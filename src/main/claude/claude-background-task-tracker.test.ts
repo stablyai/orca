@@ -530,6 +530,16 @@ describe('ClaudeBackgroundTaskTracker', () => {
       )
     }
     expect(tracker.stoppableTaskIds.length).toBeLessThanOrEqual(256)
+    expect(tracker.goalBackgroundWork).toBe('live')
+    tracker.observe(system('task_notification', { task_id: 'unknown', status: 'completed' }))
+    for (let index = 0; index < 256; index += 1) {
+      tracker.observe(
+        system('task_notification', { task_id: `task-${index}`, status: 'completed' })
+      )
+    }
+    expect(tracker.goalBackgroundWork).toBe('unverifiable')
+    tracker.observe(aggregate([]))
+    expect(tracker.goalBackgroundWork).toBe('exited')
   })
 
   it('bounds aggregate rosters and resets to the edge-only fallback on clear', () => {

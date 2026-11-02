@@ -3,6 +3,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { recordFailedStartDispatchIdentity } from '../worker-terminal/failed-start-dispatch-identity'
+import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
 
 export function markWorkerDispatchReady(
   this: OrchestrationDb,
@@ -54,12 +55,15 @@ export function failWorkerStart(
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not starting.`)
     }
     const now = new Date().toISOString()
+    // A start that never ran counts toward the breaker, or a retry loop of failed starts never ends.
+    const failureCount = dispatch.failure_count + 1
     transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
       id: dispatchId,
       from: dispatch.status,
-      to: 'failed',
+      to: failureCount >= DISPATCH_CIRCUIT_BREAK_FAILURES ? 'circuit_broken' : 'failed',
       projection: {
+        failure_count: failureCount,
         last_failure: reason,
         completed_at: now,
         capability_revoked_at: dispatch.capability_revoked_at ?? now

@@ -63,12 +63,19 @@ export type ResolveSourceControlAiResult =
   | { ok: true; value: ResolvedSourceControlAiOperation }
   | { ok: false; error: string }
 
-type ResolveSourceControlAiInput = {
-  settings: Pick<
+export type SourceControlAiSettingsInput = Partial<
+  Pick<
     GlobalSettings,
-    'defaultTuiAgent' | 'agentCmdOverrides' | 'commitMessageAi' | 'sourceControlAi'
-  > &
-    Partial<Pick<GlobalSettings, 'disabledTuiAgents'>>
+    | 'defaultTuiAgent'
+    | 'agentCmdOverrides'
+    | 'commitMessageAi'
+    | 'sourceControlAi'
+    | 'disabledTuiAgents'
+  >
+>
+
+type ResolveSourceControlAiInput = {
+  settings: SourceControlAiSettingsInput
   repo?: Pick<Repo, 'sourceControlAi'> | null
   operation: AiTextOperation
   discoveryHostKey?: string

@@ -5,11 +5,8 @@
  * Electron's single-instance lock only fences other Electron launches; orcad is a plain Node
  * process that cannot see it. Sharing orcad's lock file gives both hosts one owner record.
  */
-import {
-  acquireOrcadInstanceLock,
-  OrcadInstanceLockError,
-  type OrcadInstanceLock
-} from '../orcad/orcad-instance-lock'
+import { acquireOrcadInstanceLock, type OrcadInstanceLock } from '../orcad/orcad-instance-lock'
+import { OrcadInstanceLockError } from '../orcad/orcad-data-root-privacy'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
 export type DesktopProfileLockResult =

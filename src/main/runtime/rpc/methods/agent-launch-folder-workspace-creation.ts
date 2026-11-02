@@ -9,7 +9,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentLaunchWorkspaceFactory } from '../../../agent-launch/agent-launch-surface-factories'
 import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
-import type { AgentLaunchParams } from './agent-launch-schemas'
+import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 
 type FolderWorkspaceCreateParams = Extract<
   AgentLaunchParams['target'],

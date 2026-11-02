@@ -7,10 +7,11 @@
 
 import type { AgentChildWorkAliasKind } from './agent-status-child-work-alias'
 import type {
+  AgentChildWorkId,
+  AgentChildWorkInvocationFence,
   AgentChildWorkKind,
   AgentChildWorkOperation,
   AgentChildWorkOutcome,
-  AgentChildWorkOutcomeBasis,
   AgentChildWorkResidency,
   AgentChildWorkState
 } from './agent-status-child-work'
@@ -62,17 +63,27 @@ export type AgentChildWorkOperationEvidence = {
   operation: AgentChildWorkOperation | null
 }
 
-/** The child's own terminal frame. `unknown` is an ending whose status the provider did not say.
- *  With `basis`, the ending is the provider acknowledging a Stop, which the child's own terminal
- *  frame of the same run still replaces. */
+/** The child's own terminal frame. `unknown` is an ending whose status the provider did not say. */
 export type AgentChildWorkEndedEvidence = {
   type: 'ended'
   observedAt: number
   handle: AgentChildWorkEvidenceHandle
   outcome: AgentChildWorkOutcome
-  basis?: AgentChildWorkOutcomeBasis
   lastMessage?: string
   totalTokens?: number
+}
+
+/** The provider accepted a Stop of the run the host captured when it sent it. Settles that run
+ *  provisionally (`cancelled`, basis `stop-acknowledged`) unless it already ended; never a later
+ *  run. `outcome` is the run's own ending when the provider's answer named one. */
+export type AgentChildWorkStopAcknowledgedEvidence = {
+  type: 'stop-acknowledged'
+  observedAt: number
+  childWorkId: AgentChildWorkId
+  /** The provider handle the Stop named, for the host's open-work set, which keys by handle. */
+  handleId: string
+  invocation: AgentChildWorkInvocationFence
+  outcome?: AgentChildWorkOutcome
 }
 
 /** The user's next turn began: the provider accepted their next send. A turn the provider opens
@@ -98,5 +109,6 @@ export type AgentChildWorkEvidence =
   | AgentChildWorkOperationEvidence
   | AgentChildWorkEndedEvidence
   | AgentChildWorkRemovedEvidence
+  | AgentChildWorkStopAcknowledgedEvidence
   | AgentChildWorkTurnStartedEvidence
   | AgentChildWorkSessionEndedEvidence

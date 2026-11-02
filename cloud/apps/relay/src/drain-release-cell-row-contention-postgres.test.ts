@@ -32,7 +32,8 @@ const describePostgres = databaseUrl ? describe : describe.skip
 // asia-east2 cell to the us-central1 database, measured in production.
 const ASIA_ROUND_TRIP_MS = 171
 const LOCAL_ROUND_TRIP_MS = 1
-const WINDOW_MS = 10_000
+// Keep the measured contention rates; repeating them for longer only repeats the same locks.
+const WINDOW_MS = 5_000
 // Reconnecting hosts dialling the directors during the window. Above the
 // ~6-15/s the production tail sustained, so the director side is never idle.
 const DIAL_RATE_PER_SECOND = 20
@@ -75,7 +76,7 @@ const CELLS = [SOURCE, ...TARGETS, US_CELL]
 const RELEASED_ACTIVITY = `control:${SOURCE.id}:1`
 
 // The desktop client books each host's next /v1/assign 5-5.5s after its last
-// one, whatever Retry-After says (src/main/runtime/relay/relay-assign-rate-gate.ts).
+// one, whatever Retry-After says (src/main/runtime/mobile-cloud-relay/relay-assign-rate-gate.ts).
 const HOST_ASSIGN_MIN_INTERVAL_MS = 5_000
 const HOST_ASSIGN_INTERVAL_JITTER_MS = 500
 // A host still unplaced this long after its release counts as never placed.

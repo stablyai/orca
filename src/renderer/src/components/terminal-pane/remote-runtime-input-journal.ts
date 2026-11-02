@@ -1,6 +1,6 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TerminalInputAckKind } from '../../../../shared/terminal-stream-protocol'
-import type { RemoteRuntimeMultiplexedTerminal } from '../../runtime/remote-runtime-terminal-multiplexer'
+import type { RemoteRuntimeMultiplexedTerminal } from '../../runtime/remote-runtime-terminal-multiplexer-types'
 import {
   isSameRemoteRuntimeInputEndpoint,
   type RemoteRuntimeInputEndpoint
@@ -51,6 +51,8 @@ export type RemoteRuntimeInputJournal = {
   whenAcknowledged: (seq: number) => Promise<boolean>
   /** Withdraws `seq` for its caller; a resend fills its slot with nothing. */
   cancel: (seq: number) => void
+  /** True while input the host has not applied is still held for a resend. */
+  hasUnacknowledgedInput: () => boolean
   discard: () => void
 }
 
@@ -247,6 +249,9 @@ export function createRemoteRuntimeInputJournal(deps: {
       return new Promise((resolve) => {
         waiters.set(seq, resolve)
       })
+    },
+    hasUnacknowledgedInput() {
+      return entries.some((entry) => entry.text.length > 0)
     },
     cancel(seq) {
       const index = entries.findIndex((entry) => entry.seq === seq)

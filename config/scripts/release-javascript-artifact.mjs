@@ -12,7 +12,8 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { runProcessSync, describeProcessFailure } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
 import { isDirectInvocation } from './script-entry-detection.mjs'
 import { DESKTOP_RC_TAG, DESKTOP_STABLE_TAG } from './release-tag-patterns.mjs'
 import { getTarProgram } from './zip-extractor-command.mjs'

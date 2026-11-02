@@ -1,7 +1,5 @@
 // Runtime creates (CLI, agents, phone, paired clients, orchestration) reuse prepared checkouts
 // like the app's own creates, so they must send the same create events, exactly once each.
-import { readFileSync, readdirSync } from 'node:fs'
-import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -232,34 +230,23 @@ describe('runtime create events', () => {
     expect(mocks.track).toHaveBeenCalledOnce()
   })
 
-  it('carries the SSH create timing the runtime hands to the remote create', async () => {
+  it('refuses an SSH create and still names its host on the failed event', async () => {
     const runtime = makeRuntime({
       id: 'repo-remote',
       path: '/srv/app',
       kind: 'git',
       executionHostId: 'ssh:remote-1'
     })
-    const remoteCreate = vi.fn(
-      async (_repo: unknown, args: { timing?: WorktreeCreateTimingRecorder }) => {
-        // Stands in for createRemoteWorktree, which records into the recorder it is given.
-        args.timing?.recordExecutionHost('ssh')
-        await args.timing?.time('git_worktree_add', async () => {})
-        return { worktree }
-      }
-    )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: createManagedRemoteWorktree exists on the service; the cast only exposes the protected member to the spy.
-    const internals = runtime as unknown as { createManagedRemoteWorktree: typeof remoteCreate }
-    vi.spyOn(internals, 'createManagedRemoteWorktree').mockImplementation(remoteCreate)
 
-    await runtime.createManagedWorktree({ repoSelector: 'repo-remote', name: 'app' })
-    await vi.waitFor(() => expect(events('workspace_created')).toHaveLength(1))
+    await expect(
+      runtime.createManagedWorktree({ repoSelector: 'repo-remote', name: 'app' })
+    ).rejects.toThrow('Remote connection dropped')
+    await vi.waitFor(() => expect(events('workspace_create_failed')).toHaveLength(1))
 
-    expect(remoteCreate.mock.calls[0]?.[1].timing).toBeDefined()
-    expect(events('workspace_created')[0]).toMatchObject({
+    expect(events('workspace_create_failed')[0]).toMatchObject({
       create_entry_point: 'runtime',
       execution_host: 'ssh'
     })
-    expect(typeof events('workspace_created')[0].git_worktree_add_ms).toBe('number')
     // SSH would need a remote round trip, so the repo is not probed.
     expect(mocks.probe).not.toHaveBeenCalled()
   })
@@ -283,53 +270,5 @@ describe('runtime create events', () => {
     ).rejects.toThrow('Selected agent is disabled')
     expect(mocks.createLocal).not.toHaveBeenCalled()
     expect(mocks.track).not.toHaveBeenCalled()
-  })
-})
-
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      return sourceFiles(full)
-    }
-    return entry.name.endsWith('.ts') && !/\.(test|spec)\.ts$/.test(entry.name) ? [full] : []
-  })
-}
-
-describe('one event per create', () => {
-  const mainDir = path.resolve(__dirname, '..')
-  const relative = (file: string): string => path.relative(mainDir, file).split(path.sep).join('/')
-
-  it('sends the create events only from the shared sender, besides the SSH root adopt', () => {
-    const senders = sourceFiles(mainDir)
-      .filter((file) =>
-        /track\(\s*'workspace_(created|create_failed)'/.test(readFileSync(file, 'utf8'))
-      )
-      .map(relative)
-      .sort()
-    expect(senders).toEqual([
-      'ipc/worktrees/create/register-worktree-create-handlers.ts',
-      'workspace-create-telemetry.ts'
-    ])
-    const handler = readFileSync(
-      path.join(mainDir, 'ipc/worktrees/create/register-worktree-create-handlers.ts'),
-      'utf8'
-    )
-    // The remaining direct sends there belong to the root adopt, which no other entry point runs.
-    expect(handler.match(/track\(\s*'workspace_(created|create_failed)'/g)).toHaveLength(2)
-  })
-
-  it('keeps the app and runtime entry points from running each other', () => {
-    const handler = readFileSync(
-      path.join(mainDir, 'ipc/worktrees/create/register-worktree-create-handlers.ts'),
-      'utf8'
-    )
-    expect(handler).not.toMatch(/createManagedWorktree/)
-    const runtimeImportsHandler = sourceFiles(path.join(mainDir, 'runtime')).filter((file) =>
-      /register-worktree-create-handlers|ipcMain\.emit|['"]worktrees:create['"]/.test(
-        readFileSync(file, 'utf8')
-      )
-    )
-    expect(runtimeImportsHandler.map(relative)).toEqual([])
   })
 })

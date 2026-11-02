@@ -95,18 +95,12 @@ describe("the account catalog facts a child's listing hands the host", () => {
         'claude',
         {
           models: cached.map((id) => ({ id, label: id, isDefault: false, efforts: [] })),
-          fastModeTierByModel: new Map(),
           origin: 'probe'
         },
         'discovery'
       )
     }
-    store.recordSuccess(
-      'fp',
-      'claude',
-      { ...listing, fastModeTierByModel: new Map(), origin: 'live-session' },
-      'live'
-    )
+    store.recordSuccess('fp', 'claude', { ...listing, origin: 'live-session' }, 'live')
     return store.get('fp')?.models.map((model) => model.id)
   }
 

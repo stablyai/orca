@@ -21,7 +21,7 @@ import { makeTab } from '../../store/slices/store-session-test-harness'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { getCompactAgentSecondary } from './worktree-card-compact-agent-row'
-import { resolveAttention } from './smart-attention'
+import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
 
 const NOW = new Date('2026-05-04T12:00:00.000Z').getTime()
 const TAB_ID = 'tab-1'

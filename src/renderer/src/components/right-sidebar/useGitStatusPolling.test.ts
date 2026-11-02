@@ -94,6 +94,9 @@ async function usePollingOnce(
     }
   })
 
+  vi.doMock('./worktree-git-owner-target', () => ({
+    getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
+  }))
   vi.doMock('@/store', () => ({
     useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
       getState: () => ({ settings: null })
@@ -217,7 +220,7 @@ describe('useGitStatusPolling', () => {
       undefined,
       undefined,
       {
-        runtimeTargetSettings: { activeRuntimeEnvironmentId: null },
+        runtimeTarget: { kind: 'local' },
         applyUpstreamStatus: false
       }
     )
@@ -241,7 +244,7 @@ describe('useGitStatusPolling', () => {
       undefined,
       pushTarget,
       {
-        runtimeTargetSettings: { activeRuntimeEnvironmentId: null },
+        runtimeTarget: { kind: 'local' },
         applyUpstreamStatus: false
       }
     )
@@ -375,6 +378,9 @@ describe('useGitStatusPolling', () => {
         useRef: <T>(initial: T) => ({ current: initial })
       }
     })
+    vi.doMock('./worktree-git-owner-target', () => ({
+      getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
+    }))
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -488,6 +494,9 @@ describe('useGitStatusPolling', () => {
         useRef: <T>(initial: T) => ({ current: initial })
       }
     })
+    vi.doMock('./worktree-git-owner-target', () => ({
+      getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
+    }))
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -612,6 +621,9 @@ describe('useGitStatusPolling', () => {
         }
       }
     })
+    vi.doMock('./worktree-git-owner-target', () => ({
+      getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
+    }))
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -794,6 +806,9 @@ describe('useGitStatusPolling', () => {
       }
     })
 
+    vi.doMock('./worktree-git-owner-target', () => ({
+      getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
+    }))
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })

@@ -27,10 +27,6 @@ import {
   seedNewOrcaProfileTelemetryConsent,
   setActiveOrcaProfile
 } from '../orca-profiles/profile-index-store'
-import {
-  cloudSessionIdentity,
-  recordCloudSessionIdentityMutation
-} from '../orca-profiles/profile-cloud-session-mutation'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
@@ -191,17 +187,6 @@ export function registerOrcaProfileHandlers(
         return { status: 'already-active' }
       }
 
-      const activeProfile = current.profiles.find(
-        (profile) => profile.id === current.activeProfileId
-      )
-      if (activeProfile?.cloud) {
-        // Why: profile selection changes the expected identity synchronously;
-        // stale refresh saves must fail even before relaunch teardown finishes.
-        recordCloudSessionIdentityMutation(
-          cloudSessionIdentity(activeProfile.id, activeProfile.cloud),
-          getProfileUserDataPath()
-        )
-      }
       // Why: the current profile must be persisted before the global index
       // points startup at the target profile.
       // Switching leaves source files intact; relaunch cleanup still needs its live writer.

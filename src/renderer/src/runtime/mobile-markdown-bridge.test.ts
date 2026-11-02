@@ -11,15 +11,12 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { attachMobileMarkdownBridge } from './mobile-markdown-bridge'
 import {
   cleanupMobileMarkdownBridgeHarness,
+  markdownUnifiedTab,
   openMarkdownFile,
   resetEditorState,
   sendRequest,
   setupWindow
 } from './mobile-markdown-bridge-test-harness'
-
-vi.mock('@/components/tab-bar/group-tab-order', () => ({
-  getActiveTabNavOrder: () => [{ type: 'editor', id: '/repo/README.md', tabId: 'tab-md' }]
-}))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: () => null
@@ -109,6 +106,72 @@ describe('mobile markdown bridge', () => {
       })
 
       expect(readFile.mock.calls[0]?.[0]).not.toHaveProperty('access')
+    } finally {
+      detach()
+    }
+  })
+
+  it('reads a markdown tab that sits in a split group the desktop is not focused on', async () => {
+    openMarkdownFile()
+    useAppStore.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [markdownUnifiedTab('tab-md', '/repo/README.md', 'group-split')]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          { id: 'group-main', worktreeId: 'wt-1', activeTabId: null, tabOrder: [] },
+          {
+            id: 'group-split',
+            worktreeId: 'wt-1',
+            activeTabId: 'tab-md',
+            tabOrder: ['tab-md']
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { 'wt-1': 'group-main' }
+    })
+    setupWindow({ readFile: vi.fn().mockResolvedValue({ content: '# split', isBinary: false }) })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      const response = await sendRequest({
+        id: 'read-split',
+        operation: 'read',
+        worktreeId: 'wt-1',
+        tabId: 'tab-md'
+      })
+
+      expect(response).toMatchObject({ ok: true, result: { content: '# split' } })
+    } finally {
+      detach()
+    }
+  })
+
+  it('reads the requested tab when the same file is open in two groups', async () => {
+    openMarkdownFile()
+    useAppStore.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          markdownUnifiedTab('tab-main', '/repo/README.md', 'group-main'),
+          markdownUnifiedTab('tab-split', '/repo/README.md', 'group-split')
+        ]
+      }
+    })
+    setupWindow({ readFile: vi.fn().mockResolvedValue({ content: '# both', isBinary: false }) })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      const response = await sendRequest({
+        id: 'read-duplicate',
+        operation: 'read',
+        worktreeId: 'wt-1',
+        tabId: 'tab-split'
+      })
+
+      expect(response).toMatchObject({
+        ok: true,
+        result: { tabId: 'tab-split', filePath: '/repo/README.md', content: '# both' }
+      })
     } finally {
       detach()
     }

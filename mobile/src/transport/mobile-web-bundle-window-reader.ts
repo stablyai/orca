@@ -3,6 +3,7 @@ import { decodeMobileWebBundleRange } from './mobile-web-bundle-range-decode'
 import type { MobileWebBundleManifestReply } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from './rpc-client'
 import { runRpcOperation } from './rpc-operation'
+import type { SendRequestOptions } from './unvalidated-rpc-request-port'
 
 /** What a chunk or range reply restates about the window it answers. */
 export type MobileWebBundleWindowHeader = {
@@ -24,11 +25,14 @@ export type MobileWebBundleWindowReply = {
 /** One client, one grid and one read method, fixed for a whole fetch by the manifest reply. */
 export type MobileWebBundleWindowReader = {
   readonly windowBytes: number
-  read(window: {
-    buildId: string
-    path: string
-    offset: number
-  }): Promise<MobileWebBundleWindowReply>
+  read(
+    window: {
+      buildId: string
+      path: string
+      offset: number
+    },
+    options?: SendRequestOptions
+  ): Promise<MobileWebBundleWindowReply>
 }
 
 /** Ranges when the host named a range grid, chunks otherwise: a host that predates the range
@@ -41,11 +45,12 @@ export function mobileWebBundleWindowReader(
   if (rangeBytes === undefined) {
     return {
       windowBytes: opened.chunkBytes,
-      read: async (window) => {
+      read: async (window, options) => {
         const { dataBase64, ...header } = await runRpcOperation(
           client,
           mobileWebBundleChunkRead,
-          window
+          window,
+          options
         )
         return { header, bytes: () => decodeBase64(dataBase64) }
       }
@@ -53,11 +58,12 @@ export function mobileWebBundleWindowReader(
   }
   return {
     windowBytes: rangeBytes,
-    read: async (window) => {
+    read: async (window, options) => {
       const { dataBase64, encoding, ...header } = await runRpcOperation(
         client,
         mobileWebBundleRangeRead,
-        window
+        window,
+        options
       )
       return {
         header,

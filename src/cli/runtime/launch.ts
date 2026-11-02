@@ -1,7 +1,7 @@
-import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { spawn, type SpawnOptions } from 'node:child_process'
+import { resolve } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath
@@ -11,6 +11,10 @@ import {
   pinServeUserDataPath,
   resolveLaunchUserDataPath
 } from './launch-user-data-path'
+import { foregroundServeIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
+import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbox-request'
+import { needsElectronNoSandbox } from './electron-sandbox-switch'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
 import { getPlatformUserDataPath } from './metadata'
 import { isSameUserDataPath } from '../../shared/serve-user-data-path'
@@ -21,15 +25,33 @@ import {
 } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
 import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
-import {
-  resolveLocalServeRuntime,
-  serveOptionArgs,
-  serveWithOrcad,
-  type ServeOrcaAppArgs
-} from './serve-orcad-launch'
+import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
+import { resolveLocalServeRuntime, serveWithOrcad } from './serve-orcad-launch'
+import { serveOptionArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 import { waitForRecipeJson } from './serve-recipe-json'
+import {
+  preflightElectronServe,
+  recordElectronServeStartupAbort,
+  refuseIfProfileServed
+} from './serve-electron-preflight'
+import { MacServeStartupAbortError } from './serve-signal-exit-diagnostic'
+import { superviseServeService } from './serve-supervised-service'
+import { reexecThisServeUnderInitReaper } from './serve-pid1-init-reaper'
+import { supervisedAppImageUpdate } from './serve-appimage-update'
+import {
+  relocateThisServeSupervisor,
+  SERVE_SUPERVISOR_APP_ROOT_ENV
+} from './serve-supervisor-relocation'
+import { serverOnlyServeMessage } from './serve-app-launcher'
+import { isSupervisedSpawnHeld } from './serve-supervised-stop'
+import { openServeBundlePark } from './serve-bundle-park'
+import {
+  redactingSpawn,
+  shouldRedactSupervisedStdout,
+  type ServeSpawnChild
+} from './serve-pairing-redaction'
 
-const USER_NAMESPACE_PROBE_TIMEOUT_MS = 2_000
+const STARTUP_ABORT_MS = 30_000
 
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
@@ -95,7 +117,7 @@ export function getMacOpenArgs(appBundlePath: string, userDataPath: string): str
 }
 
 function spawnDetached(command: string, args: string[], options: SpawnOptions): void {
-  const child = spawnProcess(command, args, {
+  const child = spawn(command, args, {
     detached: true,
     stdio: 'ignore',
     ...options
@@ -107,12 +129,40 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
 }
 
 export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
+  // Why first: as a container or PrivatePIDs init, nothing would reap orphaned descendants.
+  reexecThisServeUnderInitReaper()
   const executable = resolveForegroundOrcaExecutable()
-  if (args.recipeJson && !args.projectRoot) {
-    throw new RuntimeClientError('invalid_argument', 'Recipe JSON output requires --project-root.')
-  }
   // Why one value: the selector, orcad and Electron must all serve the profile the caller chose.
   const userDataPath = resolveLaunchUserDataPath()
+  if (args.supervise) {
+    // Why: a successful relocation replaces this process and never resolves.
+    return relocateThisServeSupervisor(resolveAppRoot(), userDataPath).then(() => {
+      let attempt = 0
+      return superviseServeService({
+        userDataPath,
+        executable,
+        appRoot: resolveAppRoot(),
+        force: args.force === true,
+        park: openServeBundlePark({ executable }),
+        appImageUpdate: supervisedAppImageUpdate(executable, userDataPath, args.force === true),
+        // Why first only: --force overrides a remembered abort once; the brake owns later attempts.
+        runOnce: () =>
+          serveOnce(
+            executable,
+            { ...args, force: args.force === true && attempt++ === 0 },
+            userDataPath
+          )
+      })
+    })
+  }
+  return serveOnce(executable, args, userDataPath)
+}
+
+function serveOnce(
+  executable: string,
+  args: ServeOrcaAppArgs,
+  userDataPath: string
+): Promise<number> {
   // Why synchronous on the opt-out: it must spawn Electron exactly as before, without asking.
   if (process.env[SERVE_RUNTIME_ENV] === SERVE_RUNTIME_ELECTRON) {
     return serveWithElectron(executable, args, userDataPath)
@@ -132,8 +182,20 @@ async function serveWithSelectedRuntime(
     usesMacUpdateHandoff: args.recipeJson !== true && getMacAppBundlePath(executable) !== null
   })
   if (selection.kind === 'orcad') {
+    // Why only supervised: orcad refuses a held profile as a configuration fault (exit 78), which
+    // the brake would count; exit 3 here lets the supervisor wait for the other Orca instead.
+    const refusal = args.supervise ? await refuseIfProfileServed(args, userDataPath) : null
+    if (refusal !== null) {
+      return refusal
+    }
     process.stderr.write(`[serve] running on orcad ${selection.version}\n`)
-    return serveWithOrcad(selection, args, userDataPath, stripElectronRunAsNode(process.env))
+    return serveWithOrcad(
+      selection,
+      args,
+      userDataPath,
+      stripElectronRunAsNode(process.env),
+      findBundledWebClientRoot(resolveAppRoot())
+    )
   }
   if (selection.reason) {
     process.stderr.write(`[serve] using Electron serve: ${selection.reason}\n`)
@@ -146,6 +208,20 @@ function serveWithElectron(
   args: ServeOrcaAppArgs,
   userDataPath: string
 ): Promise<number> {
+  const preflight = preflightElectronServe(args, userDataPath)
+  if (preflight === null) {
+    return spawnElectronServe(executable, args, userDataPath)
+  }
+  return Promise.resolve(preflight).then(
+    (refusal) => refusal ?? spawnElectronServe(executable, args, userDataPath)
+  )
+}
+
+function spawnElectronServe(
+  executable: string,
+  args: ServeOrcaAppArgs,
+  userDataPath: string
+): Promise<number> {
   const pinned = pinServeUserDataPath(
     getExecutableAppArgs(executable),
     stripElectronRunAsNode(process.env),
@@ -153,7 +229,10 @@ function serveWithElectron(
   )
   const childArgs = pinned.args
   childArgs.push('--serve', ...serveOptionArgs(args, '--serve-'))
-
+  // Why: the isolated profile has no login keychain, and the probe that discovers this blocks the
+  // foreground process on the Keychain authorization prompt before it advertises readiness (#25453).
+  childArgs.push(...foregroundServeIsolatedProfileSwitches())
+  childArgs.push(...headlessServeOzonePlatformSwitches(process.platform))
   const handoffPath =
     args.recipeJson !== true && getMacAppBundlePath(executable)
       ? getServeUpdateHandoffPath(userDataPath)
@@ -162,7 +241,10 @@ function serveWithElectron(
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
   }
-  const spawnOptions: SpawnOptions = {
+  // Why process-host: it encodes a Windows `.cmd`/`.bat` executable's arguments instead of a raw shell.
+  const spec: ProcessSpec = {
+    program: executable,
+    args: childArgs,
     detached: args.recipeJson === true,
     cwd: resolveAppRoot(),
     stdio:
@@ -171,65 +253,51 @@ function serveWithElectron(
         : handoffPath
           ? ['inherit', 'inherit', 'inherit', 'ipc']
           : 'inherit',
-    ...getExecutableSpawnOptions(executable),
     env: childEnv
   }
+  const spawnServeChild: ServeSpawnChild = shouldRedactSupervisedStdout(args.supervise === true)
+    ? redactingSpawn(spawnProcess)
+    : spawnProcess
   const interruptedHandoff = handoffPath ? readServeUpdateHandoffSync(handoffPath) : null
   if (interruptedHandoff?.phase === 'install-requested') {
     // Why: the node-mode CLI is not an NSRunningApplication, so it can retain launchd ownership while ShipIt swaps the app.
     return resumeInterruptedServeUpdate({
-      executable,
-      childArgs,
-      spawnOptions,
-      spawnChild: spawnProcess,
+      spec,
+      spawnChild: spawnServeChild,
       handoffPath: handoffPath!,
       handoff: interruptedHandoff
     })
   }
-  const child = spawnProcess(executable, childArgs, spawnOptions)
+  if (isSupervisedSpawnHeld()) {
+    return Promise.resolve(0)
+  }
+  const child = spawnServeChild(spec)
+  const spawnedAt = Date.now()
 
   if (args.recipeJson) {
     return waitForRecipeJson(child)
   }
   return superviseForegroundServe({
-    executable,
-    childArgs,
-    spawnOptions,
-    spawnChild: spawnProcess,
+    spec,
+    spawnChild: spawnServeChild,
     child,
     handoffPath,
     expectedHandoff: null
+  }).catch((error: unknown) => {
+    // Why only a prompt abort: the registration abort kills the child before any JS runs.
+    if (error instanceof MacServeStartupAbortError && Date.now() - spawnedAt < STARTUP_ABORT_MS) {
+      recordElectronServeStartupAbort(userDataPath, error.message)
+    }
+    throw error
   })
 }
 
 export function getExecutableAppArgs(executable: string): string[] {
   const args = process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
-  if (shouldDisableExtractedAppImageSandbox(executable)) {
+  if (needsElectronNoSandbox(executable)) {
     args.push('--no-sandbox')
   }
   return args
-}
-
-function shouldDisableExtractedAppImageSandbox(executable: string): boolean {
-  if (process.platform !== 'linux' || !existsSync(join(dirname(executable), 'AppRun'))) {
-    return false
-  }
-  // An extracted AppImage has no root-owned setuid sandbox; mirror AppRun's userns fallback.
-  if (process.getuid?.() === 0) {
-    return true
-  }
-  try {
-    return (
-      runProcessSync({
-        program: 'unshare',
-        args: ['-Ur', 'true'],
-        stdio: 'ignore',
-        timeoutMs: USER_NAMESPACE_PROBE_TIMEOUT_MS
-      }).code !== 0
-    )
-  } catch {
-    return true
-  }
 }
 
 function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {
@@ -239,8 +307,9 @@ function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shel
 export function resolveAppRoot(): string {
   // Why: dev-mode resource resolution in the Electron child may consult
   // process.cwd(). Pin it to the app root so `orca serve` behaves the same
-  // regardless of the shell directory it was launched from.
-  return resolve(__dirname, '../../..')
+  // regardless of the shell directory it was launched from. A supervisor re-run from its copy
+  // outside the app must still start the app's own files.
+  return process.env[SERVE_SUPERVISOR_APP_ROOT_ENV] || resolve(__dirname, '../../..')
 }
 
 export function resolveForegroundOrcaExecutable(): string {
@@ -251,14 +320,15 @@ export function resolveForegroundOrcaExecutable(): string {
   if (process.env.ELECTRON_RUN_AS_NODE === '1') {
     return process.execPath
   }
-  throw new RuntimeClientError(
-    'runtime_serve_failed',
-    'Could not determine how to start Orca server. Set ORCA_APP_EXECUTABLE to the Orca executable.'
-  )
+  throw new RuntimeClientError('runtime_serve_failed', serverOnlyServeMessage(process.platform))
 }
 
 export function stripElectronRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const next = { ...env }
   delete next.ELECTRON_RUN_AS_NODE
+  // Why: the request is applied as a switch; the server's terminals must not inherit it.
+  delete next[ELECTRON_NO_SANDBOX_REQUEST_ENV]
+  // Why: only the relocated supervisor itself may resolve its app root this way.
+  delete next[SERVE_SUPERVISOR_APP_ROOT_ENV]
   return next
 }

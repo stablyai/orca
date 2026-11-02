@@ -1,5 +1,4 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
@@ -27,21 +26,19 @@ const AGENT_DRAFT_PASTE_INERT_ESCAPE = '\u241b'
 export type AgentDraftPtyInputWriter = (data: string) => boolean | Promise<boolean>
 
 export async function sendAgentDraftPasteContent(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   content: string,
   inputKind: TerminalInputKind,
   writePty?: AgentDraftPtyInputWriter
 ): Promise<boolean> {
   return await runTerminalPtyInputTransaction(ptyId, () =>
-    sendAgentDraftPasteContentNow(settings, ptyId, content, inputKind, writePty)
+    sendAgentDraftPasteContentNow(ptyId, content, inputKind, writePty)
   )
 }
 
 // Why: callers that must keep extra PTY writes (e.g. submit Enter) inside the same
 // transaction take the lock themselves; taking it again here would deadlock.
 export async function sendAgentDraftPasteContentNow(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   content: string,
   inputKind: TerminalInputKind,
@@ -57,7 +54,6 @@ export async function sendAgentDraftPasteContentNow(
   })
   if (!directMeasurement.exceededLimit) {
     return await writeAgentDraftPtyInput(
-      settings,
       ptyId,
       wrapTerminalBracketedPasteText(terminalContent),
       inputKind,
@@ -75,16 +71,16 @@ export async function sendAgentDraftPasteContentNow(
   for (const chunk of iterateAgentDraftPasteContentChunks(terminalContent)) {
     let accepted = false
     try {
-      accepted = await writeAgentDraftPtyInput(settings, ptyId, chunk, inputKind, writePty)
+      accepted = await writeAgentDraftPtyInput(ptyId, chunk, inputKind, writePty)
     } catch {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
-        await closeAgentDraftBracketedPaste(settings, ptyId, inputKind, writePty)
+        await closeAgentDraftBracketedPaste(ptyId, inputKind, writePty)
       }
       return false
     }
     if (!accepted) {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
-        await closeAgentDraftBracketedPaste(settings, ptyId, inputKind, writePty)
+        await closeAgentDraftBracketedPaste(ptyId, inputKind, writePty)
       }
       return false
     }
@@ -198,19 +194,15 @@ function getSanitizedUtf8ByteLengthForCodePoint(codePoint: number): number {
 }
 
 async function writeAgentDraftPtyInput(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind,
   writePty?: AgentDraftPtyInputWriter
 ): Promise<boolean> {
-  return writePty
-    ? await writePty(data)
-    : await sendRuntimePtyInputVerified(settings, ptyId, data, inputKind)
+  return writePty ? await writePty(data) : await sendRuntimePtyInputVerified(ptyId, data, inputKind)
 }
 
 async function closeAgentDraftBracketedPaste(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   inputKind: TerminalInputKind,
   writePty?: AgentDraftPtyInputWriter
@@ -218,7 +210,7 @@ async function closeAgentDraftBracketedPaste(
   try {
     // Why: once the opener reached the PTY, a failed content chunk should not
     // leave the target TUI in bracketed-paste mode.
-    await writeAgentDraftPtyInput(settings, ptyId, BRACKETED_PASTE_END, inputKind, writePty)
+    await writeAgentDraftPtyInput(ptyId, BRACKETED_PASTE_END, inputKind, writePty)
   } catch {
     // The original write already failed; callers only need the paste to fail closed.
   }

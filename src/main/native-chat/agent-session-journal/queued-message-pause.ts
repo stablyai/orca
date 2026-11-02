@@ -256,19 +256,20 @@ export function queuePauseHolding(
 }
 
 /** The card the queue sends next: the oldest waiting one with no hold of its own, unless a
- *  returned card or one a pause holds comes first. The queue never reorders, so a newer card never
- *  overtakes one a pause holds; a card held on its own is passed over. The drain's pick and its
- *  consume both read this. */
-export function nextSendableQueuedCard<T extends QueueCard>(
+ *  returned card, one a pause holds, or one being edited (`editHeld`) comes first. The queue never
+ *  reorders, so a newer card never overtakes either; a card held on its own is passed over. The
+ *  drain's pick and its consume both read this. */
+export function nextSendableQueuedCard<T extends QueueCard & { messageId: string }>(
   pauses: readonly DerivedQueuePause[],
-  cards: readonly T[]
+  cards: readonly T[],
+  editHeld: ReadonlySet<string> = new Set()
 ): T | null {
   for (const card of cards) {
     if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
       return null
     }
     if (card.state === 'waiting' && card.holdReason === null) {
-      return card
+      return editHeld.has(card.messageId) ? null : card
     }
   }
   return null

@@ -5,42 +5,46 @@
  * the host for `recoverInterruptedOrcadActivation` to finish or undo it. A run that ends with
  * the host provably back on one slot drops the fence; one that cannot prove it keeps it.
  */
-import { orcadRemoteBaseDir } from './orcad-remote-windows-node'
+import { orcadRemoteBaseDir } from '../managed-server/install/orcad-remote-windows-node'
 import { randomUUID } from 'node:crypto'
 import type { OrcadDeployOptions, OrcadDeployResult } from './orcad-remote-deploy'
-import { isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './remote-exec/remote-exec-command'
 import {
   withActivatedVersion,
   type OrcadActivationRecord,
   type OrcadStateSnapshot
-} from './orcad-activation-record'
+} from '../managed-server/activation/orcad-activation-record'
 import {
   readOrcadActivationRecord,
   writeOrcadActivationRecord
-} from './orcad-activation-record-store'
+} from '../managed-server/activation/orcad-activation-record-store'
 import { launchAndJudgeOrcadSlot } from './orcad-candidate-launch-verdict'
-import { planOrcadUpdate, type OrcadTerminalCensus } from './orcad-update-plan'
+import { planOrcadUpdate } from './orcad-update-plan'
+import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import { CURRENT_ORCAD_DAEMON_PROTOCOL } from './orcad-daemon-protocol-crossing'
-import { ORCAD_LOG_FILENAME } from './orcad-remote-launch'
+import { ORCAD_LOG_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 import {
   captureOrcadStateSnapshotCommand,
   orcadSnapshotDirName,
   parseOrcadSnapshotCapture
-} from './orcad-state-snapshot'
+} from '../managed-server/host-state/orcad-state-snapshot'
 import { joinRemotePath } from './ssh-remote-platform'
 import { computeLocalOrcadBuildHash } from './orcad-local-build-hash'
-import { preflightInstalledOrcad } from './orcad-remote-preflight'
-import type { OrcadActivationLockControl } from './orcad-activation-lock'
-import type { OrcadActivateTransaction } from './orcad-activation-transaction'
+import { preflightInstalledOrcad } from '../managed-server/install/orcad-remote-preflight'
+import type { OrcadActivationLockControl } from '../managed-server/activation/orcad-activation-lock'
+import type { OrcadActivateTransaction } from '../managed-server/activation/orcad-activation-transaction'
 import {
   createOrcadActivationTransaction,
   withOrcadActivationCandidateReady,
   withOrcadActivationIncumbentStopped,
   withOrcadActivationSnapshot
-} from './orcad-activation-transaction-transitions'
-import { writeOrcadActivationTransaction } from './orcad-activation-transaction-store'
-import { execOrcadRemoteOr, withoutAbortSignal } from './orcad-remote-runtime-control'
-import { execOrcadStateMutationOr } from './orcad-state-mutation-exec'
+} from '../managed-server/activation/orcad-activation-transaction-transitions'
+import { writeOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-store'
+import {
+  execOrcadRemoteOr,
+  withoutAbortSignal
+} from '../managed-server/install/orcad-remote-runtime-control'
+import { execOrcadStateMutationOr } from '../managed-server/host-state/orcad-state-mutation-exec'
 import {
   initialOrcadActivationAdmissionCommand,
   parseInitialOrcadActivationAdmission
@@ -56,8 +60,8 @@ import {
   restoreAfterRejectedCandidate,
   stopTransactionIncumbent
 } from './orcad-transaction-incumbent'
-import { withOrcadLogTail } from './orcad-remote-log-tail'
-import { orcadCandidateLaunchFailureCode } from './orcad-host-unavailable'
+import { withOrcadLogTail } from '../managed-server/install/orcad-remote-log-tail'
+import { orcadCandidateLaunchFailureCode } from '../orcad/orcad-host-unavailable'
 import { errorMessage } from '../../shared/error-message'
 
 type Outcome = Extract<OrcadDeployResult, { outcome: 'installed-not-activated' }>
@@ -71,16 +75,19 @@ const UNVERIFIABLE_CENSUS: OrcadTerminalCensus = {
   daemonProtocolVersion: null
 }
 
+function countedLockedRecord(options: OrcadDeployOptions, record: OrcadActivationRecord): boolean {
+  const counted = options.censusRecord
+  return (
+    !counted || (counted.active === record.active && counted.activatedAt === record.activatedAt)
+  )
+}
+
 /** A census counted against another incumbent says nothing about this one's terminals. */
 function censusForLockedRecord(
   options: OrcadDeployOptions,
   record: OrcadActivationRecord
 ): OrcadTerminalCensus {
-  const counted = options.censusRecord
-  return !counted ||
-    (counted.active === record.active && counted.activatedAt === record.activatedAt)
-    ? options.census
-    : UNVERIFIABLE_CENSUS
+  return countedLockedRecord(options, record) ? options.census : UNVERIFIABLE_CENSUS
 }
 
 export async function activateInstalledOrcad(
@@ -157,6 +164,20 @@ export async function activateInstalledOrcad(
     )
     if (admission.decision === 'defer') {
       return notActivated(admission.code, admission.reason)
+    }
+  }
+
+  // Last check before anything stops: the census above may predate a long upload.
+  if (incumbent && options.recountCensus && countedLockedRecord(options, record)) {
+    const recount = planOrcadUpdate({
+      record,
+      candidateVersion: fullVersion,
+      census: await options.recountCensus(),
+      candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
+      ...(options.force !== undefined ? { force: options.force } : {})
+    })
+    if (recount.action === 'defer') {
+      return notActivated(recount.code, recount.reason)
     }
   }
 

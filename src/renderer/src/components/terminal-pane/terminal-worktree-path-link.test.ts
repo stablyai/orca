@@ -120,7 +120,7 @@ describe('resolveKnownWorktreeRootPathLink', () => {
 })
 
 const remoteContext = (environmentId: string, worktreeId = 'source') => ({
-  settings: { activeRuntimeEnvironmentId: environmentId },
+  target: { kind: 'environment' as const, environmentId: environmentId },
   worktreeId,
   worktreePath: '/source'
 })
@@ -166,7 +166,7 @@ describe('terminal root link ownership', () => {
       ]
     })
     const context = {
-      settings: null,
+      target: { kind: 'local' as const },
       worktreeId: 'source',
       worktreePath: '/source',
       connectionId: 'alpha'
@@ -259,7 +259,7 @@ describe('terminal root link ownership', () => {
       activeWorkspaceExecutionHostId: activeHost
     })
     const sshContext = (state: Parameters<typeof getConnectionIdFromState>[0]) => ({
-      settings: null,
+      target: { kind: 'local' as const },
       worktreeId: 'repo::/home/u/proj',
       worktreePath: '/home/u/proj',
       connectionId: getConnectionIdFromState(state, 'repo::/home/u/proj') ?? undefined
@@ -288,7 +288,11 @@ describe('terminal root link ownership', () => {
       runtimeEnvironments: [],
       runtimeEnvironmentCatalogHydrated: false
     }
-    const context = { settings: null, worktreeId: 'restoring::/x', worktreePath: '/x' }
+    const context = {
+      target: { kind: 'local' as const },
+      worktreeId: 'restoring::/x',
+      worktreePath: '/x'
+    }
     expect(resolveKnownWorktreeRootPathLink('/target', state, context)).toBeNull()
   })
 })

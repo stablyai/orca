@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   isSafePtySessionId,
   mintPtySessionId,
-  parsePtySessionId,
   ptySessionIdForAgentCreateOperation
 } from './pty-session-id'
+import { parsePtySessionId } from '../../shared/pty-session-id-format'
 
 const USER_DATA = '/tmp/orca-userdata'
 

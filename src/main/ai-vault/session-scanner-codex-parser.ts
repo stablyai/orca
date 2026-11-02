@@ -34,7 +34,6 @@ import {
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
-import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
 import {
@@ -62,27 +61,6 @@ export async function parseCodexSessionFile(
     executionHostId,
     messages,
     titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
-  })
-}
-
-export async function parseCodexSessionContent(args: {
-  file: FileWithMtime
-  content: string | AsyncIterable<string>
-  platform?: NodeJS.Platform
-  codexHome?: string | null
-  executionHostId?: ExecutionHostId
-  executionHostPlatform?: NodeJS.Platform | null
-  readIndexedTitle?: (sessionId: string) => Promise<string | null>
-  signal?: AbortSignal
-}): Promise<AiVaultSession | null> {
-  return parseCodexSessionLines({
-    file: args.file,
-    lines: remoteSessionContentLines(args.content, args.signal),
-    platform: args.platform ?? process.platform,
-    codexHome: args.codexHome ?? null,
-    executionHostId: args.executionHostId,
-    executionHostPlatform: args.executionHostPlatform,
-    titleReader: args.readIndexedTitle
   })
 }
 

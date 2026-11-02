@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+const { notifyTerminalInputNotSent } = vi.hoisted(() => ({ notifyTerminalInputNotSent: vi.fn() }))
+vi.mock('./terminal-input-not-sent-notice', () => ({ notifyTerminalInputNotSent }))
 import {
   _resetTerminalInputQuarantineForTests,
   armTerminalInputQuarantine,
@@ -12,6 +15,7 @@ const REATTACH_MS = 1_100
 
 beforeEach(() => {
   _resetTerminalInputQuarantineForTests()
+  notifyTerminalInputNotSent.mockReset()
 })
 
 describe('terminal input quarantine', () => {
@@ -108,5 +112,25 @@ describe('terminal input quarantine', () => {
     armTerminalInputQuarantine(TAB, 5_000)
     expect(isTerminalInputQuarantined('closed-tab')).toBe(false)
     expect(isTerminalInputQuarantined(TAB)).toBe(true)
+  })
+})
+
+describe('quarantine notice', () => {
+  it('tells the user once that the interrupted line was not sent', () => {
+    // Why revert-sensitive: the drop used to be silent, so the first command after a
+    // daemon restart vanished without a trace.
+    armTerminalInputQuarantine(TAB, 0)
+    expect(notifyTerminalInputNotSent).not.toHaveBeenCalled()
+    for (const char of 'echo hi') {
+      expect(shouldDropQuarantinedTerminalInput(TAB, char, REATTACH_MS)).toBe(true)
+    }
+    expect(notifyTerminalInputNotSent).toHaveBeenCalledOnce()
+    expect(notifyTerminalInputNotSent).toHaveBeenCalledWith(TAB)
+  })
+
+  it('says nothing when the quarantine expires unused', () => {
+    armTerminalInputQuarantine(TAB, 0)
+    expect(shouldDropQuarantinedTerminalInput(TAB, 'e', 10_000)).toBe(false)
+    expect(notifyTerminalInputNotSent).not.toHaveBeenCalled()
   })
 })

@@ -2,14 +2,14 @@
 
 On Windows the terminal daemon does not run from the install directory. Before it forks the
 daemon, the app materializes a trimmed copy of its own runtime under
-`%LOCALAPPDATA%\<executable basename>\daemon-host\<app version>\` and forks the daemon from there
+`%LOCALAPPDATA%\<executable basename>\daemon-host-profiles\<profile key>\<app version>\` and forks the daemon from there
 (`src/main/daemon/daemon-host-relocation.ts`). This is what keeps live terminals alive across an
 auto-update and across a crash of the main process.
 
-The executable basename scopes rebranded builds away from one another. Upstream Orca runs its
-relocated host as `%LOCALAPPDATA%\Orca\daemon-host\<app version>\Orca.exe`; the private POC uses
-`%LOCALAPPDATA%\Phorca\daemon-host\<app version>\Phorca.exe`. The copied file name still follows
-`process.execPath` byte-for-byte.
+The executable basename scopes rebranded builds away from one another; the profile key keeps
+different user-data profiles from pruning each other's copies. The copied file name follows
+`process.execPath` byte-for-byte. The older `daemon-host` root is left untouched until a real
+uninstall because one profile cannot prove another profile's daemon has exited.
 
 Read this before changing the copy plan, the host exe name, the LOCALAPPDATA layout, or
 `config/nsis/orca-installer-hooks.nsh`.

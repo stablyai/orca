@@ -257,7 +257,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(rows[0].startsWith(encodePaletteIdentity(['workspace-tab']))).toBe(true)
     expect(rows.some((id) => id.startsWith(encodePaletteIdentity(['worktree'])))).toBe(true)
     expect(testContainer.textContent).toContain('Recent Chats & Terminals')
-    expect(testContainer.textContent).toContain('Recent Worktrees')
+    expect(testContainer.textContent).toContain('Recent Workspaces')
   })
 
   it('keeps duplicate persisted tab ids as separate recent rows and digit targets', async () => {
@@ -284,7 +284,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await renderPalette(makeManyTabState(12))
 
     expect(getTabRowIds()).toHaveLength(6)
-    expect(testContainer.textContent).toContain('Recent Worktrees')
+    expect(testContainer.textContent).toContain('Recent Workspaces')
     // Why: the worktree section shrinks against the recent rows so the list holds at 10 total —
     // it must never uncap, not even for the frame before the order snapshot lands.
     expect(getWorktreeRows().length).toBeLessThanOrEqual(4)

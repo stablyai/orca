@@ -20,10 +20,6 @@ export function writeHangDetectionMarker(markerPath: string, marker: HangDetecti
   writeFileSync(markerPath, JSON.stringify(marker), { mode: 0o600 })
 }
 
-export function readHangDetectionMarker(markerPath: string): HangDetectionMarker | null {
-  return readAvailableHangDetectionMarker(markerPath) ?? null
-}
-
 function readAvailableHangDetectionMarker(
   markerPath: string
 ): HangDetectionMarker | null | undefined {

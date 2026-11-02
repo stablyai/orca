@@ -29,3 +29,14 @@ describe('OpenCode hook selection', () => {
     ).toBe('opencode2')
   })
 })
+
+describe('selectOpenCodeHookAgent after a sleep prefix', () => {
+  it('selects OpenCode 2 hooks instead of the v1 fallback', () => {
+    expect(selectOpenCodeHookAgent(undefined, 'sleep 30 && opencode2', () => true)).toBe(
+      'opencode2'
+    )
+    expect(
+      selectOpenCodeHookAgent(undefined, 'sleep 30 && opencode2', (agent) => agent === 'opencode')
+    ).toBeNull()
+  })
+})

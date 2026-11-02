@@ -17,23 +17,25 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
-      settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined,
+      target: { kind: 'local' } | { kind: 'environment'; environmentId: string },
       connectionId?: string
-    ) => connectionId ?? settings?.activeRuntimeEnvironmentId ?? null
-  ),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+    ) => connectionId ?? (target.kind === 'environment' ? target.environmentId : null)
+  )
 }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: mocks.getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: mocks.getRuntimeGitDiff,
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: mocks.getRuntimeGitDiff
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId,
@@ -46,6 +48,18 @@ vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
+
+// Fixture owners: `repo-runtime::` workspaces live on runtime-1, everything else here is local.
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const ownerTarget = (_s: unknown, worktreeId?: string, owner?: string | null) => {
+    const id = owner === undefined && worktreeId?.startsWith('repo-runtime::') ? 'runtime-1' : owner
+    return id ? { kind: 'environment', environmentId: id } : { kind: 'local' }
+  }
+  return {
+    getRuntimeTargetForFileOwner: ownerTarget,
+    requireRuntimeTargetForFileOwner: ownerTarget
+  }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: {

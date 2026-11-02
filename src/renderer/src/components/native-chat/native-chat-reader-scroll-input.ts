@@ -1,6 +1,6 @@
 // Input owns departure from following; layout and application writes also produce scroll events.
 
-import { useCallback, useMemo } from 'react'
+import { createContext, useCallback, useMemo } from 'react'
 import {
   readerGestureDirection,
   readerGestureLeavesEnd,
@@ -71,6 +71,7 @@ type ReaderScrollCallbacks = {
   /** The same gesture, for whatever was still moving the transcript to yield to it. */
   onTakeScroll?: () => void
   onLeaveEnd: () => void
+  onScrollGesture: (gesture: ReaderGesture) => void
 }
 
 export type NativeChatReaderScrollInputHandlers = Pick<
@@ -81,15 +82,17 @@ export type NativeChatReaderScrollInputHandlers = Pick<
 /** Invalidate pending navigation on input, and detach only when the transcript can move away. */
 export function nativeChatReaderScrollInputHandlers({
   onReaderScroll,
-  onLeaveEnd
+  onLeaveEnd,
+  onScrollGesture
 }: ReaderScrollCallbacks): NativeChatReaderScrollInputHandlers {
   const report = (gesture: ReaderGesture, event: React.SyntheticEvent<HTMLDivElement>): void => {
     const transcript = event.currentTarget
-    if (
-      gestureLeavesEnd(gesture, transcript) &&
-      gestureReachesTranscript(event.target, transcript, readerGestureDirection(gesture))
-    ) {
-      onLeaveEnd()
+    if (gestureReachesTranscript(event.target, transcript, readerGestureDirection(gesture))) {
+      if (gestureLeavesEnd(gesture, transcript)) {
+        onLeaveEnd()
+      } else {
+        onScrollGesture(gesture)
+      }
     }
   }
   return {
@@ -135,13 +138,25 @@ export function nativeChatReaderScrollInputHandlers({
   }
 }
 
-/** The transcript scroller's input props, the wheel the rail overlaying it forwards, and find steps. */
+/** Reports a gesture a surface swallowed before the transcript could see it: a visual's frame. */
+export const NativeChatForwardedGestureContext = createContext<
+  ((gesture: ReaderGesture) => void) | null
+>(null)
+
+/** The transcript scroller's input props, the gestures surfaces over or inside it forward, and find steps. */
 export function useNativeChatReaderScrollInput(
   scrollRef: React.RefObject<HTMLElement | null>,
-  { onReaderScroll: onScrollInput, onTakeScroll, onLeaveEnd }: ReaderScrollCallbacks
+  {
+    onReaderScroll: onScrollInput,
+    onTakeScroll,
+    onLeaveEnd,
+    onScrollGesture
+  }: ReaderScrollCallbacks
 ): {
   scrollerProps: NativeChatReaderScrollInputHandlers
   railWheel: (deltaY: number) => void
+  /** A gesture from a surface the transcript's own handlers never hear: reported where the view is now. */
+  forwardedGesture: (gesture: ReaderGesture) => void
   /** A find step moves the transcript for the reader, so it ends following like a gesture. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
 } {
@@ -150,19 +165,30 @@ export function useNativeChatReaderScrollInput(
     onTakeScroll?.()
   }, [onScrollInput, onTakeScroll])
   const scrollerProps = useMemo(
-    () => nativeChatReaderScrollInputHandlers({ onReaderScroll, onLeaveEnd }),
-    [onLeaveEnd, onReaderScroll]
+    () =>
+      nativeChatReaderScrollInputHandlers({
+        onReaderScroll,
+        onLeaveEnd,
+        onScrollGesture
+      }),
+    [onScrollGesture, onLeaveEnd, onReaderScroll]
+  )
+  const forwardedGesture = useCallback(
+    (gesture: ReaderGesture) => {
+      onReaderScroll()
+      onScrollGesture(gesture)
+    },
+    [onScrollGesture, onReaderScroll]
   )
   // Reported before the rail moves the transcript, so the gesture reads where it started.
   const railWheel = useCallback(
     (deltaY: number) => {
-      if (deltaY === 0) {
-        return
-      }
-      onReaderScroll()
-      const transcript = scrollRef.current
-      if (transcript && gestureLeavesEnd({ kind: 'wheel', deltaY, zoom: false }, transcript)) {
-        onLeaveEnd()
+      if (deltaY !== 0) {
+        onReaderScroll()
+        const transcript = scrollRef.current
+        if (transcript && gestureLeavesEnd({ kind: 'wheel', deltaY, zoom: false }, transcript)) {
+          onLeaveEnd()
+        }
       }
     },
     [onLeaveEnd, onReaderScroll, scrollRef]
@@ -195,5 +221,5 @@ export function useNativeChatReaderScrollInput(
     },
     [onLeaveEnd, onReaderScroll, scrollRef]
   )
-  return { scrollerProps, railWheel, revealFindMatch }
+  return { scrollerProps, railWheel, forwardedGesture, revealFindMatch }
 }

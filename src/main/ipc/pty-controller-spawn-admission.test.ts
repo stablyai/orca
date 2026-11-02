@@ -7,13 +7,10 @@ import {
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import {
-  registerPtyHandlers,
-  clearProviderPtyState,
-  setLocalPtyProvider,
-  isCurrentPtyExit,
-  restorePtyIncarnation
-} from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { clearProviderPtyState } from './pty/provider/state-cleanup'
+import { setLocalPtyProvider } from './pty/provider/registry'
+import { isCurrentPtyExit, restorePtyIncarnation } from './pty/provider/ownership-state'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

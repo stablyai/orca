@@ -52,9 +52,6 @@ vi.mock('@/store', () => ({
     { getState: () => ({ recordFeatureInteraction: vi.fn() }) }
   )
 }))
-vi.mock('@/lib/repo-runtime-owner', () => ({
-  getSettingsForRepoRuntimeOwner: () => ({ activeRuntimeEnvironmentId: null })
-}))
 vi.mock('@/components/ui/popover', () => ({
   Popover: vi.fn(),
   PopoverContent: vi.fn(),

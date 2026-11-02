@@ -21,7 +21,6 @@ describe('Claude model switch confirmation detection', () => {
     const unsubscribe = vi.fn(() => {})
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Fable 5',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
@@ -47,7 +46,6 @@ describe('Claude model switch confirmation detection', () => {
     const dataObserver = { current: (_data: string): void => {} }
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Opus (1M context)',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
@@ -69,7 +67,6 @@ describe('Claude model switch confirmation detection', () => {
       const dataObserver = { current: (_data: string): void => {} }
       const observer = createClaudeModelSwitchConfirmationObserver({
         ptyId: 'pty-1',
-        settings: {},
         expectedModelLabel: 'Opus (1M context)',
         subscribeToData: (watcher) => {
           dataObserver.current = watcher
@@ -95,7 +92,6 @@ describe('Claude model switch confirmation detection', () => {
     const submitConfirmation = vi.fn()
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Fable 5',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
@@ -121,7 +117,6 @@ describe('Claude model switch confirmation detection', () => {
     const dataObserver = { current: (_data: string): void => {} }
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Haiku',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
@@ -141,7 +136,6 @@ describe('Claude model switch confirmation detection', () => {
   it('reports unknown when the PTY observer cannot be established', async () => {
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
-      settings: {},
       expectedModelLabel: 'Fable 5',
       subscribeToData: () => Promise.reject(new Error('unavailable')),
       timeoutMs: 100
@@ -158,7 +152,6 @@ describe('Claude model switch confirmation detection', () => {
       let settled = false
       const observer = createClaudeModelSwitchConfirmationObserver({
         ptyId: 'pty-1',
-        settings: {},
         expectedModelLabel: 'Fable 5',
         subscribeToData: () => vi.fn(() => {}),
         timeoutMs: 100

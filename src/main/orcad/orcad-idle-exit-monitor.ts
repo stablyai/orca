@@ -19,7 +19,7 @@ export type OrcadIdleExitMonitorOptions = {
   probes: readonly OrcadIdleProbe[]
   /** Any client request restarts the quiet period, even one that came and went between checks. */
   lastClientActivityAt: () => number
-  onIdle: (evidence: OrcadIdleExitEvidence) => void
+  onIdle: (evidence: OrcadIdleExitEvidence) => void | boolean | Promise<void | boolean>
   now?: () => number
   pollMs?: number
   log?: (line: string) => void
@@ -80,8 +80,17 @@ export class OrcadIdleExitMonitor {
     if (now - quietSince < this.options.timeoutMs) {
       return false
     }
+    if (
+      (await this.options.onIdle({
+        quietSince,
+        stoppedAt: now,
+        timeoutMs: this.options.timeoutMs
+      })) === false
+    ) {
+      this.quietSince = null
+      return false
+    }
     this.stop()
-    this.options.onIdle({ quietSince, stoppedAt: now, timeoutMs: this.options.timeoutMs })
     return true
   }
 

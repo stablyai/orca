@@ -8,7 +8,7 @@ import {
   checkWorkspaceLayoutRules,
   type WorkspaceLayoutPartition,
   type WorkspaceLayoutRule
-} from './workspace-layout-rules'
+} from '../../../shared/workspace-layout/workspace-layout-rules'
 
 const WT = 'repo-1::/tmp/wt'
 

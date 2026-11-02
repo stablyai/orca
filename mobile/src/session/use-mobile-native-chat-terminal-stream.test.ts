@@ -10,7 +10,6 @@ describe('useMobileNativeChatTerminalStream', () => {
   const subscribingRef = { current: new Set<string>() }
   const leaseOnlyRef = { current: new Set<string>() }
   const webReadyRef = { current: new Set(['terminal-1']) }
-  const initializedRef = { current: new Set(['terminal-1']) }
   /** Mirrors the route's subscribe-time coverage guess, which is what decides whether
    *  the host opens a lease-only stream or a streaming one. */
   let subscribeOpensLeaseOnly = false
@@ -37,7 +36,6 @@ describe('useMobileNativeChatTerminalStream', () => {
     leaseOnlyRef.current = new Set()
     subscribeOpensLeaseOnly = false
     webReadyRef.current = new Set(['terminal-1'])
-    initializedRef.current = new Set(['terminal-1'])
     harnessRenderCount = 0
     subscribe.mockClear()
     unsubscribe.mockClear()
@@ -70,7 +68,6 @@ describe('useMobileNativeChatTerminalStream', () => {
       subscribingRef,
       leaseOnlyRef,
       webReadyRef,
-      initializedRef,
       subscribe,
       unsubscribe
     })
@@ -115,7 +112,6 @@ describe('useMobileNativeChatTerminalStream', () => {
 
     expect(unsubscribe).toHaveBeenNthCalledWith(1, 'terminal-1')
     expect(subscribe).toHaveBeenNthCalledWith(1, 'terminal-1')
-    expect(initializedRef.current.has('terminal-1')).toBe(false)
 
     await act(async () => {
       renderer?.update(createElement(Harness, { showNativeChat: false }))
@@ -138,7 +134,6 @@ describe('useMobileNativeChatTerminalStream', () => {
 
   it('trades a lease-only stream for output when a chat tab hands off to a terminal tab', async () => {
     webReadyRef.current.add('terminal-2')
-    initializedRef.current.add('terminal-2')
     await act(async () => {
       renderer = create(createElement(Harness, { showNativeChat: true }))
     })
@@ -153,9 +148,6 @@ describe('useMobileNativeChatTerminalStream', () => {
     expect(unsubscribe).toHaveBeenCalledWith('terminal-2')
     expect(subscribe).toHaveBeenCalledWith('terminal-2')
     expect(leaseOnlyRef.current.has('terminal-2')).toBe(false)
-    // The lease-only stream carried no scrollback, so xterm is empty — a stale
-    // initialized mark would drop the replacement snapshot and keep the tab blank.
-    expect(initializedRef.current.has('terminal-2')).toBe(false)
   })
 
   it('settles once a lease-only stream has been replaced by a full one', async () => {

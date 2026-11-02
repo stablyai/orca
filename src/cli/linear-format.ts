@@ -1,6 +1,8 @@
 import type {
   LinearAttachResult,
   LinearCommentAddResult,
+  LinearCommentDeleteResult,
+  LinearCommentEditResult,
   LinearCreateResult,
   LinearIssueListResult,
   LinearMcpIssueListResult,
@@ -165,6 +167,14 @@ export function formatLinearStatusSet(result: LinearStatusSetResult): string {
 export function formatLinearCommentAdd(result: LinearCommentAddResult): string {
   const suffix = result.meta.deduplicated ? ' (already posted)' : ''
   return `Added comment ${result.comment.id} to ${result.issue.identifier}${suffix}.`
+}
+
+export function formatLinearCommentEdit(result: LinearCommentEditResult): string {
+  return `Edited comment ${result.comment.id} on ${result.issue.identifier}.`
+}
+
+export function formatLinearCommentDelete(result: LinearCommentDeleteResult): string {
+  return `Deleted comment ${result.comment.id} from ${result.issue.identifier}.`
 }
 
 export function formatLinearAttach(result: LinearAttachResult): string {

@@ -26,7 +26,7 @@ export type LocalPtyProviderMocks = {
   readWindowsPtyJobProcessIdsMock: Mock
   killWithDescendantSweepMock: Mock
   isWslAvailableAsyncMock: Mock
-  wslUncDirectoryExistsMock: Mock
+  wslUncDirectoryExistsAsyncMock: Mock
   createShellPromptReadinessProbeMock: Mock
 }
 
@@ -99,8 +99,8 @@ export function applyLocalPtyProviderMockDefaults(mocks: LocalPtyProviderMocks):
   mocks.readWindowsPtyJobProcessIdsMock.mockReturnValue(null)
   mocks.isWslAvailableAsyncMock.mockReset()
   mocks.isWslAvailableAsyncMock.mockResolvedValue(true)
-  mocks.wslUncDirectoryExistsMock.mockReset()
-  mocks.wslUncDirectoryExistsMock.mockReturnValue(true)
+  mocks.wslUncDirectoryExistsAsyncMock.mockReset()
+  mocks.wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
   mocks.createShellPromptReadinessProbeMock.mockReset()
 }
 

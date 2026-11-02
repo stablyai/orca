@@ -275,12 +275,3 @@ function markAutomationDomains(owner: AutomationPersistence): void {
 function markAutomationDefinitionDomain(owner: AutomationPersistence): void {
   owner[automationPersistenceContext].runtime.dirtyProfileStateDomains?.add('automations')
 }
-
-export function installAutomationPersistenceContext(
-  target: AutomationPersistence,
-  source: AutomationPersistence
-): void {
-  Object.defineProperty(target, automationPersistenceContext, {
-    value: source[automationPersistenceContext]
-  })
-}

@@ -21,6 +21,8 @@ export function ArtifactPublishButton({
   sourceKey,
   createRequest,
   className,
+  variant = 'ghost',
+  size = 'icon-sm',
   disabled,
   anchorRef,
   open: controlledOpen,
@@ -29,6 +31,9 @@ export function ArtifactPublishButton({
   sourceKey: string
   createRequest: () => Promise<ArtifactWriteRequest>
   className?: string
+  /** For a toolbar whose other buttons use a different style. */
+  variant?: React.ComponentProps<typeof Button>['variant']
+  size?: React.ComponentProps<typeof Button>['size']
   disabled?: boolean
 } & (
   | { anchorRef?: never; open?: never; onOpenChange?: never }
@@ -134,8 +139,8 @@ export function ArtifactPublishButton({
             <PopoverTrigger asChild>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon-sm"
+                variant={variant}
+                size={size}
                 className={cn('shrink-0', className)}
                 disabled={blocked}
                 aria-label={label}

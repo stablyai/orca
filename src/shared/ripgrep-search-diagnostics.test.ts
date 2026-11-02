@@ -39,4 +39,38 @@ describe('ripgrep search diagnostics', () => {
     expect(new RipgrepSearchDiagnostics().failure(code, null, acc)).toBeNull()
     expect(acc.truncated).toBe(false)
   })
+
+  describe('skippable per-path OS errors', () => {
+    const skippable = new Set([1, 1920])
+
+    it('does not fail or truncate a search whose only errors are unopenable paths', () => {
+      const diagnostics = new RipgrepSearchDiagnostics(skippable)
+      diagnostics.append('rg: .\\nul: Incorrect function. (os error 1)\r\nrg: .\\li')
+      diagnostics.append('nk: The file cannot be accessed by the system. (os error 1920)')
+      const acc = createAccumulator()
+      acc.totalMatches = 3
+      expect(diagnostics.failure(2, null, acc)).toBeNull()
+      expect(acc.truncated).toBe(false)
+      expect(diagnostics.failure(2, null, createAccumulator())).toBeNull()
+    })
+
+    it('still fails on any other diagnostic', () => {
+      const diagnostics = new RipgrepSearchDiagnostics(skippable)
+      diagnostics.append('rg: .\\nul: Incorrect function. (os error 1)\n')
+      diagnostics.append('rg: ./secret: Access is denied. (os error 5)\n')
+      expect(diagnostics.failure(2, null, createAccumulator())).toBeInstanceOf(Error)
+    })
+
+    it('fails when exit 2 left no diagnostic to classify', () => {
+      expect(
+        new RipgrepSearchDiagnostics(skippable).failure(2, null, createAccumulator())
+      ).toBeInstanceOf(Error)
+    })
+
+    it('keeps the default policy when no errors are skippable', () => {
+      const diagnostics = new RipgrepSearchDiagnostics()
+      diagnostics.append('rg: .\\nul: Incorrect function. (os error 1)\n')
+      expect(diagnostics.failure(2, null, createAccumulator())).toBeInstanceOf(Error)
+    })
+  })
 })

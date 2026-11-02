@@ -2,9 +2,9 @@ import { expect, it } from 'vitest'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { makeFolderWorkspace } from '../../store/slices/worktrees-slice-test-fixtures'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { addHostSectionRows } from './host-section-rows'
-import { scopeHostSectionCollapse } from './host-section-collapse'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
+import { addHostSectionRows } from '../../../../shared/sidebar-list/host-section-rows'
+import { scopeHostSectionCollapse } from '../../../../shared/sidebar-list/host-section-collapse'
 import { getFolderWorkspaceRevealGroupKeys } from './worktree-list/navigation/folder-reveal'
 
 const localGroup: ProjectGroup = {

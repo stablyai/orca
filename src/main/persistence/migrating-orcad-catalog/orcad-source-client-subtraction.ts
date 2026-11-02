@@ -1,5 +1,6 @@
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
 import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration-manifest'
+import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration-source-kind'
 import { parsePersistedAutomationHostFilter } from '../../../shared/automation-host-filter'
 import { hostStableKey } from '../../../shared/automation-owner-key'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
@@ -47,7 +48,9 @@ export function subtractOrcadMigrationClientState(
       }
     }
   }
-  const target = state.sshTargets.find((entry) => entry.id === source.sshTargetId)
+  const target = state.sshTargets.find(
+    (entry) => entry.id === requireOrcadMigrationSshSource(source).sshTargetId
+  )
   if (target && clientState.savedPortForwards) {
     target.portForwards = structuredClone(clientState.savedPortForwards)
   }

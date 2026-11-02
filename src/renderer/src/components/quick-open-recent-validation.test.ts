@@ -7,7 +7,7 @@ vi.mock('@/runtime/runtime-file-request-debounce', () => ({
     request: () => Promise<unknown>
   ) => request()
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-search-client', () => ({
   listRuntimeFiles: mocks.list,
   cancelRuntimeFileList: mocks.cancel
 }))
@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 const context = {
-  settings: { activeRuntimeEnvironmentId: null },
+  target: { kind: 'local' as const },
   worktreeId: 'wt',
   worktreePath: '/repo'
 }

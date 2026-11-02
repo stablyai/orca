@@ -237,33 +237,47 @@ describe('attach', () => {
 })
 
 describe('cancel', () => {
-  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
+  /** The provider's turn row: a Stop naming a turn the journal never showed is late, a no-op. */
+  async function runningTurn(): Promise<void> {
     await attach()
+    acquire.mock.calls
+      .at(-1)![0]
+      .events!.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
+        { kind: 'turn', turnId: 'turn-1', state: 'running' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    await host.flushStreamedEvents(SESSION)
+  }
+
+  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
+    await runningTurn()
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
     expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(page.ok && page.page.items[0]?.body).toMatchObject({
+    const note = page.ok ? page.page.items.find((item) => item.body.kind === 'status') : undefined
+    expect(note?.body).toMatchObject({
       kind: 'status',
       text: 'Cancellation requested.'
     })
-    expect(JSON.stringify(page.ok && page.page.items[0]?.body)).not.toContain('turn-1')
+    expect(JSON.stringify(note?.body)).not.toContain('turn-1')
   })
 
-  it('reports an unconfirmed cancellation rather than failing the call', async () => {
-    await attach()
+  it('ends the child when the turn runs on after an unanswered interrupt', async () => {
+    await runningTurn()
     cancelTurn.mockRejectedValueOnce(new Error('no answer'))
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
-    expect(result).toMatchObject({ ok: true, value: { cancelled: false } })
+    expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
   })
 
   it('never interrupts twice on a replay', async () => {
-    await attach()
+    await runningTurn()
     const params = {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
@@ -328,7 +342,7 @@ describe('cancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 
-  it('records an unknown outcome when strict prompt interruption throws and never retries it', async () => {
+  it('answers a strict prompt interruption that throws once saved from its receipt, the same on a retry, and never retries it', async () => {
     await attach()
     const prompt = await seedApproval()
     cancelTurn.mockRejectedValueOnce(new Error('interrupt receipt lost'))
@@ -341,24 +355,20 @@ describe('cancel', () => {
       ...fields
     }
 
-    await expect(host.cancel(CALLER, params)).rejects.toThrow('interrupt receipt lost')
-    expect(await host.cancel(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
+    // Saved before the interrupt, which then threw: the answer is its receipt, never rewritten, and
+    // the retry is answered from it without reaching the provider again. The card stays pending,
+    // and its turn says the cancellation was not confirmed.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const answered = await host.cancel(CALLER, params)
+    expect(answered).toMatchObject({ ok: true })
+    expect(await host.cancel(CALLER, params)).toEqual({ ...answered, replayed: true })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
-    expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
-      ok: true,
-      page: {
-        items: [
-          expect.objectContaining({
-            body: expect.objectContaining({
-              resolution: expect.objectContaining({ state: 'pending' })
-            })
-          })
-        ]
-      }
-    })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    const bodies = page.ok ? page.page.items.map((item) => item.body) : []
+    expect(bodies).toEqual([
+      expect.objectContaining({ resolution: expect.objectContaining({ state: 'pending' }) }),
+      expect.objectContaining({ kind: 'status', text: 'Cancellation was not confirmed.' })
+    ])
   })
 })
 
@@ -460,7 +470,7 @@ describe('respondToPrompt', () => {
     expect(answerPrompt).not.toHaveBeenCalled()
   })
 
-  it("does not turn a recorded refusal into another client's successful answer", async () => {
+  it("does not turn a refused answer into another client's successful answer", async () => {
     await attach()
     const prompt = await seedApproval()
     const rejectedFields = {
@@ -485,10 +495,12 @@ describe('respondToPrompt', () => {
       }
     )
 
+    // A refusal records nothing, so the retry is judged afresh: the prompt has moved on.
     expect(await host.respondToPrompt(CALLER, rejected)).toMatchObject({
       ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
+      refusal: { code: 'agent_session_item_revision_stale' }
     })
+    expect(answerPrompt).toHaveBeenCalledOnce()
   })
 
   it('keeps the answer and reports it undelivered when the provider callback throws', async () => {
@@ -854,6 +866,7 @@ describe('subscribe', () => {
     if (!replacement.ok) {
       throw new Error(`expected replacement owner, got ${replacement.refusal.code}`)
     }
-    expect(events.at(-1)).toMatchObject({ type: 'snapshot', fence: replacement.fence })
+    expect(events.findLast((event) => event.type === 'snapshot')?.fence).toBe(replacement.fence)
+    expect(events.at(-1)).toMatchObject({ fence: replacement.fence })
   })
 })

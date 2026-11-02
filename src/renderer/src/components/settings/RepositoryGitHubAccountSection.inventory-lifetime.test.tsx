@@ -25,13 +25,7 @@ vi.mock('../../store', () => {
   return { useAppStore }
 })
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: (settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null) =>
-    settings?.activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: settings.activeRuntimeEnvironmentId }
-      : { kind: 'local' },
-  callRuntimeRpc: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 vi.mock('./repository-github-account', async (importOriginal) => ({
   ...(await importOriginal<typeof RepositoryGitHubAccountModule>()),
@@ -189,22 +183,23 @@ describe('repository account inventory request ownership', () => {
     expect(listAccountsMock).toHaveBeenCalledTimes(2)
   })
 
-  it('reloads for a changed legacy runtime target and keeps explicit refresh forced', async () => {
+  it('keeps an unstamped repo on this computer when the default host changes', async () => {
     const repo: Repo = { ...BASE_REPO, executionHostId: undefined }
     storeState.settings = { activeRuntimeEnvironmentId: 'server-1' }
     await render(repo)
     storeState.settings = { activeRuntimeEnvironmentId: 'server-2' }
     await render(repo)
+    expect(listAccountsMock).toHaveBeenCalledTimes(1)
     expect(listAccountsMock).toHaveBeenNthCalledWith(
-      2,
-      { kind: 'environment', environmentId: 'server-2' },
+      1,
+      { kind: 'local' },
       { id: repo.id, path: repo.path },
       { refreshCapability: false }
     )
     await act(async () => getRefreshButton().click())
     expect(listAccountsMock).toHaveBeenNthCalledWith(
-      3,
-      { kind: 'environment', environmentId: 'server-2' },
+      2,
+      { kind: 'local' },
       { id: repo.id, path: repo.path },
       { refreshCapability: true }
     )

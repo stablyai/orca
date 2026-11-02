@@ -8,7 +8,6 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from '../../runtime/mobile-session-terminal-persistence-retirement'
-import { projectTerminalTopologySlice } from '../../runtime/terminal-topology-projection'
 import type { Store } from '../loading-store/store'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
@@ -19,7 +18,7 @@ import {
   type WorkspaceLayoutPartition,
   type WorkspaceLayoutRule,
   type WorkspaceLayoutViolation
-} from './workspace-layout-rules'
+} from '../../../shared/workspace-layout/workspace-layout-rules'
 import { closeLeafOrTab } from './terminal-topology-commit'
 import {
   emptyTerminalSessionProfile,
@@ -30,7 +29,7 @@ import {
 } from './terminal-topology-profile-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -106,13 +105,12 @@ function expectLayoutRules(
   expect(layoutViolations(session, previous), context).toEqual([])
 }
 
-/** Main's projected slices, reduced to what the model states. */
+/** Main's persisted topology per worktree, reduced to what the model states. */
 function projectedTopology(session: WorkspaceSessionState) {
   return Object.fromEntries(
     WORKTREES.map((worktreeId) => {
-      const slice = projectTerminalTopologySlice(session, LOCAL_EXECUTION_HOST_ID, worktreeId)
-      const tabs = slice.tabs.map((tab) => {
-        const layout = slice.layouts[tab.id]
+      const tabs = (session.tabsByWorktree?.[worktreeId] ?? []).map((tab) => {
+        const layout = session.terminalLayoutsByTabId?.[tab.id]
         return {
           tabId: tab.id,
           leaves: Object.fromEntries(
@@ -120,7 +118,11 @@ function projectedTopology(session: WorkspaceSessionState) {
           )
         }
       })
-      return [worktreeId, { tabs, sleeping: Object.keys(slice.sleeping).sort() }]
+      const sleeping = Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})
+        .filter(([, record]) => record.worktreeId === worktreeId)
+        .map(([paneKey]) => paneKey)
+        .sort()
+      return [worktreeId, { tabs, sleeping }]
     })
   )
 }
@@ -302,7 +304,7 @@ async function runSeed(seed: number): Promise<string[]> {
       options,
       requestedSession: store.getWorkspaceSession(),
       ownerMatches: () => true,
-      hostId: () => LOCAL_EXECUTION_HOST_ID,
+      hostIds: () => [LOCAL_EXECUTION_HOST_ID],
       getSession: (hostId) => store.getWorkspaceSession(hostId),
       setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
       onClosed: () => {}
@@ -551,24 +553,33 @@ async function runSeed(seed: number): Promise<string[]> {
         const ptyId = ids.pty(worktreeId)
         const ticks = Math.floor(random() * 4)
         log.push(`${op} ${target.tabId}:${target.leafId} → ${leafId} ${ptyId} stale-save+${ticks}`)
-        // `terminal.split` from a client or the CLI: main mints the pane while the window's
-        // in-flight save lacks it.
+        // `terminal.split` from a client or the CLI: main writes the pane, then binds it, while
+        // the window's in-flight save lacks it.
+        writer = 'host split'
         const [bound] = await Promise.all([
-          store.persistPtyBinding(() => {
-            writer = 'host split'
-            return {
-              worktreeId,
+          store
+            .admitTerminalPane({
+              type: 'splitPane',
+              workspace: worktreeId,
               tabId: target.tabId,
-              leafId,
-              ptyId,
-              hostAdmittedMembership: true,
-              expectedSourceBinding: {
+              leafId: target.leafId,
+              direction: 'vertical',
+              newLeafId: leafId
+            })
+            .then(() =>
+              store.persistPtyBinding({
+                worktreeId,
                 tabId: target.tabId,
-                leafId: target.leafId,
-                ptyId: target.pane.ptyId!
-              }
-            }
-          }),
+                leafId,
+                ptyId,
+                mayCreate: false,
+                expectedSourceBinding: {
+                  tabId: target.tabId,
+                  leafId: target.leafId,
+                  ptyId: target.pane.ptyId!
+                }
+              })
+            ),
           staleSave(window.snapshot(), ticks)
         ])
         expect(bound).toBe(true)

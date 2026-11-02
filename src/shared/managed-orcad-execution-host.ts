@@ -11,9 +11,12 @@ import {
 import type { ExecutionHostRegistryEntry } from './execution-host-registry'
 import type { SshConnectionState } from './ssh-types'
 
+/** The deployment fields host pairing reads; a WSL distro has no SSH host row to merge with. */
+export type ManagedOrcadDeploymentSummary = { kind?: 'ssh'; sshTargetId: string } | { kind: 'wsl' }
+
 export type ManagedOrcadEnvironmentSummary = {
   id: string
-  orcadDeployment?: { sshTargetId: string } | null
+  orcadDeployment?: ManagedOrcadDeploymentSummary | null
 }
 
 /** The merge fields a host row carries; picker option types extend it. */
@@ -29,7 +32,8 @@ export type MergedExecutionHost = {
 export function getManagedOrcadSshTargetId(
   environment: ManagedOrcadEnvironmentSummary
 ): string | null {
-  return environment.orcadDeployment?.sshTargetId.trim() || null
+  const deployment = environment.orcadDeployment
+  return (deployment?.kind !== 'wsl' && deployment?.sshTargetId.trim()) || null
 }
 
 /**

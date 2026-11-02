@@ -65,7 +65,8 @@ function harness({
   sqlPolicy = 'ALWAYS',
   migSize = 1,
   observedRequests = 0,
-  selectorGeneration = 0
+  selectorGeneration = 0,
+  admitModes
 } = {}) {
   const cells = new Map(
     ['staging-gce-c1', 'staging-gce-c2', 'staging-gce-c3', 'staging-gce-c4'].map((cellId, index) => [
@@ -88,6 +89,7 @@ function harness({
   ])
   const commands = []
   const events = []
+  const posts = []
   let activationPolicy = sqlPolicy
   let clock = 0
 
@@ -154,6 +156,12 @@ function harness({
     const parsed = new URL(url)
     if (!options.method) return response({ ok: true })
     const body = JSON.parse(options.body)
+    posts.push(parsed.pathname)
+    if (parsed.pathname === '/v1/admin/cell-admit-mode') {
+      // A pre-census director's router answers an unknown route with a plain-text 404.
+      if (!admitModes) return new Response('404 Not Found', { status: 404 })
+      return response({ v: 1, cellId: body.cellId, admitMode: admitModes[body.cellId] ?? 'db' })
+    }
     if (parsed.pathname === '/v1/admin/cell-status') {
       const state = cells.get(body.cellId)
       const index = [...cells.keys()].indexOf(body.cellId)
@@ -225,6 +233,8 @@ function harness({
     cells,
     commands,
     events,
+    posts,
+    admitModes,
     deps: {
       command,
       commandJson,
@@ -292,13 +302,71 @@ test('sleeps only after disabling admission and proving zero active work', async
   )
 })
 
-test('refuses staging sleep after the monotonic selector boundary', async () => {
-  const testHarness = harness({ selectorGeneration: 1 })
+test('sleeps under the selector without writing any cell admission', async () => {
+  for (const admitModes of [undefined, {}]) {
+    const testHarness = harness({ selectorGeneration: 3, admitModes })
+    const before = [...testHarness.cells.values()].map((cell) => cell.enabled)
+    await runStagingRelayPower(argumentConfig(topologyFile(), 'sleep'), testHarness.deps)
+
+    assert.equal(testHarness.sqlPolicy(), 'NEVER')
+    assert.deepEqual([...testHarness.cells.values()].map((cell) => cell.targetSize), [0, 0, 0, 0])
+    assert.deepEqual([...testHarness.cells.values()].map((cell) => cell.enabled), before)
+    assert.equal(testHarness.posts.includes('/v1/admin/cell-state'), false)
+    assert.equal(testHarness.posts.includes('/v1/admin/cell-admit-mode'), true)
+    assert.deepEqual(testHarness.events.at(-1), {
+      event: 'staging_relay_slept',
+      stoppedCells: ['staging-gce-c1', 'staging-gce-c2', 'staging-gce-c3', 'staging-gce-c4'],
+      selectorGeneration: 3
+    })
+  }
+})
+
+test('refuses a selector-era sleep while any cell is reserve or busy', async () => {
+  const reserve = harness({ selectorGeneration: 3, admitModes: { 'staging-gce-c2': 'reserve' } })
   await assert.rejects(
-    runStagingRelayPower(argumentConfig(topologyFile(), 'sleep'), testHarness.deps),
-    /cannot reverse the monotonic admission selector/
+    runStagingRelayPower(argumentConfig(topologyFile(), 'sleep'), reserve.deps),
+    /refuses reserve-mode cells: staging-gce-c2/
   )
+  assert.equal(reserve.commands.length, 0)
+
+  // A flip that lands after the first read, while Cloud Run scales down, still stops the resize.
+  const late = harness({ selectorGeneration: 3, admitModes: {} })
+  const run = late.deps.command
+  late.deps.command = (args) => {
+    if (args[0] === 'run' && args[2] === 'update-traffic') late.admitModes['staging-gce-c4'] = 'reserve'
+    return run(args)
+  }
+  await assert.rejects(
+    runStagingRelayPower(argumentConfig(topologyFile(), 'sleep'), late.deps),
+    /refuses reserve-mode cells: staging-gce-c4/
+  )
+  assert.deepEqual([...late.cells.values()].map((cell) => cell.targetSize), [1, 1, 1, 1])
+  assert.equal(late.sqlPolicy(), 'ALWAYS')
+
+  const busy = harness({ selectorGeneration: 3, observedRequests: 1 })
+  await assert.rejects(
+    runStagingRelayPower(argumentConfig(topologyFile(), 'sleep'), busy.deps),
+    /still has active Relay work/
+  )
+  assert.equal(busy.commands.length, 0)
+  assert.deepEqual([...busy.cells.values()].map((cell) => cell.targetSize), [1, 1, 1, 1])
+})
+
+test('a selector-era sleep then wake restores the selector membership', async () => {
+  const testHarness = harness({ selectorGeneration: 3 })
+  const file = topologyFile()
+  await runStagingRelayPower(argumentConfig(file, 'sleep'), testHarness.deps)
+  for (const state of testHarness.cells.values()) state.observedRequests = 0
+  await runStagingRelayPower(argumentConfig(file, 'wake'), testHarness.deps)
+
+  assert.equal(testHarness.sqlPolicy(), 'ALWAYS')
   assert.deepEqual([...testHarness.cells.values()].map((cell) => cell.targetSize), [1, 1, 1, 1])
+  assert.equal(testHarness.posts.includes('/v1/admin/cell-state'), false)
+  assert.deepEqual(testHarness.events.at(-1), {
+    event: 'staging_relay_woke',
+    runningCells: ['staging-gce-c1', 'staging-gce-c2', 'staging-gce-c3', 'staging-gce-c4'],
+    admissionCells: ['staging-gce-c3']
+  })
 })
 
 test('refuses to terminate workers from an unknown partially asleep state', async () => {

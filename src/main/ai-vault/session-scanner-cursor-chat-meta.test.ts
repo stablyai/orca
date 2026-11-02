@@ -9,6 +9,8 @@ let failNextChatsReaddir = false
 let failNextChatsRootReaddir = false
 let failMetaJsonReads = false
 let failMetaJsonStats: false | true | 'eacces' = false
+// Stands in for the WSL gate rejecting a read the scan cancelled.
+let cancelMetaJsonReads: AbortController | null = null
 let chatsRootReads = 0
 vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
   const actual = await importOriginal<typeof WslTranscriptFsAccess>()
@@ -36,6 +38,10 @@ vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
       if (failMetaJsonReads && String(args[0]).endsWith('meta.json')) {
         return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
       }
+      if (cancelMetaJsonReads && String(args[0]).endsWith('meta.json')) {
+        cancelMetaJsonReads.abort()
+        return Promise.reject(new DOMException('This operation was aborted', 'AbortError'))
+      }
       return actual.wslGatedReadFile(...args)
     },
     wslGatedStat: (
@@ -60,7 +66,11 @@ import {
   withCursorChatMetaScan
 } from './session-scanner-cursor-chat-meta'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
-import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import {
+  isAiVaultScanCancelledError,
+  type AiVaultScanIssue,
+  type AiVaultSession
+} from '../../shared/ai-vault-types'
 import { AI_VAULT_AGENT_SOURCES } from './session-scanner-agent-sources'
 import { discoverFiles } from './session-scanner-discovery'
 import { scanAiVaultSessions } from './session-scanner'
@@ -68,13 +78,11 @@ import {
   createSessionParseStats,
   parseAgentSessionFileCached,
   resetSessionParseCacheForTests,
-  seedSessionParseCache,
-  snapshotSessionParseCacheForPersistence,
   type SessionParseStats
 } from './session-scanner-parse-cache'
 import {
   getSessionParseCacheEntry,
-  type PersistedSessionParseCacheEntry
+  setSessionParseCacheColdTier
 } from './session-parse-cache-store'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import type { FileWithMtime } from './session-scanner-types'
@@ -101,6 +109,7 @@ afterEach(async () => {
   failNextChatsRootReaddir = false
   failMetaJsonReads = false
   failMetaJsonStats = false
+  cancelMetaJsonReads = null
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
@@ -174,12 +183,16 @@ describe('cursor chat meta', () => {
   it('re-indexes after a chat appears under an already indexed workspace', async () => {
     const cursorHome = await createCursorHome()
     await writeChatMeta(cursorHome, 'workspace-hash', 'chat-first')
+    const workspacePath = join(cursorHome, 'chats', 'workspace-hash')
+    // The directory update must be visible even within one filesystem clock tick.
+    await utimes(workspacePath, 1, 1)
     const firstTranscript = await writeTranscript(cursorHome, 'slug', 'chat-first', [])
     expect(await cursorChatMetaPath(firstTranscript)).toBeDefined()
 
     const laterMetaPath = await writeChatMeta(cursorHome, 'workspace-hash', 'chat-later')
     const laterTranscript = await writeTranscript(cursorHome, 'slug', 'chat-later', [])
 
+    expect((await stat(workspacePath)).mtimeMs).not.toBe(1_000)
     expect(await cursorChatMetaPath(laterTranscript)).toBe(laterMetaPath)
   })
 
@@ -401,6 +414,43 @@ describe('cursor sidecar enrichment', () => {
     expect(session?.resumeCommand).toContain('/repo/second')
   })
 
+  it('keeps the stored merge when a sidecar-only re-merge is cancelled', async () => {
+    const cursorHome = await createCursorHome()
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-9', { cwd: '/repo/first' })
+    await writeTranscript(cursorHome, 'slug', 'chat-9', [
+      JSON.stringify({ role: 'user', message: { content: 'hi' } })
+    ])
+    resetSessionParseCacheForTests()
+    await parseCursorCached(await cursorCandidate(cursorHome))
+    const future = new Date(Date.now() + 10_000)
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-9', { cwd: '/repo/second' })
+    await utimes(join(cursorHome, 'chats', 'workspace-hash', 'chat-9', 'meta.json'), future, future)
+    const candidate = await cursorCandidate(cursorHome)
+    const before = getSessionParseCacheEntry(candidate.path)
+
+    const controller = new AbortController()
+    cancelMetaJsonReads = controller
+    await expect(
+      withCursorChatMetaScan(() =>
+        parseAgentSessionFileCached(
+          { agent: 'cursor', file: candidate, codexHome: null },
+          'darwin',
+          undefined,
+          undefined,
+          controller.signal
+        )
+      )
+    ).rejects.toSatisfy(isAiVaultScanCancelledError)
+    cancelMetaJsonReads = null
+
+    // Not cached as "no metadata" under the new sidecar stat.
+    expect(getSessionParseCacheEntry(candidate.path)?.session?.cwd).toBe('/repo/first')
+    expect(getSessionParseCacheEntry(candidate.path)?.sidecar).toEqual(before?.sidecar)
+    const { session, stats } = await parseCursorCached(candidate)
+    expect(stats.fullParses).toBe(0)
+    expect(session?.cwd).toBe('/repo/second')
+  })
+
   it('treats a persisted entry with no sidecar as unknown and enriches once', async () => {
     const cursorHome = await createCursorHome()
     await writeChatMeta(cursorHome, 'workspace-hash', 'chat-9', { cwd: '/repo/persisted' })
@@ -411,14 +461,15 @@ describe('cursor sidecar enrichment', () => {
     await parseCursorCached(await cursorCandidate(cursorHome))
 
     // What a build older than the sidecar field wrote: no such key.
-    const persisted = snapshotSessionParseCacheForPersistence().map(
-      ([path, entry]): [string, PersistedSessionParseCacheEntry] => {
-        const { sidecar: _sidecar, ...rest } = entry
-        return [path, rest]
-      }
-    )
+    const candidate = await cursorCandidate(cursorHome)
+    const {
+      resume: _resume,
+      foldSession: _fold,
+      sidecar: _sidecar,
+      ...persisted
+    } = getSessionParseCacheEntry(candidate.path)!
     resetSessionParseCacheForTests()
-    seedSessionParseCache(persisted)
+    setSessionParseCacheColdTier({ read: () => persisted, stored: () => {}, deleted: () => {} })
 
     const { session, stats } = await parseCursorCached(await cursorCandidate(cursorHome))
     expect(stats.reused).toBe(0)

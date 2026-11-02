@@ -1,3 +1,4 @@
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -5,7 +6,6 @@ import {
   computeWorktreePathMock,
   createSetupRunnerScript,
   detectInstalledAgentsWithShellPathHydrationMock,
-  detectRemoteAgentsMock,
   electronMocks,
   ensurePathWithinWorkspaceMock,
   getDefaultTabsLaunch,
@@ -14,12 +14,18 @@ import {
   shouldRunSetupForCreate
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
+import {
+  TEST_REPO_ID,
+  makeWorktreeMeta,
+  spawnedPtyEnv,
+  store,
+  makeRuntimeStoreWithWorkspaceSession
+} from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('does not surface the new workspace when a background create splits its setup pane', async () => {
+  it('does not surface the new workspace when a background create opens Setup', async () => {
     const runtimeStore = {
-      ...store,
+      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
       getSettings: () => ({
         ...store.getSettings(),
         setupScriptLaunchMode: 'split-horizontal' as const
@@ -81,28 +87,26 @@ describe('OrcaRuntimeService', () => {
       setupDecision: 'run'
     })
 
-    // Split launch modes reach the renderer through splitTerminal, not
-    // createTerminal — that path must suppress owner surfacing too.
     expect(activateWorktree).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    const mainEnv = (spawn.mock.calls[0]![0] as { env?: Record<string, string> }).env ?? {}
+    const mainEnv = spawnedPtyEnv(spawn.mock.calls[0]![0])
     await vi.waitFor(() =>
       expect(revealTerminalSession).toHaveBeenLastCalledWith(
         result.worktree.id,
         expect.objectContaining({
           ptyId: 'pty-bg-split-setup',
-          tabId: mainEnv.ORCA_TAB_ID,
+          tabId: expect.not.stringMatching(`^${mainEnv.ORCA_TAB_ID}$`),
           activate: false,
           surfaceOwner: false,
-          splitDirection: 'horizontal'
+          title: 'Setup'
         })
       )
     )
   })
 
-  it('still surfaces the new workspace when an activating create splits its setup pane', async () => {
+  it('still surfaces the new workspace when an activating create opens Setup', async () => {
     const runtimeStore = {
-      ...store,
+      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
       getSettings: () => ({
         ...store.getSettings(),
         setupScriptLaunchMode: 'split-horizontal' as const
@@ -175,14 +179,12 @@ describe('OrcaRuntimeService', () => {
         result.worktree.id,
         expect.objectContaining({
           ptyId: 'pty-active-split-setup',
-          splitDirection: 'horizontal'
+          title: 'Setup'
         })
       )
     )
-    const splitRevealPayload = revealTerminalSession.mock.lastCall?.[1] as
-      | { surfaceOwner?: boolean }
-      | undefined
-    expect(splitRevealPayload).not.toHaveProperty('surfaceOwner')
+    const setupRevealPayload = revealTerminalSession.mock.lastCall?.[1]
+    expect(setupRevealPayload).not.toHaveProperty('surfaceOwner')
   })
 
   it('does not warn when setup is explicitly skipped for CLI-created worktrees', async () => {
@@ -564,7 +566,6 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
-    expect(detectRemoteAgentsMock).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-draft',

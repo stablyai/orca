@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import { cancelHistoryGc } from '../terminal-history-gc'
-import type { registerSshHandlers } from '../ipc/ssh'
-import type { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
+import type { registerSshHandlers } from '../ipc/ssh/ssh'
 import type { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import type { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
@@ -29,7 +28,6 @@ const {
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
   registerSshHandlersMock,
-  registerRemoteWorkspaceHandlersMock,
   registerDaemonManagementHandlersMock,
   registerWorkspaceCleanupHandlersMock,
   startFolderRepoGitUpgradeWatchMock,
@@ -59,8 +57,6 @@ const {
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
   registerSshHandlersMock: vi.fn<(...args: Parameters<typeof registerSshHandlers>) => void>(),
-  registerRemoteWorkspaceHandlersMock:
-    vi.fn<(...args: Parameters<typeof registerRemoteWorkspaceHandlers>) => void>(),
   registerDaemonManagementHandlersMock: vi.fn<typeof registerDaemonManagementHandlers>(),
   registerWorkspaceCleanupHandlersMock: vi.fn<typeof registerWorkspaceCleanupHandlers>(),
   startFolderRepoGitUpgradeWatchMock: vi.fn<typeof startFolderRepoGitUpgradeWatch>(),
@@ -116,15 +112,10 @@ vi.mock('../ipc/worktree-change-invalidators', () => ({
   runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
-vi.mock('../ipc/pty', () => ({
-  getLocalPtyProvider: vi.fn(),
-  registerPtyHandlers: registerPtyHandlersMock
-}))
+vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
+vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: registerPtyHandlersMock }))
 
-vi.mock('../ipc/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
-vi.mock('../ipc/remote-workspace', () => ({
-  registerRemoteWorkspaceHandlers: registerRemoteWorkspaceHandlersMock
-}))
+vi.mock('../ipc/ssh/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
 vi.mock('../ipc/pty-management', () => ({
   registerDaemonManagementHandlers: registerDaemonManagementHandlersMock
 }))
@@ -165,7 +156,8 @@ vi.mock('../macos-tcc-prompt-notice', () => ({
   releasePendingTccPromptNotice: releasePendingTccPromptNoticeMock
 }))
 
-import { attachMainWindowServices } from './attach-main-window-services'
+import { attachMainWindowServices, registerUpdaterHandlers } from './attach-main-window-services'
+import { registerUpdaterHandlers as registerWindowUpdaterHandlers } from './main-window-updater'
 
 type MockFn = ReturnType<typeof vi.fn>
 
@@ -207,6 +199,10 @@ async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
 }
 
 describe('attachMainWindowServices', () => {
+  it('exports the updater handlers exercised by the recovery tests', () => {
+    expect(registerUpdaterHandlers).toBe(registerWindowUpdaterHandlers)
+  })
+
   afterEach(() => {
     cancelHistoryGc()
   })
@@ -233,12 +229,6 @@ describe('attachMainWindowServices', () => {
       runtime
     )
     expect(registerSshHandlersMock.mock.calls[0]?.[1]()).toBe(mainWindow)
-    expect(registerRemoteWorkspaceHandlersMock).toHaveBeenCalledExactlyOnceWith(
-      store,
-      expect.any(Function),
-      runtime
-    )
-    expect(registerRemoteWorkspaceHandlersMock.mock.calls[0]?.[1]()).toBe(mainWindow)
     expect(registerDaemonManagementHandlersMock).toHaveBeenCalledExactlyOnceWith()
     expect(registerDaemonManagementHandlersMock).toHaveBeenCalledAfter(registerPtyHandlersMock)
     expect(registerWorkspaceCleanupHandlersMock).toHaveBeenCalledExactlyOnceWith(store)

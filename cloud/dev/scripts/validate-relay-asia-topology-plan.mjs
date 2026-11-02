@@ -25,7 +25,8 @@ const CELL_SHAPES = {
       'production-gce-c31': 'asia-east2-b',
       'production-gce-c32': 'us-central1-a',
       'production-gce-c33': 'us-central1-b',
-      'production-gce-c34': 'asia-east2-c'
+      'production-gce-c34': 'asia-east2-c',
+      'production-gce-c35': 'asia-east2-a'
     },
     waves: [
       ['production-gce-c27', 'production-gce-c28', 'production-gce-c29'],
@@ -33,7 +34,8 @@ const CELL_SHAPES = {
       ['production-gce-c31'],
       // Declared together, so they plan together: a lone C32 plan would hit C33's missing template.
       ['production-gce-c32', 'production-gce-c33'],
-      ['production-gce-c34']
+      ['production-gce-c34'],
+      ['production-gce-c35']
     ]
   },
   staging: {

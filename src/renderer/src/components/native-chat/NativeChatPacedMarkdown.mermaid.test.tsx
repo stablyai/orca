@@ -6,13 +6,24 @@ import {
   NativeChatReplyRevealsContext,
   type NativeChatReplyReveals
 } from './native-chat-reply-reveals'
-import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from './native-chat-text-reveal'
+import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../shared/native-chat-text-reveal'
 
 const reveals: NativeChatReplyReveals = { begun: new Set(['reply']), drawn: new Map() }
 
 const mermaid = vi.hoisted(() => ({ rendered: vi.fn() }))
 vi.mock('@/components/sidebar/CommentMermaidBlock', () => ({
-  default: ({ content: code }: { content: string }) => {
+  default: ({
+    content: code,
+    pendingContent,
+    renderEnabled
+  }: {
+    content: string
+    pendingContent?: React.ReactNode
+    renderEnabled?: boolean
+  }) => {
+    if (renderEnabled === false) {
+      return <>{pendingContent}</>
+    }
     mermaid.rendered(code)
     return <div data-testid="diagram">{code}</div>
   }

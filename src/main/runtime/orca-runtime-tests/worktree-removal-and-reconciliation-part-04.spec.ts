@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -18,13 +18,11 @@ import {
   mkdir,
   mkdtemp,
   restoreLocalWatcherAfterFailedRemovalMock,
-  registerSshGitProvider,
   removeWorktree,
   removeWorktreeLinkedPathsMock,
   rm,
   runHook,
   tmpdir,
-  unregisterSshGitProvider,
   writeFile
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
@@ -47,7 +45,7 @@ import {
 } from '../orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('does not inspect or delete a local path when SSH runtime orphan cleanup has no filesystem provider', async () => {
+  it('does not inspect or delete a local path for an SSH runtime orphan this process does not serve', async () => {
     const localPath = await mkdtemp(join(tmpdir(), 'orca-runtime-ssh-missing-fs-'))
     const repo = {
       id: 'repo-runtime-ssh-missing-fs',
@@ -79,30 +77,17 @@ describe('OrcaRuntimeService', () => {
       },
       removeWorktreeMeta
     }
-    const gitProvider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: repo.path,
-          head: 'main',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
-        }
-      ])
-    }
-    registerSshGitProvider(repo.connectionId, gitProvider as never)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
       await expect(
         runtime.removeManagedWorktree(`id:${worktreeId}`, { force: true })
-      ).rejects.toThrow('SSH filesystem provider unavailable')
+      ).rejects.toThrow('Remote connection dropped')
 
       await expect(lstat(localPath)).resolves.toBeTruthy()
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
     } finally {
-      unregisterSshGitProvider(repo.connectionId)
       await rm(localPath, { recursive: true, force: true })
     }
   })
@@ -334,7 +319,10 @@ describe('OrcaRuntimeService', () => {
         stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
       })
     )
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+    onTestFinished(() => gitSpy.mockRestore())
 
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
     expect(removeWorktree).toHaveBeenCalledWith(
@@ -513,7 +501,10 @@ describe('OrcaRuntimeService', () => {
         stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
       })
     )
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+    onTestFinished(() => gitSpy.mockRestore())
 
     // Prime the bounded raw scan cache with the worktree still present.
     await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)

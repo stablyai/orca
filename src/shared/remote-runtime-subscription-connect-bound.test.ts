@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from './paired-runtime-connection'
 /**
  * The subscribe path is the one that regressed: its connect failure rejects the subscribe
  * promise rather than reaching `onError`, and that rejection crosses `ipcMain.handle`, which
@@ -57,12 +58,12 @@ describe('remote runtime subscription connect bound', () => {
     const keyPair = generateKeyPair()
     const controller = new AbortController()
     const pending = subscribeRemoteRuntimeTransport(
-      {
+      pairedRuntimeConnectionFromOffer({
         v: 2,
         endpoint,
         deviceToken: 'device-token',
         publicKeyB64: publicKeyToBase64(keyPair.publicKey)
-      },
+      }),
       'files.search',
       { worktree: 'id:fixture', query: 'needle' },
       15_000,
@@ -86,12 +87,12 @@ describe('remote runtime subscription connect bound', () => {
     controller.abort()
     await expect(
       subscribeRemoteRuntimeTransport(
-        {
+        pairedRuntimeConnectionFromOffer({
           v: 2,
           endpoint,
           deviceToken: 'device-token',
           publicKeyB64: publicKeyToBase64(keyPair.publicKey)
-        },
+        }),
         'files.search',
         {},
         15_000,
@@ -107,12 +108,12 @@ describe('remote runtime subscription connect bound', () => {
     const keyPair = generateKeyPair()
 
     const rejection = await subscribeRemoteRuntimeTransport(
-      {
+      pairedRuntimeConnectionFromOffer({
         v: 2,
         endpoint,
         deviceToken: 'device-token',
         publicKeyB64: publicKeyToBase64(keyPair.publicKey)
-      },
+      }),
       'terminal.multiplex',
       {},
       // Why: comfortably longer than the connect bound, reproducing production's

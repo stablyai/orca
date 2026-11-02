@@ -15,6 +15,9 @@ vi.mock('@/store', () => {
     settings: { defaultTuiAgent: 'codex', disabledTuiAgents: [] },
     worktreesByRepo: {},
     repos: [],
+    activeWorktreeId: 'worktree-1',
+    tabsByWorktree: { 'worktree-1': [{ id: 'starting-tab', ptyId: null }] },
+    ptyIdsByTabId: {},
     openSettingsPage: vi.fn(),
     openSettingsTarget: vi.fn()
   }
@@ -49,7 +52,10 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 const launchMock = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
-vi.mock('sonner', () => ({ toast: { error: toastError, message: vi.fn(), success: vi.fn() } }))
+const toastMessage = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({
+  toast: { error: toastError, message: toastMessage, success: vi.fn() }
+}))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMock }))
 
 type DivProps = { disabled?: boolean; title?: string; onSelect?: () => void }
@@ -68,7 +74,6 @@ function registerLaunch(
   attempt: StructuredLaunchAttempt = {
     kind: 'first',
     requestId: `${agent}-pick`,
-    blank: true,
     stagedPrompt: null
   }
 ): void {
@@ -224,6 +229,30 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Couldn't send to"), {
       description: expect.stringContaining("Orca couldn't confirm your message reached the agent")
     })
+  })
+
+  // Why: the pane's own spawn reports a real failure; a terminal still starting is not one.
+  it("says nothing while a new tab's terminal is still starting", async () => {
+    vi.useFakeTimers()
+    try {
+      launchMock.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'starting-tab' } })
+      toastError.mockClear()
+      toastMessage.mockClear()
+      render(
+        <QuickLaunchAgentMenuItems
+          worktreeId={WORKTREE_ID}
+          groupId="group-1"
+          onFocusTerminal={vi.fn()}
+        />
+      )
+      fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(toastMessage).not.toHaveBeenCalled()
+      expect(toastError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('starts no agent when the menu has nothing left to send', () => {

@@ -37,9 +37,6 @@ function entry(
   return { itemId, revision: 0, sequence, observedAt: sequence, body, turnScope }
 }
 
-// A client that draws no other rejected send in place; a send a Stop took back is drawn either way.
-const NO_IN_PLACE = { rejectedInPlace: false }
-
 const said = (itemId: string, text: string, turnItemId: string) =>
   entry(
     itemId,
@@ -77,7 +74,7 @@ const stopped = (id: string, overrides: Partial<AgentJournalSubmission> = {}) =>
 /** Each row as id and role, in the order the transcript draws them. */
 function rows(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
   return projectNativeChatTranscriptMessages(
-    projectStructuredAgentSessionMessages(items, [], submissions, NO_IN_PLACE)
+    projectStructuredAgentSessionMessages(items, [], submissions)
   ).map((message) => ({ id: message.id, role: message.role }))
 }
 
@@ -132,12 +129,7 @@ describe('a send a Stop took back before the agent started it', () => {
       user('never-ran'),
       stopRow('never-ran')
     ])
-    const [, , row] = projectStructuredAgentSessionMessages(
-      items,
-      [],
-      [stopped('never-ran')],
-      NO_IN_PLACE
-    )
+    const [, , row] = projectStructuredAgentSessionMessages(items, [], [stopped('never-ran')])
     expect(row?.blocks).toEqual([
       {
         type: 'text',
@@ -146,8 +138,7 @@ describe('a send a Stop took back before the agent started it', () => {
       }
     ])
     expect(row?.journalPosition).toEqual(
-      projectStructuredAgentSessionMessages(items, [], [stopped('never-ran')], NO_IN_PLACE)[1]
-        ?.journalPosition
+      projectStructuredAgentSessionMessages(items, [], [stopped('never-ran')])[1]?.journalPosition
     )
   })
 
@@ -396,7 +387,7 @@ describe('a send a Stop took back before the agent started it', () => {
     ]
     const journal = { items, submissions }
     const { conversation } = projectNativeChatTranscript(
-      projectStructuredAgentSessionMessages(items, [], submissions, NO_IN_PLACE),
+      projectStructuredAgentSessionMessages(items, [], submissions),
       undefined,
       journal
     )
@@ -738,13 +729,15 @@ describe('a send a Stop took back before the agent started it', () => {
     expect(rows(items, [stopped('card-send', { queuedMessageId: 'card-1' })])).toEqual([])
   })
 
-  it('keeps any other refused send out of the conversation', () => {
-    const items = [sent('refused', 'hello')]
+  it('draws any other refused send as not sent, with no stop row', () => {
+    const shown = projectStructuredAgentSessionMessages(
+      [sent('refused', 'hello')],
+      [],
+      [submission('refused', { dispatchState: 'rejected', reason: DISPATCH_REJECTED_WRITE_FAILED })]
+    )
 
-    expect(
-      rows(items, [
-        submission('refused', { dispatchState: 'rejected', reason: DISPATCH_REJECTED_WRITE_FAILED })
-      ])
-    ).toEqual([])
+    expect(shown.map(({ id, unsent }) => ({ id, unsent }))).toEqual([
+      { id: agentJournalSubmissionKey('refused'), unsent: true }
+    ])
   })
 })

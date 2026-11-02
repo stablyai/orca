@@ -6,6 +6,7 @@ import { hasJiraAssigneeCreateField } from '@/components/task-page-jira-create-f
 import { getJiraProjectSelectionKey } from '@/components/task-page-jira-project-selection'
 import { jiraListAssignableUsersForProject } from '@/runtime/runtime-jira-client'
 import { translate } from '@/i18n/i18n'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export function TaskPageJiraIssueAssigneeField({
   model
@@ -34,7 +35,7 @@ export function TaskPageJiraIssueAssigneeField({
     setNewJiraIssueAssignee,
     newJiraIssueSubmitting
   } = model
-  const providerSettings = jiraTaskSourceContext ?? settings
+  const providerSettings = jiraTaskSourceContext ?? defaultScopeSource(settings)
   const projectKey = newJiraIssueTargetProject?.key
   const projectSiteId = newJiraIssueTargetProject?.siteId
   const searchAssignableUsers = useCallback(

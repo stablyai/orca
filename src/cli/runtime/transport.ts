@@ -1,8 +1,10 @@
-import { readSshBridgeCredential } from '../../shared/ssh-bridge-credential-env'
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import type {
+  ExpectedRuntimeSource,
+  RuntimeOrchestrationEnvelope
+} from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
@@ -13,7 +15,9 @@ export async function sendRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  // Why separate from the envelope: federation forwards envelopes to other runtimes.
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
@@ -197,15 +201,15 @@ export async function sendRequest<TResult>(
       socket.write(
         `${JSON.stringify({
           id: requestId,
-          // Why: a bridged SSH invocation must present its scoped credential, never the owner token.
-          authToken: readSshBridgeCredential() ?? metadata.authToken,
+          authToken: metadata.authToken,
           method,
           params,
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
+          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
+          expectedRuntimeSource
         })}\n`
       )
     })

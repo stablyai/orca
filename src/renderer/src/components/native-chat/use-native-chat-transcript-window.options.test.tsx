@@ -272,10 +272,10 @@ describe('native chat transcript virtualizer contract', () => {
     expect(result.current.isAlignPending()).toBe(false)
 
     result.current.alignToViewportTop(row)
-    expect(virtualizerMock.scrollToIndex).toHaveBeenCalledWith(
-      3,
-      expect.objectContaining({ align: 'start' })
-    )
+    expect(virtualizerMock.scrollToIndex).toHaveBeenCalledWith(3, {
+      align: 'start',
+      behavior: 'auto'
+    })
     scrollElement.scrollTop = 900
     expect(result.current.isAlignPending()).toBe(true)
     scrollElement.scrollTop = 401

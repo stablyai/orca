@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   flushOrcadProfileStoreForShutdown,
@@ -70,6 +72,25 @@ describe('orcad profile-state shutdown', () => {
       installOrcadShutdownSignals(async () => {})('idle', notFailed)
       await vi.waitFor(() => expect(exit).toHaveBeenLastCalledWith(0))
       expect(notFailed).not.toHaveBeenCalled()
+
+      // A fatal fault's completed stop must still read as a failure to a supervisor.
+      installOrcadShutdownSignals(async () => {})('uncaught exception', undefined, 1)
+      await vi.waitFor(() => expect(exit).toHaveBeenLastCalledWith(1))
+
+      // A fatal fault during an idle stop escalates it and retracts the clean-stop record once.
+      let finishStop = (): void => {}
+      const idleFailed = vi.fn()
+      const idle = installOrcadShutdownSignals(
+        () => new Promise<void>((resolve) => (finishStop = resolve))
+      )
+      expect(idle('idle', idleFailed)).toBe(true)
+      expect(idle('uncaught exception', undefined, 1)).toBe(false)
+      expect(idle('uncaught exception', undefined, 1)).toBe(false)
+      expect(idleFailed).toHaveBeenCalledOnce()
+      exit.mockClear()
+      finishStop()
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+      expect(idleFailed).toHaveBeenCalledOnce()
     } finally {
       vi.restoreAllMocks()
     }
@@ -166,5 +187,17 @@ describe('orcad profile-state shutdown', () => {
 
     await expect(flushOrcadProfileStoreForShutdown(store)).rejects.toBe(flushError)
     expect(freezeWritesAsync).toHaveBeenCalledOnce()
+  })
+})
+
+describe('orcad runtime cleanup order', () => {
+  // Booting orcad here would need its whole runtime; the wiring is pinned by the entry point's text.
+  it('closes notification dismissals in a cleanup that runs after RPC stops', () => {
+    const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
+    const close = entry.indexOf('registerCleanup(() => runtime.closeNotificationDismissals())')
+    const rpcStop = entry.indexOf('registerCleanup(() => rpc.stop())')
+    expect(close).toBeGreaterThan(-1)
+    // Cleanups run in reverse registration order.
+    expect(close).toBeLessThan(rpcStop)
   })
 })

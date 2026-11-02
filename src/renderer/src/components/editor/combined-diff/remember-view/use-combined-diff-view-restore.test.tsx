@@ -9,8 +9,9 @@ import { useCombinedDiffSectionLoadRegistry } from '../load-sections/combined-di
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { combinedDiffViewStateCache } from './combined-diff-view-memory'
 import { useCombinedDiffViewRestore } from './use-combined-diff-view-restore'
-import { disposeClosedEditorTabs } from '../../closed-editor-tab-disposal'
-import type { MonacoModelRegistry } from '../../diff-monaco-model-disposal'
+import { createStore } from 'zustand/vanilla'
+import { createEditorModelRegistry } from '@/lib/editor-model-registry'
+import { attachClosedEditorTabCleanup } from '../../closed-editor-tab-controller'
 import type { OpenFile } from '@/store/slices/editor'
 
 function buildAllModeEntrySet(
@@ -78,7 +79,7 @@ describe('useCombinedDiffViewRestore deferral', () => {
     expect(sections.map((section) => section.loadOnDemand)).toEqual([true, true, false])
   })
 
-  it('restores a closed combined-diff tab from the view-state cache when it is reopened', () => {
+  it('restores a closed combined-diff tab with a cold model registry when reopened', async () => {
     // Why this test exists: combined-diff tab ids are deterministic
     // (`<worktreeId>::all-diffs::uncommitted`), so closing and reopening the review hits the same
     // viewStateKey and restores loaded bodies + scroll with no refetch. Sweeping the combined-diff
@@ -115,22 +116,26 @@ describe('useCombinedDiffViewRestore deferral', () => {
     })
     cleanup()
 
-    const closedTab = {
+    const closedTab: OpenFile = {
       id: viewStateKey,
       mode: 'diff',
       diffSource: 'combined-uncommitted',
       filePath: '/repo',
-      worktreeId: 'wt-1'
-    } as unknown as OpenFile
-    disposeClosedEditorTabs(
-      {
-        editor: { getModel: () => null, getModels: () => [] },
-        Uri: { parse: (v: string) => v }
-      } as unknown as MonacoModelRegistry,
-      [closedTab]
-    )
-
-    expect(restoreSections(entrySet, viewStateKey)).toEqual(loadedSections)
+      worktreeId: 'wt-1',
+      relativePath: '',
+      language: 'plaintext',
+      isDirty: false
+    }
+    const store = createStore(() => ({ openFiles: [closedTab] }))
+    const detach = attachClosedEditorTabCleanup(store, createEditorModelRegistry())
+    try {
+      store.setState({ openFiles: [] })
+      await Promise.resolve()
+      store.setState({ openFiles: [closedTab] })
+      expect(restoreSections(entrySet, viewStateKey)).toEqual(loadedSections)
+    } finally {
+      detach()
+    }
   })
 
   it('auto-loads an uncounted tracked row once its own pass counted something', () => {

@@ -15,6 +15,7 @@ import {
   mediaReleaseParamsSchema,
   mediaReleaseResultSchema
 } from './bridge-media-verbs'
+import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 
 /**
  * The shell-answered request seam: what a `native.` method is, and every verb there is.
@@ -42,7 +43,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.media.release',
   'native.audio.start',
   'native.audio.read',
-  'native.audio.stop'
+  'native.audio.stop',
+  'native.storage.read'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -88,6 +90,12 @@ export const clipboardReadParamsSchema = z.strictObject({ mime: mimeSchema })
 export const clipboardWriteResultSchema = z.strictObject({ written: z.boolean() })
 export const clipboardReadResultSchema = z.strictObject({ value: z.string() })
 
+// A workspace key the host-area page opened in-page, read on demand rather than carried in `init`.
+export const storageReadParamsSchema = z.strictObject({
+  key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS)
+})
+export const storageReadResultSchema = z.strictObject({ value: z.string().nullable() })
+
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
     params: clipboardWriteParamsSchema,
@@ -124,6 +132,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.audio.stop': {
     params: audioStopParamsSchema,
     result: audioStopResultSchema
+  },
+  'native.storage.read': {
+    params: storageReadParamsSchema,
+    result: storageReadResultSchema
   }
 }
 

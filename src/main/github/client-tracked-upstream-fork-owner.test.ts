@@ -9,7 +9,6 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -31,11 +30,9 @@ import { resetPRForBranchMocks } from './client-test-harness'
 
 const {
   ghExecFileAsyncMock,
-  getOwnerRepoMock,
   getOwnerRepoForRemoteMock,
   resolvePRRepositoryCandidatesMock,
-  gitExecFileAsyncMock,
-  getSshGitProviderMock
+  gitExecFileAsyncMock
 } = clientMocks
 
 describe('getPRForBranch', () => {
@@ -199,175 +196,5 @@ describe('getPRForBranch', () => {
       ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Fno-pr&state=all&per_page=1'],
       { cwd: '/repo-root' }
     )
-  })
-
-  it('checks the tracked upstream branch through the SSH git provider', async () => {
-    const sshGitProvider = {
-      exec: vi.fn().mockResolvedValue({
-        stdout: 'local-created-from-pr\0origin/contributor/original\n',
-        stderr: ''
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(sshGitProvider)
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 78,
-            title: 'SSH upstream branch PR',
-            state: 'open',
-            html_url: 'https://github.com/acme/widgets/pull/78',
-            updated_at: '2026-03-28T00:00:00Z',
-            draft: false,
-            mergeable: true,
-            base: { ref: 'main', sha: 'base-oid' },
-            head: { ref: 'contributor/original', sha: 'upstream-head-oid' }
-          }
-        ])
-      })
-
-    const pr = await getPRForBranch(
-      '/remote/repo-root',
-      'local-created-from-pr',
-      undefined,
-      'ssh-1'
-    )
-
-    expect(sshGitProvider.exec).toHaveBeenCalledWith(
-      ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads'],
-      '/remote/repo-root'
-    )
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Acontributor%2Foriginal&state=all&per_page=1'],
-      {}
-    )
-    expect(pr).toMatchObject({ number: 78, title: 'SSH upstream branch PR' })
-  })
-
-  it('uses the same-name tracked upstream fork owner through the SSH git provider', async () => {
-    const sshGitProvider = {
-      exec: vi.fn().mockResolvedValue({
-        stdout: 'contributor/fix\0fork/contributor/fix\n',
-        stderr: ''
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(sshGitProvider)
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [
-        { owner: 'stablyai', repo: 'orca' },
-        { owner: 'origin-owner', repo: 'orca' }
-      ],
-      headRepo: { owner: 'origin-owner', repo: 'orca' }
-    })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'fork-owner', repo: 'orca' })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 79,
-            title: 'SSH same-name fork PR',
-            state: 'open',
-            html_url: 'https://github.com/stablyai/orca/pull/79',
-            updated_at: '2026-03-28T00:00:00Z',
-            draft: false,
-            mergeable: true,
-            base: { ref: 'main', sha: 'base-oid' },
-            head: { ref: 'contributor/fix', sha: 'same-name-ssh-head-oid' }
-          }
-        ])
-      })
-
-    const pr = await getPRForBranch('/remote/repo-root', 'contributor/fix', undefined, 'ssh-1')
-
-    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/remote/repo-root', 'fork', 'ssh-1')
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['api', 'repos/stablyai/orca/pulls?head=fork-owner%3Acontributor%2Ffix&state=all&per_page=1'],
-      {}
-    )
-    expect(pr).toMatchObject({
-      number: 79,
-      title: 'SSH same-name fork PR',
-      prRepo: { owner: 'stablyai', repo: 'orca' },
-      headRepo: { owner: 'fork-owner', repo: 'orca' }
-    })
-  })
-
-  it('caches positive tracked-upstream entries for unsigned SSH runtimes during PR refresh polling', async () => {
-    const sshGitProvider = {
-      exec: vi.fn().mockResolvedValue({
-        stdout: 'refs/heads/feature\0origin/contributor/original\n',
-        stderr: ''
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(sshGitProvider)
-    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-    getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
-
-    await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
-    await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
-    await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
-
-    expect(sshGitProvider.exec).toHaveBeenCalledTimes(1)
-  })
-
-  it('refreshes positive tracked-upstream entries for unsigned SSH runtimes after the TTL', async () => {
-    vi.useFakeTimers()
-    try {
-      const sshGitProvider = {
-        exec: vi
-          .fn()
-          .mockResolvedValueOnce({
-            stdout: 'refs/heads/feature\0origin/old-upstream\n',
-            stderr: ''
-          })
-          .mockResolvedValueOnce({
-            stdout: 'refs/heads/feature\0origin/contributor/original\n',
-            stderr: ''
-          })
-      }
-      getSshGitProviderMock.mockReturnValue(sshGitProvider)
-      getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-      getOwnerRepoForRemoteMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-      ghExecFileAsyncMock
-        .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-        .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-        .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-        .mockResolvedValueOnce({
-          stdout: JSON.stringify([
-            {
-              number: 81,
-              title: 'Fresh SSH upstream PR',
-              state: 'open',
-              html_url: 'https://github.com/acme/widgets/pull/81',
-              updated_at: '2026-03-28T00:00:00Z',
-              draft: false,
-              mergeable: true,
-              base: { ref: 'main', sha: 'base-oid' },
-              head: { ref: 'contributor/original', sha: 'upstream-head-oid' }
-            }
-          ])
-        })
-
-      await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
-      await vi.advanceTimersByTimeAsync(30_001)
-      const pr = await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
-
-      expect(sshGitProvider.exec).toHaveBeenCalledTimes(2)
-      expect(pr).toMatchObject({
-        number: 81,
-        title: 'Fresh SSH upstream PR'
-      })
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

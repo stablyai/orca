@@ -15,6 +15,7 @@ import {
   type FileLinkTarget
 } from '@/components/terminal-pane/terminal-file-link-target'
 import { getTerminalFileContext } from '@/components/terminal-pane/terminal-file-path-mapping'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 // Why: a host that could not answer is retried a few times, then waits for the next recheck.
 export const UNVERIFIABLE_RETRY_DELAYS_MS = [2_000, 10_000, 30_000] as const
@@ -67,8 +68,14 @@ export function createNativeChatFileLinkExistence(
   const inFlight = new Map<string, number>()
   /** Paths the host could not answer in this generation, with their pending retry. */
   const failures = new Map<string, { attempt: number; timer?: ReturnType<typeof setTimeout> }>()
-  /** Subscribed messages per path, so a changed answer refreshes only them. */
-  const holders = new Map<string, { target: FileLinkTarget; watchers: Set<WatcherState> }>()
+  /** Subscribed messages per path; their answers stay live beyond the unobserved cache limit. */
+  const holders = new Map<
+    string,
+    { target: FileLinkTarget; watchers: Set<WatcherState>; answer?: Answer }
+  >()
+
+  const answerFor = (key: string): Answer | undefined =>
+    holders.get(key)?.answer ?? answers.get(key)
 
   const clearFailure = (key: string): void => {
     clearTimeout(failures.get(key)?.timer)
@@ -79,7 +86,7 @@ export function createNativeChatFileLinkExistence(
     if (inFlight.get(key) === sentIn) {
       inFlight.delete(key)
     }
-    const previous = answers.get(key)
+    const previous = answerFor(key)
     // Why: a reply to an older question must not overwrite what a newer one found.
     if (previous && previous.generation > sentIn) {
       return
@@ -87,7 +94,12 @@ export function createNativeChatFileLinkExistence(
     if (sentIn === generation) {
       clearFailure(key)
     }
-    writeTerminalPathExistsCache(answers, key, { exists, generation: sentIn })
+    const held = holders.get(key)
+    if (held) {
+      held.answer = { exists, generation: sentIn }
+    } else {
+      writeTerminalPathExistsCache(answers, key, { exists, generation: sentIn })
+    }
     if ((previous?.exists ?? false) !== exists) {
       for (const watcher of holders.get(key)?.watchers ?? []) {
         watcher.refresh()
@@ -131,8 +143,8 @@ export function createNativeChatFileLinkExistence(
       if (
         !current.sourceHostResolved ||
         current.connectionId !== target.fileContext.connectionId ||
-        current.settings?.activeRuntimeEnvironmentId !==
-          target.fileContext.settings?.activeRuntimeEnvironmentId
+        runtimeTargetEnvironmentId(current.target) !==
+          runtimeTargetEnvironmentId(target.fileContext.target)
       ) {
         throw new Error('The workspace host changed or could not be determined')
       }
@@ -160,6 +172,11 @@ export function createNativeChatFileLinkExistence(
 
   const index = (watcher: WatcherState, target: FileLinkTarget): void => {
     const entry = holders.get(target.cacheKey) ?? { target, watchers: new Set<WatcherState>() }
+    const cached = answers.get(target.cacheKey)
+    if (cached) {
+      entry.answer = cached
+      answers.delete(target.cacheKey)
+    }
     entry.watchers.add(watcher)
     holders.set(target.cacheKey, entry)
   }
@@ -170,6 +187,9 @@ export function createNativeChatFileLinkExistence(
       entry?.watchers.delete(watcher)
       if (entry?.watchers.size === 0) {
         holders.delete(key)
+        if (entry.answer) {
+          writeTerminalPathExistsCache(answers, key, entry.answer)
+        }
         // Why: nothing shows this path any more, so its retries end here.
         clearFailure(key)
       }
@@ -197,7 +217,7 @@ export function createNativeChatFileLinkExistence(
       return false
     }
     const key = target.cacheKey
-    const answer = readTerminalPathExistsCache(answers, key)
+    const answer = holders.get(key)?.answer ?? readTerminalPathExistsCache(answers, key)
     if (!answer && !mayAsk) {
       return false
     }
@@ -213,14 +233,14 @@ export function createNativeChatFileLinkExistence(
   }
 
   const isOutdated = (key: string): boolean =>
-    (answers.get(key)?.generation ?? -1) < generation && !failures.has(key)
+    (answerFor(key)?.generation ?? -1) < generation && !failures.has(key)
 
   // Why: an answer can land between a message's render and its subscribe; nothing would refresh it.
   const catchUp = (watcher: WatcherState): void => {
     let changed = false
     for (const [key, { target, shown }] of watcher.held) {
       index(watcher, target)
-      changed ||= (answers.get(key)?.exists ?? false) !== shown
+      changed ||= (answerFor(key)?.exists ?? false) !== shown
       if (isOutdated(key)) {
         send(target)
       }

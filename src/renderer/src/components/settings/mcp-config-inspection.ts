@@ -9,6 +9,9 @@ import {
 import { joinPath } from '../../lib/path'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import type { LoadedMcpConfigInspection } from './McpConfigFileRow'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 
 function isMissingFileError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
@@ -17,10 +20,10 @@ function isMissingFileError(error: unknown): boolean {
 
 export async function loadMcpConfigInspections(
   targetRootPath: string,
-  connectionId: string | undefined
+  context: RuntimeFileOperationArgs
 ): Promise<LoadedMcpConfigInspection[]> {
   const entriesByRelativeDir = new Map<string, readonly McpConfigDirectoryEntry[]>()
-  const rootEntries = await window.api.fs.readDir({ dirPath: targetRootPath, connectionId })
+  const rootEntries = await readRuntimeDirectory(context, targetRootPath)
   entriesByRelativeDir.set('', rootEntries)
 
   const rootDirectoryNames = new Set(
@@ -33,10 +36,7 @@ export async function loadMcpConfigInspections(
         return
       }
       try {
-        const entries = await window.api.fs.readDir({
-          dirPath: joinPath(targetRootPath, relativeDir),
-          connectionId
-        })
+        const entries = await readRuntimeDirectory(context, joinPath(targetRootPath, relativeDir))
         entriesByRelativeDir.set(relativeDir, entries)
       } catch (error) {
         unreadableParentDirMessages.set(
@@ -74,16 +74,23 @@ export async function loadMcpConfigInspections(
       }
 
       try {
-        const result = await window.api.fs.readFile({ filePath: absolutePath, connectionId })
+        const result = await readRuntimeFileContent({
+          target: context.target,
+          worktreeId: context.worktreeId ?? undefined,
+          filePath: absolutePath,
+          relativePath: candidate.relativePath,
+          connectionId: context.connectionId
+        })
         const inspection = inspectMcpConfigContent(candidate, result.isBinary ? '' : result.content)
         return { ...inspection, absolutePath }
       } catch (error) {
         if (isMissingFileError(error)) {
           return { ...inspectMcpConfigContent(candidate, null), absolutePath }
         }
+        // Why: the listing proved the file exists; an unreadable file must not unlock starter overwrite.
         return {
           ...inspectMcpConfigContent(candidate, null),
-          exists: false,
+          exists: true,
           status: 'invalid',
           absolutePath,
           readError: extractIpcErrorMessage(error, 'Unable to read config file.')

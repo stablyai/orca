@@ -3,6 +3,10 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import {
+  createRunningPullRequestGenerationRecord,
+  resolvePullRequestGenerationSuccess
+} from '@/store/slices/pull-request-generation'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { CreateHostedReviewResult } from '../../../../../shared/hosted-review'
 import { getDefaultSourceControlAiSettings } from '../../../../../shared/source-control-ai-settings'
@@ -20,7 +24,7 @@ type CreateInput = Parameters<typeof useChecksPanelCreateReview>[0]
 afterEach(() => {
   cleanup()
   openHttpLink.mockClear()
-  useAppStore.setState({ activeWorktreeId: null })
+  useAppStore.setState({ activeWorktreeId: null, pullRequestGenerationRecords: {} })
 })
 
 function makeInput(overrides: Partial<CreateInput> = {}): CreateInput {
@@ -70,6 +74,8 @@ function makeInput(overrides: Partial<CreateInput> = {}): CreateInput {
       useTemplate: true
     },
     prDraft: true,
+    prFieldRevisions: { base: 0, title: 0, body: 0, draft: 0 },
+    pullRequestFieldsInitialized: true,
     prFieldsAreSeedPlaceholders: false,
     prGenerating: false,
     prTitle: '  Create title  ',
@@ -116,6 +122,83 @@ describe('useChecksPanelCreateReview provider flow', () => {
     expect(setIsCreatingPr).toHaveBeenLastCalledWith(false)
     expect(createPrInFlightRef.current).toBeNull()
   })
+
+  it.each(['github', 'gitlab'] as const)(
+    'keeps a title edited while %s auto-submit generation is pending',
+    async (provider) => {
+      let finish = (): void => {}
+      const input = makeInput({
+        activePullRequestGenerationKey: 'checks-title-edits',
+        hostedReviewCreateProvider: provider,
+        prAiGenerationEnabled: true,
+        prFieldsAreSeedPlaceholders: true,
+        handleGeneratePullRequestFields: vi.fn(
+          () =>
+            new Promise<{ result: { base: string; title: string; body: string; draft: boolean } }>(
+              (resolve) => {
+                useAppStore.getState().setPullRequestGenerationRecord(
+                  'checks-title-edits',
+                  createRunningPullRequestGenerationRecord(
+                    {
+                      repoId: 'repo-1',
+                      worktreeId: 'wt-1',
+                      worktreePath: '/workspace/repo',
+                      branch: 'feature/create',
+                      requestId: 3,
+                      runtimeTarget: { kind: 'local' }
+                    },
+                    { base: 'main', title: 'Seed title', body: '', draft: false },
+                    { base: 0, title: 0, body: 0, draft: 0 },
+                    true
+                  )
+                )
+                finish = () => {
+                  const record = resolvePullRequestGenerationSuccess({
+                    record:
+                      useAppStore.getState().pullRequestGenerationRecords['checks-title-edits'],
+                    requestId: 3,
+                    result: {
+                      base: 'main',
+                      title: '[ORCA-7] Generated title',
+                      body: 'Generated details',
+                      draft: true
+                    }
+                  })
+                  if (record?.result) {
+                    resolve({ result: record.result })
+                  }
+                }
+              }
+            )
+        ),
+        ownerSettings: {
+          ...getDefaultSettings('/home/test'),
+          sourceControlAi: { ...getDefaultSourceControlAiSettings(), agentId: 'cursor' }
+        }
+      })
+      const { result, rerender } = renderHook(
+        (props: CreateInput) => useChecksPanelCreateReview(props),
+        { initialProps: input }
+      )
+      let click: Promise<void> = Promise.resolve()
+      act(() => {
+        click = result.current.handleCreatePullRequest()
+      })
+      rerender({
+        ...input,
+        prTitle: 'My manual title',
+        prFieldRevisions: { base: 0, title: 1, body: 0, draft: 0 }
+      })
+      await act(async () => {
+        finish()
+        await click
+      })
+      expect(input.createHostedReview).toHaveBeenCalledWith(
+        '/workspace/repo',
+        expect.objectContaining({ title: 'My manual title', body: 'Generated details', provider })
+      )
+    }
+  )
 
   it('generates details, then creates with them, when the composer still holds placeholders', async () => {
     const input = makeInput({

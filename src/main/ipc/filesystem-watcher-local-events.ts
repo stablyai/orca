@@ -18,6 +18,10 @@ import {
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush, createDebouncedBatch } from './filesystem-watcher-batch-control'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import {
+  notifyLocalWatcherEvents,
+  notifyLocalWatcherInterrupted
+} from './local-watcher-event-observers'
 
 // Why: matches the watcher subprocess budget in parcel-watcher-event-delivery.ts.
 const DIRECTORY_STAT_CONCURRENCY = 8
@@ -245,6 +249,7 @@ export async function createLocalWatcher(
     }
 
     const markWatcherInterrupted = (): void => {
+      notifyLocalWatcherInterrupted(root)
       root.batch.overflowed = true
       scheduleLocalBatchFlush(root)
     }
@@ -256,6 +261,7 @@ export async function createLocalWatcher(
         if (err) {
           // Why: treat watcher errors as overflow so the renderer conservatively refreshes rather than trusting possibly-invalid caches (§7.2, §7.3).
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
+          notifyLocalWatcherInterrupted(root)
           emitOverflowPayload(root)
           // Why: after an error the native subscription may be invalid (deleted root); tear down the dead watcher so it doesn't dangle (§7.3).
           cancelLocalBatchFlush(root)
@@ -272,6 +278,7 @@ export async function createLocalWatcher(
         if (root.batch.cancelled) {
           return
         }
+        notifyLocalWatcherEvents(root, events)
         queueWatcherEvents(root.batch, events)
         scheduleLocalBatchFlush(root)
       },

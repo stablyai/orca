@@ -1,7 +1,6 @@
 import { ChevronDown, Loader2, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
-import type { RemotePairingFailureKind } from '../../../../shared/remote-pairing-verification'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
@@ -10,14 +9,12 @@ import { Label } from '../ui/label'
 import { translate } from '@/i18n/i18n'
 import {
   translateHostAccessLinkError,
-  translateRemotePairingEndpointKind,
-  translateRemotePairingFailureDescription
+  translateRemotePairingEndpointKind
 } from '@/lib/remote-pairing-copy'
-
-export type RuntimeHostAccessFailure = {
-  kind: RemotePairingFailureKind
-  message: string
-}
+import {
+  RuntimeHostAccessFailureAlert,
+  type RuntimeHostAccessFailure
+} from './RuntimeHostAccessFailureAlert'
 
 type RuntimeHostAccessFormProps = {
   name: string
@@ -238,51 +235,11 @@ export function RuntimeHostAccessForm({
       ) : null}
 
       {failure ? (
-        <div
+        <RuntimeHostAccessFailureAlert
           id="runtime-server-verification-error"
-          role="alert"
-          className="space-y-1 rounded-md border border-destructive/50 p-3"
-        >
-          <div className="text-sm font-medium text-destructive">
-            {failure.kind === 'host-identity-mismatch'
-              ? translate(
-                  'auto.components.settings.RuntimeHostAccessForm.identityMismatch',
-                  'The reached Orca host does not match this access link'
-                )
-              : failure.kind === 'access-link-invalid'
-                ? translate(
-                    'auto.components.settings.RuntimeHostAccessForm.invalidLink',
-                    'This access link is no longer valid'
-                  )
-                : failure.kind === 'protocol-incompatible'
-                  ? translate(
-                      'auto.components.settings.RuntimeHostAccessForm.incompatible',
-                      'Orca versions are not compatible'
-                    )
-                  : failure.kind === 'connection-interrupted'
-                    ? translate(
-                        'auto.components.settings.RuntimeHostAccessForm.interrupted',
-                        'Connection interrupted'
-                      )
-                    : failure.kind === 'environment-save-failed'
-                      ? translate(
-                          'auto.components.settings.RuntimeHostAccessForm.saveFailed',
-                          'Could not save the host'
-                        )
-                      : translate(
-                          'auto.components.settings.RuntimeHostAccessForm.unavailable',
-                          'Host unavailable'
-                        )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {failure.kind === 'environment-save-failed'
-              ? failure.message
-              : translateRemotePairingFailureDescription(
-                  failure.kind,
-                  parsed.ok ? parsed.value.displayEndpoint : null
-                )}
-          </p>
-        </div>
+          failure={failure}
+          endpoint={parsed.ok ? parsed.value.displayEndpoint : null}
+        />
       ) : null}
 
       <details className="group text-xs">

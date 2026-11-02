@@ -10,7 +10,8 @@ import type {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChildIdentity
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
@@ -34,6 +35,11 @@ export type StructuredAgentSessionAttachContext = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   publishStatus: (sessionId: string) => void
+  openProviderChild?: (
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity
+  ) => void
+  generationEnded?: StructuredAgentSessionLifetimeContext['generationEnded']
   /** Joining a stop's close ends the child's record through the one exit handler. */
   endExitedChild: StructuredAgentSessionLifetimeContext['endExitedChild']
   wakeDelivery?: StructuredAgentSessionLifetimeContext['wakeDelivery']

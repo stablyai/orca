@@ -124,6 +124,20 @@ describe('resource manager row presentation', () => {
     expect(container.querySelector('button[aria-label="Kill session ssh-b"]')).not.toBeNull()
   })
 
+  it("names the server and offers no kill on a paired server's own samples", () => {
+    renderWorktreeRow(
+      makeWorktree({
+        isRemote: true,
+        hostLabel: 'Lab box',
+        sessions: [makeSession({ sessionId: 'server-a', bound: false, readOnly: true })]
+      })
+    )
+
+    expect(container.textContent).toContain('· Lab box')
+    expect(container.textContent).not.toContain('· remote')
+    expect(container.querySelector('button[aria-label^="Kill session"]')).toBeNull()
+  })
+
   it('keeps kill affordances on the orphan bucket rows', () => {
     renderWorktreeRow(
       makeWorktree({

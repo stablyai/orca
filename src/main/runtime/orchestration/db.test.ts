@@ -347,6 +347,25 @@ describe('OrchestrationDb', () => {
       expect(d.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
+    it('rolls back the gate row when the Task transition cannot commit', () => {
+      const d = createDb()
+      const task = d.createTask({ runId: 'run_legacy_local', spec: 'atomic gate creation' })
+      const dispatch = createRootDispatch(d, task.id, 'term_gate')
+      d.db.exec(`
+        CREATE TRIGGER reject_gate_task_block
+        BEFORE UPDATE ON tasks
+        WHEN NEW.status = 'blocked'
+        BEGIN SELECT RAISE(ABORT, 'forced gate task block failure'); END;
+      `)
+
+      expect(() => d.createGate({ taskId: task.id, question: 'Proceed?' })).toThrow(
+        'forced gate task block failure'
+      )
+      expect(d.listGates({ taskId: task.id })).toHaveLength(0)
+      expect(d.getTask(task.id)?.status).toBe('dispatched')
+      expect(d.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+    })
+
     it('resolves a gate and unblocks the task', () => {
       const d = createDb()
       const task = d.createTask({ runId, spec: 'work' })

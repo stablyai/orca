@@ -2,6 +2,10 @@ import { connect } from 'node:net'
 import { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import { readNetworkProxySettings } from './browser-network-proxy-settings-source'
+import { selectBrowserNetworkTunnelProxy } from './browser-network-tunnel-proxy-selection'
+import { HttpConnectTunnelSocket } from './http-connect-tunnel-socket'
+import { SystemSshSocksClientSocket } from './system-ssh-socks-client-socket'
 
 export type BrowserNetworkExecutionRoute = {
   key: string
@@ -72,8 +76,30 @@ export function resolveNativeBrowserNetworkExecutionRoute(
   }
   return {
     key: browserNetworkExecutionHostKey(host),
-    connect: (target) => connect({ ...target, allowHalfOpen: true }),
+    connect: connectNativeBrowserNetworkTarget,
     isValid: () => true,
     close: () => {}
   }
+}
+
+/** Dials a tunnel destination from this host the way its own browser would: through its proxy. */
+export function connectNativeBrowserNetworkTarget(
+  target: BrowserNetworkTunnelOpen,
+  env: Record<string, string | undefined> = process.env
+): BrowserNetworkTunnelSocket {
+  const proxy = selectBrowserNetworkTunnelProxy(target, readNetworkProxySettings(), env)
+  if (proxy.kind === 'http') {
+    return new HttpConnectTunnelSocket(proxy.url, target)
+  }
+  if (proxy.kind === 'socks5' && !proxy.url.username && !proxy.url.password) {
+    return new SystemSshSocksClientSocket(
+      { host: proxy.url.hostname.replace(/^\[|\]$/g, ''), port: Number(proxy.url.port) || 1080 },
+      target
+    )
+  }
+  if (proxy.kind !== 'direct') {
+    // Why throw, not dial direct: a host that requires a proxy must not leak traffic around it.
+    throw new Error('browser_tunnel_proxy_unsupported')
+  }
+  return connect({ ...target, allowHalfOpen: true })
 }

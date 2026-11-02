@@ -7,8 +7,8 @@
  * `runtime.createManagedWorktree` for this and nothing a client sends or reads changes.
  *
  * This is the one `legacy-host` producer, so the no-agent outcome below is caught in one place.
- * The host's other agent-first creates (headless automations, federation) still call
- * `createManagedWorktree` directly; they are to call this entry, not the executor.
+ * The host's other agent-first creates (headless automations, federation) run the executor with
+ * their own workspace factories instead.
  */
 
 import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'

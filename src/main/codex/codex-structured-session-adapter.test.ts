@@ -4,7 +4,7 @@ import {
   type openCodexAppServerConnection
 } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
@@ -20,6 +20,8 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
 describe('CodexStructuredSessionAdapter.acquire', () => {
@@ -31,13 +33,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
-      options: { model: 'gpt-saved', effort: 'low', fastMode: 'true' }
+      options: { model: 'gpt-saved', effort: 'low', serviceTier: 'priority' }
     })
 
     expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
       model: 'gpt-saved',
       effort: 'low',
-      fastMode: 'true'
+      serviceTier: 'priority'
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'thread/start',
@@ -124,7 +126,20 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
   it('starts a new thread and reports the process and link the lease will prove', async () => {
     const codex = fakeCodex()
-    const adapter = adapterFor(codex, { codexHome: '/codex/home' })
+    const record = agentSessionRecordFixture({
+      sessionId: 'session-1',
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/codex/home' }
+    })
+    // The launch its registration composes: the shared seal names the child, not this adapter.
+    const adapter = adapterFor(codex, {}, [], {
+      resolveLaunch: createCodexStructuredLaunchResolver({
+        store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
+        resolveWorkspacePath: async () => '/work/repo',
+        resolveCommand: () => 'codex',
+        resolveLaunchArgs: () => []
+      })
+    })
 
     const acquisition = await adapter.acquire({
       identity: identityFor('session-1'),
@@ -133,7 +148,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
 
     expect(codex.connections[0].launch.env).toEqual({
-      [CODEX_SPAWN_TOKEN_ENV]: 'spawn-9',
+      [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: 'spawn-9',
       CODEX_HOME: '/codex/home',
       ORCA_AGENT_SESSION_ID: 'session-1',
       ORCA_STRUCTURED_SESSION: '1',
@@ -142,13 +157,22 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         ? { ORCA_CLI_BIN_DIR: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin$/) }
         : {}),
       ORCA_USER_DATA_PATH: expect.any(String),
+      ORCA_ENVIRONMENT: '',
+      ORCA_PAIRING_CODE: '',
+      ORCA_REMOTE_PAIRING: '',
       // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
       PATH: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[:;]/)
     })
     expect(codex.connections[0].launch.cwd).toBe('/work/repo')
     expect(codex.connections[0].calls[0]).toEqual({
       method: 'thread/start',
-      params: { cwd: '/work/repo' }
+      // A chat with no mode asks, stated outright.
+      params: {
+        cwd: '/work/repo',
+        approvalPolicy: 'on-request',
+        sandbox: 'workspace-write',
+        approvalsReviewer: 'user'
+      }
     })
     expect(acquisition.process).toEqual({
       hostId: 'host-1',
@@ -201,8 +225,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         path: '/rollouts/thread-proven.jsonl'
       })
     })
-    expect(acquisition.link.origin).toBe('resumed')
-    expect(acquisition.link.handle).toEqual(codexProviderHandle('thread-proven'))
+    expect(acquisition.link?.origin).toBe('resumed')
+    expect(acquisition.link?.handle).toEqual(codexProviderHandle('thread-proven'))
   })
 
   it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
@@ -568,8 +592,8 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     ).toEqual({
       // Built without Codex's own words, so nothing is quoted and no detail is invented.
       state: 'rejected',
-      reason: 'The provider did not accept this message.',
-      rejection: { kind: 'providerRejected' }
+      reason: "Codex didn't accept this message.",
+      rejection: { kind: 'providerRejected', neverReachedAgent: true }
     })
   })
 

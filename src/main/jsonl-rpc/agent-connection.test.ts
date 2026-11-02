@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
@@ -21,16 +21,15 @@ function fixture(
   options: JsonlRpcAgentConnectionOptions = {},
   behavior: { exitOnEnd?: boolean; processless?: boolean } = {}
 ) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: behavior.processless ? undefined : 9_999_999,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  const spawn = vi.fn<typeof spawnProcess>(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Fixture supplies piped stdio, pid, kill and process lifecycle events read by the shared supervisor.
-    return child as unknown as ReturnType<typeof spawnProcess>
+  const spawn = vi.fn<PipedProcessSpawner>(() => {
+    return child
   })
   if (behavior.exitOnEnd !== false) {
     child.stdin.once('finish', () => child.emit('exit', 0, null))
@@ -210,7 +209,7 @@ describe('JSON-lines RPC process ownership', () => {
   })
 
   it('validates peer limits before spawning', () => {
-    const spawn = vi.fn<typeof spawnProcess>()
+    const spawn = vi.fn<PipedProcessSpawner>()
     expect(
       () =>
         new JsonlRpcAgentConnection(

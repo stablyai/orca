@@ -15,7 +15,7 @@ import { hasErrorCode } from './daemon-process-inspection'
 import { PRIVATE_DIR_MODE } from './daemon-private-file-modes'
 
 /** `/tmp` is the only POSIX directory whose length does not depend on the user. */
-const SHORT_DAEMON_SOCKET_DIR_PREFIX = '/tmp/.orca-daemon-'
+export const SHORT_DAEMON_SOCKET_DIR_PREFIX = '/tmp/.orca-daemon-'
 
 export function shortDaemonSocketDir(runtimeDir: string, uid: number): string {
   const runtimeHash = createHash('sha256').update(runtimeDir).digest('hex').slice(0, 12)
@@ -39,7 +39,7 @@ export function resolveDaemonUnixSocketPath(
 }
 
 /** Validate, never repair: a dir planted by another user or a symlink is refused, not chmod'ed. */
-function ensureOwnedPrivateDir(dir: string, uid: number): void {
+export function ensureOwnedPrivateDir(dir: string, uid: number): void {
   try {
     mkdirSync(dir, { mode: PRIVATE_DIR_MODE })
   } catch (error) {

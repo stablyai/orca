@@ -3,7 +3,7 @@ import {
   closeWebRuntimeTerminal,
   consumePendingWebRuntimeSplitMirrorTelemetry,
   splitWebRuntimeTerminal
-} from './web-runtime-session'
+} from './web-runtime-terminal-actions'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   peekWebSessionFocusIntent,
@@ -11,6 +11,7 @@ import {
 } from './web-session-focus-intent'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn(),
@@ -47,16 +48,24 @@ vi.mock('../lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     // The production caller invokes the returned settle receipt.
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
@@ -161,13 +170,7 @@ describe('splitWebRuntimeTerminal', () => {
         }
       }
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal(
@@ -205,13 +208,7 @@ describe('splitWebRuntimeTerminal', () => {
       ok: false,
       error: { code: 'terminal_exited', message: 'Terminal exited' }
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal(
@@ -239,13 +236,7 @@ describe('splitWebRuntimeTerminal', () => {
         }
       }
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(splitWebRuntimeTerminal('pty-local-1', 'horizontal', 'keyboard', SPLIT_SOURCE)).toBe(
       false
@@ -296,7 +287,7 @@ describe('splitWebRuntimeTerminal', () => {
             }
       )
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
@@ -393,7 +384,7 @@ describe('splitWebRuntimeTerminal', () => {
             }
       )
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', {
@@ -420,7 +411,7 @@ describe('splitWebRuntimeTerminal', () => {
         resolveList = resolve
       })
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
     const source = {
       worktreeId: SPLIT_WORKTREE_ID,
       tabId: toWebTerminalSurfaceTabId('tab-1'),
@@ -480,7 +471,7 @@ describe('splitWebRuntimeTerminal', () => {
     stubSplitSourceTab('tab-1')
     const splitResolvers: ((response: unknown) => void)[] = []
     const runtimeCall = vi.fn(() => new Promise((resolve) => splitResolvers.push(resolve)))
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
     const split = (): boolean =>
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
     expect(split()).toBe(true)
@@ -521,7 +512,7 @@ describe('splitWebRuntimeTerminal', () => {
         resolveList = resolve
       })
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
@@ -591,7 +582,7 @@ describe('splitWebRuntimeTerminal', () => {
         split: { handle: 'terminal-2', tabId: 'tab-1', paneRuntimeId: -1 }
       }
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
@@ -634,7 +625,7 @@ describe('splitWebRuntimeTerminal', () => {
             }
       )
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal(
@@ -669,7 +660,7 @@ describe('splitWebRuntimeTerminal', () => {
           resolveSplit = resolve
         })
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
@@ -705,7 +696,7 @@ describe('splitWebRuntimeTerminal', () => {
           resolveSplit = resolve
         })
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
@@ -757,7 +748,7 @@ describe('splitWebRuntimeTerminal', () => {
             resolveList = resolve
           })
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
@@ -812,13 +803,7 @@ describe('closeWebRuntimeTerminal', () => {
         }
       }
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(true)
 
@@ -845,13 +830,7 @@ describe('closeWebRuntimeTerminal', () => {
         }
       }
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     expect(closeWebRuntimeTerminal('pty-local-1')).toBe(false)
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)

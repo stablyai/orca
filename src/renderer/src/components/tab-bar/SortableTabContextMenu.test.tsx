@@ -77,17 +77,17 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   TabSessionSurfaceSwitchMenuItems: ({
     tab,
-    structuredSessionId,
+    nativeChat,
     leadingSeparator
   }: {
     tab: { id: string }
-    structuredSessionId?: string
+    nativeChat?: { sessionId: string }
     leadingSeparator: boolean
   }) => (
     <div
       data-testid="session-surface-switch"
       data-tab-id={tab.id}
-      data-structured-session-id={structuredSessionId ?? ''}
+      data-structured-session-id={nativeChat?.sessionId ?? ''}
       data-leading-separator={String(leadingSeparator)}
     />
   )
@@ -116,16 +116,7 @@ function renderMenu(overrides: Partial<ComponentProps<typeof SortableTabContextM
   act(() => {
     root.render(
       <SortableTabContextMenu
-        tab={{
-          id: 'term-1',
-          ptyId: null,
-          worktreeId: 'wt-1',
-          title: 'bash',
-          customTitle: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 0
-        }}
+        tab={{ id: 'term-1', worktreeId: 'wt-1', color: null }}
         unifiedTabId="tab-1"
         groupId="group-1"
         isActive
@@ -237,6 +228,39 @@ describe('requestActiveTerminalPaneSplit', () => {
 })
 
 describe('SortableTabContextMenu', () => {
+  it.each([false, true])(
+    'copies the workspace ID of an inactive tab (pinned: %s)',
+    async (isPinned) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      const onClose = vi.fn()
+      const onRenameOpen = vi.fn()
+      const apiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { ui: { writeClipboardText } }
+      })
+      try {
+        const { container, onActivate } = renderMenu({
+          isActive: false,
+          isPinned,
+          onClose,
+          onRenameOpen
+        })
+        await act(async () => getButton(container, 'Copy Tab ID').click())
+        expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('orcaTabId: tab-1')
+        expect(onActivate).not.toHaveBeenCalled()
+        expect(onClose).not.toHaveBeenCalled()
+        expect(onRenameOpen).not.toHaveBeenCalled()
+      } finally {
+        if (apiDescriptor) {
+          Object.defineProperty(window, 'api', apiDescriptor)
+        } else {
+          Reflect.deleteProperty(window, 'api')
+        }
+      }
+    }
+  )
+
   it('does not expose a native/terminal view switch', () => {
     const { container } = renderMenu()
 
@@ -268,7 +292,7 @@ describe('SortableTabContextMenu', () => {
   })
 
   it('offers the session-history chat/CLI move right above Pin Tab', () => {
-    const { container } = renderMenu({ structuredSessionId: 'orca-chat-1' })
+    const { container } = renderMenu({ nativeChat: { sessionId: 'orca-chat-1', agent: 'codex' } })
     const marker = getSurfaceSwitchMarker(container)
 
     expect(marker.getAttribute('data-tab-id')).toBe('term-1')
@@ -370,5 +394,14 @@ describe('SortableTabContextMenu', () => {
 
     expect(container.textContent).not.toContain('Move Tab to Split')
     expect(container.textContent).toContain('Split terminal right')
+  })
+
+  it('offers Close split pane only when the group is one of several splits', () => {
+    const onCloseSplitPane = vi.fn()
+    const { container } = renderMenu({ onCloseSplitPane })
+    act(() => getButton(container, 'Close split pane').click())
+    expect(onCloseSplitPane).toHaveBeenCalledOnce()
+
+    expect(renderMenu().container.textContent).not.toContain('Close split pane')
   })
 })

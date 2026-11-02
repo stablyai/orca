@@ -6,6 +6,10 @@ import type { AgentStatusEntry } from './agent-status-types'
  */
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 
+/** How long a persisted row survives hydration. A restored nonterminal row is unverifiable for
+ *  this whole window: no exit evidence arrived, so the live window above must not end it. */
+export const AGENT_STATUS_HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
 /** When the AUTHORITY says it observed the evidence, on the authority's own clock.
  *  A relay reconnect replays a cached row and must restamp `updatedAt`, so measuring against it
  *  pushes the deadline out by another window on every reconnect. Only comparable against a
@@ -44,9 +48,23 @@ export function isFreshNonDoneAgentStatus(
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
   // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
-  return Boolean(
-    entry &&
-    entry.state !== 'done' &&
+  return Boolean(entry && entry.state !== 'done' && isAgentStatusFresh(entry, now, staleAfterMs))
+}
+
+/** Child evidence can remain live beneath a parent whose own turn is already done. */
+export function isAgentStatusFresh(
+  entry: Pick<
+    AgentStatusEntry,
+    | 'updatedAt'
+    | 'evidenceObservedAt'
+    | 'mirroredEvidenceReceivedAt'
+    | 'restoredUnconfirmed'
+    | 'structuredHostOwned'
+  >,
+  now = Date.now(),
+  staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
+): boolean {
+  return (
     entry.restoredUnconfirmed !== true &&
     (entry.structuredHostOwned === true ||
       now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)

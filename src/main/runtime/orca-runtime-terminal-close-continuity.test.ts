@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import {
+  resetAgentLaunchPanesForTests,
+  trackRunningAgentLaunchPane
+} from '../agent-launch/agent-launch-pane-attachment'
 import {
   CANARY_INCARNATION_ID,
   CANARY_LEAF_ID,
@@ -18,7 +22,8 @@ import {
   SIBLING_PTY_ID,
   STALE_TAB_ID,
   TAB_ID,
-  WORKTREE_ID
+  WORKTREE_ID,
+  type CloseContinuityHarness
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 
 describe('terminal close and handle incarnation continuity', () => {
@@ -368,36 +373,6 @@ describe('terminal close and handle incarnation continuity', () => {
     expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
   })
 
-  it.each([true, false])(
-    'promises a retry only when the stop recorded a replayable kill (recorded: %s)',
-    async (recorded) => {
-      const harness = createHarness()
-      const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
-      harness.setVerifiedStopResult(false)
-      const recordUnconfirmedStop = vi.fn(() => {
-        // The order must exist before the follow-up kill, whose own failure lands only later.
-        expect(harness.kill).not.toHaveBeenCalled()
-        return recorded
-      })
-      const controller = harness.runtime['ptyController']
-      if (!controller) {
-        throw new Error('fixture has no PTY controller')
-      }
-      Object.assign(controller, { recordUnconfirmedStop })
-
-      const closing = harness.runtime.closeTerminal(handle)
-      await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalled())
-      harness.retirePersistedTab()
-      harness.acknowledged.resolve()
-
-      const close = await closing
-      expect(recordUnconfirmedStop).toHaveBeenCalledWith(PTY_ID)
-      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-      expect(close.ptyStopVerdict).toBe('unverifiable')
-      expect(close.pendingKillRecorded).toBe(recorded ? true : undefined)
-    }
-  )
-
   it('leaves a confirmed kill receipt free of any stop verdict', async () => {
     const harness = createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
@@ -619,5 +594,77 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.runtime['invalidateAllHandlesForPty'](PTY_ID)
 
     await expect(waiting).rejects.toThrow('terminal_handle_stale')
+  })
+})
+
+function launchIn(leafId: string) {
+  return trackRunningAgentLaunchPane({
+    worktreeId: WORKTREE_ID,
+    paneKey: makePaneKey(TAB_ID, leafId)
+  })
+}
+
+describe("a pane close main starts (a phone's, the CLI's)", () => {
+  afterEach(() => {
+    resetAgentLaunchPanesForTests()
+  })
+
+  it('stops a launch still running in that pane, and only that one', async () => {
+    const harness = createHarness({ publishMobileSurface: true })
+    harness.syncSplitFixtureGraph()
+    const closed = launchIn(LEAF_ID)
+    const sibling = launchIn(SIBLING_LEAF_ID)
+    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (candidate) => candidate.ptyId === PTY_ID
+    )
+    if (!terminal) {
+      throw new Error('fixture pane has no terminal handle')
+    }
+
+    await harness.runtime.closeTerminal(terminal.handle)
+
+    expect(harness.closeTerminalPane).toHaveBeenCalledWith(TAB_ID, LEAF_ID)
+    expect(closed.closedByUser()).toBe(true)
+    expect(sibling.closedByUser()).toBe(false)
+  })
+})
+
+async function closeByPty(harness: CloseContinuityHarness): Promise<unknown> {
+  const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+    (candidate) => candidate.ptyId === PTY_ID
+  )
+  if (!terminal) {
+    throw new Error('fixture pane has no terminal handle')
+  }
+  return harness.runtime.closeTerminal(terminal.handle)
+}
+
+/** A PTY-backed tab with no paired-viewer surface: the path orcad serves to the CLI. */
+function headlessPtyTab(): CloseContinuityHarness {
+  const harness = createHarness({ registerPtyBacked: true })
+  harness.syncFixtureTabWithoutLeaf()
+  harness.setVerifiedStopResult(true)
+  return harness
+}
+
+describe('closing a terminal by PTY on a host without a renderer tab', () => {
+  it('stops the PTY without asking a missing renderer to close the tab', async () => {
+    const harness = headlessPtyTab()
+    harness.syncEmptyGraph()
+
+    await expect(closeByPty(harness)).resolves.toMatchObject({ tabId: TAB_ID })
+
+    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, expect.anything())
+  })
+
+  it('does not fail the close when the advisory renderer notification throws', async () => {
+    const harness = headlessPtyTab()
+    harness.syncEmptyGraph()
+    harness.closeTerminal.mockImplementation(() => {
+      throw new Error('renderer gone')
+    })
+
+    await expect(closeByPty(harness)).resolves.toMatchObject({ tabId: TAB_ID })
   })
 })

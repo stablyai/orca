@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from './paired-runtime-connection'
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateKeyPair, publicKeyToBase64 } from './e2ee-crypto'
@@ -67,12 +68,12 @@ describe('remote runtime connect bound', () => {
     const onTextFrame = vi.fn()
 
     const opened = openRemoteRuntimeWebSocket(
-      {
+      pairedRuntimeConnectionFromOffer({
         v: 2,
         endpoint,
         deviceToken: 'device-token',
         publicKeyB64: publicKeyToBase64(keyPair.publicKey)
-      },
+      }),
       { onClose: vi.fn(), onError, onTextFrame },
       150
     )

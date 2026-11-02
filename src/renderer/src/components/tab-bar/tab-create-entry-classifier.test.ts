@@ -6,7 +6,7 @@ import {
   TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
   validateNewTabEntryAbsolutePath,
   validateNewTabEntryRelativePath
-} from './tab-create-entry-action'
+} from './tab-create-entry-classifier'
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
 

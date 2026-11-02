@@ -22,7 +22,7 @@ vi.mock('@/components/editor/editor-autosave', () => ({
   notifyEditorExternalFileChange: vi.fn(),
   requestEditorSaveQuiesce: vi.fn(async () => {})
 }))
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
   stageRuntimeGitPath: (...args: unknown[]) => mocks.stagePath(...args),
   unstageRuntimeGitPath: (...args: unknown[]) => mocks.unstagePath(...args),
   discardRuntimeGitPath: (...args: unknown[]) => mocks.discardPath(...args),
@@ -61,7 +61,7 @@ function clickRetry(): void {
 function renderMutations() {
   return renderHook(() =>
     useSourceControlEntryMutations({
-      activeRepoSettings: null,
+      activeRepoTarget: { kind: 'local' },
       activeWorktreeId: 'wt-1',
       worktreePath: '/repo',
       refreshActiveGitStatusAfterMutation: async () => {}
@@ -72,7 +72,7 @@ function renderMutations() {
 function renderDiscard(discardSingle: (path: string) => Promise<void>) {
   return renderHook(() =>
     useSourceControlDiscardConfirmation({
-      activeRepoSettings: null,
+      activeRepoTarget: { kind: 'local' },
       activeWorktreeId: 'wt-1',
       worktreePath: '/repo',
       grouped: EMPTY_GROUPS,

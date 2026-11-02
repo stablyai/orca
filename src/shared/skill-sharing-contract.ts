@@ -17,6 +17,9 @@ import type {
   SkillBundleSelectedSkill
 } from './skill-bundle-install-contract'
 
+// Why: a plain message survives Electron IPC, which drops error classes and fields.
+export const SKILL_SHARE_NAME_TAKEN_ERROR = 'skill-share-name-taken'
+
 export type SkillSharePreview = {
   preparationId: string
   packageId: string

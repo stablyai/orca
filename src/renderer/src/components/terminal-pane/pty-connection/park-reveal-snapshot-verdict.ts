@@ -1,13 +1,13 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { RESET_GRAPHIC_RENDITION } from '../../../../../shared/terminal-mode-reset-profiles'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
-import type { PtyBufferSnapshot } from '../pty-transport'
+import type { PtyBufferSnapshot } from '../pty-transport-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { PARK_REVEAL_NO_HOST_IMAGE_WARNING } from './hidden-output-restore-limits'
 import type { HiddenOutputSnapshotResult } from './hidden-output-snapshot-serialize'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 /** Which restore budget an unverifiable probe is charged to; null when the loop keeps its own count (legacy hosts). */
 export type ParkRevealRetryLedger = 'host' | 'local' | null

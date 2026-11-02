@@ -23,7 +23,7 @@ vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => ownerRef.current,
   getFileExplorerOperationOwnerFromState: () => ownerRef.current
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: runtimeWatch.subscribe
 }))
 

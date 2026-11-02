@@ -23,6 +23,7 @@ vi.mock('../git/runner', async (importOriginal) => {
 // level. We only exercise the fetch cache, so we let those imports load
 // normally — none of them trigger IO until a runtime method is called.
 import { OrcaRuntimeService } from './orca-runtime'
+import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
 
 function isFetchArgs(argv: unknown): argv is string[] {
   if (!Array.isArray(argv)) {
@@ -195,22 +196,45 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     expect(fetchCallCount()).toBe(1)
   })
 
-  it('bounds process-lifetime fetch cache maps for churned repo paths', async () => {
-    mockFetchResults(Array.from({ length: 520 }, () => ({ stdout: '', stderr: '' })))
-    const runtime = new OrcaRuntimeService(null)
-    const caches = runtime as unknown as {
-      canonicalFetchKeyCache: Map<string, string>
-      fetchLastCompletedAt: Map<string, number>
+  it('evicts the oldest canonical key after 512 distinct repo paths', async () => {
+    const owner = new RuntimeRemoteFetchController()
+    const resolve = vi.spyOn(owner, 'getCanonicalRepoKey').mockImplementation(async (path) => path)
+    for (let index = 0; index < 513; index += 1) {
+      await owner.getCanonicalFetchKey(`/repo/cache-${index}`, 'origin')
     }
+    await owner.getCanonicalFetchKey('/repo/cache-1', 'origin')
+    expect(resolve).toHaveBeenCalledTimes(513)
+    await owner.getCanonicalFetchKey('/repo/cache-0', 'origin')
+    expect(resolve).toHaveBeenCalledTimes(514)
+  })
 
-    for (let i = 0; i < 520; i += 1) {
-      await runtime.fetchRemoteWithCache(`/repo/cache-${i}`, 'origin')
+  it('evicts the oldest successful freshness entry after 512 distinct repo paths', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(10_000)
+    mockFetchResults(Array.from({ length: 514 }, () => ({ stdout: '', stderr: '' })))
+    const owner = new RuntimeRemoteFetchController()
+    for (let index = 0; index < 513; index += 1) {
+      await owner.getOrStartRemoteFetch(`/repo/cache-${index}`, 'origin')
     }
+    await owner.getOrStartRemoteFetch('/repo/cache-1', 'origin')
+    expect(fetchCallCount()).toBe(513)
+    await owner.getOrStartRemoteFetch('/repo/cache-0', 'origin')
+    expect(fetchCallCount()).toBe(514)
+  })
 
-    expect(caches.canonicalFetchKeyCache.size).toBeLessThanOrEqual(512)
-    expect(caches.fetchLastCompletedAt.size).toBeLessThanOrEqual(512)
-    expect(caches.canonicalFetchKeyCache.has('/repo/cache-0::origin')).toBe(false)
-    expect(caches.fetchLastCompletedAt.has('/repo/cache-0::origin')).toBe(false)
+  it('keeps successful fetch freshness independent between owners', async () => {
+    mockFetchResults([
+      { stdout: '', stderr: '' },
+      { stdout: '', stderr: '' }
+    ])
+    const first = new RuntimeRemoteFetchController()
+    const second = new RuntimeRemoteFetchController()
+    await first.getOrStartRemoteFetch('/repo/isolated', 'origin')
+    await second.getOrStartRemoteFetch('/repo/isolated', 'origin')
+    expect(fetchCallCount()).toBe(2)
+    await first.getOrStartRemoteFetch('/repo/isolated', 'origin')
+    await second.getOrStartRemoteFetch('/repo/isolated', 'origin')
+    expect(fetchCallCount()).toBe(2)
   })
 
   it.each([

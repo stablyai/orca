@@ -40,6 +40,34 @@ describe('orchestration RPC methods', () => {
       expect(updated?.status).toBe('blocked')
     })
 
+    it('refuses a foreign Run task when no legacy adoption exists', async () => {
+      setup()
+      expect(db.getLegacyAdoption()).toBeUndefined()
+      const callerRun = db.getCurrentRunForPane(h.coordinatorPaneKey)
+      if (!callerRun) {
+        throw new Error('Expected the caller to have a bound Run')
+      }
+      const foreignRun = db.createRun({
+        objective: 'foreign work',
+        coordinatorHandle: 'term_foreign_coord',
+        coordinatorPaneKey: 'tab_foreign:77777777-7777-4777-8777-777777777777'
+      })
+      const foreignTask = db.createTask({ spec: 'foreign assignment', runId: foreignRun.id })
+
+      await expect(
+        call('orchestration.gateCreate', {
+          task: foreignTask.id,
+          question: 'Proceed?',
+          from: 'term_coord'
+        })
+      ).rejects.toMatchObject({
+        code: 'task_not_found',
+        message: `Task ${foreignTask.id} was not found in Run ${callerRun.id}.`
+      })
+      expect(db.getTask(foreignTask.id)?.status).toBe('ready')
+      expect(db.listGates({ taskId: foreignTask.id })).toHaveLength(0)
+    })
+
     it('rejects invalid options JSON', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })

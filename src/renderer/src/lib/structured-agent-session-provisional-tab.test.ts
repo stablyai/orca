@@ -5,7 +5,9 @@ import type { StructuredAgentLaunchSettlement } from './structured-agent-launch-
 
 const mocks = vi.hoisted(() => ({
   createUnifiedTab: vi.fn(),
-  createSupport: vi.fn()
+  createSupport: vi.fn(),
+  requestFocus: vi.fn(),
+  cancelFocus: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -55,11 +57,13 @@ describe('a provisional structured chat tab', () => {
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan: planSettlingAs({ kind: 'structured', sessionId: 'claude_1' }),
       hooks: {},
+      focusIntent: { request: mocks.requestFocus, cancel: mocks.cancelFocus },
       targetGroupId: 'group-2'
     })
 
     expect(launch?.tab).toBeNull()
     expect(mocks.createUnifiedTab).not.toHaveBeenCalled()
+    expect(mocks.requestFocus).not.toHaveBeenCalled()
     await expect(launch?.settlement).resolves.toEqual({ kind: 'structured', sessionId: 'claude_1' })
     expect(mocks.createSupport).toHaveBeenCalledOnce()
     expect(mocks.createUnifiedTab).toHaveBeenCalledWith(
@@ -67,5 +71,7 @@ describe('a provisional structured chat tab', () => {
       'agent-session',
       expect.objectContaining({ executionHostId: 'local', targetGroupId: 'group-2' })
     )
+    expect(mocks.requestFocus).toHaveBeenCalledExactlyOnceWith('structured-agent-session-claude_1')
+    expect(mocks.cancelFocus).not.toHaveBeenCalled()
   })
 })

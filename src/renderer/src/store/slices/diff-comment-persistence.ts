@@ -4,14 +4,16 @@ import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
+import { callHostRoute } from '@/runtime/host-route-call'
+import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
@@ -51,7 +53,6 @@ export function normalizeDiffComment(comment: DiffComment): DiffComment {
 
 async function persist(
   state: AppState,
-  settings: AppState['settings'],
   worktreeId: string,
   diffComments: DiffComment[],
   folderExecutionHostId?: ReturnType<typeof getExecutionHostIdForFolderWorkspace>
@@ -65,27 +66,32 @@ async function persist(
       scope.folderWorkspaceId,
       executionHostId
     )
-    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
-    const updated =
-      target.kind === 'local'
-        ? await window.api.folderWorkspaces.update({
-            folderWorkspaceId: scope.folderWorkspaceId,
-            updates: { diffComments }
-          })
-        : (
-            await callRuntimeRpc<{ folderWorkspace: FolderWorkspace | null }>(
-              target,
-              'folderWorkspace.update',
-              { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
-              { timeoutMs: 15_000 }
-            )
-          ).folderWorkspace
+    const updated = runtimeEnvironmentId
+      ? (
+          await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
+            // Why local: the folder's catalog row lives on the server even when it names an SSH target.
+            hostRouteForAuthority({
+              endpoint: { kind: 'environment', environmentId: runtimeEnvironmentId },
+              at: 'local'
+            }),
+            'folderWorkspace.update',
+            { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
+            { timeoutMs: 15_000 }
+          )
+        ).folderWorkspace
+      : await window.api.folderWorkspaces.update({
+          folderWorkspaceId: scope.folderWorkspaceId,
+          updates: { diffComments }
+        })
     if (!updated?.diffComments) {
       throw new Error('Failed to persist folder workspace review notes')
     }
     return
   }
-  const target = getActiveRuntimeTarget(settings)
+  const target = runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId })
+  if (!target) {
+    throw new Error('The workspace host is unresolved; review notes were not saved.')
+  }
   if (target.kind === 'local') {
     await window.api.worktrees.updateMeta({
       worktreeId,
@@ -99,13 +105,6 @@ async function persist(
     { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments },
     { timeoutMs: 15_000 }
   )
-}
-
-function settingsForWorktreeOwner(state: AppState, worktreeId: string): AppState['settings'] {
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  return state.settings
-    ? { ...state.settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }
-    : ({ activeRuntimeEnvironmentId: runtimeEnvironmentId } as AppState['settings'])
 }
 
 // Why: IPC writes aren't ordered, so serialize per worktree to stop an older snapshot from overwriting a newer one on disk.
@@ -175,7 +174,6 @@ export function enqueueDiffCommentPersist(
         stateList = folderWorkspace?.diffComments
         await persist(
           state,
-          state.settings,
           worktreeId,
           (stateList ?? []).map(normalizeDiffComment),
           folderExecutionHostId
@@ -185,12 +183,7 @@ export function enqueueDiffCommentPersist(
         const target = get().worktreesByRepo[repoId]?.find((w) => w.id === worktreeId)
         stateList = target?.diffComments
         const state = get()
-        await persist(
-          state,
-          settingsForWorktreeOwner(state, worktreeId),
-          worktreeId,
-          (stateList ?? []).map(normalizeDiffComment)
-        )
+        await persist(state, worktreeId, (stateList ?? []).map(normalizeDiffComment))
       }
     } catch (err) {
       // Why: converge to what actually landed; rollback's identity guard no-ops when a later mutation owns the array.

@@ -180,6 +180,11 @@ describe('OrchestrationDb Run pagination', () => {
 
   afterEach(() => db?.close())
 
+  it('rejects an invalid cursor with cursor_invalid', () => {
+    db = new OrchestrationDb(':memory:')
+    expect(() => db!.listRuns({ limit: 2, cursor: 'not-a-cursor' })).toThrow(/cursor is invalid/)
+  })
+
   it('returns stable bounded pages without skipping Runs sharing a timestamp', () => {
     db = new OrchestrationDb(':memory:')
     const createdIds = Array.from({ length: 5 }, (_, index) => `run_page_${index}`)

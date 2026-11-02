@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
@@ -86,17 +87,26 @@ describe('moving a pane to a new tab', () => {
   })
 
   it('re-keys the SSH lease and moves within the partition that holds the tab', async () => {
-    const store = openStore(newDataFile())
+    const dataFile = newDataFile()
+    // Leases now arrive only from a relay-era profile.
+    writeFileSync(
+      dataFile,
+      JSON.stringify({
+        sshRemotePtyLeases: [
+          {
+            targetId: 'ssh-1',
+            ptyId: 'pty-agent',
+            worktreeId: WT,
+            tabId: SOURCE,
+            leafId: MOVED,
+            state: 'attached'
+          }
+        ]
+      })
+    )
+    const store = openStore(dataFile)
     const hostId = toSshExecutionHostId('ssh-1')
     await seedSplitSource(store, hostId)
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'pty-agent',
-      worktreeId: WT,
-      tabId: SOURCE,
-      leafId: MOVED,
-      state: 'attached'
-    })
 
     await expect(
       store.moveTerminalLeafToNewTab({ ...moveRequest, ptyId: 'pty-agent' })

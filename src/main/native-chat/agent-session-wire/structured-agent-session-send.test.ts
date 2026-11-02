@@ -87,7 +87,7 @@ describe('send', () => {
     expect(page.providerSession).toEqual({ key: 'session_id', id: THREAD })
   })
 
-  it('settles a submission write failure as rejected before provider dispatch', async () => {
+  it('a submission write failure leaves no accepted operation before provider dispatch', async () => {
     await attach()
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
@@ -103,7 +103,7 @@ describe('send', () => {
     expect(dispatch).not.toHaveBeenCalled()
     expect(
       store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
-    ).toMatchObject({ outcome: { status: 'failed' } })
+    ).toBeUndefined()
   })
 
   it('settles a thrown dispatch as unknown, never as a rejection', async () => {
@@ -338,10 +338,10 @@ describe('send', () => {
       'host fault before the write'
     )
     expect(hostJournal().submissions()).toHaveLength(0)
-    // Its success would have committed with its write, so a row still pending wrote nothing.
+    // A throw before acceptance leaves no receipt or compatibility ledger row.
     expect(
       store.listOperationRows().find((row) => row.operationId === clientMessageId)
-    ).toMatchObject({ outcome: { status: 'pending' } })
+    ).toBeUndefined()
 
     await expect(host.send({ callerKey: 'client-after-recovery' }, params)).resolves.toMatchObject({
       ok: true,
@@ -351,7 +351,7 @@ describe('send', () => {
     await delivered(clientMessageId)
     expect(
       store.listOperationRows().find((row) => row.operationId === clientMessageId)
-    ).toMatchObject({ callerKey: CALLER.callerKey, outcome: { status: 'succeeded' } })
+    ).toMatchObject({ callerKey: 'client-after-recovery', outcome: { status: 'succeeded' } })
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })

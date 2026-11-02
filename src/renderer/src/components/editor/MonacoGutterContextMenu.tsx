@@ -1,4 +1,5 @@
 import React from 'react'
+import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { Copy, ExternalLink } from 'lucide-react'
 import {
   DropdownMenu,
@@ -9,7 +10,7 @@ import {
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-client'
+import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-working-tree-client'
 import { formatPathLineReference } from './line-copy-path'
 import { translate } from '@/i18n/i18n'
 
@@ -73,9 +74,17 @@ export function MonacoGutterContextMenu({
               return
             }
             const connectionId = getConnectionId(activeFile?.worktreeId ?? null) ?? undefined
+            const target = getRuntimeTargetForFileOwner(
+              state,
+              activeFile.worktreeId,
+              activeFile.runtimeEnvironmentId
+            )
+            if (!target) {
+              return
+            }
             const url = await getRuntimeGitRemoteFileUrl(
               {
-                settings: state.settings,
+                target,
                 worktreeId: activeFile.worktreeId,
                 worktreePath: worktree.path,
                 connectionId

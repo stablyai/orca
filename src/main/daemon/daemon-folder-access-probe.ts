@@ -4,7 +4,7 @@
 // restarting the terminal service is the remedy or whether they must re-allow Orca first.
 
 import { isAbsolute } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { DirectoryEnumerationOutcome } from './directory-enumeration-probe'
 
 /** `unknown` keeps "the probe could not answer" apart from every verdict it could have returned. */

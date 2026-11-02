@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { runOrcaReleaseAction } from './sync-orca-release-action.mjs'
 import { ORCA_SYNC_BRANCH, selectOrcaRelease, syncOrcaRelease } from './sync-orca-release.mjs'
 

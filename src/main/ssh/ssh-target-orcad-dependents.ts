@@ -92,9 +92,9 @@ export function collectUntransferredDependentBlockers(
   store: Pick<Store, 'inspectOrcadMigrationUntransferredDependencies'>,
   manifest: OrcadMigrationManifest
 ): OrcadMigrationBlocker[] {
-  let counts: Record<OrcadMigrationDependencyKind, number>
+  let census: ReturnType<Store['inspectOrcadMigrationUntransferredDependencies']>
   try {
-    counts = store.inspectOrcadMigrationUntransferredDependencies(manifest).counts
+    census = store.inspectOrcadMigrationUntransferredDependencies(manifest)
   } catch {
     return [
       {
@@ -104,10 +104,12 @@ export function collectUntransferredDependentBlockers(
       }
     ]
   }
-  const dependencies = CENSUS_DEPENDENCY_KINDS.filter((kind) => counts[kind] > 0).map((kind) => ({
-    kind,
-    count: counts[kind]
-  }))
+  const dependencies = CENSUS_DEPENDENCY_KINDS.filter((kind) => census.counts[kind] > 0).map(
+    (kind) => {
+      const names = census.names?.[kind]?.slice(0, MAX_NAMES)
+      return { kind, count: census.counts[kind], ...(names?.length ? { names } : {}) }
+    }
+  )
   return dependencies.length > 0
     ? [{ code: 'orcad_migration_dependent_state', category: 'client-owned-state', dependencies }]
     : []

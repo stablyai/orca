@@ -2,7 +2,11 @@ import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 import { useClipboardReader } from '../platform/clipboard'
 import { triggerSelection, triggerError } from '../platform/haptics'
-import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
+import {
+  hostRefusesOtherRuntimeWorkspace,
+  loadMobileNewTabAgentOptions,
+  MobileWorkspaceOnOtherRuntimeError
+} from './mobile-new-tab-agent-loader'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
@@ -13,6 +17,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     worktreeId,
     client,
     connState,
+    hostCapabilities,
     activeHandle,
     pendingDiffNotesDelivery,
     showCreateTabDrawer,
@@ -120,6 +125,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     }
   }, [clipboardContents, selectModeActive, setCanPaste])
 
+  const hostRefusesOtherRuntime = hostRefusesOtherRuntimeWorkspace(hostCapabilities)
   useEffect(() => {
     const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
     if (!shouldLoadAgentOptions) {
@@ -140,24 +146,34 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     void (async () => {
       const options = await loadMobileNewTabAgentOptions({
         client,
-        worktreeId
+        worktreeId,
+        hostRefusesOtherRuntime
       })
       if (stale) {
         return
       }
       setCreateTabAgentOptions(options)
       setCreateTabAgentLoadState('loaded')
-    })().catch(() => {
+    })().catch((error: unknown) => {
       if (!stale) {
         setCreateTabAgentOptions([])
-        setCreateTabAgentLoadState('error')
+        setCreateTabAgentLoadState(
+          error instanceof MobileWorkspaceOnOtherRuntimeError ? 'other-runtime' : 'error'
+        )
       }
     })
 
     return () => {
       stale = true
     }
-  }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, worktreeId])
+  }, [
+    client,
+    connState,
+    hostRefusesOtherRuntime,
+    pendingDiffNotesDelivery,
+    showCreateTabDrawer,
+    worktreeId
+  ])
   return {
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,

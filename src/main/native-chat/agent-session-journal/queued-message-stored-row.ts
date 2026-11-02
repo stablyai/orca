@@ -5,6 +5,7 @@ import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-sessio
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
+import { isAgentSessionOptions } from '../../../shared/agent-session-record'
 
 /** A `queued_messages` row as this file's SELECTs return it; null when it cannot be read back. */
 export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | null {
@@ -27,6 +28,7 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     carried_from: string | null
     queued_epoch: string | null
     queued_sequence: number | null
+    options_json: string | null
   }
   let body: AgentJournalMessageItem
   try {
@@ -65,7 +67,21 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     queuedAt:
       record.queued_epoch !== null && typeof record.queued_sequence === 'number'
         ? { epoch: record.queued_epoch, sequence: record.queued_sequence }
-        : null
+        : null,
+    ...storedOptions(record.options_json)
+  }
+}
+
+/** A bad value only loses the model the send carried, never the card. */
+function storedOptions(json: string | null): { options?: Record<string, string> } {
+  if (json === null) {
+    return {}
+  }
+  try {
+    const options: unknown = JSON.parse(json)
+    return isAgentSessionOptions(options) ? { options } : {}
+  } catch {
+    return {}
   }
 }
 

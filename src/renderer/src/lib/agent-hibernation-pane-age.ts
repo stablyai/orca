@@ -96,11 +96,6 @@ export function getHibernationBoundaryResolvedAtByPaneKey(): Record<string, numb
   return Object.fromEntries(boundaryResolvedAtByPaneKey)
 }
 
-export function forgetHibernationPaneAge(paneKey: string): void {
-  ptyBindingByPaneKey.delete(paneKey)
-  boundaryResolvedAtByPaneKey.delete(paneKey)
-}
-
 export function resetHibernationPaneAgeForTests(): void {
   ptyBindingByPaneKey.clear()
   boundaryResolvedAtByPaneKey.clear()

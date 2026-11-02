@@ -9,9 +9,11 @@ import {
 } from '../appimage-runtime-identity'
 import {
   ensureAppImageExtractedRoot,
-  resolveAppImageCacheRootPath
+  resolveAppImageCacheRootPath,
+  resolveLegacyAppImageNamespacePath
 } from './appimage-extracted-root'
 import { pruneAppImageExtractedRoots } from './appimage-extraction-pruning'
+import { resolveGenerationStableLauncherPath } from './appimage-generation-stable-launcher'
 import { withAppImageRegistrationLock } from './appimage-registration-lock'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
 import { quoteShell } from './cli-install-path-format'
@@ -31,6 +33,8 @@ export type LinuxBareOrcaDispatcherOptions = {
   appImageCacheRootPath?: string
   /** Test seam — defaults to running the AppImage's own `--appimage-extract`. */
   appImageExtractRunner?: (appImagePath: string, cwd: string) => Promise<void>
+  /** Absolute time (ms) by which AppImage extraction and its lock wait must finish. */
+  appImageDeadlineAt?: number
 }
 
 export type LinuxBareOrcaDispatcherState =
@@ -99,18 +103,27 @@ async function resolveStableLauncherPath(
     const extractionOptions = {
       appImagePath,
       cacheRootPath: options.appImageCacheRootPath,
-      runExtract: options.appImageExtractRunner
+      runExtract: options.appImageExtractRunner,
+      deadlineAt: options.appImageDeadlineAt
     }
     return withAppImageRegistrationLock(
       resolveAppImageCacheRootPath(extractionOptions),
       async () => {
         const extractedRoot = await ensureAppImageExtractedRoot(extractionOptions)
         if (extractedRoot) {
-          await pruneAppImageExtractedRoots(extractedRoot.rootPath)
+          await pruneAppImageExtractedRoots(
+            extractedRoot.rootPath,
+            resolveLegacyAppImageNamespacePath(extractionOptions)
+          )
         }
         return extractedRoot?.stableLauncherPath ?? null
-      }
+      },
+      { deadlineAt: options.appImageDeadlineAt }
     )
+  }
+  const stableLauncher = resolveGenerationStableLauncherPath(options.resourcesPath)
+  if (stableLauncher) {
+    return stableLauncher
   }
   const launcher = getBundledLauncherPath('linux', options.resourcesPath)
   // Why: getBundledLauncherPath only joins the path; guard existence so we never

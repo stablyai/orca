@@ -1,4 +1,3 @@
-import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
 import {
   ORCA_EDITOR_FILE_SAVED_EVENT,
   requestEditorFileSave,
@@ -10,8 +9,8 @@ import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { readRuntimeFileContent } from './runtime-file-client'
-import { settingsForRuntimeOwner } from './runtime-rpc-client'
+import { readRuntimeFileContent } from './runtime-file-read-client'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import {
   hashMarkdownContent,
   isMarkdownContentByteLengthOverLimit,
@@ -188,13 +187,13 @@ function resolveMarkdownTarget(
   tabId: string
 ): { tab: OpenFile; sourceFile: OpenFile } {
   const state = useAppStore.getState()
-  const orderItem = getActiveTabNavOrder(state, worktreeId).find(
-    (item) => item.type === 'editor' && (item.tabId === tabId || item.id === tabId)
+  // Why every group: the phone lists tabs from all split groups, not just the desktop's focused one.
+  const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === tabId && candidate.contentType === 'editor'
   )
-  const tabFileId = orderItem?.type === 'editor' ? orderItem.id : tabId
-  const tab = state.openFiles.find(
-    (file) => file.worktreeId === worktreeId && (file.id === tabFileId || file.id === tabId)
-  )
+  // Hosts publish the file id when a file has no unified tab.
+  const fileId = unifiedTab?.entityId ?? tabId
+  const tab = state.openFiles.find((file) => file.worktreeId === worktreeId && file.id === fileId)
   if (!tab || !isMarkdownTab(tab)) {
     throw new Error('tab_not_found')
   }
@@ -245,7 +244,7 @@ async function readFileContent(file: OpenFile): Promise<string> {
   const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
   const state = useAppStore.getState()
   const result: FileContent = await readRuntimeFileContent({
-    settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
+    target: requireRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId),
     filePath: file.filePath,
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,

@@ -1,4 +1,5 @@
 /** The device half of the media verbs: the picker it runs, the bytes it moves, the file it deletes. */
+import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { splitBridgeReply } from '../mobile-web-shell/bridge/bridge-reply-chunking'
 import {
@@ -52,7 +53,16 @@ function fakeFile(bytes: Uint8Array): NativeMediaFile {
 }
 
 function bytesOf(length: number): Uint8Array {
-  return Uint8Array.from({ length }, (_, index) => index % 251)
+  // A fixed stream exposes shifted offsets and reordered chunks without a short repeating pattern.
+  let state = 0x9e3779b9
+  const bytes = new Uint8Array(length)
+  for (let index = 0; index < length; index += 1) {
+    state ^= state << 13
+    state ^= state >>> 17
+    state ^= state << 5
+    bytes[index] = state >>> 24
+  }
+  return bytes
 }
 
 type Harness = {
@@ -365,7 +375,7 @@ describe('reading chunks', () => {
     const total = 1_000_000
     const { probe, handle } = await staged(total)
     const source = bytesOf(total)
-    const collected: number[] = []
+    const collected = new Uint8Array(total)
     let offset = 0
     let reads = 0
     for (;;) {
@@ -378,16 +388,16 @@ describe('reading chunks', () => {
       )
       reads += 1
       const bytes = atob(chunk.base64)
-      for (let index = 0; index < bytes.length; index += 1) {
-        collected.push(bytes.codePointAt(index) ?? 0)
-      }
+      collected.set(Buffer.from(bytes, 'latin1'), offset)
       offset += bytes.length
+      expect(chunk.eof).toBe(offset === total)
       if (chunk.eof) {
         break
       }
     }
     expect(reads).toBe(Math.ceil(total / BRIDGE_MEDIA_READ_MAX_BYTES))
-    expect(collected).toEqual([...source])
+    expect(offset).toBe(total)
+    expect(Buffer.compare(collected, source)).toBe(0)
   })
 
   it('answers exactly the bytes a short read asked for, at the offset it asked for', async () => {

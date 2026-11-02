@@ -22,11 +22,8 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import {
-  deleteRuntimePath,
-  readRuntimeFileContent,
-  writeRuntimeFile
-} from '@/runtime/runtime-file-client'
+import { deleteRuntimePath, writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
 
 type UseFileDeletionParams = {
@@ -130,7 +127,7 @@ export function useFileDeletion({
         const state = useAppStore.getState()
         const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
         const fileContext = {
-          settings: operationRoute.settings,
+          target: operationRoute.target,
           worktreeId: activeWorktreeId,
           worktreePath: worktree?.path ?? null,
           connectionId: operationRoute.connectionId,
@@ -147,7 +144,7 @@ export function useFileDeletion({
         if (!node.isDirectory) {
           try {
             const rf = await readRuntimeFileContent({
-              settings: fileContext.settings,
+              target: fileContext.target,
               filePath: node.path,
               relativePath: node.relativePath,
               worktreeId: activeWorktreeId ?? undefined,
@@ -172,7 +169,7 @@ export function useFileDeletion({
               await writeRuntimeFile(
                 {
                   ...fileContext,
-                  settings: currentRoute.settings,
+                  target: currentRoute.target,
                   connectionId: currentRoute.connectionId
                 },
                 node.path,
@@ -185,7 +182,7 @@ export function useFileDeletion({
               await deleteRuntimePath(
                 {
                   ...fileContext,
-                  settings: currentRoute.settings,
+                  target: currentRoute.target,
                   connectionId: currentRoute.connectionId
                 },
                 node.path,

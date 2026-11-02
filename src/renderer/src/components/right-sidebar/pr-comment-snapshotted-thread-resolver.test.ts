@@ -58,14 +58,19 @@ describe('buildSnapshottedThreadResolver', () => {
     })
   })
 
-  it('resolves a GitLab discussion against the snapshotted MR iid', async () => {
+  it('resolves a GitLab discussion against the snapshotted MR iid and host', async () => {
     const resolveGitLabDiscussion = vi.fn().mockResolvedValue({ ok: true })
     const resolveReviewThread = vi.fn()
     const resolve = buildSnapshottedThreadResolver(
       deps({
         provider: 'gitlab',
         githubResolveTarget: undefined,
-        gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7 },
+        gitlabTarget: {
+          repoPath: '/repos/widgets',
+          repoId: 'repo-1',
+          iid: 7,
+          ownerHostId: 'runtime:env-b'
+        },
         resolveGitLabDiscussion,
         resolveReviewThread
       })
@@ -77,7 +82,8 @@ describe('buildSnapshottedThreadResolver', () => {
       repoId: 'repo-1',
       iid: 7,
       discussionId: 'D1',
-      resolved: true
+      resolved: true,
+      repoOwnerExecutionHostId: 'runtime:env-b'
     })
     expect(resolveReviewThread).not.toHaveBeenCalled()
   })
@@ -119,7 +125,12 @@ describe('buildSnapshottedThreadResolver', () => {
       deps({
         provider: 'gitlab',
         githubResolveTarget: undefined,
-        gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7 },
+        gitlabTarget: {
+          repoPath: '/repos/widgets',
+          repoId: 'repo-1',
+          iid: 7,
+          ownerHostId: 'runtime:env-b'
+        },
         resolveGitLabDiscussion: vi.fn().mockResolvedValue({ ok: false, error: 'timed out' }),
         onResolveFailed,
         onResolvedOptimistically

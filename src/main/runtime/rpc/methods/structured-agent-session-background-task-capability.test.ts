@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'

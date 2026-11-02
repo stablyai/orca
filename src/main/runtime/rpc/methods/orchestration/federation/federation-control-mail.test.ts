@@ -7,7 +7,7 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { fingerprintAuthenticatedPairingCredential } from '../../../orchestration-mutation-executor'
+import { fingerprintAuthenticatedPairingCredential } from '../../../../device-principal'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { syncFederationBarrier } from './federation-sync-barrier.test-support'
 

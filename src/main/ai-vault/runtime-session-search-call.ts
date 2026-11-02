@@ -1,4 +1,4 @@
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 
 // Why: runtime RPC failures resolve as ok:false, but the shared search client
 // classifies thrown errors by code, so the refusal has to keep its code to be

@@ -6,12 +6,61 @@ import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-reject
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import {
+  getFocusedDropRuntimeId,
   getSidebarProjectDropAffordance,
-  isRemoteRuntimeActive,
-  resolveSidebarProjectDropPath
+  isSidebarProjectDropRefusedByFocus,
+  resolveSidebarProjectDropPath,
+  routeSidebarProjectDrop,
+  type SidebarProjectDropRoute
 } from './sidebar-project-drop'
 import { translate } from '@/i18n/i18n'
 import { userNamedFileAccess } from '@/lib/local-file-access'
+import { listWslHostWindowsPathAccess } from '@/lib/windows-path-access'
+import type { AppState } from '@/store/types'
+
+function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings'>) {
+  return listWslHostWindowsPathAccess(
+    state.runtimeEnvironments,
+    state.settings?.experimentalWslHosts === true
+  )
+}
+
+/** Says why a drop was refused; true when it was. */
+function refuseSidebarProjectDrop(route: SidebarProjectDropRoute): boolean {
+  if (route.kind === 'windows-drive-on-wsl-host') {
+    toast.error(
+      translate(
+        'auto.components.sidebar.useSidebarProjectDrop.windowsDriveOnWslHost',
+        'Folders on a Windows drive stay on this computer, not in {{value0}}.',
+        { value0: route.distro }
+      ),
+      {
+        description: translate(
+          'auto.components.sidebar.useSidebarProjectDrop.windowsDriveOnWslHostDescription',
+          'Git in WSL is slow on Windows drives. Switch the host to this computer to add it, or drop a folder from \\\\wsl.localhost\\{{value0}}.',
+          { value0: route.distro }
+        )
+      }
+    )
+    return true
+  }
+  if (route.kind === 'runtime-focused') {
+    toast.error(
+      translate(
+        'auto.components.sidebar.useSidebarProjectDrop.849ef13dc0',
+        'Local folder drops are unavailable for server runtimes.'
+      ),
+      {
+        description: translate(
+          'auto.components.sidebar.useSidebarProjectDrop.5ccb56c7be',
+          'Use Add Project to enter a host path.'
+        )
+      }
+    )
+    return true
+  }
+  return false
+}
 
 type SidebarProjectDropHandlers = {
   onDragEnter: (event: React.DragEvent<HTMLElement>) => void
@@ -26,10 +75,16 @@ export function useSidebarProjectDrop(): {
 } {
   const openModal = useAppStore((s) => s.openModal)
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isHandlingDrop, setIsHandlingDrop] = useState(false)
   const dragDepthRef = useRef(0)
-  const remoteRuntimeActive = isRemoteRuntimeActive(settings)
+  const wslDropHosts = useMemo(
+    () => getWslDropHosts({ runtimeEnvironments, settings }),
+    [runtimeEnvironments, settings]
+  )
+  const focusedRuntimeId = getFocusedDropRuntimeId(settings)
+  const remoteRuntimeActive = isSidebarProjectDropRefusedByFocus(focusedRuntimeId, wslDropHosts)
   const mountedRef = useMountedRef()
 
   const clearDragState = useCallback(() => {
@@ -61,20 +116,14 @@ export function useSidebarProjectDrop(): {
         )
         return
       }
-      // Why: re-read live settings; a runtime can be focused while the drop is prepared.
-      if (isRemoteRuntimeActive(useAppStore.getState().settings)) {
-        toast.error(
-          translate(
-            'auto.components.sidebar.useSidebarProjectDrop.849ef13dc0',
-            'Local folder drops are unavailable for server runtimes.'
-          ),
-          {
-            description: translate(
-              'auto.components.sidebar.useSidebarProjectDrop.5ccb56c7be',
-              'Use Add Project to enter a host path.'
-            )
-          }
-        )
+      // Why: re-read live state; a runtime can be focused while the drop is prepared.
+      const state = useAppStore.getState()
+      const route = routeSidebarProjectDrop({
+        path: pathResolution.path,
+        focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
+        wslHosts: getWslDropHosts(state)
+      })
+      if (refuseSidebarProjectDrop(route)) {
         return
       }
 
@@ -96,7 +145,12 @@ export function useSidebarProjectDrop(): {
           )
           return
         }
-        openModal('add-repo', { droppedLocalPath: pathResolution.path })
+        openModal(
+          'add-repo',
+          route.kind === 'wsl-host'
+            ? { droppedHostPath: { hostId: route.hostId, path: route.linuxPath } }
+            : { droppedLocalPath: pathResolution.path }
+        )
       } catch (error) {
         if (mountedRef.current) {
           toast.error(
@@ -162,7 +216,8 @@ export function useSidebarProjectDrop(): {
     affordance: getSidebarProjectDropAffordance({
       isDragOver,
       isHandlingDrop,
-      remoteRuntimeActive
+      remoteRuntimeActive,
+      wslDropsOnly: focusedRuntimeId !== null && !remoteRuntimeActive
     })
   }
 }

@@ -36,15 +36,19 @@ export function connectDaemonSocket(socketPath: string, timeoutMs: number): Prom
 export function armDaemonSocketCloseHandlers(
   controlSocket: Socket,
   streamSocket: Socket,
-  handleClose: () => void
+  handleClose: () => void,
+  drainStream: (done: () => void) => void
 ): () => void {
-  controlSocket.on('close', handleClose)
-  controlSocket.on('error', handleClose)
+  // Why drain first: handling the close destroys the stream socket, and a daemon's last output
+  // (often a session's exit) can still sit unread behind the ingest bound.
+  const handleControlClose = (): void => drainStream(handleClose)
+  controlSocket.on('close', handleControlClose)
+  controlSocket.on('error', handleControlClose)
   streamSocket.on('close', handleClose)
   streamSocket.on('error', handleClose)
   return () => {
-    controlSocket.off('close', handleClose)
-    controlSocket.off('error', handleClose)
+    controlSocket.off('close', handleControlClose)
+    controlSocket.off('error', handleControlClose)
     streamSocket.off('close', handleClose)
     streamSocket.off('error', handleClose)
   }

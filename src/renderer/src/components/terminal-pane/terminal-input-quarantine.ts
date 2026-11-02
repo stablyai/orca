@@ -1,3 +1,5 @@
+import { notifyTerminalInputNotSent } from './terminal-input-not-sent-notice'
+
 // Why this module exists: when a dead daemon endpoint is replaced (STA-2373,
 // #10065), the pane remounts and re-attaches to a *fresh* shell. Keystrokes in
 // flight during that window are dropped, but everything typed after re-attach
@@ -75,6 +77,10 @@ export function shouldDropQuarantinedTerminalInput(
   if (entry.lastInputAt !== null && now - entry.lastInputAt >= QUARANTINE_IDLE_MS) {
     quarantineByTabId.delete(tabId)
     return false
+  }
+  if (entry.lastInputAt === null) {
+    // Why: dropping the user's typing silently is what made it look lost; say so once per line.
+    notifyTerminalInputNotSent(tabId)
   }
   entry.lastInputAt = now
   if (containsLineTerminator(data)) {

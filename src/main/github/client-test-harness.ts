@@ -41,7 +41,6 @@ export function resetPRForBranchMocks(mocks: GitHubClientMocks): void {
   mocks.noteRateLimitSpendMock.mockReset()
   mocks.ghRepoExecOptionsMock.mockClear()
   mocks.githubRepoContextMock.mockClear()
-  mocks.getSshGitProviderMock.mockReset()
   mocks.readLocalGitConfigSignatureMock.mockReset()
   mocks.readLocalGitConfigSignatureMock.mockResolvedValue(undefined)
   mocks.acquireMock.mockReset()

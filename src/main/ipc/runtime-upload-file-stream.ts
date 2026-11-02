@@ -9,8 +9,8 @@ import { formatByteCeiling, REMOTE_IMPORT_MAX_FILE_BYTES } from './runtime-impor
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-} from './runtime-environment-manual-disconnect'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+} from './runtime-environments/runtime-environment-manual-disconnect'
+import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 
 // Why: base64 turns 3 bytes into 4 chars, so a 384 KiB slice lands on the wire
 // as exactly 512 KiB — the chunk size the renderer used before streaming.

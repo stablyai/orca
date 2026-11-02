@@ -1,10 +1,11 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { LocalBaseRefRefreshResult } from '../../../../shared/worktree/base-ref-drift-types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import { makeWorkspaceLineage, makeWorktree } from './worktrees-slice-test-fixtures'
+import { TEST_REPO, makeWorkspaceLineage, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
   mockApi,
@@ -39,7 +40,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('prefetches create base through desktop IPC on the local runtime target', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
 
     await store.getState().prefetchWorktreeCreateBase('repo1', 'origin/main')
 
@@ -51,10 +52,11 @@ describe('createWorktree base status merge', () => {
   })
 
   it('prefetches create base through runtime RPC for remote runtime targets', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'remote-runtime' }
     } as Partial<AppState>)
+    seedRepoHost(store, 'runtime:remote-runtime')
     runtimeEnvironmentCall.mockResolvedValue({ id: 'req', ok: true, result: null })
 
     await store.getState().prefetchWorktreeCreateBase('repo1')
@@ -71,7 +73,7 @@ describe('createWorktree base status merge', () => {
   it('marks the create payload as a generated name only when the caller says so', async () => {
     // Why: the host retires generated names permanently, and the creature pool contains ordinary
     // words ("orca", "runner", "molly"). A name the user typed must stay reusable.
-    const store = createTestStore()
+    const store = createRepoTestStore()
     mockApi.worktrees.create.mockResolvedValue({
       worktree: makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
     })
@@ -114,7 +116,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('passes linked work item and creation agent metadata through the create IPC payload', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -174,7 +176,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('adopts an explicit provisioned root without calling ordinary worktree create', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const adopted = makeWorktree({
       id: 'repo1::/workspace/repo',
       repoId: 'repo1',
@@ -237,7 +239,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('stamps the owning runtime host onto worktrees created on a remote runtime', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const created = makeWorktree({
       id: 'repo-remote::/remote/feature',
       repoId: 'repo-remote',
@@ -277,7 +279,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('passes the active folder workspace as parent for in-app worktree creates', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -310,7 +312,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('merges create result metadata into a worktree inserted by the watcher race', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const watcherWorktree = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -335,7 +337,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('requests a warning dialog when creation falls back to a local base', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -369,7 +371,7 @@ describe('createWorktree base status merge', () => {
     status: LocalBaseRefRefreshResult['status']
     expectedReason: string
   }[])('warns when local base ref refresh returns $status', async ({ status, expectedReason }) => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -410,7 +412,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('falls back to the generic dirty detail when ownerWorktreePath is missing', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -435,7 +437,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('names the toast from branch when displayName is blank', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -464,7 +466,8 @@ describe('createWorktree base status merge', () => {
 
   // Creates that joined one refresh report the same fact, so they share one toast per repo+branch.
   it('reuses one toast id for every create of the same repo and base branch', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
+    store.setState({ repos: [TEST_REPO, { ...TEST_REPO, id: 'repo2' }] })
     const refresh = {
       status: 'skipped_error',
       baseRef: 'origin/main',
@@ -490,7 +493,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('does not warn when the local base ref refresh succeeds', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -511,7 +514,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('does not warn when local base ref refresh is omitted from the create result', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -525,7 +528,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('suggests turning on local main freshness when the create result reports a stale local base', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -554,7 +557,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('persists the dismissal flag when the suggestion toast is closed or swiped', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     store.setState({
       settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
       updateSettings: vi.fn().mockResolvedValue(undefined)
@@ -580,7 +583,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('does not record a dismissal on close when the feature is already enabled', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     store.setState({
       settings: { refreshLocalBaseRefOnWorktreeCreate: true } as AppState['settings'],
       updateSettings: vi.fn().mockResolvedValue(undefined)
@@ -606,7 +609,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('stamps manualOrder on create while Manual sort is active', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     store.setState({ sortBy: 'manual' } as Partial<AppState>)
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(123_456)
     const wt = makeWorktree({
@@ -634,7 +637,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('passes branchNameOverride through the local create IPC payload', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/feature-something',
       repoId: 'repo1',
@@ -672,7 +675,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('retries a suffixed branchNameOverride when local IPC reports a branch conflict', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const error = new Error(
       'Branch "feature/something" already exists. Pick a different worktree name.'
     )
@@ -721,7 +724,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('does not overwrite a newer reconcile status with the initial checking status', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
     mockApi.worktrees.create.mockImplementation(async () => {
       store.getState().updateWorktreeBaseStatus({
@@ -753,3 +756,14 @@ describe('createWorktree base status merge', () => {
     })
   })
 })
+
+// Creation routes by the project row's own host, so every test seeds that row.
+function seedRepoHost(store: ReturnType<typeof createTestStore>, hostId: ExecutionHostId): void {
+  store.setState({ repos: [{ ...TEST_REPO, executionHostId: hostId }] })
+}
+
+function createRepoTestStore(): ReturnType<typeof createTestStore> {
+  const store = createTestStore()
+  seedRepoHost(store, 'local')
+  return store
+}

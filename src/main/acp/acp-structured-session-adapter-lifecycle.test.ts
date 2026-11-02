@@ -6,6 +6,7 @@ import {
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { StructuredAgentSessionTaskQueue } from '../native-chat/agent-session-wire/structured-agent-session-task-queue'
+import { agentSessionLaunchFolderMissing } from '../runtime/agent-session-launch-directory'
 import { tick } from './acp-scripted-agent.test-support'
 import {
   GROK,
@@ -59,7 +60,7 @@ describe('ACP Stop names a turn', () => {
     expect(rig.settled.map((settled) => settled.clientMessageId)).toEqual(['old', 'new'])
   })
 
-  it('a Stop naming an ended turn during the gap before the next prompt opens stops that prompt', async () => {
+  it('a Stop naming a turn with no journal row, in the gap before the next prompt opens, stops that prompt', async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()
     await sendHello(rig, 'old')
@@ -108,7 +109,12 @@ describe('ACP Stop names a turn', () => {
     expect(rig.sent('session/cancel')).toHaveLength(2)
     expect(rig.settled).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ clientMessageId: 'follow-up', state: 'rejected' })
+        // Held by Orca, never prompted: proof it never reached the agent.
+        expect.objectContaining({
+          clientMessageId: 'follow-up',
+          state: 'rejected',
+          rejection: { kind: 'cancelled', neverReachedAgent: true }
+        })
       ])
     )
   })
@@ -220,7 +226,7 @@ describe('ACP connection loss', () => {
     ).toEqual({
       state: 'rejected',
       reason: 'Grok stopped before this message was sent.',
-      rejection: { kind: 'providerExited' }
+      rejection: { kind: 'providerExited', neverReachedAgent: true }
     })
     // The next start's stop of the old child is one Orca asked for; it does not rename the crash.
     await expect(rig.acquire()).rejects.toMatchObject({
@@ -434,6 +440,21 @@ describe('ACP startup that never answers', () => {
     start.abort()
     releaseLaunch()
     expect(await failed).toMatchObject({ name: 'AgentSessionPreSpawnError' })
+    expect(rig.spawned).toEqual([])
+  })
+
+  it('refuses a floating chat whose folder is gone with the reason the person reads', async () => {
+    const rig = await openAcpAdapterRig({
+      deps: {
+        resolveLaunch: async () => {
+          throw agentSessionLaunchFolderMissing('/gone/floating')
+        }
+      }
+    })
+    expect(await rig.acquire().catch((error: unknown) => error)).toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchFolderMissing'
+    })
     expect(rig.spawned).toEqual([])
   })
 })

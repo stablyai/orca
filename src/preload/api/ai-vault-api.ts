@@ -20,10 +20,14 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
 import type {
-  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
 import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
+import type {
+  AiVaultScanProgress,
+  AiVaultScanProgressUpdate
+} from '../../shared/ai-vault-scan-progress'
 
 export type AiVaultApi = {
   /** Omitted host means this host; `all` is merged by this desktop across every enumerated host. */
@@ -48,7 +52,7 @@ export type AiVaultApi = {
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (
-    args: AiVaultPrepareSessionResumeArgs
+    args: AiVaultPrepareSessionResumeRequest
   ) => Promise<AiVaultPrepareSessionResumeResult>
   /** Lists the Task subagent transcripts of one session, on demand. */
   listSubagentSessions: (args: AiVaultSubagentListArgs) => Promise<AiVaultSubagentListResult>
@@ -58,4 +62,7 @@ export type AiVaultApi = {
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
   /** Fires when any app window regains OS focus; returns an unsubscribe. */
   onWindowFocused: (callback: () => void) => () => void
+  /** The local scan entry for a request key, if it is still retained. */
+  getScanProgress: (scanKey: string) => Promise<AiVaultScanProgress | null>
+  onScanProgress: (callback: (update: AiVaultScanProgressUpdate) => void) => () => void
 }

@@ -43,15 +43,9 @@ export function normalizeSubagentState(state: string): NativeChatSubagentState {
   return TERMINAL_SUBAGENT_STATES.has(state) ? (state as NativeChatSubagentState) : 'unverifiable'
 }
 
-/** Bound on the per-child provider strings a roster row carries — `id` and
- *  `label`. One constant because the producer writes a durable row and both
- *  readers clip it again: a larger producer bound is bytes every consumer throws
- *  away, replayed on every reconnect.
- *
- *  `groupId` is deliberately NOT bounded by the producer: the row's durable
- *  identity is `codex-subagents:${groupId}` and cannot be clipped without
- *  changing which row a replay finds, so bounding only the block field would
- *  save nothing and make the two disagree. Both readers still clip it. */
+/** Bound on the per-child provider strings a subagent row carries — `id`, `label` and
+ *  `groupId`. One constant because the host writes a durable row and both readers clip it again:
+ *  a larger write bound is bytes every consumer throws away, replayed on every reconnect. */
 export const MAX_SUBAGENT_FIELD_CHARS = 512
 
 export function isTerminalSubagentState(state: string): boolean {

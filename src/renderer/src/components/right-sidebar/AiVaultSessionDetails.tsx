@@ -3,6 +3,7 @@ import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import type React from 'react'
 import {
   FileJson,
+  Folder,
   FolderGit2,
   MessageSquare,
   MessageSquarePlus,
@@ -25,6 +26,9 @@ import { sessionDetailConversationTurns, sessionPromptPreview } from './ai-vault
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import {
+  aiVaultResumeInSessionWorkspaceLabel,
+  aiVaultSessionWorkspaceHeading,
+  isAiVaultFolderWorkspaceId,
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
   shouldShowAiVaultWorktreeStatusBadge,
@@ -109,10 +113,7 @@ export function SessionInlineDetails({
               <Play className="size-3.5" />
               {referenceSession
                 ? translate('aiVault.continueInCli', 'Continue in CLI')
-                : translate(
-                    'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-                    'Resume in Worktree'
-                  )}
+                : aiVaultResumeInSessionWorkspaceLabel(resumeActions.worktree.worktreeId)}
             </Button>
           ) : null}
           {showResumeInNewTab ? (
@@ -263,11 +264,14 @@ export function SessionInlineDetails({
           vaultScope
         }) ? (
           <SessionReceiptSection
-            icon={<FolderGit2 className="size-3" />}
-            label={translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.worktree',
-              'Worktree'
-            )}
+            icon={
+              isAiVaultFolderWorkspaceId(worktreeDisplay.worktreeId) ? (
+                <Folder className="size-3" />
+              ) : (
+                <FolderGit2 className="size-3" />
+              )
+            }
+            label={aiVaultSessionWorkspaceHeading(worktreeDisplay.worktreeId)}
           >
             <WorktreeMetadataLines worktreeInfo={worktreeDisplay} vaultScope={vaultScope} />
           </SessionReceiptSection>
@@ -345,7 +349,7 @@ function WorktreeMetadataLines({
         }) ? (
           <>
             <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-              {aiVaultWorktreeStatusLabel(worktreeInfo.status)}
+              {aiVaultWorktreeStatusLabel(worktreeInfo.status, worktreeInfo.worktreeId)}
             </span>
             <span className="shrink-0 text-muted-foreground/45">·</span>
           </>

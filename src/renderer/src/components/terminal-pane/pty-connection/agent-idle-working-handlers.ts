@@ -3,14 +3,11 @@ import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { isLocalExecutionHost } from '../../../../../shared/execution-host'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
-import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
-import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
-import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
+import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 
 import { settleTerminalPaneRecovery } from '../terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -121,7 +118,7 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
   session.hostAgnosticTerminalWorktree =
     session.deps.worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
     isEphemeralSetupTerminalWorktreeId(session.deps.worktreeId)
-  session.worktreeProvesLocalHost = parseExecutionHostId(session.worktree?.hostId)?.kind === 'local'
+  session.worktreeProvesLocalHost = isLocalExecutionHost(session.worktree?.hostId)
   session.connectionOwnerHydrating =
     !session.terminalOwnerUnresolved &&
     !session.hostAgnosticTerminalWorktree &&
@@ -129,131 +126,19 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     session.runtimeEnvironmentId === null &&
     session.worktreeConnectionId === undefined
   // Why: an SSH host nested under a HUB is execution identity, not permission for the paired client to dial that host.
-  session.connectionId =
+  // A set id is a relay-era `ssh:` row not yet converted to its managed runtime: the pane never
+  // spawns there, the reconnect overlay owns it, and the converted row remounts the pane.
+  session.unservedSshTargetId =
     !session.terminalOwnerUnresolved &&
     !session.connectionOwnerHydrating &&
     session.runtimeEnvironmentId === null
       ? (session.worktreeConnectionId ?? null)
       : null
-  type DirectSshRetryLease = Pick<
-    DirectSshPaneRetryAttempt,
-    'attemptId' | 'authority' | 'tabGeneration'
-  >
-  session.directSshRetryAttempt = (() => {
-    const pendingAttempt = session.state.directSshPaneRetryByTabId?.[session.deps.tabId]
-    const liveBinding = session.state.directSshLivePtyBindingByTabId?.[session.deps.tabId]
-    const attempt =
-      pendingAttempt?.authority.targetId === session.connectionId &&
-      pendingAttempt.tabGeneration === (session.tab?.generation ?? 0)
-        ? pendingAttempt
-        : liveBinding?.authority.targetId === session.connectionId &&
-            liveBinding.tabGeneration === (session.tab?.generation ?? 0)
-          ? liveBinding
-          : undefined
-    return attempt
-  })()
-  // Only the PENDING retry marks a mount that a reconnect created. directSshRetryAttempt also
-  // accepts the live binding, which is written at the same tab generation once the reconnect
-  // succeeds and then outlives it — so it stays truthy for every later remount of that generation,
-  // not just this one.
-  session.followsDirectSshReconnect = (() => {
-    const pending = session.state.directSshPaneRetryByTabId?.[session.deps.tabId]
-    return (
-      pending?.authority.targetId === session.connectionId &&
-      pending.tabGeneration === (session.tab?.generation ?? 0)
-    )
-  })()
   // Generation is part of ownership: a recovery remount must not join a spawn
   // started by the pane instance it replaced, while StrictMode remounts keep
   // the same generation and may still share their in-flight spawn.
-  session.pendingSpawnKey = JSON.stringify([
-    session.cacheKey,
-    session.tabGeneration,
-    session.directSshRetryAttempt?.attemptId ?? null
-  ])
-  session.capturedDirectSshRetryPtyAccepted = false
-  session.directSshPaneRetrySettlementCancelled = false
-  session.directSshPaneRetrySettlementTimers = new Set<ReturnType<typeof setTimeout>>()
-  session.directSshPaneRetryTimedPromises = new WeakSet<object>()
-  session.capturedDirectSshRetryLeaseMatches = (): boolean => {
-    if (!session.directSshRetryAttempt) {
-      return true
-    }
-    const currentState = useAppStore.getState()
-    const currentConnection = currentState.sshConnectionStates.get(
-      session.directSshRetryAttempt.authority.targetId
-    )
-    const currentTab = (currentState.tabsByWorktree[session.deps.worktreeId] ?? []).find(
-      (candidate) => candidate.id === session.deps.tabId
-    )
-    if (
-      currentConnection?.providerEpoch !== session.directSshRetryAttempt.authority.providerEpoch ||
-      currentConnection?.connectionGeneration !==
-        session.directSshRetryAttempt.authority.connectionGeneration ||
-      (currentTab?.generation ?? 0) !== session.directSshRetryAttempt.tabGeneration
-    ) {
-      return false
-    }
-    const pendingAttempt = currentState.directSshPaneRetryByTabId?.[session.deps.tabId]
-    const pendingMatches =
-      pendingAttempt?.attemptId === session.directSshRetryAttempt.attemptId &&
-      directSshAuthoritiesEqual(
-        pendingAttempt.authority,
-        session.directSshRetryAttempt.authority
-      ) &&
-      pendingAttempt.tabGeneration === session.directSshRetryAttempt.tabGeneration
-    const liveBinding = currentState.directSshLivePtyBindingByTabId?.[session.deps.tabId]
-    const liveBindingMatchesAttempt =
-      liveBinding?.attemptId === session.directSshRetryAttempt.attemptId &&
-      directSshAuthoritiesEqual(liveBinding.authority, session.directSshRetryAttempt.authority) &&
-      liveBinding.tabGeneration === session.directSshRetryAttempt.tabGeneration
-    return pendingMatches || liveBindingMatchesAttempt
-  }
-  session.capturedDirectSshRetryStateMatches = (ptyId: string): boolean => {
-    if (!session.directSshRetryAttempt) {
-      return true
-    }
-    const currentConnection = useAppStore
-      .getState()
-      .sshConnectionStates.get(session.directSshRetryAttempt.authority.targetId)
-    return (
-      parseAppSshPtyId(ptyId)?.connectionId === session.directSshRetryAttempt.authority.targetId &&
-      currentConnection?.status === 'connected' &&
-      session.capturedDirectSshRetryLeaseMatches()
-    )
-  }
-  session.claimCapturedDirectSshRetryPty = (ptyId: string): boolean => {
-    if (!session.capturedDirectSshRetryStateMatches(ptyId)) {
-      return false
-    }
-    session.capturedDirectSshRetryPtyAccepted = session.directSshRetryAttempt !== undefined
-    return true
-  }
-  session.canAdoptCapturedDirectSshRetryPty = (ptyId: string): boolean => {
-    const canAdopt = session.capturedDirectSshRetryStateMatches(ptyId)
-    if (canAdopt && session.directSshRetryAttempt) {
-      session.capturedDirectSshRetryPtyAccepted = true
-    }
-    return canAdopt
-  }
-  // One settle for this pane's attach attempt, reporting to both ledgers that
-  // track it: the direct-SSH pane retry (when a lease owns this attempt) and
-  // the tab's recovery ledger. Keeping them on one call is what stops a second
-  // settle path drifting out of step with the first.
-  session.settlePaneAttachAttempt = (
-    attempt: DirectSshRetryLease | undefined,
-    status: 'success' | 'failed' | 'timed-out'
-  ): void => {
+  session.pendingSpawnKey = JSON.stringify([session.cacheKey, session.tabGeneration])
+  session.settlePaneAttachAttempt = (status: 'success' | 'failed' | 'timed-out'): void => {
     settleTerminalPaneRecovery(session.deps.tabId, session.terminalRecoveryGeneration, status)
-    if (!attempt || status === 'success') {
-      return
-    }
-    useAppStore.getState().settleDirectSshPaneRetry?.({
-      status,
-      tabId: session.deps.tabId,
-      attemptId: attempt.attemptId,
-      authority: attempt.authority,
-      tabGeneration: attempt.tabGeneration
-    })
   }
 }

@@ -1,6 +1,10 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
-import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
+import {
+  recordPullRequestGenerationEdits,
+  type PullRequestFieldRevisions,
+  type PullRequestGenerationFields
+} from '@/store/slices/pull-request-generation'
 import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PullRequestGenerationOutcome } from './create-pull-request-dialog-field-model'
@@ -17,6 +21,9 @@ export function useGenerateBeforeCreatePullRequest({
   aiGenerationEnabled,
   canCreate,
   createPullRequest,
+  fields,
+  fieldRevisions,
+  fieldsInitialized,
   fieldsAreSeedPlaceholders,
   generatePullRequestFields,
   generationKey,
@@ -26,6 +33,9 @@ export function useGenerateBeforeCreatePullRequest({
   aiGenerationEnabled: boolean
   canCreate: boolean
   createPullRequest: CreatePullRequest
+  fields: PullRequestGenerationFields
+  fieldRevisions: PullRequestFieldRevisions
+  fieldsInitialized: boolean
   fieldsAreSeedPlaceholders: boolean
   generatePullRequestFields: (
     overrides: undefined,
@@ -35,6 +45,16 @@ export function useGenerateBeforeCreatePullRequest({
   repo: Pick<Repo, 'sourceControlAi'> | null
   settings: AppState['settings']
 }) {
+  useLayoutEffect(() => {
+    if (generationKey && fieldsInitialized) {
+      useAppStore
+        .getState()
+        .updatePullRequestGenerationRecord(generationKey, (record) =>
+          recordPullRequestGenerationEdits(record, fields, fieldRevisions)
+        )
+    }
+  }, [generationKey, fields, fieldRevisions, fieldsInitialized])
+
   const handleCreatePullRequest = useCallback(
     async (stacked = false): Promise<void> => {
       const status = generationKey
@@ -69,8 +89,7 @@ export function useGenerateBeforeCreatePullRequest({
       if (!outcome.result) {
         return
       }
-      // Why: the click owns the run, so create through its closure wherever the user went; a later render can show another branch or cleared eligibility.
-      // The result is what the composer fills in, so the PR matches the form.
+      // The request record retains edits across branch switches and composer remounts.
       await createPullRequest(stacked, outcome.result)
     },
     [

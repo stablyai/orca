@@ -219,12 +219,22 @@ describe('Windows server prebuild cache inputs', () => {
           'process-tree-kill-gate',
           'spawn-observer',
           'bounded-output-sink',
+          'growing-byte-buffer',
           'child-termination-reporter',
           'process-spec',
           'windows-command-line',
-          'windows-cmd-shim-resolution'
-        ].map((name) => `src/shared/child-process/${name}.ts`)
+          'windows-cmd-shim-resolution',
+          'windows-system-binary'
+        ].map((name) => `src/packages/process-host/src/${name}.ts`)
       )
+    )
+    expect(WINDOWS_PREBUILD_CACHE_INPUTS).toEqual(
+      expect.arrayContaining([
+        'src/packages/process-host/.gitignore',
+        'src/packages/process-host/package.json',
+        'src/packages/process-host/scripts/build-dist.mjs',
+        'src/packages/process-host/tsconfig.json'
+      ])
     )
   })
 

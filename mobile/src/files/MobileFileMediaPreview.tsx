@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import type { MobileFileMedia } from './mobile-file-media'
@@ -8,6 +8,7 @@ import { createMobileMediaSink } from './mobile-media-preview-cache'
 import { MobileMediaPlayback } from './MobileMediaPlayback'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
+import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 
 type State = { uri: string } | { error: string } | { bytes: number; total: number }
 type Props = { media: MobileFileMedia; client: MobileFilePreviewRpcSender | null; title: string }
@@ -62,18 +63,7 @@ function MediaDownload({ media, client, title }: Props) {
     return <MobileMediaPlayback key={state.uri} uri={state.uri} mimeType={mimeType} title={title} />
   }
   if ('error' in state) {
-    return (
-      <View style={styles.state}>
-        <Text style={styles.errorText}>{state.error}</Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={() => setAttempt(attempt + 1)}
-          accessibilityRole="button"
-        >
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      </View>
-    )
+    return <MobileLoadErrorState message={state.error} onRetry={() => setAttempt(attempt + 1)} />
   }
   return (
     <View style={styles.state}>

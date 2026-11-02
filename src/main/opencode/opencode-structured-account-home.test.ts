@@ -55,7 +55,7 @@ describe('structured OpenCode account binding', () => {
     accounts.select(second)
     const environment = environmentForStructuredOpenCodeAccountHome(binding, {
       managedAccounts: accounts,
-      baseEnvironment: { PATH: '/bin' }
+      baseEnvironment: { PATH: '/bin', XDG_DATA_HOME: '/settings/data', OPENCODE_DB: 'work.db' }
     })
     expect(environment.XDG_DATA_HOME).toBe(`/profiles/${first}/data`)
     expect(environment.OPENCODE_DB).toBe('opencode.db')

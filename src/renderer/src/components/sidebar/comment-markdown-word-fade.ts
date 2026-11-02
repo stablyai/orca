@@ -3,20 +3,12 @@
 // text mounts only the new ones.
 
 import type { Element, Root } from 'hast'
+import { SPACELESS_SCRIPT_RANGES } from '../../../../shared/native-chat-text-reveal'
 
 /** Elements whose renderers read their text, or that are faded in as a whole. */
 const UNSPLIT_TAGS = new Set(['a', 'code', 'pre', 'kbd', 'svg', 'math'])
 
-/** Scripts written without spaces, where each character is its own word. */
-const SPACELESS_SCRIPT_RANGES = String.raw`\u2e80-\ud7ff\uf900-\uffef`
-const SPACELESS_SCRIPT_CHAR = new RegExp(`[${SPACELESS_SCRIPT_RANGES}]`, 'u')
-
-/** Shared with whatever paces the text these words are drawn from, so both end words alike. */
-export function isSpacelessScriptChar(char: string): boolean {
-  return SPACELESS_SCRIPT_CHAR.test(char)
-}
-
-/** Whitespace, one character of such a script, or a run of anything else. */
+/** Whitespace, one character of a script written without spaces, or a run of anything else. */
 const WORD_PATTERN = new RegExp(
   `\\s+|[${SPACELESS_SCRIPT_RANGES}]|[^\\s${SPACELESS_SCRIPT_RANGES}]+`,
   'gu'

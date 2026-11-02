@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainHttpClient } from '../network/http-client'
 
 const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
@@ -8,6 +9,12 @@ const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
   ptySpawnMock: vi.fn()
 }))
 
+// The probe's child runs in-process here; the worker transport has its own suite.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
@@ -30,9 +37,90 @@ describe('Codex backend rate-limit requests', () => {
   })
 
   afterEach(() => {
+    setMainHttpClient(null)
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+  })
+
+  it('uses the host HTTP client for usage, credit reads and redemption', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: { access_token: 'synthetic-token', account_id: 'synthetic-account' }
+      })
+    )
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          plan_type: 'plus',
+          rate_limit: { primary_window: { used_percent: 12, limit_window_seconds: 3_600 } }
+        })
+      )
+      .mockResolvedValueOnce(Response.json({ available_count: 0, credits: [] }))
+      .mockResolvedValueOnce(Response.json({ code: 'already_redeemed' }))
+    setMainHttpClient({ fetch: request, proxySession: () => null })
+    const deadline = vi.spyOn(AbortSignal, 'timeout')
+
+    await expect(
+      fetchCodexRateLimits({ codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\fixture\\.codex' })
+    ).resolves.toMatchObject({ status: 'ok', session: { usedPercent: 12 } })
+    await expect(
+      consumeCodexRateLimitResetCredit({
+        codexHomePath: '/managed/synthetic-home',
+        idempotencyKey: 'synthetic-request'
+      })
+    ).resolves.toBe('alreadyRedeemed')
+
+    expect(request.mock.calls.map(([url]) => url)).toEqual([
+      'https://chatgpt.com/backend-api/wham/usage',
+      'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
+      'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume'
+    ])
+    for (const [, init] of request.mock.calls) {
+      expect(init).toEqual(
+        expect.objectContaining({
+          credentials: 'omit',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer synthetic-token',
+            'ChatGPT-Account-Id': 'synthetic-account'
+          }),
+          signal: expect.any(AbortSignal)
+        })
+      )
+    }
+    expect(request).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ redeem_request_id: 'synthetic-request' }),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' })
+      })
+    )
+    expect(deadline.mock.calls.map(([milliseconds]) => milliseconds)).toEqual([
+      10_000, 10_000, 30_000
+    ])
+    expect(fetch).not.toHaveBeenCalled()
+    expect(childSpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back to global fetch when the configured host transport fails', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: { access_token: 'synthetic-token', account_id: 'synthetic-account' }
+      })
+    )
+    const failure = new Error('fixture proxy refused the connection')
+    const request = vi.fn().mockRejectedValue(failure)
+    setMainHttpClient({ fetch: request, proxySession: () => null })
+    await expect(
+      consumeCodexRateLimitResetCredit({
+        codexHomePath: '/managed/synthetic-home',
+        idempotencyKey: 'synthetic-request'
+      })
+    ).rejects.toBe(failure)
+    expect(request).toHaveBeenCalledOnce()
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('uses the official backend usage contract without spawning Codex', async () => {

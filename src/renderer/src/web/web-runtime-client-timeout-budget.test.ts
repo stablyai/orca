@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebRuntimeClient } from './web-runtime-client'
 
@@ -34,12 +35,14 @@ describe('WebRuntimeClient timeout budget', () => {
   })
 
   it('starts a fresh request timeout after the connection wait completes', async () => {
-    const client = new WebRuntimeClient({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.alloc(32).toString('base64')
-    })
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
     client.close()
     let resolveConnection!: () => void
     const connection = new Promise<void>((resolve) => {

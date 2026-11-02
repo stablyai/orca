@@ -63,7 +63,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
-vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mocks.refresh
 }))
 
@@ -328,7 +328,8 @@ describe('a chat whose start was never confirmed', () => {
           envelope: expect.objectContaining({ clientOperationId: `operation-${CLAUDE_SESSION}` })
         })
       }),
-      expect.any(Function)
+      expect.any(Function),
+      true
     )
     expect(lifecycle()).toBeNull()
     expect(rows()).toEqual([])

@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration-manifest'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 
@@ -32,10 +30,12 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 const {
   abortRemoteOrcadMigrationCatalog,
   commitRemoteOrcadMigrationCatalog,
+  listRemoteOrcadRepositories,
   readRemoteOrcadMigrationCatalogState,
   stageRemoteOrcadMigrationCatalog,
   stageRemoteOrcadMigrationSnapshotChunk
 } = await import('./orcad-migration-catalog-client')
+const { listRemoteOrcadFolderCatalog } = await import('./orcad-server-folder-workspaces')
 
 function manifest(): OrcadMigrationManifest {
   const unsigned = {
@@ -82,6 +82,56 @@ describe('remote orcad migration catalog client', () => {
       }
     }
   )
+
+  it('keeps each server project’s execution host, so a nested SSH row is never read as local', async () => {
+    sendRequest.mockResolvedValue({
+      ok: true,
+      result: {
+        repos: [
+          { id: 'own', path: '/root/a', connectionId: null, displayName: 'own' },
+          { id: 'nested', path: '/root/b', connectionId: 'ssh-nested' },
+          { id: 'runtime', path: '/root/c', executionHostId: 'runtime:env' },
+          // An older orcad row: no host fields at all.
+          { id: 'legacy', path: '/root/d' }
+        ]
+      }
+    })
+    await expect(listRemoteOrcadRepositories(pairingCode)).resolves.toEqual([
+      { id: 'own', path: '/root/a' },
+      { id: 'nested', path: '/root/b', connectionId: 'ssh-nested' },
+      { id: 'runtime', path: '/root/c', executionHostId: 'runtime:env' },
+      { id: 'legacy', path: '/root/d' }
+    ])
+  })
+
+  it('reads the server’s folder workspaces and the groups that place them on a host', async () => {
+    sendRequest.mockImplementation(async (_pairing, method: string) => ({
+      ok: true,
+      result:
+        method === 'folderWorkspace.list'
+          ? {
+              folderWorkspaces: [
+                { id: 'own', folderPath: '/root/a', projectGroupId: 'g', connectionId: null },
+                { id: 'nested', folderPath: '/root/b', projectGroupId: 'g', connectionId: 'ssh-x' }
+              ]
+            }
+          : { groups: [{ id: 'g', name: 'G', parentGroupId: null }, { id: 'h' }] }
+    }))
+    await expect(listRemoteOrcadFolderCatalog(pairingCode)).resolves.toEqual({
+      folderWorkspaces: [
+        { id: 'own', folderPath: '/root/a', projectGroupId: 'g', connectionId: null },
+        { id: 'nested', folderPath: '/root/b', projectGroupId: 'g', connectionId: 'ssh-x' }
+      ],
+      projectGroups: [
+        { id: 'g', parentGroupId: null },
+        { id: 'h', parentGroupId: null }
+      ]
+    })
+    expect(sendRequest.mock.calls.map((call) => call[1]).sort()).toEqual([
+      'folderWorkspace.list',
+      'projectGroup.list'
+    ])
+  })
 
   it('pins snapshot acknowledgments to the admitted destination runtime', async () => {
     const request = {

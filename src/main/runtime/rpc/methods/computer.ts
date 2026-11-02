@@ -21,7 +21,7 @@ import {
   Scroll,
   SetValue,
   TypeText
-} from './computer-schemas'
+} from '../../../../shared/rpc-contract/computer-schemas-params'
 import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams

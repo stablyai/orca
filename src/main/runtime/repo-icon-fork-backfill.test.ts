@@ -54,15 +54,19 @@ describe('startup fork-upstream backfill', () => {
 
     await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
 
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
-      upstream: { owner: 'upstream-org', repo: 'rocket' },
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/acme.png?size=64',
-        source: 'github',
-        label: 'acme/rocket-pro'
-      }
-    })
+    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(
+      'repo-1',
+      {
+        upstream: { owner: 'upstream-org', repo: 'rocket' },
+        repoIcon: {
+          type: 'image',
+          src: 'https://github.com/acme.png?size=64',
+          source: 'github',
+          label: 'acme/rocket-pro'
+        }
+      },
+      'local'
+    )
   })
 
   it('migrates a same-name fork to the upstream owner avatar', async () => {
@@ -83,15 +87,19 @@ describe('startup fork-upstream backfill', () => {
 
     await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
 
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
-      upstream: { owner: 'upstream-org', repo: 'rocket' },
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/upstream-org.png?size=64',
-        source: 'github',
-        label: 'upstream-org/rocket'
-      }
-    })
+    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(
+      'repo-1',
+      {
+        upstream: { owner: 'upstream-org', repo: 'rocket' },
+        repoIcon: {
+          type: 'image',
+          src: 'https://github.com/upstream-org.png?size=64',
+          source: 'github',
+          label: 'upstream-org/rocket'
+        }
+      },
+      'local'
+    )
   })
 
   it('skips every row whose files sit on an SSH host', async () => {
@@ -137,8 +145,12 @@ describe('startup fork-upstream backfill', () => {
     resolveSlug({ owner: 'acme', repo: 'rocket-pro' })
     await backfill
 
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
-      upstream: { owner: 'upstream-org', repo: 'rocket' }
-    })
+    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(
+      'repo-1',
+      {
+        upstream: { owner: 'upstream-org', repo: 'rocket' }
+      },
+      'local'
+    )
   })
 })

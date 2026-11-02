@@ -129,6 +129,17 @@ describe('AutomationSchedulePicker', () => {
     }
   )
 
+  it.each(['en', 'zh', 'ja', 'ko', 'es'])(
+    'shows a valid multi-day weekly rule without an invalid label in %s (#24985)',
+    async (locale) => {
+      await i18n.changeLanguage(locale)
+      const rrule = 'FREQ=WEEKLY;BYDAY=TU,TH,SA;BYHOUR=8;BYMINUTE=0'
+
+      expect(formatUiAutomationSchedule(rrule)).toBe(rrule)
+      expect(formatUiAutomationSchedule('*/30 9-17 * * MON-FRI')).not.toBe('Invalid schedule')
+    }
+  )
+
   it('localizes the valid-custom-cron status without matching English copy (#14404)', async () => {
     await i18n.changeLanguage('zh')
 

@@ -710,15 +710,16 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
 index 7b286d3d64..5239ba4e40 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
-@@ -18,6 +18,7 @@
+@@ -18,6 +18,8 @@
  #include <iostream>
  #include <string>
  #include <thread>
 +#include <mutex>
++#include <atomic>
  #include <vector>
  #include <Windows.h>
  #include <strsafe.h>
-@@ -44,15 +45,37 @@ struct pty_baton {
+@@ -44,15 +46,39 @@ struct pty_baton {
    HANDLE hOut;
    HPCON hpc;
  
@@ -751,6 +752,8 @@ index 7b286d3d64..5239ba4e40 100644
  static std::vector<std::unique_ptr<pty_baton>> ptyHandles;
 +// Orca: every table access shares the exit watcher's lock; handles can be recycled.
 +static std::mutex ptyJobMutex;
++// Orca: 0 = no per-terminal ceiling (the default); set once at daemon start.
++static std::atomic<uint32_t> ptyActiveProcessLimit{0};
  static volatile LONG ptyCounter;
  
 -static pty_baton* get_pty_baton(int id) {
@@ -758,7 +761,7 @@ index 7b286d3d64..5239ba4e40 100644
    auto it = std::find_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
      return ptyHandle->id == id;
    });
-@@ -62,7 +85,7 @@ static pty_baton* get_pty_baton(int id) {
+@@ -62,7 +88,7 @@ static pty_baton* get_pty_baton(int id) {
    return nullptr;
  }
  
@@ -767,7 +770,7 @@ index 7b286d3d64..5239ba4e40 100644
    auto it = std::remove_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
      return ptyHandle->id == id;
    });
-@@ -102,8 +125,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+@@ -102,8 +128,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
      // Get process exit code.
      GetExitCodeProcess(baton->hShell, (LPDWORD)(&exit_event->exit_code));
      // Clean up handles
@@ -801,7 +804,7 @@ index 7b286d3d64..5239ba4e40 100644
  
      auto status = tsfn.BlockingCall(exit_event, callback); // In main thread
      switch (status) {
-@@ -242,6 +288,20 @@ HRESULT CreateNamedPipesAndPseudoConsole(const Napi::CallbackInfo& info,
+@@ -242,6 +291,20 @@ HRESULT CreateNamedPipesAndPseudoConsole(const Napi::CallbackInfo& info,
    return HRESULT_FROM_WIN32(GetLastError());
  }
  
@@ -822,7 +825,7 @@ index 7b286d3d64..5239ba4e40 100644
  static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
    Napi::Env env(info.Env());
    Napi::HandleScope scope(env);
-@@ -301,8 +361,10 @@ static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
+@@ -301,8 +364,10 @@ static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
      // We were able to instantiate a conpty
      const int ptyId = InterlockedIncrement(&ptyCounter);
      marshal.Set("pty", Napi::Number::New(env, ptyId));
@@ -835,7 +838,7 @@ index 7b286d3d64..5239ba4e40 100644
    } else {
      throw Napi::Error::New(env, "Cannot launch conpty");
    }
-@@ -350,11 +412,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -350,11 +415,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
    const bool useConptyDll = info[4].As<Napi::Boolean>().Value();
    Napi::Function exitCallback = info[5].As<Napi::Function>();
  
@@ -855,7 +858,7 @@ index 7b286d3d64..5239ba4e40 100644
  
    // Prepare command line
    std::unique_ptr<wchar_t[]> mutableCommandline = std::make_unique<wchar_t[]>(cmdline.length() + 1);
-@@ -409,6 +475,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -409,6 +478,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "UpdateProcThreadAttribute failed");
    }
  
@@ -871,7 +874,7 @@ index 7b286d3d64..5239ba4e40 100644
    PROCESS_INFORMATION piClient{};
    fSuccess = !!CreateProcessW(
        nullptr,
-@@ -416,7 +491,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -416,7 +494,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
        nullptr,                      // lpProcessAttributes
        nullptr,                      // lpThreadAttributes
        false,                        // bInheritHandles VERY IMPORTANT that this is false
@@ -883,7 +886,7 @@ index 7b286d3d64..5239ba4e40 100644
        envArg,                       // lpEnvironment
        mutableCwd.get(),             // lpCurrentDirectory
        &siEx.StartupInfo,            // lpStartupInfo
-@@ -426,8 +504,48 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -426,8 +507,54 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "Cannot create process");
    }
  
@@ -909,6 +912,12 @@ index 7b286d3d64..5239ba4e40 100644
 +    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobLimits{};
 +    jobLimits.BasicLimitInformation.LimitFlags =
 +        handle->allowJobBreakaway ? JOB_OBJECT_LIMIT_BREAKAWAY_OK : 0;
++    // Orca: an opt-in ceiling; forks past it fail inside this terminal's tree only.
++    const uint32_t activeProcessLimit = ptyActiveProcessLimit.load();
++    if (activeProcessLimit > 0) {
++      jobLimits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
++      jobLimits.BasicLimitInformation.ActiveProcessLimit = activeProcessLimit;
++    }
 +    if (!SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, &jobLimits, sizeof(jobLimits)) ||
 +        !AssignProcessToJobObject(hJob, piClient.hProcess)) {
 +      // Why tolerate failure: an outer job without JOB_OBJECT_LIMIT_BREAKAWAY_OK
@@ -934,7 +943,7 @@ index 7b286d3d64..5239ba4e40 100644
    if (useConptyDll && fLoadedDll)
    {
      PFNRELEASEPSEUDOCONSOLE const pfnReleasePseudoConsole = (PFNRELEASEPSEUDOCONSOLE)GetProcAddress(
-@@ -438,8 +556,12 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -438,8 +565,12 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      }
    }
  
@@ -949,7 +958,7 @@ index 7b286d3d64..5239ba4e40 100644
  
    // Close the thread handle to avoid resource leak
    CloseHandle(piClient.hThread);
-@@ -472,9 +594,10 @@ static Napi::Value PtyResize(const Napi::CallbackInfo& info) {
+@@ -472,9 +603,10 @@ static Napi::Value PtyResize(const Napi::CallbackInfo& info) {
    SHORT rows = static_cast<SHORT>(info[2].As<Napi::Number>().Uint32Value());
    const bool useConptyDll = info[3].As<Napi::Boolean>().Value();
  
@@ -962,7 +971,7 @@ index 7b286d3d64..5239ba4e40 100644
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -513,9 +636,10 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
+@@ -513,9 +645,10 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
      return env.Undefined();
    }
  
@@ -975,7 +984,7 @@ index 7b286d3d64..5239ba4e40 100644
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -544,29 +668,215 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,29 +677,229 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -1202,16 +1211,31 @@ index 7b286d3d64..5239ba4e40 100644
 +  return Napi::Boolean::New(env, true);
 +}
 +
++/**
++ * Orca: setActiveProcessLimit(limit) applies JOB_OBJECT_LIMIT_ACTIVE_PROCESS to
++ * every ConPTY job created afterwards. 0 turns it off. Existing jobs keep theirs.
++ */
++static Napi::Value PtySetActiveProcessLimit(const Napi::CallbackInfo& info) {
++  Napi::Env env(info.Env());
++  Napi::HandleScope scope(env);
++  if (info.Length() != 1 || !info[0].IsNumber()) {
++    throw Napi::Error::New(env, "Usage: pty.setActiveProcessLimit(limit)");
++  }
++  ptyActiveProcessLimit.store(info[0].As<Napi::Number>().Uint32Value());
++  return Napi::Boolean::New(env, true);
++}
++
  /**
  * Init
  */
-@@ -577,6 +887,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +910,10 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
 +  exports.Set("terminateJob", Napi::Function::New(env, PtyTerminateJob));
 +  exports.Set("listJobProcessIds", Napi::Function::New(env, PtyListJobProcessIds));
 +  exports.Set("assignCurrentProcessToJob", Napi::Function::New(env, PtyAssignCurrentProcessToJob));
++  exports.Set("setActiveProcessLimit", Napi::Function::New(env, PtySetActiveProcessLimit));
    return exports;
  };
  

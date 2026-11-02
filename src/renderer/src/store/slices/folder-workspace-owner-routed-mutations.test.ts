@@ -308,7 +308,7 @@ describe('folder workspace owner-routed mutations', () => {
     const pendingUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { isUnread: true })
-    await store.getState().fetchFolderWorkspaces()
+    await store.getState().fetchFolderWorkspaces(catalogOwner(store))
     resolveUpdate({ ...folderWorkspace, isUnread: true, updatedAt: 2 })
     await pendingUpdate
 
@@ -335,7 +335,7 @@ describe('folder workspace owner-routed mutations', () => {
     const pendingUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { isUnread: true })
-    await store.getState().fetchFolderWorkspaces()
+    await store.getState().fetchFolderWorkspaces(catalogOwner(store))
     resolveUpdate({ ...folderWorkspace, isUnread: true, updatedAt: 2 })
     await pendingUpdate
 
@@ -619,8 +619,20 @@ describe('folder workspace owner-routed mutations', () => {
       settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'env-old' })
     })
     await expect(
-      store.getState().createFolderWorkspace({ projectGroupId: projectGroup.id, linkedItems: [] })
+      store
+        .getState()
+        .createFolderWorkspace(
+          { projectGroupId: projectGroup.id, linkedItems: [] },
+          { runtimeEnvironmentId: 'env-old' }
+        )
     ).rejects.toThrow('Update the remote runtime')
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })
+
+// The catalog these tests read is the one the focused host would have shown.
+function catalogOwner(store: {
+  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+}): { runtimeEnvironmentId: string | null } {
+  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+}

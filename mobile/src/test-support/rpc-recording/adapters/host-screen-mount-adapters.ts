@@ -1,20 +1,10 @@
 import type { MountAdapter } from '../recording-scenario'
+import { INITIAL_MOBILE_VIEW } from '../../../worktree/workspace-view-settings'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const HOST = 'host-1'
-
-const INITIAL_VIEW_STATE = {
-  groupMode: 'none',
-  sortMode: 'recent',
-  hideSleeping: false,
-  hideDefaultBranch: false,
-  alwaysShowDefaultBranch: true,
-  filterRepoIds: [],
-  collapsedGroups: [],
-  workspaceStatuses: []
-}
 
 /**
  * The host screen's shared view settings, and the Home card's per-host stats read. Both belong to
@@ -30,24 +20,14 @@ export function hostScreenMountAdapters(
       >('mobile/src/host-screen/use-host-view-settings.ts').useHostViewSettings
       const state = observableModel(context, {
         clientRef: { current: context.client },
-        collapsedGroups: new Set<string>(),
-        filters: {
-          filterRepoIds: new Set<string>(),
-          hideSleeping: false,
-          hideDefaultBranch: false,
-          alwaysShowDefaultBranch: true
-        },
-        groupMode: 'none',
-        sortMode: 'recent',
-        viewStateRef: { current: { ...INITIAL_VIEW_STATE } },
-        workspaceStatuses: []
+        view: INITIAL_MOBILE_VIEW,
+        viewRef: { current: INITIAL_MOBILE_VIEW }
       })
       let actions: ReturnType<typeof useViewSettings>
       const hook = hookMount(() => {
         actions = useViewSettings({
           client: context.client,
           connState: 'connected',
-          hostId: HOST,
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
           state: state as unknown as Parameters<typeof useViewSettings>[0]['state']
         })
@@ -64,18 +44,11 @@ export function hostScreenMountAdapters(
             return performHookAction(() => actions.handleSortChange('name'))
           }
           if (name === 'hide-sleeping') {
-            return performHookAction(() => actions.toggleHideSleeping())
+            return performHookAction(() => actions.setFilter('hideSleepingWorkspaces', true))
           }
           throw new Error(`Unknown view settings action: ${name}`)
         },
-        state: () =>
-          projectObservable({
-            groupMode: state.groupMode,
-            sortMode: state.sortMode,
-            filters: state.filters,
-            collapsed: state.collapsedGroups,
-            statuses: state.workspaceStatuses
-          }),
+        state: () => projectObservable({ view: state.view }),
         dispose: hook.unmount
       }
     },

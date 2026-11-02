@@ -145,13 +145,36 @@ describe('Claude child-work decoder', () => {
     ])
   })
 
-  it('reports a start for an ended child as a restart, and a late start of its run as nothing', () => {
+  it('reports the run a completion ended waking under the same spawn call as that run again', () => {
     const decoder = decoderWith(
       backgroundAgent,
       system('task_notification', {
         task_id: 'agent-bg',
         tool_use_id: 'toolu_bg',
         status: 'completed'
+      })
+    )
+    decoder.observe(backgroundAgent)
+    decoder.observe(system('task_progress', { task_id: 'agent-bg', last_tool_name: 'Read' }))
+    expect(decoder.drain(500)).toEqual([
+      expect.objectContaining({
+        type: 'live',
+        restart: true,
+        child: expect.objectContaining({
+          handle: { idKind: 'task_id', id: 'agent-bg', runId: 'toolu_bg' }
+        })
+      }),
+      expect.objectContaining({ type: 'live' })
+    ])
+  })
+
+  it('reports a start for an ended child as a restart, and a late start of a stopped run as nothing', () => {
+    const decoder = decoderWith(
+      backgroundAgent,
+      system('task_notification', {
+        task_id: 'agent-bg',
+        tool_use_id: 'toolu_bg',
+        status: 'stopped'
       })
     )
     decoder.observe(backgroundAgent)
@@ -185,22 +208,12 @@ describe('Claude child-work decoder', () => {
     expect(decoder.drain(500)).toEqual([])
   })
 
-  it('bounds the live children it tracks', () => {
+  it('admits every live child: only the host store bounds them', () => {
     const decoder = new ClaudeChildWorkDecoder()
-    for (let index = 0; index < 257; index += 1) {
+    for (let index = 0; index < 300; index += 1) {
       decoder.observe({ ...backgroundAgent, task_id: `agent-${index}` })
     }
-    expect(decoder.drain(500)).toHaveLength(256)
-  })
-
-  it('ends what still runs as stopped when Orca ends the session, and only then', () => {
-    const decoder = decoderWith(backgroundAgent)
-    decoder.stopLive()
-    decoder.clear()
-    expect(decoder.drain(500)).toEqual([
-      expect.objectContaining({ type: 'ended', outcome: 'cancelled' }),
-      { type: 'session-ended', observedAt: 500 }
-    ])
+    expect(decoder.drain(500)).toHaveLength(300)
   })
 
   it('marks the end of the provider session', () => {

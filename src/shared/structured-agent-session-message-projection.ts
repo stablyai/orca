@@ -1,4 +1,5 @@
 import type {
+  AgentJournalCursor,
   AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -25,14 +26,10 @@ export type StructuredAgentSessionOptimisticMessage = {
   clientMessageId: string
   body: AgentJournalMessageItem
   queuedAt: number
+  /** The host's acknowledgement; a read past it supersedes this echo. */
+  recordedCursor?: AgentJournalCursor
   /** Sent while the chat read Stopping: drawn after the turn being stopped. */
   sentWhileStopping?: true
-}
-
-export type StructuredAgentSessionMessageProjectionOptions = {
-  /** Draw a message the host accepted and then rejected where the host recorded it, as not sent.
-   *  Off for a client that hands such a message back to its composer instead. */
-  rejectedInPlace: boolean
 }
 
 /** The loaded items that are a conversation command such as `/compact`, by item id. */
@@ -105,7 +102,6 @@ export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   submissions: readonly AgentJournalSubmission[],
-  options: StructuredAgentSessionMessageProjectionOptions,
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
   // A send a Stop took back before the agent started it stays where it was sent, as the
@@ -128,13 +124,11 @@ export function projectStructuredAgentSessionMessages(
   // Runs on every streaming commit, so a chat with no such send pays nothing for placing one.
   const placement =
     stoppedBeforeStart.size > 0 ? placeStoppedSends(items, submissions, stoppedBeforeStart) : null
-  const inPlace = options.rejectedInPlace
-    ? structuredAgentSessionRejectedShownInPlace(
-        submissions,
-        structuredAgentSessionCommandItemIds(items),
-        items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
-      )
-    : new Set<string>()
+  const inPlace = structuredAgentSessionRejectedShownInPlace(
+    submissions,
+    structuredAgentSessionCommandItemIds(items),
+    items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
+  )
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
   for (const item of items) {
@@ -178,17 +172,21 @@ export function projectStructuredAgentSessionMessages(
   if (shownStopped.size > 0) {
     moved = keepStoppedSendsInSendOrder(delivered, stoppedBeforeStart, shownStopped) || moved
   }
-  const conversation = moved
+  const ordered = moved
     ? Array.from(collapseProviderRetryRuns(delivered)).sort(compareNativeChatTranscriptMessages)
     : collapseProviderRetryRuns(delivered)
+  const conversation =
+    shownStopped.size > 0 ? withStopRowsAfterStoppedSends(ordered, shownStopped) : ordered
   return [
-    // After the held sends leave: they are drawn after the conversation, never inside a run.
-    ...(shownStopped.size > 0
-      ? withStopRowsAfterStoppedSends(conversation, shownStopped)
+    // In no turn; merged at their journal places after the stop rows, so a run keeps one stop row.
+    ...(unsentItems.length > 0
+      ? withRowsAtJournalPlaces(
+          conversation,
+          projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const }))
+        )
       : conversation),
+    // After the held sends leave: they are drawn after the conversation, never inside a run.
     ...held,
-    // In no turn; the journal position keeps their place.
-    ...projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const })),
     // The host's row draws a message once it has one, under its own id or the provider's.
     ...optimistic
       .filter(
@@ -205,4 +203,22 @@ export function projectStructuredAgentSessionMessages(
         ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
       }))
   ]
+}
+
+/** `rows` with the few `placed` rows merged in at their journal places, so a reader that draws the
+ *  list as given needs no sort. */
+function withRowsAtJournalPlaces(
+  rows: readonly NativeChatMessage[],
+  placed: NativeChatMessage[]
+): NativeChatMessage[] {
+  placed.sort(compareNativeChatTranscriptMessages)
+  const merged: NativeChatMessage[] = []
+  let next = 0
+  for (const row of rows) {
+    while (next < placed.length && compareNativeChatTranscriptMessages(placed[next], row) < 0) {
+      merged.push(placed[next++])
+    }
+    merged.push(row)
+  }
+  return merged.concat(placed.slice(next))
 }

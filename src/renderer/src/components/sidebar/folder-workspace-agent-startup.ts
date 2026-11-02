@@ -1,24 +1,36 @@
-import { CLIENT_PLATFORM, type LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import {
+  resolveRepoExecutionHostPlatform,
+  type ExecutionHostPlatformFact
+} from '@/lib/execution-host-facts'
+import type { AppState } from '@/store/types'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
 
-export function getFolderWorkspaceAgentLaunchPlatform(
-  projectGroup: Pick<ProjectGroup, 'connectionId' | 'parentPath'>
-): NodeJS.Platform {
-  const parentPath = projectGroup.parentPath?.trim() ?? ''
-  if (projectGroup.connectionId) {
-    return isWindowsAbsolutePathLike(parentPath) ? 'win32' : 'linux'
-  }
-  return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
+/** OS of the host that owns a folder group; its agents are quoted for that host's shell. */
+export function getFolderWorkspaceAgentLaunchFact(
+  state: Pick<
+    AppState,
+    'sshConnectionStates' | 'sshStateByEnvironment' | 'runtimeStatusByEnvironmentId'
+  >,
+  projectGroup: Pick<ProjectGroup, 'connectionId' | 'executionHostId' | 'parentPath'>
+): ExecutionHostPlatformFact {
+  return resolveRepoExecutionHostPlatform(
+    state,
+    {
+      connectionId: projectGroup.connectionId,
+      executionHostId: projectGroup.executionHostId,
+      path: projectGroup.parentPath?.trim() ?? ''
+    },
+    () => undefined
+  )
 }
 
 /** Resolve the linked context that should appear in the agent input without submitting. */

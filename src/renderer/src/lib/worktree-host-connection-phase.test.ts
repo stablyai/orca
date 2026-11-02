@@ -197,6 +197,38 @@ describe('selectWorktreeHostConnectionPhase', () => {
     })
   })
 
+  it("reads a paired server's folder workspace on its nested target like a project there", () => {
+    const state = makeState({
+      // As fetched from the server: its own SSH target, stamped with the server's host.
+      folderWorkspaces: [
+        {
+          id: 'fw-runtime',
+          projectGroupId: 'group-runtime',
+          folderPath: '/srv/notes',
+          connectionId: 'ssh-nested',
+          executionHostId: 'runtime:env-a'
+        }
+      ],
+      projectGroups: [
+        {
+          id: 'group-runtime',
+          kind: 'folder',
+          connectionId: 'ssh-nested',
+          executionHostId: 'runtime:env-a'
+        }
+      ],
+      runtimeStatusByEnvironmentId: new Map([
+        ['env-a', { status: { runtimeId: 'runtime-a' }, checkedAt: 1 }]
+      ])
+    })
+
+    expect(selectWorktreeHostConnectionPhase(state, 'folder:fw-runtime')).toMatchObject({
+      phase: 'unverifiable',
+      targetId: 'ssh-nested',
+      environmentId: 'env-a'
+    })
+  })
+
   it('names a new connection on every reconnect', () => {
     const connected = makeSshState('connected')
     const reconnected = makeSshState('connected', {

@@ -88,8 +88,8 @@ export function upsertWorkingClaudeSubagent(
     // background_tasks omission must stop reaping it (teammate-shaped ids
     // never appear there). The fold re-tags its own recreations after this.
     existing.backgroundTasksAuthoritative = undefined
-    // Why: the live event proves the agent process behind the restored row is
-    // still running it, so the liveness reap must stop treating it as a claim.
+    // Why: the live event confirms the restored row, so the manual-compact reap and
+    // runtime-working checks must treat it as live child work again.
     existing.restoredFromSnapshot = undefined
     return
   }

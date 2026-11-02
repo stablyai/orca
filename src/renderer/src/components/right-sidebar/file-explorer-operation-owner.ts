@@ -1,13 +1,17 @@
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { translate } from '@/i18n/i18n'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getSettingsForWorktreeRuntimeOwner
-} from '@/lib/worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 import {
   getFloatingWorkspaceOperationRoute,
@@ -16,8 +20,10 @@ import {
 } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
 
+const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())
+
 export type FileExplorerOperationRoute = {
-  settings: { activeRuntimeEnvironmentId: string | null }
+  target: RuntimeClientTarget
   connectionId?: string
   expectedExecutionHostId?: 'local' | `ssh:${string}`
   expectedSshTargetId?: string
@@ -60,7 +66,7 @@ export function getFileExplorerOperationOwnerFromState(
         kind: 'runtime',
         environmentId: route.runtimeEnvironmentId,
         executionHostId:
-          route.executionHostId ?? `runtime:${encodeURIComponent(route.runtimeEnvironmentId)}`
+          route.executionHostId ?? toRuntimeExecutionHostId(route.runtimeEnvironmentId)
       }
     }
     if (route.executionHostId) {
@@ -68,25 +74,31 @@ export function getFileExplorerOperationOwnerFromState(
     }
   }
 
+  const explicitOwner = worktreeId
+    ? runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
+    : null
+  // Why: file writes and deletes must not pick one of two hosts that publish this workspace.
+  if (explicitOwner?.kind === 'ambiguous') {
+    return { kind: 'unresolved' }
+  }
   const connectionId = getConnectionIdFromState(state, worktreeId ?? null)
-  const explicitRuntimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const explicitRuntimeEnvironmentId = explicitOwner?.environmentId ?? null
   // Why: global runtime focus is not ownership evidence while SSH/local
   // metadata is unresolved; destructive actions must wait for explicit provenance.
   if (connectionId === undefined && explicitRuntimeEnvironmentId === null) {
     return { kind: 'unresolved' }
   }
-  const settings = getSettingsForWorktreeRuntimeOwner(state, worktreeId)
-  // Why: inferred SSH ownership outranks global runtime focus, but an explicit
+  // Why: inferred SSH ownership outranks a projected runtime owner, but an explicit
   // workspace runtime still owns its files.
   const runtimeEnvironmentId =
     connectionId && explicitRuntimeEnvironmentId === null
       ? null
-      : settings.activeRuntimeEnvironmentId?.trim()
+      : getRuntimeEnvironmentIdForWorktree(state, worktreeId)?.trim()
   if (runtimeEnvironmentId) {
     return {
       kind: 'runtime',
       environmentId: runtimeEnvironmentId,
-      executionHostId: `runtime:${encodeURIComponent(runtimeEnvironmentId)}`
+      executionHostId: toRuntimeExecutionHostId(runtimeEnvironmentId)
     }
   }
   if (connectionId === undefined) {
@@ -107,19 +119,19 @@ export function getFileExplorerOperationRoute(
   switch (owner.kind) {
     case 'local':
       return {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' },
         expectedExecutionHostId: 'local'
       }
     case 'ssh':
       return {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' },
         connectionId: owner.connectionId,
-        expectedExecutionHostId: `ssh:${encodeURIComponent(owner.connectionId)}`
+        expectedExecutionHostId: toSshExecutionHostId(owner.connectionId)
       }
     case 'runtime': {
       const host = parseExecutionHostId(owner.executionHostId)
       return {
-        settings: { activeRuntimeEnvironmentId: owner.environmentId },
+        target: { kind: 'environment', environmentId: owner.environmentId },
         ...(host?.kind === 'ssh'
           ? { expectedExecutionHostId: host.id }
           : { expectedExecutionHostId: 'local' as const })
@@ -135,15 +147,15 @@ export function requireMatchingFileExplorerOperationRoute(
   expectedOwner: FileExplorerOperationOwner | undefined
 ): FileExplorerOperationRoute {
   if (!expectedOwner || expectedOwner.kind === 'unresolved') {
-    throw new Error(getFileExplorerOwnerUnresolvedMessage())
+    throw ownerUnresolved()
   }
   const currentOwner = getFileExplorerOperationOwner(worktreeId)
   if (JSON.stringify(currentOwner) !== JSON.stringify(expectedOwner)) {
-    throw new Error(getFileExplorerOwnerUnresolvedMessage())
+    throw ownerUnresolved()
   }
   const route = getFileExplorerOperationRoute(expectedOwner)
   if (!route) {
-    throw new Error(getFileExplorerOwnerUnresolvedMessage())
+    throw ownerUnresolved()
   }
   return route
 }
@@ -153,18 +165,18 @@ export function captureFileExplorerOperationGuard(
   expectedOwner: FileExplorerOperationOwner | undefined
 ): FileExplorerOperationGuard {
   if (!worktreeId) {
-    throw new Error(getFileExplorerOwnerUnresolvedMessage())
+    throw ownerUnresolved()
   }
   const route = requireMatchingFileExplorerOperationRoute(worktreeId, expectedOwner)
   const operationRoute = getFileExplorerGenerationRoute(expectedOwner)
   if (!operationRoute) {
-    throw new Error(getFileExplorerOwnerUnresolvedMessage())
+    throw ownerUnresolved()
   }
   const generationGuard = captureWorktreeOperationGenerationGuard(
     useAppStore.getState,
     worktreeId,
     operationRoute,
-    () => new Error(getFileExplorerOwnerUnresolvedMessage()),
+    ownerUnresolved,
     () => getFileExplorerGenerationRoute(getFileExplorerOperationOwner(worktreeId))
   )
   const expectedSshConnectionGeneration = getExpectedSshConnectionGeneration(
@@ -173,15 +185,15 @@ export function captureFileExplorerOperationGuard(
   )
   const operationHost = parseExecutionHostId(operationRoute.executionHostId)
   if (!operationHost) {
-    throw new Error(getFileExplorerOwnerUnresolvedMessage())
+    throw ownerUnresolved()
   }
-  if (operationHost?.kind === 'ssh' && expectedSshConnectionGeneration === undefined) {
-    throw new Error(getFileExplorerOwnerUnresolvedMessage())
+  if (operationHost.kind === 'ssh' && expectedSshConnectionGeneration === undefined) {
+    throw ownerUnresolved()
   }
   const guardedRoute: FileExplorerOperationRoute = {
     ...route,
     expectedExecutionHostId: operationHost.kind === 'ssh' ? operationHost.id : 'local',
-    ...(operationHost?.kind === 'ssh' ? { expectedSshTargetId: operationHost.targetId } : {}),
+    ...(operationHost.kind === 'ssh' ? { expectedSshTargetId: operationHost.targetId } : {}),
     ...(expectedSshConnectionGeneration === undefined ? {} : { expectedSshConnectionGeneration })
   }
   return {
@@ -192,7 +204,7 @@ export function captureFileExplorerOperationGuard(
         getExpectedSshConnectionGeneration(useAppStore.getState(), operationRoute) !==
         expectedSshConnectionGeneration
       ) {
-        throw new Error(getFileExplorerOwnerUnresolvedMessage())
+        throw ownerUnresolved()
       }
       return guardedRoute
     }
@@ -222,7 +234,7 @@ function getFileExplorerGenerationRoute(
       return { executionHostId: 'local', runtimeEnvironmentId: null }
     case 'ssh':
       return {
-        executionHostId: `ssh:${encodeURIComponent(owner.connectionId)}`,
+        executionHostId: toSshExecutionHostId(owner.connectionId),
         runtimeEnvironmentId: null
       }
     case 'runtime':

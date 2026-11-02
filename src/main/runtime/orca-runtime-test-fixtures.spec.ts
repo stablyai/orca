@@ -1,4 +1,4 @@
-import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
+import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { expect, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -10,6 +10,7 @@ import {
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { toComparableRelaySshPtyId } from '../../shared/ssh-pty-id'
+import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
@@ -446,8 +447,8 @@ const store = {
   getProjects: () => []
 }
 
-// Callers pass the pane's APP-form pty id; the lease stores RELAY form, exactly as
-// upsertSshRemotePtyLease does through toStoredPtyId. Non-SSH ids pass through untouched.
+// Callers pass the pane's APP-form pty id; the lease stores RELAY form, exactly as the relay-era
+// writer did through toStoredPtyId. Non-SSH ids pass through untouched.
 function createRuntimeWithSshLease(
   ptyId: string,
   tabId: string,
@@ -568,6 +569,7 @@ function makeRuntimeStoreWithWorkspaceSession(
   ownerHostId = 'local'
 ): {
   runtimeStore: typeof store & {
+    admitTerminalPane: ReturnType<typeof withRuntimePaneAdmission>['admitTerminalPane']
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
     setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
     flushOrThrow: ReturnType<typeof vi.fn<() => void>>
@@ -580,46 +582,48 @@ function makeRuntimeStoreWithWorkspaceSession(
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const runtimeStore = withDurableRuntimeStore({
-    ...store,
-    getWorkspaceSession: (hostId?: string) =>
-      hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
-    setWorkspaceSession: vi.fn(setSession),
-    // Headless close is a durable transaction; keep the in-memory fixture's
-    // persistence contract equivalent to the production store.
-    flushOrThrow: vi.fn(),
-    persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
-      const args = typeof input === 'function' ? input() : input
-      if (!args) {
-        return false
-      }
-      const tabs = session.tabsByWorktree[args.worktreeId] ?? []
-      session = {
-        ...session,
-        tabsByWorktree: {
-          ...session.tabsByWorktree,
-          [args.worktreeId]: tabs.map((tab) =>
-            tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
-          )
-        },
-        terminalLayoutsByTabId: {
-          ...session.terminalLayoutsByTabId,
-          [args.tabId]: {
-            ...(session.terminalLayoutsByTabId[args.tabId] ?? {
-              root: { type: 'leaf', leafId: args.leafId },
-              activeLeafId: args.leafId,
-              expandedLeafId: null
-            }),
-            ptyIdsByLeafId: {
-              ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
-              [args.leafId]: args.ptyId
+  const runtimeStore = withRuntimePaneAdmission(
+    withDurableRuntimeStore({
+      ...store,
+      getWorkspaceSession: (hostId?: string) =>
+        hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
+      setWorkspaceSession: vi.fn(setSession),
+      // Headless close is a durable transaction; keep the in-memory fixture's
+      // persistence contract equivalent to the production store.
+      flushOrThrow: vi.fn(),
+      persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
+        const args = typeof input === 'function' ? input() : input
+        if (!args) {
+          return false
+        }
+        const tabs = session.tabsByWorktree[args.worktreeId] ?? []
+        session = {
+          ...session,
+          tabsByWorktree: {
+            ...session.tabsByWorktree,
+            [args.worktreeId]: tabs.map((tab) =>
+              tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
+            )
+          },
+          terminalLayoutsByTabId: {
+            ...session.terminalLayoutsByTabId,
+            [args.tabId]: {
+              ...(session.terminalLayoutsByTabId[args.tabId] ?? {
+                root: { type: 'leaf', leafId: args.leafId },
+                activeLeafId: args.leafId,
+                expandedLeafId: null
+              }),
+              ptyIdsByLeafId: {
+                ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
+                [args.leafId]: args.ptyId
+              }
             }
           }
         }
-      }
-      return true
+        return true
+      })
     })
-  })
+  )
   return { runtimeStore, getSession: () => session, setSession }
 }
 
@@ -685,5 +689,5 @@ export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadless
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
 export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
-export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
+export { renderGateCapMs, setInMemoryOrchestrationMessages, spawnedPtyEnv, store, syncSinglePty }
 export { visibleNonEmptyLines, withPlatform, writeHeadless }

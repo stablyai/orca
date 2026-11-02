@@ -2,10 +2,13 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type {
-  NeedsSetupProjectHostOption,
-  ProjectHostSetupOption
+import {
+  getProjectHostSetupSelectionKey,
+  type NeedsSetupProjectHostOption,
+  type ProjectHostSetupOption,
+  type ReadyProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
 import {
@@ -28,6 +31,7 @@ import RunTargetField from './RunTargetField'
 type RunTargetComboboxProps = {
   hostOptions: readonly ProjectHostSetupOption[]
   hostValue: string | null
+  hostExecutionHostId?: ExecutionHostId | null
   onHostChange?: (setupId: string) => void
   recipes: EphemeralVmRecipeOption[]
   recipeValue: string | null
@@ -52,6 +56,7 @@ const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
 export default function RunTargetCombobox({
   hostOptions,
   hostValue,
+  hostExecutionHostId,
   onHostChange,
   recipes,
   recipeValue,
@@ -83,8 +88,14 @@ export default function RunTargetCombobox({
     () => hostOptions.filter((option) => option.kind === 'ready'),
     [hostOptions]
   )
+  const isSelected = (candidate: { id: string; hostId: string }): boolean =>
+    candidate.id === hostValue && (!hostExecutionHostId || candidate.hostId === hostExecutionHostId)
   const selectedHost =
-    readyHostOptions.find((option) => option.id === hostValue) ?? readyHostOptions[0] ?? null
+    readyHostOptions.find(isSelected) ??
+    // Why: a selection on a merged machine's other id still belongs to that machine's one row.
+    readyHostOptions.find((option) => option.aliasSetups?.some(isSelected)) ??
+    readyHostOptions[0] ??
+    null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null
   // Only a committed selection paints the field; typing replaces it.
@@ -97,8 +108,8 @@ export default function RunTargetCombobox({
   }, [combobox])
 
   const selectHost = useCallback(
-    (setupId: string): void => {
-      onHostChange?.(setupId)
+    (option: ReadyProjectHostSetupOption): void => {
+      onHostChange?.(getProjectHostSetupSelectionKey(option))
       onRecipeChange?.(null)
       close()
     },
@@ -158,7 +169,7 @@ export default function RunTargetCombobox({
         return
       }
       if (row.kind === 'ready') {
-        selectHost(row.option.id)
+        selectHost(row.option)
         return
       }
       if (row.kind === 'needs-setup') {
@@ -295,13 +306,13 @@ export default function RunTargetCombobox({
                     label={row.option.label}
                     detail={row.option.path}
                     armed={isArmed}
-                    current={selectedRecipe === null && row.option.id === selectedHost?.id}
+                    current={selectedRecipe === null && row.option === selectedHost}
                     optionId={optionId}
                     onArm={() => {
                       arm(row.key)
                       setSubmenu(null)
                     }}
-                    onCommit={() => selectHost(row.option.id)}
+                    onCommit={() => selectHost(row.option)}
                   />
                 )
               }

@@ -34,7 +34,7 @@ export function collectOrcadMigrationSourceCatalog(
   return { repositories, projectGroups, folderWorkspaces }
 }
 
-function collectProjectGroups(
+export function collectProjectGroups(
   groups: ProjectGroup[],
   initialIds: ReadonlySet<string>
 ): ProjectGroup[] {

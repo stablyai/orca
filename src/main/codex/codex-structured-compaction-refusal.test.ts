@@ -32,7 +32,7 @@ describe('Codex compaction refused at the request', () => {
       })
     ).resolves.toEqual({
       state: 'rejected',
-      reason: 'The provider did not accept this message: thread has nothing to compact.',
+      reason: "Codex didn't accept this message: thread has nothing to compact.",
       rejection: {
         kind: 'providerRejected',
         detail: { text: 'thread has nothing to compact', audience: 'person' }

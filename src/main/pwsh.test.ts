@@ -9,7 +9,7 @@ const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
 // by hand -- execFileSync's ETIMEDOUT versus execFile's SIGTERM-with-no-code --
 // are now one `timedOut` flag, so the suite states the outcome rather than the
 // spawn mechanism that produced it.
-vi.mock('../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock,
   runProcessSync: runProcessSyncMock
 }))

@@ -1,7 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
+import type { RpcBinarySendResult } from './rpc-binary-sender'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt, encryptBytes } from './e2ee-crypto'
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt,
+  encryptBytes
+} from '../../../shared/e2ee-crypto'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
@@ -35,7 +42,14 @@ function setup(overrides?: Partial<E2EEChannelOptions>) {
     serverSecretKey: serverKeys.secretKey,
     resolveAuthenticatedDevice: (token) =>
       token === 'valid-token'
-        ? { deviceId: 'device-1', deviceToken: token, scope: 'mobile' }
+        ? {
+            deviceId: 'device-1',
+            deviceToken: token,
+            scope: 'mobile',
+            clientId: token,
+            callerFingerprint: 'test-fingerprint',
+            credentialRevision: 0
+          }
         : null,
     onReady,
     onError,
@@ -75,7 +89,10 @@ describe('E2EEChannel', () => {
       expect(ctx.onReady).toHaveBeenCalledWith(ctx.channel, {
         deviceId: 'device-1',
         deviceToken: 'valid-token',
-        scope: 'mobile'
+        scope: 'mobile',
+        clientId: 'valid-token',
+        callerFingerprint: 'test-fingerprint',
+        credentialRevision: 0
       })
       expect(ctx.onError).not.toHaveBeenCalled()
       expect(ctx.channel.deviceToken).toBe('valid-token')
@@ -106,7 +123,14 @@ describe('E2EEChannel', () => {
       const ctx = setup({
         resolveAuthenticatedDevice: (token) =>
           token === 'valid-token'
-            ? { deviceId: 'device-1', deviceToken: token, scope: 'runtime' }
+            ? {
+                deviceId: 'device-1',
+                deviceToken: token,
+                scope: 'runtime',
+                clientId: token,
+                callerFingerprint: 'test-fingerprint',
+                credentialRevision: 0
+              }
             : null
       })
       ctx.channel.handleRawMessage(
@@ -308,7 +332,7 @@ describe('E2EEChannel', () => {
       const ctx = setup()
       const sharedKey = doHandshake(ctx)
       const sentBefore = ctx.ws.sent.length
-      let accepted: boolean | void = undefined
+      let accepted: RpcBinarySendResult = undefined
 
       ctx.channel.onMessage((_plaintext, _encryptedReply, encryptedBinaryReply) => {
         accepted = encryptedBinaryReply(

@@ -154,7 +154,8 @@ export function transitionLifecycleWithDb(
   const legal = LEGAL_TRANSITIONS[params.entity][current.state] ?? []
   const promptReportCorrection =
     params.correction === 'unobserved_prompt_report' &&
-    current.state === 'failed' &&
+    (current.state === 'failed' ||
+      (params.entity === 'dispatch' && current.state === 'circuit_broken')) &&
     ((params.entity === 'task' && params.to === 'completed') ||
       (params.entity === 'dispatch' && params.to === 'completed') ||
       (params.entity === 'worker' && params.to === 'succeeded'))

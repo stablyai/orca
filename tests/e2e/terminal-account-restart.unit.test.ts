@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite, type PtyIpcSuiteFixtures } from '../../src/main/ipc/pty-ipc-test-harness'
 import { TerminalKilledError } from '../../src/main/daemon/daemon-pty-lifecycle-errors'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
-import { registerPtyHandlers, setLocalPtyProvider } from '../../src/main/ipc/pty'
+import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
+import { setLocalPtyProvider } from '../../src/main/ipc/pty/provider/registry'
 import { TerminalIntentionalStops } from '../../src/main/runtime/terminal-intentional-stops'
 
 vi.mock('electron', () =>
@@ -227,11 +228,12 @@ import type { PtyTransport } from '../../src/renderer/src/components/terminal-pa
 
 let rendererState: StoreState
 vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => rendererState,
-    subscribe: () => () => {}
-  }
+  useAppStore: Object.assign(
+    (selector: (state: StoreState) => unknown) => selector(rendererState),
+    { getState: () => rendererState, subscribe: () => () => {} }
+  )
 }))
+vi.mock('zustand/react/shallow', () => ({ useShallow: (selector: unknown) => selector }))
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
   useCallback: (callback: unknown) => callback,
@@ -311,13 +313,13 @@ describe('account restart through renderer connection and host spawn', () => {
         rendererState.ptyIdsByTabId[tabId] = []
       })
     })
+    rendererState.pendingPaneAccountRestarts = { 'pty-old': 'codex' }
     const controller = {
       ...deps,
       managerRef: { current: manager },
       panePtyBindingsRef: { current: bindings },
       savedLayout: { ptyIdsByLeafId: { [leafId]: 'pty-old' } },
-      pendingCodexPaneRestartIds: { 'pty-old': true },
-      consumePendingCodexPaneRestart: vi.fn(() => true),
+      consumePendingPaneAccountRestart: vi.fn(() => 'codex'),
       clearCodexRestartNotice: vi.fn(),
       suppressPtyExit: vi.fn(),
       setTerminalError: vi.fn(),

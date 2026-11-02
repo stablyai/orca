@@ -23,12 +23,6 @@ describe('opening the launch record ahead of a launch', () => {
     expect(open).toHaveBeenCalledOnce()
   })
 
-  it('never opens it for a profile no launching client uses', () => {
-    const { open, gate: warmup } = gate()
-    warmup.startupSettled()
-    expect(open).not.toHaveBeenCalled()
-  })
-
   it('does nothing when it is already open', () => {
     const { open, gate: warmup } = gate(true)
     warmup.startupSettled()

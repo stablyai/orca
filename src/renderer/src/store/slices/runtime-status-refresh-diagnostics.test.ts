@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -19,9 +20,7 @@ describe('refreshRuntimeEnvironmentStatus diagnostics', () => {
       },
       _meta: { runtimeId: null }
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { getStatus } }
-    })
+    stubRuntimeEnvironmentBridge({ getStatus })
     const publish = vi.fn()
 
     const applySnapshot = vi.fn()

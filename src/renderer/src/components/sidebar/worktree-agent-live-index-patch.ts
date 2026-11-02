@@ -1,4 +1,4 @@
-import { resolveAgentStatusWorktreeId } from '@/lib/agent-status-worktree-attribution'
+import { resolveAgentStatusWorktreeId } from '../../../../shared/agent-status-worktree-attribution'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'

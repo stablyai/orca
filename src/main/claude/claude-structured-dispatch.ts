@@ -28,10 +28,6 @@ import {
   claudeUserMessageWasProvablyUnwritten
 } from './claude-agent-sdk-user-message-queue'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
-import {
-  claudeStartupFailureFact,
-  failClaudeStartup
-} from './claude-structured-session-startup-state'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
@@ -99,7 +95,6 @@ export function releaseClaudeDispatchWaitersInDoubt(
  *  CLI's idle has not. Retired rather than dropped: their identities stay joinable, bounded by
  *  `MAX_RETIRED_DISPATCH_WAITERS`. */
 export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
-  failClaudeStartup(session, new Error('claude stream-json ended before startup completed'))
   for (const waiter of session.dispatchWaiters.splice(0)) {
     retireWaiter(session, waiter)
     waiter.resolve(null)
@@ -131,10 +126,6 @@ export async function dispatchClaudeTurn(
   }
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
     return { state: 'rejected', ...claudeDispatchRejection(agentSessionFailureFact('queueFull')) }
-  }
-  const startupFailure = claudeStartupFailureFact(session)
-  if (startupFailure) {
-    return { state: 'rejected', ...claudeDispatchRejection(startupFailure) }
   }
   // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
   // whether Claude runs a command, so the two cannot disagree about which frame settles this.

@@ -71,6 +71,15 @@ export type AcpDialect = {
     request(sessionId: string, id: string): { method: string; params: unknown }
     response(value: unknown, id: string): { cancelled: boolean; state?: NativeChatSubagentState }
   }
+  backgroundTaskStop?: {
+    /** Missing required target: proves the route exists without addressing any task. */
+    probe: { method: string; params: unknown }
+    /** The agent refusing the route by name: the only answer that hides Stop. */
+    lacksRoute(error: AcpAgentError): boolean
+    request(sessionId: string, taskId: string): { method: string; params: unknown }
+    /** `gone`: the agent no longer runs a task by that id; its own ending may still follow. */
+    response(value: unknown, taskId: string): 'killed' | 'gone' | 'refused'
+  }
   injectedPromptIdentity?: true
   /** A tool update in the shared shape (`rawOutput.stdout`, `rawOutput.exitCode`), read first. */
   normalizeToolUpdate?(update: ToolCallUpdate): ToolCallUpdate
@@ -86,6 +95,7 @@ export type AcpDialect = {
   contextWindow?(models: unknown): number | undefined
   /** A model's own effort menu and default, as the agent advertises them per model. */
   modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
+  /** A request shown to the person; a permission request it claims is never auto-answered. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   /** Requests answered at once instead of shown to the person. */
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
@@ -96,6 +106,12 @@ export type AcpDialect = {
   failedTurnText?(stopReason: string): string
   /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own `/` commands a chat does not offer: hidden from its list, and a message
+   *  that is only one of them is refused before it reaches the agent. */
+  withheldCommands?: readonly string[]
 }
+
+/** Which of the dialect's stop routes this agent process proved it answers. */
+export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
 
 export const GENERIC_ACP_DIALECT: AcpDialect = {}

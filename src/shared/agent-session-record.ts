@@ -157,6 +157,8 @@ export type AgentSessionRecord = {
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
+  /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
+  permissionMode?: string
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
@@ -167,12 +169,13 @@ export type AgentSessionRecord = {
   updatedAt: number
 }
 
+/** Replaces the provider options or sets the permission mode, never both, so neither write
+ *  touches the other. */
 export type AgentSessionOptionsReplacement = {
   sessionId: string
   fence: number
-  options: Readonly<Record<string, string>>
   now: number
-}
+} & ({ options: Readonly<Record<string, string>> } | { permissionMode: string })
 
 const MAX_ID_LENGTH = 512
 /** A death evidence's `detail` past this fails a load, so whoever writes one cuts it here. */
@@ -360,6 +363,8 @@ export function isPersistedAgentSessionRecord(
     (record.launchDirectory === undefined ||
       isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
+    (record.permissionMode === undefined ||
+      isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
     (record.providerContextBoundary === undefined ||
       isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&
@@ -388,7 +393,9 @@ export function isPersistedAgentSessionRecord(
       validated.providerContextBoundary.afterFence <= validated.lease.runtimeFence) &&
     (validated.lease.claimStatus !== 'live' ||
       (validated.lease.ownerProcess !== null &&
-        head?.linkId === validated.lease.provenHandleLinkId &&
-        head.mintedAtFence === validated.lease.runtimeFence))
+        // Null: the owner's process is live and its provider has not answered with a handle yet.
+        (validated.lease.provenHandleLinkId === null ||
+          (head?.linkId === validated.lease.provenHandleLinkId &&
+            head.mintedAtFence === validated.lease.runtimeFence))))
   )
 }

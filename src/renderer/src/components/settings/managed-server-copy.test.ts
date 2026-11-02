@@ -36,7 +36,9 @@ describe('managed server action refusals', () => {
         code: 'orcad_stop_active_environment',
         verdict: 'live'
       })
-    ).toBe('Not done: choose another Active Server in Advanced before stopping this server.')
+    ).toBe(
+      'Not done: this server is the default host for new projects. Choose another one in Advanced before stopping it.'
+    )
   })
 
   it.each([

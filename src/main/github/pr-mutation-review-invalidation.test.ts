@@ -42,7 +42,6 @@ vi.mock('./client/lookup/pr-number-lookup', () => ({
 vi.mock('./client/lookup/branch-lookup-resolution', () => ({
   resolvePRForBranchOutcome: mocks.resolve
 }))
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProviderGeneration: () => 1 }))
 vi.mock('../ipc/github-work-item-mutation-events', () => ({
   broadcastGitHubWorkItemMutation: vi.fn()
 }))

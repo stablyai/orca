@@ -1,9 +1,9 @@
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
-import { agentLaunchPaneEvidence } from '../pane/agent-launch-pane-evidence'
+import { agentLaunchPaneLiveness } from '../pane/agent-launch-pane-evidence'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import { createPtySpawnTiming } from '../../pty-spawn-timing'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
@@ -48,7 +48,7 @@ export async function beginPtyIpcSpawn(
     launchPaneKey && args.worktreeId && args.tabId && args.leafId
       ? resolveAgentLaunchPaneVerdict(
           { worktreeId: args.worktreeId, paneKey: launchPaneKey },
-          agentLaunchPaneEvidence(ctx.deps, {
+          agentLaunchPaneLiveness(ctx.deps, {
             worktreeId: args.worktreeId,
             tabId: args.tabId,
             leafId: args.leafId,

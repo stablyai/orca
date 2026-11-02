@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
@@ -19,11 +20,13 @@ function editorDocument() {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const posted: MobileRichMarkdownEditorMessage[] = []
   const cleared: (number | null)[] = []
-  const document_ = createRichMarkdownEditorDocument({
-    postToHost: (message) => posted.push(message),
-    keyboardInsetSource: () => null,
-    clearTimer: (handle) => cleared.push(handle)
-  })
+  const document_ = createRichMarkdownEditorDocument(
+    quietRichMarkdownEditorHost({
+      postToHost: (message) => posted.push(message),
+      keyboardInsetSource: () => null,
+      clearTimer: (handle) => cleared.push(handle)
+    })
+  )
   started.push(document_)
   posted.length = 0
   return {

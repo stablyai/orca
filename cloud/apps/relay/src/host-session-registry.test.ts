@@ -1373,6 +1373,31 @@ describe('source-owned idle cutover', () => {
     ).toEqual({ outcome: 'busy' })
     expect(commit).not.toHaveBeenCalled()
   })
+  it('closes a superseded socket whose refresh meets the cutover, not its successor', async () => {
+    const h = await source()
+    const successor = new FakeSocket()
+    h.registry.acceptControl(
+      successor as unknown as WebSocket,
+      identity,
+      undefined,
+      new Set([RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME])
+    )
+    successor.removeAllListeners('message')
+    await h.activate(successor as unknown as WebSocket, identity, h.session, 1, true, 1)
+    vi.setSystemTime(Date.now() + IDLE_REHOME_MIN_CONTROL_AGE_MS)
+    const commit = deferred<{ outcome: 'committed' }>()
+    const cutover = h.registry.idleRehome(
+      request,
+      vi.fn(() => commit.promise),
+      vi.fn().mockResolvedValue('not-committed')
+    )
+    h.socket.emit('message', Buffer.from(JSON.stringify({ type: 'auth-refresh', relayJwt: 'jwt' })), false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'resolve-director')
+    expect(successor.close).not.toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'resolve-director')
+    commit.resolve({ outcome: 'committed' })
+    await cutover
+  })
   it('keeps either established client busy until both actually leave', async () => {
     const h = await source()
     h.session.activeConnIds.add('phone')

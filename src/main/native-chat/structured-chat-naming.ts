@@ -18,7 +18,8 @@ export type StructuredChatNamingDeps = {
   getSettings: () => Pick<GlobalSettings, 'nativeChatAutoName'>
   readFirstPrompt: (sessionId: string, hostStartedAt: number) => Promise<string>
   now?: () => number
-  hasOpenDispatch: (record: AgentSessionRecord) => boolean
+  /** An orchestration worker's chat takes its task's title instead of a generated name. */
+  workerTaskTitle: (record: AgentSessionRecord) => { title: string } | null
   generate: (record: AgentSessionRecord, firstPrompt: string) => Promise<string | null>
   onNamed: (workspaceId: string, sessionId: string) => void
   logger: StructuredAgentSessionLogger
@@ -42,32 +43,35 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     }
   }
 
-  async function name(summary: AgentSessionStatusSummary) {
-    const store = deps.getStore()
-    const record = store?.getRecord(summary.sessionId)
-    if (
-      !store ||
-      !record ||
-      record.conversationName !== undefined ||
-      deps.hasOpenDispatch(record)
-    ) {
-      return
-    }
+  async function generateName(
+    store: NonNullable<ReturnType<StructuredChatNamingDeps['getStore']>>,
+    record: AgentSessionRecord
+  ): Promise<string | null> {
     const firstPrompt = clampConversationNameFirstPrompt(
-      await deps.readFirstPrompt(summary.sessionId, hostStartedAt)
+      await deps.readFirstPrompt(record.sessionId, hostStartedAt)
     )
     if (
       !hasStructuredChatPromptText(firstPrompt) ||
-      store.getRecord(summary.sessionId)?.conversationName !== undefined ||
+      store.getRecord(record.sessionId)?.conversationName !== undefined ||
       deps.getSettings().nativeChatAutoName === false
     ) {
+      return null
+    }
+    return deps.generate(record, firstPrompt)
+  }
+
+  async function name(summary: AgentSessionStatusSummary) {
+    const store = deps.getStore()
+    const record = store?.getRecord(summary.sessionId)
+    if (!store || !record || record.conversationName !== undefined) {
       return
     }
-    const generated = await deps.generate(record, firstPrompt)
-    if (!generated) {
+    const workerTask = deps.workerTaskTitle(record)
+    const chatName = workerTask ? workerTask.title : await generateName(store, record)
+    if (!chatName || deps.getSettings().nativeChatAutoName === false) {
       return
     }
-    const named = await store.compareAndSetConversationName(summary.sessionId, generated, null)
+    const named = await store.compareAndSetConversationName(summary.sessionId, chatName, null)
     if (named) {
       refresh(named)
     }

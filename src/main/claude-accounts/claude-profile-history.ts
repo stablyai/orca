@@ -1,4 +1,12 @@
-import { mkdirSync, readdirSync, realpathSync, rmdirSync, statSync, symlinkSync } from 'node:fs'
+import {
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  rmdirSync,
+  statSync,
+  symlinkSync,
+  unlinkSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import { resolveClaudeDefaultHome } from './claude-profile-paths'
@@ -17,9 +25,9 @@ import {
   mergeClaudeProfilePromptHistory
 } from './claude-profile-prompt-history'
 
+// Not `sessions`: Claude's live-process registry, bound to its own folder's daemon.
 export const CLAUDE_PROFILE_HISTORY_DIRS = [
   'projects',
-  'sessions',
   'session-env',
   'file-history',
   'shell-snapshots',
@@ -136,6 +144,24 @@ function mergeDirectory(
   return 'linked'
 }
 
+/** Undoes an earlier build's `sessions` link into the default home; Claude recreates the folder. */
+function unlinkSharedSessions(profile: string, home: string): ClaudeProfileSurfaceOutcome {
+  const source = join(profile, 'sessions')
+  if (!lstatIfPresent(source)?.isSymbolicLink()) {
+    return 'unchanged'
+  }
+  if (realpathSync(source) !== realpathSync(join(home, 'sessions'))) {
+    return 'user-owned'
+  }
+  try {
+    unlinkSync(source)
+  } catch {
+    // A Windows junction is removed as a directory.
+    rmdirSync(source)
+  }
+  return 'synced'
+}
+
 /**
  * Pools a profile's sessions and prompt history into the default home. Execution-host paths only;
  * callers go through provisionClaudeAccountProfile, which gates and creates the profile.
@@ -156,6 +182,9 @@ export async function shareClaudeProfileHistory(args: {
       mergeDirectory(args.profileHome, defaultHome, name, platform, report)
     )
   }
+  await runClaudeProfileSurface(report, 'sessions', () =>
+    unlinkSharedSessions(args.profileHome, defaultHome)
+  )
   await runClaudeProfileSurface(report, 'history.jsonl', () =>
     mergeClaudeProfilePromptHistory(args.profileHome, defaultHome, platform, report)
   )

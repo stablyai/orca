@@ -10,7 +10,7 @@ import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
-import { getProviderAccountScope } from './provider-account-scope'
+import { getProviderAccountScope, type ProviderHostScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { LINEAR_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { translate } from '@/i18n/i18n'
@@ -76,9 +76,13 @@ export function LinearIntegrationCard(): React.JSX.Element {
       description={
         connected
           ? translate(
-              'auto.components.settings.task.tracker.integration.cards.e1f5e6424c',
-              '{{value0}} workspace{{value1}} connected',
-              { value0: workspaces.length, value1: workspaces.length === 1 ? '' : 's' }
+              workspaces.length === 1
+                ? 'auto.components.settings.task.tracker.integration.cards.connectedWorkspaceSingular'
+                : 'auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural',
+              workspaces.length === 1
+                ? '{{count}} workspace connected'
+                : '{{count}} workspaces connected',
+              { count: workspaces.length }
             )
           : checking
             ? translate(
@@ -236,7 +240,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
   )
 }
 
-function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProviderAccountScope> }) {
+function ProviderAccountScopeRow({ scope }: { scope: ProviderHostScope }) {
   const subordinateRowClass = useIntegrationSubordinateRowClass('text-xs')
 
   return (

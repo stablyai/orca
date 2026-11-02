@@ -2,6 +2,7 @@ import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import {
   createPtyPreconnectInputBuffer,
   type AcceptedInputOptions,
+  type PreconnectInputWriter,
   type PtyPreconnectInputBuffer
 } from './pty-preconnect-input-buffer'
 
@@ -11,33 +12,43 @@ export type RemoteRuntimeInputEndpoint = {
   incarnationId: string | null
 }
 
-type HeldInputWriter = {
-  isCurrent: () => boolean
-  sendInput: (data: string, inputKind: TerminalInputKind) => boolean
-  sendInputImmediate: (data: string) => boolean
-  sendInputAccepted: (
-    data: string,
-    inputKind: TerminalInputKind,
-    options?: AcceptedInputOptions
-  ) => Promise<boolean>
-  continuesAfterFailedWrite?: () => boolean
+// Why: release() always supplies an accepted-write path, so the hold requires what the buffer only accepts.
+type HeldInputWriter = PreconnectInputWriter &
+  Required<Pick<PreconnectInputWriter, 'sendInputAccepted'>>
+
+// Why null: typing on a restored screen precedes the connect that names its terminal.
+type HeldEndpoint = RemoteRuntimeInputEndpoint | null
+
+type HeldInput = {
+  endpoint: HeldEndpoint
+  buffer: PtyPreconnectInputBuffer
+  /** Typed before the pane bound a terminal; settles when the connect that expects it ends. */
+  beforeBind: boolean
 }
+
+/** One connect's claim on pre-bind typing; identity decides which connect may settle it. */
+export type RestoredInputExpectation = { readonly endpoint: HeldEndpoint }
 
 export type RemoteRuntimeRecoveryInputHold = {
   isHolding: () => boolean
-  enqueue: (
-    endpoint: RemoteRuntimeInputEndpoint,
-    data: string,
-    inputKind: TerminalInputKind
-  ) => boolean
+  hasPendingInput: () => boolean
+  isHoldingBeforeBind: () => boolean
+  enqueue: (endpoint: HeldEndpoint, data: string, inputKind: TerminalInputKind) => boolean
   enqueueAccepted: (
-    endpoint: RemoteRuntimeInputEndpoint,
+    endpoint: HeldEndpoint,
     data: string,
     inputKind: TerminalInputKind,
     options?: AcceptedInputOptions
   ) => Promise<boolean>
+  /** Binds pre-bind typing to the terminal a connect restores; null (a fresh create) drops it. */
+  expect: (endpoint: HeldEndpoint) => RestoredInputExpectation
+  /** Ends the latest connect's expectation: without a bound terminal its typing is dropped. */
+  settleExpectation: (expectation: RestoredInputExpectation, bound: boolean) => void
   /** Delivers held input to the endpoint it was typed into, or drops it if the pane rebound elsewhere. */
-  release: (bound: RemoteRuntimeInputEndpoint, writer: HeldInputWriter) => void
+  release: (
+    bound: RemoteRuntimeInputEndpoint,
+    writer: HeldInputWriter
+  ) => { done: Promise<void> } | undefined
   discard: () => void
 }
 
@@ -55,11 +66,17 @@ export function isSameRemoteRuntimeInputEndpoint(
 }
 
 /** Keeps keystrokes typed while a remote pane is binding or recovering, scoped to one endpoint. */
-export function createRemoteRuntimeRecoveryInputHold(): RemoteRuntimeRecoveryInputHold {
-  let held: {
-    endpoint: RemoteRuntimeInputEndpoint
-    buffer: PtyPreconnectInputBuffer
-  } | null = null
+export function createRemoteRuntimeRecoveryInputHold(
+  options: { holdBeforeFirstConnect?: boolean } = {}
+): RemoteRuntimeRecoveryInputHold {
+  const newHold = (endpoint: HeldEndpoint, beforeBind: boolean): HeldInput => ({
+    endpoint,
+    buffer: createPtyPreconnectInputBuffer([], { recoveryHold: true }),
+    beforeBind
+  })
+  let held: HeldInput | null = options.holdBeforeFirstConnect ? newHold(null, true) : null
+  // Why: only the latest connect may settle pre-bind typing; a superseded one must not drop it.
+  let latestExpectation: RestoredInputExpectation | null = null
 
   const discard = (): void => {
     const current = held
@@ -67,34 +84,78 @@ export function createRemoteRuntimeRecoveryInputHold(): RemoteRuntimeRecoveryInp
     current?.buffer.clear()
   }
 
-  const bufferFor = (endpoint: RemoteRuntimeInputEndpoint): PtyPreconnectInputBuffer => {
-    if (held && !isSameRemoteRuntimeInputEndpoint(held.endpoint, endpoint)) {
+  const matches = (endpoint: HeldEndpoint): boolean =>
+    endpoint === null
+      ? held?.beforeBind === true
+      : held?.endpoint != null && isSameRemoteRuntimeInputEndpoint(held.endpoint, endpoint)
+
+  const bufferFor = (endpoint: HeldEndpoint): PtyPreconnectInputBuffer => {
+    if (held && !matches(endpoint)) {
       // Why: input typed at one shell must never run in its replacement (#10065).
       discard()
     }
     if (!held?.buffer.isBuffering()) {
       // Why: a drained buffer refuses input; its release bookkeeping may still be settling.
-      held = { endpoint, buffer: createPtyPreconnectInputBuffer([], { recoveryHold: true }) }
+      held = newHold(endpoint, endpoint === null)
     }
     return held.buffer
   }
 
   return {
     isHolding: () => held?.buffer.isBuffering() === true,
+    hasPendingInput: () => held?.buffer.hasPendingInput() === true,
+    isHoldingBeforeBind: () => held?.beforeBind === true && held.buffer.isBuffering(),
     enqueue: (endpoint, data, inputKind) =>
       bufferFor(endpoint).enqueue(data, 'ordinary', inputKind),
-    enqueueAccepted: (endpoint, data, inputKind, options) =>
-      bufferFor(endpoint).enqueueAccepted(data, inputKind, undefined, options),
+    enqueueAccepted: (endpoint, data, inputKind, acceptedOptions) =>
+      bufferFor(endpoint).enqueueAccepted(data, inputKind, undefined, acceptedOptions),
+    expect(endpoint) {
+      const expectation: RestoredInputExpectation = { endpoint }
+      latestExpectation = endpoint ? expectation : null
+      if (!endpoint) {
+        if (held?.beforeBind) {
+          discard()
+        }
+        return expectation
+      }
+      let expected = held
+      if (!expected?.buffer.isBuffering() || (expected.endpoint && !matches(endpoint))) {
+        discard()
+        expected = newHold(endpoint, true)
+        held = expected
+      }
+      expected.endpoint ??= endpoint
+      expected.beforeBind = true
+      return expectation
+    },
+    settleExpectation(expectation, bound) {
+      if (expectation !== latestExpectation) {
+        return
+      }
+      latestExpectation = null
+      if (!held?.beforeBind) {
+        return
+      }
+      if (bound) {
+        held.beforeBind = false
+      } else {
+        discard()
+      }
+    },
     release(bound, writer) {
       const current = held
       if (!current) {
         return
       }
-      if (!isSameRemoteRuntimeInputEndpoint(current.endpoint, bound)) {
+      if (!current.endpoint || !isSameRemoteRuntimeInputEndpoint(current.endpoint, bound)) {
         discard()
+        if (current.beforeBind) {
+          // Why: the restored screen still shows the original terminal until its connect settles.
+          held = newHold(current.endpoint, true)
+        }
         return
       }
-      void current.buffer
+      const done = current.buffer
         .flush({
           ...writer,
           isCurrent: () => held === current && writer.isCurrent()
@@ -105,6 +166,7 @@ export function createRemoteRuntimeRecoveryInputHold(): RemoteRuntimeRecoveryInp
             held = null
           }
         })
+      return { done }
     },
     discard
   }

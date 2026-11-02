@@ -5,24 +5,10 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
-  toastLoading: vi.fn(() => 'toast-1'),
-  toastDismiss: vi.fn(),
-  toastError: vi.fn(),
-  toastMessage: vi.fn(),
-  resolveDroppedPathsForAgent: vi.fn(),
   callRuntimeRpc: vi.fn()
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
-
-vi.mock('sonner', () => ({
-  toast: {
-    loading: mocks.toastLoading,
-    dismiss: mocks.toastDismiss,
-    error: mocks.toastError,
-    message: mocks.toastMessage
-  }
-}))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
@@ -34,8 +20,7 @@ import {
   prepareNativeChatSessionAttachmentUpload,
   resolveNativeChatAttachmentOwner,
   resolveNativeChatAttachmentOwnerForWorktree,
-  resolveNativeChatRuntimeSessionAttachmentOwner,
-  uploadNativeChatAttachmentPaths
+  resolveNativeChatRuntimeSessionAttachmentOwner
 } from './native-chat-attachment-upload'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -95,42 +80,16 @@ describe('resolveNativeChatAttachmentOwner', () => {
     })
   })
 
-  it('resolves a structured SSH owner directly from its worktree', () => {
-    expect(
-      resolveNativeChatAttachmentOwnerForWorktree(
-        state({
-          repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          sshConnectionStates: new Map([['conn-1', { connectionGeneration: 4 } as never]])
-        }),
-        'wt-1'
-      )
-    ).toMatchObject({
-      kind: 'ssh',
-      connectionId: 'conn-1',
-      worktreePath: '/repo/worktree'
+  it('refuses client files for an SSH-owned worktree, whatever its connection state', () => {
+    const sshState = state({ repos: [repoFixture({ connectionId: 'conn-1' })] })
+    expect(resolveNativeChatAttachmentOwner(sshState, 'tab-1')).toEqual({ kind: 'remote' })
+    expect(resolveNativeChatAttachmentOwnerForWorktree(sshState, 'wt-1')).toEqual({
+      kind: 'remote'
     })
   })
 
-  it('resolves an SSH repo worktree to ssh with the worktree path', () => {
-    expect(
-      resolveNativeChatAttachmentOwner(
-        state({
-          repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          sshConnectionStates: new Map([['conn-1', { connectionGeneration: 4 } as never]])
-        }),
-        'tab-1'
-      )
-    ).toEqual({
-      kind: 'ssh',
-      connectionId: 'conn-1',
-      worktreePath: '/repo/worktree',
-      expectedExecutionHostId: 'ssh:conn-1',
-      expectedSshTargetId: 'conn-1',
-      expectedSshConnectionGeneration: 4
-    })
-  })
-
-  it('resolves a runtime-owned repo to runtime', () => {
+  it('refuses client files for a runtime-owned repo but saves clipboard images on that server', () => {
+    // #27997: a managed SSH host is a runtime owner; its agent reads the server's own temp dir.
     expect(
       resolveNativeChatAttachmentOwner(
         state({
@@ -138,7 +97,18 @@ describe('resolveNativeChatAttachmentOwner', () => {
         }),
         'tab-1'
       )
-    ).toEqual({ kind: 'runtime' })
+    ).toEqual({ kind: 'remote', clipboardImageEnvironmentId: 'env-1' })
+  })
+
+  it('takes no clipboard image for a server-nested SSH host the server does not serve', () => {
+    expect(
+      resolveNativeChatAttachmentOwner(
+        state({
+          repos: [repoFixture({ connectionId: 'jetson', executionHostId: 'runtime:env-1' })]
+        }),
+        'tab-1'
+      )
+    ).toEqual({ kind: 'remote' })
   })
 
   it('keeps a recorded local workspace local when a runtime is focused', () => {
@@ -160,90 +130,6 @@ describe('resolveNativeChatAttachmentOwner', () => {
     expect(resolveNativeChatAttachmentOwner(state({ repos: [] }), 'tab-1')).toEqual({
       kind: 'not-ready'
     })
-  })
-
-  it('reports not-ready instead of throwing when the SSH generation is gone', () => {
-    expect(
-      resolveNativeChatAttachmentOwner(
-        state({
-          repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          sshConnectionStates: new Map()
-        }),
-        'tab-1'
-      )
-    ).toEqual({ kind: 'not-ready' })
-  })
-
-  it('reports not-ready when an SSH worktree has no known path yet', () => {
-    expect(
-      resolveNativeChatAttachmentOwner(
-        state({
-          repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo' } as never] },
-          tabsByWorktree: { 'wt-1': [terminalTab()] }
-        }),
-        'tab-1'
-      )
-    ).toEqual({ kind: 'not-ready' })
-  })
-})
-
-describe('uploadNativeChatAttachmentPaths', () => {
-  const owner = {
-    kind: 'ssh' as const,
-    connectionId: 'conn-1',
-    worktreePath: '/remote/worktree',
-    expectedExecutionHostId: 'ssh:conn-1' as const,
-    expectedSshTargetId: 'conn-1',
-    expectedSshConnectionGeneration: 4
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.stubGlobal('window', {
-      api: { fs: { resolveDroppedPathsForAgent: mocks.resolveDroppedPathsForAgent } }
-    })
-  })
-
-  it('uploads through the terminal drop resolver and returns remote paths', async () => {
-    mocks.resolveDroppedPathsForAgent.mockResolvedValue({
-      resolvedPaths: ['/remote/worktree/.orca/drops/a.txt'],
-      skipped: [],
-      failed: []
-    })
-    await expect(uploadNativeChatAttachmentPaths(['/local/a.txt'], owner)).resolves.toEqual([
-      '/remote/worktree/.orca/drops/a.txt'
-    ])
-    expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledWith({
-      paths: ['/local/a.txt'],
-      worktreePath: '/remote/worktree',
-      connectionId: 'conn-1',
-      expectedExecutionHostId: 'ssh:conn-1',
-      expectedSshTargetId: 'conn-1',
-      expectedSshConnectionGeneration: 4
-    })
-    expect(mocks.toastLoading).toHaveBeenCalledTimes(1)
-    expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
-  })
-
-  it('surfaces per-file skips and failures through the shared drop toasts', async () => {
-    mocks.resolveDroppedPathsForAgent.mockResolvedValue({
-      resolvedPaths: [],
-      skipped: [{ sourcePath: '/local/link', reason: 'symlink' }],
-      failed: [{ sourcePath: '/local/b.txt', reason: 'boom' }]
-    })
-    await expect(
-      uploadNativeChatAttachmentPaths(['/local/link', '/local/b.txt'], owner)
-    ).resolves.toEqual([])
-    expect(mocks.toastMessage).toHaveBeenCalledTimes(1)
-    expect(mocks.toastError).toHaveBeenCalledTimes(1)
-  })
-
-  it('returns null and reports when the upload IPC fails', async () => {
-    mocks.resolveDroppedPathsForAgent.mockRejectedValue(new Error('sftp down'))
-    await expect(uploadNativeChatAttachmentPaths(['/local/a.txt'], owner)).resolves.toBeNull()
-    expect(mocks.toastError).toHaveBeenCalledTimes(1)
-    expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
   })
 })
 

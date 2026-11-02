@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  decideHostKey,
-  strictestHostKeyChecking,
-  type HostKeyDecisionInput
-} from './ssh-host-key-decision'
+import { decideHostKey, type HostKeyDecisionInput } from './ssh-host-key-decision'
 
 function input(overrides: Partial<HostKeyDecisionInput> = {}): HostKeyDecisionInput {
   return {
@@ -393,41 +389,5 @@ describe('deciding what to do with a presented host key', () => {
     for (const overrides of cases) {
       expect(decideHostKey(input(overrides)).action).not.toBe('prompt')
     }
-  })
-})
-
-/**
- * Merging a user-resolved policy with a separately-probed site policy.
- *
- * Only reachable on the `-F` path, where OpenSSH ignores /etc/ssh/ssh_config so the per-user
- * resolution cannot represent a site policy at all. Before this, being unable to see the site policy
- * meant refusing every unknown host — which locked out anyone whose HOME diverges from their passwd
- * home (devcontainers, `su`, Nix shells) with no override.
- */
-describe('merging the user and site host key policies', () => {
-  it('keeps the user value when the site could not be read', () => {
-    // The blind case that still fails strict: a null probe must not invent a policy.
-    expect(strictestHostKeyChecking('ask', null)).toBe('ask')
-    expect(strictestHostKeyChecking(undefined, null)).toBe('ask')
-  })
-
-  it('takes a strict site policy over a laxer user value', () => {
-    expect(strictestHostKeyChecking('ask', 'yes')).toBe('yes')
-    expect(strictestHostKeyChecking('no', 'true')).toBe('true')
-  })
-
-  it('does not let a lax site policy loosen the user', () => {
-    // The direction that must never relax: a permissive site config cannot downgrade a user who
-    // asked for strict, or we end up laxer than ssh itself.
-    expect(strictestHostKeyChecking('yes', 'no')).toBe('yes')
-    expect(strictestHostKeyChecking('ask', 'off')).toBe('ask')
-  })
-
-  it('lets the site raise ask to accept-new', () => {
-    expect(strictestHostKeyChecking('ask', 'accept-new')).toBe('accept-new')
-  })
-
-  it('keeps a strict user value against accept-new', () => {
-    expect(strictestHostKeyChecking('yes', 'accept-new')).toBe('yes')
   })
 })

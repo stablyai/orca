@@ -4,7 +4,6 @@ import {
   OrcaRuntimeService,
   computeWorktreePathMock,
   detectInstalledAgentsWithShellPathHydrationMock,
-  detectRemoteAgentsMock,
   ensurePathWithinWorkspaceMock,
   listWorktrees
 } from './orca-runtime-test-mocks.spec'
@@ -27,7 +26,6 @@ async function runCreate(
 ) {
   detectInstalledAgentsWithShellPathHydrationMock.mockReset()
   detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue(settings.detected)
-  detectRemoteAgentsMock.mockClear()
   const metaById: Record<string, WorktreeMeta> = {}
   const runtime = new OrcaRuntimeService({
     ...store,

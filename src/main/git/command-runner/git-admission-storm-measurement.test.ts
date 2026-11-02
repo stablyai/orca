@@ -2,7 +2,7 @@ import { existsSync, watch } from 'node:fs'
 import { chmod, mkdir, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { gitExecFileAsync } from './git-exec-file'
 import {
   GENERAL_CAP,

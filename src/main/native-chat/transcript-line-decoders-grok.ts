@@ -175,14 +175,21 @@ function isGrokBootstrapContext(content: unknown): boolean {
   if (userInfoEnd === -1) {
     return false
   }
-  const remainder = normalized.slice(userInfoEnd + '</user_info>'.length).trim()
-  // Why: Grok 0.2.93 appends its git snapshot to the user-info bootstrap row;
-  // reject only that known envelope so real prompts mentioning either tag survive.
-  return (
-    remainder.length === 0 ||
-    (remainder.startsWith('<git_status>') && remainder.endsWith('</git_status>'))
-  )
+  // Why: Grok 0.2.93 appends its git snapshot and 1.0 its rules to the user-info bootstrap row;
+  // reject only those known envelopes so real prompts mentioning the tags survive.
+  let remainder = normalized.slice(userInfoEnd + '</user_info>'.length).trim()
+  while (remainder.length > 0) {
+    const section = GROK_BOOTSTRAP_SECTIONS.find((name) => remainder.startsWith(`<${name}>`))
+    const sectionEnd = section ? remainder.indexOf(`</${section}>`) : -1
+    if (!section || sectionEnd === -1) {
+      return false
+    }
+    remainder = remainder.slice(sectionEnd + `</${section}>`.length).trim()
+  }
+  return true
 }
+
+const GROK_BOOTSTRAP_SECTIONS = ['git_status', 'rules']
 
 function standaloneTextContent(content: unknown): string | null {
   if (typeof content === 'string') {

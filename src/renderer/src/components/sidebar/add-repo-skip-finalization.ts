@@ -1,6 +1,6 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import { isDefaultBranchWorkspace } from '../../../../shared/worktree/workspace-kinds'
 import { revealRepoInProjectFilter, type ProjectFilterRevealState } from './project-filter-reveal'
 
 export type AddRepoSkipFinalizationState = ProjectFilterRevealState & {

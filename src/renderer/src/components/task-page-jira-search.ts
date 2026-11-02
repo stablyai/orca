@@ -18,9 +18,13 @@ export type TaskPageJiraSearchResult = {
 
 export async function searchTaskPageJiraIssues(
   query: string,
-  search: (jql: string) => Promise<JiraIssue[]>
+  search: (jql: string) => Promise<JiraIssue[]>,
+  mode: 'input' | 'jql' = 'input'
 ): Promise<TaskPageJiraSearchResult> {
   const trimmed = query.trim()
+  if (mode === 'jql') {
+    return { issues: await search(trimmed), jqlRejection: null }
+  }
   if (!mayBeJql(trimmed)) {
     return { issues: await searchJiraIssuesByKeyOrText(trimmed, search), jqlRejection: null }
   }

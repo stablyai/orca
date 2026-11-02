@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, expect, it } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { orcadArtifactFilenames } from '../../shared/orcad-artifacts'
 
 const REPO_ROOT = join(__dirname, '..', '..', '..')
@@ -53,7 +53,7 @@ it('ships every worker and child entry orcad loads at runtime', () => {
   const named = new Set(
     buildOrcadBundles().flatMap((text) => text.match(RUNTIME_ENTRY_FILENAME) ?? [])
   )
-  const shipped = new Set(orcadArtifactFilenames('linux-x64-glibc'))
+  const shipped = new Set(orcadArtifactFilenames('linux-x64-glibc', []))
   const missing = [...named].filter(
     (filename) => !shipped.has(filename) && !KNOWN_UNSHIPPED_ENTRIES.has(filename)
   )
@@ -67,7 +67,7 @@ it('ships every worker and child entry orcad loads at runtime', () => {
 it('ships every child entry build-orcad.mjs builds', async () => {
   const builder = pathToFileURL(join(REPO_ROOT, 'config/scripts/orcad-entry-build.mjs')).href
   const entries = await import(builder)
-  const shipped = new Set(orcadArtifactFilenames('linux-x64-glibc'))
+  const shipped = new Set(orcadArtifactFilenames('linux-x64-glibc', []))
   const built = Object.values<string>(entries.ORCAD_CHILD_ENTRY_POINTS).map((entry) =>
     entries.orcadChildOutputFilename(entry)
   )

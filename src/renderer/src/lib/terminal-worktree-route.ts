@@ -3,11 +3,9 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-se
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from './worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { resolveWorktreeOperationRouteResult } from './worktree-operation-route'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
 
@@ -118,11 +116,12 @@ function resolveFloatingScopeOwnership(
   purpose: TerminalHostOwnershipPurpose,
   runtimeEnvironmentId: string | null
 ): TerminalHostOwnership {
-  if (
-    purpose === 'spawn' ||
-    !runtimeEnvironmentId ||
-    getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  ) {
+  if (purpose === 'spawn' || !runtimeEnvironmentId) {
+    return ownershipForRuntimeEnvironmentId(runtimeEnvironmentId)
+  }
+  // Why a twin downgrades too: runtime PTYs on these surfaces carry `remote:` ids, so a raw id is
+  // local or SSH on either twin.
+  if (runtimeEnvironmentIdUnlessTwin(state, worktreeId)) {
     return ownershipForRuntimeEnvironmentId(runtimeEnvironmentId)
   }
   // Why: this surface publishes no runtime owner and only looks runtime-owned because exactly one

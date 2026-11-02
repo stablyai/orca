@@ -11,7 +11,7 @@ import type {
   AgentLaunchPrompt,
   AgentLaunchResult
 } from '../../../src/shared/agent-launch-intent'
-import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import { isStructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch-tab-closed'
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
@@ -24,10 +24,8 @@ import {
   isAgentLaunchReservationTakenRefusal
 } from '../../../src/shared/agent-launch-replay-refusal'
 import { sendReplayingAmbiguousDelivery } from '../tasks/replay-on-ambiguous-delivery'
-import {
-  structuredSessionOperationId,
-  structuredSessionRandomUuid
-} from './structured-session-operation-id'
+import { structuredSessionOperationId } from './structured-session-operation-id'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
@@ -59,19 +57,17 @@ export const AGENT_LAUNCH_TAB_CLOSED_MESSAGE =
 export type MobileAgentLaunchReservation = {
   /** The terminal pane: its tab and leaf halves, as the host lists them. */
   pane: { tabId: string; leafId: string }
-  /** Only for an agent the host may start as a chat. */
+  /** For any agent the host may start as a chat; a launch that settles as a terminal ignores it. */
   sessionId: string | null
 }
 
 export function reserveMobileAgentLaunch(
   agent: TuiAgent,
-  randomUuid: () => string = structuredSessionRandomUuid
+  randomUuid: () => string = randomV4Uuid
 ): MobileAgentLaunchReservation {
   return {
     pane: { tabId: randomUuid(), leafId: randomUuid() },
-    sessionId: isAgentSessionHandleProvider(agent)
-      ? createStructuredAgentSessionId(agent, randomUuid)
-      : null
+    sessionId: isStructuredAgentId(agent) ? createStructuredAgentSessionId(agent, randomUuid) : null
   }
 }
 

@@ -5,7 +5,10 @@
  * leases: moving a direct SSH host's state into a managed server is the catalog migration.
  */
 import type { Store } from '../persistence'
-import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
+import {
+  getManagedOrcadFenceEnvironmentId,
+  isEphemeralRuntimeSshOwner
+} from '../../shared/managed-orcad-ssh-owner'
 import type {
   OrcadMigrationBlocker,
   OrcadMigrationPreflight
@@ -234,11 +237,12 @@ export function collectTargetCatalogBlockers(
   return blockers
 }
 
-/** Who holds the target exclusively: an ephemeral runtime or a managed Orca server. */
+/** Who holds the target exclusively: a managed Orca server, or an unmigrated legacy owner. */
 function targetHolder(
   target: SshTarget
 ): Extract<OrcadMigrationBlocker, { code: 'orcad_migration_target_owned' }>['holder'] | null {
-  if (target.owner) {
+  // Why: a recipe VM's runtime owns when the host is created and destroyed, not which server runs it.
+  if (target.owner && !isEphemeralRuntimeSshOwner(target.owner)) {
     return { kind: 'runtime', runtimeId: target.owner.runtimeId }
   }
   const environmentId = getManagedOrcadFenceEnvironmentId(target)

@@ -7,10 +7,8 @@ import {
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
 import { codexGoalRowText, codexThreadGoalState } from '../../codex/codex-goal-journal-rows'
-import {
-  classifyProviderFrame,
-  hasTypedProviderFrameTranslator
-} from './provider-frame-disposition'
+import { isProviderRecord } from '../../provider-process/provider-json-record'
+import { classifyProviderFrame } from './provider-frame-disposition'
 
 export type UnhandledProviderFrameJournalItem = {
   body: AgentJournalPlainStatusItem
@@ -19,8 +17,9 @@ export type UnhandledProviderFrameJournalItem = {
 }
 
 export type UnhandledProviderFrameJournalItemOptions = {
-  /** A typed translator accepted this exact frame, not merely this frame kind. */
-  coveredByTypedTranslator?: boolean
+  /** The caller's own translator judged this frame a failure, from facts its kind alone cannot
+   *  carry (a Claude result is one only when its turn was not stopped by the user). */
+  reportsFailure?: boolean
 }
 
 function serializeProviderPayload(payload: unknown): string {
@@ -41,9 +40,7 @@ const MESSAGE_KEYS = [
   'detail',
   'description',
   'reason',
-  // `error` is how a failed dependency reports itself — an MCP server that could not start says
-  // so here and nowhere else. Without it the row falls back to the bare method name, which is how
-  // "MCP server X failed to start: auth expired" reached users as `notification:mcpServer/...`.
+  // Where a failure frame keeps its sentence (Codex's `error` nests it as `error.message`).
   'error'
 ] as const
 
@@ -80,6 +77,47 @@ export function readableProviderFrameText(payload: unknown): string | null {
   return null
 }
 
+function hookText(value: unknown): string | null {
+  return typeof value === 'string' ? value.trim() || null : null
+}
+
+function hookFailureFrameText(
+  provider: string,
+  kind: string,
+  payload: unknown,
+  fallback: string | null
+): string | null {
+  if (!isProviderRecord(payload)) {
+    return null
+  }
+  if (provider === 'codex' && kind === 'notification:hook/completed') {
+    const run = isProviderRecord(payload.run) ? payload.run : null
+    const event = hookText(run?.eventName)
+    const name = event ? ` ${event.charAt(0).toUpperCase()}${event.slice(1)}` : ''
+    const errors = Array.isArray(run?.entries)
+      ? run.entries.flatMap((entry: unknown) => {
+          const text =
+            isProviderRecord(entry) && entry.kind === 'error' ? hookText(entry.text) : null
+          return text ? [text] : []
+        })
+      : []
+    const detail = errors.join('\n') || fallback
+    return `Codex${name} hook failed${detail ? `: ${detail}` : '.'}`
+  }
+  if (provider === 'claude' && kind === 'message:system:hook_response') {
+    const name = hookText(payload.hook_name) ?? hookText(payload.hook_event)
+    const code = payload.exit_code
+    const exit =
+      typeof code === 'number' && Number.isSafeInteger(code) && code !== 0
+        ? ` (exit code ${code})`
+        : ''
+    const detail =
+      hookText(payload.stderr) ?? hookText(payload.output) ?? hookText(payload.stdout) ?? fallback
+    return `Claude${name ? ` ${name}` : ''} hook failed${exit}${detail ? `: ${detail}` : '.'}`
+  }
+  return null
+}
+
 /** Substantive adapter fallbacks become bounded journal rows; a chat draws one only with a sentence. */
 export function unhandledProviderFrameJournalItem(
   provider: string,
@@ -88,18 +126,10 @@ export function unhandledProviderFrameJournalItem(
   limits: JournalPayloadLimits = DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   options: UnhandledProviderFrameJournalItemOptions = {}
 ): UnhandledProviderFrameJournalItem | null {
-  // A kind a typed translator owns never degrades to its opcode here, in either
-  // direction: "no row" is that translator's decision, not a gap this fallback
-  // has to cover. Checked before classification, because the payload sniffer
-  // inside it promotes a covered frame that reports a failure and would
-  // otherwise print `${provider} · ${kind}` beside the typed row.
-  if (
-    options.coveredByTypedTranslator === true &&
-    hasTypedProviderFrameTranslator(provider, kind)
-  ) {
-    return null
-  }
-  const classification = classifyProviderFrame(provider, kind, payload)
+  const classification =
+    options.reportsFailure === true
+      ? 'error-surface'
+      : classifyProviderFrame(provider, kind, payload)
   if (
     classification === 'stream-into-item' ||
     classification === 'status-chrome' ||
@@ -125,6 +155,9 @@ export function unhandledProviderFrameJournalItem(
       : undefined
   const tone = noticeTone ?? (classification === 'error-surface' ? 'error' : undefined)
   let message = readableProviderFrameText(payload)
+  if (classification === 'error-surface') {
+    message = hookFailureFrameText(provider, kind, payload, message) ?? message
+  }
   if (
     provider === 'codex' &&
     (method === 'configWarning' || method === 'deprecationNotice') &&

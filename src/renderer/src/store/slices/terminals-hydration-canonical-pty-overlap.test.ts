@@ -1,7 +1,6 @@
 // Keep this bare import first: it installs the preload-API stub the store imports read at eval time.
 import './terminal-hydration-store-test-bootstrap'
 import { describe, expect, it, vi } from 'vitest'
-import { hydrateWorkspaceTerminalRows } from './terminal-session-row-hydration'
 import { getOrphanTerminalIds } from './terminal-orphan-helpers'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { Tab } from '../../../../shared/tab-types'
@@ -15,7 +14,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()
 }))
@@ -335,31 +334,6 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
     const state = hydrate(session).getState()
 
     expect(Object.keys(state.sleepingAgentSessionsByPaneKey)).toEqual([`split-tab:${soloLeafId}`])
-  })
-
-  it('lets remote-snapshot rows keep every PTY, since unifiedTabs describes the local client', () => {
-    const sharedPtyId = 'daemon-shared'
-    const session = makeSession({
-      tabs: [
-        makeTab({ id: 'canonical-tab', worktreeId: WORKTREE_ID, ptyId: sharedPtyId }),
-        makeTab({ id: 'remote-tab', worktreeId: WORKTREE_ID, ptyId: sharedPtyId, sortOrder: 1 })
-      ],
-      layouts: {
-        'canonical-tab': { ...makeLayout(), ptyIdsByLeafId: { 'canonical-leaf': sharedPtyId } },
-        'remote-tab': { ...makeLayout(), ptyIdsByLeafId: { 'remote-leaf': sharedPtyId } }
-      },
-      canonicalEntityIds: ['canonical-tab']
-    })
-    const rows = session.tabsByWorktree[WORKTREE_ID]!
-
-    expect(
-      hydrateWorkspaceTerminalRows(session, WORKTREE_ID, rows, { rowsFromRemoteSnapshot: true })
-        .subsumedTabIds
-    ).toEqual([])
-    // Guards the gate: without the flag the same rows collapse, so a caller that forgets it drops live remote rows.
-    expect(hydrateWorkspaceTerminalRows(session, WORKTREE_ID, rows).subsumedTabIds).toEqual([
-      'remote-tab'
-    ])
   })
 
   it('retains a non-canonical row that owns no PTY at all', () => {

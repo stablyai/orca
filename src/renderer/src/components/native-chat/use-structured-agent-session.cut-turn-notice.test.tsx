@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 
 const SCOPE = { kind: 'turn' as const, turnItemId: 'turn-1' }
@@ -74,6 +74,9 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 describe('useStructuredAgentSession transcript', () => {
+  // A root left mounted can commit after happy-dom is torn down ("window is not defined").
+  afterEach(cleanup)
+
   it('shows a cut turn no row explains with its one notice, placed in that turn', () => {
     const { result } = renderHook(() =>
       useStructuredAgentSession({

@@ -51,7 +51,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     runtimeEnvironmentId: null,
     isMac: false,
     richMarkdownSpellcheckEnabled: true,
-    settings: { activeRuntimeEnvironmentId: null },
+    runtimeTarget: { kind: 'local' },
     activateMarkdownLink: vi.fn(),
     rootRef: ref<HTMLDivElement | null>(null),
     editorRef: ref<Editor | null>(null),

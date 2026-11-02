@@ -17,7 +17,7 @@ export function useSourceControlPanelFoundation() {
     activeGroupId,
     activeRemoteActionSequence,
     activeRepo,
-    activeRepoSettings,
+    activeRepoTarget,
     activeSourceControlLaunchPlatform,
     activeWorktreeId,
     branchEntries,
@@ -51,7 +51,7 @@ export function useSourceControlPanelFoundation() {
 
   const listing = useSourceControlFileListing({
     activeRemoteActionSequence,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     branchEntries,
     branchName,
@@ -76,7 +76,8 @@ export function useSourceControlPanelFoundation() {
     worktreePath
   })
   const ai = useSourceControlAi({
-    settings: activeRepoSettings,
+    settings: panelState.settings,
+    target: activeRepoTarget,
     activeRepo: activeRepo ?? null,
     activeWorktreeId,
     activeConnectionId,

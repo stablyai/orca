@@ -6,7 +6,6 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import type { Store } from '../persistence'
 import { orcadMigrationCutoverFixture } from './orcad-migration-cutover-fixture'
 import { writeOrcadMigrationSourceCutover } from './orcad-migration-cutover-journal'
@@ -15,13 +14,9 @@ const userData = vi.hoisted(() => ({ dir: '' }))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => userData.dir })
 }))
-vi.mock('./ssh-provider-authority', () => ({ isCurrentSshProviderAuthority: () => true }))
-const provider = {}
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: () => provider }))
 
 const { isFrozenOrcadSourceSessionPartition, visibleProjectGroups } =
   await import('./orcad-retained-source')
-const { listReposForExecutionHost } = await import('../ipc/repos/host-repo-catalog-snapshot')
 
 const FENCED: SshTarget = {
   id: 'ssh-box',
@@ -124,17 +119,5 @@ describe('lists while a converted host keeps its source rows', () => {
     } finally {
       rmSync(userDataPath, { recursive: true, force: true })
     }
-  })
-
-  it('leaves the source repos out of the host catalog the SSH bridge hydrates from', async () => {
-    const authority: unknown = { targetId: FENCED.id, providerEpoch: 'e1', connectionGeneration: 1 }
-    if (!isAdmissibleDirectSshAuthority(authority)) {
-      throw new Error('fixture authority rejected')
-    }
-    const snapshot = await listReposForExecutionHost(catalog([FENCED]), {
-      executionHostId: `ssh:${FENCED.id}`,
-      expectedAuthority: authority
-    })
-    expect(snapshot).toMatchObject({ authoritative: true, repos: [] })
   })
 })

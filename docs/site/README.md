@@ -17,6 +17,20 @@ pnpm --ignore-workspace dev
 
 Open [http://localhost:3004/docs](http://localhost:3004/docs).
 
+## Linting
+
+Run `pnpm --ignore-workspace lint` inside this directory. The isolated Oxlint
+configuration keeps the native equivalents of the previous Next.js, React,
+React hooks and accessibility checks at their existing severities, including
+alt text on Next.js `Image` components. Generated Next.js and MDX output is
+excluded. Oxlint also reports its default correctness warnings.
+
+The migration does not provide equivalents for React's deprecated-API check,
+React Compiler configuration/gating diagnostics, or Next.js's relative
+`location.assign` advisory. JSX variable-use bookkeeping is handled by Oxlint's
+parser. Keep TypeScript and the production Next.js build in the validation
+workflow; this is not a claim of complete ESLint rule parity.
+
 ## Production build
 
 ```bash

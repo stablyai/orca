@@ -4,7 +4,7 @@ import { createBrowserMockApi, createTestStore } from './browser-slice-test-harn
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { createTestStore as createAppStore, makeWorktree, seedStore } from './store-test-helpers'
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn()
 }))
 

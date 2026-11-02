@@ -50,7 +50,7 @@ describe.each(['claude', 'codex'] as const)('%s command-first naming', (provider
       const naming = createStructuredChatNamingHandler({
         getStore: () => store,
         getSettings: () => ({}),
-        hasOpenDispatch: () => false,
+        workerTaskTitle: () => null,
         readFirstPrompt,
         generate,
         onNamed: vi.fn(),

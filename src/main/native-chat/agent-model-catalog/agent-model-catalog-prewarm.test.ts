@@ -38,7 +38,6 @@ vi.mock('../../observability/tracer', () => ({
 function listing(id: string): AgentModelCatalogSuccess {
   return {
     models: [{ id, label: id, isDefault: true, efforts: [] }],
-    fastModeTierByModel: new Map(),
     origin: 'probe'
   }
 }
@@ -289,6 +288,11 @@ describe('one account, one catalog key', () => {
     })
     // What the chat saved, through the host and through the Codex adapter's own handle…
     service.recordLiveListing('session-1', { models: listing('gpt-live').models })
+    const incoming = { models: [...listing('gpt-live').models, ...listing('gpt-new').models] }
+    const retained = (launchOnlyModelId: string) =>
+      service.retainedLiveModelIds('session-1', { ...incoming, launchOnlyModelId })
+    expect(retained('gpt-live')).toEqual(['gpt-live', 'gpt-new'])
+    expect(retained('gpt-new')).toEqual(['gpt-live'])
     const adapterAccess = agentModelCatalogSessionAccess(
       store,
       { agent: 'codex', accountHomeVariable: 'CODEX_HOME' },

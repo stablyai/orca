@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import {
-  buildMobileSessionTabSnapshots,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
-} from './sync-runtime-graph'
+} from './sync-runtime-graph/sync-key'
 import type { AppState } from '../store/types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {

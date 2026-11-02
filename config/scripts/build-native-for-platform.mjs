@@ -5,6 +5,12 @@ import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 if (process.platform === 'win32') {
   runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
+  runNodeScript('config/scripts/build-windows-agent-hook.mjs')
+  process.exit(0)
+}
+
+if (process.platform === 'linux') {
+  runNodeScript('config/scripts/build-wayland-clipboard.mjs')
   process.exit(0)
 }
 

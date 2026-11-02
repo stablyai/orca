@@ -190,8 +190,8 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(onError).not.toHaveBeenCalled()
-    // undefined, not a sessionExpired result: the reattach handler's no-pty-id branch routes an
-    // SSH pane to recoverUnverifiableDirectSshReattach (remount + reattach, no shell restart).
+    // undefined, not a sessionExpired result: an unaddressable id is unverifiable, never a
+    // licence to restart the shell.
     expect(result).toBeUndefined()
   })
 

@@ -8,13 +8,18 @@ import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
   settleStructuredAgentSessionBuiltinCatalog,
-  structuredAgentSessionOptionSnapshot
+  structuredAgentSessionOptionSnapshot,
+  type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
 import { structuredAgentSessionOptionView } from './structured-agent-session-option-view'
 
-function viewModel(...args: Parameters<typeof structuredAgentSessionOptionView>) {
+function viewModel(
+  state: StructuredAgentSessionOptionState,
+  seed: Readonly<Record<string, string>> | undefined,
+  held: Readonly<Record<string, string>>
+) {
   const model = structuredAgentSessionOptionSnapshot(
-    structuredAgentSessionOptionView(...args)
+    structuredAgentSessionOptionView(state, seed, held)
   ).find((descriptor) => descriptor.id === 'model')
   return model?.kind.type === 'select' ? model.kind.currentValue : undefined
 }
@@ -186,6 +191,48 @@ describe('structured agent session options', () => {
     })
     expect(structuredAgentSessionOptionSnapshot(absent).map(({ id }) => id)).toEqual(['model'])
     expect(absent.record.valuesByModel['account-model']?.fastMode).toBeUndefined()
+  })
+
+  it('offers one speed choice in place of the Fast toggle where the model lists speeds', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [
+          {
+            id: 'gpt-6.1-sol',
+            label: 'GPT-6.1 Sol',
+            isDefault: true,
+            efforts: [],
+            supportsFastMode: true,
+            serviceTiers: [
+              { value: 'priority', label: 'Fast' },
+              { value: 'ultrafast', label: 'Ultrafast' }
+            ]
+          }
+        ],
+        fastModeSupport: { supported: true },
+        current: { model: 'gpt-6.1-sol', serviceTier: 'ultrafast', confirmed: ['serviceTier'] }
+      }
+    )
+    const snapshot = structuredAgentSessionOptionSnapshot(state)
+    expect(snapshot.map(({ id }) => id)).toEqual(['model', 'serviceTier'])
+    expect(snapshot).toContainEqual(
+      expect.objectContaining({
+        id: 'serviceTier',
+        kind: {
+          type: 'select',
+          currentValue: 'ultrafast',
+          choices: [
+            { value: 'default', label: 'Standard' },
+            { value: 'priority', label: 'Fast' },
+            { value: 'ultrafast', label: 'Ultrafast' }
+          ]
+        },
+        valueSource: 'reported',
+        settable: true
+      })
+    )
   })
 
   it('renders Fast off but marked unreported when support is known and no value is', () => {

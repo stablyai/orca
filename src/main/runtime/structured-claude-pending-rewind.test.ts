@@ -24,6 +24,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { createClaudeStructuredLaunchResolver } from './structured-agent-launch-composition.test-support'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
@@ -116,12 +117,16 @@ beforeEach(async () => {
   adapter = createStructuredClaudeRuntimeAdapter({
     store,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveClaudeCommand: () => '/usr/local/bin/claude',
-    resolveClaudeLaunchArgs: () => [],
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
+    resolveLaunch: createClaudeStructuredLaunchResolver({
+      store,
+      resolveCommand: () => '/usr/local/bin/claude',
+      resolveLaunchArgs: () => [],
+      resolveAuthPolicy: () => ({ account: 'system' })
+    }),
     openClaudeConnection: claude.openConnection,
     readProcessStartTime: async () => HOST_TEST_NOW,
-    onLifecycleEvent: () => {}
+    // A rewind runs only once the agent has proven its start, which the host learns from these.
+    onLifecycleEvent: (event) => void host.handleAdapterEvent(event)
   })
   log = recordingStructuredAgentSessionLogger()
   // Only Claude sessions are attached here; the router supplies the production create gate.

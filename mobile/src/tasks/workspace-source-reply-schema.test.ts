@@ -7,9 +7,9 @@ import {
   repoSetupHooksSchema,
   repoSparsePresetListSchema,
   repoSparsePresetSaveSchema,
-  SSH_CONNECTION_STATUS,
   sshConnectionStateSchema
 } from './workspace-source-reply-schema'
+import { SSH_CONNECTION_STATUS } from '../transport/ssh-connection-status-arms'
 
 // Pins the SSH status degrade, the error tri-state beside it, and the preset requirement.
 

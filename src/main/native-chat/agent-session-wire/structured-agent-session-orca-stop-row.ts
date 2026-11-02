@@ -80,7 +80,10 @@ function cutByNobody(item: AgentJournalRenderItem | undefined): boolean {
 export async function recordStructuredAgentSessionShutdownCut(input: {
   journal: OrcaStopRowJournal
   sessionId: string
+  /** The stopped child's fence, which keys the row. */
   fence: number
+  /** The fence the row is written at: the lease's, which the child's end moved past `fence`. */
+  rowFence: number
   generation: string
   turnItemId: string | null
   trigger: AgentSessionResumeTrigger
@@ -108,7 +111,7 @@ export async function recordStructuredAgentSessionShutdownCut(input: {
     await input.journal.appendItem(
       { provider: 'orca', clientMessageId },
       orcaStopRowBody(input.failureTextContext, input.trigger),
-      { fence: input.fence, turnScope: { kind: 'turn', turnItemId } }
+      { fence: input.rowFence, turnScope: { kind: 'turn', turnItemId } }
     )
   } catch (error) {
     input.logger.warn('recording why a quit cut a reply failed', {

@@ -61,3 +61,17 @@ describe('SessionActionMenuItems hand-off placement', () => {
     expect(order[0]).toBe(HAND_OFF)
   })
 })
+
+describe('SessionActionMenuItems jump label', () => {
+  it.each([
+    ['folder:folder-1', 'Jump to Folder'],
+    ['repo-1::/repo/orca', 'Jump to Worktree']
+  ])('names the jump by the workspace kind of %s', (jumpWorkspaceId, label) => {
+    const order = renderMenuOrder({
+      showJumpToWorktree: true,
+      jumpWorkspaceId,
+      onJumpToWorktree: vi.fn()
+    })
+    expect(order[0]).toBe(label)
+  })
+})

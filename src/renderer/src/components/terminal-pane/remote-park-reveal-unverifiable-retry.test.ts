@@ -114,9 +114,7 @@ function nextQueuedTransport(): MockTransport {
   return nextTransport
 }
 
-vi.mock('./pty-transport', () => ({
-  createIpcPtyTransport: vi.fn(() => nextQueuedTransport())
-}))
+vi.mock('./pty-transport', () => ({ createIpcPtyTransport: vi.fn(() => nextQueuedTransport()) }))
 
 vi.mock('./remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(() => nextQueuedTransport())

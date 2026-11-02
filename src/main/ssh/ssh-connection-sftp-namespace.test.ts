@@ -7,6 +7,10 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as SystemSshArgs from './system-transport/system-ssh-args'
+import type * as SystemSshFileBinaryTransfer from './system-transport/system-ssh-file-binary-transfer'
+import type * as SystemSshFileTransfer from './system-transport/system-ssh-file-transfer'
+import type * as SshGConfigResolution from './config/ssh-g-config-resolution'
 
 vi.mock('ssh2', () => ({
   BaseAgent: class {},
@@ -15,25 +19,40 @@ vi.mock('ssh2', () => ({
   utils: { parseKey: vi.fn() }
 }))
 
-vi.mock('./ssh-system-fallback', () => ({
-  getOrcaControlSocketPath: vi.fn().mockReturnValue(null),
+vi.mock('./system-transport/system-ssh-args', async (importOriginal) => ({
+  ...(await importOriginal<typeof SystemSshArgs>()),
+  getOrcaControlSocketPath: vi.fn().mockReturnValue(null)
+}))
+vi.mock('./system-transport/system-ssh-command', () => ({
   spawnSystemSsh: vi.fn(),
-  spawnSystemSshCommand: vi.fn(),
+  spawnSystemSshCommand: vi.fn()
+}))
+vi.mock('./system-transport/system-ssh-file-binary-transfer', async (importOriginal) => ({
+  ...(await importOriginal<typeof SystemSshFileBinaryTransfer>()),
   downloadFileViaSystemSsh: vi.fn().mockResolvedValue(undefined),
-  uploadDirectoryViaSystemSsh: vi.fn().mockResolvedValue(undefined),
   uploadFileViaSystemSsh: vi.fn().mockResolvedValue(undefined),
-  writeBufferViaSystemSsh: vi.fn().mockResolvedValue(undefined),
+  writeBufferViaSystemSsh: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('./system-transport/system-ssh-file-transfer', async (importOriginal) => ({
+  ...(await importOriginal<typeof SystemSshFileTransfer>()),
+  uploadDirectoryViaSystemSsh: vi.fn().mockResolvedValue(undefined),
   writeFileViaSystemSsh: vi.fn().mockResolvedValue(undefined)
 }))
 
 vi.mock('./ssh-control-socket', () => ({ removeControlSocketPath: vi.fn() }))
-vi.mock('./ssh-config-parser', () => ({ resolveWithSshG: vi.fn().mockResolvedValue(null) }))
+vi.mock('./config/ssh-g-config-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof SshGConfigResolution>()),
+  resolveWithSshG: vi.fn().mockResolvedValue(null)
+}))
 
 import { SshConnection } from './ssh-connection'
 import type { SftpNamespacePathMapping } from './sftp-namespace-resolution'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
-import { uploadDirectoryViaSystemSsh, writeFileViaSystemSsh } from './ssh-system-fallback'
+import {
+  uploadDirectoryViaSystemSsh,
+  writeFileViaSystemSsh
+} from './system-transport/system-ssh-file-transfer'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const SHELL_HOME = '/var/services/homes/alice'

@@ -1,8 +1,4 @@
 import { createInterface } from 'node:readline'
-import {
-  remoteSessionContentLines,
-  type RemoteSessionContent
-} from './remote-session-content-lines'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -198,21 +194,6 @@ export async function parseCodebuddySessionFile(
     crlfDelay: Infinity
   })
   return parseCodebuddySessionLines({ file, lines, platform, messages })
-}
-
-export async function parseCodebuddySessionContent(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {},
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseCodebuddySessionLines({
-    file,
-    lines: remoteSessionContentLines(content, signal),
-    platform,
-    options
-  })
 }
 
 async function parseCodebuddySessionLines(args: {

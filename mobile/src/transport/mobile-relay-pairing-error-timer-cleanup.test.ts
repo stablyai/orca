@@ -175,7 +175,7 @@ describe('closed relay pairing client error timer ownership', () => {
     target.socket.onmessage?.({
       data: JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 })
     })
-    expect(await waiting).toEqual(new RelayOuterError(4404))
+    expect(await waiting).toEqual(new RelayOuterError(4404, true))
     target.socket.onerror?.()
     expect(vi.getTimerCount()).toBe(0)
     expect(closedLogs(target.logs)).toEqual([

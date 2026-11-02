@@ -136,6 +136,8 @@ function toLifecycleMutationRow(mutation: JournalLifecycleMutationInput): Journa
   return journalLifecycleMutationRow(
     sizedAsStopped(mutation),
     journalLifecycleMutationItemId(mutation),
+    Number.MAX_SAFE_INTEGER,
+    // The widest provenance any row can state, so the chunk built from it still fits.
     Number.MAX_SAFE_INTEGER
   )
 }

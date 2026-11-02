@@ -1,5 +1,6 @@
 import React from 'react'
-import MermaidBlock from '@/components/editor/MermaidBlock'
+import MermaidBlock, { type RenderedMermaidDiagram } from '@/components/editor/MermaidBlock'
+import { useAppStore } from '@/store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { cn } from '@/lib/utils'
 
@@ -11,18 +12,22 @@ import { cn } from '@/lib/utils'
 export default function CommentMermaidBlock({
   content,
   className,
-  pendingContent
+  pendingContent,
+  renderEnabled = true
 }: {
   content: string
   className?: string
   pendingContent?: React.ReactNode
+  renderEnabled?: boolean
 }): React.JSX.Element {
   const isDark = useDocumentDarkTheme()
+  const openModal = useAppStore((s) => s.openModal)
+  const expand = (diagram: RenderedMermaidDiagram): void => openModal('diagram-viewer', diagram)
 
   if (pendingContent === undefined) {
     return (
       <div className={cn(className)}>
-        <MermaidBlock content={content} isDark={isDark} htmlLabels={false} />
+        <MermaidBlock content={content} isDark={isDark} htmlLabels={false} onExpand={expand} />
       </div>
     )
   }
@@ -34,6 +39,8 @@ export default function CommentMermaidBlock({
       htmlLabels={false}
       className={className}
       pendingContent={pendingContent}
+      renderEnabled={renderEnabled}
+      onExpand={expand}
     />
   )
 }

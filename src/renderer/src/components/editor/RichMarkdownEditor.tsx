@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
@@ -56,8 +57,10 @@ export default function RichMarkdownEditor({
   headerSlot
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const settings = useAppStore((s) => s.settings)
-  const richMarkdownSpellcheckEnabled = settings?.richMarkdownSpellcheckEnabled ?? true
+  const richMarkdownSpellcheckEnabled = useAppStore(
+    (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
+  )
+  const runtimeTarget = useFileOwnerRuntimeTarget(worktreeId, runtimeEnvironmentId)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
@@ -200,7 +203,7 @@ export default function RichMarkdownEditor({
     runtimeEnvironmentId,
     isMac,
     richMarkdownSpellcheckEnabled,
-    settings,
+    runtimeTarget,
     activateMarkdownLink,
     rootRef,
     editorRef,
@@ -296,8 +299,7 @@ export default function RichMarkdownEditor({
     baseCanonicalRef,
     markdownDocuments,
     rootRef,
-    runtimeEnvironmentId,
-    settings,
+    runtimeTarget,
     slashMenuSetter: menu.setSlashMenu,
     worktreeId,
     worktreeRoot

@@ -19,7 +19,7 @@ import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   assertPreviewWithinTransportBudget,
   previewableBinaryByteLimit
-} from '../../runtime/runtime-file-commands-mobile-file-list-limit'
+} from '../../runtime/files/file-preview-budget'
 import { ChunkedUploadRegistry, nextChunkedUploadLength } from './chunked-upload-registry'
 import {
   AGENT_SESSION_ATTACHMENT_PART_FILE,

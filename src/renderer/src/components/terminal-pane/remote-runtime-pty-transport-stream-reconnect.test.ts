@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -10,6 +10,19 @@ import {
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
+
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -68,8 +81,10 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     const connect = transport.connect({ url: '', callbacks: {} })
+    // The stream open overlaps terminal.create; destroy once the pane is waiting on it alone.
     await vi.waitFor(() => {
       expect(runtimeSubscribe).toHaveBeenCalled()
+      expect(transport.getPtyId()).not.toBeNull()
     })
     transport.destroy?.()
     resolveSubscribe({ unsubscribe, sendBinary: subscriptionSendBinary })
@@ -234,7 +249,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       'RECONNECT_SNAPSHOT'
     ])
     expect(onData.mock.calls.map((call) => call[0])).toEqual(['LIVE_AFTER_RECONNECT'])
-    expect(onOutputPauseChanged).toHaveBeenLastCalledWith(false, true)
+    expect(onOutputPauseChanged).toHaveBeenLastCalledWith(false, true, false)
     transport.destroy?.()
   })
 
@@ -551,6 +566,68 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.getRecoveryState?.().phase).toBe('connected')
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
       expect(recoveryStates.at(-1)?.epoch).toBeGreaterThan(disconnectedState?.epoch ?? 0)
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // #25783/#9092: a route returning without `online` (Tailscale, VPN) left a latched pane dead.
+  it('revives a pane latched past its window when its environment answers again', async () => {
+    vi.useFakeTimers()
+    try {
+      let partitioned = false
+      runtimeSubscribe.mockImplementation(
+        async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+          if (partitioned) {
+            throw Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
+              code: 'remote_runtime_unavailable'
+            })
+          }
+          subscriptionCallbacks = callbacks
+          queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+          return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+        }
+      )
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const {
+        getControlReadyReviverCountForTests,
+        reviveRemoteRuntimePtyRecoveriesForEnvironment
+      } = await import('./remote-runtime-pty-recovery-state')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+      transport.attach({ existingPtyId: 'remote:env-1@@terminal-1', callbacks: {} })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      emitSnapshot(latestSubscribePayload().streamId, 'before partition')
+      expect(getControlReadyReviverCountForTests('env-1')).toBe(0)
+
+      partitioned = true
+      subscriptionCallbacks?.onClose?.()
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 60_000)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      const callsAtCutoff = runtimeSubscribe.mock.calls.length
+
+      partitioned = false
+      expect(reviveRemoteRuntimePtyRecoveriesForEnvironment('env-2')).toBe(0)
+      expect(reviveRemoteRuntimePtyRecoveriesForEnvironment('env-1')).toBe(1)
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(callsAtCutoff + 1))
+      await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
+      emitSnapshot(latestSubscribePayload().streamId, 'after the route returned')
+      await vi.advanceTimersByTimeAsync(50)
+      expect(transport.isConnected()).toBe(true)
+      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
+      // Why: a healthy pane holds no registration, so a detached-and-discarded transport is never retained.
+      expect(getControlReadyReviverCountForTests('env-1')).toBe(0)
+
+      partitioned = true
+      subscriptionCallbacks?.onClose?.()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(getControlReadyReviverCountForTests('env-1')).toBe(1)
+      transport.detach?.()
+      expect(getControlReadyReviverCountForTests('env-1')).toBe(0)
       transport.destroy?.()
     } finally {
       vi.useRealTimers()

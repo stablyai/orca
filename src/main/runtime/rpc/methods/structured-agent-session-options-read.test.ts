@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -229,5 +230,45 @@ describe("agentSession.modelCatalog with what the running agent's start said", (
     const reply = await readFor('pi')
     expect(reply).toMatchObject({ ok: true })
     expect(reply).not.toMatchObject({ result: { unavailable: expect.anything() } })
+  })
+})
+
+describe('agentSession.modelCatalog for a chat on a model its CLI stopped listing', () => {
+  const opus = { id: 'opus', label: 'Opus', isDefault: true, efforts: [] }
+  const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [opus]
+  }))
+  const record: AgentSessionRecord = {
+    ...agentSessionRecordFixture(),
+    provider: 'claude',
+    options: { model: 'opus[1m]', effort: 'max' }
+  }
+
+  beforeEach(() => {
+    setStructuredAgentSessionHost(
+      Object.assign(hostStub(), {
+        deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
+      })
+    )
+  })
+
+  it("lists the chat's own model, so an older client that replaces an unlisted one keeps it", async () => {
+    const own = { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }
+    const forChat = { agent: 'claude', sessionId: record.sessionId }
+    expect(await call('agentSession.modelCatalog', forChat, STRUCTURED_CLIENT)).toMatchObject({
+      ok: true,
+      result: { models: [opus, own] }
+    })
+    // A new chat's read, which seeds the next new chat's list, and the account's name only the CLI's.
+    const newChat = { ...forChat, worktree: 'id:wt-1' }
+    const runtime = { resolveStructuredAgentSessionLocalWorkspacePath: async () => '/repo' }
+    for (const reply of [
+      await call('agentSession.modelCatalog', newChat, STRUCTURED_CLIENT, runtime),
+      await call('agentSession.modelCatalog', { agent: 'claude' }, STRUCTURED_CLIENT)
+    ]) {
+      expect(reply).toMatchObject({ ok: true, result: { models: [opus] } })
+    }
   })
 })

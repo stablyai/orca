@@ -1,13 +1,11 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  activateWebRuntimeSessionTab,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorkspace } from './worktree-activation'
 import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,
@@ -25,6 +23,7 @@ export type WorkspaceTabPaletteActivationFailure =
 
 export type WorkspaceTabPaletteActivationResult =
   | { status: 'activated' }
+  | { status: 'blocked' }
   | { status: 'failed'; reason: WorkspaceTabPaletteActivationFailure }
 
 // Why: callers outside Cmd+J hold only the identifiers, not a full search result.
@@ -108,10 +107,10 @@ export function activateWorkspaceTabPaletteResult(
   const executionHostId =
     result.executionHostId ?? initialState.getKnownWorktreeById(result.worktreeId)?.hostId
   const activated = executionHostId
-    ? activateAndRevealWorktree(result.worktreeId, { executionHostId })
-    : activateAndRevealWorktree(result.worktreeId)
+    ? activateAndRevealWorkspace(result.worktreeId, { executionHostId })
+    : activateAndRevealWorkspace(result.worktreeId)
   if (!activated) {
-    return { status: 'failed', reason: 'missing-worktree' }
+    return { status: 'blocked' }
   }
 
   const state = useAppStore.getState()

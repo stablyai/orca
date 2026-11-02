@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { splitWorktreeSortOrderByHost } from './worktree-sort-order-host-split'
 
 const state: WorktreeRuntimeOwnerState = {

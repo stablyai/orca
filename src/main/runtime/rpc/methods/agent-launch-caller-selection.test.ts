@@ -169,6 +169,28 @@ describe('a paired client launching into an existing workspace', () => {
     )
   })
 
+  it.each(['focused', 'background'] as const)(
+    'keeps a paired %s chat inactive on the host',
+    async (presentation) => {
+      const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
+      await launch({ ...EXISTING_LAUNCH, presentation }, runtime)
+      expect(chatActivation()).toBe(false)
+      expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledTimes(
+        presentation === 'focused' ? 1 : 0
+      )
+    }
+  )
+
+  it('focuses a paired terminal only for the caller', async () => {
+    const runtime = selectionRuntime({ settings: {}, terminalPaneKey: PANE_KEY })
+    await launch({ ...EXISTING_LAUNCH, presentation: 'focused' }, runtime)
+    expect(runtime.createTerminal).toHaveBeenCalledWith(
+      'id:wt-7',
+      expect.objectContaining({ presentation: 'background', surfaceOwner: false })
+    )
+    expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledOnce()
+  })
+
   it('selects nothing when the runtime reported no pane for the terminal', async () => {
     const runtime = selectionRuntime({ settings: {} })
 

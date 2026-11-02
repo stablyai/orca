@@ -22,6 +22,17 @@ function psLine(dir: string, appName = 'Orca: some-branch') {
 }
 
 describe('dev-electron-bundle-cache', () => {
+  it('keeps recently used bundles during automatic retention sweeps', () => {
+    expect(
+      selectStaleDevBundleDirs({
+        bundles: [settled(A), { ...settled(B), mtimeMs: NOW - 8 * 24 * 60 * 60 * 1000 }],
+        currentDir: null,
+        processTable: '',
+        nowMs: NOW,
+        minAgeMs: 7 * 24 * 60 * 60 * 1000
+      })
+    ).toEqual([B])
+  })
   it('reclaims siblings while keeping the current bundle', () => {
     expect(
       selectStaleDevBundleDirs({

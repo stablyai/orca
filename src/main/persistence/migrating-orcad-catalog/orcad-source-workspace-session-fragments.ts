@@ -21,24 +21,39 @@ export function sessionPartitions(
   ]
 }
 
+export type MergedSessionFragments = {
+  session: WorkspaceSessionState | null
+  /** Worktrees two partitions saved differently, when `session` is null. */
+  conflicts: string[]
+}
+
 /**
  * Null when two partitions disagree about the same worktree. The same marker in both (a renderer
- * snapshot can copy one into the local and the host partition) is not a disagreement.
+ * snapshot can copy one into the local and the host partition) is not a disagreement, and neither
+ * is an empty row beside a populated one: like the app's own adoption, empty is not evidence.
  */
 export function mergeSessionFragments(
-  fragments: WorkspaceSessionState[]
-): WorkspaceSessionState | null {
+  fragments: WorkspaceSessionState[],
+  /** Tabs some partition recorded as closed: a row listing one never wins over an empty row. */
+  closedTabIds: ReadonlySet<string>
+): MergedSessionFragments {
   const ownerKeys = new Set<string>()
   const entityKeys = new Set<string>()
   const keyedValues = new Map<string, string>()
   let merged: WorkspaceSessionState | undefined
-  for (const fragment of fragments) {
+  const populated = populatedOwnerRows(fragments, closedTabIds)
+  for (const fragment of fragments.map((entry) =>
+    withoutEmptyRowsFilledElsewhere(entry, populated)
+  )) {
     const owners = collectSessionOwnerKeys(fragment)
-    if (
-      [...owners].some((key) => ownerKeys.has(key) && !agreesOnOwner(fragment, key, keyedValues)) ||
-      hasDuplicates(entityKeys, collectSessionEntityKeys(fragment))
-    ) {
-      return null
+    const conflicts = [...owners].filter(
+      (key) => ownerKeys.has(key) && !agreesOnOwner(fragment, key, keyedValues)
+    )
+    if (conflicts.length > 0) {
+      return { session: null, conflicts }
+    }
+    if (hasDuplicates(entityKeys, collectSessionEntityKeys(fragment))) {
+      return { session: null, conflicts: [...owners] }
     }
     owners.forEach((key) => ownerKeys.add(key))
     for (const field of OWNER_KEYED_FIELDS) {
@@ -48,7 +63,57 @@ export function mergeSessionFragments(
     }
     merged = mergeWorkspaceSessions(merged, fragment)
   }
-  return merged ?? null
+  return merged ? { session: merged, conflicts: [] } : { session: null, conflicts: [] }
+}
+
+/** Field and owner key of every populated row, except a tab row naming a closed tab. */
+function populatedOwnerRows(
+  fragments: readonly WorkspaceSessionState[],
+  closedTabIds: ReadonlySet<string>
+): Set<string> {
+  const populated = new Set<string>()
+  for (const fragment of fragments) {
+    for (const field of OWNER_KEYED_FIELDS) {
+      for (const [key, value] of Object.entries(fragment[field] ?? {})) {
+        const reopensClosedTab =
+          field === 'tabsByWorktree' &&
+          (fragment.tabsByWorktree[key] ?? []).some((tab) => closedTabIds.has(tab.id))
+        if (!isEmptyRow(value) && !reopensClosedTab) {
+          populated.add(`${field}\0${key}`)
+        }
+      }
+    }
+  }
+  return populated
+}
+
+function withoutEmptyRowsFilledElsewhere(
+  fragment: WorkspaceSessionState,
+  populated: ReadonlySet<string>
+): WorkspaceSessionState {
+  let next: WorkspaceSessionState | undefined
+  for (const field of OWNER_KEYED_FIELDS) {
+    for (const [key, value] of Object.entries(fragment[field] ?? {})) {
+      if (isEmptyRow(value) && populated.has(`${field}\0${key}`)) {
+        next ??= structuredClone(fragment)
+        const rows: unknown = next[field]
+        if (rows && typeof rows === 'object') {
+          Reflect.deleteProperty(rows, key)
+        }
+      }
+    }
+  }
+  return next ?? fragment
+}
+
+function isEmptyRow(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return true
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0
+  }
+  return typeof value === 'object' && Object.keys(value).length === 0
 }
 
 const OWNER_KEYED_FIELDS = [
@@ -66,6 +131,10 @@ function agreesOnOwner(
   keyedValues: ReadonlyMap<string, string>
 ): boolean {
   return OWNER_KEYED_FIELDS.every((field) => {
+    // A fence, not a choice: mergeWorkspaceSessions keeps the highest revision.
+    if (field === 'terminalTopologyRevisionByRepoId') {
+      return true
+    }
     const value: unknown = Object.getOwnPropertyDescriptor(fragment[field] ?? {}, ownerKey)?.value
     const seen = keyedValues.get(`${field}\0${ownerKey}`)
     return value === undefined || seen === undefined || seen === serializeOrcadMigrationValue(value)

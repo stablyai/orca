@@ -20,14 +20,16 @@ export const QUEUED_MESSAGES_PUBLISHED_MAX_BYTES =
 export const QUEUED_MESSAGES_PERSON_RESERVE_BYTES = MAX_PROMPT_BYTES + 1024
 
 /** Refused readably rather than trimmed, when the published cards would outgrow their frame room.
- *  Another agent's card must also leave the person's reserve free. */
+ *  Another agent's card must also leave the person's reserve free. `replacing` is an edit's own
+ *  card, whose old body the new one takes the place of. */
 export function queuedMessagesPublishedBytesRefusal(
   journal: AgentSessionJournal,
   body: AgentJournalMessageItem,
-  fromPerson: boolean
+  fromPerson: boolean,
+  replacing?: string
 ): AgentSessionWireRefusal | null {
   const bytes = unsettledQueuedMessages(journal).reduce(
-    (sum, row) => sum + publishedBodyBytes(row.body),
+    (sum, row) => (row.messageId === replacing ? sum : sum + publishedBodyBytes(row.body)),
     publishedBodyBytes(body)
   )
   const limit = fromPerson

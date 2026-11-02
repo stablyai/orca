@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isClientHostedBrowserPageHandle } from '@/store/slices/browser'
 import type { BrowserWorkspace as BrowserWorkspaceState } from '../../../../../shared/browser-workspace-types'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import { useBrowserAutomationVisiblePageIds } from '../host-guest/browser-automation-visibility'
@@ -118,14 +119,14 @@ export default function BrowserPane({
     // first frame. The host mints the placement, so keying on it would swap component and key at
     // adoption — a remount that replays open dropdowns and throws away focus and drafts. The pane
     // renders connecting until adoption fills the placement in.
-    const stagedClientHosted =
-      environmentHandle?.staged === true && environmentHandle.stagedClientHosted === true
-    // Why: a row restored from a previous run has no placement until the relaunched host recovers
+    // A row restored from a previous run has no placement until the relaunched host recovers
     // the page, and the streamed pane would meanwhile open a server screencast the host refuses
     // for a client-placed page. It mounts quiet on the client pane until adoption fills it in.
-    const restoredClientHosted = environmentHandle?.restoredClientHosted === true
+    const clientHosted = environmentHandle
+      ? isClientHostedBrowserPageHandle(environmentHandle)
+      : false
     return activeBrowserPage ? (
-      clientPlacement || stagedClientHosted || restoredClientHosted ? (
+      clientHosted ? (
         <ClientHostedBrowserPagePane
           key={`${activeBrowserRuntimeEnvironmentId}:${activeBrowserPage.id}`}
           browserTab={activeBrowserPage}

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import type * as MiniMaxApiKeyStore from './minimax-api-key-store'
 
 const safeStorageMock = vi.hoisted(() => ({
@@ -7,11 +8,7 @@ const safeStorageMock = vi.hoisted(() => ({
   decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
 }))
 
-const electronMock = vi.hoisted(() => ({
-  safeStorage: safeStorageMock
-}))
-
-vi.mock('electron', () => electronMock)
+beforeEach(() => setSecretStore({ ...safeStorageMock, describeProtectionGap: () => null }))
 
 const existsSyncMock = vi.fn()
 const readFileSyncMock = vi.fn()

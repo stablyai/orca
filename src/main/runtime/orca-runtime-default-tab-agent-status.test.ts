@@ -32,7 +32,7 @@ class DefaultTabRuntime extends OrcaRuntimeService {
     super(store)
   }
 
-  protected override async resolveTerminalWorkspaceLaunchScope(): Promise<TerminalWorkspaceLaunchScope> {
+  override async resolveTerminalWorkspaceLaunchScope(): Promise<TerminalWorkspaceLaunchScope> {
     return {
       id: WORKTREE_ID,
       path: '/repo/app',
@@ -99,7 +99,8 @@ function notifierWithRename(renameTerminal: RuntimeNotifier['renameTerminal']): 
 
 async function createHeadlessRuntimeWithAgent(
   connectionId: string | null = null,
-  store: RuntimeStore | null = null
+  // Provisioning reads settings before default tabs since #28543 (setup-only skips them).
+  store: RuntimeStore = sessionStore(getDefaultWorkspaceSession()).store
 ): Promise<{ runtime: DefaultTabRuntime; handle: string }> {
   const runtime = new DefaultTabRuntime(store, connectionId)
   let spawned = 0

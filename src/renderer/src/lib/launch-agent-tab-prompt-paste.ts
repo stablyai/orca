@@ -19,8 +19,8 @@ export function pasteAgentLaunchPromptOnceReady(args: {
   prompt: string
   onPromptDelivered?: () => void
   onPromptDeliveryUnconfirmed?: () => void
-  /** Whether the paste may be written; readiness is observed while it is pending. */
-  sendGate?: Promise<boolean>
+  /** The launch pane's PTY once its agent started; the paste goes there and nowhere else. */
+  launchPty?: Promise<string | null>
 }): Promise<{ delivered: boolean; failureNotified: boolean }> {
   const { worktreeId, tabId, agent, submit, onPromptDelivered, onPromptDeliveryUnconfirmed } = args
   const timeoutNotice = createPasteReadinessTimeoutNotice({
@@ -36,7 +36,7 @@ export function pasteAgentLaunchPromptOnceReady(args: {
     submit,
     forcePaste: true,
     onTimeout: timeoutNotice.onTimeout,
-    ...(args.sendGate ? { sendGate: args.sendGate } : {}),
+    ...(args.launchPty ? { launchPty: args.launchPty } : {}),
     ...(onPromptDeliveryUnconfirmed ? { onUnconfirmedDelivery: onPromptDeliveryUnconfirmed } : {})
   }).then((delivered) => {
     if (delivered) {

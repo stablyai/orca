@@ -1,22 +1,24 @@
 /**
- * Runs the layout checks after each scenario step and records which check fired.
+ * Runs the layout checks after each scenario step and records which check fired. The runtime's
+ * layout is read live from its `layout.subscribe` stream.
  *
- * - rules: the runtime's layout breaks a structural rule (also on transient reads while settling),
- *   or an id changed for the same pane, tab or group since the previous step.
+ * - rules: the runtime's layout breaks a model rule (on every published frame, so a breach that
+ *   heals before the step settles is recorded as transient), or an id changed for the same pane,
+ *   tab or group since the previous step; or the saved profile breaks a disk-format rule.
+ * - roundTrip: a saved partition does not load and save to a fixed point.
  * - view: what the window draws differs from the runtime's layout.
  * - client: what a paired client / the CLI is told differs from the runtime's layout.
  * - expected: the runtime's layout is not the one the scenario's commands should produce.
  * - restart: the layout after a relaunch (or PTY daemon restart) differs from before it.
  * - marker: text written to a pane's terminal never shows in that pane (a frozen or crossed pane).
  * - remount: a pane's terminal view was created again in the same window outside a restart.
- *
- * Between checkpoints a sampler runs the rules every 100 ms; a breach that heals before the next
- * step is recorded as transient.
  */
 
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
+import type { WorkspaceLayoutModel } from '../../../src/shared/workspace-layout/workspace-layout-model'
 import {
+  checkWorkspaceLayoutModelRules,
   checkWorkspaceLayoutRules,
   diffOracleLayouts,
   formatViolations,
@@ -24,15 +26,18 @@ import {
   type OracleLayout,
   type WorkspaceLayoutPartition
 } from './workspace-layout-oracle-model'
+import {
+  liveLayoutModels,
+  type LiveLayoutFeed,
+  type LiveWorkspace
+} from './workspace-layout-oracle-feed'
 import { compareClientToRuntime, compareDrawnToRuntime } from './workspace-layout-oracle-compare'
 import { readClientView, readDrawnLayout, type ClientView } from './workspace-layout-oracle-views'
 import { expectedDifferences, type ExpectedLayout } from './workspace-layout-oracle-expected'
+import { checkLayoutRoundTrip } from '../../../src/shared/workspace-layout/workspace-layout-round-trip-check'
 import { checkPaneMarkers } from './workspace-layout-oracle-markers'
-import {
-  installRemountCounter,
-  LayoutRuleSampler,
-  readRemountCounts
-} from './workspace-layout-oracle-watch'
+import { installRemountCounter, readRemountCounts } from './workspace-layout-oracle-watch'
+import { unexpectedFindings } from '../workspace-layout-oracle-known-on-main'
 
 export type OracleCheck =
   | 'rules'
@@ -42,6 +47,7 @@ export type OracleCheck =
   | 'restart'
   | 'marker'
   | 'remount'
+  | 'roundTrip'
 export type OracleFinding = {
   check: OracleCheck
   step: string
@@ -54,7 +60,10 @@ export type OracleTarget = {
   /** The window, when one is attached; a headless runtime has none. */
   page?: Page
   client: RuntimeClient
-  readPartitions: () => Promise<WorkspaceLayoutPartition[]>
+  /** The runtime's live layout; the same feed across retargets of one run. */
+  feed: LiveLayoutFeed
+  /** The saved profile, read once a step settles for the disk-format rules and the round trip. */
+  readSavedPartitions: () => Promise<WorkspaceLayoutPartition[]>
   /** Worktrees whose client view is compared; the scenario's own worktrees. */
   worktreeIds: () => string[]
 }
@@ -62,7 +71,11 @@ export type OracleTarget = {
 export type { ExpectedLayout }
 
 const SETTLE_TIMEOUT_MS = Number(process.env.ORCA_LAYOUT_ORACLE_SETTLE_MS ?? 12_000)
-const POLL_MS = 300
+// Views (the window's drawing, session.tabs.list, terminal.list) catch up after the runtime's last
+// frame with no event of their own, so the step re-reads them on this interval until they agree.
+const VIEW_CONVERGENCE_POLL_MS = 300
+// Today's quiet window (three reads, ~600 ms): no frame across this many gaps between reads.
+const QUIET_GAPS = 2
 
 type ViewRead = { view: string[]; client: string[]; evidence: Record<string, unknown> }
 
@@ -93,36 +106,59 @@ export type StepOptions = {
   allowRemount?: true
 }
 
+/** A model-rule breach line → the step label current when a frame first showed it. */
+type FrameBreaches = Map<string, string>
+
 export class LayoutOracle {
   readonly findings: OracleFinding[] = []
-  private previous: WorkspaceLayoutPartition[] | null = null
+  private previousModels: WorkspaceLayoutModel[] | null = null
+  private previousSaved: WorkspaceLayoutPartition[] | null = null
   private previousLayout: OracleLayout | null = null
   private snapshot: OracleLayout | null = null
   private remountBaseline: Record<string, number> = {}
   /** Terminal views created per pane in the current window, for the report (and a precondition). */
   readonly viewCreations: Record<string, number>[] = []
-  private readonly sampler: LayoutRuleSampler
+  private readonly frameBreaches: FrameBreaches = new Map()
+  private label = 'start'
 
-  constructor(private target: OracleTarget) {
-    this.sampler = new LayoutRuleSampler(target.readPartitions)
+  constructor(
+    private target: OracleTarget,
+    /** The scenario id the known-on-main list is keyed by. */
+    private readonly scenarioId: string
+  ) {}
+
+  /** The feed's frame callback: the model rules on every published frame. */
+  checkFrame(feed: LiveLayoutFeed): void {
+    for (const line of formatViolations(
+      checkWorkspaceLayoutModelRules(liveLayoutModels(feed.entries()))
+    )) {
+      if (!this.frameBreaches.has(line)) {
+        this.frameBreaches.set(line, this.label)
+      }
+    }
   }
 
-  /** Starts the between-steps sampler and, with a window, the remount counter. */
+  /** With a window, starts the remount counter. */
   async start(): Promise<void> {
     if (this.target.page) {
       await installRemountCounter(this.target.page)
     }
-    this.sampler.start()
   }
 
-  async stop(): Promise<void> {
-    await this.sampler.stop()
+  /** Breaches first seen on a frame while `label` was current, marked as reported. */
+  private takeFrameBreaches(label: string): string[] {
+    const lines = [...this.frameBreaches]
+      .filter(([, seenAt]) => seenAt === label)
+      .map(([line]) => line)
+    for (const line of lines) {
+      this.frameBreaches.set(line, `${label} (reported)`)
+    }
+    return lines
   }
 
   /** After a relaunch: new window, new renderer, so remounts count from zero again. */
   async retarget(target: OracleTarget): Promise<void> {
     this.target = target
-    this.sampler.retarget(target.readPartitions)
     this.remountBaseline = {}
     if (target.page) {
       await installRemountCounter(target.page)
@@ -135,7 +171,7 @@ export class LayoutOracle {
     }
   }
 
-  private async readViews(partitions: WorkspaceLayoutPartition[]): Promise<ViewRead> {
+  private async readViews(entries: LiveWorkspace[]): Promise<ViewRead> {
     const { page, client } = this.target
     const clientViews = await Promise.all(
       this.target.worktreeIds().map((worktreeId) => readClientView(client, worktreeId))
@@ -145,13 +181,13 @@ export class LayoutOracle {
       clientViews.flatMap((view) => view.terminals.flatMap((terminal) => terminal.ptyId ?? []))
     )
     const drawn = page ? await readDrawnLayout(page) : null
-    const view = drawn ? compareDrawnToRuntime(partitions, drawn, live) : []
+    const view = drawn ? compareDrawnToRuntime(entries, drawn, live) : []
     if (drawn && drawn.strips.length === 0) {
       view.push('the window draws no tab strip')
     }
     return {
       view,
-      client: clientViews.flatMap((view) => compareClientToRuntime(partitions, view)),
+      client: clientViews.flatMap((view) => compareClientToRuntime(entries, view)),
       evidence: { drawn, clients: clientViews.map(summarizeClientView) }
     }
   }
@@ -165,39 +201,60 @@ export class LayoutOracle {
     expected: ExpectedLayout | null,
     options: StepOptions = {}
   ): Promise<OracleLayout> {
-    const transient = new Set<string>()
+    const { feed } = this.target
     const deadline = Date.now() + SETTLE_TIMEOUT_MS
-    let last = ''
     let stableReads = 0
-    let partitions: WorkspaceLayoutPartition[] = []
+    let lastFrames = -1
+    let entries: LiveWorkspace[] = []
     let differences: ViewRead = { view: [], client: [], evidence: {} }
     for (;;) {
-      partitions = await this.target.readPartitions()
-      for (const line of formatViolations(checkWorkspaceLayoutRules(partitions))) {
-        transient.add(line)
-      }
-      const serialized = JSON.stringify(toOracleLayout(partitions))
-      stableReads = serialized === last ? stableReads + 1 : 0
-      last = serialized
-      differences = await this.readViews(partitions)
-      const agreed = differences.view.length === 0 && differences.client.length === 0
-      if ((agreed && stableReads >= 2) || Date.now() > deadline) {
+      entries = feed.entries()
+      differences = await this.readViews(entries)
+      // Quiet only if no frame arrived since the previous read, including during the sleep.
+      stableReads = feed.ready && feed.frames === lastFrames ? stableReads + 1 : 0
+      lastFrames = feed.frames
+      // A difference main is known to keep never converges, so it does not hold the wait.
+      const agreed =
+        unexpectedFindings(this.scenarioId, [
+          { check: 'view', step: label, details: differences.view },
+          { check: 'client', step: label, details: differences.client }
+        ]).length === 0
+      if ((agreed && stableReads >= QUIET_GAPS) || Date.now() > deadline) {
         break
       }
-      await sleep(POLL_MS)
+      await sleep(VIEW_CONVERGENCE_POLL_MS)
     }
+    if (!feed.ready) {
+      this.record('rules', label, [
+        `no live layout: ${feed.error ?? 'the stream sent no snapshot'}`
+      ])
+    }
+    const models = liveLayoutModels(entries)
     const settled = formatViolations(
-      checkWorkspaceLayoutRules(partitions, this.previous ?? undefined)
+      checkWorkspaceLayoutModelRules(models, this.previousModels ?? undefined)
     )
-    this.record('rules', label, settled)
-    const between = this.sampler.take(this.sampler.label)
+    // The saved profile, which the live stream does not carry: disk-format rules and round trip.
+    const saved = await this.target.readSavedPartitions()
+    const savedLines = formatViolations(
+      checkWorkspaceLayoutRules(saved, this.previousSaved ?? undefined)
+    ).map((line) => line.replace(': ', ': saved profile: '))
+    this.record('rules', label, [...settled, ...savedLines])
+    this.record(
+      'roundTrip',
+      label,
+      saved.flatMap(({ hostId, session }) =>
+        checkLayoutRoundTrip(hostId, session).findings.map(
+          (finding) => `${hostId} ${JSON.stringify(finding)}`
+        )
+      )
+    )
     this.record(
       'rules',
       `${label} (transient)`,
-      [...new Set([...between, ...transient])].filter((line) => !settled.includes(line))
+      this.takeFrameBreaches(this.label).filter((line) => !settled.includes(line))
     )
-    this.sampler.label = label
-    const layout = toOracleLayout(partitions)
+    this.label = label
+    const layout = toOracleLayout(entries)
     const evidence = { runtime: layout, ...differences.evidence }
     this.record('view', label, differences.view, evidence)
     this.record('client', label, differences.client, evidence)
@@ -210,7 +267,8 @@ export class LayoutOracle {
       )
     }
     await this.checkRemounts(label, options)
-    this.previous = partitions
+    this.previousModels = models
+    this.previousSaved = saved
     this.previousLayout = layout
     return layout
   }

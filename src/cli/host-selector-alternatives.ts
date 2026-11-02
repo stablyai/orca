@@ -99,24 +99,33 @@ export function crossKindNextSteps(
   return steps
 }
 
+/**
+ * The host's SSH target summaries; throws what the host reports. Why the fallback: hosts
+ * predating listTargetSummaries still answer listTargets from the same summariser, and without it
+ * an old host looks like one with no SSH targets, rejecting a target id that is valid there.
+ */
+export async function fetchSshTargetSummaries<T extends { id: string }>(
+  client: RuntimeClient
+): Promise<{ targets: T[]; legacy: boolean }> {
+  try {
+    const result = await client.call<{ targets: T[] }>('ssh.listTargetSummaries')
+    return { targets: result.result.targets, legacy: false }
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'method_not_found')) {
+      throw error
+    }
+    const legacy = await client.call<{ targets: T[] }>('ssh.listTargets')
+    return { targets: legacy.result.targets, legacy: true }
+  }
+}
+
 // Why: only display identity crosses this boundary — the RPC deliberately withholds addresses
 // and credentials — and an enumeration failure must never mask the error we are explaining.
 export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSummary[]> {
   try {
-    const result = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargetSummaries')
-    return result.result.targets
-  } catch (error) {
-    // Why: hosts predating listTargetSummaries still answer listTargets, and both are served by
-    // the same summariser. Without this an old host looks like one with no SSH targets at all,
-    // which would reject a target id that is actually valid there.
-    if (error instanceof Error && 'code' in error && error.code === 'method_not_found') {
-      try {
-        const legacy = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargets')
-        return await enrichLegacySshTargetStates(client, legacy.result.targets)
-      } catch {
-        return []
-      }
-    }
+    const { targets, legacy } = await fetchSshTargetSummaries<SshTargetSummary>(client)
+    return legacy ? await enrichLegacySshTargetStates(client, targets) : targets
+  } catch {
     return []
   }
 }

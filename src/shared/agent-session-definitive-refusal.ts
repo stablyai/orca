@@ -12,7 +12,21 @@
  * never falls back.
  */
 
-import type { AgentSessionWireRefusalCode } from './agent-session-wire'
+import type { AgentSessionWireRefusal, AgentSessionWireRefusalCode } from './agent-session-wire'
+
+/** Admission reasons eligible for attempt-level proof, only at a boundary before commit. */
+export function isAgentSessionCreateAdmissionRefusal(
+  refusal: Pick<AgentSessionWireRefusal, 'code' | 'details'>
+): boolean {
+  return (
+    ((refusal.code === 'agent_session_conflict' ||
+      refusal.code === 'agent_session_ownership_unknown') &&
+      refusal.details?.reason === 'conversationHeldElsewhere') ||
+    (refusal.code === 'agent_session_identity_required' &&
+      (refusal.details?.reason === 'transcriptNotFound' ||
+        refusal.details?.reason === 'transcriptUnreadable'))
+  )
+}
 
 /** Proves the host neither created a session nor will on a retry. */
 const DEFINITIVE_REFUSAL_CODES: ReadonlySet<string> = new Set<AgentSessionWireRefusalCode>([

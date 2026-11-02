@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 import {
   OXLINT_SCANS,
+  collectBaseLineBlocks,
   diagnosticTouchesAddedLines,
   isUnloadedPluginDirectiveUnusedWarning,
   isMovedCode,
@@ -123,6 +125,103 @@ describe('moved-code exemption', () => {
 
   it('never exempts an empty highlight', () => {
     expect(isMovedCode(['', '   '], [['a()']])).toBe(false)
+  })
+
+  it('reads the base text of a file that was renamed away', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-rename-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({
+          program: 'git',
+          args: ['-c', 'commit.gpgsign=false', ...args],
+          cwd: repo
+        })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      writeFileSync(path.join(repo, 'old.ts'), 'const moved = value as Thing\n')
+      git('add', 'old.ts')
+      git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'base')
+      const base = git('rev-parse', 'HEAD')
+      git('mv', 'old.ts', 'new.ts')
+
+      expect(collectBaseLineBlocks(repo, base)).toEqual([['const moved = value as Thing']])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps source boundaries across batches, missing files, and multibyte contents', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-batch-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: repo })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const files = Array.from({ length: 40 }, (_, index) => `file ${index} é.ts`)
+      const sources = files.map((_, index) =>
+        index === 0 ? '' : `  const café${index} = '🐳'\r\n\r\n// missing\nlastLine()`
+      )
+      files.forEach((file, index) => writeFileSync(path.join(repo, file), sources[index]))
+      git('add', '--all')
+      git(
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.invalid',
+        'commit',
+        '-qm',
+        'base'
+      )
+      const base = git('rev-parse', 'HEAD')
+      const expected = sources.map((_, index) =>
+        index === 0 ? [] : [`const café${index} = '🐳'`, '// missing', 'lastLine()']
+      )
+      expect(
+        collectBaseLineBlocks(repo, base, ['missing.ts', ...files, 'also-missing.ts'])
+      ).toEqual(expected)
+      expect(collectBaseLineBlocks(repo, base, [])).toEqual([])
+      expect(collectBaseLineBlocks(repo, base, ['missing.ts'])).toEqual([])
+      expect(collectBaseLineBlocks(path.join(repo, 'absent'), base, files)).toEqual([])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('reads filenames containing newlines', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-newline-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: repo })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const file = 'line\nbreak.ts'
+      writeFileSync(path.join(repo, file), 'const kept = true\n')
+      git('add', '--all')
+      git(
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.invalid',
+        'commit',
+        '-qm',
+        'base'
+      )
+      expect(collectBaseLineBlocks(repo, git('rev-parse', 'HEAD'), [file])).toEqual([
+        ['const kept = true']
+      ])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
   })
 })
 

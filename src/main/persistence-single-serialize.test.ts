@@ -17,7 +17,7 @@ import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-port
 
 const testState = { dir: '' }
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -45,7 +45,6 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 }))
 
 async function createStore() {
-  vi.resetModules()
   const { setSecretStore } = await import('../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => cipherState.encryptionAvailable,
@@ -64,8 +63,6 @@ async function createStore() {
     describeProtectionGap: () => null
   })
   const { Store, initDataPath } = await import('./persistence')
-  // Why here: userData resolves through AppEnvironment, and this must point at this
-  // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })

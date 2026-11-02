@@ -20,6 +20,7 @@ import { BrowserClientPageNavigationFence } from './browser-client-page-navigati
 import { executeBrowserClientPageReconciliationCommand } from './browser-client-page-reconciliation'
 import {
   findBrowserClientPageByWebContentsId,
+  forgetBrowserClientRetainedPage,
   type BrowserClientRetainedPage
 } from './browser-client-page-retained-state'
 import {
@@ -134,6 +135,10 @@ export class BrowserClientPageCommandExecutor {
     return this.pages.get(browserPageId)?.generation === pageHostGeneration
   }
 
+  hostsPage(browserPageId: string): boolean {
+    return !this.closed && this.pages.has(browserPageId)
+  }
+
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean {
     return this.failedPages.get(browserPageId)?.pageHostGeneration === pageHostGeneration
   }
@@ -192,18 +197,14 @@ export class BrowserClientPageCommandExecutor {
     try {
       await page.retiring
     } catch (error) {
-      if (this.pages.get(browserPageId) === page) {
-        this.pages.delete(browserPageId)
-      }
+      forgetBrowserClientRetainedPage(this.pages, browserPageId, page)
       this.failedPages.set(
         browserPageId,
         Object.freeze({ ...page.inventory, state: 'outcomeUnknown' })
       )
       throw error
     }
-    if (this.pages.get(browserPageId) === page) {
-      this.pages.delete(browserPageId)
-    }
+    forgetBrowserClientRetainedPage(this.pages, browserPageId, page)
     return true
   }
 
@@ -302,9 +303,7 @@ export class BrowserClientPageCommandExecutor {
       try {
         page.retiring ??= this.cleanupPage(page)
         await page.retiring
-        if (this.pages.get(browserPageId) === page) {
-          this.pages.delete(browserPageId)
-        }
+        forgetBrowserClientRetainedPage(this.pages, browserPageId, page)
       } catch (error) {
         failures.push(error)
       }

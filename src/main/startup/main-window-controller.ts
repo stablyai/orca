@@ -17,13 +17,7 @@ import {
 import { logStartupMilestone } from './startup-diagnostics'
 import { notifyMainWindowBecameVisible } from '../window/main-window-visibility'
 import { setTrayAttention } from '../tray/system-tray'
-import {
-  createSystemTrayDeferred,
-  getSystemTrayOptions,
-  showMainWindowFromTray,
-  showRendererRecoveryPrompt,
-  syncMacMenuBarIcon
-} from './main-window-actions'
+import { createSystemTrayDeferred, showRendererRecoveryPrompt } from './main-window-actions'
 import { attachMainWindowCoreServices } from './main-window-core-services'
 import {
   clearMainWindowAgentStatusListeners,
@@ -38,7 +32,6 @@ import {
   recordProcessGoneCrash
 } from './main-window-lifecycle-flags'
 import { presentGpuFallbackRecoveredLaunchPrompt } from './gpu-lifecycle'
-import { maybeAutoRenameBranchOnFirstWorkFromHook } from './branch-rename-hook'
 import {
   resumeSyntheticTitleSpinnerTimer,
   stopSyntheticTitleSpinnerTimer
@@ -209,7 +202,6 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   window.on('restore', () => setTrayAttention(false))
   installMainWindowAgentStatusListeners({
     window,
-    maybeAutoRenameBranchOnFirstWork: maybeAutoRenameBranchOnFirstWorkFromHook,
     onRecordAgentState: (agentType, status) =>
       recordCoalescedCrashBreadcrumb({
         name: 'agent_state_changed',
@@ -229,11 +221,4 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   logStartupMilestone('load-start')
   loadMainWindow(window)
   return window
-}
-
-export function configureWindowActions(): void {
-  // Kept as a named seam for startup composition; action callbacks are state-backed.
-  void getSystemTrayOptions
-  void showMainWindowFromTray
-  void syncMacMenuBarIcon
 }

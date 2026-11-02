@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { isAiVaultSyntheticSessionPath } from '../../../../shared/ai-vault-session-deletion'
+import { revealInFileManager } from '@/lib/reveal-in-file-manager'
 
 // One definition, shared with main's delete validator; re-exported here under
 // the name this module's callers already use.
@@ -35,4 +36,14 @@ export function canOpenAiVaultSessionLogInOrca(
     return false
   }
   return !isAiVaultSyntheticSessionPath(filePath)
+}
+
+/** Reveals a session's log or cwd in the OS file manager, judged by the session's own host. */
+export async function revealAiVaultSessionPath(
+  session: Pick<AiVaultSession, 'executionHostId'>,
+  path: string | null
+): Promise<void> {
+  if (path) {
+    await revealInFileManager(path, session.executionHostId)
+  }
 }

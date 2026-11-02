@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { linearCreateIssue, linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { useAppStore } from '@/store'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreationModel) {
   const {
     settings,
@@ -57,17 +58,20 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
     setNewLinearIssueSubmitting(true)
     const submitProviderRuntimeContextKey = providerRuntimeContextKey
     try {
-      const result = await linearCreateIssue(linearTaskSourceContext ?? settings, {
-        teamId: newLinearIssueTargetTeam.id,
-        title,
-        description: newLinearIssueBody || undefined,
-        workspaceId: newLinearIssueTargetTeam.workspaceId,
-        stateId: newLinearIssueStateId || undefined,
-        priority: newLinearIssuePriority,
-        assigneeId: newLinearIssueAssigneeId || undefined,
-        projectId: newLinearIssueProjectId || null,
-        labelIds: newLinearIssueLabelIds.length > 0 ? newLinearIssueLabelIds : undefined
-      })
+      const result = await linearCreateIssue(
+        linearTaskSourceContext ?? defaultScopeSource(settings),
+        {
+          teamId: newLinearIssueTargetTeam.id,
+          title,
+          description: newLinearIssueBody || undefined,
+          workspaceId: newLinearIssueTargetTeam.workspaceId,
+          stateId: newLinearIssueStateId || undefined,
+          priority: newLinearIssuePriority,
+          assigneeId: newLinearIssueAssigneeId || undefined,
+          projectId: newLinearIssueProjectId || null,
+          labelIds: newLinearIssueLabelIds.length > 0 ? newLinearIssueLabelIds : undefined
+        }
+      )
       if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
         return
       }
@@ -105,7 +109,7 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
 
       // Why: auto-select the new issue so the user sees exactly what was filed (mirrors the GitHub create-issue flow).
       void linearGetIssue(
-        linearTaskSourceContext ?? settings,
+        linearTaskSourceContext ?? defaultScopeSource(settings),
         result.id,
         newLinearIssueTargetTeam.workspaceId
       )

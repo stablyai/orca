@@ -104,6 +104,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -138,6 +139,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -218,6 +220,7 @@ describe('Cmd+J quick action context', () => {
       state,
       activeGroupSnapshot: { worktreeId: 'wt-1', groupId: 'closed-group' },
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -244,6 +247,7 @@ describe('Cmd+J quick action context', () => {
       state,
       activeGroupSnapshot: null,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -299,6 +303,7 @@ describe('Cmd+J quick action context', () => {
         state: { ...state, activeView },
         activeGroupSnapshot: null,
         openNewBrowserTab: async () => {},
+        openBrowserUrl: async () => {},
         openNewMarkdownFile: async () => {},
         openNewTerminalTab: async () => {},
         openCreateWorkspace: () => {},
@@ -318,6 +323,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async (groupId: string) => {
         calls.push(groupId)
@@ -344,6 +350,9 @@ describe('Cmd+J quick action context', () => {
       managedBrowserCreationEnabled: false,
       openNewBrowserTab: async () => {
         calls.push('browser')
+      },
+      openBrowserUrl: async () => {
+        calls.push('browser-url')
       },
       openNewMarkdownFile: async () => {
         calls.push('markdown')
@@ -379,6 +388,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
@@ -400,6 +410,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},

@@ -5,13 +5,13 @@ import {
   withDeactivatedVersion,
   withDeactivatedVersionCommitted,
   type OrcadActivationRecord
-} from './orcad-activation-record'
-import { planManagedOrcadAutoUpdate } from './orcad-managed-auto-update'
+} from '../managed-server/activation/orcad-activation-record'
+import { planManagedOrcadAutoUpdate } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import { compareAppVersions } from '../../shared/app-version'
 import {
   MANAGED_ORCAD_FENCED_DETAIL,
   MANAGED_ORCAD_NOT_ACTIVATED_DETAIL
-} from './orcad-managed-serving'
+} from '../managed-server/lifecycle/orcad-managed-serving'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
 

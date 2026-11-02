@@ -11,16 +11,16 @@ import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   hasIndexedDetectedWorktree,
+  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import { onPairedWebClientHost } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
 } from './folder-workspace-runtime-owner'
-
-export { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 
 export type WorktreeOperationRoute = {
   executionHostId: ExecutionHostId | null
@@ -188,15 +188,18 @@ function resolveSelectedHostRoute(
   }
   // Why: only an `ssh:` selection can hide a paired HUB owner, so local stays an O(1) hot path.
   if (selectedHost.kind !== 'ssh') {
-    return { executionHostId: selectedHost.id, runtimeEnvironmentId: null }
+    return onPairedWebClientHost(state, {
+      executionHostId: selectedHost.id,
+      runtimeEnvironmentId: null
+    })
   }
   const { environmentIds } = collectHubOwnerEnvironmentIds(state, worktreeId, selectedHost.id)
   const environmentId = environmentIds.values().next().value
-  return {
+  return onPairedWebClientHost(state, {
     executionHostId: selectedHost.id,
     // Why: rival HUBs projecting the same host cannot be disambiguated by the host selection alone.
     runtimeEnvironmentId: environmentIds.size === 1 && environmentId ? environmentId : null
-  }
+  })
 }
 
 /**
@@ -247,6 +250,16 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const resolution = resolveOwnerRouteResult(state, worktreeId)
+  return resolution.kind === 'resolved'
+    ? { kind: 'resolved', route: onPairedWebClientHost(state, resolution.route) }
+    : resolution
+}
+
+function resolveOwnerRouteResult(
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): WorktreeOperationRouteResolution {
   const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
   if (activeRoute) {
     return { kind: 'resolved', route: activeRoute }
@@ -268,7 +281,7 @@ export function resolveWorktreeOperationRouteResult(
     resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
     hasDetectedWorktree
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const hasKnownRepo = state.repos?.some((repo) => repo.id === repoId) === true
+  const hasKnownRepo = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
   if (!hasKnownWorktree && !hasKnownRepo) {
     return { kind: 'missing' }
   }
@@ -329,7 +342,7 @@ function resolveUnstampedLocalWorktreeRoute(
   state: WorktreeOperationRouteState,
   repoId: string
 ): WorktreeOperationRoute | null {
-  const hasUnstampedRepoRow = state.repos?.some((repo) => repo.id === repoId) ?? false
+  const hasUnstampedRepoRow = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
   return hasUnstampedRepoRow
     ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
     : null
@@ -359,18 +372,4 @@ function resolveFolderWorkspaceOperationRoute(
       runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
     }
   }
-}
-
-/**
- * Projects the route's runtime environment onto settings so a routed operation runs against the
- * owner's environment rather than whichever one the UI has active; settings can still be absent
- * during early hydration, hence the synthesized fallback.
- */
-export function settingsForWorktreeOperationRoute(
-  settings: AppState['settings'],
-  route: WorktreeOperationRoute
-): AppState['settings'] {
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: route.runtimeEnvironmentId }
-    : ({ activeRuntimeEnvironmentId: route.runtimeEnvironmentId } as AppState['settings'])
 }

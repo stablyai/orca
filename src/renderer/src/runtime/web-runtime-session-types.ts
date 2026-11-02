@@ -20,6 +20,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  /** The Windows shell the terminal runs as, never typed into the host default shell. */
+  shell?: string
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]

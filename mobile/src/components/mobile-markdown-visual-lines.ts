@@ -1,12 +1,10 @@
 import {
+  NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER,
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine,
   type NativeChatVisualDirective
 } from '../../../src/shared/native-chat-visual-directive'
-
-/** Same fence shapes the block parser opens and closes on, so a directive inside code stays code. */
-const CODE_FENCE_OPEN = /^```([A-Za-z0-9_-]+)?\s*$/
-const CODE_FENCE_CLOSE = /^```\s*$/
+import { mobileMarkdownCodeLines } from './mobile-markdown-tree'
 // Private-use delimiters, as the preview normalizer's own code placeholders use.
 const PLACEHOLDER_PREFIX = '\uE000ORCA_VISUAL_'
 const PLACEHOLDER = /^\uE000ORCA_VISUAL_(\d+)\uE000$/
@@ -22,29 +20,24 @@ function placeholderFor(index: number): string {
 }
 
 /**
- * Lifts native-chat visual directive lines out of assistant prose before preview normalization,
- * which decodes entities and strips tags and would otherwise rewrite a title. Only top-level lines
- * outside fenced code count; quotes and list items never start with the marker. Past the per-message
- * cap a directive stays literal text.
+ * Lifts native-chat visual directive lines out of assistant prose before it is parsed, which
+ * decodes entities and reads tags and would otherwise rewrite a title. Only lines outside code
+ * count, as the parser reads it; quotes and list items never start with the marker. Past the
+ * per-message cap a directive stays literal text.
  */
 export function protectMobileMarkdownVisualLines(content: string): MobileMarkdownVisualLines {
   // Text that already spells a placeholder would alias a real one; it renders no visuals at all.
-  if (content.includes(PLACEHOLDER_PREFIX)) {
+  if (
+    content.includes(PLACEHOLDER_PREFIX) ||
+    !content.includes(NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER)
+  ) {
     return { text: content, directives: [] }
   }
-  const lines = content.replace(/\r\n?/g, '\n').split('\n')
+  const normalized = content.replace(/\r\n?/g, '\n')
+  const code = mobileMarkdownCodeLines(normalized)
   const directives: NativeChatVisualDirective[] = []
-  let inFence = false
-  const next = lines.map((line) => {
-    if (inFence) {
-      inFence = !CODE_FENCE_CLOSE.test(line)
-      return line
-    }
-    if (CODE_FENCE_OPEN.test(line)) {
-      inFence = true
-      return line
-    }
-    if (directives.length >= NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE) {
+  const next = normalized.split('\n').map((line, index) => {
+    if (code.has(index) || directives.length >= NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE) {
       return line
     }
     const directive = parseNativeChatVisualDirectiveLine(line)

@@ -31,7 +31,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: vi.fn(async () => true)
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root
@@ -200,7 +202,7 @@ it('leaves a failure a retry cannot fix out of Select all', async () => {
   expect(button('Resume 1 chat').disabled).toBe(false)
 })
 
-it('disables Select all and the workspace checkbox while a resume runs', async () => {
+it('drops Select all and the checkbox column while every listed chat is resuming', async () => {
   const continued = Promise.withResolvers<unknown>()
   rpc.mockImplementation((_target, method) =>
     method === 'agentSession.restartResumable'
@@ -215,12 +217,11 @@ it('disables Select all and the workspace checkbox while a resume runs', async (
   )
   await act(async () => button('Resume 2 chats').click())
   await act(async () => button('Resuming chats 0/2').click())
-  const list = document.querySelector('[aria-label="Chats that would be resumed"]')!
-  const boxes = [...list.querySelectorAll('[role="checkbox"]')]
-  expect(boxes).toHaveLength(2)
-  for (const box of boxes) {
-    expect(box.hasAttribute('disabled')).toBe(true)
-  }
+  const list = document.querySelector('[aria-label="Chats in this resume"]')!
+  expect(list.querySelectorAll('[role="checkbox"]')).toHaveLength(0)
+  expect(list.textContent).not.toContain('Select all')
+  expect(list.textContent).not.toContain('of 2')
+  expect(list.querySelectorAll('[role="img"][aria-label*="Waiting to start"]')).toHaveLength(2)
   await act(async () => continued.resolve({ sessions: [], failed: [], resumed: [], continued: [] }))
 })
 

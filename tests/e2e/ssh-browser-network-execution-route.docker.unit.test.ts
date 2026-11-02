@@ -3,18 +3,17 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Client } from 'ssh2'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { TestInfo } from '@stablyai/playwright-test'
 import type { SshConnection } from '../../src/main/ssh/ssh-connection'
 import type { SshProviderEpoch } from '../../src/shared/ssh-types'
-import { ensureDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
+import { ensureDockerSshHostImage } from './helpers/docker-ssh-host-image'
 import {
-  cleanupDockerSshRelayTarget,
-  execDockerSshRelayTargetCommand,
-  shellQuote,
-  startDockerSshRelayTarget,
-  type DockerSshRelayTarget
-} from './helpers/docker-ssh-relay-target'
+  cleanupDockerSshHostTarget,
+  execDockerSshHostTargetCommand,
+  startDockerSshHostTarget,
+  type DockerSshHostTarget
+} from './helpers/docker-ssh-host-target'
 import { resolveSshBrowserNetworkExecutionRoute } from '../../src/main/browser/ssh-browser-network-execution-route'
+import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
 
 const runDocker = process.env.ORCA_RUN_DOCKER_SSH_BROWSER_E2E === '1'
 const executionHost = {
@@ -25,13 +24,13 @@ const executionHost = {
 }
 
 describe.runIf(runDocker)('SSH browser network execution route Docker journey', () => {
-  let target: DockerSshRelayTarget | null = null
+  let target: DockerSshHostTarget | null = null
   let client: Client | null = null
 
   beforeAll(async () => {
-    ensureDockerSshRelayImage(process.cwd())
-    target = startDockerSshRelayTarget({ workerIndex: 0 } as TestInfo)
-    execDockerSshRelayTargetCommand(
+    ensureDockerSshHostImage(process.cwd())
+    target = startDockerSshHostTarget({ workerIndex: 0 })
+    execDockerSshHostTargetCommand(
       target,
       "grep -q 'remote-only.internal' /etc/hosts || printf '127.0.0.1 remote-only.internal\\n' >> /etc/hosts"
     )
@@ -39,9 +38,9 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
       "const http=require('http')",
       "http.createServer((_request,response)=>response.end('sta-4150-remote-only')).listen(18080,'127.0.0.1')"
     ].join(';')
-    execDockerSshRelayTargetCommand(
+    execDockerSshHostTargetCommand(
       target,
-      `nohup node -e ${shellQuote(server)} >/tmp/sta-4150-http.log 2>&1 </dev/null &`
+      `nohup node -e ${quotePosixShell(server)} >/tmp/sta-4150-http.log 2>&1 </dev/null &`
     )
     const waitForServer = [
       "const net=require('net')",
@@ -51,7 +50,7 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
       "socket.once('error',()=>{socket.destroy();if(Date.now()>=deadline)process.exit(1);setTimeout(probe,25)})}",
       'probe()'
     ].join(';')
-    execDockerSshRelayTargetCommand(target, `node -e ${shellQuote(waitForServer)}`)
+    execDockerSshHostTargetCommand(target, `node -e ${quotePosixShell(waitForServer)}`)
     client = new Client()
     await new Promise<void>((resolve, reject) => {
       client!.once('ready', resolve)
@@ -70,7 +69,7 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
     if (client) {
       client.end()
     }
-    cleanupDockerSshRelayTarget(target)
+    cleanupDockerSshHostTarget(target)
   })
 
   it('resolves and connects the exact remote-only domain on the SSH host', async () => {

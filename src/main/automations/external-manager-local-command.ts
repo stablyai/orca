@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const LOCAL_COMMAND_LOOKUP_TIMEOUT_MS = 5_000
 const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
@@ -36,7 +36,7 @@ export async function isExternalAutomationCommandOnPath(command: string): Promis
 }
 
 // Why: local automation mutations back UI actions; a wedged CLI must not keep
-// create/edit/run/delete pending after Node signals a timeout.
+// pause/resume/run/delete pending after Node signals a timeout.
 export function runLocalAutomationCommand(command: string, args: string[]): Promise<void> {
   return runLocalProviderCommand(command, args, {
     timeoutMs: LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS,

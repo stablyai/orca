@@ -30,9 +30,11 @@ import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 export type StructuredAttentionWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
 
 export type StructuredAttentionMobileDeliveryDeps = {
-  readNotificationSettings: () => NotificationSettings
+  readNotificationSettings: () => NotificationSettings | undefined
   /** In-memory metadata only: a lookup that could wait would let the alert outlive its prompt. */
   readWorkspaceLabels: (scope: AgentSessionExecutionLocation) => StructuredAttentionWorkspaceLabels
+  /** In-memory only, like the labels: whether the desktop's Filters switches hide this workspace. */
+  isWorkspaceHidden: (scope: AgentSessionExecutionLocation) => boolean
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
@@ -83,6 +85,10 @@ export function createStructuredAttentionMobileDelivery(
         return
       }
       const scope = edge.type === 'prompt' ? edge.prompt.scope : edge.completion.scope
+      const settings = deps.readNotificationSettings()!
+      if (!settings.notifyHiddenWorkspaces && deps.isWorkspaceHidden(scope)) {
+        return
+      }
       const attentionKey = agentSessionAttentionKey(edge)
       const request: NotificationDispatchRequest = {
         source: 'agent-task-complete',
@@ -101,7 +107,6 @@ export function createStructuredAttentionMobileDelivery(
         request,
         getRuntimeDesktopSurface().translateNotification
       )
-      const settings = deps.readNotificationSettings()
       // The same eligibility the desktop's own fan-out applies: these preferences gate the phone too.
       const desktopAllowed = settings.enabled && settings.agentTaskComplete
       deps.dispatch({

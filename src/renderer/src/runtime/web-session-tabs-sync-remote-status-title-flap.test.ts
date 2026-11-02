@@ -513,6 +513,30 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       expect(entry?.interactivePrompt).toBe('Allow Bash(rm -rf)?')
     })
 
+    it('keeps live client status over a restored, unconfirmed host block', () => {
+      const store = seedPairedClientStore()
+      replayClientOscWorking(store, T0 + 500)
+
+      // Host clock ahead of the client: only the unconfirmed flag can keep this row out.
+      const restoredAt = T0 + 60_000
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 2,
+          hostNow: restoredAt,
+          includeAgentStatus: true,
+          agentStatusOverrides: {
+            state: 'blocked',
+            prompt: 'Allow Bash(rm -rf)?',
+            restoredUnconfirmed: true
+          }
+        }),
+        T0 + 1_000
+      )
+
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
+    })
+
     it('adopts host monitoring metadata without replacing client-owned byte status', () => {
       const store = seedPairedClientStore()
       applyHostSnapshot(

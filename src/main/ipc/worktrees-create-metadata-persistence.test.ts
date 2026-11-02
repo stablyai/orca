@@ -7,7 +7,9 @@ import {
   getPullRequestPushTargetMock,
   gitExecFileAsyncMock
 } from './worktrees-test-module-mocks'
-import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
   ORIGIN_HEAD_COMPONENT,
   ORIGIN_REMOTE_URL,
@@ -34,7 +36,6 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:forceDeletePreservedBranch',
   'worktrees:updateMeta',
   'worktrees:listLineage',
-  'worktrees:listLineageForHost',
   'worktrees:updateLineage',
   'worktrees:persistSortOrder',
   'worktrees:getBranchRenameFailureOutput',
@@ -68,18 +69,11 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -125,7 +119,12 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -252,6 +251,81 @@ describe('registerWorktreeHandlers', () => {
       updates: { displayName: 'Renamed workspace' }
     })
     expect(runtimeStub.notifyWorktreesChangedForRemoteClients).toHaveBeenCalledWith('repo-1')
+  })
+
+  describe('a folder workspace removed while its terminal is still bound (#22712)', () => {
+    const folderRepo = { ...harnessRepo, kind: 'folder' as const }
+    const workspaceId = `${harnessRepo.id}::${harnessRepo.path}::workspace:0b6f6d2e-1c1d-4c55-9a51-3f1c0f4f2a10`
+
+    // Backs the store mocks with one meta table so writes, removal and listing see the same rows.
+    function useFolderMetaTable(): Record<string, WorktreeMeta> {
+      const table: Record<string, WorktreeMeta> = {}
+      store.getRepo.mockReturnValue(folderRepo)
+      store.getRepos.mockReturnValue([folderRepo])
+      store.getWorktreeMeta.mockImplementation((id: string) => table[id])
+      store.getAllWorktreeMeta.mockImplementation(() => table)
+      store.setWorktreeMeta.mockImplementation((id: string, meta: Partial<WorktreeMeta>) => {
+        table[id] = mergeWorktreeMetaForWrite(table[id], meta)
+        return table[id]
+      })
+      store.removeWorktreeMeta.mockImplementation((id: string) => {
+        delete table[id]
+      })
+      table[workspaceId] = mergeWorktreeMetaForWrite(undefined, {
+        displayName: 'Feature work',
+        createdAt: 1
+      })
+      return table
+    }
+
+    it('does not bring the workspace back as a blank row when the terminal reports activity', async () => {
+      const table = useFolderMetaTable()
+
+      await handlers['worktrees:remove'](null, { worktreeId: workspaceId })
+      expect(table[workspaceId]).toBeUndefined()
+      // The renderer still lists the row until its teardown runs, so a PTY reattach in that
+      // window stamps activity on the removed id (bumpWorktreeActivity -> updateMeta).
+      handlers['worktrees:updateMeta'](null, {
+        worktreeId: workspaceId,
+        updates: { lastActivityAt: 2 }
+      })
+      handlers['worktrees:updateMeta'](null, {
+        worktreeId: workspaceId,
+        executionHostId: 'local',
+        updates: { isUnread: true }
+      })
+
+      const rows = await handlers['worktrees:list'](null, { repoId: folderRepo.id })
+      expect(rows).not.toContainEqual(expect.objectContaining({ id: workspaceId }))
+      expect(table[workspaceId]).toBeUndefined()
+    })
+
+    it('refuses the write when a same-id owner on another host sits at a different path', () => {
+      const table = useFolderMetaTable()
+      delete table[workspaceId]
+      const otherOwner = { ...folderRepo, path: '/elsewhere/repo' }
+      store.getRepo.mockReturnValue(otherOwner)
+      store.getRepos.mockReturnValue([otherOwner, folderRepo])
+
+      handlers['worktrees:updateMeta'](null, {
+        worktreeId: workspaceId,
+        executionHostId: 'ssh:build-box',
+        updates: { lastActivityAt: 2 }
+      })
+
+      expect(table[workspaceId]).toBeUndefined()
+    })
+
+    it('still persists metadata updates for a folder workspace that exists', () => {
+      const table = useFolderMetaTable()
+
+      handlers['worktrees:updateMeta'](null, {
+        worktreeId: workspaceId,
+        updates: { lastActivityAt: 2 }
+      })
+
+      expect(table[workspaceId]).toMatchObject({ displayName: 'Feature work', lastActivityAt: 2 })
+    })
   })
 
   it('persists display-name provenance at the host boundary', () => {

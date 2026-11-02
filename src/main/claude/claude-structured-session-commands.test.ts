@@ -34,7 +34,10 @@ describe('session command updates', () => {
     }
     claude.connections[0].handlers.onMessage?.(frame)
     await tick()
-    expect(adapter.readCommands('session-1')).toEqual([{ name: 'plugin:check', kind: 'skill' }])
+    expect(adapter.readCommands('session-1')).toEqual([
+      { name: 'plugin:check', kind: 'skill' },
+      { name: 'doctor', kind: 'command' }
+    ])
     expect(changed).toHaveBeenCalledTimes(1)
     claude.connections[0].handlers.onMessage?.(frame)
     await tick()

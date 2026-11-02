@@ -28,7 +28,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     renameTarget,
     setRenameTarget,
     terminalRefs,
-    initializedHandlesRef,
     activeHandleRef,
     activeSessionTabTypeRef,
     pendingSelectionRef,
@@ -79,7 +78,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       if (response.accepted) {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
-        initializedHandlesRef.current.delete(target.handle)
         clearTerminalLiveInputDefault(target.handle)
         const next = terminals.filter((terminal) => terminal.handle !== target.handle)
         setTerminals(next)
@@ -150,7 +148,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           const terminalHandle = tab.terminal
           unsubscribeTerminal(terminalHandle)
           terminalRefs.current.delete(terminalHandle)
-          initializedHandlesRef.current.delete(terminalHandle)
           clearTerminalLiveInputDefault(terminalHandle)
         }
         sessionTabsRef.current = remainingTabs

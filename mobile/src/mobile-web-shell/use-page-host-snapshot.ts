@@ -3,10 +3,12 @@ import { loadHosts } from '../transport/host-store'
 import type { BridgeInitHost } from './bridge/bridge-envelope'
 import {
   hydrateMirroredStorage,
+  readMirroredKeyOrStore,
   readMirroredStorage,
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
 import {
+  isHostWorkspaceStorageKey,
   isPageStorageKeyForRoute,
   pageStorageEntriesForInit,
   pageStorageKeysForRoute,
@@ -34,6 +36,8 @@ export type PageHostSnapshotView = {
   refreshStorage: () => Promise<void>
   /** Applies one page write to the app's store and to the map the next `init` will carry. */
   writeStorage: (key: string, value: string | null) => void
+  /** One workspace key of this host, read for a host-area page that opened it in-page. */
+  readWorkspaceKey: (key: string) => Promise<string | null>
 }
 
 /**
@@ -47,7 +51,11 @@ export type PageHostSnapshotView = {
  * keys are re-seated per `init` answer, because the store is their truth; between those reads the
  * map is kept current by every writer of one, which is what lets `init` stay synchronous.
  */
-export function usePageHostSnapshot(hostId: string, routePathname: string): PageHostSnapshotView {
+export function usePageHostSnapshot(
+  hostId: string,
+  routePathname: string,
+  hostArea = false
+): PageHostSnapshotView {
   const [snapshot, setSnapshot] = useState<PageHostSnapshot | null>(null)
   const [unreadable, setUnreadable] = useState(false)
 
@@ -110,12 +118,23 @@ export function usePageHostSnapshot(hostId: string, routePathname: string): Page
     (key: string, value: string | null): void => {
       // The host refuses a key outside this list before this ever runs. Held to it here too, so the
       // map cannot hold something the next refresh would drop and answer a read with it meanwhile.
-      if (!isPageStorageKeyForRoute(key, hostId, routePathname)) {
+      if (!isPageStorageKeyForRoute(key, hostId, routePathname, hostArea)) {
         return
       }
       writeMirroredStorage(key, value)
     },
-    [hostId, routePathname]
+    [hostArea, hostId, routePathname]
+  )
+
+  const readWorkspaceKey = useCallback(
+    async (key: string): Promise<string | null> => {
+      if (!hostArea || !isHostWorkspaceStorageKey(key, hostId)) {
+        throw new Error('this page may not read that key')
+      }
+      // The map first: every shell-side write lands there synchronously, before the store has it.
+      return readMirroredKeyOrStore(key)
+    },
+    [hostArea, hostId]
   )
 
   return {
@@ -137,6 +156,7 @@ export function usePageHostSnapshot(hostId: string, routePathname: string): Page
       return { storage: entries, storageOversize: oversize }
     }, [hostId, routePathname]),
     refreshStorage,
-    writeStorage
+    writeStorage,
+    readWorkspaceKey
   }
 }

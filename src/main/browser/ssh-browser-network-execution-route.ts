@@ -5,7 +5,7 @@ import type { Client as SshClient } from 'ssh2'
 import {
   startSystemSshDynamicForwardProcess,
   type SystemSshDynamicForwardProcess
-} from '../ssh/system-ssh-dynamic-forward-process'
+} from '../ssh/system-transport/system-ssh-dynamic-forward-process'
 import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
 import {
   browserNetworkExecutionHostKey,

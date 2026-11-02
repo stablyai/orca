@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   AI_VAULT_SCAN_CANCELLED_MESSAGE,
   type AiVaultListResult
@@ -8,6 +9,7 @@ import {
 const FORCED_SCAN_PREEMPT_AFTER_MS = 5_000
 
 type ScanEntry = {
+  id: string
   controller: AbortController
   force: boolean
   startedAt: number
@@ -27,7 +29,10 @@ export class AiVaultScanCoordinator {
     key: string
     force?: boolean
     signal?: AbortSignal
-    start: (signal: AbortSignal) => Promise<AiVaultListResult>
+    onCreate?: (id: string) => void
+    onError?: (error: unknown) => void
+    onReject?: (error: unknown, id: string) => unknown
+    start: (signal: AbortSignal, id: string) => Promise<AiVaultListResult>
   }): Promise<AiVaultListResult> {
     if (args.signal?.aborted) {
       return Promise.reject(scanCancellationError())
@@ -39,7 +44,13 @@ export class AiVaultScanCoordinator {
       entry = undefined
     }
     if (!entry) {
-      entry = this.createEntry(args.key, args.force === true, args.start)
+      entry = this.createEntry(
+        args.key,
+        args.force === true,
+        args.start,
+        args.onCreate,
+        args.onError
+      )
       this.entries.set(args.key, entry)
     }
     if (preempted) {
@@ -48,16 +59,21 @@ export class AiVaultScanCoordinator {
       preempted.preemptedBy = entry
       preempted.controller.abort()
     }
-    return this.attach(args.key, entry, args.signal)
+    return this.attach(args.key, entry, args.signal, args.onReject)
   }
 
   private createEntry(
     key: string,
     force: boolean,
-    start: (signal: AbortSignal) => Promise<AiVaultListResult>
+    start: (signal: AbortSignal, id: string) => Promise<AiVaultListResult>,
+    onCreate?: (id: string) => void,
+    onError?: (error: unknown) => void
   ): ScanEntry {
     const controller = new AbortController()
+    const id = randomUUID()
+    onCreate?.(id)
     const entry: ScanEntry = {
+      id,
       controller,
       force,
       startedAt: Date.now(),
@@ -65,7 +81,7 @@ export class AiVaultScanCoordinator {
         if (controller.signal.aborted) {
           throw scanCancellationError()
         }
-        return start(controller.signal)
+        return start(controller.signal, id)
       }),
       waiterCount: 0,
       settled: false,
@@ -75,11 +91,19 @@ export class AiVaultScanCoordinator {
       entry.settled = true
       this.removeEntry(key, entry)
     }
-    void entry.promise.then(onSettled, onSettled)
+    void entry.promise.then(onSettled, (error) => {
+      onError?.(error)
+      onSettled()
+    })
     return entry
   }
 
-  private attach(key: string, entry: ScanEntry, signal?: AbortSignal): Promise<AiVaultListResult> {
+  private attach(
+    key: string,
+    entry: ScanEntry,
+    signal?: AbortSignal,
+    onReject?: (error: unknown, id: string) => unknown
+  ): Promise<AiVaultListResult> {
     entry.waiterCount++
     return new Promise((resolve, reject) => {
       let attached = true
@@ -109,7 +133,7 @@ export class AiVaultScanCoordinator {
           reject(scanCancellationError())
           return
         }
-        void this.attach(key, replacement, signal).then(resolve, reject)
+        void this.attach(key, replacement, signal, onReject).then(resolve, reject)
       }
       signal?.addEventListener('abort', onAbort, { once: true })
       entry.controller.signal.addEventListener('abort', onAbort, { once: true })
@@ -127,7 +151,7 @@ export class AiVaultScanCoordinator {
         (error) => {
           if (attached) {
             detach()
-            reject(error)
+            reject(onReject ? onReject(error, entry.id) : error)
           }
         }
       )

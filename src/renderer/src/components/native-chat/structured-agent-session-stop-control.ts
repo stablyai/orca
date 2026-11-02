@@ -3,6 +3,8 @@
 export function structuredAgentSessionStopControl(input: {
   /** The host has published this chat to this view. */
   published: boolean
+  /** Temporary: hosts without create.message.v1 still leave the prompt on this client. */
+  legacyLaunch?: { takeBackText: () => void }
   /** The Stop the host is asked for once it has published this chat. */
   host: {
     /** The host takes a Stop naming no turn (and this view holds its fence). */
@@ -15,24 +17,21 @@ export function structuredAgentSessionStopControl(input: {
     sending: boolean
     /** A Stop's part of that send: what has not gone out goes no further. */
     stopSends: () => void
-    /** Before the host publishes the chat: the launch's unsent text goes back to the composer. */
-    takeBackLaunchText: () => void
   }
 }): { canStop: boolean; stop: () => Promise<unknown> } {
-  const { published, host } = input
+  const { published, host, legacyLaunch } = input
   const { turnId, isWorking } = input.transportState
-  const { sending, stopSends, takeBackLaunchText } = input.sends
+  const { sending, stopSends } = input.sends
   return {
-    // Before the host publishes this chat to this view, nothing sent has reached it: a Stop takes
-    // back what this client holds, so a start that never answers cannot hold the message hostage.
-    canStop:
-      turnId !== null ||
-      (!published && sending) ||
-      (host.stopsConversation && (isWorking || sending)),
+    canStop: published
+      ? turnId !== null || (host.stopsConversation && (isWorking || sending))
+      : legacyLaunch !== undefined && sending,
     stop: () => {
       if (!published) {
-        takeBackLaunchText()
-        stopSends()
+        if (legacyLaunch) {
+          legacyLaunch.takeBackText()
+          stopSends()
+        }
         return Promise.resolve(null)
       }
       return host.stop(turnId, stopSends)

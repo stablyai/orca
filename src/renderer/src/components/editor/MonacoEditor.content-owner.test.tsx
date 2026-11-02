@@ -38,6 +38,8 @@ vi.mock('@monaco-editor/react', () => ({
   },
   loader: { config: vi.fn() }
 }))
+// Why: these wrapper contracts never mount Monaco.
+vi.mock('@/lib/monaco-setup', () => ({}))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({

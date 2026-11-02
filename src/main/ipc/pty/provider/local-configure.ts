@@ -10,8 +10,9 @@ import {
   stampWslOrchestrationCompatibilityHost
 } from '../../../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { buildPtyHostEnv } from '../host-env/assembly'
+import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
+import { getRuntimeSourceStamp } from '../../../runtime/host-descriptor'
 import {
   getCompatibleSelectedCodexHomePath,
   shouldStripInheritedOrcaCodexHome
@@ -93,6 +94,7 @@ export function configureLocalPtyProvider(args: {
         isWsl: ctx?.isWsl,
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+        terminalInlineImages: ptySettings?.terminalInlineImages,
         disabledTuiAgents: ptySettings?.disabledTuiAgents,
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
@@ -114,6 +116,10 @@ export function configureLocalPtyProvider(args: {
         runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx?.isWsl === true ? ctx.wslDistro : null
       )
+      stampRuntimeSourceEnv(
+        env,
+        getRuntimeSourceStamp(runtime, getAppEnvironment().getPath('userData'))
+      )
       if (ctx?.isWsl === true) {
         addOrcaWslInteropEnv(env)
       }
@@ -126,7 +132,6 @@ export function configureLocalPtyProvider(args: {
       }
       clearProviderPtyState(id)
       ptyOwnership.delete(id)
-      markClaudePtyExited(id)
       runtime?.onPtyExit(id, code, incarnationId, {
         providerExitObserved: true,
         ...(cause ? { cause } : {})

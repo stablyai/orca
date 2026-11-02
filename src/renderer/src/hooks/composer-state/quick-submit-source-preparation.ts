@@ -20,6 +20,7 @@ type QuickSubmitSourcePreparationInput = Pick<
 import { useCallback } from 'react'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
@@ -65,13 +66,15 @@ export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparat
       const submitLinkedPR =
         smartGitHubResolution.kind === 'none' ? effectiveLinkedPR : smartGitHubResolution.linkedPR
 
+      // Why: must match the seed shown in the name field, or an auto-managed Jira name reverts to lowercase on submit.
       const submitTitleName = submitLinkedWorkItem
-        ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem)
+        ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem, getJiraIssueKeyCasingSeedOptions())
         : null
 
       const nameIsAutoManaged = !isExplicitWorkspaceNameInput({
         name,
-        lastAutoName: lastAutoNameRef.current
+        lastAutoName: lastAutoNameRef.current,
+        lookupTextIsQuery: !linkedWorkItem && smartGitHubResolution.kind !== 'none'
       })
 
       const smartGitHubCreateNames =

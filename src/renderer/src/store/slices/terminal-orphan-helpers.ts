@@ -45,7 +45,6 @@ type OrphanTerminalCleanupState = Pick<
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
   | 'pendingInitialCwdByTabId'
-  | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
   | 'automaticAgentResumeClaimsByTabId'
   | 'nativeChatLaunchPromptByTabId'
@@ -103,7 +102,6 @@ export function buildOrphanTerminalCleanupPatch(
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
   | 'pendingInitialCwdByTabId'
-  | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
   | 'automaticAgentResumeClaimsByTabId'
   | 'nativeChatLaunchPromptByTabId'
@@ -123,7 +121,6 @@ export function buildOrphanTerminalCleanupPatch(
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,
       pendingStartupByTabId: state.pendingStartupByTabId,
       pendingInitialCwdByTabId: state.pendingInitialCwdByTabId,
-      pendingSetupSplitByTabId: state.pendingSetupSplitByTabId,
       pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
       automaticAgentResumeClaimsByTabId: state.automaticAgentResumeClaimsByTabId,
       nativeChatLaunchPromptByTabId: state.nativeChatLaunchPromptByTabId,
@@ -145,7 +142,6 @@ export function buildOrphanTerminalCleanupPatch(
   const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
   const nextPendingStartupByTabId = { ...state.pendingStartupByTabId }
   const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
-  const nextPendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
   const nextPendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
   const nextAutomaticAgentResumeClaimsByTabId = {
     ...state.automaticAgentResumeClaimsByTabId
@@ -172,7 +168,6 @@ export function buildOrphanTerminalCleanupPatch(
     delete nextTerminalLayoutsByTabId[orphanTabId]
     delete nextPendingStartupByTabId[orphanTabId]
     delete nextPendingInitialCwdByTabId[orphanTabId]
-    delete nextPendingSetupSplitByTabId[orphanTabId]
     delete nextPendingIssueCommandSplitByTabId[orphanTabId]
     delete nextAutomaticAgentResumeClaimsByTabId[orphanTabId]
     delete nextNativeChatLaunchPromptByTabId[orphanTabId]
@@ -203,7 +198,6 @@ export function buildOrphanTerminalCleanupPatch(
     terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
     pendingStartupByTabId: nextPendingStartupByTabId,
     pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
-    pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
     pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
     automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
     nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,

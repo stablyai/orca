@@ -17,6 +17,7 @@ import {
   type WireClaudeModel
 } from './claude-structured-catalog-listing'
 import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AgentModelCatalogLiveListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 /**
@@ -217,14 +218,10 @@ export async function readClaudeStructuredSessionOptions(
   timeoutMs: number | undefined
 ): Promise<StructuredAgentSessionLiveOptions> {
   const readMutationSequence = session.optionMutationSequence
-  // Before startup both requests would wait on initialize; answer from the saved options.
-  const [catalog, settings] =
-    session.startup.state === 'proven'
-      ? await Promise.all([
-          session.connection.supportedModels({ timeoutMs }).catch(() => null),
-          session.connection.getSettings({ timeoutMs }).catch(() => null)
-        ])
-      : [null, null]
+  const [catalog, settings] = await Promise.all([
+    session.connection.supportedModels({ timeoutMs }).catch(() => null),
+    session.connection.getSettings({ timeoutMs }).catch(() => null)
+  ])
   observeClaudeSettingsReadback(session, settings, readMutationSequence)
   return claudeStructuredSessionOptionsFrom(session, catalog, readMutationSequence)
 }
@@ -255,10 +252,22 @@ function observeClaudeSettingsReadback(
   }
 }
 
-/** The options as main already holds them, over `catalog`; asks the CLI nothing. Startup's
- *  settings readback is applied by the time a start proves, and the SDK answers `list_models`
- *  from its initialize result, so a started session's snapshot passes that result here rather
- *  than paying two round trips for what it already read. */
+/** The account listing with what the start's settings readback resolved, for the host to save
+ *  once; empty when the listing names no model. */
+export function claudeResolvedCatalogListing(
+  session: ClaudeSession,
+  catalog: unknown[] | null
+): { catalogListing?: AgentModelCatalogLiveListing } {
+  const listing = claudeCatalogListing(
+    session,
+    listedModels(catalog ? { models: catalog } : null),
+    { withConfiguredDefault: true }
+  )
+  return listing ? { catalogListing: listing } : {}
+}
+
+/** The options already held in memory, over `catalog`; asks the CLI nothing. The SDK answers
+ *  `list_models` from initialize, so open passes that result without another round trip. */
 export function claudeStructuredSessionOptionsFrom(
   session: ClaudeSession,
   catalog: unknown[] | null,

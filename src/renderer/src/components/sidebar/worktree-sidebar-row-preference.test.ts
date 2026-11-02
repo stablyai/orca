@@ -3,7 +3,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { HostSectionRow } from './host-section-rows'
+import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
 import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
 
 const repo: Repo = {
@@ -45,7 +45,6 @@ function item(workspace: Worktree, sectionKey: string): HostSectionRow {
     repo,
     depth: 0,
     groupDepth: 0,
-    lineageTrail: [],
     isLastLineageChild: false,
     lineageChildCount: 0
   }

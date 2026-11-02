@@ -7,7 +7,7 @@ import {
   AutomationList,
   AutomationRuns,
   AutomationUpdate
-} from './automation-schemas'
+} from '../../../../shared/rpc-contract/automation-params'
 
 function mutationOwner(
   id: string,

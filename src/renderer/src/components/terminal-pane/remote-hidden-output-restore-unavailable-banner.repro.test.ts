@@ -335,12 +335,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
             : [...current, ptyId]
       mockStoreState.ptyIdsByTabId = { ...byTab, [tabId]: next }
     }),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    clearWorktreeUnread: vi.fn(),
-    clearTerminalTabUnread: vi.fn(),
-    clearTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
@@ -536,7 +531,6 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
       }),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),
-      markWorktreeUnread: vi.fn(),
       observeTerminalGitHubPullRequestLink: vi.fn(),
       recordTerminalInput: vi.fn(),
       setAgentStatus: vi.fn(),
@@ -549,9 +543,8 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
       clearPaneForegroundAgent: vi.fn((paneKey: string) => {
         delete (mockStoreState.paneForegroundAgentByPaneKey as Record<string, unknown>)[paneKey]
       }),
-      markTerminalTabUnread: vi.fn(),
-      markTerminalPaneUnread: vi.fn(),
-      markAgentCompletionPaneUnread: vi.fn()
+      markTerminalBell: vi.fn(),
+      markAgentAttentionUnread: vi.fn()
     }
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -627,7 +620,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
 
     // Reveal triggered exactly one remote snapshot request against the owning runtime.
     expect(serializeBuffer).toHaveBeenCalledTimes(1)
-    expect(serializeBuffer).toHaveBeenNthCalledWith(1, { scrollbackRows: 5000 })
+    expect(serializeBuffer).toHaveBeenNthCalledWith(1, { scrollbackRows: 5000, repaintsPane: true })
 
     await advanceThroughNullRetryBudget(drive)
 
@@ -635,7 +628,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     // 1 initial + 3 deferred retries (50ms each), then abandonment unblocks live
     // output — but for a remote pane it must stay quiet, not claim loss.
     expect(serializeBuffer).toHaveBeenCalledTimes(4)
-    expect(serializeBuffer).toHaveBeenNthCalledWith(4, { scrollbackRows: 5000 })
+    expect(serializeBuffer).toHaveBeenNthCalledWith(4, { scrollbackRows: 5000, repaintsPane: true })
     expect(written.some((data) => data.includes('LIVE_AGENT_CHUNK'))).toBe(true)
     expect(written.some((data) => data.includes(BANNER_FRAGMENT))).toBe(false)
     // Remote pane never consulted local main recovery — the banner's "main

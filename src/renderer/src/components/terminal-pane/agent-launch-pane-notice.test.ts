@@ -31,10 +31,11 @@ describe("the pane of a launch whose agent isn't running", () => {
 })
 
 describe('which pane shows it', () => {
-  const tab = { agentLaunchPane: { leafId: 'leaf-1', outcome: { kind: 'unconfirmed' as const } } }
+  const outcome = { kind: 'not-started' as const, code: 'boom' }
+  const tab = { agentLaunchPane: { leafId: 'leaf-1', outcome } }
 
   it('the leaf the launch laid out, once its fate is final', () => {
-    expect(agentLaunchPaneOutcomeForLeaf(tab, 'leaf-1')).toEqual({ kind: 'unconfirmed' })
+    expect(agentLaunchPaneOutcomeForLeaf(tab, 'leaf-1')).toEqual(outcome)
     expect(agentLaunchPaneOutcomeForLeaf(tab, 'leaf-2')).toBeNull()
     expect(
       agentLaunchPaneOutcomeForLeaf({ agentLaunchPane: { leafId: 'leaf-1' } }, 'leaf-1')

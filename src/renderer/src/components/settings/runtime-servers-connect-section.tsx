@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { Button } from '../ui/button'
 import type { RuntimeHostDetails } from './runtime-environment-host-details'
-import { RuntimeHostAccessForm, type RuntimeHostAccessFailure } from './RuntimeHostAccessForm'
+import { RuntimeHostAccessForm } from './RuntimeHostAccessForm'
+import type { RuntimeHostAccessFailure } from './RuntimeHostAccessFailureAlert'
 import { RuntimeServerRow } from './runtime-server-row'
 
 type RuntimeServersConnectSectionProps = {

@@ -1,4 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import { Terminal } from '@xterm/headless'
 import {
   TerminalStreamOpcode,
@@ -10,6 +23,7 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import { writeHeadlessTerminal } from './pty-connection-test-async'
 import { buildFoldedImageReplayWrites } from './terminal-snapshot-replay-paint'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 // P2-5 / P2-7: a pushed snapshot is sent because the client's stream broke (dropped
 // output, reconnect, restore), so the pane's own history ends somewhere before the
@@ -55,23 +69,19 @@ describe('pushed remote snapshots never splice stale history above the image', (
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: vi.fn().mockResolvedValue({
-            ok: true,
-            result: {
-              terminal: {
-                handle: 'terminal-1',
-                tabId: 'tab-1',
-                leafId: 'pane:1',
-                worktreeId: 'wt-1'
-              }
-            }
-          }),
-          subscribe: runtimeSubscribe
+    stubRuntimeEnvironmentBridge({
+      call: vi.fn().mockResolvedValue({
+        ok: true,
+        result: {
+          terminal: {
+            handle: 'terminal-1',
+            tabId: 'tab-1',
+            leafId: 'pane:1',
+            worktreeId: 'wt-1'
+          }
         }
-      }
+      }),
+      subscribe: runtimeSubscribe
     })
   })
 

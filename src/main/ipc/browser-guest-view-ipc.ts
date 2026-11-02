@@ -112,6 +112,8 @@ export function registerBrowserGuestViewHandlers(): void {
         typeof args.enabled !== 'boolean' ||
         typeof args.emitViewport !== 'boolean' ||
         !isValidBrowserAnnotationViewportBridgeMarkers(args.markers) ||
+        (args.selectionId !== undefined &&
+          (typeof args.selectionId !== 'string' || args.selectionId.length > 80)) ||
         !isValidBrowserAnnotationViewportBridgeToken(args.token)
       ) {
         return false
@@ -132,6 +134,7 @@ export function registerBrowserGuestViewHandlers(): void {
           enabled: args.enabled,
           emitViewport: args.emitViewport,
           markers: args.markers,
+          selectionId: args.selectionId,
           token: args.token
         },
         resolveGuest

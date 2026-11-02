@@ -11,6 +11,7 @@ import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import { isAgentSessionOptions } from '../../../shared/agent-session-record'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
@@ -34,7 +35,9 @@ export function applyJournalSubmission(
     ...(row.origin === 'client' || row.origin === 'host' ? { origin: row.origin } : {}),
     // Kept as written, a newer build's kind too; an undecodable one as an empty kind, so neither
     // reads as a row without one.
-    ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {})
+    ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
+    // A stored value this build cannot read only loses the model it carried, never the row.
+    ...(isAgentSessionOptions(row.options) ? { options: row.options } : {})
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   // A message handed over later belongs to no turn until its handover names one.
@@ -46,7 +49,8 @@ export function applyJournalSubmission(
     itemId,
     0,
     journalRenderItem(itemId, 0, row.body, row, turnScope),
-    row.fence
+    // A person's message is no generation's work: its provenance is the fence that accepted it.
+    { fence: row.fence }
   )
 }
 

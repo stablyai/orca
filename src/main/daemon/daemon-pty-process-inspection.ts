@@ -1,6 +1,6 @@
 import { isShellProcess } from '../../shared/agent-detection'
 import { DaemonPtyBufferSnapshots } from './daemon-pty-buffer-snapshots'
-import { parsePtySessionId } from './pty-session-id'
+import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import {
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,

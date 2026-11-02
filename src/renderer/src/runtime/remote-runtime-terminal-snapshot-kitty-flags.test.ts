@@ -9,10 +9,11 @@ import {
 } from '../../../shared/terminal-stream-protocol'
 import {
   getRemoteRuntimeTerminalMultiplexer,
-  resetRemoteRuntimeTerminalMultiplexersForTests,
-  type RemoteRuntimeMultiplexedTerminal
+  resetRemoteRuntimeTerminalMultiplexersForTests
 } from './remote-runtime-terminal-multiplexer'
+import type { RemoteRuntimeMultiplexedTerminal } from './remote-runtime-terminal-multiplexer-types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 // `kittyKeyboardFlags` is an additive optional field on the existing
 // SnapshotStart frame (Rule 1 of docs/reference/remote-wire-compatibility.md).
@@ -93,19 +94,15 @@ describe('SnapshotStart kitty keyboard flags', () => {
     snapshots.length = 0
     resetRemoteRuntimeTerminalMultiplexersForTests()
     replaceRuntimeEnvironmentRevisions([])
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          subscribe: vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
-            server = new KittyFlagsServer((bytes) => callbacks.onBinary?.(bytes))
-            queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
-            return {
-              unsubscribe: vi.fn(),
-              sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => server.receive(bytes)
-            }
-          })
+    stubRuntimeEnvironmentBridge({
+      subscribe: vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
+        server = new KittyFlagsServer((bytes) => callbacks.onBinary?.(bytes))
+        queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+        return {
+          unsubscribe: vi.fn(),
+          sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => server.receive(bytes)
         }
-      }
+      })
     })
   })
 

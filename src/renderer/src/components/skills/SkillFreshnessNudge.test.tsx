@@ -37,12 +37,8 @@ function placement(
     physicalIdentity: 'physical-orca-cli',
     topology: 'canonical-copy',
     status: 'outdated',
-    installedReleaseRevision: 1,
-    installedAppVersion: '1.0.0',
-    currentReleaseRevision: 2,
     currentPackageDigest: 'current',
-    currentAppVersion: '2.0.0',
-    observedPackageDigest: 'old',
+    lockSource: 'stablyai/orca',
     errorCategory: null,
     ...overrides
   }
@@ -112,7 +108,7 @@ async function rerenderNudge(): Promise<void> {
   })
 }
 
-const DISMISSAL_KEY = ['physical-orca-cli', 'orca-cli', '2'].join('\0')
+const DISMISSAL_KEY = ['physical-orca-cli', 'orca-cli', 'current'].join('\0')
 
 describe('SkillFreshnessNudge', () => {
   beforeEach(() => {
@@ -149,6 +145,45 @@ describe('SkillFreshnessNudge', () => {
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })
 
+  it('counts only Orca-owned outdated skills', async () => {
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [
+        placement(),
+        placement({
+          id: 'computer-use',
+          name: 'computer-use',
+          physicalIdentity: 'physical-computer-use',
+          lockSource: 'acme/agent-skills'
+        }),
+        placement({
+          id: 'orchestration',
+          name: 'orchestration',
+          physicalIdentity: 'physical-orchestration',
+          lockSource: null
+        })
+      ],
+      eligibleUpdateNames: ['computer-use', 'orca-cli', 'orchestration'],
+      scanIssues: [],
+      scannedAt: 1
+    }
+    await renderNudge()
+
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+    expect(mocks.toastInfo.mock.calls[0]?.[0]).toBe('An installed Orca skill is out of date')
+    expect(mocks.toastInfo.mock.calls[0]?.[1].description).toContain('Update orca-cli so')
+  })
+
+  it('raises no nudge when every outdated copy came from somewhere else', async () => {
+    mocks.inventory = {
+      ...eligibleInventory(),
+      installations: [placement({ lockSource: 'acme/agent-skills' })]
+    }
+    await renderNudge()
+
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+  })
+
   it('opens the update dialog on action click without persisting a dismissal', async () => {
     await renderNudge()
 
@@ -166,7 +201,7 @@ describe('SkillFreshnessNudge', () => {
 
     mocks.inventory = {
       schemaVersion: 1,
-      installations: [placement({ status: 'current', observedPackageDigest: 'current' })],
+      installations: [placement({ status: 'current' })],
       eligibleUpdateNames: [],
       scanIssues: [],
       scannedAt: 2

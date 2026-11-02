@@ -1,4 +1,5 @@
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
+import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
@@ -81,13 +82,41 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   }
 
   // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord): void {
+  protected ingestSpoolRecord(record: SpoolRecord): Promise<void> | void {
     if (!isAgentHookSource(record.source)) {
       return
     }
+    const token = this.token
+    const statusHookGeneration = this.statusHookGeneration
+    const apply = () => {
+      if (
+        !this.statusHooksEnabled ||
+        this.token !== token ||
+        this.statusHookGeneration !== statusHookGeneration
+      ) {
+        throw new Error('Status hook spool replay interrupted')
+      }
+      this.applySpoolHook(record, body)
+    }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
+    const pending = checkHookOwnerPresence(this.state, record.source, body, this.env, (paneKey) =>
+      this.checkAgentPresence(paneKey)
+    )
+    return pending ? pending.then(apply) : apply()
+  }
+
+  private applySpoolHook(record: SpoolRecord, body: unknown): void {
+    if (!isAgentHookSource(record.source)) {
+      return
+    }
     const normalized = this.normalizeLocalHookPayload(record.source, body, true)
     if (!normalized.event) {
+      return
+    }
+    const exit = this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(normalized.event.paneKey))
+    // Why: a hook spooled a full second before a proven exit (stamps are whole seconds) describes
+    // the dead agent; replaying it would install an obsolete owner. A same-second one may not.
+    if (exit && record.receivedAt + 1000 <= exit.at) {
       return
     }
     const replay = { ...normalized.event, isReplay: true as const }

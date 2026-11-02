@@ -10,6 +10,9 @@ import { gitExecFileAsync } from '../runner'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 import { bulkPathspecCommands, literalPathspec } from './git-pathspec'
 import { encodeGitPathspecs } from '../../../shared/git-pathspec-stdin'
+import { redoWriteForDriveCheckoutSuspects } from './drive-checkout-suspect-writes'
+
+const DISCARD_WRITE = ['restore', '--worktree'] as const
 
 /**
  * Discard working tree changes for a file.
@@ -44,6 +47,7 @@ export async function discardChanges(
       await gitExecFileAsync(['restore', '--worktree', '--', literalPathspec(filePath, options)], {
         ...gitOptionsForWorktree(worktreePath, options)
       })
+      await redoWriteForDriveCheckoutSuspects(worktreePath, [filePath], DISCARD_WRITE, options)
       return
     }
 
@@ -134,6 +138,7 @@ export async function bulkDiscardChanges(
             )
           }
         )
+        await redoWriteForDriveCheckoutSuspects(worktreePath, trackedPaths, DISCARD_WRITE, options)
       }
     )
   } finally {

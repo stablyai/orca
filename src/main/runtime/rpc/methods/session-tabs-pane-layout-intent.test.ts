@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { SESSION_TAB_METHODS } from './session-tabs'
-import { UpdatePaneLayout } from './session-tabs-schemas'
+import { UpdatePaneLayout } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 
 const LAYOUT_PARAMS = {
   worktree: 'id:wt-1',

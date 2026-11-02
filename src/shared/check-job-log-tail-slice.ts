@@ -1,13 +1,19 @@
 import {
+  clampUtf8TextPrefix,
   clampUtf8TextTail,
   getUtf8ByteLength,
   isUtf8ByteLengthWithinLimit
 } from './utf8-byte-limits'
-import { ownRetainedString } from './own-retained-string'
+import {
+  stripAnsiEscapeSequences,
+  TERMINAL_CONTROL_CHARACTER_PATTERN
+} from './ansi-escape-sequences'
+import { PR_CHECK_LOG_TAIL_BYTES, sanitizeCheckJobLogExcerpt } from './check-job-log-excerpt'
+
+export { PR_CHECK_LOG_TAIL_BYTES } from './check-job-log-excerpt'
 
 export const PR_CHECK_LOG_TAIL_LINES = 200
 export const PR_CHECK_LOG_TAIL_RECENT_LINES = 100
-export const PR_CHECK_LOG_TAIL_BYTES = 16 * 1024
 export const PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES = 2
 export const PR_CHECK_LOG_TAIL_MAX_EARLIER_LINES = 30
 export const PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR = '… earlier errors …'
@@ -16,6 +22,23 @@ export const PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR = '… earlier errors …'
 // error markers so failures remain visible without downloading the full job log.
 const ERROR_LINE_PATTERN =
   /(?:##\[error\]|::error::|::error\b|\berror:|FAILED|exit code|ENOENT|EACCES|panic:|AssertionError)/i
+
+function matchesErrorMarker(candidate: string): boolean {
+  return ERROR_LINE_PATTERN.test(
+    stripAnsiEscapeSequences(candidate).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
+  )
+}
+
+function hasErrorMarker(rawLine: string): boolean {
+  if (isUtf8ByteLengthWithinLimit(rawLine, PR_CHECK_LOG_TAIL_BYTES)) {
+    return matchesErrorMarker(rawLine)
+  }
+  const windowBytes = PR_CHECK_LOG_TAIL_BYTES / 2
+  return (
+    matchesErrorMarker(clampUtf8TextPrefix(rawLine, windowBytes)) ||
+    matchesErrorMarker(clampUtf8TextTail(rawLine, windowBytes).text)
+  )
+}
 
 function applyLogTailByteCap(text: string): string {
   if (isUtf8ByteLengthWithinLimit(text, PR_CHECK_LOG_TAIL_BYTES)) {
@@ -26,9 +49,12 @@ function applyLogTailByteCap(text: string): string {
 
 function joinLogExcerptWithByteCap(prefixLines: string[], recentLines: string[]): string {
   const prefix = prefixLines.join('\n')
-  // UTF-16 length is a lower bound; oversized prefixes need no exact byte count.
+  // Oversized prefixes need no exact byte count, including multibyte text.
   const prefixByteLength =
-    prefix.length >= PR_CHECK_LOG_TAIL_BYTES ? PR_CHECK_LOG_TAIL_BYTES : getUtf8ByteLength(prefix)
+    prefix.length >= PR_CHECK_LOG_TAIL_BYTES ||
+    !isUtf8ByteLengthWithinLimit(prefix, PR_CHECK_LOG_TAIL_BYTES)
+      ? PR_CHECK_LOG_TAIL_BYTES
+      : getUtf8ByteLength(prefix)
   if (prefixByteLength >= PR_CHECK_LOG_TAIL_BYTES) {
     return clampUtf8TextTail(prefix, PR_CHECK_LOG_TAIL_BYTES).text
   }
@@ -43,7 +69,7 @@ function collectEarlierErrorLineIndexes(lines: string[], recentStart: number): n
   const indexes = new Set<number>()
   // Newest-first errors and descending windows add the newest unique indexes first.
   for (let index = recentStart - 1; index >= 0; index -= 1) {
-    if (!ERROR_LINE_PATTERN.test(lines[index] ?? '')) {
+    if (!hasErrorMarker(lines[index] ?? '')) {
       continue
     }
     const contextStart = Math.max(0, index - PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES)
@@ -59,7 +85,7 @@ function collectEarlierErrorLineIndexes(lines: string[], recentStart: number): n
 }
 
 function buildCheckLogTail(logText: string): string {
-  const lines = logText.split(/\r?\n/)
+  const lines = logText.split(/\r\n|\r|\n/)
   const recentStart = Math.max(0, lines.length - PR_CHECK_LOG_TAIL_RECENT_LINES)
   const recentLines = lines.slice(recentStart)
 
@@ -84,5 +110,5 @@ function buildCheckLogTail(logText: string): string {
 
 export function sliceCheckLogTail(logText: string): string {
   // Cached excerpts must not pin the downloaded log behind a small V8 slice.
-  return ownRetainedString(buildCheckLogTail(logText))
+  return sanitizeCheckJobLogExcerpt(buildCheckLogTail(logText))
 }

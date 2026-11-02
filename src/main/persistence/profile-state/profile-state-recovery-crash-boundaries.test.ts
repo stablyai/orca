@@ -54,7 +54,7 @@ vi.mock('../../telemetry/client', () => ({ track: () => {} }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -90,7 +90,7 @@ const selectedJson = JSON.stringify(selectedState)
 const oldJson = JSON.stringify(oldState)
 
 beforeAll(() => {
-  bundle = buildRecoveryCrashProcess(suiteRoot)
+  bundle = buildRecoveryCrashProcess(suiteRoot).bundle
 })
 beforeEach(() => {
   setSecretStore({
@@ -488,12 +488,6 @@ describe('seeded recovery fixture copies', () => {
       expect(readFileSync(seed.exportPath, 'utf8')).toBe(selectedJson)
     }
   )
-
-  it('rejects an incomplete copied WAL family before a recovery child starts', async () => {
-    const incomplete = await fixture('json', false)
-    rmSync(`${incomplete.databasePath}-wal`)
-    expect(() => cloneFixture(incomplete)).toThrow(/ENOENT/)
-  })
 })
 
 it.each(['first-export', 'authority-marker'] as const)(

@@ -1,5 +1,4 @@
 import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
@@ -21,8 +20,7 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 export function waitForAgentDraftInputReady(
   ptyId: string,
   timeoutMs: number,
-  readySignal: DraftPasteReadySignal,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  readySignal: DraftPasteReadySignal
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let settled = false
@@ -75,12 +73,7 @@ export function waitForAgentDraftInputReady(
     }
 
     if (isRemoteRuntimePtyId(ptyId)) {
-      void subscribeToRuntimeTerminalData(
-        settings,
-        ptyId,
-        `desktop:paste-ready:${ptyId}`,
-        observeData
-      )
+      void subscribeToRuntimeTerminalData(ptyId, `desktop:paste-ready:${ptyId}`, observeData)
         .then((remoteUnsubscribe) => {
           if (settled) {
             remoteUnsubscribe()

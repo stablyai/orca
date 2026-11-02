@@ -9,6 +9,11 @@ import {
 
 const FILE_COUNT_PATH = /^\d+ files?$/
 
+/** Codex reports a change to several files under the path `N files`, which names no file. */
+export function isNativeChatFileCountPath(path: string): boolean {
+  return FILE_COUNT_PATH.test(path)
+}
+
 /** A move is appended to the patch body as prose rather than a header field, on
  *  every lane that carries the body as text. Left in place it renders as a
  *  numbered line of the file it moved.
@@ -44,7 +49,7 @@ export function editFilesFromPatchText(
   callerPath: string | null,
   summaryOnly = false
 ): NativeChatEditFileSummary[] | null {
-  if (callerPath !== null && FILE_COUNT_PATH.test(callerPath)) {
+  if (callerPath !== null && isNativeChatFileCountPath(callerPath)) {
     // A file count cannot name a card, regardless of the patch contents.
     return null
   }

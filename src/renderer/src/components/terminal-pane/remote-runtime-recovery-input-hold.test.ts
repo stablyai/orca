@@ -141,4 +141,20 @@ describe('remote runtime recovery input hold', () => {
     await expect(accepted).resolves.toBe(false)
     expect(hold.isHolding()).toBe(false)
   })
+
+  it('lets only the latest connect settle typing held before the pane bound a terminal', async () => {
+    const hold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+    const { sent, writer } = createWriter()
+    hold.enqueue(null, 'pre-entry ', 'driving')
+    const superseded = hold.expect(endpoint)
+    const latest = hold.expect(endpoint)
+    hold.enqueue(null, 'typed', 'driving')
+
+    hold.settleExpectation(superseded, false)
+    expect(hold.isHoldingBeforeBind()).toBe(true)
+    hold.settleExpectation(latest, true)
+    hold.release(endpoint, writer)
+
+    await vi.waitFor(() => expect(sent).toEqual(['pre-entry typed']))
+  })
 })

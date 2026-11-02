@@ -6,7 +6,7 @@ import {
 import { acpWindowUsage } from './acp-context-usage'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import type { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
-import type { AcpSubagentTimeline } from './acp-subagent-timeline'
+import type { AcpSubagents } from './acp-subagents'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 import type { SessionNotification } from './generated/acp-protocol.generated'
 import { acpNamedTextKey } from './acp-turn-messages'
@@ -29,7 +29,7 @@ export function acpSessionUpdate(
     tools: AcpToolTimeline
     dialect: AcpDialect
     backgroundTasks: AcpBackgroundTaskTimeline
-    subagents: AcpSubagentTimeline
+    subagents: AcpSubagents
     messageKey?: string
   }
 ): ProviderTimelineEvent[] {

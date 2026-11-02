@@ -1,8 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
-import { admitProcessTreeKill } from './child-process/process-tree-kill-gate'
-import { GrowingByteBuffer } from './growing-byte-buffer'
+import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
+import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 
 export const DEFAULT_MAX_CAPTURE_BYTES = 1024 * 1024
 const CANCEL_FORCE_KILL_DELAY_MS = 5_000

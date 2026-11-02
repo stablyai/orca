@@ -2,7 +2,10 @@ import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { toast } from 'sonner'
 import type { OrcadManagedPendingMigrationRow } from '../../../../shared/orcad-managed-runtime'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import {
+  getOrcadSshDeployment,
+  type PublicKnownRuntimeEnvironment
+} from '../../../../shared/runtime-environments'
 import type { SshTarget } from '../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -12,6 +15,7 @@ import { Label } from '../ui/label'
 import { ManagedServerRow } from './ManagedServerRow'
 import { RuntimeSshAccessControl } from './RuntimeSshAccessControl'
 import { SshTargetSelect } from './SshTargetSelect'
+import { WslHostsSection } from './WslHostsSection'
 import { managedServerOutcomeLabel, migrationPhaseLabel } from './managed-server-copy'
 
 type ManagedServersSectionProps = {
@@ -57,11 +61,14 @@ export function ManagedServersSection({
   if (!api) {
     return null
   }
-  const managed = environments.filter((environment) => environment.orcadDeployment)
+  // Why not WSL hosts: they have their own section and none of the SSH lifecycle actions.
+  const managed = environments.filter(
+    (environment) => environment.orcadDeployment && environment.orcadDeployment.kind !== 'wsl'
+  )
   const paired = environments.filter((environment) => !environment.orcadDeployment)
   // Why: a host that already runs, or is moving to, a managed server can't take another.
   const busyTargetIds = new Set([
-    ...managed.map((environment) => environment.orcadDeployment?.sshTargetId),
+    ...managed.map((environment) => getOrcadSshDeployment(environment)?.sshTargetId),
     ...pending.map((row) => row.sshTargetId)
   ])
   const emptyTargets = targets.filter(
@@ -201,6 +208,8 @@ export function ManagedServersSection({
           ))}
         </div>
       ) : null}
+
+      <WslHostsSection onChanged={onChanged} />
 
       {paired.length > 0 ? (
         <div className="space-y-1">

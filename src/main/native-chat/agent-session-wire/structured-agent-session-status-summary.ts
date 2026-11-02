@@ -7,6 +7,7 @@ import type { StructuredAgentSessionStatusState } from './structured-agent-sessi
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
+import { isAgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
@@ -37,6 +38,7 @@ export function structuredAgentSessionStatusSummary({
   // The journal has no model: the record's acknowledged options are where a mid-session
   // switch lands, so the row follows whichever is in force.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
+  const permissionMode = record?.permissionMode
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -56,6 +58,7 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
+    ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),

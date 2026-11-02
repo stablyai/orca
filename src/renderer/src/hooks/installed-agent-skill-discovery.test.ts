@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const discoverSkillsForRuntimeTarget = vi.hoisted(() =>
   vi.fn<

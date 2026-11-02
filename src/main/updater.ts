@@ -106,6 +106,9 @@ export function dismissAvailableUpdate(): void {
   updater.dismissAvailableUpdate()
 }
 
-export function setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
+export function setupAutoUpdater(
+  mainWindow: BrowserWindow | null,
+  opts?: UpdaterSetupOptions
+): void {
   updater.setupAutoUpdater(mainWindow, opts, IS_PHORCA_MANAGED_BUILD)
 }

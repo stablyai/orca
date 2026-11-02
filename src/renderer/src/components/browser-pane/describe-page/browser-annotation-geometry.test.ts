@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import {
+  applyBrowserAnnotationViewportReport,
   createBrowserAnnotationPayload,
   getBrowserOverlayAnchor,
   getLiveBrowserAnnotationRect
@@ -109,5 +110,96 @@ describe('browser annotation geometry', () => {
     const source = payload()
     expect(createBrowserAnnotationPayload(source).screenshot).toBeNull()
     expect(createBrowserAnnotationPayload(source).target.selector).toBe('button')
+  })
+})
+
+describe('browser annotation card follows the live element', () => {
+  const box = (left: number, top: number, width: number, height: number) => ({
+    getBoundingClientRect: () => ({ left, top, width, height })
+  })
+  // Clicked at viewport (10, 20) with window scroll (5, 15).
+  const clicked = payload({ isFixed: false })
+
+  it('uses the guest-measured box over the click-time one after a box inside the page scrolls', () => {
+    // Window scroll did not move, so the click-time math alone would leave the card in place.
+    const viewport = applyBrowserAnnotationViewportReport(
+      { scrollX: 0, scrollY: 0, version: 0 },
+      { scrollX: 5, scrollY: 15, target: { x: 10, y: 300, width: 40, height: 20 } }
+    )
+    expect(getLiveBrowserAnnotationRect(clicked, viewport)).toEqual({
+      x: 10,
+      y: 300,
+      width: 40,
+      height: 20
+    })
+    const pane = box(0, 0, 900, 900)
+    expect(getBrowserOverlayAnchor(clicked, pane, pane, viewport)).toEqual({
+      x: 30,
+      y: 320,
+      side: 'bottom'
+    })
+  })
+
+  it('follows the element after a pane resize reflows it', () => {
+    const viewport = applyBrowserAnnotationViewportReport(
+      { scrollX: 5, scrollY: 15, version: 1 },
+      { scrollX: 5, scrollY: 15, target: { x: 200, y: 20, width: 300, height: 20 } }
+    )
+    const pane = box(0, 0, 600, 900)
+    expect(getBrowserOverlayAnchor(clicked, pane, pane, viewport)).toEqual({
+      x: 350,
+      y: 40,
+      side: 'bottom'
+    })
+  })
+
+  it('converts guest pixels to pane pixels when the page is zoomed', () => {
+    // 120% page zoom: the guest lays out 1000 CSS pixels across a 1200-pixel-wide view.
+    const viewport = applyBrowserAnnotationViewportReport(
+      { scrollX: 0, scrollY: 0, version: 0 },
+      {
+        scrollX: 0,
+        scrollY: 0,
+        viewportWidth: 1000,
+        target: { x: 100, y: 50, width: 50, height: 10 }
+      }
+    )
+    const pane = box(0, 0, 1200, 900)
+    expect(getBrowserOverlayAnchor(clicked, pane, pane, viewport)).toEqual({
+      x: 150,
+      y: 72,
+      side: 'bottom'
+    })
+  })
+
+  it('picks the side with the measured card height once the card has rendered', () => {
+    const fixed = payload({
+      isFixed: true,
+      rectViewport: { x: 100, y: 40, width: 100, height: 20 }
+    })
+    const pane = box(0, 0, 900, 310)
+    const viewport = { scrollX: 0, scrollY: 0, version: 0 }
+    // 250 pixels below the target: too shallow for the assumed 240-pixel card plus margin.
+    expect(getBrowserOverlayAnchor(fixed, pane, pane, viewport).side).toBe('right')
+    expect(getBrowserOverlayAnchor(fixed, pane, pane, viewport, 200).side).toBe('bottom')
+  })
+
+  it('keeps the same viewport state when a report changes nothing', () => {
+    const target = { x: 1, y: 2, width: 3, height: 4 }
+    const report = { scrollX: 1, scrollY: 2, viewportWidth: 800, target }
+    const first = applyBrowserAnnotationViewportReport(
+      { scrollX: 0, scrollY: 0, version: 0 },
+      report
+    )
+    expect(first.version).toBe(1)
+    expect(applyBrowserAnnotationViewportReport(first, { ...report, target: { ...target } })).toBe(
+      first
+    )
+    const released = applyBrowserAnnotationViewportReport(first, {
+      scrollX: 1,
+      scrollY: 2,
+      viewportWidth: 800
+    })
+    expect(released).toEqual({ scrollX: 1, scrollY: 2, viewportWidth: 800, version: 2 })
   })
 })

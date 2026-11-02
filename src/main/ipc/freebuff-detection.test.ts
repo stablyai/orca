@@ -3,7 +3,7 @@ import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
-} from './tui-agent-detection-commands'
+} from '../../shared/tui-agent-detection-commands'
 
 describe('Freebuff detection', () => {
   it.each(['darwin', 'linux', 'win32', 'wsl'] as const)(

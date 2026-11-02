@@ -13,7 +13,6 @@ export function mountCreatedWorktreeStartupTabsInBackground(worktreeId: string):
     .filter(
       (tabId) =>
         state.pendingStartupByTabId[tabId] !== undefined ||
-        state.pendingSetupSplitByTabId[tabId] !== undefined ||
         state.pendingIssueCommandSplitByTabId[tabId] !== undefined
     )
   if (tabIds.length > 0) {

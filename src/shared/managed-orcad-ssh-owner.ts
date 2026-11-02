@@ -27,3 +27,9 @@ export function isEphemeralRuntimeSshOwner(owner: SshTargetOwner | undefined): b
     owner?.type === 'on-demand-runtime' && getLegacyManagedOrcadOwnerEnvironmentId(owner) === null
   )
 }
+
+/** Every VM a recipe makes shares its label, so the runtime id keeps their server names unique. */
+export function managedOrcadServerName(target: Pick<SshTarget, 'label' | 'owner'>): string {
+  const runtimeId = isEphemeralRuntimeSshOwner(target.owner) ? target.owner?.runtimeId : undefined
+  return runtimeId ? `${target.label} VM ${runtimeId.slice(-8)}` : target.label
+}

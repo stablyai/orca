@@ -6,7 +6,10 @@ import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
 import { emptyDormantPayload } from '../persistence/migrating-orcad-catalog/orcad-source-dormant-state'
-import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
+import {
+  createOrcadMigrationManifest,
+  describeOversizedOrcadMigrationPayload
+} from './orcad-migration-manifest-export'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -127,7 +130,7 @@ describe('orcad migration manifest export', () => {
       { migrationId: 'migration-legacy', now: () => new Date('2026-08-30T12:00:00.000Z') }
     )
 
-    expect(manifest.source.sshTargetGeneration).toBeNull()
+    expect(manifest.source).toMatchObject({ sshTargetGeneration: null })
     expect(target.generation).toBeUndefined()
   })
 
@@ -164,5 +167,23 @@ describe('orcad migration manifest export', () => {
     expect(manifest.payload.dormantState?.workspaceSession?.tabsByWorktree).toHaveProperty(
       'repo-prod::/srv/worktree'
     )
+  })
+})
+
+describe('an oversized manifest', () => {
+  it('names its largest parts and what to trim instead of a bare code', () => {
+    const message = describeOversizedOrcadMigrationPayload({
+      repositories: [repo('repo-1', TARGET.id)],
+      projectGroups: [],
+      folderWorkspaces: [],
+      dormantState: {
+        ...emptyDormantPayload(),
+        workspaceSession: { ...getDefaultWorkspaceSession(), activeRepoId: 'x'.repeat(4096) }
+      }
+    })
+    expect(message).toMatch(/^This SSH host's saved state is too large to move/)
+    expect(message).toContain('Largest parts: saved tabs and panes (5 KB)')
+    expect(message).toContain('Close tabs you no longer need')
+    expect(message).toContain('(orcad_migration_manifest_too_large)')
   })
 })

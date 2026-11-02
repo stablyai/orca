@@ -270,6 +270,7 @@ export function SessionRowTrailingActions({
             onResumeInNewCli={onResumeInNewCli}
             onJumpToOriginalPane={onJumpToOriginalPane}
             showJumpToWorktree={showJumpToWorktree}
+            jumpWorkspaceId={worktreeInfo?.worktreeId}
             onJumpToWorktree={onJumpToWorktree}
             onCopyResume={onCopyResume}
             onCopyId={onCopyId}

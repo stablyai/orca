@@ -30,7 +30,7 @@ vi.mock('@/runtime/runtime-host-contact-regained', () => ({
     return subscriptionState.unsubscribeContact
   }
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: subscriptionState.subscribeRuntimeFileChanges
 }))
 vi.mock('./editor-external-watch-targets', () => ({

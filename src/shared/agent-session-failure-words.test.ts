@@ -24,7 +24,7 @@ import {
 /** What Orca's own text looks like: a code or marker, a uuid, a path, an exception. */
 const ORCA_INTERNAL = /\b[a-z]+_[a-z_]+\b|[0-9a-f]{8}-[0-9a-f]{4}-|[/\\][\w.-]+[/\\]|Error:|ENOENT/
 
-const SURFACES: readonly AgentSessionFailureSurface[] = ['row', 'rejection']
+const SURFACES: readonly AgentSessionFailureSurface[] = ['row', 'rejection', 'answer']
 const LEGACY_MARKER_KINDS: ReadonlySet<SubmissionRejectionKind> = new Set([
   'cancelled',
   'writeFailed',
@@ -76,7 +76,11 @@ describe('the words written beside a failure fact', () => {
           expect(sentence).not.toMatch(ORCA_INTERNAL)
           if (surface === 'row') {
             expect(agentSessionFailureWords(fact, { ...context, surface }).text).toBe(sentence)
-          } else if (isSubmissionRejectionFact(fact) && !LEGACY_MARKER_KINDS.has(fact.kind)) {
+          } else if (
+            surface === 'rejection' &&
+            isSubmissionRejectionFact(fact) &&
+            !LEGACY_MARKER_KINDS.has(fact.kind)
+          ) {
             expect(agentSessionFailureWords(fact, { ...context, surface }).reason).toBe(sentence)
           }
         }

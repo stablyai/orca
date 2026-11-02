@@ -1,11 +1,14 @@
-import { evaluateOrcadActivation, type OrcadActivationVerdict } from './orcad-activation-gate'
-import { orcadActivationTransactionRoot } from './orcad-activation-transaction'
-import type { OrcadReadinessParse } from './orcad-remote-launch'
+import {
+  evaluateOrcadActivation,
+  type OrcadActivationVerdict
+} from '../managed-server/activation/orcad-activation-gate'
+import { orcadActivationTransactionRoot } from '../managed-server/activation/orcad-activation-transaction'
+import type { OrcadReadinessParse } from '../managed-server/install/orcad-remote-launch'
 import {
   launchOrcadAndAwaitReadiness,
   type OrcadRemoteExecTarget
-} from './orcad-remote-runtime-control'
-import { isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
+} from '../managed-server/install/orcad-remote-runtime-control'
+import { isUnconfirmedSshCommandTermination } from './remote-exec/remote-exec-command'
 
 type CandidateLaunchTarget = Parameters<typeof launchOrcadAndAwaitReadiness>[0] &
   OrcadRemoteExecTarget & {

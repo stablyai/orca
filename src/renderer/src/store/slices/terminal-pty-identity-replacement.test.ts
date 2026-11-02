@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTestStore, makeTab, seedStore, makeWorktree } from './store-test-helpers'
+import { createTestStore, makeTab, seedStore } from './store-test-helpers'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
 {
@@ -38,13 +38,13 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
           [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: replacementPtyId })]
         },
         ptyIdsByTabId: { 'tab-1': [replacementPtyId] },
-        pendingCodexPaneRestartIds: { [stalePtyId]: true }
+        pendingPaneAccountRestarts: { [stalePtyId]: 'codex' }
       })
 
       store.getState().updateTabPtyId('tab-1', replacementPtyId, stalePtyId)
 
       expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([replacementPtyId])
-      expect(store.getState().pendingCodexPaneRestartIds).toEqual({ [replacementPtyId]: true })
+      expect(store.getState().pendingPaneAccountRestarts).toEqual({ [replacementPtyId]: 'codex' })
     })
 
     it('publishes pane and tab replacement identities in one store commit', () => {
@@ -284,7 +284,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
       const normalized = store.getState().terminalLayoutsByTabId['tab-1']
       expect(normalized.ptyIdsByLeafId).not.toEqual(duplicate.ptyIdsByLeafId)
 
-      store.getState().markTerminalPaneUnread('tab-1:leaf-a', 'terminal-bell')
+      store.setState({ unreadTerminalPanes: { 'tab-1:leaf-a': 'terminal-bell' } })
       const beforeUnread = { ...store.getState().unreadTerminalPanes }
 
       for (let i = 0; i < REPEATS; i += 1) {
@@ -309,75 +309,6 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
       store.getState().setTabLayout('tab-1', null)
       unsubscribe()
       expect(wakeups).toBe(0)
-    })
-
-    it('guards SSH acknowledgements by captured edit identity and target', () => {
-      const store = createTestStore()
-      const worktreeA = 'repo-a::/tmp/a'
-      const worktreeB = 'repo-b::/tmp/b'
-      store.setState({
-        repos: [
-          {
-            id: 'repo-a',
-            path: '/tmp',
-            displayName: 'Repo A',
-            badgeColor: '#000',
-            addedAt: 0,
-            connectionId: 'target-a'
-          },
-          {
-            id: 'repo-b',
-            path: '/tmp',
-            displayName: 'Repo B',
-            badgeColor: '#000',
-            addedAt: 0,
-            connectionId: 'target-b'
-          }
-        ],
-        worktreesByRepo: {
-          'repo-a': [makeWorktree({ id: worktreeA, repoId: 'repo-a', hostId: 'ssh:target-a' })],
-          'repo-b': [makeWorktree({ id: worktreeB, repoId: 'repo-b', hostId: 'ssh:target-b' })]
-        },
-        tabsByWorktree: {
-          [worktreeA]: [makeTab({ id: 'tab-a', worktreeId: worktreeA })],
-          [worktreeB]: [makeTab({ id: 'tab-b', worktreeId: worktreeB })]
-        }
-      })
-      const empty = { root: null, activeLeafId: null, expandedLeafId: null }
-
-      store.getState().setTabLayout('tab-a', {
-        ...empty,
-        root: { type: 'leaf', leafId: 'leaf-initial' },
-        activeLeafId: 'leaf-initial'
-      })
-      store.getState().setTabLayout('tab-a', empty)
-      const firstEdit = store.getState().pendingDirectSshLayoutEditsByTabId['tab-a']
-      store.getState().setTabLayout('tab-a', {
-        ...empty,
-        root: { type: 'leaf', leafId: 'leaf-a' },
-        activeLeafId: 'leaf-a'
-      })
-      const currentEdit = store.getState().pendingDirectSshLayoutEditsByTabId['tab-a']
-      expect(currentEdit).not.toBe(firstEdit)
-
-      store.getState().acknowledgeDirectSshLayoutEdits({ 'tab-a': firstEdit })
-      expect(store.getState().pendingDirectSshLayoutEditsByTabId['tab-a']).toBe(currentEdit)
-
-      store.getState().setTabLayout('tab-b', {
-        ...empty,
-        root: { type: 'leaf', leafId: 'leaf-initial-b' },
-        activeLeafId: 'leaf-initial-b'
-      })
-      store.getState().setTabLayout('tab-b', empty)
-      const targetBEdit = store.getState().pendingDirectSshLayoutEditsByTabId['tab-b']
-      store.getState().acknowledgeDirectSshLayoutEdits({ 'tab-a': currentEdit })
-      expect(store.getState().pendingDirectSshLayoutEditsByTabId['tab-a']).toBeUndefined()
-      expect(store.getState().pendingDirectSshLayoutEditsByTabId['tab-b']).toBe(targetBEdit)
-
-      store.getState().acknowledgeDirectSshLayoutEdits({
-        'tab-b': { targetId: 'target-a', root: targetBEdit.root }
-      })
-      expect(store.getState().pendingDirectSshLayoutEditsByTabId['tab-b']).toBe(targetBEdit)
     })
   })
 }

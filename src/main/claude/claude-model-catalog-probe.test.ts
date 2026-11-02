@@ -18,7 +18,7 @@ import {
 
 type ListingCall = Parameters<typeof runAgentModelCatalogListing>
 
-const AUTH_POLICY = { stripAuthEnv: false } as const
+const AUTH_POLICY = { account: 'system' } as const
 
 const HOME = (path: string): { variable: string; path: string } => ({
   variable: 'CLAUDE_CONFIG_DIR',
@@ -100,6 +100,32 @@ describe('claude model catalog probe', () => {
       expect(options.inheritedEnv).toEqual(invocation.env)
     }
   )
+
+  // The rows `claude` 2.1.280 lists: what a chat naming no model runs, and its auto support.
+  it('marks the row the CLI default resolves to and keeps each row auto support', async () => {
+    const listing = `${JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'orca-model-discovery',
+        response: {
+          models: [
+            { value: 'default', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
+            { value: 'opus[1m]', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
+            { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', supportsAutoMode: null }
+          ]
+        }
+      }
+    })}\n`
+    const probe = createClaudeModelCatalogProbe({ ...probeDeps(), runListing: async () => listing })
+    const { models } = await probe(HOME('/homes/account-a'))
+    expect(
+      models.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))
+    ).toEqual([
+      { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
+      { id: 'haiku', isDefault: false, supportsAutoMode: undefined }
+    ])
+  })
 
   it('pins no CLAUDE_CONFIG_DIR for the CLI default home, exactly as a session spawn does', async () => {
     const envs: (NodeJS.ProcessEnv | undefined)[] = []
@@ -198,7 +224,7 @@ describe('Claude catalog availability', () => {
     const runListing = vi.fn(async () => LISTED)
     const probe = createClaudeModelCatalogProbe({
       ...probeDeps(),
-      resolveAuthPolicy: () => ({ stripAuthEnv: managed }),
+      resolveAuthPolicy: () => ({ account: managed ? ('managed' as const) : ('system' as const) }),
       runListing
     })
     const result = await probe(HOME('/homes/a'))

@@ -114,8 +114,17 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['automations', 'runs'],
     summary: 'List automation run history',
-    usage: 'orca automations runs [--id <automation-id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id'],
-    examples: ['orca automations runs', 'orca automations runs --id 2f9e... --json']
+    usage:
+      'orca automations runs [--id <automation-id>] [--limit <n>] [--cursor <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'limit', 'cursor'],
+    notes: [
+      'Without --limit or --cursor, reads the whole history in pages, so a large history from a paired server still fits in its replies.',
+      'With --limit or --cursor, prints one page (newest first, at most 100 runs) and its nextCursor; pass that as --cursor for the next page.'
+    ],
+    examples: [
+      'orca automations runs',
+      'orca automations runs --id 2f9e... --json',
+      'orca automations runs --limit 20 --json'
+    ]
   }
 ]

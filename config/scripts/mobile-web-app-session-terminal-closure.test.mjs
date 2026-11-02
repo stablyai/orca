@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { mobileWebAppRouteChunkClosure } from './mobile-web-app-route-chunk-closure.mjs'
@@ -478,8 +478,13 @@ const describeClosure = bundles ? describe : describe.skip
 describeClosure(
   "the session route's page closure with the terminal on it",
   () => {
+    let closure
+    beforeAll(async () => {
+      closure = await mobileWebAppRouteClosure(SESSION_ROUTE)
+    }, 300_000)
+
     it('gains the document, xterm and the addons, and sheds the engine string', async () => {
-      const { local, modules } = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      const { local, modules } = closure
       for (const gone of SHED) {
         expect(local, `${gone} is still in the closure`).not.toContain(gone)
       }
@@ -506,7 +511,7 @@ describeClosure(
     }, 300_000)
 
     it('enters through the web sibling and the route body, not the switch', async () => {
-      const { local } = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      const { local } = closure
       for (const entry of ROUTE_ENTRY) {
         expect(local, `${entry} is not in the closure`).toContain(entry)
       }
@@ -518,7 +523,7 @@ describeClosure(
     }, 300_000)
 
     it('reaches the engine as one deferred module and never as part of the download', async () => {
-      const { modules } = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      const { modules } = closure
       // The engine is here, as the one artifact the loader imports.
       expect(artifactModules(modules)).toHaveLength(1)
       // Package sources stay inside that artifact; unrelated module counts are not this boundary.
@@ -537,16 +542,17 @@ describeClosure(
     }, 600_000)
 
     it('leaves the 16px seam census exactly where C7.2 left it', async () => {
-      const closure = await mobileWebAppRouteClosure(SESSION_ROUTE)
       // Two preconditions, because zero offenders is what a walk that read nothing also reports:
       // the seam's own web module has to be in the closure, and no style may be unresolved.
       expect(closure.local).toContain('src/platform/text-input-font-size.web.ts')
+      expect(closure.local.length).toBeGreaterThan(900)
       expect(unresolvedTextInputStyles(mobileDir, closure)).toEqual([])
       expect(textInputFontSizeOffenders(mobileDir, closure)).toHaveLength(EXPECTED_OFFENDERS)
+      expect(closure.local).toContain('src/session/mobile-native-chat-input-styles.web.ts')
+      expect(closure.local).not.toContain('src/session/mobile-native-chat-input-styles.ts')
     }, 300_000)
 
     it('holds the editables the TextInput census cannot see to the same floor', async () => {
-      const closure = await mobileWebAppRouteClosure(SESSION_ROUTE)
       // The rich Markdown editor's surface is a `contenteditable` in a markup string, sized by a
       // rule in a stylesheet: `modulesDeclaringTextInput` matches JSX tags and never sees it, so it
       // shipped at 14 px and was measured at 14 px in both engines. The same floor, read by a rule

@@ -46,6 +46,8 @@ function registerGuard(
     getPendingInstallVersion: () => '2.0.0',
     getKnownReleaseUrl: () => undefined,
     performQuitAndInstall,
+    commitStagedMacInstall: vi.fn(),
+    failMacStaging: vi.fn(),
     shouldDeferMacQuitForInstall: () => true,
     sendStatus: vi.fn()
   })

@@ -1,11 +1,9 @@
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
   consumePendingActivationSpawn,
-  getPendingActivationSpawnCount,
-  isCurrentDirectSshAuthority,
-  isRemoteRuntimePtyId
+  getPendingActivationSpawnCount
 } from './terminal-pty-identities'
 
 export function createTerminalPtyReleaseActions(
@@ -20,12 +18,10 @@ export function createTerminalPtyReleaseActions(
       }
       let worktreeId: string | null = null
       let wasActivationSpawn = false
-      let preservesDirectSshContinuationGap = false
       let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
         const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
-        const liveBinding = s.directSshLivePtyBindingByTabId[tabId]
         let nextTabsByWorktree = s.tabsByWorktree
         for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
           const index = tabs.findIndex((t) => t.id === tabId)
@@ -45,16 +41,8 @@ export function createTerminalPtyReleaseActions(
           const { pendingActivationSpawn: _unused, ...rest } = tab
           void _unused
           const nextTabPtyId = remainingPtyIds.at(-1) ?? null
-          preservesDirectSshContinuationGap = Boolean(
-            ptyId &&
-            remainingPtyIds.length === 0 &&
-            liveBinding?.ptyId === ptyId &&
-            getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0 &&
-            isCurrentDirectSshAuthority(s, liveBinding.authority)
-          )
           const shouldRetainActivationSpawn =
-            preservesDirectSshContinuationGap ||
-            (wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId))
+            wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId)
           const nextPendingActivationSpawn = shouldRetainActivationSpawn
             ? tab.pendingActivationSpawn
             : consumePendingActivationSpawn(tab.pendingActivationSpawn)
@@ -78,14 +66,14 @@ export function createTerminalPtyReleaseActions(
           // Why: repo purge can retire the owning tab before its async exit arrives; don't resurrect an orphan PTY index.
           delete nextPtyIdsByTabId[tabId]
         }
-        const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         if (ptyId) {
-          delete nextPendingCodexPaneRestartIds[ptyId]
+          delete nextPendingPaneAccountRestarts[ptyId]
           delete nextCodexRestartNoticeByPtyId[ptyId]
         } else {
           for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
-            delete nextPendingCodexPaneRestartIds[currentPtyId]
+            delete nextPendingPaneAccountRestarts[currentPtyId]
             delete nextCodexRestartNoticeByPtyId[currentPtyId]
           }
         }
@@ -104,46 +92,14 @@ export function createTerminalPtyReleaseActions(
             delete nextLastKnownRelay[tabId]
           }
         }
-        let nextDirectSshPaneRetryByTabId = s.directSshPaneRetryByTabId
-        const pendingRetry = s.directSshPaneRetryByTabId[tabId]
-        if (
-          pendingRetry &&
-          (!ptyId ||
-            (existingPtyIds.includes(ptyId) &&
-              parseAppSshPtyId(ptyId)?.connectionId === pendingRetry.authority.targetId))
-        ) {
-          nextDirectSshPaneRetryByTabId = { ...s.directSshPaneRetryByTabId }
-          delete nextDirectSshPaneRetryByTabId[tabId]
-        }
-        let nextDirectSshLivePtyBindingByTabId = s.directSshLivePtyBindingByTabId
-        if (liveBinding && (!ptyId || liveBinding.ptyId === ptyId)) {
-          nextDirectSshLivePtyBindingByTabId = {
-            ...s.directSshLivePtyBindingByTabId
-          }
-          const promotedPtyId = ptyId ? remainingPtyIds.at(-1) : undefined
-          if (
-            promotedPtyId &&
-            parseAppSshPtyId(promotedPtyId)?.connectionId === liveBinding.authority.targetId &&
-            isCurrentDirectSshAuthority(s, liveBinding.authority)
-          ) {
-            nextDirectSshLivePtyBindingByTabId[tabId] = {
-              ...liveBinding,
-              ptyId: promotedPtyId
-            }
-          } else if (!preservesDirectSshContinuationGap) {
-            delete nextDirectSshLivePtyBindingByTabId[tabId]
-          }
-        }
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? { tabsByWorktree: nextTabsByWorktree }
             : {}),
           ptyIdsByTabId: nextPtyIdsByTabId,
           lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
-          codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
-          directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
-          directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
+          codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }
       })
       // Bump activity on PTY exit, but skip intentional shutdowns (suppressed exits) and click-driven pane unmounts (pendingActivationSpawn).

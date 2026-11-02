@@ -91,10 +91,8 @@ beforeAll(async () => {
       'src/main/runtime/rpc/methods/session-tab-agent-status-projection.ts'
     ),
     importReleaseCheckoutModule(checkout, 'src/shared/workspace-session-schema.ts'),
-    importReleaseCheckoutModule(
-      checkout,
-      'src/renderer/src/components/native-chat/structured-agent-session-tabs.ts'
-    ),
+    // Why: releases from v1.4.228 define it here; the renderer module only imports it.
+    importReleaseCheckoutModule(checkout, 'src/shared/structured-agent-session-tab.ts'),
     importReleaseCheckoutModule(checkout, 'src/shared/agent-session-record.ts')
   ])
   current = await loadAgentSessionWireBuild(WORKING_TREE)

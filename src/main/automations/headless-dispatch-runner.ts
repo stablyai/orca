@@ -26,6 +26,9 @@ export type HeadlessAutomationDispatchContext = {
   watchRun: (run: AutomationRun) => void
 }
 
+/** Thrown by a dispatcher that finds the run should not start; recorded as a skip, not a failure. */
+export class AutomationDispatchRefusedError extends Error {}
+
 function describeDispatchError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -51,7 +54,8 @@ export async function runHeadlessAutomationDispatch(
   } catch (error) {
     return runs.updateRun({
       runId: run.id,
-      status: 'dispatch_failed',
+      status:
+        error instanceof AutomationDispatchRefusedError ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
       error: describeDispatchError(error)
     })

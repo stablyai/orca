@@ -11,6 +11,7 @@ import type { OpenTabSearchResult } from './open-tab-search'
 
 export type OpenTabSelectionOutcome =
   | { status: 'activated'; focus: (() => void) | null }
+  | { status: 'blocked' }
   | { status: 'failed'; message: string }
 
 // Every source distinguishes a dead workspace from a target that went stale
@@ -36,6 +37,9 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
       workspaceId: result.workspaceId,
       worktreeId: result.worktreeId
     })
+    if (activation.status === 'blocked') {
+      return activation
+    }
     if (activation.status === 'failed') {
       return failed(
         activation.reason,
@@ -58,6 +62,9 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
       tabId: result.tabId,
       worktreeId: result.worktreeId
     })
+    if (activation.status === 'blocked') {
+      return activation
+    }
     if (activation.status === 'failed') {
       return failed(
         activation.reason,
@@ -78,6 +85,9 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
     tabId: result.tabId,
     worktreeId: result.worktreeId
   })
+  if (activation.status === 'blocked') {
+    return activation
+  }
   if (activation.status === 'failed') {
     return failed(
       activation.reason,

@@ -54,7 +54,7 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
       resolveDbPath: async () => '/fake/opencode.db',
       readPage
     })
-    expect(result).toEqual({ messages: ids.map(message) })
+    expect(result).toEqual({ messages: ids.map(message), sourceEmpty: false })
   })
 
   it('reports notFound when the first page misses', async () => {
@@ -64,6 +64,36 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
       readPage
     })
     expect(result).toEqual({ error: 'Transcript unavailable', notFound: true })
+  })
+
+  it.each([
+    [null, true],
+    [42, false]
+  ])(
+    'distinguishes no raw rows from undecodable rows at cursor %s',
+    async (cursor, sourceEmpty) => {
+      const result = await readOpenCodeNativeChatTranscriptFull('ses-1', {
+        resolveDbPath: async () => '/fake/opencode.db',
+        readPage: async () => ({ items: [], hasMore: false, beforeMessageRowId: cursor })
+      })
+      expect(result).toEqual({ messages: [], sourceEmpty })
+    }
+  )
+
+  it('reads the selected ZCode store on every full-read page', async () => {
+    const resolveDbPath = vi.fn(async () => '/fake/zcode.db')
+    const readPage = vi.fn(async () => ({ items: [], hasMore: false, beforeMessageRowId: null }))
+    await readOpenCodeNativeChatTranscriptFull(
+      'z-session',
+      { resolveDbPath, readPage },
+      undefined,
+      'zcode'
+    )
+    expect(resolveDbPath).toHaveBeenCalledWith('z-session', undefined, 'zcode')
+    expect(readPage).toHaveBeenCalledWith(
+      { dbPath: '/fake/zcode.db', sessionId: 'z-session', limit: 500, agent: 'zcode' },
+      undefined
+    )
   })
 
   it('returns a retryable error when DB discovery throws', async () => {

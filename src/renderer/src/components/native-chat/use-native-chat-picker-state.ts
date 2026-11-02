@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -52,6 +53,7 @@ export function useNativeChatPickerState(args: {
   agentCommands: readonly SlashCommandSuggestion[]
   /** A message recalled from history is resent or walked past, not completed, until it is edited. */
   recalledFromHistory: boolean
+  disabled: boolean
   /** Skill names the running session reports; undefined keeps the host disk scan. */
   sessionSkillNames?: readonly string[]
   textareaRef: RefObject<NativeChatComposerInput | null>
@@ -67,6 +69,7 @@ export function useNativeChatPickerState(args: {
     caret,
     agentCommands,
     recalledFromHistory,
+    disabled,
     sessionSkillNames,
     textareaRef,
     setDraft,
@@ -74,7 +77,11 @@ export function useNativeChatPickerState(args: {
     setActiveSuggestion
   } = args
   const profile = useMemo(() => getNativeChatAgentProfile(agent), [agent])
-  const skillPickerTriggered = isSkillPickerTriggered(draft.slice(0, caret), profile)
+  const disabledRef = useRef(disabled)
+  useLayoutEffect(() => {
+    disabledRef.current = disabled
+  }, [disabled])
+  const skillPickerTriggered = !disabled && isSkillPickerTriggered(draft.slice(0, caret), profile)
   const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
@@ -83,7 +90,7 @@ export function useNativeChatPickerState(args: {
   const lastOpenKeyRef = useRef<string | null>(null)
   const autocomplete = useMemo<ComposerAutocomplete>(
     () =>
-      recalledFromHistory
+      recalledFromHistory || disabled
         ? { mode: 'none' }
         : deriveComposerAutocomplete(
             draft,
@@ -101,6 +108,7 @@ export function useNativeChatPickerState(args: {
       dismissalContext,
       dismissed,
       discovery,
+      disabled,
       draft,
       profile,
       recalledFromHistory,
@@ -143,7 +151,7 @@ export function useNativeChatPickerState(args: {
 
   const completeItem = useCallback(
     (item: NativeChatPickerItem) => {
-      if (autocomplete.mode !== 'slash') {
+      if (disabledRef.current || autocomplete.mode !== 'slash') {
         return
       }
       const result = applyPickerSuggestion(draft, caret, item)
@@ -159,8 +167,13 @@ export function useNativeChatPickerState(args: {
   )
 
   const completeMention = useCallback(
-    (path: string) => commitCompletion(applyMentionSuggestion(draft, caret, path)),
-    [caret, commitCompletion, draft]
+    (path: string) => {
+      if (disabledRef.current || autocomplete.mode !== 'mention') {
+        return
+      }
+      commitCompletion(applyMentionSuggestion(draft, caret, path))
+    },
+    [autocomplete, caret, commitCompletion, draft]
   )
 
   const handleDraftOrCaretChange = useCallback(

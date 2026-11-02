@@ -1,25 +1,20 @@
 /**
  * The two headless `orca serve` hosts the layout oracle drives with no window: orcad (plain Node)
- * and Electron serve. Both keep their pairing port across restarts so paired clients reconnect,
- * and a headless runtime's saved profile is the runtime layout the oracle checks.
+ * and Electron serve. Both keep their pairing port across restarts so paired clients and the
+ * oracle's layout stream reconnect.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
 import { resolveBundledOrcadRuntime } from '../../../src/main/orcad/orcad-bundled-runtime'
-import { runProcess } from '../../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../../src/shared/node-runtime-pin'
-import type { WorkspaceSessionState } from '../../../src/shared/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { cleanupE2EDaemons } from './electron-process-shutdown'
 import { launchHeadlessPairedRuntimeHost } from './headless-paired-runtime-host'
 import { cliServeProfile, spawnUntilReady, type ReadyProcess } from './orca-serve-cli-host'
-import { readPersistedProfileState } from './persisted-profile-state'
-import { partitionsFromProfileRoot } from './workspace-layout-oracle-views'
-import type { WorkspaceLayoutPartition } from './workspace-layout-oracle-model'
 
 export type HeadlessHostKind = 'orcad' | 'electron'
 
@@ -202,16 +197,6 @@ export function pairedClient(host: HeadlessOracleHost, name: string): RuntimeCli
   return new RuntimeClient(dir, 30_000, host.pairingUrl, null)
 }
 
-/** The runtime's layout: a headless runtime has no window, so its saved session is the state. */
-export function readHeadlessPartitions(userDataDir: string): WorkspaceLayoutPartition[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: committed profile documents are read verbatim; the oracle's rules judge their shape rather than a parser salvaging it.
-  const root = readPersistedProfileState(userDataDir) as {
-    workspaceSession?: WorkspaceSessionState
-    workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
-  }
-  return partitionsFromProfileRoot(root)
-}
-
 async function git(cwd: string, args: string[]): Promise<void> {
   const result = await runProcess({ program: 'git', args, cwd, timeoutMs: 30_000 })
   if (result.code !== 0) {
@@ -224,7 +209,8 @@ export async function addRepoWorktree(
   host: HeadlessOracleHost,
   client: RuntimeClient
 ): Promise<string> {
-  const repoPath = mkdtempSync(path.join(os.tmpdir(), 'layout-oracle-repo-'))
+  // The runtime lists a worktree by its real path; macOS's temp dir is behind a symlink.
+  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'layout-oracle-repo-')))
   host.cleanups.push(() => rmSync(repoPath, PROFILE_REMOVAL))
   writeFileSync(path.join(repoPath, 'README.md'), 'layout oracle\n')
   await git(repoPath, ['init', '-q'])

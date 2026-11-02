@@ -32,6 +32,8 @@ export function useMobileHostModelCatalogUpgrade(args: {
   fence: number | null
   optionCatalog: AgentSessionOptionCatalog | null
   activeOptionRecordRef: MutableRefObject<NativeChatSessionOptionRecord>
+  /** A listing landed after the chat's options were read, which answered without it. */
+  onListingLanded?: () => void
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
@@ -43,6 +45,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     enabled,
     fence,
     newLaunch,
+    onListingLanded,
     optionCatalog,
     sessionId,
     updateOptionState,
@@ -89,7 +92,12 @@ export function useMobileHostModelCatalogUpgrade(args: {
         if (catalog.origin === 'unknown' && catalog.listingInProgress === true && !stale) {
           // Usable on the built-in list while the listing runs; it lands in place.
           apply(catalog)
-          return read(true).then(apply)
+          return read(true).then((listed) => {
+            apply(listed)
+            if (!stale && listed.origin !== 'unknown') {
+              onListingLanded?.()
+            }
+          })
         }
         apply(catalog)
         return undefined
@@ -105,6 +113,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     enabled,
     fence,
     newLaunch,
+    onListingLanded,
     optionCatalog,
     sessionId,
     updateOptionState,

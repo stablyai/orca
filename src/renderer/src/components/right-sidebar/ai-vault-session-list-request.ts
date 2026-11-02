@@ -1,5 +1,8 @@
 import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
-import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import {
+  parseRoutableExecutionHostId,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import {
   aiVaultSessionResultCacheKey,
@@ -52,4 +55,36 @@ export function cacheAiVaultSessionList(
     result,
     replaceHostEntries: options.replaceHostEntries
   })
+}
+
+export type AiVaultConditionalSnapshot = { fingerprint: string; result: AiVaultListResult }
+
+export async function refreshAiVaultSessionList(
+  request: AiVaultSessionListRequest,
+  options: { force?: boolean; requestToken: string },
+  previous?: AiVaultConditionalSnapshot
+): Promise<AiVaultListResult> {
+  const args = aiVaultSessionListArgs(request, options)
+  if (
+    request.sessionLimit !== 'unlimited' &&
+    parseRoutableExecutionHostId(request.executionHostScope)?.kind === 'runtime'
+  ) {
+    args.afterFingerprint = previous?.fingerprint ?? null
+  }
+  const result = await window.api.aiVault.listSessions(args)
+  if (!result.unchanged) {
+    return result
+  }
+  if (
+    !previous ||
+    typeof args.afterFingerprint !== 'string' ||
+    result.fingerprint !== args.afterFingerprint
+  ) {
+    const full = await window.api.aiVault.listSessions(aiVaultSessionListArgs(request, options))
+    if (full.unchanged) {
+      throw new Error('Session refresh did not return the requested full history')
+    }
+    return full
+  }
+  return { ...previous.result, scannedAt: result.scannedAt, fingerprint: result.fingerprint }
 }

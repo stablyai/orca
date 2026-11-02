@@ -18,7 +18,7 @@ const row = (sessionId: string): ResumeCandidate => ({
   recordedAt: 1
 })
 const failure = { ...row('a'), failedAt: 2, outcome: 'unconfirmed' as const, reason: 'pending' }
-const run = beginResumeRun([row('a'), row('b')], 10)
+const run = beginResumeRun([row('a'), row('b')], 10, 'user')
 
 describe('the dialog over a bulk action', () => {
   it('never regresses a seen phase or verdict when live progress clears', () => {

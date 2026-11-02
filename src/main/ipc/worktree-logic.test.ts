@@ -2,28 +2,32 @@ import { posix, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
-  sanitizeWorktreeDisplayName,
-  resolveWorktreeCreateDisplayName,
-  resolveWorktreeCreateDisplayNameRequest,
-  resolveWorktreeCreateDisplayNameMeta,
   ensurePathWithinWorkspace,
-  computeBranchName,
-  getConfiguredBranchPrefix,
-  computeValidatedBranchName,
   computeWorktreePath,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
-  shouldSetDisplayName,
-  mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
   isWindowsLongPathWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
-  isOrphanedWorktreeError,
-  areWorktreePathsEqual
+  isOrphanedWorktreeError
 } from './worktree-logic'
+import {
+  sanitizeWorktreeDisplayName,
+  resolveWorktreeCreateDisplayName,
+  resolveWorktreeCreateDisplayNameRequest,
+  resolveWorktreeCreateDisplayNameMeta,
+  shouldSetDisplayName
+} from './worktree-display-name'
+import {
+  computeBranchName,
+  getConfiguredBranchPrefix,
+  computeValidatedBranchName
+} from './worktree-branch-name'
+import { mergeWorktree } from './worktree-metadata-merge'
+import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 
 describe('sanitizeWorktreeName', () => {
   it('replaces spaces with hyphens', () => {

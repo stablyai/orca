@@ -24,6 +24,8 @@ export type WorktreeCardProps = {
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
   hostContextLabel?: string
+  /** Reuse the normal project badge for a nested child owned by another repo. */
+  showProjectName?: boolean
   inPinnedSection?: boolean
   activationRowKey?: string
   renameRowKey?: string

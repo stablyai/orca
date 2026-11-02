@@ -1,20 +1,52 @@
+import { useEffect, useState } from 'react'
 import { Loader2, ServerOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
+import type { WslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
+import { WslHostUnavailableBanner } from './WslHostUnavailableBanner'
 
 type VisibleRecoveryPhase = Extract<
   PtyTransportRecoveryState['phase'],
   'recovering' | 'backoff' | 'disconnected'
 >
 
+// Why: a resubscribe that lands on its first backoff step plus an SSH round trip is
+// invisible to the user, so announcing it only flashes a banner.
+export const REMOTE_RUNTIME_RECOVERY_BANNER_DELAY_MS = 1_000
+
+/** Shows retrying recovery only once it outlasts the delay; anything needing action shows at once. */
+export function useRemoteRuntimeRecoveryBannerRevealed(needsAction: boolean): boolean {
+  const [revealed, setRevealed] = useState(needsAction)
+  if (needsAction && !revealed) {
+    setRevealed(true)
+  }
+  useEffect(() => {
+    if (revealed) {
+      return
+    }
+    const timer = window.setTimeout(
+      () => setRevealed(true),
+      REMOTE_RUNTIME_RECOVERY_BANNER_DELAY_MS
+    )
+    return () => window.clearTimeout(timer)
+  }, [revealed])
+  return revealed
+}
+
 export function TerminalRemoteRuntimeReconnectBanner({
   phase,
-  onReconnect
+  onReconnect,
+  wslHostUnavailable = null
 }: {
   phase: VisibleRecoveryPhase
   onReconnect: () => void
+  /** The pane's WSL host cannot run: nothing is retrying, so say why instead. */
+  wslHostUnavailable?: WslHostUnavailableReason | null
 }): React.JSX.Element {
+  if (wslHostUnavailable) {
+    return <WslHostUnavailableBanner reason={wslHostUnavailable} />
+  }
   const retrying = phase !== 'disconnected'
 
   return (
@@ -69,4 +101,17 @@ export function TerminalRemoteRuntimeReconnectBanner({
       </div>
     </div>
   )
+}
+
+/** Keyed per pane: holds a retrying banner back until recovery outlasts the delay. */
+export function DelayedRemoteRuntimeReconnectBanner({
+  epoch,
+  ...props
+}: Parameters<typeof TerminalRemoteRuntimeReconnectBanner>[0] & {
+  epoch: number
+}): React.JSX.Element | null {
+  const revealed = useRemoteRuntimeRecoveryBannerRevealed(
+    props.phase === 'disconnected' || Boolean(props.wslHostUnavailable)
+  )
+  return revealed ? <TerminalRemoteRuntimeReconnectBanner key={epoch} {...props} /> : null
 }

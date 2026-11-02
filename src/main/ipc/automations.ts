@@ -4,7 +4,6 @@ import type { AutomationService } from '../automations/service'
 import type {
   AutomationDispatchResult,
   AutomationPrecheckResult,
-  ExternalAutomationRunsPage,
   AutomationRun
 } from '../../shared/automations-types'
 import { createScopedExternalAutomations } from '../automations/external-manager'
@@ -17,10 +16,7 @@ import { ownerKey } from '../../shared/automation-owner-key'
 import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
 import type {
   ScopedExternalManagerActionRequest,
-  ScopedExternalManagerCreateRequest,
-  ScopedExternalManagerListRequest,
-  ScopedExternalManagerRunsRequest,
-  ScopedExternalManagerUpdateRequest
+  ScopedExternalManagerListRequest
 } from '../../shared/external-automation-scope'
 
 /**
@@ -84,21 +80,6 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
       request: ScopedExternalManagerListRequest
     ): Promise<ExternalAutomationManagerCacheEntry> =>
       scopedExternal.listManager(requireCapturedOwner(request))
-  )
-  ipcMain.handle(
-    'automations:listExternalRunsForOwner',
-    (_event, request: ScopedExternalManagerRunsRequest): Promise<ExternalAutomationRunsPage> =>
-      scopedExternal.listRuns(requireCapturedOwner(request))
-  )
-  ipcMain.handle(
-    'automations:createExternalForOwner',
-    (_event, request: ScopedExternalManagerCreateRequest): Promise<void> =>
-      scopedExternal.create(requireCapturedOwner(request))
-  )
-  ipcMain.handle(
-    'automations:updateExternalForOwner',
-    (_event, request: ScopedExternalManagerUpdateRequest): Promise<void> =>
-      scopedExternal.update(requireCapturedOwner(request))
   )
   ipcMain.handle(
     'automations:runExternalActionForOwner',

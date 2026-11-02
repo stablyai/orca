@@ -1,14 +1,7 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createSshDisposalError,
-  SSH_MUX_REQUEST_TIMEOUT_CODE
-} from '../ssh/ssh-channel-multiplexer'
-import {
-  discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote
-} from './commit-message-text-generation'
+import { discoverCommitMessageModelsLocal } from './commit-message-text-generation'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import {
   createChildTerminationExpectation,
@@ -225,9 +218,10 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       defaultModelId: 'auto'
     })
     if (process.platform === 'win32') {
+      // npx.cmd is an npm shim, so process-host runs it as node + npx-cli.js, never cmd.exe.
       expect(spawnMock).toHaveBeenCalledWith(
-        expect.stringMatching(/cmd\.exe$/i),
-        ['/d', '/c', expect.stringMatching(/npx\.cmd$/i), 'cursor-agent', '--list-models'],
+        expect.stringMatching(/node\.exe$/i),
+        [expect.stringMatching(/npx-cli\.js$/i), 'cursor-agent', '--list-models'],
         expect.objectContaining({ windowsHide: true })
       )
     } else {
@@ -526,98 +520,5 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('close')).toBe(0)
-  })
-})
-
-describe('generateCommitMessageFromContext on the Windows direct-child path', () => {
-  it('discovers dynamic models through a remote execution plan', async () => {
-    const execute = vi.fn(async (plan, cwd, timeoutMs) => {
-      expect(plan).toEqual({
-        binary: 'npx',
-        args: ['cursor-agent', '--list-models'],
-        stdinPayload: null,
-        label: 'Cursor'
-      })
-      expect(cwd).toBe('/remote/repo')
-      expect(timeoutMs).toBe(60_000)
-      return {
-        stdout: 'auto - Auto\ngpt-5.2 - GPT-5.2\n',
-        stderr: '',
-        exitCode: 0,
-        timedOut: false
-      }
-    })
-
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      execute,
-      'npx cursor-agent'
-    )
-
-    expect(result).toMatchObject({
-      success: true,
-      defaultModelId: 'auto',
-      models: [
-        { id: 'auto', label: 'Auto' },
-        { id: 'gpt-5.2', label: 'GPT-5.2' }
-      ]
-    })
-  })
-
-  it('reports remote model discovery transport timeouts without PATH guidance', async () => {
-    const transportTimeout = Object.assign(
-      new Error('Request "agent.execNonInteractive" timed out after 65000ms'),
-      { code: SSH_MUX_REQUEST_TIMEOUT_CODE }
-    )
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      async () => {
-        throw transportTimeout
-      },
-      'npx cursor-agent'
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
-    })
-  })
-
-  it('keeps the unverifiable wording when the link is declared lost instead of timing out', async () => {
-    // Same regression as the exec leg: a wedged link now disposes the mux before the response
-    // deadline, so this branch sees CONNECTION_LOST. Reporting "could not be reached" for it
-    // asserts absence the client never observed (docs/reference/ssh-execution-boundary.md).
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      async () => {
-        throw createSshDisposalError('connection_lost')
-      },
-      'npx cursor-agent'
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
-    })
-  })
-
-  it('reports remote model discovery spawn failures with remote install guidance', async () => {
-    const result = await discoverCommitMessageModelsRemote('cursor', '/remote/repo', async () => ({
-      stdout: '',
-      stderr: '',
-      exitCode: null,
-      timedOut: false,
-      spawnError: 'ENOENT'
-    }))
-
-    expect(result).toEqual({
-      success: false,
-      error: 'cursor-agent not found on the remote PATH. Install Cursor there.'
-    })
   })
 })

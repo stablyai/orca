@@ -5,9 +5,15 @@ import type {
   OrcadMigrationManifest,
   OrcadMigrationManifestSource
 } from './orcad-migration-manifest'
+import {
+  assertLocalWslScopeMatchesPayload,
+  parseLocalWslSource
+} from './orcad-migration-wsl-source-validation'
 import type { ProjectGroup } from './project-group-types'
 import type { Repo } from './repo-types'
 import {
+  MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES,
+  MAX_ORCAD_MIGRATION_REPOSITORIES,
   assertUniqueIds,
   boundedArray,
   boundedStringArray,
@@ -21,12 +27,11 @@ import {
   parseOrcadMigrationDormantState
 } from './orcad-migration-dormant-state-validation'
 
+export { MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES, MAX_ORCAD_MIGRATION_REPOSITORIES }
 export const ORCAD_MIGRATION_MANIFEST_VERSION = 1 as const
 export type OrcadMigrationManifestVersion = typeof ORCAD_MIGRATION_MANIFEST_VERSION
 export const MAX_ORCAD_MIGRATION_MANIFEST_BYTES = 768 * 1024
-export const MAX_ORCAD_MIGRATION_REPOSITORIES = 1_024
 export const MAX_ORCAD_MIGRATION_PROJECT_GROUPS = 4_096
-export const MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES = 16_384
 export const MAX_ORCAD_MIGRATION_IMPORT_RECEIPTS = 64
 
 export function parseOrcadMigrationManifest(value: unknown): OrcadMigrationManifest {
@@ -64,6 +69,7 @@ export function parseOrcadMigrationManifest(value: unknown): OrcadMigrationManif
   if (bytes > MAX_ORCAD_MIGRATION_MANIFEST_BYTES) {
     throw new Error('orcad_migration_manifest_too_large')
   }
+  assertLocalWslScopeMatchesPayload(manifest)
   return manifest
 }
 
@@ -143,6 +149,13 @@ function parsePayload(value: unknown): OrcadMigrationCatalogPayload {
 function parseSource(value: unknown): OrcadMigrationManifestSource {
   if (!isRecord(value)) {
     throw new Error('orcad_migration_manifest_source_invalid')
+  }
+  if (value.kind === 'local-wsl') {
+    return parseLocalWslSource(value)
+  }
+  // An explicit 'ssh-relay' is refused too: SSH has exactly one encoding, so one digest.
+  if (value.kind !== undefined) {
+    throw new Error('orcad_migration_manifest_source_kind_unsupported')
   }
   const generation = value.sshTargetGeneration
   if (generation !== null && (!Number.isSafeInteger(generation) || Number(generation) < 1)) {

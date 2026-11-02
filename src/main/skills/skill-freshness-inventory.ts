@@ -1,13 +1,12 @@
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
-import {
-  SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
-  type SkillFreshnessInstallation,
-  type SkillFreshnessInventory
+import type {
+  SkillFreshnessInstallation,
+  SkillFreshnessInventory
 } from '../../shared/skill-freshness'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
-import { loadSkillBundleArtifacts } from './skill-bundle-artifacts'
+import { loadSkillBundleManifest } from './skill-bundle-artifacts'
 import { eligibleSkillUpdateNames } from './skill-freshness-eligibility'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
 import {
@@ -18,27 +17,9 @@ import {
   type CandidateLstat
 } from './skill-freshness-placement-observation'
 import { scanKnownPluginSkillCandidates } from './skill-plugin-cache-scan'
-import { convergableSkillNames } from './skill-update-convergence'
-import { matchesUpdaterLock, readGloballyUpdatableSkillLocks } from './skill-update-registration'
+import { readSkillLockSources } from './skill-lock-sources'
 
 export const MAXIMUM_REPOSITORY_SKILL_ROOTS = 128
-
-// Why: the updater installs source-repo HEAD, which legitimately runs ahead of the
-// bundled registry — content the bundle has never seen is the steady state right
-// after an update. Bytes whose git tree sha equals the lock's recorded hash are the
-// CLI's own install, not a user edit, so calling them "unrecognized" (modified) is
-// false. Judged only over the placements the update command writes; a same-name
-// copy elsewhere earns no trust from someone else's lock entry.
-function trustLockInstalledRevision(
-  installation: SkillFreshnessInstallation,
-  globalSkillLocks: ReadonlyMap<string, string>
-): SkillFreshnessInstallation {
-  return installation.status === 'unrecognized' &&
-    SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
-    matchesUpdaterLock(installation, globalSkillLocks.get(installation.name))
-    ? { ...installation, status: 'newer-known' }
-    : installation
-}
 
 export function boundRepositorySkillRoots(roots: readonly SkillScanRoot[]): {
   scanned: SkillScanRoot[]
@@ -51,9 +32,6 @@ export function boundRepositorySkillRoots(roots: readonly SkillScanRoot[]): {
 }
 
 export async function inventorySkillFreshness(args: {
-  // Why: the bundled artifacts are content-only; the running build supplies
-  // its own version here so current placements can be labeled honestly.
-  currentAppVersion: string
   homeDir?: string
   cwd?: string
   repos?: Repo[]
@@ -61,11 +39,12 @@ export async function inventorySkillFreshness(args: {
   candidateLstat?: CandidateLstat
   stateHome?: string | null
 }): Promise<SkillFreshnessInventory> {
-  const [artifacts, globalSkillLocks] = await Promise.all([
-    loadSkillBundleArtifacts(args.resourceRoot),
-    readGloballyUpdatableSkillLocks({ homeDir: args.homeDir, stateHome: args.stateHome })
+  const [manifest, lockSources] = await Promise.all([
+    loadSkillBundleManifest(args.resourceRoot),
+    readSkillLockSources({ homeDir: args.homeDir, stateHome: args.stateHome })
   ])
-  const currentByName = new Map(artifacts.manifest.skills.map((skill) => [skill.name, skill]))
+  const currentByName = new Map(manifest.skills.map((skill) => [skill.name, skill]))
+  const lockSourceOf = (name: string): string | null => lockSources.get(name) ?? null
   const discoveryArgs = {
     homeDir: args.homeDir,
     cwd: args.cwd,
@@ -84,14 +63,13 @@ export async function inventorySkillFreshness(args: {
     throw new Error('Missing canonical agent skills root')
   }
 
-  const homeTasks = artifacts.manifest.skills.flatMap((current) =>
+  const homeTasks = manifest.skills.flatMap((current) =>
     homeRoots.map(
       (root) => () =>
         classifyHomeSkillCandidate({
           root,
           current,
-          currentAppVersion: args.currentAppVersion,
-          artifacts,
+          lockSource: lockSourceOf(current.name),
           canonicalRootPath,
           candidateLstat: args.candidateLstat ?? ((path) => lstat(path))
         })
@@ -104,14 +82,13 @@ export async function inventorySkillFreshness(args: {
   )
 
   const candidateLstat = args.candidateLstat ?? ((path) => lstat(path))
-  const repoTasks = artifacts.manifest.skills.flatMap((current) =>
+  const repoTasks = manifest.skills.flatMap((current) =>
     repoRoots.map(
       (root) => () =>
         classifyUnsupportedSkillCandidate({
           root,
           current,
-          currentAppVersion: args.currentAppVersion,
-          artifacts,
+          lockSource: lockSourceOf(current.name),
           unresolvedPath: join(root.path, current.name),
           candidateLstat
         })
@@ -122,12 +99,11 @@ export async function inventorySkillFreshness(args: {
   const omittedRepoTasks =
     omittedRepoRoots.length === 0
       ? []
-      : artifacts.manifest.skills.map(
+      : manifest.skills.map(
           (current) => () =>
             observeSkillFreshnessInstallation({
               current,
-              currentAppVersion: args.currentAppVersion,
-              artifacts,
+              lockSource: lockSourceOf(current.name),
               rootId: 'repo-scan-limit',
               providers: [...new Set(omittedRepoRoots.flatMap((root) => root.providers))],
               sourceKind: 'repo',
@@ -156,8 +132,7 @@ export async function inventorySkillFreshness(args: {
               classifyUnsupportedSkillCandidate({
                 root,
                 current,
-                currentAppVersion: args.currentAppVersion,
-                artifacts,
+                lockSource: lockSourceOf(current.name),
                 unresolvedPath: candidate.path,
                 candidateLstat
               })
@@ -178,21 +153,16 @@ export async function inventorySkillFreshness(args: {
   const installations = dedupeSkillFreshnessPlacements([
     ...homeInstallations,
     ...unsupportedInstallations
-  ])
-    .map((installation) => trustLockInstalledRevision(installation, globalSkillLocks))
-    .sort(
-      (left, right) =>
-        left.name.localeCompare(right.name, 'en') ||
-        left.unresolvedPath.localeCompare(right.unresolvedPath, 'en')
-    )
+  ]).sort(
+    (left, right) =>
+      left.name.localeCompare(right.name, 'en') ||
+      left.unresolvedPath.localeCompare(right.unresolvedPath, 'en')
+  )
 
   return {
     schemaVersion: 1,
     installations,
-    eligibleUpdateNames: eligibleSkillUpdateNames(
-      installations,
-      convergableSkillNames(installations, globalSkillLocks, artifacts.knownSnapshots)
-    ),
+    eligibleUpdateNames: eligibleSkillUpdateNames(installations),
     scanIssues,
     scannedAt: Date.now()
   }

@@ -1,0 +1,17 @@
+# `<file> <src/... literal>` pairs in config/, .github/ and tests/ that name no tracked file.
+# This is a RATCHET: the list may only SHRINK. Fix the reference, then prune:
+# pnpm check:path-literal-ratchet --prune
+.github/workflows/agent-state-rules-publish.yml src/main/runtime/readiness-census
+.github/workflows/zcode-credential-contract.yml src/shared/windows-security-descriptor
+config/scripts/check-layout-writer-ratchets.mjs src/renderer/src/runtime/remote-workspace-frozen/
+config/scripts/pr-layout-oracle-route.mjs src/main/runtime/old-session-tabs-stream/
+config/scripts/pr-layout-oracle-route.mjs src/renderer/src/runtime/remote-workspace-frozen/
+config/scripts/run-ssh-staged-upload-reliability.mjs src/main/ssh/ssh-relay-install-namespace.test.ts
+config/scripts/vitest-sqlite-runtime-files.mjs src/main/ipc/pty/ipc/spawn-commit-ssh-lease-cardinality.test.ts
+config/scripts/vitest-sqlite-runtime-files.mjs src/main/native-chat/agent-session-wire/structured-agent-session-signed-out-child.test.ts
+config/scripts/vitest-sqlite-runtime-files.mjs src/main/native-chat/agent-session-wire/structured-agent-session-startup-permission-mode.test.ts
+config/scripts/vitest-sqlite-runtime-files.mjs src/main/native-chat/agent-session-wire/structured-agent-session-startup-picks.test.ts
+config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-composer-primary-action.ts
+config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts
+config/tsconfig.node.json src/renderer/src/components/native-chat/structured-agent-question-projection.ts
+tests/e2e/capture-opencode-tui-repro.mjs src/cli/cmd/tui/ui/spinner

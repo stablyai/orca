@@ -1,10 +1,12 @@
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 import { ORCAD_SERVER_ENTRY_FILENAME } from '../../src/shared/orcad-artifacts.ts'
 
 const root = join(import.meta.dirname, '..', '..')
+const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)('../dark-build-switches.cjs')
 
 export const ORCAD_ENTRY_POINT = 'src/main/orcad/main.ts'
 export const ORCAD_LAUNCHER_ENTRY_POINT = 'src/main/orcad/launcher.ts'
@@ -15,7 +17,10 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
-  sessionScanner: 'src/main/ai-vault/session-scanner-service-entry.ts'
+  sessionScanner: 'src/main/ai-vault/session-scanner-service-entry.ts',
+  workerThreadChildProcess:
+    'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts',
+  claudeProfileSetup: 'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'
 }
 
 /** Each child ships flat beside orcad.js under its source basename; the runtime resolvers look there. */
@@ -24,6 +29,19 @@ export function orcadChildOutputFilename(entryPoint) {
 }
 
 export const ORCAD_EXTERNAL_MODULES = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
+
+// Bundled ESM resolves from the deployed bundle, like CommonJS __filename.
+export const ORCAD_COMMONJS_MODULE_OPTIONS = {
+  banner: {
+    js: 'var __orcadModuleUrl = require("node:url").pathToFileURL(__filename).href;'
+  },
+  define: {
+    'import.meta.url': '__orcadModuleUrl',
+    // Why only when on: an undeclared switch already reads as off, so other builds keep their bytes.
+    ...turnedOnDarkBuildDefines()
+  },
+  logOverride: { 'empty-import-meta': 'error' }
+}
 
 // Native binaries are staged separately from every JavaScript entry.
 export const externalNativeAddons = {
@@ -45,6 +63,7 @@ const jsoncParserEsm = {
 
 export function buildOrcadEntry(outfile) {
   return build({
+    ...ORCAD_COMMONJS_MODULE_OPTIONS,
     entryPoints: [join(root, ORCAD_ENTRY_POINT)],
     bundle: true,
     platform: 'node',
@@ -56,7 +75,10 @@ export function buildOrcadEntry(outfile) {
     metafile: true,
     minify: true,
     sourcemap: false,
-    define: { 'process.env.NODE_ENV': '"production"' },
+    define: {
+      ...ORCAD_COMMONJS_MODULE_OPTIONS.define,
+      'process.env.NODE_ENV': '"production"'
+    },
     logLevel: 'error'
   })
 }
@@ -81,6 +103,7 @@ export function buildOrcadLauncher(outfile) {
     .update(readFileSync(join(dirname(outfile), ORCAD_SERVER_ENTRY_FILENAME)))
     .digest('hex')
   return build({
+    ...ORCAD_COMMONJS_MODULE_OPTIONS,
     entryPoints: [join(root, ORCAD_LAUNCHER_ENTRY_POINT)],
     bundle: true,
     platform: 'node',
@@ -90,7 +113,10 @@ export function buildOrcadLauncher(outfile) {
     metafile: true,
     minify: true,
     sourcemap: false,
-    define: { ORCAD_SERVER_SHA256: JSON.stringify(serverSha256) },
+    define: {
+      ...ORCAD_COMMONJS_MODULE_OPTIONS.define,
+      ORCAD_SERVER_SHA256: JSON.stringify(serverSha256)
+    },
     logLevel: 'error'
   })
 }

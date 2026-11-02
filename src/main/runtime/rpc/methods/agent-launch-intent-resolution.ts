@@ -6,7 +6,7 @@
 import type { AgentLaunchIntent, AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
-import type { AgentLaunchParams } from './agent-launch-schemas'
+import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
 /**
@@ -54,7 +54,11 @@ async function agentLaunchIntent(
     ...(params.cwd ? { cwd: params.cwd } : {}),
     ...(params.launchSource ? { launchSource: params.launchSource } : {}),
     ...(paneKey ? { paneKey } : {}),
-    ...(params.sessionId ? { sessionId: params.sessionId } : {})
+    ...(params.sessionId ? { sessionId: params.sessionId } : {}),
+    ...(params.accountEnv ? { accountEnv: params.accountEnv } : {}),
+    ...(params.nativeChatDefault !== undefined
+      ? { nativeChatDefault: params.nativeChatDefault }
+      : {})
   }
 }
 

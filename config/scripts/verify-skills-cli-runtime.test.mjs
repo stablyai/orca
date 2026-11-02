@@ -25,8 +25,13 @@ describe('skills CLI runtime closure', () => {
     const packageJson = JSON.parse(
       await readFile(new URL('../../package.json', import.meta.url), 'utf8')
     )
-    for (const scriptName of ['build:desktop', 'build:release']) {
-      const script = packageJson.scripts[scriptName]
+    for (const scriptName of ['build:desktop', 'build:desktop:ci', 'build:release']) {
+      const script = packageJson.scripts[scriptName].replace(
+        'pnpm run build:desktop:assets',
+        packageJson.scripts['build:desktop:assets']
+      )
+      expect(script).toContain('build:electron-vite')
+      expect(script).toContain('verify:built-skills-cli')
       expect(script.indexOf('build:electron-vite')).toBeLessThan(
         script.indexOf('verify:built-skills-cli')
       )

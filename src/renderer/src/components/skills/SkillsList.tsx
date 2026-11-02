@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { SkillRow } from './SkillRow'
 import { SkillDetailDialog } from './SkillDetailDialog'
@@ -26,6 +28,7 @@ export function SkillsList({
   skills,
   allSkills,
   local,
+  ownerHostId,
   agentByRootPath,
   selectedIds,
   selectionMode,
@@ -39,6 +42,8 @@ export function SkillsList({
   skills: readonly DiscoveredSkill[]
   allSkills: readonly DiscoveredSkill[]
   local: boolean
+  /** Host the listed skill files live on. */
+  ownerHostId: ExecutionHostId
   agentByRootPath: ReadonlyMap<string, string>
   selectedIds: ReadonlySet<string>
   selectionMode: 'share' | 'delete' | null
@@ -58,6 +63,15 @@ export function SkillsList({
   const anchorIdRef = useRef<string | null>(null)
   const [detailSkill, setDetailSkill] = useState<DiscoveredSkill | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(null)
+
+  const revealSkill = async (skill: DiscoveredSkill): Promise<void> => {
+    const result = await window.api.shell.openInFileManager(skill.skillFilePath, ownerHostId)
+    if (!result.ok) {
+      toast.error(
+        translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')
+      )
+    }
+  }
   const selectedNames = selectedShareSkillNameKeys(allSkills, selectedIds)
   const focusTargetId = skills.some((skill) => skill.id === focusedId) ? focusedId : skills[0]?.id
 
@@ -127,6 +141,11 @@ export function SkillsList({
             setDetailSkill(null)
           }
         }}
+        onReveal={() => {
+          if (detailSkill) {
+            void revealSkill(detailSkill)
+          }
+        }}
       />
       <div
         ref={listRef}
@@ -172,6 +191,7 @@ export function SkillsList({
               onSelectionChange={(selected, range) => handleSelection(index, selected, range)}
               onShare={() => onShare(skill)}
               onDelete={() => onDelete(skill)}
+              onReveal={() => void revealSkill(skill)}
               onKeyDown={onListKeyDown}
             />
           )

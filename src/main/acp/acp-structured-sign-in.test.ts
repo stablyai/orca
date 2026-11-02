@@ -5,7 +5,9 @@ import { providerStartupFailureFact } from '../native-chat/agent-session-wire/st
 import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { AcpAuthRequiredError } from './acp-errors'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
+import { AcpSessionRuntime } from './acp-session-runtime'
 import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
@@ -74,6 +76,23 @@ describe('ACP sign-out at the first prompt', () => {
       }
     }
   })
+})
+
+it('ends a running turn signed out when the connection closes for sign-in', async () => {
+  const rig = await openAcpAdapterRig({ script: (agent) => agent.on('session/prompt', () => {}) })
+  await rig.acquire()
+  await sendHello(rig, 'first')
+  await rig.frame('session/prompt')
+  // The protocol close the real connection makes at a sign-in prompt line on stderr.
+  AcpSessionRuntime.prototype.close.call(rig.child(), new AcpAuthRequiredError('Sign in'))
+  await rig.settle()
+  expect(rig.settled).toContainEqual(
+    expect.objectContaining({
+      clientMessageId: 'first',
+      state: 'rejected',
+      rejection: expect.objectContaining({ kind: 'notSignedIn' })
+    })
+  )
 })
 
 it.each(ACP_LAUNCH_SPECS)(

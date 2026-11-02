@@ -14,11 +14,11 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent-test-state'
+} from '@/lib/worktree-activation-created-agent.test-fixture'
 import {
   createMockStore,
   registerWorktreeActivationReset
-} from './worktree-activation-test-harness'
+} from './worktree-activation.test-fixture'
 
 const defaultChat = vi.hoisted(() => ({
   open: vi.fn(),

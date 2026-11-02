@@ -21,6 +21,11 @@ const {
   releaseMock: vi.fn()
 }))
 
+vi.mock('./jira-agile-fields', () => ({
+  getAgileFieldIds: async () => ({}),
+  agileFieldIdList: () => []
+}))
+
 vi.mock('./request-queue', () => ({ acquire: acquireMock, release: releaseMock }))
 
 vi.mock('./authenticated-request', () => ({

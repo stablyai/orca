@@ -110,9 +110,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         parentCardContent
       )}
 
-      {newCardStyle && lineageChildren ? (
+      {lineageChildren ? (
         <div
-          className="mt-1.5 space-y-1"
+          className={cn('space-y-1', newCardStyle ? 'mt-1.5' : 'mt-3')}
           data-worktree-lineage-children=""
           style={lineageChildrenStyle}
         >

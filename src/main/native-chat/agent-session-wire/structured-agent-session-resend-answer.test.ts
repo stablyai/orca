@@ -17,6 +17,7 @@ import {
 } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
+  HOST_TEST_NOW as NOW,
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
@@ -35,9 +36,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 function hostJournal(): AgentSessionJournal {
-  return (
-    host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-  ).sessions.get(SESSION)!.journal
+  return host.collaboratorsForTests().sessions.get(SESSION)!.journal
 }
 
 function sendParams(text: string) {
@@ -50,7 +49,7 @@ async function deliveredOnce(): Promise<void> {
 }
 
 describe('a resent send id', () => {
-  it('is answered from a refused row without opening the chat again', async () => {
+  it('re-evaluates a pre-acceptance failure after the chat is reopened', async () => {
     await attach()
     vi.spyOn(hostJournal(), 'appendSubmission').mockRejectedValueOnce(new Error('disk full'))
     const params = sendParams('refused once')
@@ -64,16 +63,9 @@ describe('a resent send id', () => {
 
     const resent = await host.send(CALLER, params)
 
-    expect(resent).toMatchObject({
-      ok: false,
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        details: { reason: 'journalWriteFailed' }
-      }
-    })
-    // The answer came from the ledger alone: the closed chat was not opened to give it.
-    expect(host.hasSession(SESSION)).toBe(false)
-    expect(dispatch).not.toHaveBeenCalled()
+    expect(resent).toMatchObject({ ok: true, replayed: false })
+    expect(host.hasSession(SESSION)).toBe(true)
+    await deliveredOnce()
   })
 
   it('answers unknown, never a refusal, when the chat holding its answer cannot be opened', async () => {
@@ -240,5 +232,238 @@ describe('a send queued behind a running turn', () => {
     } finally {
       await rig.dispose()
     }
+  })
+})
+
+describe('send receipt acceptance', () => {
+  it.each(['body', 'delivery'] as const)(
+    'conflicts when the same id changes its %s',
+    async (field) => {
+      await attach()
+      const params = sendParams('original')
+      expect(await host.send(CALLER, params)).toMatchObject({ ok: true })
+      await deliveredOnce()
+      const body = field === 'body' ? hostTestMessage('changed') : params.body
+      const fields = {
+        body,
+        ...(field === 'delivery' ? { delivery: 'queue-if-active' as const } : {})
+      }
+      await expect(
+        host.send(CALLER, {
+          ...fields,
+          envelope: envelope('agentSession.send', fields, {
+            clientOperationId: params.envelope.clientOperationId
+          })
+        })
+      ).resolves.toMatchObject({
+        ok: false,
+        refusal: {
+          code: 'agent_session_operation_conflict',
+          details: { reason: 'operationIdReused' }
+        }
+      })
+      expect(dispatch).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('conflicts with an unswitched caller ledger row even after its expiry', async () => {
+    await attach()
+    const body = hostTestMessage('reuses Stop')
+    const old = NOW - 3 * 24 * 60 * 60_000
+    const params = {
+      envelope: envelope(
+        'agentSession.send',
+        { body },
+        { clientOperationId: `${old}-${'a'.repeat(32)}` }
+      ),
+      body
+    }
+    await store.admitOperation({
+      callerKey: 'another-caller',
+      operationId: params.envelope.clientOperationId,
+      fingerprint: envelope('agentSession.cancel', {}).payloadFingerprint,
+      now: old
+    })
+    expect(
+      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
+        ?.expiresAt
+    ).toBeLessThan(NOW)
+    const before = store.listOperationRows()
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_conflict',
+        details: { reason: 'operationIdReused' }
+      }
+    })
+    expect(store.listOperationRows()).toEqual(before)
+    expect(hostJournal().submissions()).toHaveLength(0)
+    expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual(
+      { verdict: 'absent' }
+    )
+  })
+
+  it('keeps the temporary ledger row so Stop cannot reuse a send id', async () => {
+    await attach()
+    const params = sendParams('accepted')
+    await host.send(CALLER, params)
+    await deliveredOnce()
+    await expect(
+      host.cancel(CALLER, {
+        envelope: envelope(
+          'agentSession.cancel',
+          {},
+          { clientOperationId: params.envelope.clientOperationId }
+        )
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_conflict',
+        details: { reason: 'operationIdReused' }
+      }
+    })
+  })
+
+  it.each(['agent_session_command_receipts', 'agent_session_operations'])(
+    'rolls back the message when %s cannot be written, then retries the same id fresh',
+    async (table) => {
+      await attach()
+      const params = sendParams('receipt must commit')
+      const db = openTestJournalHostDatabase(root).db
+      db.exec(`CREATE TRIGGER fail_receipt BEFORE INSERT ON ${table}
+      BEGIN SELECT RAISE(ABORT, 'receipt storage failed'); END`)
+      await expect(host.send(CALLER, params)).resolves.toMatchObject({
+        ok: false,
+        refusal: { details: { reason: 'journalWriteFailed' } }
+      })
+      expect(hostJournal().submissions()).toHaveLength(0)
+      expect(
+        store
+          .listOperationRows()
+          .find((row) => row.operationId === params.envelope.clientOperationId)
+      ).toBeUndefined()
+      expect(
+        store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
+      ).toEqual({ verdict: 'absent' })
+      expect(dispatch).not.toHaveBeenCalled()
+      db.exec('DROP TRIGGER fail_receipt')
+      await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
+      await deliveredOnce()
+    }
+  )
+
+  it('answers unknown for an unreadable receipt and never runs the message again', async () => {
+    await attach()
+    const params = sendParams('accepted before corruption')
+    await host.send(CALLER, params)
+    await deliveredOnce()
+    openTestJournalHostDatabase(root)
+      .db.prepare(
+        "UPDATE agent_session_command_receipts SET result_json = '{' WHERE operation_id = ?"
+      )
+      .run(params.envelope.clientOperationId)
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
+    })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers an in-transaction duplicate from the receipt after rolling back the second append', async () => {
+    await attach()
+    const params = sendParams('accepted once')
+    await host.send(CALLER, params)
+    await deliveredOnce()
+    const journal = hostJournal()
+    await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)!.lease.runtimeFence)
+    const before = journal.cursor()
+    vi.spyOn(store, 'readCommandReceipt').mockReturnValueOnce({ verdict: 'absent' })
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { submission: { clientMessageId: params.envelope.clientOperationId } }
+    })
+    expect(journal.cursor()).toEqual(before)
+    expect(journal.submissions()).toHaveLength(0)
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns the committed send through receipt replay after publication fails', async () => {
+    await attach()
+    const params = sendParams('accepted before publication failed')
+    const journal = hostJournal()
+    const error = new Error('publication failed')
+    journal.observeCommits(
+      vi.fn().mockImplementationOnce(() => {
+        throw error
+      })
+    )
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    expect(hostTestState().log.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fields: expect.objectContaining({ scope: 'send-journal-write', error })
+        }),
+        expect.objectContaining({
+          fields: expect.objectContaining({
+            scope: 'command-receipt-publication',
+            refusal: 'agent_session_operation_invalid'
+          })
+        })
+      ])
+    )
+    expect(journal.submissions()).toHaveLength(1)
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
+    journal.observeCommits(() => {})
+    await deliveredOnce()
+  })
+})
+
+it('keeps a same-fingerprint ledger row unchanged while writing the Send receipt', async () => {
+  await attach()
+  const params = sendParams('accepted with prior compatibility identity')
+  await store.admitGlobalOperation({
+    callerKey: 'original-caller',
+    operationId: params.envelope.clientOperationId,
+    fingerprint: params.envelope.payloadFingerprint,
+    now: NOW
+  })
+  const prior = store
+    .listOperationRows()
+    .find((row) => row.operationId === params.envelope.clientOperationId)
+  await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
+  expect(
+    store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
+  ).toEqual(prior)
+  expect(
+    store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
+  ).toMatchObject({
+    verdict: 'readable',
+    receipt: { status: 'accepted', fingerprint: params.envelope.payloadFingerprint }
+  })
+  await deliveredOnce()
+})
+
+it('preserves global conflicts with a non-chat operation already in the ledger', async () => {
+  await attach()
+  const params = sendParams('cannot reuse a terminal launch')
+  await store.admitOperation({
+    callerKey: 'terminal-caller',
+    operationId: params.envelope.clientOperationId,
+    fingerprint: 'different-terminal-launch',
+    now: NOW
+  })
+  await expect(host.send(CALLER, params)).resolves.toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
+  })
+  expect(hostJournal().submissions()).toHaveLength(0)
+  expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual({
+    verdict: 'absent'
   })
 })

@@ -122,7 +122,7 @@ async function retryingRead(reader, read) {
   return { failed: true, error: String(lastError?.message ?? lastError) }
 }
 
-async function readLogEntries(reader, { filter, projection, limit = ENTRY_LIMIT }) {
+export async function readLogEntries(reader, { filter, projection, limit = ENTRY_LIMIT }) {
   const args = [
     'logging', 'read', filter,
     '--project', reader.projectId,
@@ -154,21 +154,22 @@ async function readTimestampsOverWindow(reader, { filter, window }) {
 
 // Cloud Run's own request counter, aligned per minute server-side: a brownout's tens of thousands
 // of 503s are counted, where a log read of them stops at its entry limit (10-01 c29).
-async function readDirector503PerMinute(reader, { config, span }) {
+async function readDirectorRequestCountSeries(reader, { config, span, filters = [], groupByFields }) {
   const url = new URL(`https://monitoring.googleapis.com/v3/projects/${config.projectId}/timeSeries`)
   url.searchParams.set('filter', [
     'metric.type="run.googleapis.com/request_count"',
     'resource.type="cloud_run_revision"',
     `resource.label."service_name"="${config.directorService}"`,
-    'metric.label."response_code"="503"'
+    ...filters
   ].join(' AND '))
   url.searchParams.set('interval.startTime', span.startedAt.toISOString())
   url.searchParams.set('interval.endTime', span.endedAt.toISOString())
   url.searchParams.set('aggregation.alignmentPeriod', '60s')
   url.searchParams.set('aggregation.perSeriesAligner', 'ALIGN_DELTA')
   url.searchParams.set('aggregation.crossSeriesReducer', 'REDUCE_SUM')
+  if (groupByFields) url.searchParams.set('aggregation.groupByFields', groupByFields)
   url.searchParams.set('pageSize', '1000')
-  const read = await retryingRead(reader, async (timeoutMs) => {
+  return await retryingRead(reader, async (timeoutMs) => {
     const { stdout } = await reader.runGcloud(['auth', 'print-access-token'], { timeoutMs })
     const response = await reader.fetch(url, {
       headers: { authorization: `Bearer ${stdout.trim()}` },
@@ -179,15 +180,42 @@ async function readDirector503PerMinute(reader, { config, span }) {
     if (body.nextPageToken) throw new Error('Cloud Monitoring pagination is incomplete')
     return { timeSeries: body.timeSeries ?? [] }
   })
-  const perMinute = {}
-  for (const series of read.timeSeries ?? []) {
-    for (const point of series.points ?? []) {
-      // A delta point covers the minute that ends at its end time; a minute with no point had none.
-      const minute = minuteKey(Date.parse(point.interval.endTime) - 60_000)
-      perMinute[minute] = (perMinute[minute] ?? 0) + Number(point.value.int64Value ?? 0)
-    }
+}
+
+function addPointsPerMinute(perMinute, series) {
+  for (const point of series.points ?? []) {
+    // A delta point covers the minute that ends at its end time; a minute with no point had none.
+    const minute = minuteKey(Date.parse(point.interval.endTime) - 60_000)
+    perMinute[minute] = (perMinute[minute] ?? 0) + Number(point.value.int64Value ?? 0)
   }
+  return perMinute
+}
+
+export async function readDirector503PerMinute(reader, { config, span }) {
+  const read = await readDirectorRequestCountSeries(reader, {
+    config,
+    span,
+    filters: ['metric.label."response_code"="503"']
+  })
+  const perMinute = {}
+  for (const series of read.timeSeries ?? []) addPointsPerMinute(perMinute, series)
   return { perMinute, failed: read.failed }
+}
+
+// Every response code in one read, so a minute missing from the 503 series can be told apart from
+// one not published yet: the other codes' series carry the same publishing front.
+export async function readDirectorRequestsByCodePerMinute(reader, { config, span }) {
+  const read = await readDirectorRequestCountSeries(reader, {
+    config,
+    span,
+    groupByFields: 'metric.label."response_code"'
+  })
+  const byCode = {}
+  for (const series of read.timeSeries ?? []) {
+    const code = series.metric?.labels?.response_code ?? 'unknown'
+    byCode[code] = addPointsPerMinute(byCode[code] ?? {}, series)
+  }
+  return { byCode, failed: read.failed }
 }
 
 // Cells log through the COS container agent, so the text lives in jsonPayload.message; a
@@ -419,8 +447,8 @@ export async function evaluateShadowGate(config, {
       appliedPaceWindowMs: config.drainAppliedPaceWindowMs,
       targetHosts: config.targetHosts,
       settledAt: config.drainSettledAt || null,
-      // Isolate to restart-safe, which includes the quiet the restart wait holds after the cell
-      // empties: (ceil(pace / 5 s) + 1) samples of 5 s.
+      // Isolate to restart-safe: the later of the pace window's end and the cell emptying, plus
+      // one 5 s sample.
       settledAfterSeconds: config.drainStartedAt && config.drainSettledAt
         ? Math.round((Date.parse(config.drainSettledAt) - Date.parse(config.drainStartedAt)) / 1000)
         : null

@@ -5,7 +5,10 @@
 // each keeps the ones its retained row held.
 
 import { parseCodexGoalJournalItemId } from '../../codex/codex-goal-journal-identity'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_ITEM_BODY_KINDS,
   isAdmissibleAgentJournalMessageBody
@@ -64,12 +67,29 @@ export function mergeRetainedHostLifecycleRows(
   )
 }
 
+/** The live agent's rewound history as retained rows: its own observation, at the fence it
+ *  answered at. A row the old epoch held keeps that row's provenance when merged. */
+export function rewindProviderRows(
+  items: readonly { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[],
+  observedAt: number,
+  ownerFence: number
+): RetainedRow[] {
+  return items.map(({ identity, body }) => ({
+    itemId: agentJournalItemKey(identity),
+    body,
+    observedAt,
+    ownerFence
+  }))
+}
+
 /** The rebuilt epoch's item for one retained row, with the scope and producer it was written with. */
 export function retainedRowReplacement(row: RetainedRow): AgentJournalProducerLinkage & {
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   observedAt: number
   turnScope?: AgentJournalTurnScope
+  ownerFence: number
+  executionOwner?: number
 } {
   const identity = parseAgentJournalItemKey(row.itemId)
   if (!identity) {
@@ -87,6 +107,10 @@ export function retainedRowReplacement(row: RetainedRow): AgentJournalProducerLi
     body: restoreRewindJournalBody(row.body),
     observedAt: row.observedAt,
     ...(scope ? { turnScope: scope } : {}),
+    // The old fold's provenance, so a rewind never makes a dead generation's work current. A record
+    // from before rows carried it states none: 0, which is never current.
+    ownerFence: row.ownerFence ?? 0,
+    ...(row.executionOwner === undefined ? {} : { executionOwner: row.executionOwner }),
     ...(agentId === undefined ? {} : { agentId }),
     ...(parentAgentId === undefined ? {} : { parentAgentId }),
     ...(providerParentRef === undefined ? {} : { providerParentRef }),
@@ -96,7 +120,7 @@ export function retainedRowReplacement(row: RetainedRow): AgentJournalProducerLi
 }
 
 /** A provider item the old epoch held keeps that row's scope, producer and first-seen time; only
- *  its body is the provider's, and a user message keeps the sender the host recorded on it. */
+ *  its body is the provider's, except that a user message keeps what the host recorded on it. */
 function withHeldAttribution(item: RetainedRow, held: RetainedRow | undefined): RetainedRow {
   if (!held) {
     return item
@@ -105,21 +129,22 @@ function withHeldAttribution(item: RetainedRow, held: RetainedRow | undefined): 
   return { ...item, ...attribution, body: withHeldSender(item.body, heldBody) }
 }
 
-/** The provider's copy of a user message, with the sender the host recorded on it put back: no
- *  provider ever carries it. */
+/** A person's own message keeps Orca's body, as the live fold does: the provider's copy leads with
+ *  any stopped messages it carried. Another sender's keeps the provider's copy with that sender put
+ *  back, since no provider ever carries it. */
 function withHeldSender(
   provider: RetainedRow['body'],
   held: RetainedRow['body']
 ): RetainedRow['body'] {
   if (
     !isAdmissibleAgentJournalMessageBody(held) ||
-    !isAdmissibleAgentJournalMessageBody(provider)
+    !isAdmissibleAgentJournalMessageBody(provider) ||
+    held.role !== 'user' ||
+    provider.role !== 'user'
   ) {
     return provider
   }
-  return held.from !== undefined && held.role === 'user' && provider.role === 'user'
-    ? Object.assign({}, provider, { from: held.from })
-    : provider
+  return held.from === undefined ? held : Object.assign({}, provider, { from: held.from })
 }
 
 /** Provider turn id → the item id of its turn record: the turn's own, or the command turn that

@@ -33,7 +33,7 @@ function createParams(content = ''): EditorConfigParams {
     worktreeRoot: '/repo',
     isMac: false,
     richMarkdownSpellcheckEnabled: true,
-    settings: {} as EditorConfigParams['settings'],
+    runtimeTarget: { kind: 'local' },
     activateMarkdownLink: vi.fn(),
     rootRef: { current: null },
     editorRef: { current: null },

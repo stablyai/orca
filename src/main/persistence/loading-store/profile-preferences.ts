@@ -249,12 +249,3 @@ export function getFeatureInteractionOperations(
     getUI: () => owner.getUI()
   }
 }
-
-export function installProfilePreferencesContext(
-  target: ProfilePreferences,
-  source: ProfilePreferences
-): void {
-  Object.defineProperty(target, profilePreferencesContext, {
-    value: source[profilePreferencesContext]
-  })
-}

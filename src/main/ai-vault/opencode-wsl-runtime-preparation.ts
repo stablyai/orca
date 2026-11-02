@@ -4,19 +4,19 @@ import { basename, join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { ServerTarget } from '../../shared/node-runtime-pin'
-import { RELAY_OPENCODE_SQLITE_READER_FILENAME } from '../../shared/relay-artifacts'
+import { OPENCODE_SQLITE_READER_FILENAME } from '../../shared/remote-bundle-artifacts'
 import { parseWslUncPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { NODE_SQLITE_READER_API_SOURCE } from '../sqlite/node-sqlite-reader-api'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
-import { materializeNodeRuntimeArchive } from '../ssh/pinned-runtime-materializer'
+import { materializeNodeRuntimeArchive } from '../node-runtime/pinned-runtime-materializer'
 import { parseOrcadLinuxLibc } from '../ssh/orcad-deployment-target'
 import {
   installNodeRuntimeFromHostArchiveCommand,
   nodeRuntimeStoreDir,
   posixNodeRuntimeExecutable,
-  probeRemoteNodeRuntimeCommand,
-  REMOTE_NODE_RUNTIME_READY
-} from '../ssh/orcad-remote-node-runtime'
+  probeRemoteNodeRuntimeCommand
+} from '../managed-server/install/orcad-remote-node-runtime'
+import { REMOTE_NODE_RUNTIME_READY } from '../ssh/orcad-remote-node-runtime-report'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
@@ -102,10 +102,8 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     return result.stdout.trim()
   }
   const app = getAppEnvironment()
-  // The reader is plain JavaScript; either packaged Linux architecture is usable.
-  const reader = (['linux-x64', 'linux-arm64'] as const)
-    .flatMap((platform) => relayBundleCandidates(platform, app.getAppPath()))
-    .map((directory) => join(directory, RELAY_OPENCODE_SQLITE_READER_FILENAME))
+  const reader = relayBundleCandidates('wsl', app.getAppPath())
+    .map((directory) => join(directory, OPENCODE_SQLITE_READER_FILENAME))
     .find(existsSync)
   if (!reader) {
     throw new Error('The bundled WSL SQLite reader is missing. Reinstall Orca to repair it.')
@@ -113,6 +111,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
   const hasDatabase = await run({
     script: [
       'data="${XDG_DATA_HOME:-$HOME/.local/share}/opencode"',
+      'if [ -f "$HOME/.zcode/cli/db/db.sqlite" ]; then printf present; exit 0; fi',
       // WSL discovery still enumerates the default data root independently of guest overrides.
       'for db in "$HOME/.local/share/opencode"/opencode.db "$HOME/.local/share/opencode"/opencode-*.db; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       'case "${OPENCODE_DB-}" in',
@@ -125,7 +124,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     loginPath: 'none'
   })
   if (hasDatabase !== 'present') {
-    return { distro, error: 'No OpenCode database is present in this WSL distro.' }
+    return { distro, error: 'No OpenCode or ZCode database is present in this WSL distro.' }
   }
   const readerPath = await run({
     program: 'wslpath',

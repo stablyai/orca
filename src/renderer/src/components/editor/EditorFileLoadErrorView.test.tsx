@@ -23,6 +23,18 @@ describe('EditorFileLoadErrorView', () => {
     expect(onRetry).toHaveBeenCalledOnce()
   })
 
+  it('drops the IPC wrapper from a stored host error', () => {
+    render(
+      <EditorFileLoadErrorView
+        message="Error invoking remote method 'runtimeEnvironments:call': Error: WSL hosts are turned off in Settings → Experimental."
+        onRetry={vi.fn()}
+      />
+    )
+
+    screen.getByText('WSL hosts are turned off in Settings → Experimental.')
+    expect(screen.queryByText(/Error invoking remote method/)).toBeNull()
+  })
+
   it('localizes the host-unresolved state by its sentinel code, not by the stored text', () => {
     // Why: the stored `loadError` is an English fallback; the code is what selects the
     // localized copy, so a translated catalog cannot desynchronize from the comparison.

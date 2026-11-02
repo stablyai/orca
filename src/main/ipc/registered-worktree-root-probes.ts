@@ -4,7 +4,7 @@ import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { Repo } from '../../shared/repo-types'
 import { getErrorCode } from '../git/worktree-operation-options'
 import { resolveLocalProjectRuntimesForRepos } from '../local-project-runtime-resolution'
-import type { Store } from '../persistence'
+import type { RegisteredWorktreeRootStore as RootStore } from './registered-worktree-root-store'
 import { getWorktreeMirrorDistroForRuntime } from '../project-runtime-git-options'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 
@@ -20,7 +20,7 @@ type ListedRoots = { roots: Set<string>; listingFailed: boolean; wslDistro: stri
  * runtime awaiting repair has no distro, so it keeps the host Git this listing always used.
  */
 export async function listWorktreeRootsWithConcurrency(
-  store: Store,
+  store: RootStore,
   repos: readonly Repo[]
 ): Promise<ListedRoots[]> {
   const runtimes = resolveLocalProjectRuntimesForRepos(store, repos)

@@ -1,3 +1,4 @@
+import { getFishClaudeShellFunction } from './claude-shell-function'
 import { buildPosixStdoutFence, type PosixStdoutFence } from './posix-stdout-fence'
 
 export function quotePosixShell(value: string): string {
@@ -16,9 +17,15 @@ export function quotePosixShell(value: string): string {
  */
 export function buildWslExecArgs(
   distro: string | undefined,
-  shellArgs: readonly string[]
+  shellArgs: readonly string[],
+  options: { user?: string } = {}
 ): string[] {
-  return [...(distro ? ['-d', distro] : []), '--exec', ...shellArgs]
+  return [
+    ...(distro ? ['-d', distro] : []),
+    ...(options.user ? ['-u', options.user] : []),
+    '--exec',
+    ...shellArgs
+  ]
 }
 
 export function buildWslLoginShellCommand(command: string): string {
@@ -84,6 +91,10 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/bash/rcfile" ]; then',
     '      exec "$_orca_wsl_shell" --rcfile "${_orca_shell_ready_root}/bash/rcfile"',
     '    fi',
+    '    ;;',
+    // Why: a WSL fish pane gets no shell-ready wrapper or XDG handoff, so this is its only `claude`.
+    '  fish)',
+    `    exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getFishClaudeShellFunction())}`,
     '    ;;',
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',

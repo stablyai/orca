@@ -125,7 +125,19 @@ async function launchWorkerAgent(
       onStage: (stage) =>
         args.onStage(stage === 'worktree_create' ? 'worktree_create' : 'terminal_create'),
       workspaces: {
-        createWorktree: async ({ startupAgent }) => {
+        createRecoveryShell: async (worktreeId) => {
+          const shell = await args.runtime.createTerminal(`id:${worktreeId}`, {
+            surfaceOwner: false
+          })
+          args.effects.push({
+            kind: 'terminal',
+            role: 'recovery_shell',
+            action: 'created',
+            id: shell.handle,
+            tabId: shell.tabId
+          })
+        },
+        createWorktree: async ({ startupAgent, promisedAgentChat, onWorkspaceCreated }) => {
           created = await createWorkerWorktree({
             runtime: args.runtime,
             db: args.db,
@@ -136,6 +148,8 @@ async function launchWorkerAgent(
             agent,
             // The executor withholds the startup agent exactly when the worker is to be a session.
             withAgentTerminal: startupAgent !== undefined,
+            promisedAgentChat,
+            onWorkspaceCreated,
             ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
             effects: args.effects
           })

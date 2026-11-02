@@ -104,4 +104,29 @@ describe('the client roster of subagents', () => {
     expect(named.has('agent-599')).toBe(true)
     expect(named.has('agent-0')).toBe(false)
   })
+
+  it('names a subagent from its own row, and forgets it with that row', () => {
+    const own: AgentJournalRenderItem = {
+      itemId: 'orca:subagent:a',
+      revision: 1,
+      sequence: 4,
+      observedAt: 4,
+      body: {
+        kind: 'message',
+        role: 'system',
+        blocks: [
+          { type: 'text', text: 'Kicked off subagent review' },
+          { type: 'subagent', id: 'a', label: 'review', state: 'working', groupId: 't', run: 'x' }
+        ]
+      }
+    }
+    const named = fold([own])
+    expect(named.get('a')).toEqual({
+      entry: { id: 'a', label: 'review', state: 'working' },
+      rosterItemId: 'orca:subagent:a',
+      rosterPosition: { sequence: 4, index: 0 },
+      rosterRevision: 1
+    })
+    expect(foldStructuredAgentSubagentRoster(named, [], ['orca:subagent:a']).size).toBe(0)
+  })
 })

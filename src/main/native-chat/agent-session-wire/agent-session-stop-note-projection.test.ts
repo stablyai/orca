@@ -24,6 +24,7 @@ import { readAgentSessionHistory } from './agent-session-history-page'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 
 const journals = createTrackedJournalOpener()
 const turnIdentity = { provider: 'orca', clientMessageId: 'turn-1' } as const
@@ -386,4 +387,33 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
       )
   ).toBe(true)
   expect(rows()).toEqual(stored)
+})
+
+it('refreshes a phone within its frames, in bounded pages', async () => {
+  await turn('interrupted')
+  for (let index = 0; index < 205; index += 1) {
+    await journal.appendItem(structuredAgentSessionStopNoteIdentity(`op-${index}`), unconfirmed, {
+      fence: 1,
+      turnScope: scope
+    })
+  }
+  const events: AgentSessionSubscribeEvent[] = []
+  new AgentSessionSubscribers().open({
+    id: 'phone',
+    sessionId: 'session-1',
+    journal,
+    fence: 1,
+    cursor: journal.cursor(),
+    emit: (event) => events.push(event),
+    boundedFrames: true
+  })
+  const batches = events.flatMap((event) => (event.type === 'batch' ? [event.batch] : []))
+  // The caught-up checkpoint, then the 205 notes in two pages.
+  expect(batches.filter((batch) => batch.items.length > 0)).toHaveLength(2)
+  expect(batches.flatMap((batch) => batch.items)).toHaveLength(205)
+  for (const event of events) {
+    expect(Buffer.byteLength(JSON.stringify(event), 'utf8')).toBeLessThan(
+      MOBILE_BRIDGE_MAX_FRAME_BYTES
+    )
+  }
 })

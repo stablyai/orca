@@ -23,13 +23,10 @@ import {
  */
 const DIRECTORY = import.meta.dirname
 
-/** The entry is the one file allowed a statement at its top level — it is the call. */
-const ENTRY = 'native-document-entry'
-
 /** The sequence that calls the starts, which is not a module with a start of its own. */
 const THE_SEQUENCE = 'create-rich-markdown-editor-document'
 
-const MODULES = documentModuleNames(DIRECTORY, [ENTRY])
+const MODULES = documentModuleNames(DIRECTORY, [])
 
 const moduleSource = (name: string) => documentModuleSource(DIRECTORY, name)
 

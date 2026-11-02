@@ -13,6 +13,7 @@ import {
   ensureBrowserClientHostsForRestoredPages,
   resetRestoredBrowserClientHostAttachForTests
 } from './restored-client-hosted-browser-host-attach'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }
@@ -23,14 +24,10 @@ const prepareBrowserClientHostPlacement = vi.fn(
 )
 
 function stubApi(): void {
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        getStatus: vi.fn(),
-        list: vi.fn(),
-        prepareBrowserClientHostPlacement
-      }
-    }
+  stubRuntimeEnvironmentBridge({
+    getStatus: vi.fn(),
+    list: vi.fn(),
+    prepareBrowserClientHostPlacement
   })
 }
 

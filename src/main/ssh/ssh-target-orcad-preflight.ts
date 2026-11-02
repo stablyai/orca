@@ -6,7 +6,7 @@
  * What blocks is what cannot move: another owner, live terminal leases, and dependent state the
  * manifest cannot carry. Read-only: building the manifest here exports nothing.
  */
-import { isLiveSshPtyLease } from '../../shared/ssh-pty-lease-liveness'
+import { isLiveSshPtyLease } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import type {
   OrcadMigrationBlocker,
@@ -32,7 +32,9 @@ export type OrcadMigrationPreflightStore = OrcadMigrationExportStore &
 export function preflightOrcadMigrationExport(
   store: OrcadMigrationPreflightStore,
   targetId: string,
-  owner?: { environmentId: string; recorded: boolean }
+  owner?: { environmentId: string; recorded: boolean },
+  /** COMPAT(legacy-relay-bridge): leases a bridged proof left running for the bridge. */
+  bridgedPtyIds: readonly string[] = []
 ): OrcadMigrationPreflight {
   const resolved = resolveOrcadPreflightTarget(store, targetId, owner)
   if ('result' in resolved) {
@@ -42,7 +44,7 @@ export function preflightOrcadMigrationExport(
   const blockers: OrcadMigrationBlocker[] = [...collectTargetCatalogBlockers(store, target)]
   const terminalLeases = store
     .getSshRemotePtyLeases(targetId)
-    .filter(isLiveSshPtyLease)
+    .filter((lease) => isLiveSshPtyLease(lease) && !bridgedPtyIds.includes(lease.ptyId))
     .map(({ ptyId, worktreeId, tabId, leafId, state, updatedAt }) => ({
       ptyId,
       worktreeId,
@@ -68,6 +70,33 @@ export function preflightOrcadMigrationExport(
     claimable: !blockers.some(isBlockingOrcadMigrationBlocker),
     blockers
   }
+}
+
+/** Whether a confirmed "Move anyway" would export: what it can't leave (desktop drafts) still refuses. */
+export function leaveBehindClearsOrcadMigrationBlockers(
+  store: OrcadMigrationPreflightStore & Pick<Store, 'createOrcadMigrationLeaveBehindView'>,
+  targetId: string
+): boolean {
+  const view = store.createOrcadMigrationLeaveBehindView(targetId)
+  return preflightOrcadMigrationExport(
+    {
+      ...view,
+      getSshTarget: (id) => store.getSshTarget(id),
+      getSshRemotePtyLeases: (id) => store.getSshRemotePtyLeases(id)
+    },
+    targetId
+  ).claimable
+}
+
+/** Only saved state blocks: a confirmed "Move anyway" may leave it on this desktop. */
+export function onlyLeavableOrcadMigrationBlockers(
+  blockers: readonly OrcadMigrationBlocker[]
+): boolean {
+  const blocking = blockers.filter(isBlockingOrcadMigrationBlocker)
+  return (
+    blocking.length > 0 &&
+    blocking.every((blocker) => blocker.code === 'orcad_migration_dependent_state')
+  )
 }
 
 // Exported catalog rows and saved port forwards (which stay with the source) do not block.

@@ -1,4 +1,4 @@
-import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
 import { closeRuntimeBrowserClientPage } from './runtime-browser-client-page-creation'
 import {
   releaseRuntimeBrowserClientPageRecord,

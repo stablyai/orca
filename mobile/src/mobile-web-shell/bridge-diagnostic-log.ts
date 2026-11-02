@@ -24,7 +24,10 @@ function diagnosticKey(diagnostic: BridgeHostDiagnostic): string {
  * says why. The host already holds `post-failed` to one; this is the same bound for the kinds it
  * does not, and a new host starts the count over because a new page is new evidence.
  */
-export function createBridgeDiagnosticReporter(): (diagnostic: BridgeHostDiagnostic) => void {
+export function createBridgeDiagnosticReporter(
+  // Gets the same once-per-key diagnostics as the console, for the exported connection log.
+  onReported?: (diagnostic: BridgeHostDiagnostic) => void
+): (diagnostic: BridgeHostDiagnostic) => void {
   const reported = new Set<string>()
   return (diagnostic) => {
     const key = diagnosticKey(diagnostic)
@@ -32,6 +35,7 @@ export function createBridgeDiagnosticReporter(): (diagnostic: BridgeHostDiagnos
       return
     }
     reported.add(key)
+    onReported?.(diagnostic)
     if (diagnostic.kind === 'refused') {
       console.warn('[web-shell-bridge] refused a page frame', diagnostic.refusal)
       return

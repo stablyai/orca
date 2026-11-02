@@ -11,29 +11,19 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
-import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../../shared/agent-session-compaction'
-import {
-  isBackgroundTaskBlock,
-  isSubagentGroupBlock,
-  type NativeChatMessage
-} from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../shared/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatTurnBarRows } from '../../../../shared/native-chat-turn-grouping'
-import {
-  nativeChatTurnFold,
-  type NativeChatTurnFoldRow
-} from '../../../../shared/native-chat-turn-fold'
+import { nativeChatTurnFold, nativeChatTurnFoldRow } from '../../../../shared/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
-import { isStoppedBeforeStartBlock } from '../../../../shared/native-chat-stopped-before-start'
 import {
   type NativeChatRowTypography,
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
 } from './native-chat-row-height-estimate'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import {
   NO_NATIVE_CHAT_SUBAGENT_CHOICES,
@@ -48,7 +38,7 @@ import {
   type NativeChatSubagentEntriesSlot,
   type NativeChatSubagentSectionSlot
 } from './native-chat-subagent-section-slots'
-import { nativeChatRowRendersProse, nativeChatRowSpeaksOrActs } from './native-chat-trailing-run'
+import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat-trailing-run'
 import { nativeChatTranscriptWorkRuns } from './native-chat-transcript-work-runs'
 
 export type NativeChatTranscriptSlot =
@@ -140,34 +130,9 @@ export function buildNativeChatTranscriptSlots(
   } = input
   // One pass to decide what each row draws, then the fold over those readings —
   // so "is this the answer" and "does this row render prose" cannot disagree.
-  const foldRows: NativeChatTurnFoldRow[] = messages.map((message, index) => ({
-    turnKey: turnKeys[index],
-    role: message.role,
-    rendersProse: nativeChatRowRendersProse(message),
-    draws: receipts.has(message.id) || nativeChatRowRendersContent(message.blocks),
-    // The raw blocks, not the renderable ones: a childless roster draws no row
-    // and its plain-text twin is then the only record the spawn happened.
-    outlivesTurn: message.blocks.some(
-      (block) =>
-        isSubagentGroupBlock(block) ||
-        isBackgroundTaskBlock(block) ||
-        isStoppedBeforeStartBlock(block)
-    ),
-    // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
-    reportsFailure: message.blocks.some(
-      (block) =>
-        block.type === 'text' &&
-        block.tone === 'error' &&
-        block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
-    ),
-    explainsTurn: message.blocks.some(
-      (block) =>
-        block.type === 'text' &&
-        (block.presentation === 'compaction' ||
-          block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
-          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION)
-    )
-  }))
+  const foldRows = messages.map((message, index) =>
+    nativeChatTurnFoldRow(message, turnKeys[index], receipts.has(message.id))
+  )
   // Liveness is the turn's, not any one call's: the run at the frontier stays
   // live between its calls, and a run the agent has moved past is settled even
   // while its last call is still reporting.
@@ -322,13 +287,15 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
   slots: readonly NativeChatTranscriptSlot[],
   journalItems: readonly AgentJournalRenderItem[] | undefined,
   stopping = false,
-  journalSubmissions?: readonly AgentJournalSubmission[]
+  journalSubmissions?: readonly AgentJournalSubmission[],
+  host: Parameters<typeof nativeChatMessagesWaitingBehindLiveTurn>[4] = {}
 ): { slots: NativeChatTranscriptSlot[]; waitingSlots: NativeChatTranscriptSlot[] } {
   const waiting = nativeChatMessagesWaitingBehindLiveTurn(
     slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : [])),
     journalItems,
     stopping,
-    journalSubmissions
+    journalSubmissions,
+    host
   )
   const isWaiting = (slot: NativeChatTranscriptSlot): boolean =>
     slot.kind === 'message' &&

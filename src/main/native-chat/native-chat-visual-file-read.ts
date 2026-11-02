@@ -1,4 +1,4 @@
-// Reading one visual out of a chat's visuals folder. This is the boundary, not the renderer: the
+// Reading one visual out of a chat's scratch folder. This is the boundary, not the renderer: the
 // file must sit directly in the folder both lexically and canonically, be a regular file reached
 // without a symlink, and be UTF-8 text within the byte cap.
 
@@ -194,9 +194,11 @@ async function readContained(
     const html = decodeVisualText(buffer)
     const revision = nativeChatVisualRevision(buffer)
     const sizeBytes = buffer.length
+    // Under the folder as named, so `path:<its folder>` is the exact selector of this file root.
+    const path = join(folder, file)
     return knownRevision === revision
-      ? { ok: true, revision, sizeBytes, unchanged: true }
-      : { ok: true, revision, sizeBytes, html }
+      ? { ok: true, revision, sizeBytes, path, unchanged: true }
+      : { ok: true, revision, sizeBytes, path, html }
   } finally {
     await handle.close()
   }

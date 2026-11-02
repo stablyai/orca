@@ -43,7 +43,11 @@ vi.mock('../agent-hooks/installer-utils', async (importOriginal) => {
 })
 
 import { CodexHookService } from './hook-service'
-import { _internals as lookupInternals, startCodexHookHashLookup } from './codex-hook-hash-lookup'
+import {
+  _internals as lookupInternals,
+  resolveCodexHookAnswer,
+  startCodexHookHashLookup
+} from './codex-hook-hash-lookup'
 import { memoizeCodexHookAnswer } from './codex-hook-trust-memo'
 import type { CodexHookAnswer } from './codex-hook-trust-derivation'
 import {
@@ -364,9 +368,17 @@ describe('managed-home Codex hook approval', () => {
       })
     )
 
-    await service.install(undefined, false)
+    try {
+      await service.install(undefined, false)
 
-    expect(listedEventApprovals()).toEqual(CODEX_HASHES)
+      expect(listedEventApprovals()).toEqual(CODEX_HASHES)
+      expect(
+        readHookTrustEntries(join(managedHome(), 'config.toml')).get(managedKey('stop', 0))
+      ).toEqual({ trustedHash: 'sha256:codex-stop', enabled: true })
+    } finally {
+      await resolveCodexHookAnswer()
+    }
+
     expect(
       readHookTrustEntries(join(managedHome(), 'config.toml')).get(managedKey('stop', 0))
     ).toEqual({ trustedHash: 'sha256:codex-stop', enabled: true })

@@ -8,18 +8,10 @@ import {
 } from '../../../../shared/remote-rpc-content-budget'
 import { assertGitDiffWithinTransportBudget } from '../../../../shared/git-diff-transport-budget'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from '../../orca-runtime-git'
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { GIT_METHODS } from './git'
-
-const sshMocks = vi.hoisted(() => ({ getSshGitProvider: vi.fn() }))
-
-vi.mock('../../../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: sshMocks.getSshGitProvider
-}))
 
 const OVERSIZED_BASE64 = 'A'.repeat(REMOTE_RPC_MAX_CONTENT_BYTES + 1024)
 
@@ -152,26 +144,4 @@ describe('remote git diff transport budget', () => {
       })
     }
   )
-
-  // Why: an SSH host forwards its provider's payload verbatim, so the cap cannot rely on the far
-  // side clamping — this walks the real RuntimeGitCommands with an unclamped forwarded diff.
-  it('caps an SSH-forwarded diff a remote client requested', async () => {
-    sshMocks.getSshGitProvider.mockReturnValue({
-      getDiff: vi.fn().mockResolvedValue(OVERSIZED_DIFF)
-    })
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: { id: 'wt-1', path: '/remote/repo' } as unknown as ResolvedRuntimeGitWorktree,
-        executionHostId: 'ssh:conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-    const runtime = Object.assign(commands, {
-      getRuntimeId: () => 'test-runtime'
-    }) as unknown as OrcaRuntimeService
-
-    const response = await dispatchRemote(runtime, 'git.diff', CASES[0]!.params, 'mobile')
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'diff_too_large' } })
-  })
 })

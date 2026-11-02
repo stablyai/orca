@@ -78,7 +78,6 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
-import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 import {
   mockPtyProcess,
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
@@ -181,16 +180,6 @@ describe('createPtySubprocess', () => {
     }
 
     expect(onMacosTccSpawnStrategy).not.toHaveBeenCalled()
-  })
-
-  it('uses a new daemon protocol for the macOS login preflight host behavior', () => {
-    expect(PROTOCOL_VERSION).toBeGreaterThan(22)
-    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
-  })
-
-  it('uses a new daemon protocol for daemon-local Codex env ownership', () => {
-    expect(PROTOCOL_VERSION).toBeGreaterThan(22)
-    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
   })
 
   it('resolves a missing Unix default before spawning node-pty', async () => {

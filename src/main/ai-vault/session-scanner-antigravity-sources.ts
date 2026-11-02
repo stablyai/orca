@@ -41,7 +41,8 @@ export function antigravityDiscoveries(
       issues,
       extensions: ['.jsonl'],
       filePredicate: isAntigravityTranscriptPath,
-      directoryPredicate: shouldDescendAntigravityBrainDirectory
+      directoryPredicate: shouldDescendAntigravityBrainDirectory,
+      signal: options.signal
     }).then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
   )
 }

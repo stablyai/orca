@@ -9,6 +9,7 @@ import {
   setRuntimeEnvironmentCatalogRefresher,
   subscribeRuntimeEnvironment
 } from './runtime-environment-pairing-refresh'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const PAIRING_CHANGED = new Error(
   "Error invoking remote method 'runtimeEnvironments:subscribe': Error: Runtime environment pairing changed; refresh and try again"
@@ -32,7 +33,7 @@ function installMain(onCatalogWrite: () => void = () => {}): {
     refuseStale(args)
     return { ok: true, result: {} }
   })
-  vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe, call } } })
+  stubRuntimeEnvironmentBridge({ subscribe, call })
   setRuntimeEnvironmentCatalogRefresher(async () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 2 }])
     // The app's store-write subscriber resyncs subscriptions keyed on the revision.

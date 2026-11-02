@@ -3,7 +3,10 @@ import { isAgentSessionOptionRejectedError } from './structured-agent-session-op
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 export async function performSetOption(
-  ctx: AgentSessionTurnContext,
+  ctx: Pick<
+    AgentSessionTurnContext,
+    'sessionId' | 'adapter' | 'fence' | 'persistOptions' | 'publish'
+  >,
   input: { key: string; value: string },
   signal?: AbortSignal
 ): Promise<TurnOutcome<AgentSessionOptionResult>> {

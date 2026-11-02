@@ -18,26 +18,13 @@ import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary
 import { ChecksList } from './checks-list'
 import { PRCommentsList } from './comments-list'
 import { translate } from '@/i18n/i18n'
-import type { ChecksPanelReview } from '../checks-panel-review'
-import type { ChecksPanelHostedReviewModifierDestination } from '../checks-panel-hosted-review-click-routing'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
-type ReviewHeaderComponentProps = {
-  review: ChecksPanelReview
-  isRefreshing: boolean
-  canUnlinkReview: boolean
-  modifierHintDestination: ChecksPanelHostedReviewModifierDestination
-  onRefresh: () => void
-  onOpenReview: (event: React.MouseEvent<HTMLButtonElement>) => void
-  onUnlinkReview: () => void
-  onLinkAnotherReview: () => void
-}
+import { ChecksPanelReviewHeader } from './review-header'
 
 export function ChecksPanelActiveContent({
-  model,
-  ReviewHeaderComponent
+  model
 }: {
   model: ChecksPanelActiveContentModel
-  ReviewHeaderComponent: React.ComponentType<ReviewHeaderComponentProps>
 }): React.JSX.Element | null {
   const {
     activeConnectionId,
@@ -51,11 +38,13 @@ export function ChecksPanelActiveContent({
     aiActionDisabledReason,
     canTargetPRComments,
     checks,
+    checksError,
     checksLoading,
     claimedCommentResolutionRef,
     commentResolutionLaunchAcceptedRef,
     comments,
     commentsDisabledReason,
+    commentsError,
     commentsLoading,
     commentsSelectionClearRequest,
     conflictDetailsRefreshing,
@@ -129,7 +118,7 @@ export function ChecksPanelActiveContent({
       {/* Hosted review header */}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
         {/* Review number + state badge + refresh + open link */}
-        <ReviewHeaderComponent
+        <ChecksPanelReviewHeader
           review={activeReview}
           isRefreshing={isRefreshing}
           canUnlinkReview={activeReview.provider === 'github' ? true : linkedGitLabMR !== null}
@@ -242,6 +231,7 @@ export function ChecksPanelActiveContent({
       {!(activeConflictReview && checks.length === 0 && !checksLoading) && (
         <ChecksList
           checks={checks}
+          checksError={checksError}
           checksLoading={checksLoading}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
@@ -251,6 +241,7 @@ export function ChecksPanelActiveContent({
       )}
       <PRCommentsList
         comments={comments}
+        commentsError={commentsError}
         commentsLoading={commentsLoading}
         reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}

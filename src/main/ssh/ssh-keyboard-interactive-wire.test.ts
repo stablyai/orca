@@ -6,11 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshConnection } from './ssh-connection'
 import { createCallbacks, createResolvedConfig, createTarget } from './ssh-connection-test-fixtures'
 import { initSshHostKeyStoreFile } from './ssh-host-key-store'
-import { resolveWithSshG } from './ssh-config-parser'
-import type * as SshConfigParser from './ssh-config-parser'
+import { resolveWithSshG } from './config/ssh-g-config-resolution'
+import type * as SshGConfigResolution from './config/ssh-g-config-resolution'
 
-vi.mock('./ssh-config-parser', async (importOriginal) => ({
-  ...(await importOriginal<typeof SshConfigParser>()),
+vi.mock('./config/ssh-g-config-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof SshGConfigResolution>()),
   resolveWithSshG: vi.fn()
 }))
 

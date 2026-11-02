@@ -1,5 +1,5 @@
 import { splitWorktreeId } from '../shared/worktree/id'
-import { worktreePathComparisonKey } from './ipc/worktree-path-comparison'
+import { worktreePathComparisonKey } from './worktree-path-comparison-key'
 
 /** Comparison keys used only to retain state; canonical equivalence must never select a delete target. */
 export function worktreeRetentionPathComparisonKey(

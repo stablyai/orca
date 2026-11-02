@@ -97,8 +97,9 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
     hasHostSidebarActivity: false,
     agents: []
   }
+  const summaries = new Map([[WORKTREE_ID, summary]])
   host.attachRuntimeWorktreeAgentRows({
-    summaries: new Map([[WORKTREE_ID, summary]]),
+    summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
     workingTerminalEvidenceByWorktreeId: new Map(),
@@ -112,8 +113,8 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
       }
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map: Map<string, unknown>, _paths: unknown, _missing: unknown, id: string) =>
-      map.get(id) ?? null
+    // Old builds pass (summaries, pathIndex, missingIds, id); newer ones pass (id). The id is last in both.
+    getSummary: (...args: unknown[]) => summaries.get(String(args.at(-1))) ?? null
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: JSON.parse of the rows the host just attached, which are plain objects keyed by paneKey.
   const rows = JSON.parse(JSON.stringify(summary.agents)) as AgentRow[]

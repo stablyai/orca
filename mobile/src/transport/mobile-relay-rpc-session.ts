@@ -7,6 +7,11 @@ import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import {
+  withRpcEnvelopeFields,
+  type RpcEnvelopeFields,
+  type RpcRequestFrame
+} from './rpc-envelope-fields'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
@@ -102,7 +107,8 @@ export function connectMobileRelayRpcSession(args: {
     async sendRequest(method, params, options) {
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
-      return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
+      const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
+      return sendRpc(method, params, timeoutMs, false, options?.envelope)
     },
 
     subscribe(method, params, listener, options) {
@@ -204,7 +210,8 @@ export function connectMobileRelayRpcSession(args: {
     method: string,
     params: unknown,
     timeoutMs = requestTimeoutMs,
-    beforeConnected = false
+    beforeConnected = false,
+    envelope?: RpcEnvelopeFields
   ): Promise<RpcResponse> {
     if (closed || (!beforeConnected && state !== 'connected')) {
       return Promise.reject(new Error('relay session not connected'))
@@ -217,7 +224,7 @@ export function connectMobileRelayRpcSession(args: {
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
       pending.track(id, { resolve, reject, timer, written: false })
-      if (!sendFrame({ id, method, params })) {
+      if (!sendFrame({ id, method, params, envelope })) {
         clearTimeout(timer)
         pending.drop(id)
         reject(new Error('relay E2EE channel not ready'))
@@ -227,8 +234,9 @@ export function connectMobileRelayRpcSession(args: {
     })
   }
 
-  function sendFrame(request: { id: string; method: string; params?: unknown }): boolean {
-    return link.sendText(JSON.stringify({ ...request, deviceToken: args.deviceToken }))
+  function sendFrame({ envelope, ...request }: RpcRequestFrame): boolean {
+    const wire = withRpcEnvelopeFields({ ...request, deviceToken: args.deviceToken }, envelope)
+    return link.sendText(JSON.stringify(wire))
   }
 
   function handleText(plaintext: string): void {

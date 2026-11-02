@@ -34,7 +34,7 @@ import { codexThreadWaitsOnUser, readCodexTurnId } from './codex-structured-thre
 import { CODEX_TOKEN_USAGE_METHOD, readCodexThreadTokenTotal } from './codex-subagent-activity'
 import type { CodexExecutionChild, CodexSubagentExecutions } from './codex-subagent-executions'
 
-/** The executions' own child bound. */
+/** Facts kept for settled children; a working child always has its own. */
 const MAX_CHILD_FACTS = 128
 const MAX_OPEN_CALLS_PER_CHILD = 16
 const CHILD_FRAME_METHODS: ReadonlySet<string> = new Set([
@@ -66,7 +66,8 @@ function ofTurn<T extends { turnId: string | null }>(fact: T | undefined, turnId
 
 function commandLive(
   command: Extract<CodexBackgroundCommandChange, { type: 'started' }>,
-  ownerId: string | null
+  ownerId: string | null,
+  stopsTerminals: boolean
 ) {
   const { task } = command
   return (observedAt: number): AgentChildWorkEvidence => ({
@@ -79,7 +80,8 @@ function commandLive(
       state: 'working',
       ...(task.description ? { description: task.description } : {}),
       ...(ownerId !== null ? { ownerId } : {}),
-      stoppable: false
+      // As the strip offers it: a backgrounded process this app-server can terminate.
+      stoppable: stopsTerminals && command.backgrounded && command.processId !== undefined
     }
   })
 }
@@ -91,8 +93,15 @@ export class CodexChildWorkEvidence {
   constructor(
     private readonly primaryThreadId: string,
     private readonly executions: CodexSubagentExecutions,
-    private readonly liveCommands: (threadId: string) => readonly CodexBackgroundCommandChange[]
+    private readonly liveCommands: (threadId: string) => readonly CodexBackgroundCommandChange[],
+    /** Whether this app-server proved it can terminate a background command. */
+    private readonly stopsTerminals: () => boolean = () => false
   ) {}
+
+  /** Restates these commands, as when whether they can be stopped changed. */
+  restateCommands(commands: readonly CodexBackgroundCommandChange[]): void {
+    this.queueCommands(commands)
+  }
 
   /** After the tracker applied the frame: which command processes it saw start or stop, and the
    *  child the frame is about. */
@@ -104,7 +113,7 @@ export class CodexChildWorkEvidence {
     this.queueCommands(commands)
     for (const threadId of this.childThreads(event, frame)) {
       const facts = this.factsFor(threadId)
-      if (facts && event.threadId === threadId) {
+      if (event.threadId === threadId) {
         this.record(facts, event)
       }
       this.queueChild(threadId)
@@ -144,7 +153,7 @@ export class CodexChildWorkEvidence {
     for (const command of commands) {
       if (command.type === 'started') {
         const ownerId = command.threadId === this.primaryThreadId ? null : command.threadId
-        this.pending.push(commandLive(command, ownerId))
+        this.pending.push(commandLive(command, ownerId, this.stopsTerminals()))
         continue
       }
       const { taskId } = command
@@ -265,7 +274,8 @@ export class CodexChildWorkEvidence {
       ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
       ...(lastMessage ? { lastMessage } : {}),
       ...(spawner && spawner !== this.primaryThreadId ? { ownerId: spawner } : {}),
-      stoppable: false
+      // `turn/interrupt` reaches a child thread's turn on every Codex Orca runs.
+      stoppable: true
     }
   }
 
@@ -289,19 +299,19 @@ export class CodexChildWorkEvidence {
     }
   }
 
-  private factsFor(threadId: string): ChildFacts | undefined {
+  private factsFor(threadId: string): ChildFacts {
     const existing = this.facts.get(threadId)
     if (existing) {
       return existing
     }
     if (this.facts.size >= MAX_CHILD_FACTS) {
+      // Refusing a working child its facts would drop its every edge; the host's limits bound them.
       const idle = [...this.facts.keys()].find(
         (id) => this.executions.find(id)?.execution?.state !== 'working'
       )
-      if (idle === undefined) {
-        return undefined
+      if (idle !== undefined) {
+        this.facts.delete(idle)
       }
-      this.facts.delete(idle)
     }
     const facts: ChildFacts = { openCalls: new Map(), waiting: false }
     this.facts.set(threadId, facts)

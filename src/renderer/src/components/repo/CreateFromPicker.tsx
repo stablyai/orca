@@ -19,8 +19,6 @@ import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
@@ -56,11 +54,6 @@ export function CreateFromPicker({
   onValueChange: (baseBranch: string) => void
   onSetDefault?: (baseBranch: string) => void | Promise<void>
 }): React.JSX.Element {
-  // Per-repo evidence, not the ambient active-runtime setting; the base-ref helpers
-  // just take a settings-shaped object, so it is synthesized at each call below.
-  const repoRuntimeEnvironmentId = useAppStore((state) =>
-    getRuntimeEnvironmentIdForRepo(state, repoId)
-  )
   const repo = repoMap.get(repoId)
   const repoHostId = repo ? getRepoExecutionHostId(repo) : undefined
   const [open, setOpen] = React.useState(false)
@@ -161,16 +154,12 @@ export function CreateFromPicker({
   )
 
   React.useEffect(() => {
-    if (!repoId) {
+    if (!repoId || !repoHostId) {
       return
     }
     let stale = false
     setDefaultBaseRef(null)
-    void getRuntimeRepoBaseRefDefault(
-      { activeRuntimeEnvironmentId: repoRuntimeEnvironmentId },
-      repoId,
-      repoHostId
-    )
+    void getRuntimeRepoBaseRefDefault(repoHostId, repoId)
       .then((result) => {
         if (!stale) {
           setDefaultBaseRef(result.defaultBaseRef)
@@ -184,7 +173,7 @@ export function CreateFromPicker({
     return () => {
       stale = true
     }
-  }, [repoHostId, repoRuntimeEnvironmentId, repoId])
+  }, [repoHostId, repoId])
 
   React.useEffect(() => {
     if (!isRuntimeRepoRefSearchQueryWithinLimit(query)) {
@@ -195,7 +184,7 @@ export function CreateFromPicker({
     const trimmedQuery = query.trim()
     // Why: an empty query lists the repo's branches, as the composer's Branch tab already does;
     // a minimum length left this picker showing only the default and worktree branches.
-    if (!open || !repoId) {
+    if (!open || !repoId || !repoHostId) {
       setSearchResults([])
       setIsSearching(false)
       return
@@ -204,13 +193,7 @@ export function CreateFromPicker({
     let stale = false
     setIsSearching(true)
     const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefs(
-        { activeRuntimeEnvironmentId: repoRuntimeEnvironmentId },
-        repoId,
-        trimmedQuery,
-        30,
-        repoHostId
-      )
+      void searchRuntimeRepoBaseRefs(repoHostId, repoId, trimmedQuery, 30)
         .then((results) => {
           if (!stale) {
             setSearchResults(results)
@@ -232,7 +215,7 @@ export function CreateFromPicker({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [repoHostId, repoRuntimeEnvironmentId, open, query, repoId])
+  }, [repoHostId, open, query, repoId])
 
   const compactTriggerContent = (
     <>

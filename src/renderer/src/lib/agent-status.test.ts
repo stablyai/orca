@@ -12,7 +12,7 @@ import {
   formatAgentTypeLabel,
   agentTypeToIconAgent
 } from './agent-status'
-import { extractLastOscTitle } from '../components/terminal-pane/pty-transport'
+import { extractLastOscTitle } from '../../../shared/agent-detection'
 
 describe('detectAgentStatusFromTitle', () => {
   it('returns null for empty string', () => {

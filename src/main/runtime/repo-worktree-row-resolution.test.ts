@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
 import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
@@ -39,6 +40,7 @@ function gitWorktree(path: string): GitWorktreeInfo {
 }
 
 function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
+  store: Store
   metaById: Record<string, WorktreeMeta>
   scanRepo: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['scanRepo']>>
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
@@ -65,6 +67,55 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
 }
 
 describe('host-qualified scoped worktree resolution', () => {
+  it('projects cross-repository lineage by scanning only related repos on the selected host', async () => {
+    const childRepo = repo('child-repo', '/child-repo', { executionHostId: 'local' })
+    const parentRepo = repo('parent-repo', '/parent-repo', { executionHostId: 'local' })
+    const remoteParent = repo('parent-repo', '/remote-parent-repo', {
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+    const unrelated = repo('unrelated', '/unrelated', { executionHostId: 'local' })
+    const deps = createDeps([childRepo, parentRepo, remoteParent, unrelated])
+    const childId = 'child-repo::/child'
+    const parentId = 'parent-repo::/parent'
+    deps.metaById[childId] = mergeWorktreeMetaForWrite(undefined, {
+      instanceId: 'child-instance',
+      hostId: 'local',
+      projectId: 'child-project'
+    })
+    deps.metaById[parentId] = mergeWorktreeMetaForWrite(undefined, {
+      instanceId: 'parent-instance',
+      hostId: 'local',
+      projectId: 'parent-project'
+    })
+    const lineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      createdAt: 1
+    }
+    Object.assign(deps.store, { getAllWorktreeLineage: () => ({ [childId]: lineage }) })
+    deps.scanRepo.mockImplementation(async (owner) => ({
+      ok: true,
+      worktrees: [gitWorktree(owner.id === 'child-repo' ? '/child' : '/parent')]
+    }))
+
+    await expect(resolveScopedWorktreeIdRow(deps, childId, 'local')).resolves.toMatchObject({
+      parentWorktreeId: parentId,
+      lineage
+    })
+    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([childRepo, parentRepo])
+
+    deps.scanRepo.mockClear()
+    await expect(resolveScopedWorktreeIdRow(deps, parentId, 'local')).resolves.toMatchObject({
+      childWorktreeIds: [childId]
+    })
+    expect(deps.scanRepo.mock.calls.map(([owner]) => owner)).toEqual([parentRepo, childRepo])
+  })
+
   it('scans only the selected local or SSH owner when repo ids and paths collide', async () => {
     const owners = [
       repo('shared', '/local/repo', { executionHostId: 'local' }),

@@ -267,28 +267,11 @@ describe('MobilePage pairing connection mode', () => {
     expect(screen.getByTestId('custom-addresses')).toHaveTextContent('100.126.117.25:6768')
   })
 
-  it('does not auto-mint any QR when signed out with Anywhere selected', async () => {
+  it('preselects LAN and mints a local-only QR on a signed-out desktop', async () => {
     mocks.storeState.orcaProfileAuthStatus = { state: 'local' }
     await openPairingStep()
 
-    // Aligned with Settings: signed-out Anywhere cannot serve Relay, so we mint
-    // nothing rather than a scannable local-only QR under the Relay label.
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(getPairingQR).not.toHaveBeenCalled()
-    expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
-    expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none')
-    expect(screen.getByTestId('can-generate')).toHaveTextContent('false')
-  })
-
-  it('mints a local-only QR when switching to LAN while signed out', async () => {
-    mocks.storeState.orcaProfileAuthStatus = { state: 'local' }
-    const user = userEvent.setup()
-    await openPairingStep()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(getPairingQR).not.toHaveBeenCalled()
-
-    // Picking LAN is an honest local-only path, so a QR mints.
-    await user.click(screen.getByRole('button', { name: 'LAN' }))
+    // Why: Relay's one-click sign-in links this desktop to an Orca account, so it is opt-in.
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'local-only' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
@@ -299,11 +282,10 @@ describe('MobilePage pairing connection mode', () => {
     const user = userEvent.setup()
     await openPairingStep()
 
-    await user.click(screen.getByRole('button', { name: 'LAN' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
     getPairingQR.mockClear()
 
-    // Switching back to Orca Relay must clear the local QR, not remint a
+    // Switching to Orca Relay must clear the local QR, not remint a
     // local-only code under the Relay label.
     await user.click(screen.getByRole('button', { name: 'Orca Relay' }))
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('automatic'))
@@ -317,8 +299,9 @@ describe('MobilePage pairing connection mode', () => {
     mocks.storeState.orcaProfileAuthStatus = { state: 'local' }
     const user = userEvent.setup()
     await openPairingStep()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(getPairingQR).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Orca Relay' }))
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
+    getPairingQR.mockClear()
 
     await user.click(screen.getByRole('button', { name: 'Change address' }))
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -334,10 +317,10 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Enter flow' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
-    // Signed-out Anywhere shows no QR at all.
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(getPairingQR).not.toHaveBeenCalled()
-    expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none')
+    // Signed-out Anywhere (an explicit choice) shows no QR at all.
+    await user.click(screen.getByRole('button', { name: 'Orca Relay' }))
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
+    getPairingQR.mockClear()
 
     // Hold the sign-in mint pending so we can inspect the upgrade window.
     let resolveRelayQr: ((value: Record<string, unknown>) => void) | undefined

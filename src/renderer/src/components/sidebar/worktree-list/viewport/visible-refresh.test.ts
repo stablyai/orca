@@ -54,7 +54,6 @@ function row(id: string): WorktreeItemRow {
     },
     depth: 0,
     groupDepth: 0,
-    lineageTrail: [],
     isLastLineageChild: true,
     lineageChildCount: 0
   }

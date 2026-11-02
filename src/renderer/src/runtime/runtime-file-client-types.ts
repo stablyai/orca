@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 export type RuntimeReadableFileContent = {
@@ -11,7 +11,8 @@ export type RuntimeReadableFileContent = {
 }
 
 export type RuntimeFileReadArgs = {
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  /** The file owner's transport; never the focused server. */
+  target: RuntimeClientTarget
   filePath: string
   relativePath?: string
   worktreeId?: string
@@ -20,10 +21,15 @@ export type RuntimeFileReadArgs = {
   includeLocalLogMetadata?: boolean
   /** File access of the local fallback read; remote reads stay root-relative. */
   access?: LocalFileAccess
+  /** Host grant for a runtime file outside every workspace (see OpenFile.terminalArtifactGrantId). */
+  terminalArtifactGrantId?: string
+  /** Set by readers that render the bytes: page a remote PDF/image too large for one reply. */
+  pageOversizedBinary?: boolean
 }
 
 export type RuntimeFileOperationArgs = {
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  /** The worktree owner's transport; never the focused server. */
+  target: RuntimeClientTarget
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId?: string

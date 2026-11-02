@@ -8,6 +8,8 @@ import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
+test.use({ seedTestRepo: false })
+
 // Why: afterEach deletes every target carrying this prefix, so two workers loading
 // the module in the same millisecond must not collide on a shared Date.now().
 const HOST_PREFIX = `e2e-ssh-modal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`

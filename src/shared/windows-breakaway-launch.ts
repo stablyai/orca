@@ -21,11 +21,6 @@ export type WindowsBreakawayLaunchContract = {
   reportMarker: string
 }
 
-export const RELAY_WINDOWS_BREAKAWAY_CONTRACT: WindowsBreakawayLaunchContract = {
-  argsFlag: '--relay-args',
-  reportMarker: 'ORCA_RELAY_LAUNCH'
-}
-
 export const ORCAD_WINDOWS_BREAKAWAY_CONTRACT: WindowsBreakawayLaunchContract = {
   argsFlag: '--orcad-args',
   reportMarker: 'ORCA_ORCAD_LAUNCH'

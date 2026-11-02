@@ -7,7 +7,7 @@
  * paint and git. This one runs git churn alone against a hidden window and
  * takes a V8 CPU profile OF THE MAIN PROCESS for each phase, which is the only
  * way to split spawn initiation from stdout drain from porcelain parsing — the
- * churn probe reports spawn initiation only.
+ * churn probe reports spawn initiation only (the whole run for synchronous launches).
  *
  * Run: ORCA_GIT_COST_BENCH=1 ORCA_BACKGROUND_LAUNCH=1 \
  *   npx playwright test tests/e2e/main-thread-git-cost.spec.ts \

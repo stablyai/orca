@@ -16,6 +16,23 @@ beforeEach(() => {
 })
 
 describe('codex restart notice lifecycle', () => {
+  it('keeps a queued Claude restart through Codex notice clear, dismiss and settle', () => {
+    const pending = (): string | undefined =>
+      useAppStore.getState().pendingPaneAccountRestarts['pty-1']
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'claude')
+
+    switchAccount('pty-1', A, B)
+    useAppStore.getState().clearCodexRestartNotice('pty-1')
+    expect(pending()).toBe('claude')
+
+    switchAccount('pty-1', A, B)
+    useAppStore.getState().dismissCodexRestartNotices(['pty-1'])
+    expect(pending()).toBe('claude')
+
+    switchAccount('pty-1', B, A)
+    expect(pending()).toBe('claude')
+  })
+
   it('raises no notice when the pane returns to the account it launched under', () => {
     switchAccount('pty-1', A, B)
     switchAccount('pty-1', B, A)
@@ -75,7 +92,7 @@ describe('codex restart notice lifecycle', () => {
 
   it('drops a queued restart when the user dismisses the same pane', () => {
     switchAccount('pty-1', A, B)
-    useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'codex')
 
     useAppStore.getState().dismissCodexRestartNotices(['pty-1'])
 
@@ -84,14 +101,14 @@ describe('codex restart notice lifecycle', () => {
       nextAccountLabel: B,
       dismissed: true
     })
-    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   })
 
   it('re-blocks a dismissed pane once a restart is queued for it', () => {
     switchAccount('pty-1', A, B)
     useAppStore.getState().dismissCodexRestartNotices(['pty-1'])
 
-    useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'codex')
 
     // Why: the pane still runs under A until it relaunches, so the dismissal
     // that freed its keyboard must not outlive the restart request.
@@ -204,7 +221,7 @@ describe('codex restart notices with colliding account labels', () => {
 
   it('puts a failed accepted restart back to the unanswered prompt', () => {
     switchAccount('pty-1', A, B)
-    useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'codex')
 
     useAppStore.getState().reopenCodexRestartPrompt('pty-1')
 
@@ -214,7 +231,7 @@ describe('codex restart notices with colliding account labels', () => {
       previousAccountLabel: A,
       nextAccountLabel: B
     })
-    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   })
 
   it('leaves unanswered and dismissed notices alone on a reopen request', () => {

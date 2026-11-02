@@ -3,7 +3,11 @@ import { AlertTriangle, GitBranch, Loader2, RotateCcw, X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
-import { getCreationProgressLabel } from '@/lib/pending-worktree-creation'
+import {
+  getCreationProgressLabel,
+  getVisibleCheckoutProgress
+} from '@/lib/pending-worktree-creation'
+import { Progress } from '@/components/ui/progress'
 import { translate } from '@/i18n/i18n'
 
 /**
@@ -24,6 +28,7 @@ export default function WorktreeCreationPanel({
 }): React.JSX.Element | null {
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const [now, setNow] = React.useState(() => Date.now())
+  const progressLabelId = React.useId()
   // Why: depend on the primitive status only — provisioning appends a log to the
   // entry on every stderr chunk, giving a fresh `entry` reference each tick that
   // would otherwise tear down and recreate this interval before it can fire.
@@ -47,6 +52,7 @@ export default function WorktreeCreationPanel({
   const isVmCreation = entry.phase === 'provisioning-vm'
   const title = entry.request.displayName || entry.request.name
   const elapsedLabel = formatElapsedTime(now - entry.startedAt)
+  const checkoutProgress = getVisibleCheckoutProgress(entry)
 
   return (
     <div className="absolute inset-0 flex flex-col bg-background">
@@ -158,9 +164,18 @@ export default function WorktreeCreationPanel({
           <div className="flex min-h-0 max-w-3xl flex-col gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <Loader2 className="size-3.5 shrink-0 animate-spin" />
-              <span>{getCreationProgressLabel(entry)}</span>
+              <span id={progressLabelId} className="tabular-nums">
+                {getCreationProgressLabel(entry)}
+              </span>
               <span className="text-muted-foreground/70">{elapsedLabel}</span>
             </div>
+            {checkoutProgress ? (
+              <Progress
+                value={checkoutProgress.percent}
+                aria-labelledby={progressLabelId}
+                className="h-1.5 max-w-xs"
+              />
+            ) : null}
           </div>
         )}
       </div>

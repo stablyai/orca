@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { app } from 'electron'
 import { notifyServeSupervisorReady } from '../serve-update-handoff'
+import { clearServeAbortPark } from '../../shared/serve-abort-park'
+import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
 import { buildServePairingReadiness, servePublishMode } from '../server/serve-pairing-readiness'
 import { mainProcessState as state } from './main-process-state'
 import { getServeOptions, type ServeOptions } from './serve-options'
@@ -9,13 +9,7 @@ import { getServeOptions, type ServeOptions } from './serve-options'
 export { getServeOptions, type ServeOptions }
 
 export function getBundledWebClientRoot(): string | undefined {
-  const appPath = app.getAppPath()
-  const roots = [
-    join(appPath, 'out', 'web'),
-    // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the web bundle.
-    join(appPath, '..', 'web')
-  ]
-  return roots.find((root) => existsSync(join(root, 'web-index.html')))
+  return findBundledWebClientRoot(app.getAppPath())
 }
 
 export async function printServeReady(options: ServeOptions): Promise<void> {
@@ -36,4 +30,6 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
     output
   )
   notifyServeSupervisorReady(runtime.getRuntimeId())
+  // Why: a serve that got this far proves this environment can launch it after all.
+  clearServeAbortPark(app.getPath('userData'))
 }

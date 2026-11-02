@@ -5,19 +5,11 @@ import { activateAndRevealWorktree } from './worktree-activation'
 import { activateStructuredAgentSessionById } from './structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
-import {
-  callRuntimeRpc,
-  getActiveRuntimeTarget,
-  runtimeEnvironmentSupportsCapability,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import {
-  applyStructuredSessionTabSnapshots,
-  isCurrentLocalStructuredSessionGeneration,
-  localStructuredSessionGeneration
-} from '@/runtime/local-structured-session-tabs-sync'
+import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
@@ -112,12 +104,9 @@ export async function activateAiVaultStructuredSession(
   // second click runs the whole sequence again and lands its own toast.
   const hostKey = executionHostIdForStructuredTarget(
     target ??
-      getActiveRuntimeTarget({
-        activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(
-          useAppStore.getState(),
-          structured.workspaceId
-        )
-      })
+      runtimeTargetForOwnerEnvironment(
+        getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), structured.workspaceId)
+      )
   )
   const key = `${hostKey}\0${structured.workspaceId}\0${structured.sessionId}`
   const inFlight = activationsInFlight.get(key)
@@ -206,12 +195,9 @@ export async function revealStructuredSession(target: {
 }): Promise<StructuredSessionRevealOutcome> {
   const host =
     target.target ??
-    getActiveRuntimeTarget({
-      activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(
-        useAppStore.getState(),
-        target.worktreeId
-      )
-    })
+    runtimeTargetForOwnerEnvironment(
+      getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), target.worktreeId)
+    )
   // Negotiated against the host that will answer this call, not the local one: a paired host runs
   // its own build, and its method-not-found is indistinguishable from a refusal we should surface.
   // A local host is this build, so it always has the method and needs no round trip to prove it.
@@ -270,26 +256,20 @@ async function refreshStructuredSessionTabs(
   const state = useAppStore.getState()
   const host =
     target ??
-    getActiveRuntimeTarget({
-      activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    })
-  // Every other caller that applies an inventory fences it on the sync generation. Structured chat
-  // can be switched off while this call is in flight, which wipes the mirror; without this the
-  // answer would land afterwards and re-seed a chat row into a renderer that just discarded them.
-  const generation = localStructuredSessionGeneration()
-  const snapshot = await withStructuredSessionRestoreTimeout(
-    callRuntimeRpc<RuntimeMobileSessionTabsResult>(
+    runtimeTargetForOwnerEnvironment(getRuntimeEnvironmentIdForWorktree(state, worktreeId))
+  if (host.kind === 'local') {
+    await withStructuredSessionRestoreTimeout(refreshLocalStructuredSessionWorktreeTabs(worktreeId))
+    return
+  }
+  // Paired inventories arrive through their existing host-scoped subscription.
+  await withStructuredSessionRestoreTimeout(
+    callRuntimeRpc(
       host,
       'session.tabs.list',
       { worktree: toRuntimeWorktreeSelector(worktreeId) },
       { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
     )
   )
-  if (host.kind !== 'local' || !isCurrentLocalStructuredSessionGeneration(generation)) {
-    return
-  }
-  // Paired inventories arrive through their existing host-scoped subscription.
-  applyStructuredSessionTabSnapshots([snapshot])
 }
 
 async function withStructuredSessionRestoreTimeout<T>(promise: Promise<T>): Promise<T> {

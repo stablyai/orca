@@ -1,12 +1,14 @@
 import { useCallback } from 'react'
 import type { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import {
   createWorktreeContextMenuDeleteIntent,
   deferWorktreeContextMenuDeleteIntent
 } from './worktree-context-menu-delete-intent'
 import { runSleepWorktrees } from './sleep-worktree-flow'
+import { collectTwinHostsAlsoSlept } from './sleep-twin-confirmation'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
@@ -21,6 +23,7 @@ export function useWorktreeContextMenuCommands(args: {
   createGroupDialogActiveRef: React.MutableRefObject<boolean>
   createProjectGroup: ReturnType<typeof useAppStore.getState>['createProjectGroup']
   folderWorkspaceId: string | null
+  getState: () => ReturnType<typeof useAppStore.getState>
   isMultiContext: boolean
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
@@ -29,6 +32,7 @@ export function useWorktreeContextMenuCommands(args: {
   scopeRef: React.RefObject<HTMLDivElement | null>
   setCreateGroupDialogOpen: (open: boolean) => void
   setMenuOpenState: (open: boolean) => void
+  setWorkspaceUnreadByUser: ReturnType<typeof useAppStore.getState>['setWorkspaceUnreadByUser']
   setWorktreesPinnedAndReveal: ReturnType<
     typeof useAppStore.getState
   >['setWorktreesPinnedAndReveal']
@@ -46,10 +50,10 @@ export function useWorktreeContextMenuCommands(args: {
     window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))
   }, [args])
   const handleToggleRead = useCallback(() => {
-    args.updateWorktreeMeta(
+    args.setWorkspaceUnreadByUser(
       args.worktree.id,
-      { isUnread: !args.worktree.isUnread },
-      { executionHostId: args.worktree.hostId ?? 'local' }
+      !args.worktree.isUnread,
+      args.worktree.hostId ?? 'local'
     )
   }, [args])
   const handleTogglePin = useCallback(() => {
@@ -74,9 +78,10 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo) {
         return
       }
-      const group = await args.createProjectGroup(name)
+      const hostId = getRepoExecutionHostId(args.repo)
+      const group = await args.createProjectGroup(name, hostId)
       if (group) {
-        await args.moveProjectToGroup(args.repo.id, group.id)
+        await args.moveProjectToGroup(args.repo.id, group.id, undefined, hostId)
       }
     },
     [args]
@@ -86,13 +91,18 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo || args.repo.projectGroupId === groupId) {
         return
       }
-      void args.moveProjectToGroup(args.repo.id, groupId)
+      void args.moveProjectToGroup(
+        args.repo.id,
+        groupId,
+        undefined,
+        getRepoExecutionHostId(args.repo)
+      )
     },
     [args]
   )
   const handleRemoveProjectFromGroup = useCallback(() => {
     if (args.repo) {
-      void args.moveProjectToGroup(args.repo.id, null)
+      void args.moveProjectToGroup(args.repo.id, null, undefined, getRepoExecutionHostId(args.repo))
     }
   }, [args])
   const handleAssignWorkspaceStatus = useCallback(
@@ -136,17 +146,24 @@ export function useWorktreeContextMenuCommands(args: {
     })
   }, [args])
   const sleepWorktreesAfterMenuClose = useCallback(
-    (worktreeIds: string[]) => {
+    (worktrees: readonly Worktree[]) => {
       args.setMenuOpenState(false)
+      const worktreeIds = worktrees.map((worktree) => worktree.id)
+      // Why confirm: a twin's copies share one id, so this also sleeps copies the user didn't pick.
+      const hostIds = collectTwinHostsAlsoSlept(args.getState(), worktrees)
+      if (hostIds.length > 0) {
+        args.openModal('confirm-sleep-twin', { worktreeIds, hostIds })
+        return
+      }
       window.setTimeout(() => void runSleepWorktrees(worktreeIds), 50)
     },
     [args]
   )
   const handleCloseTerminals = useCallback(() => {
-    sleepWorktreesAfterMenuClose(args.sleepableWorktrees.map((item) => item.id))
+    sleepWorktreesAfterMenuClose(args.sleepableWorktrees)
   }, [args.sleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleSleepSubtree = useCallback(() => {
-    sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees.map((item) => item.id))
+    sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees)
   }, [args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)

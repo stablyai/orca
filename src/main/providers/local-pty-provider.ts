@@ -1,5 +1,10 @@
 import type * as pty from 'node-pty'
-import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from './pty-provider-contract'
 import {
   WRITE_ACCEPTED,
   writeRefused,

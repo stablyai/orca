@@ -6,9 +6,9 @@ import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner
 import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
 import {
   deleteRuntimePath,
-  deleteRuntimeRelativePath,
-  statRuntimePath
-} from '@/runtime/runtime-file-client'
+  deleteRuntimeRelativePath
+} from '@/runtime/runtime-file-mutation-client'
+import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 
 export function deleteUntouchedUntitledFile(getState: () => AppState, file: OpenFile): void {
   const hasRetainedView = () =>

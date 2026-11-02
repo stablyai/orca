@@ -115,11 +115,12 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-delete'],
     destructive: true,
     summary: 'Remove a project host setup',
-    usage: 'orca project setup-delete --setup <setup-id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'setup'],
+    usage: 'orca project setup-delete --setup <setup-id> [--force] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'setup', 'force'],
     notes: [
       'Independent setups are removed directly.',
-      'Repo-backed setups remove the registered repo compatibility record.'
+      'Repo-backed setups remove the registered repo compatibility record.',
+      'Refuses while the project has open terminals or saved workspace details; --force removes it anyway.'
     ],
     examples: ['orca project setup-delete --setup github:stablyai/orca::gpu --json']
   }

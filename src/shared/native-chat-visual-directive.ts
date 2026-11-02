@@ -1,5 +1,5 @@
 // The one grammar for a native-chat visual: an assistant reply line naming an HTML file in that
-// chat's visuals folder. Desktop/web (a markdown syntax extension) and mobile both parse with it.
+// chat's scratch folder. Desktop/web (a markdown syntax extension) and mobile both parse with it.
 //
 //   ::orca-visual{file="usage-chart-3f2a.html" title="Usage by day"}
 //
@@ -40,7 +40,7 @@ const ATTRIBUTE_PATTERN = /^([a-z]+)="([^"]*)"/
 const LINE_SPACE = /^[ \t]*/
 
 /**
- * A single file name inside the chat's visuals folder: no directories, separators, `..`, drive,
+ * A single file name inside the chat's scratch folder: no directories, separators, `..`, drive,
  * UNC, device or stream forms, ending in `.html`.
  */
 export function isNativeChatVisualFileName(name: string): boolean {

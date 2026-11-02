@@ -1,12 +1,11 @@
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import {
-  materializeWorktreePushTargetRemote,
-  materializeWorktreePushTargetRemoteSsh
-} from '../ipc/worktree-remote'
+import { materializeWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
-import type { Store } from '../persistence'
+import type { WorktreePushTargetStore } from '../ipc/worktree-push-target-cleanup'
+import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+
+type TerminalPushTargetStore = WorktreePushTargetStore & ProjectRuntimeResolutionStore
 
 // Why (#17828): a fork-PR remote deferred at worktree-create time must exist before an
 // autonomous agent's raw git commands run in a freshly opened terminal -- "sync through
@@ -17,25 +16,22 @@ export function triggerTerminalSpawnPushTargetMaterialization(
   worktreePath: string,
   pushTarget: GitPushTarget | undefined,
   repo: Repo | null | undefined,
-  store: Store | undefined,
+  store: TerminalPushTargetStore | null | undefined,
   repoId?: string,
   worktreeId?: string
 ): void {
-  if (!pushTarget?.remoteUrl || pushTarget.remoteCreated) {
+  // Why: an `ssh:` repo is not served here; its next sync action reports that itself.
+  if (!pushTarget?.remoteUrl || pushTarget.remoteCreated || repo?.connectionId) {
     return
   }
-  const connectionId = repo?.connectionId ?? undefined
-  const materialized = connectionId
-    ? materializeOverSsh(connectionId, worktreePath, pushTarget, store, worktreeId)
-    : materializeWorktreePushTargetRemote(
-        worktreePath,
-        pushTarget,
-        store,
-        repoId,
-        localGitOptionsForTerminalSpawn(store, repo),
-        worktreeId
-      )
-  materialized.catch((error: unknown) => {
+  materializeWorktreePushTargetRemote(
+    worktreePath,
+    pushTarget,
+    store,
+    repoId,
+    localGitOptionsForTerminalSpawn(store, repo),
+    worktreeId
+  ).catch((error: unknown) => {
     console.warn(
       `[terminal-spawn] failed to materialize push target remote for ${worktreePath}:`,
       error
@@ -43,30 +39,8 @@ export function triggerTerminalSpawnPushTargetMaterialization(
   })
 }
 
-function materializeOverSsh(
-  connectionId: string,
-  worktreePath: string,
-  pushTarget: GitPushTarget,
-  store: Store | undefined,
-  worktreeId: string | undefined
-): Promise<GitPushTarget> {
-  const provider = getSshGitProvider(connectionId)
-  if (!provider) {
-    // Why: connection dropped -- the next Orca-driven sync action will retry via its own dispatch.
-    return Promise.resolve(pushTarget)
-  }
-  return materializeWorktreePushTargetRemoteSsh(
-    provider,
-    worktreePath,
-    pushTarget,
-    store,
-    undefined,
-    worktreeId
-  )
-}
-
 function localGitOptionsForTerminalSpawn(
-  store: Store | undefined,
+  store: ProjectRuntimeResolutionStore | null | undefined,
   repo: Repo | null | undefined
 ): { wslDistro?: string } {
   if (!store || !repo) {

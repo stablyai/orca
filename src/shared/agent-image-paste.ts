@@ -26,6 +26,10 @@ export function getAgentImageHandling(agent: string | null | undefined): AgentIm
   return agent && IMAGE_ATTACHMENT_AGENTS.has(agent) ? 'attachment' : 'unsupported'
 }
 
+/** A reference `formatNativeChatFileReference` quotes: its path holds whitespace, so it may hold
+ *  text that reads like something else, such as `[Image #1]`. */
+export const NATIVE_CHAT_QUOTED_FILE_REFERENCE = /@"(?:\\"|[^"])*"|@'[^']*'/
+
 export function formatNativeChatFileReference(filePath: string): string {
   if (!/[\s@]/.test(filePath)) {
     return `@${filePath}`

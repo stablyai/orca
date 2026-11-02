@@ -5,7 +5,7 @@ import { createUIStore } from '../../store/slices/ui-slice-test-harness'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo
-} from '../sidebar/worktree-list/grouping/project-grouping'
+} from '../../../../shared/project-section-grouping'
 import {
   buildSettingsProjectList,
   getSettingsEntryHostSelection,

@@ -2,7 +2,11 @@ import type { StoreApi } from 'zustand'
 import type { editor } from 'monaco-editor'
 import type { OpenFile } from '@/store/slices/editor'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
-import { disposeClosedEditorModels, type ClosedEditorTab } from './closed-editor-tab-disposal'
+import {
+  disposeClosedEditorModels,
+  disposeClosedCheckDetailsReadingCache,
+  type ClosedEditorTab
+} from './closed-editor-tab-disposal'
 import type { MonacoModelRegistry, DisposableMonacoModel } from './diff-monaco-model-disposal'
 import { toEditorModelUri } from './editor-model-uri'
 import { getEditorModelOwnerKey } from './editor-model-owner'
@@ -94,6 +98,16 @@ export function attachClosedEditorTabCleanup(
   }
 
   const flush = (): void => {
+    const cacheGeneration = generation
+    disposeClosedCheckDetailsReadingCache(
+      [...pendingFiles.values()].filter((file) => file.mode === 'check-details'),
+      (file) =>
+        active &&
+        generation === cacheGeneration &&
+        !store
+          .getState()
+          .openFiles.some((live) => live.id === file.id && live.mode === 'check-details')
+    )
     const currentRegistry = registry
     if (!currentRegistry) {
       if (candidateModels.size === 0) {

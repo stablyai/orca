@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   buildWslCodexAppServerArgs,
   buildWslCodexIdentityProbe,
@@ -11,6 +11,7 @@ import {
   type CodexTrustGrantBinaryStamp,
   type CodexTrustGrantLedgerHome
 } from './codex-trust-grant-ledger'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 // Why: WSL pays cold-distro and login-shell startup, but stays hard-bounded on launch prep.
 const WSL_GRANT_TIMEOUT_MS = 30_000
@@ -65,6 +66,7 @@ async function buildWslCodexBinaryStamp(
     const result = await runProcess({
       program: 'wsl.exe',
       args: probe.args,
+      cwd: resolveWslInteropSpawnCwd(),
       timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
     })
     if (result.code !== 0 || result.timedOut) {

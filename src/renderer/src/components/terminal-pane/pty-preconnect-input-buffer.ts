@@ -24,7 +24,7 @@ type BufferedInput = PtyPreconnectInputEntry & {
   signal?: AbortSignal
 }
 
-type PreconnectInputWriter = {
+export type PreconnectInputWriter = {
   isCurrent: () => boolean
   sendInput: (data: string, inputKind: TerminalInputKind) => boolean
   sendInputImmediate: (data: string) => boolean

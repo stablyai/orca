@@ -104,9 +104,7 @@ vi.mock('@electron-toolkit/utils', () => ({
   is: isMock
 }))
 
-vi.mock('./ipc/pty', () => ({
-  killAllPty: killAllPtyMock
-}))
+vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
 
 vi.mock('./updater-nudge', () => ({
   fetchNudge: vi.fn().mockResolvedValue(null),

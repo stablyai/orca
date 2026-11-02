@@ -1,4 +1,4 @@
-import type { IPtyProvider } from './types'
+import type { IPtyProvider } from './pty-provider-contract'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import {
   classifyTerminalProcessInspectionFailure,

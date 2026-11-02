@@ -3,7 +3,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
-  getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import {
@@ -13,7 +12,14 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
-import { callRuntimeRpc, RuntimeRpcCallError } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '../../runtime/runtime-rpc-result'
+import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
+import {
+  runtimeTargetForOwnerEnvironment,
+  ipcOrRuntimeTargetForHostId
+} from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { workItemsCacheKey } from './cache-identity'
 import {
   findRepoForGitHubOwner,
@@ -31,6 +37,8 @@ export type GitHubWorkItemRequestTarget =
   | { kind: 'environment'; environmentId: string; runtimeRepoId: string }
   | { kind: 'local' }
 
+type GitHubSourceRoutingState = Pick<AppState, 'settings' | 'repos'>
+
 export type GitHubWorkItemsListArgs = {
   limit: number
   query?: string
@@ -46,26 +54,37 @@ export function settingsForGitHubRepoOwner(
     return settings
   }
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
   // Why: local and SSH-owned GitHub lookups run on the desktop client; host focus must not redirect them to the selected runtime.
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+  return withActiveRuntimeEnvironmentId(
+    settings,
+    parsed?.kind === 'runtime' ? parsed.environmentId : null
+  )
 }
 
-export function settingsForGitHubFocusedRepoOwner(
+function withActiveRuntimeEnvironmentId(
   settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
+  activeRuntimeEnvironmentId: string | null
 ): AppState['settings'] {
-  if (!repo?.executionHostId && !repo?.connectionId) {
-    return settings
-  }
-  return settingsForGitHubRepoOwner(settings, repo)
+  return settings
+    ? { ...settings, activeRuntimeEnvironmentId }
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing readers only consume activeRuntimeEnvironmentId before settings hydrate.
+      ({ activeRuntimeEnvironmentId } as AppState['settings'])
 }
+
+function settingsForGitHubTaskSource(
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id'> | undefined,
+  sourceContext: TaskSourceContext
+): AppState['settings'] {
+  const sourceHost = parseExecutionHostId(sourceContext.hostId)
+  return withActiveRuntimeEnvironmentId(
+    state.settings,
+    sourceHost?.kind === 'runtime'
+      ? sourceHost.environmentId
+      : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
+  )
+}
+
 export function getWorkItemsCacheKeyForOwner(
   state: Partial<Pick<AppState, 'repos' | 'settings'>>,
   repoId: string,
@@ -106,37 +125,43 @@ export function getGitHubWorkItemSourceCacheScope(
   return getGitHubWorkItemSourceHostId(state, repo, sourceContext)
 }
 
-export function getGitHubWorkItemSourceSettings(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+export function getGitHubRepoSourceSettings(
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): AppState['settings'] {
   if (sourceContext?.provider === 'github') {
-    return {
-      ...settings,
-      ...getTaskSourceRuntimeSettings(sourceContext)
-    } as AppState['settings']
+    return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
-  return settingsForGitHubFocusedRepoOwner(settings, repo)
+  return settingsForGitHubRepoOwner(state.settings, repo)
 }
 
-export function getGitHubRepoSourceSettings(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+/**
+ * Transport for a repo's GitHub request: a row-less task source's host, else the repo's owner.
+ * Local and SSH repos use this app's credentials; an unknown repo stays here too (main refuses
+ * repos it does not own) instead of following the focused server.
+ */
+export function getGitHubSourceTarget(
+  state: Pick<AppState, 'repos'>,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
-): AppState['settings'] {
+): RuntimeClientTarget {
   if (sourceContext?.provider === 'github') {
-    return {
-      ...settings,
-      ...getTaskSourceRuntimeSettings(sourceContext)
-    } as AppState['settings']
+    const sourceHost = parseExecutionHostId(sourceContext.hostId)
+    return runtimeTargetForOwnerEnvironment(
+      sourceHost?.kind === 'runtime'
+        ? sourceHost.environmentId
+        : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
+    )
   }
-  return settingsForGitHubRepoOwner(settings, repo)
+  return (
+    (repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
+  )
 }
 
 export function getGitHubWorkItemRequestContext(
   state: AppState,
-  settings: AppState['settings'],
+  requestTarget: RuntimeClientTarget,
   repoId: string,
   repoPath: string,
   sourceContext?: TaskSourceContext | null
@@ -155,7 +180,7 @@ export function getGitHubWorkItemRequestContext(
       }
     }
   }
-  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, settings)
+  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, requestTarget)
   return {
     repoId,
     repoPath,

@@ -16,7 +16,7 @@ import { fakeOrcadMigrationDestination } from './orcad-migration-destination-fak
 import { runOrcadDeltaMove } from './orcad-migration-delta-move'
 import { reconcileManagedOrcadSshTargets } from './orcad-retained-source'
 import { SshConnectionStore } from './ssh-connection-store'
-import { runTargetLifecycle } from '../ipc/ssh-target-lifecycle-queue'
+import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
 
 const mocks = vi.hoisted(() => {
   const state: { targetStore: unknown } = { targetStore: null }
@@ -24,13 +24,17 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('./ssh-target-registry', () => ({
   getSshConnectionManager: () => ({}),
-  getSshTargetRegistryStore: () => mocks.state.targetStore,
-  hasRegisteredDirectSshAuthority: () => false
+  getSshTargetRegistryStore: () => mocks.state.targetStore
 }))
-vi.mock('./orcad-runtime-deployment', () => ({ createManagedOrcadEnvironment: mocks.deploy }))
-vi.mock('./orcad-managed-tunnel', () => ({ ensureOrcadManagedTunnel: mocks.ensureTunnel }))
+vi.mock('../managed-server/lifecycle/orcad-runtime-deployment', () => ({
+  createManagedOrcadEnvironment: mocks.deploy
+}))
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  ensureOrcadManagedTunnel: mocks.ensureTunnel
+}))
 
-const { convertSshTargetToManagedOrcad } = await import('./orcad-runtime-conversion')
+const { convertSshTargetToManagedOrcad } =
+  await import('../managed-server/lifecycle/orcad-runtime-conversion')
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -134,10 +138,8 @@ async function convertedThenAdded(addOnOlderBuild: () => string): Promise<string
     convertSshTargetToManagedOrcad(userDataPath, {
       sshTargetId: TARGET.id,
       name: 'Managed',
-      listRelayPtyIds: Object.assign(async () => [], { previous: async () => [] }),
       censusHost: async () => ({ verdict: 'exited', count: 0 }),
       destinationFor: () => destination,
-      releaseDirectSession: async () => {},
       now
     })
   ).resolves.toMatchObject({ outcome: 'converted' })
@@ -148,12 +150,8 @@ async function convertedThenAdded(addOnOlderBuild: () => string): Promise<string
   return worktreeId
 }
 
-/** The relay answers only after `whileChecking` ran, as a user typing during the check would. */
+/** The census answers only after `whileChecking` ran, as a user typing during the check would. */
 function deltaMoveTypingDuringTerminalCheck(whileChecking: () => void) {
-  const list = async (): Promise<string[]> => {
-    whileChecking()
-    return []
-  }
   return runOrcadDeltaMove({
     userDataPath,
     store,
@@ -161,9 +159,10 @@ function deltaMoveTypingDuringTerminalCheck(whileChecking: () => void) {
     target: store.getSshTarget(TARGET.id)!,
     environment: listEnvironments(userDataPath)[0]!,
     destination,
-    listRelayPtyIds: Object.assign(list, { previous: async () => [] }),
-    censusHost: async () => ({ verdict: 'exited', count: 0 }),
-    releaseDirectSession: async () => {},
+    censusHost: async () => {
+      whileChecking()
+      return { verdict: 'exited', count: 0 }
+    },
     ensureTunnel: async () => {},
     runTargetLifecycle,
     now

@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useEffect, useMemo, useRef } from 'react'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
 import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
@@ -6,6 +7,7 @@ import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspa
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import type { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
+import { restrictJiraQueryToProject } from '../../../../shared/jira-project-reference'
 import { getBranchSearchRequest } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
@@ -37,7 +39,6 @@ export function useSmartWorkspaceSecondarySearches({
     mode,
     selectedRepo,
     debouncedQuery,
-    selectedRepoOwnerSettings,
     setBranches,
     setBranchResultsSource,
     setBranchesLoading,
@@ -52,6 +53,7 @@ export function useSmartWorkspaceSecondarySearches({
     setSettledLinearUrlQuery,
     jiraSourceContext,
     jiraConnectionStatus,
+    jiraProject,
     searchJiraIssues,
     setJiraIssues,
     setJiraLoading
@@ -98,8 +100,10 @@ export function useSmartWorkspaceSecondarySearches({
     ]
   )
 
+  // Why: branches are searched on the selected repo's own host.
+  const selectedRepoHostId = selectedRepo ? getRepoExecutionHostId(selectedRepo) : null
   useEffect(() => {
-    if (!branchSearchRequest) {
+    if (!branchSearchRequest || !selectedRepoHostId) {
       setBranches([])
       setBranchResultsSource(null)
       setBranchesLoading(false)
@@ -109,7 +113,7 @@ export function useSmartWorkspaceSecondarySearches({
     // Why: visibility retains prior rows while typing ahead of the debounced query.
     setBranchesLoading(true)
     void searchRuntimeRepoBaseRefDetails(
-      selectedRepoOwnerSettings,
+      selectedRepoHostId,
       branchSearchRequest.repoId,
       branchSearchRequest.query,
       branchSearchRequest.limit
@@ -139,7 +143,7 @@ export function useSmartWorkspaceSecondarySearches({
     }
   }, [
     branchSearchRequest,
-    selectedRepoOwnerSettings,
+    selectedRepoHostId,
     setBranches,
     setBranchResultsSource,
     setBranchesLoading
@@ -234,13 +238,20 @@ export function useSmartWorkspaceSecondarySearches({
     const controller = new AbortController()
     setJiraLoading(true)
     const siteId =
-      jiraConnectionStatus?.selectedSiteId ?? jiraConnectionStatus?.activeSiteId ?? null
+      jiraProject?.siteId ??
+      jiraConnectionStatus?.selectedSiteId ??
+      jiraConnectionStatus?.activeSiteId ??
+      null
     void searchJiraIssuesByKeyOrText(jiraSearchQuery, (jql) =>
-      searchJiraIssues(jql, RESULT_LIMIT, {
-        sourceContext: jiraSourceContext,
-        siteId,
-        signal: controller.signal
-      })
+      searchJiraIssues(
+        jiraProject ? restrictJiraQueryToProject(jql, jiraProject) : jql,
+        RESULT_LIMIT,
+        {
+          sourceContext: jiraSourceContext,
+          siteId,
+          signal: controller.signal
+        }
+      )
     )
       .then((issues) => {
         if (!stale) {
@@ -265,6 +276,7 @@ export function useSmartWorkspaceSecondarySearches({
     jiraConnectionStatus?.activeSiteId,
     jiraConnectionStatus?.selectedSiteId,
     jiraSearchQuery,
+    jiraProject,
     jiraSourceContext,
     searchJiraIssues,
     setJiraIssues,

@@ -5,7 +5,7 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../shared/worktree/types'
-import { getProjectedWorktreeLineage } from './worktree-lineage-projection'
+import { getProjectedWorktreeLineage } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { getWorkspaceStatus } from './workspace-status'
 import { translate } from '@/i18n/i18n'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'

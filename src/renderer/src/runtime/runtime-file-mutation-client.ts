@@ -1,6 +1,6 @@
 import type { DirEntry } from '../../../shared/filesystem-entry-types'
 import { normalizeRelativePath } from '@/lib/path'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import {
   assertLocalFilesystemFallbackAllowed,
@@ -13,6 +13,21 @@ import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
+import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime-memory-limits'
+
+/** Refuses a save the host's frame cap would reject by dropping the whole connection. */
+function assertRemoteWriteFitsOneRequest(content: string): void {
+  // Why: one UTF-16 unit escapes to at most 6 bytes, so most saves skip encoding.
+  if (content.length * 6 + 2 <= REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
+    return
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(content)).length
+  if (bytes > REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
+    throw new Error(
+      `File is too large to save to a remote Orca server (${Math.ceil(bytes / 1024)} KB; the limit is ${REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES / 1024} KB).`
+    )
+  }
+}
 
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
@@ -51,6 +66,7 @@ export async function writeRuntimeFile(
     )
     return
   }
+  assertRemoteWriteFitsOneRequest(content)
   await callRuntimeFileMutation(
     remoteArgs.target,
     'files.write',
@@ -190,7 +206,7 @@ export async function deleteRuntimeRelativePath(
   relativePath: string,
   recursive?: boolean
 ): Promise<boolean> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (
     target.kind !== 'environment' ||
     !context.worktreeId ||

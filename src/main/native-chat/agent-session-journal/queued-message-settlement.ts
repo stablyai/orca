@@ -37,6 +37,21 @@ export function queuedMessageSettlementOwed(
   )
 }
 
+/** A card waits, or is mid-hand-off and may come back to waiting: a chat that stops running
+ *  marks it (`AgentSessionJournal.markQueueReopen`). */
+export function queuedMessagesAwaitReopenMark(
+  rows: readonly QueuedMessageRow[],
+  submissions: Submissions
+): boolean {
+  return rows.some((row) => {
+    if (row.state === 'waiting') {
+      return true
+    }
+    const handOff = row.consumedAs ? submissions.get(row.consumedAs)?.dispatchState : undefined
+    return row.state === 'dispatched' && (handOff === 'pending' || handOff === 'unknown')
+  })
+}
+
 /** Applies each owed settlement, and withdraws each waiting draft an applied echo proves
  *  delivered (`draftsDeliveredByAppliedEcho`); returns how many drafts changed. */
 export function settleOwedQueuedMessages(

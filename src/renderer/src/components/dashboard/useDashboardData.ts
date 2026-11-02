@@ -1,5 +1,5 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
-import type { AgentRowState } from '@/lib/agent-row-decay-state'
+import type { AgentRowState } from '../../../../shared/agent-row-decay-state'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentChildRowModel } from '../../../../shared/agent-child-row-model'
 

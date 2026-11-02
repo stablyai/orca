@@ -10,17 +10,22 @@ export function transitionHiddenRendererPtyDeliveryState(
   session: PtyIpcSession,
   id: string,
   hidden: boolean
-): { droppable: boolean; droppedWhileHidden: boolean; policyChanged: boolean } {
+): {
+  droppable: boolean
+  droppedWhileHidden: boolean
+  hiddenDropEpisode?: number
+  policyChanged: boolean
+} {
   const settings = session.getSettings?.()
   const wasDroppable = shouldDropHiddenRendererPtyData(id, settings)
-  let droppedWhileHidden = false
+  let unmarked: ReturnType<typeof unmarkHiddenRendererPty> = { droppedWhileHidden: false }
   if (hidden) {
     markHiddenRendererPty(id)
   } else {
-    droppedWhileHidden = unmarkHiddenRendererPty(id).droppedWhileHidden
+    unmarked = unmarkHiddenRendererPty(id)
   }
   const droppable = shouldDropHiddenRendererPtyData(id, settings)
-  return { droppable, droppedWhileHidden, policyChanged: wasDroppable !== droppable }
+  return { droppable, ...unmarked, policyChanged: wasDroppable !== droppable }
 }
 
 export function transitionSpawnHiddenRendererPtyDeliveryState(

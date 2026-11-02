@@ -1,8 +1,6 @@
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
-import {
-  listRuntimeMarkdownDocuments,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import { listRuntimeMarkdownDocuments } from '@/runtime/runtime-file-metadata-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 
 type MarkdownDocumentListLoader = (
   context: RuntimeFileOperationArgs,
@@ -27,7 +25,7 @@ export function getMarkdownDocumentListRequestKey(
   rootPath: string
 ): string {
   return JSON.stringify([
-    context.settings?.activeRuntimeEnvironmentId?.trim() ?? '',
+    context.target.kind === 'environment' ? context.target.environmentId : '',
     context.connectionId ?? '',
     context.worktreeId ?? '',
     context.worktreePath ?? '',

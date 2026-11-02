@@ -21,6 +21,14 @@
     {
       "name": "renderer-scrollbar-style",
       "specifier": "./config/oxlint-plugins/renderer-scrollbar-style.mjs"
+    },
+    {
+      "name": "native-chat-design-tokens",
+      "specifier": "./config/oxlint-plugins/native-chat-design-tokens.mjs"
+    },
+    {
+      "name": "ime-enter-guard",
+      "specifier": "./config/oxlint-plugins/ime-enter-guard.mjs"
     }
   ],
   "categories": {
@@ -172,6 +180,7 @@
       "files": ["src/renderer/src/**/*.{ts,tsx}"],
       "rules": {
         "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error",
+        "ime-enter-guard/require-ime-guard": "error",
         "no-restricted-properties": [
           "error",
           {
@@ -179,6 +188,14 @@
             "message": "crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP), which white-screens the app. Use createBrowserUuid() from '@/lib/browser-uuid'."
           }
         ]
+      }
+    },
+    {
+      "files": ["src/renderer/src/components/native-chat/**/*.{ts,tsx}"],
+      "rules": {
+        "native-chat-design-tokens/no-arbitrary-font-size": "error",
+        "native-chat-design-tokens/no-softened-foreground": "error",
+        "native-chat-design-tokens/no-weakened-focus-ring": "error"
       }
     },
     {
@@ -198,7 +215,11 @@
       "rules": {
         "react/globals": "off",
         "quadratic-buffer-concat/no-loop-carried-concat": "off",
-        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off"
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off",
+        "ime-enter-guard/require-ime-guard": "off",
+        "native-chat-design-tokens/no-arbitrary-font-size": "off",
+        "native-chat-design-tokens/no-softened-foreground": "off",
+        "native-chat-design-tokens/no-weakened-focus-ring": "off"
       }
     },
     {

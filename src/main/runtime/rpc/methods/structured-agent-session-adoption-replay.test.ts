@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -59,20 +60,21 @@ function adapter(): StructuredAgentSessionAdapter {
   }
 }
 
-function createParams(operationId = OPERATION) {
+function createParams(operationId = OPERATION, sessionId = SESSION) {
   const fields = {
     worktree: `id:${WORKSPACE}`,
     agent: 'codex' as const,
-    resumeFrom: { providerSessionId: THREAD }
+    resumeFrom: { providerSessionId: THREAD,
+      cliSource: { workspaceId: WORKSPACE, paneKey: 'source-pane' } }
   }
   return {
     envelope: {
-      sessionId: SESSION,
+      sessionId,
       clientOperationId: operationId,
       expectedRuntimeFence: null,
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.create',
-        sessionId: SESSION,
+        sessionId,
         fields
       })
     },
@@ -80,13 +82,16 @@ function createParams(operationId = OPERATION) {
   }
 }
 
-async function call(dispatcher: RpcDispatcher, params: unknown, client = CLIENT) {
+async function call(dispatcher: RpcDispatcher, params: unknown, client = CLIENT, unary = false) {
   const replies: RpcResponse[] = []
   const request: RpcRequest = {
     id: `request-${replies.length + 1}`,
     authToken: 'token',
     method: 'agentSession.create',
     params
+  }
+  if (unary) {
+    return dispatcher.dispatch(request, client)
   }
   await dispatcher.dispatchStreaming(
     request,
@@ -114,7 +119,7 @@ afterEach(async () => {
 })
 
 describe('committed adopting create RPC replay', () => {
-  it('republishes from durable identity after the source disappears and account selection drifts', async () => {
+  it.each([true, false])('captures source before routing (unary=%s)', async (unary) => {
     const originalHome = join(root, 'account-original')
     const driftedHome = join(root, 'account-drifted')
     const transcriptPath = join(
@@ -150,6 +155,13 @@ describe('committed adopting create RPC replay', () => {
       undefined,
       { prepareCodexStructuredLaunch: selectAccountHome }
     )
+    const sourceRow = {
+      paneKey: 'source-pane', worktreeId: WORKSPACE, agentType: 'codex',
+      connectionId: null, receivedAt: 1, stateStartedAt: 1, state: 'waiting' as const, prompt: '',
+      providerSession: { key: 'session_id' as const, id: THREAD, transcriptPath }
+    }
+    let rows: AgentStatusIpcPayload[] = [sourceRow]
+    const sourceRows = vi.spyOn(runtime, 'getAgentProviderSessionRows').mockImplementation(() => rows)
     // The structured surface is settings-gated for every caller, not just mobile; this test
     // probes durable-identity replay, which only runs once the gate admits the call.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The RPC gate reads only this setting from the test double.
@@ -202,15 +214,51 @@ describe('committed adopting create RPC replay', () => {
     })
     const params = createParams()
 
-    expect(await call(dispatcher, params)).toMatchObject({
+    rows = unary ? [] : [{ ...sourceRow, providerSession: { ...sourceRow.providerSession, id: 'replaced' } }]
+    const route = vi.spyOn(runtime, 'routeClientHostedBrowserRpc').mockImplementationOnce(async () => {
+      rows = [sourceRow]
+      return { handled: false }
+    })
+    expect(await call(dispatcher, params, CLIENT, unary)).toMatchObject({
+      ok: true,
+      result: { ok: false, refusal: { details: { reason: 'transcriptUnreadable' } } }
+    })
+    expect(sessionAdapter.acquire).not.toHaveBeenCalled()
+    expect(internal.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
+    selectAccountHome.mockClear()
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    route.mockImplementationOnce(async () => {
+      entered.resolve()
+      await release.promise
+      return { handled: false }
+    })
+    const pending = call(dispatcher, params, CLIENT, unary)
+    await entered.promise
+    if (unary) {
+      rows = []
+    } else {
+      sourceRow.worktreeId = 'replacement-workspace'
+      sourceRow.providerSession.id = 'replacement-thread'
+      sourceRow.providerSession.transcriptPath = join(root, 'replacement.jsonl')
+    }
+    release.resolve()
+    expect(await pending).toMatchObject({
       ok: true,
       result: { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
     })
+    expect(store.getRecord(SESSION)?.accountHome).toMatchObject({ path: originalHome })
     await rm(transcriptPath)
     selectedHome = driftedHome
     setStructuredAgentSessionHost(null)
     internal.ensureStructuredAgentSessionHost = vi.fn(async () => {
       setStructuredAgentSessionHost(host)
+    })
+    sourceRows.mockImplementation(() => {
+      if (!unary) {
+        throw new Error('source snapshot unavailable')
+      }
+      return []
     })
 
     expect(await call(dispatcher, params)).toMatchObject({
@@ -236,6 +284,12 @@ describe('committed adopting create RPC replay', () => {
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
     expect(internal.publishStructuredAgentSessionTab).toHaveBeenCalledTimes(2)
     expect(selectAccountHome).toHaveBeenCalledTimes(1)
+    expect(await call(dispatcher, createParams(OPERATION, 'another-chat'))).toMatchObject({
+      ok: true,
+      result: { ok: false, refusal: { details: {
+        reason: 'conversationHeldElsewhere', owner: { sessionId: SESSION, workspaceId: WORKSPACE }
+      } } }
+    })
 
     const otherOperation = createParams(`${Date.now()}-00000000000000000000000000000002`)
     expect(await call(dispatcher, otherOperation)).toMatchObject({

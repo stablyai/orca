@@ -28,9 +28,7 @@ import { THREAD_ID } from './codex-structured-session-adapter-fixture'
 /** The delegation the parent's newest tool run reads as, the row a running chat's frontier judges. */
 async function newestRunDelegation(frames: Frame[]): Promise<NativeChatSubagentDelegation | null> {
   const { conversation } = projectNativeChatTranscript(
-    projectStructuredAgentSessionMessages(await publishedRows(frames), [], [], {
-      rejectedInPlace: true
-    })
+    projectStructuredAgentSessionMessages(await publishedRows(frames), [], [])
   )
   const runs = conversation.filter((message: NativeChatMessage) =>
     message.blocks.some((block) => block.type === 'tool-call')

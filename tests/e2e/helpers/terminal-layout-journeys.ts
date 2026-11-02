@@ -58,7 +58,7 @@ export async function addFolderWorkspace(page: Page): Promise<FolderWorkspaceSet
     .poll(async () => {
       worktreeId = await page.evaluate(async (id) => {
         const store = window.__store!
-        await store.getState().fetchRepos()
+        await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
         await store.getState().fetchWorktrees(id)
         const worktree = store.getState().worktreesByRepo[id]?.[0]
         if (worktree) {

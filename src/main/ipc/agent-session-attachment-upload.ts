@@ -16,11 +16,11 @@ import {
   type AgentSessionAttachmentUploadTarget
 } from '../../shared/agent-session-attachments'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-} from './runtime-environment-manual-disconnect'
+} from './runtime-environments/runtime-environment-manual-disconnect'
 import { stageOneSourceForRuntimeUpload } from './filesystem-runtime-upload-staging'
 import { streamExternalFileSlices } from './runtime-upload-file-stream'
 import { formatByteCeiling } from './runtime-import-limits'

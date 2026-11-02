@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { resetLocalStructuredChatsForTests } from '@/runtime/local-structured-chats'
 import { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot, type Root } from 'react-dom/client'
@@ -243,30 +242,16 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
-  it('shows structured chat controls for chats this machine still holds while Chat UI is off', async () => {
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: {
-        app: {
-          holdsStructuredAgentSessions: async () => true,
-          onStructuredAgentSessionsHeldChanged: () => () => undefined
-        }
-      }
+  it('keeps the Chat page settings off Experimental while Chat UI is on', async () => {
+    const { root, container } = await renderExperimentalPane({
+      updateSettings: vi.fn(),
+      settings: { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
     })
-    try {
-      const { root, container } = await renderExperimentalPane({
-        updateSettings: vi.fn(),
-        settings: getDefaultSettings('/tmp')
-      })
-      await act(async () => {
-        await Promise.resolve()
-      })
-      expect(container.textContent).toContain('Resume working chats automatically after a restart')
-      root.unmount()
-    } finally {
-      resetLocalStructuredChatsForTests()
-      Reflect.deleteProperty(window, 'api')
-    }
+    expect(container.textContent).toContain('Chat UI')
+    expect(container.textContent).not.toContain('Resume working chats automatically')
+    expect(container.textContent).not.toContain('Queue follow-ups')
+    expect(container.textContent).not.toContain('Use your shell environment')
+    root.unmount()
   })
 
   it('renders the agent sleep idle duration as configurable minutes', async () => {

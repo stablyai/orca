@@ -3,12 +3,12 @@
  * cells' accounts, so the managed tunnel must choose the bridge and reach the live orcad over it.
  */
 import { connect } from 'node:net'
-import { OrcadManagedTunnelTransportProvider } from './orcad-managed-tunnel-transport'
+import { OrcadManagedTunnelTransportProvider } from '../managed-server/lifecycle/orcad-managed-tunnel-transport'
 import {
   parseOrcadReadinessWaitOutput,
   readOrcadReadinessNowCommand
-} from './orcad-remote-readiness-wait'
-import { execOrcadRemote } from './orcad-remote-runtime-control'
+} from '../managed-server/install/orcad-remote-readiness-wait'
+import { execOrcadRemote } from '../managed-server/install/orcad-remote-runtime-control'
 import type { SshConnection } from './ssh-connection'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { probeTcpForwarding } from './ssh-tcp-forwarding-probe'

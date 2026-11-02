@@ -7,8 +7,13 @@ import {
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  isNativeChatDefaultFor,
+  isNativeChatEnabled
+} from '../../../../shared/structured-native-chat-launch-route'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { readAgentLaunchModeSettings } from '../../../agent-launch/agent-launch-mode'
 import type { RpcContext } from '../core'
 
 export function clientReadsOptionsWithoutModel(
@@ -57,6 +62,21 @@ export function clientRendersStructuredAgent(
   )
 }
 
+/** Whether this client opens an agent's chat from its Session History row. Claude and Codex keep
+ *  their shipped rule, any client that reads structured sessions; every other agent needs a client
+ *  that renders its chats. */
+export function clientOpensStructuredChatFromHistory(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agent: string
+): boolean {
+  return (
+    supportsStructuredAgentSessions(context) &&
+    (context.clientKind === undefined ||
+      isAgentSessionHandleProvider(agent) ||
+      clientRendersStructuredAgent(context.clientCapabilities, agent))
+  )
+}
+
 /** Preserve the existing session audience for every agent except Pi. */
 export function clientReadsStructuredSessionAgent(
   context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
@@ -97,13 +117,11 @@ export function createSupportFollowsHostSetting(
   )
 }
 
-/** An unreadable settings store reads as off, the default. */
-export function isStructuredNativeChatEnabled(
-  runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
+/** This host's resolved preference; session audience remains independent of new launches. */
+export function isStructuredNativeChatDefaultFor(
+  runtime: Parameters<typeof readAgentLaunchModeSettings>[0],
+  agent: string
 ): boolean {
-  try {
-    return isNativeChatEnabled(runtime.getClientSettings())
-  } catch {
-    return false
-  }
+  const settings = readAgentLaunchModeSettings(runtime)
+  return isTuiAgent(agent) ? isNativeChatDefaultFor(settings, agent) : isNativeChatEnabled(settings)
 }

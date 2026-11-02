@@ -1,9 +1,15 @@
-import { setLocalPtyProvider } from '../ipc/pty'
+import { setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
+import { DaemonPtyRouter } from './daemon-pty-router'
 import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
 import { readDaemonPidRecord as readDaemonPidRecordAt } from './daemon-endpoint-incarnation'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
-import { listEveryDaemonGeneration, type DaemonProvider } from './daemon-provider-routing'
+import {
+  getCurrentDaemonAdapter,
+  getLegacyDaemonAdapters,
+  listEveryDaemonGeneration,
+  type DaemonProvider
+} from './daemon-provider-routing'
 import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import type { DaemonSpawner } from './daemon-spawner'
 import {
@@ -79,6 +85,18 @@ export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
 
+/** True for a terminal on a kept-alive older daemon whose protocol matches; never for an SSH pane. */
+export function isTerminalOnLegacyDaemon(
+  ptyId: string,
+  matches: (protocolVersion: number) => boolean
+): boolean {
+  return adapter
+    ? getLegacyDaemonAdapters(adapter).some(
+        (legacy) => matches(legacy.protocolVersion) && legacy.hasPty(ptyId)
+      )
+    : false
+}
+
 // Why: computed from the pid record on demand (not cached at adoption) so the Settings
 // remedy surface always reflects the daemon actually serving terminals right now.
 export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaemonTccAttributionHealth> {
@@ -152,6 +170,25 @@ export async function requestIdleDaemonRetirement(): Promise<DaemonIdleRetiremen
     return { state: 'unverifiable' }
   }
   return adapter.requestIdleRetirement()
+}
+
+/** Whether an idle-retirement attempt left the daemon refusing new terminals. */
+export function isDaemonTerminalAdmissionClosed(): boolean {
+  if (!adapter || adapter instanceof DegradedDaemonPtyProvider) {
+    return false
+  }
+  // Fresh terminals go to the current generation, behind the router's own fence.
+  return (
+    (adapter instanceof DaemonPtyRouter && adapter.retirement.admissionClosed) ||
+    getCurrentDaemonAdapter(adapter).isIdleRetirementAdmissionClosed()
+  )
+}
+
+/** The pid the current daemon generation last authenticated as, if it ever did. */
+export function getCurrentDaemonPid(): number | null {
+  return adapter && !(adapter instanceof DegradedDaemonPtyProvider)
+    ? (getCurrentDaemonAdapter(adapter).getLastAuthenticatedDaemonIdentity()?.pid ?? null)
+    : null
 }
 
 /** Reopens terminal admission when an idle-retirement attempt did not retire the daemon. */

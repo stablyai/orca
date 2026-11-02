@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+
+vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
+  loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
+    .loadNodeOniguruma
+}))
 
 afterEach(cleanup)
 
@@ -36,23 +41,6 @@ describe('tool sentence rows', () => {
     expect(screen.getByRole('button')).toHaveAccessibleName(new RegExp(name))
     expect(screen.getByRole('button')).toHaveAccessibleName(new RegExp(verb))
     expect(container.querySelector('.font-semibold')).toBeNull()
-  })
-
-  it('tints the glyph of a failed call, and of no other', () => {
-    const glyphOf = (state: 'completed' | 'failed', isError: boolean): Element | null => {
-      const { container, unmount } = render(
-        <NativeChatToolLine
-          block={{ type: 'tool-call', name: 'Bash', input: { command: 'ls src' }, state }}
-          result={{ type: 'tool-result', output: 'out', isError }}
-        />
-      )
-      const tinted = container.querySelector('.text-destructive\\/70')
-      unmount()
-      return tinted
-    }
-    expect(glyphOf('failed', true)).not.toBeNull()
-    expect(glyphOf('completed', true)).not.toBeNull()
-    expect(glyphOf('completed', false)).toBeNull()
   })
 
   it('retains full paths in titles and accessible targets', () => {
@@ -209,7 +197,7 @@ describe('tool sentence rows', () => {
       'bg-chat-code-surface',
       'border-chat-code-border',
       'rounded-lg',
-      'text-xs'
+      'text-chat-code'
     )
     fireEvent.click(button)
     expect(screen.queryByText('command failed')).toBeNull()
@@ -319,6 +307,33 @@ describe('tool sentence rows', () => {
       expect(container.querySelectorAll('pre')).toHaveLength(2)
     }
   )
+
+  it.each([
+    ['PowerShell', 'Get-ChildItem', true],
+    ['execute', 'Get-ChildItem', false]
+  ])('colors the full %s command only when its shell is known', async (name, verb, colored) => {
+    const command = `${verb} -Path 'C:\\repo\\src\\renderer' -Recurse -File | Where-Object { $_.Length -gt 10 }`
+    const { container } = render(
+      <NativeChatToolLine
+        block={{ type: 'tool-call', name, input: { command }, state: 'completed' }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button'))
+    const detail = container.querySelector('pre')
+
+    if (colored) {
+      // The first PowerShell block in this file loads the grammar and its regex engine.
+      await waitFor(
+        () => {
+          expect(detail?.querySelector('span[style*="--syntax-dark"]')).not.toBeNull()
+        },
+        { timeout: 10_000 }
+      )
+    } else {
+      expect(detail?.querySelector('span')).toBeNull()
+    }
+    expect(detail?.textContent).toBe(command)
+  })
 
   it('keeps a long plain command with surrounding whitespace complete', () => {
     const command = `  pnpm test ${'src/renderer/tests/long-path/'.repeat(170)}end.test.ts  `

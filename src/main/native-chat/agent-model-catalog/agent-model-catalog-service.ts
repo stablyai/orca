@@ -4,11 +4,16 @@ import type {
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { isNativeLocalLocation } from '../../../shared/execution-host'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogFingerprintForRecord
 } from './agent-model-catalog-fingerprint'
-import type { AgentModelCatalogConfiguredChoice } from './agent-model-catalog-entry'
+import {
+  agentModelCatalogResultFromEntry,
+  retainedAgentModelCatalogModels,
+  type AgentModelCatalogConfiguredChoice
+} from './agent-model-catalog-entry'
 import type {
   AgentModelCatalogEntry,
   AgentModelCatalogLiveListing,
@@ -53,13 +58,17 @@ export type AgentModelCatalogService = {
     sessionId?: string
     /** Where a new chat would run; null when one was named but is not a local directory. */
     workspacePath?: string | null
+    /** Answer for the folder the named session runs in, as its new-chat read did. */
+    inSessionWorkspace?: true
     /** With no entry yet, answer from the listing this read starts or joins instead of `unknown`;
      *  with a held reason past its TTL, from the probe re-checking it. */
     waitForListing?: boolean
     /** Answer only from the saved entry and held reason; start, join or re-check no listing. */
     savedOnly?: boolean
   }) => Promise<AgentSessionModelCatalogResult>
-  /** Saves what a running session listed as its account's catalog, so the next chat starts warm. */
+  /** Incoming listing ids, checking only a launch-added row against the pinned account. */
+  retainedLiveModelIds: (sessionId: string, listing: AgentModelCatalogLiveListing) => string[]
+  /** Saves a session's listing and newly learned menus so the next chat starts warm. */
   recordLiveListing: (sessionId: string, listing: AgentModelCatalogLiveListing) => void
   /** Lists, in the background, every agent the user has used here (a saved catalog or a chat)
    *  whose catalog for the account a new chat would pin is missing or old, so a picker never meets
@@ -75,25 +84,6 @@ export type AgentModelCatalogService = {
 
 // At most this many agents list at once: each listing spawns that agent's CLI.
 const PREWARM_CONCURRENCY = 2
-
-function resultFromEntry(
-  entry: AgentModelCatalogEntry,
-  namesDefault: boolean,
-  listingNamesConfiguredModel: boolean
-): Exclude<AgentSessionModelCatalogResult, { origin: 'unknown' }> {
-  // A CLI-resolved default names the configured model even where the listing names none.
-  const namesConfigured = listingNamesConfiguredModel || entry.configured !== null
-  return {
-    origin: entry.origin,
-    // Without a default the picker names nothing until the chat reports its model.
-    models: entry.models.map((model) =>
-      namesDefault ? { ...model } : { ...model, isDefault: false }
-    ),
-    ...(entry.fastModeSupport ? { fastModeSupport: entry.fastModeSupport } : {}),
-    fetchedAt: entry.fetchedAt,
-    listingNamesConfiguredModel: namesDefault && namesConfigured
-  }
-}
 
 /** A named workspace keeps the listed default only when none of its own config can replace it. */
 async function workspaceKeepsListedDefault(
@@ -132,6 +122,18 @@ async function newChatCatalogKey(
   }
 }
 
+/** The local folder a session's agent runs in; null where this host cannot look into it, as a new
+ *  chat's own read answers. */
+async function sessionWorkspacePath(
+  deps: AgentModelCatalogServiceDeps,
+  record: AgentSessionRecord
+): Promise<string | null> {
+  if (!isNativeLocalLocation(record.location) || !deps.recordWorkspacePath) {
+    return null
+  }
+  return deps.recordWorkspacePath(record).catch(() => null)
+}
+
 /** A session launched with no model pick resolved its config scope's default model and effort;
  *  when that scope is the account's (a native workspace with no config of its own), they are the
  *  account's default, and a resolution naming no listed model retires the saved one. */
@@ -142,14 +144,10 @@ async function recordConfiguredDefault(
   choice: AgentModelCatalogConfiguredChoice | null
 ): Promise<void> {
   const accountHome = record.accountHome
-  if (
-    record.location.wslDistro !== null ||
-    !deps.recordWorkspacePath ||
-    !deps.workspaceMayOverrideDefaultModel
-  ) {
+  if (!deps.workspaceMayOverrideDefaultModel) {
     return
   }
-  const workspacePath = await deps.recordWorkspacePath(record)
+  const workspacePath = await sessionWorkspacePath(deps, record)
   if (
     !workspacePath ||
     (await deps.workspaceMayOverrideDefaultModel({
@@ -231,6 +229,11 @@ export function createAgentModelCatalogService(
       }
       const accountHomePath =
         probeHome && isLegacyAgentSessionAccountHome(probeHome) ? probeHome.path : null
+      const workspacePath = params.inSessionWorkspace
+        ? record
+          ? await sessionWorkspacePath(deps, record)
+          : null
+        : params.workspacePath
       await recordingDefaults.get(fingerprint)
       let entry = deps.store.get(fingerprint)
       const probe = deps.probes?.[params.agent]
@@ -242,14 +245,9 @@ export function createAgentModelCatalogService(
       ): Promise<AgentSessionModelCatalogResult> => {
         const unavailable = deps.store.failure(fingerprint)?.unavailable
         const result = listed
-          ? resultFromEntry(
+          ? agentModelCatalogResultFromEntry(
               listed,
-              await workspaceKeepsListedDefault(
-                deps,
-                params.agent,
-                params.workspacePath,
-                accountHomePath
-              ),
+              await workspaceKeepsListedDefault(deps, params.agent, workspacePath, accountHomePath),
               deps.listingNamesConfiguredModel?.has(params.agent) === true
             )
           : null
@@ -263,7 +261,12 @@ export function createAgentModelCatalogService(
           ...(unavailable ? { unavailable } : {})
         }
       }
-      if (params.savedOnly) {
+      // Death evidence keeps a read after an observed exit from spawning another agent; a new chat
+      // also starts released, but still needs its first listing.
+      if (
+        params.savedOnly ||
+        (scoped?.lease?.claimStatus === 'released' && scoped.lease.deathEvidence)
+      ) {
         return answer(entry)
       }
       // Past its TTL, only the probe re-derives a held reason. The reason is served meanwhile;
@@ -298,6 +301,14 @@ export function createAgentModelCatalogService(
       }
       return answer(entry)
     },
+    retainedLiveModelIds(sessionId, listing) {
+      const record = deps.getRecord(sessionId)
+      const entry =
+        record && deps.drivesRecord(record)
+          ? deps.store.get(agentModelCatalogFingerprintForRecord(record))
+          : undefined
+      return retainedAgentModelCatalogModels(entry, listing).map((model) => model.id)
+    },
     recordLiveListing(sessionId, listing) {
       const record = deps.getRecord(sessionId)
       if (!record || !deps.drivesRecord(record)) {
@@ -309,7 +320,7 @@ export function createAgentModelCatalogService(
       const saved = deps.store.recordSuccess(
         fingerprint,
         record.provider,
-        { ...listed, fastModeTierByModel: new Map(), origin: 'live-session' },
+        { ...listed, origin: 'live-session' },
         'live'
       )
       if (saved && configuredDefault !== undefined) {

@@ -5,6 +5,7 @@ import { loadHosts, updateLastConnected } from '../transport/host-store'
 import type { RpcClient } from '../transport/rpc-client'
 import type { Worktree } from '../worktree/workspace-list-sections'
 import type { HostScreenState } from './use-host-screen-state'
+import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
 
 export function useHostScreenIdentity(args: {
   client: RpcClient | null
@@ -18,14 +19,17 @@ export function useHostScreenIdentity(args: {
     setCatalogError,
     setError,
     setHostLabelById,
+    setServedProjectSections,
+    setDesktopRepos,
+    setHostHealthById,
     setHostName,
     setHostPlatform,
     setHostStoredDescriptor,
     setLastKnownWorktrees,
     setPinnedIds,
-    setRepoColorsByName,
     setRepoHostIdByRepoId,
-    setRepoIconsByName,
+    setView,
+    viewRef,
     setShowPinnedInGroups,
     setWorktrees,
     setWorktreesLoaded
@@ -58,10 +62,14 @@ export function useHostScreenIdentity(args: {
     setHostName('')
     setHostStoredDescriptor(null)
     setError('')
-    setRepoColorsByName(new Map())
-    setRepoIconsByName(new Map())
     setRepoHostIdByRepoId(new Map())
+    // Another desktop's Workspace options must not stand in until this one's are read.
+    viewRef.current = INITIAL_MOBILE_VIEW
+    setView(INITIAL_MOBILE_VIEW)
     setHostLabelById(new Map())
+    setServedProjectSections(null)
+    setDesktopRepos([])
+    setHostHealthById(new Map())
     setHostPlatform(null)
     setShowPinnedInGroups(false)
     repoMetadataFetchedAtRef.current = 0

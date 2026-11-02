@@ -105,6 +105,38 @@ describe('doc preview grant lifetime', () => {
     expect(mocks.revokeGrant).not.toHaveBeenCalled()
   })
 
+  // Why: Share reads and keys from the handle's location, so a later host change must not move it.
+  it('keeps the minted location on the handle until the grant is released', async () => {
+    const minted = {
+      owner: {
+        kind: 'runtime' as const,
+        environmentId: 'server-1',
+        worktreeSelector: 'id:wt-1',
+        worktreeRoot: '/srv/repo'
+      },
+      requestBase: '/srv/repo',
+      root: '/srv/repo/docs',
+      entryRelativePath: 'docs/a.html'
+    }
+    const movedHost = { ...minted, owner: { ...minted.owner, environmentId: 'server-2' } }
+
+    await expect(ensureDocPreviewGrant('preview-5', minted)).resolves.toMatchObject({
+      location: minted
+    })
+    await expect(ensureDocPreviewGrant('preview-5', movedHost)).resolves.toMatchObject({
+      location: minted
+    })
+    expect(mocks.mintGrant).toHaveBeenCalledExactlyOnceWith({
+      ...minted,
+      browserPageId: 'preview-5'
+    })
+
+    releaseDocPreviewGrant('preview-5')
+    await expect(ensureDocPreviewGrant('preview-5', movedHost)).resolves.toMatchObject({
+      location: movedHost
+    })
+  })
+
   it('revokes on release and mints fresh afterwards', async () => {
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },

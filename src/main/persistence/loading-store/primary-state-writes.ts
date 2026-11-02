@@ -245,12 +245,3 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
   }
   return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
 }
-
-export function installPrimaryStateWriteOperationsContext(
-  target: PrimaryStateWriteOperations,
-  source: PrimaryStateWriteOperations
-): void {
-  Object.defineProperty(target, primaryStateWriteOperationsContext, {
-    value: source[primaryStateWriteOperationsContext]
-  })
-}

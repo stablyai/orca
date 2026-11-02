@@ -14,7 +14,7 @@ function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
 }
 
 function makeOperations(repos: Repo[]) {
-  const state = { repos, projectGroups: [] }
+  const state = { repos, projectGroups: [], worktreeMeta: {} }
   const scheduleSave = vi.fn()
   const operations = new RepoUpdatePersistenceOperations({
     state,

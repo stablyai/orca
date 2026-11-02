@@ -19,6 +19,7 @@ import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { SshTargetSummary } from '../shared/ssh-types'
 import type { Repo } from '../shared/repo-types'
 import type { RuntimeClient } from './runtime-client'
+import { fetchSshTargetSummaries } from './host-selector-alternatives'
 
 /** The project/workspace selectors the same request carries; both empty means the host cannot change. */
 export type AutomationDestinationTarget = { repo?: string; workspace?: string }
@@ -49,8 +50,7 @@ async function sshTargetGeneration(
   client: RuntimeClient,
   targetId: string
 ): Promise<number | undefined> {
-  const targets = (await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargetSummaries'))
-    .result.targets
+  const { targets } = await fetchSshTargetSummaries<SshTargetSummary>(client)
   const match = targets.find((candidate) => candidate.id === targetId)
   if (!match) {
     throw new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.invalidDestination)

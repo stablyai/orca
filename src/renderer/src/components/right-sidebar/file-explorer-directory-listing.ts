@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
-import { readRuntimeDirectory } from '@/runtime/runtime-file-client'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
 import type { FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
 import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
 import {
@@ -49,7 +49,7 @@ export async function readFileExplorerDirectory(
   }
   const entries = await readRuntimeDirectory(
     {
-      settings: route.settings,
+      target: route.target,
       worktreeId: activeWorktreeId,
       worktreePath,
       connectionId: route.connectionId

@@ -18,7 +18,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -340,79 +340,5 @@ describe('Store', () => {
     expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
       'remote-b-tab'
     )
-  })
-
-  it('preserves a sync-persisted UUID root when a stale empty layout write arrives', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: null,
-          activeLeafId: null,
-          expandedLeafId: null
-        }
-      }
-    })
-
-    await store.persistPtyBinding({
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      ptyId: 'daemon-pty'
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: null,
-          activeLeafId: null,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {}
-        }
-      }
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('daemon-pty')
-    expect(session.terminalLayoutsByTabId.tab1).toEqual({
-      root: { type: 'leaf', leafId: TEST_LEAF_1 },
-      activeLeafId: TEST_LEAF_1,
-      expandedLeafId: null,
-      ptyIdsByLeafId: { [TEST_LEAF_1]: 'daemon-pty' }
-    })
   })
 })

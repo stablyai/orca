@@ -116,7 +116,8 @@ test('fails when both trust-probe attempts return a transient 503', async () => 
 test('approves the asia-east2 and US 3,000 rehome sources and still rejects unlisted cells', () => {
   for (const cellId of [
     'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
-    'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34'
+    'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34',
+    'production-gce-c35'
   ]) {
     const parsed = parseRehomeTrustProbeArguments(
       argv.map((value) => (value === 'production-gce-c7' ? cellId : value)),
@@ -124,7 +125,7 @@ test('approves the asia-east2 and US 3,000 rehome sources and still rejects unli
     )
     assert.equal(parsed.cellId, cellId)
   }
-  for (const cellId of ['production-gce-c1', 'production-gce-c17', 'production-gce-c35']) {
+  for (const cellId of ['production-gce-c1', 'production-gce-c17', 'production-gce-c36']) {
     assert.throws(
       () =>
         parseRehomeTrustProbeArguments(
@@ -183,7 +184,7 @@ test('approves exactly the committed production rehome source cells', () => {
   const sources = new Set(
     [...tfvars.slice(start, tfvars.indexOf(']', start)).matchAll(/"([^"]+)"/g)].map(([, cell]) => cell)
   )
-  assert.ok(sources.has('production-gce-c34'))
+  assert.ok(sources.has('production-gce-c35'))
   for (let ordinal = 1; ordinal <= 40; ordinal++) {
     const cellId = `production-gce-c${ordinal}`
     const approved = (() => {

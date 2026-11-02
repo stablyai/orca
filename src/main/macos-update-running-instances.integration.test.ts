@@ -3,7 +3,7 @@ import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { runProcess, spawnProcess } from '../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import { getMacUpdateRunningInstances } from './macos-update-running-instances'
 
 const APPLICATION_SOURCE = `

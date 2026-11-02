@@ -14,8 +14,7 @@ import {
 } from '../native-chat/agent-session-journal/journal-row-schema'
 import {
   createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventTarget
+  type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import {
@@ -23,7 +22,7 @@ import {
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
-import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
+import { deferredTarget } from './codex-deferred-sink-target-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
@@ -96,36 +95,6 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
     schedule: window.schedule
   })
   return { translator, tap, window }
-}
-
-function deferredTarget(
-  log: AgentJournalItemBody[],
-  publishes: string[] = []
-): StructuredAgentSessionEventTarget {
-  return {
-    fence: 7,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the journal members this path calls; the helper adds the in-order ones.
-    journal: withJournalQueueMembers({
-      appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-        log.push(body)
-        return { cursor: { epoch: 'e', sequence: log.length } }
-      }),
-      appendTombstone: vi.fn(async () => ({ epoch: 'e', sequence: log.length })),
-      appendLifecycleBatch: vi.fn(
-        async (input: { mutations: readonly JournalLifecycleMutationInput[] }) => {
-          for (const mutation of input.mutations) {
-            if (mutation.kind === 'item') {
-              log.push(mutation.body)
-            }
-          }
-          return { epoch: 'e', sequence: log.length }
-        }
-      )
-    }) as unknown as StructuredAgentSessionEventTarget['journal'],
-    publish: vi.fn(() => {
-      publishes.push('publish')
-    })
-  }
 }
 
 function hardWatermarkDeferred() {

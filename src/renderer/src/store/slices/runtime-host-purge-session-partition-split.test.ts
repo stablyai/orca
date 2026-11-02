@@ -69,8 +69,7 @@ describe('purge stops routing session writes to the removed runtime partition', 
     seedRuntimeRow(store)
     const api = {
       get: vi.fn().mockResolvedValue({}),
-      patch: vi.fn().mockResolvedValue(undefined),
-      setSync: vi.fn()
+      patch: vi.fn().mockResolvedValue(undefined)
     }
     const patch = { activeWorktreeIdsOnShutdown: [WT_A] } as unknown as WorkspaceSessionPatch
 

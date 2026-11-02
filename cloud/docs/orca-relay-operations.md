@@ -458,6 +458,14 @@ At connection headroom, queue, heap, or event-loop alerts:
 
 Never raise runtime admission or queued-byte limits during an incident without a load result proving memory headroom.
 
+## Auth outage and host token keys
+
+Cells and directors verify host relay tokens against auth's JWKS. When a refetch fails they keep verifying against the last set auth served for up to 30 minutes (`RELAY_JWKS_MAX_STALE_MS`), so a still-valid token is not refused while auth is down. A key the served set never had is always refused, and the first successful fetch replaces the set, so a rotation takes effect as soon as a process can reach auth.
+
+Relay tokens last 5 minutes, so an auth outage longer than about 6 minutes still disconnects every desktop: neither side can refresh. The stale set only keeps the tokens minted before the outage working until they expire.
+
+Emergency purge, after rotating a leaked signing key while some processes cannot reach auth: restart them (cells by the reviewed roll, the director by a blue/green deploy). A restarted process holds no set and refuses every host token until its first fetch from auth succeeds, so it fails closed. Do this only for a key compromise; for an ordinary outage, waiting is correct.
+
 ## Drain and SIGTERM
 
 Planned drain uses the authenticated admin endpoint and a reviewed grace that permits target-first registration and origin-owned operations to settle. Phones and desktops always recover through the configured director.
@@ -465,6 +473,49 @@ Planned drain uses the authenticated admin endpoint and a reviewed grace that pe
 SIGTERM is a degraded path. It may advertise zero grace, rejects new work, closes phone/data pairs together with `4503`, and cannot guarantee target registration first. Game-day this separately from planned drain.
 
 After either path, verify close/`1006`/`504` observations, bounded reconnect arrival, subscription replay, deterministic ordinary in-flight rejection, and idempotent install/confirmation reconciliation.
+
+## Director Cloud SQL transport (proxy sidecar)
+
+`relay_director_cloud_sql_proxy_sidecar` moves the director off Cloud Run's built-in `/cloudsql`
+socket, whose `connect()` blocks the event loop for the whole upstream dial (10 s per attempt while
+Cloud SQL starts or fails over), onto a Cloud SQL Auth Proxy sidecar on `127.0.0.1:5432`. Staging
+runs it since 2026-10-11 (serving `orca-cloud-relay-staging-00177-qur`); production keeps the socket
+until it is enabled through this sequence.
+
+1. In production, only after a reviewed `production.tfvars` PR sets the variable (and
+   `relay_event_loop_stall_alert`) and a staging Cloud SQL stop/start drill on the sidecar has passed.
+   Plan with exactly these targets and review it: `google_cloud_run_v2_service.relay`, the three
+   `relay_director_database_url` resources (secret, version, accessor),
+   `google_logging_metric.relay_event_loop_stall` and
+   `google_monitoring_alert_policy.relay_event_loop_stall`. Expect `5 to add, 1 to change`. The
+   director change also carries the template drift already on `main` (`ORCA_RELAY_IMAGE_DIGEST`
+   dropped, which the deploy restores; reordered or default-valued environment entries); stop on
+   anything else, such as concurrency, timeout or image.
+2. Apply the saved plan; in production, only while holding the production Cloud SQL rollout lease
+   (`terraform/state/cloud-sql-rollout/production.lock` in `onorca-cloud-terraform-state`, the
+   `cloud-sql-rollout-lease` action). **The metric must exist before its alert policy**: a new log-based metric
+   takes minutes to become visible, and the first apply can fail on the policy with `404 Cannot
+   find metric(s)`. Re-plan and apply the policy alone a few minutes later, or apply the metric in
+   an earlier run. Staging hit this on 2026-10-11.
+3. The apply creates a 0% revision (the service declares no traffic block). Cloud Run does **not**
+   start it: it reads `Ready` with reason `Retired` and logs nothing, so it proves the template
+   parses, not that the sidecar boots. Record its name; it is `status.latestCreatedRevisionName`.
+4. Dispatch the director deploy workflow with the **serving** image digest,
+   `shape-baseline-revision=<that revision>` and `confirmation=ADOPT_RELAY_DIRECTOR_TERRAFORM_SHAPE`.
+   The deploy compares its candidates with that revision's shape instead of the serving one, and
+   refuses an image change, an identity bootstrap, a topology change or pruning in the same run.
+   The first real sidecar boot is the deploy's `selector-rollback` candidate, health-checked before
+   any traffic moves; the proxy logs `Listening on 127.0.0.1:5432` and its startup and liveness
+   probes pass.
+5. Verify the serving revision has `relay` then `cloud-sql-proxy`, `DATABASE_URL` from
+   `orca-cloud-relay-director-database-url`, `ORCA_RELAY_IMAGE_DIGEST` restored, the warm floor
+   kept, and no `run.googleapis.com/cloudsql-instances` annotation.
+
+Rollback: the pre-sidecar revision survives (shape adoption refuses pruning) and keeps its own
+`/cloudsql` connection and socket secret, so `gcloud run services update-traffic <service>
+--to-revisions=<pre-sidecar revision>=100` restores it. No workflow owns that move; in production it
+needs approval and the rollout lease. The next deploy then refuses until a reviewed apply with the
+variable `false` and a deploy that adopts that apply's revision.
 
 ## Rollback
 

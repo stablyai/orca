@@ -45,6 +45,17 @@ export function getManagedCodexHookHome(runtimeHomePath: string): CodexHookHome 
   }
 }
 
+/** A Codex home Orca edits in place as it does ~/.codex: user hooks and approvals stay put. */
+export function getInPlaceCodexHookHome(homePath: string): CodexHookHome {
+  const hooksJsonPath = getConfigPath(homePath)
+  return {
+    homePath,
+    hooksJsonPath,
+    tomlPath: getCodexConfigTomlPath(homePath),
+    keySourcePaths: getRealHomeHookKeySourcePaths(hooksJsonPath)
+  }
+}
+
 /** ~/.codex, under every spelling Codex may key its entries by. */
 export function getRealHomeCodexHookHome(): CodexHookHome {
   return {

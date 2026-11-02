@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { getCompiledSchema } from '../zod-schema-compilation'
 import {
   SessionNotificationSchema,
   type SessionNotification
@@ -19,7 +20,7 @@ export function readAcpSessionEvent(params: unknown): AcpSessionEvent | null {
   if (!envelope.success) {
     return null
   }
-  const parsed = SessionNotificationSchema.safeParse(params)
+  const parsed = getCompiledSchema(SessionNotificationSchema).safeParse(params)
   return parsed.success
     ? { kind: 'known', notification: parsed.data }
     : { kind: 'unrecognized', sessionId: envelope.data.sessionId, raw: envelope.data }

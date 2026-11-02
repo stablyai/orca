@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from './paired-runtime-connection'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,7 +56,10 @@ describe('runtime environment sidecar across a downgrade', () => {
       expectedEnvironment: prepared,
       requestId: 'link-request',
       verifiedRuntimeId: 'host-runtime',
-      verifiedPairing: { ...pairing, endpoint: 'ws://127.0.0.1:41000/runtime' },
+      verifiedConnection: pairedRuntimeConnectionFromOffer({
+        ...pairing,
+        endpoint: 'ws://127.0.0.1:41000/runtime'
+      }),
       tunnel,
       now: 90
     })

@@ -28,7 +28,6 @@ function makeOptions(paneKey: string, live: { value: boolean }): AgentCompletion
   return {
     paneKey,
     getPtyId: () => 'pty-1',
-    getSettings: () => null,
     inspectProcess: vi.fn(),
     dispatchCompletion: vi.fn(),
     isLive: () => live.value

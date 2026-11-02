@@ -366,7 +366,8 @@ describe('OrcaRuntimeService', () => {
 
     acknowledged.resolve()
     await expect(pending).resolves.toEqual({ closed: true })
-    expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
+    // The final release restores throttling on the next task, after any native destruction.
+    await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
   })
 
   it('accepts a paired close after the renderer already persisted its removal', async () => {

@@ -2,7 +2,7 @@
  * orcad's half of the supervision contract: it spawns and supervises the terminal daemon.
  *
  * The whole reason the peer model is recommended over an SSH target is that daemon-backed
- * PTYs stay `live` across a runtime restart (docs/reference/ssh-execution-boundary.md).
+ * PTYs stay `live` across a runtime restart.
  * Without a daemon here, every orcad restart, update and rollback is a SIGKILL for every
  * running terminal — on the host whose selling point is that work survives the client going
  * away.
@@ -14,15 +14,13 @@
 import {
   disconnectDaemon,
   daemonOwnsFreshPersistentPtys,
-  initDaemonPtyProvider,
   readDaemonPidRecord
-} from '../daemon/daemon-init'
+} from '../daemon/daemon-provider-state'
+import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
+import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
+import { errorMessage } from '../../shared/error-message'
 
 const WINDOWS_DAEMON_STARTUP_TIMEOUT_MS = 30_000
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
 
 export type OrcadDaemonStartup =
   | { state: 'live'; pid: number | null }
@@ -44,6 +42,7 @@ export async function startOrcadDaemon(
   // session dies. An orcad daemon must survive its SSH session ending — that is the point.
   const policy = {
     macosLoginSessionWatch: false,
+    spawnAdmission: resolveTerminalSpawnAdmissionMode(),
     // A freshly uploaded node.exe plus conpty can take well over 10 s on its first, AV-scanned exec.
     ...(platform === 'win32' ? { startupTimeoutMs: WINDOWS_DAEMON_STARTUP_TIMEOUT_MS } : {})
   }

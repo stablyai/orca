@@ -20,6 +20,7 @@ import {
   revealTabStripSlot,
   type ActiveTabDockSide
 } from './tab-strip-slot-geometry'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
@@ -35,7 +36,7 @@ export function scrollTabStripByStep(
   )
   el.scrollBy({
     left: direction === 'start' ? -scrollStep : scrollStep,
-    behavior
+    behavior: motionSafeScrollBehavior(behavior)
   })
 }
 

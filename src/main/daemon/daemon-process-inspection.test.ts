@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as WindowsProcessTableModule from '../windows/windows-process-table'
 import {
   mergeProcessLivenessVerdict,
   queryWindowsProcess,
@@ -6,6 +7,14 @@ import {
   readMacosProcessStartedAtMs,
   readProcessCommandLine
 } from './daemon-process-inspection'
+
+const { readWindowsProcessCreationTime } = vi.hoisted(() => ({
+  readWindowsProcessCreationTime: vi.fn((_pid: number): number | null => null)
+}))
+vi.mock('../windows/windows-process-table', async (importOriginal) => ({
+  ...(await importOriginal<typeof WindowsProcessTableModule>()),
+  readWindowsProcessCreationTime
+}))
 
 // btime 1699000000 with 1000 start ticks: 10s after boot at 100Hz, 1s at 1000Hz.
 const readProcStat = async (path: string): Promise<string> =>
@@ -45,6 +54,20 @@ describe('daemon process inspection', () => {
       startedAtMs: 7
     })
     expect(runCommand).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the single-PID creation time when the snapshot row has none', async () => {
+    readWindowsProcessCreationTime.mockReturnValueOnce(9)
+    const readProcessTable = vi.fn(async () => [
+      { pid: 42, ppid: 1, name: 'node.exe', command: 'daemon' }
+    ])
+
+    await expect(queryWindowsProcess(42, { readProcessTable })).resolves.toEqual({
+      status: 'present',
+      commandLine: 'daemon',
+      startedAtMs: 9
+    })
+    expect(readWindowsProcessCreationTime).toHaveBeenCalledWith(42)
   })
 
   it('keeps an unreadable process table indeterminate instead of proving the process gone', async () => {

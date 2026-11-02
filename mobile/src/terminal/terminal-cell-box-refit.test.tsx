@@ -48,7 +48,6 @@ function refitHarness(cellWidth: number) {
       nativeChatCoveredRef: { current: false },
       clientRef: { current: null },
       deviceTokenRef: { current: null },
-      initializedHandlesRef: { current: new Set([HANDLE]) },
       connState: 'connected',
       tabStripVisible: false,
       textScale: 1,

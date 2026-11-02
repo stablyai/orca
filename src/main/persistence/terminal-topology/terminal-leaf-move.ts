@@ -1,5 +1,6 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   terminalLeafMovePaneKeys,
   type TerminalLeafMoveRequest,
@@ -10,6 +11,8 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { retireLeavesFromTerminalLayout } from '../../runtime/mobile-session-terminal-retirement'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
+import { writeRestorable } from './restorable-write'
+import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 import {
   advanceTerminalTopologyRevision,
   isTerminalOwnerPartition,
@@ -22,11 +25,13 @@ type PlannedTerminalLeafMove = {
   sessions: TerminalSessionPartition[]
 }
 
-function moveRecordKey<T>(
+export function moveRecordKey<T>(
   record: Record<string, T> | undefined,
   fromKey: string,
   toKey: string | null,
-  remap: (value: T) => T = (value) => value
+  remap: (value: T) => T = (value) => value,
+  /** Keep a value already at `toKey`; the moved one is dropped. */
+  keepTarget = false
 ): Record<string, T> | undefined {
   if (!record || !Object.hasOwn(record, fromKey)) {
     return record
@@ -34,7 +39,7 @@ function moveRecordKey<T>(
   const next = { ...record }
   const value = next[fromKey]
   delete next[fromKey]
-  if (toKey !== null && value !== undefined) {
+  if (toKey !== null && value !== undefined && !(keepTarget && Object.hasOwn(next, toKey))) {
     next[toKey] = remap(value)
   }
   return next
@@ -49,6 +54,21 @@ function liveTabIds(session: WorkspaceSessionState): Set<string> {
 function hasTabId(session: WorkspaceSessionState, tabId: string): boolean {
   return (
     liveTabIds(session).has(tabId) || Object.hasOwn(session.terminalLayoutsByTabId ?? {}, tabId)
+  )
+}
+
+/** A tab other than the source holds the leaf; a layout left behind by a removed row owns nothing. */
+export function leafHeldByOtherTab(
+  session: WorkspaceSessionState,
+  sourceTabId: string,
+  leafId: string
+): boolean {
+  const tabIds = liveTabIds(session)
+  return Object.entries(session.terminalLayoutsByTabId ?? {}).some(
+    ([tabId, layout]) =>
+      tabId !== sourceTabId &&
+      tabIds.has(tabId) &&
+      layoutContainsLeafId(layout?.root ?? null, leafId)
   )
 }
 
@@ -68,7 +88,7 @@ function moveLeafInPartition(
   const boundHere = sourceLayout.ptyIdsByLeafId?.[leafId]
   const remainingLayout = retireLeavesFromTerminalLayout(sourceLayout, new Set([leafId]))
   const remainingPtyIds = Object.values(remainingLayout?.ptyIdsByLeafId ?? {})
-  const { pendingActivationSpawn, ...row } = createMinimalPersistedTerminalTab({
+  const row = createMinimalPersistedTerminalTab({
     worktreeId,
     tabId: targetTabId,
     ptyId: ptyId ?? '',
@@ -78,8 +98,6 @@ function moveLeafInPartition(
   const targetTab = {
     ...row,
     ptyId,
-    // A moved live pane reattaches; only an unbound one still spawns on activation.
-    ...(ptyId ? {} : { pendingActivationSpawn }),
     ...(sourceTab.shellOverride ? { shellOverride: sourceTab.shellOverride } : {})
   }
   const nextTabs = tabs.map((tab) =>
@@ -156,17 +174,7 @@ export function planTerminalLeafMove(
   if (partitions.some(({ session }) => hasTabId(session, request.targetTabId))) {
     return refuse('target_tab_exists')
   }
-  // A layout left behind by a removed tab row owns nothing.
-  const leafElsewhere = owners.some(({ session }) => {
-    const tabIds = liveTabIds(session)
-    return Object.entries(session.terminalLayoutsByTabId ?? {}).some(
-      ([tabId, layout]) =>
-        tabId !== sourceTabId &&
-        tabIds.has(tabId) &&
-        layoutContainsLeafId(layout?.root ?? null, leafId)
-    )
-  })
-  if (leafElsewhere) {
+  if (owners.some(({ session }) => leafHeldByOtherTab(session, sourceTabId, leafId))) {
     return refuse('leaf_in_other_tab')
   }
   const holders = owners.flatMap(({ hostId, session }) => {
@@ -203,12 +211,16 @@ const PANE_KEYED_UI_RECORDS = [
   'manuallyUnreadTurnsByPaneKey'
 ] as const
 
-/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a moved leaf. */
-export function rekeyMovedLeafProfileRecords(
+type PaneAddress = { tabId: string; leafId: string }
+
+/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a pane to its new key. */
+export function rekeyPaneProfileRecords(
   state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
-  move: TerminalLeafMoveRequest
+  from: PaneAddress,
+  to: PaneAddress
 ): { ui?: PersistedState['ui']; sshRemotePtyLeases?: SshRemotePtyLease[] } {
-  const { from: fromPaneKey, to: toPaneKey } = terminalLeafMovePaneKeys(move)
+  const fromPaneKey = makePaneKey(from.tabId, from.leafId)
+  const toPaneKey = makePaneKey(to.tabId, to.leafId)
   const ui = state.ui
   let nextUi: PersistedState['ui'] | undefined
   for (const key of PANE_KEYED_UI_RECORDS) {
@@ -219,18 +231,68 @@ export function rekeyMovedLeafProfileRecords(
   }
   const leases = state.sshRemotePtyLeases ?? []
   const leasesChanged = leases.some(
-    (lease) => lease.tabId === move.sourceTabId && lease.leafId === move.leafId
+    (lease) => lease.tabId === from.tabId && lease.leafId === from.leafId
   )
   return {
     ...(nextUi ? { ui: nextUi } : {}),
     ...(leasesChanged
       ? {
           sshRemotePtyLeases: leases.map((lease) =>
-            lease.tabId === move.sourceTabId && lease.leafId === move.leafId
-              ? { ...lease, tabId: move.targetTabId }
+            lease.tabId === from.tabId && lease.leafId === from.leafId
+              ? { ...lease, tabId: to.tabId, leafId: to.leafId }
               : lease
           )
         }
       : {})
   }
+}
+
+/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a moved leaf. */
+export function rekeyMovedLeafProfileRecords(
+  state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
+  move: TerminalLeafMoveRequest
+): { ui?: PersistedState['ui']; sshRemotePtyLeases?: SshRemotePtyLease[] } {
+  return rekeyPaneProfileRecords(
+    state,
+    { tabId: move.sourceTabId, leafId: move.leafId },
+    { tabId: move.targetTabId, leafId: move.leafId }
+  )
+}
+
+/** Pane-keyed UI marks and SSH leases follow a moved leaf; returns their restores. */
+export function writeMovedLeafProfileRecords(
+  request: TerminalLeafMoveRequest,
+  context: TerminalTopologyCommitContext
+): (() => void)[] {
+  return writeRekeyedProfileRecords(rekeyMovedLeafProfileRecords(context.state, request), context)
+}
+
+/** Writes rekeyed UI marks and SSH leases; returns their restores. */
+export function writeRekeyedProfileRecords(
+  rekeyed: ReturnType<typeof rekeyPaneProfileRecords>,
+  context: TerminalTopologyCommitContext
+): (() => void)[] {
+  const { state } = context
+  const restores: (() => void)[] = []
+  if (rekeyed.ui) {
+    restores.push(
+      writeRestorable(
+        () => state.ui,
+        (ui) => (state.ui = ui),
+        rekeyed.ui
+      )
+    )
+    context.markDirty('ui')
+  }
+  if (rekeyed.sshRemotePtyLeases) {
+    restores.push(
+      writeRestorable(
+        () => state.sshRemotePtyLeases,
+        (leases) => (state.sshRemotePtyLeases = leases),
+        rekeyed.sshRemotePtyLeases
+      )
+    )
+    context.markDirty('sshRemotePtyLeases')
+  }
+  return restores
 }

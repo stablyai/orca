@@ -1,20 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { withDurableRuntimeStore } from '../runtime/runtime-durable-store-fixture'
+import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { registerPtyHandlers, setLocalPtyProvider } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { setLocalPtyProvider } from './pty/provider/registry'
 import {
   resetAgentLaunchPanesForTests,
   trackRunningAgentLaunchPane
 } from '../agent-launch/agent-launch-pane-attachment'
-import {
-  pendingAgentSessionOperationRow,
-  type AgentSessionOperationOutcome,
-  type AgentSessionOperationRow
-} from '../../shared/agent-session-operation-ledger'
-import {
-  AGENT_LAUNCH_PANE_REFUSED_CODE,
-  type AgentLaunchPaneOutcome
-} from '../../shared/agent-launch-pane-verdict'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../shared/agent-launch-pane-verdict'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -99,19 +94,6 @@ describe('a pane whose process belongs to an agent launch', () => {
     resetAgentLaunchPanesForTests()
   })
 
-  function recorded(outcome: AgentSessionOperationOutcome): AgentSessionOperationRow {
-    return {
-      ...pendingAgentSessionOperationRow({
-        callerKey: 'caller',
-        operationId: `${Date.now()}-${'1'.padStart(32, '0')}`,
-        fingerprint: 'fp',
-        now: Date.now()
-      }),
-      outcome,
-      ownedPane: pane
-    }
-  }
-
   function mountPane(): Promise<unknown> {
     return Promise.resolve(
       handlers.get('pty:spawn')!(null, {
@@ -126,14 +108,8 @@ describe('a pane whose process belongs to an agent launch', () => {
     )
   }
 
-  type LaunchPaneOnTab = { leafId: string; outcome?: AgentLaunchPaneOutcome }
-
-  /** `rows` is the launch record; null models a process that has not opened it yet. `onTab` is
-   *  what the restored tab keeps about its pane's launch. Returns the runtime the spawn reports to. */
-  function registerWithRuntime(
-    providerSpawn: ReturnType<typeof vi.fn>,
-    record: { rows: AgentSessionOperationRow[] | null; onTab?: LaunchPaneOnTab }
-  ) {
+  /** Returns the runtime the spawn reports to. */
+  function registerWithRuntime(providerSpawn: ReturnType<typeof vi.fn>) {
     setLocalPtyProvider(localProvider(providerSpawn))
     const runtime = {
       setPtyController: vi.fn(),
@@ -144,29 +120,13 @@ describe('a pane whose process belongs to an agent launch', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn(),
       hasLiveTerminalForPaneKey: vi.fn(() => false),
-      openedAgentSessionRecordStore: vi.fn(() =>
-        record.rows ? { listOperationRows: () => record.rows } : null
-      ),
-      openAgentSessionRecordStore: vi.fn(async () => ({
-        listOperationRows: () => record.rows ?? [recorded({ status: 'unknown' })]
-      })),
       reportAgentLaunchPaneVerdict: vi.fn()
     }
-    // The persisted session as a restart restores it.
-    const store = record.onTab
-      ? {
-          getWorkspaceSession: () => ({
-            tabsByWorktree: { [worktreeId]: [{ id: tabId, agentLaunchPane: record.onTab }] }
-          })
-        }
-      : undefined
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite's window double, carrying the members a renderer spawn reaches.
     const window = mainWindow as never
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a runtime carrying only the members a renderer spawn reaches before it is refused or proceeds.
     const spawnRuntime = runtime as never
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a store carrying only the persisted session the launch pane's spawn reads.
-    const spawnStore = store as never
-    registerPtyHandlers(window, spawnRuntime, undefined, undefined, undefined, spawnStore)
+    registerPtyHandlers(window, spawnRuntime)
     return runtime
   }
 
@@ -174,8 +134,7 @@ describe('a pane whose process belongs to an agent launch', () => {
 
   it('waits for the launch instead of spawning while it runs, then tells the window it settled', async () => {
     const providerSpawn = vi.fn(async () => ({ id: 'pty-after-launch' }))
-    const rows: AgentSessionOperationRow[] = []
-    const runtime = registerWithRuntime(providerSpawn, { rows })
+    const runtime = registerWithRuntime(providerSpawn)
     const running = trackRunningAgentLaunchPane(pane)
 
     const mounted = mountPane()
@@ -187,20 +146,8 @@ describe('a pane whose process belongs to an agent launch', () => {
     expect(early).toBe('waiting')
     expect(providerSpawn).not.toHaveBeenCalled()
 
-    rows.push(
-      recorded({
-        status: 'succeeded',
-        sessionId: '',
-        launch: {
-          outcome: { kind: 'terminal', handle: 'term_1', paneKey },
-          worktreeId,
-          receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: '' }
-        }
-      })
-    )
-    running.finish({ tabTakenBack: false })
+    running.finish({ kind: 'proceed' })
     await expect(mounted).resolves.toMatchObject({ id: 'pty-after-launch' })
-    // Settled: the tab forgets the launch, so a restart never opens the record for this pane.
     expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
       kind: 'proceed'
     })
@@ -208,14 +155,12 @@ describe('a pane whose process belongs to an agent launch', () => {
 
   it('tells the window the launch failed, typed, instead of starting a shell', async () => {
     const providerSpawn = vi.fn(async () => ({ id: 'pty-plain-shell' }))
-    const rows: AgentSessionOperationRow[] = []
-    const runtime = registerWithRuntime(providerSpawn, { rows })
+    const runtime = registerWithRuntime(providerSpawn)
     const running = trackRunningAgentLaunchPane(pane)
 
     const mounted = mountPane()
     await new Promise<void>((resolve) => setImmediate(resolve))
-    rows.push(recorded({ status: 'failed', code: 'agent_session_exited_during_start' }))
-    running.finish({ tabTakenBack: false })
+    running.finish({ kind: 'not-started', code: 'agent_session_exited_during_start' })
 
     await expect(mounted).rejects.toThrow(AGENT_LAUNCH_PANE_REFUSED_CODE)
     expect(providerSpawn).not.toHaveBeenCalled()
@@ -225,78 +170,9 @@ describe('a pane whose process belongs to an agent launch', () => {
     })
   })
 
-  it('still refuses a shell to a pane that mounts after the launch failed', async () => {
-    const providerSpawn = vi.fn(async () => ({ id: 'pty-plain-shell' }))
-    registerWithRuntime(providerSpawn, {
-      rows: [recorded({ status: 'failed', code: 'agent_not_installed' })]
-    })
-
-    await expect(mountPane()).rejects.toThrow(AGENT_LAUNCH_PANE_REFUSED_CODE)
-    expect(providerSpawn).not.toHaveBeenCalled()
-  })
-
-  it('after a restart, a pane whose launch was still open reads the record before it starts anything', async () => {
-    const providerSpawn = vi.fn(async () => ({ id: 'pty-plain-shell' }))
-    const runtime = registerWithRuntime(providerSpawn, { rows: null, onTab: { leafId } })
-
-    await expect(mountPane()).rejects.toThrow(AGENT_LAUNCH_PANE_REFUSED_CODE)
-    expect(providerSpawn).not.toHaveBeenCalled()
-    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
-      kind: 'unconfirmed'
-    })
-  })
-
-  it('after a restart, a pane whose fate the tab keeps says it again without opening the record', async () => {
-    const providerSpawn = vi.fn(async () => ({ id: 'pty-plain-shell' }))
-    const runtime = registerWithRuntime(providerSpawn, {
-      rows: null,
-      onTab: { leafId, outcome: { kind: 'not-started', code: 'agent_not_installed' } }
-    })
-
-    await expect(mountPane()).rejects.toThrow(AGENT_LAUNCH_PANE_REFUSED_CODE)
-    expect(providerSpawn).not.toHaveBeenCalled()
-    expect(runtime.openAgentSessionRecordStore).not.toHaveBeenCalled()
-  })
-
-  it('a new launch into a pane that showed "couldn\'t confirm" lets it attach to the new agent', async () => {
-    const providerSpawn = vi.fn(async () => ({ id: 'pty-new-agent' }))
-    const rows: AgentSessionOperationRow[] = []
-    // The saved tab still says an earlier launch could not be confirmed.
-    const runtime = registerWithRuntime(providerSpawn, {
-      rows,
-      onTab: { leafId, outcome: { kind: 'unconfirmed' } }
-    })
-    const running = trackRunningAgentLaunchPane(pane)
-
-    // The remounted pane spawns while the new launch runs: it waits, it does not show the old notice.
-    const mounted = mountPane()
-    rows.push(
-      recorded({
-        status: 'succeeded',
-        sessionId: '',
-        launch: {
-          outcome: { kind: 'terminal', handle: 'term_1', paneKey },
-          worktreeId,
-          receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: '' }
-        }
-      })
-    )
-    running.finish({ tabTakenBack: false })
-
-    // Past the verdict the ordinary spawn path runs (this suite's store double saves nothing).
-    await mounted.catch(() => {})
-    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
-      kind: 'proceed'
-    })
-    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalledWith(PANE_ADDRESS, {
-      kind: 'unconfirmed'
-    })
-    expect(providerSpawn).toHaveBeenCalled()
-  })
-
   it("attaches once the launch's agent holds the pane, not once its prompt lands", async () => {
     const providerSpawn = vi.fn(async () => ({ id: 'pty-agent' }))
-    const runtime = registerWithRuntime(providerSpawn, { rows: [] })
+    const runtime = registerWithRuntime(providerSpawn)
     const running = trackRunningAgentLaunchPane(pane)
 
     const mounted = mountPane()
@@ -310,30 +186,133 @@ describe('a pane whose process belongs to an agent launch', () => {
     expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
       kind: 'proceed'
     })
-    running.finish({ tabTakenBack: false })
-  })
-
-  it('after a restart, a settled launch pane spawns as any pane does, without opening the record', async () => {
-    const providerSpawn = vi.fn(async () => ({ id: 'pty-ordinary' }))
-    const runtime = registerWithRuntime(providerSpawn, { rows: null })
-
-    await expect(mountPane()).resolves.toMatchObject({ id: 'pty-ordinary' })
-    expect(runtime.openAgentSessionRecordStore).not.toHaveBeenCalled()
-    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
+    running.finish({ kind: 'proceed' })
   })
 
   it('never offers a shell in a tab the host is taking back', async () => {
     const providerSpawn = vi.fn(async () => ({ id: 'pty-plain-shell' }))
-    const runtime = registerWithRuntime(providerSpawn, { rows: [] })
+    const runtime = registerWithRuntime(providerSpawn)
     const running = trackRunningAgentLaunchPane(pane)
 
     const mounted = mountPane()
-    running.finish({ tabTakenBack: true })
+    running.finish({ kind: 'withdrawn' })
 
     await expect(mounted).rejects.toThrow(AGENT_LAUNCH_PANE_REFUSED_CODE)
     expect(providerSpawn).not.toHaveBeenCalled()
     expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
       kind: 'withdrawn'
     })
+  })
+})
+
+/** The daemon's three answers for a restored pane's binding, as `attachStablePaneOwner` reads them. */
+const DAEMON_ANSWERS = [
+  ['live: the agent survived, so the pane reattaches to it', 'live'],
+  ['exited: the pane opens a fresh shell, as any tab does', 'exited'],
+  ['daemon gone: the terminal host is unavailable, as for any tab', 'gone']
+] as const
+
+// What a launch pane is after a restart: nothing about its launch is restored, so it spawns as any pane.
+describe('a restored pane after a restart', () => {
+  const { handlers, mainWindow } = setupPtyIpcSuite()
+
+  it.each(DAEMON_ANSWERS)('%s', async (_name, daemon) => {
+    const worktreeId = 'repo-1::/tmp/launch-restart'
+    const tabId = 'tab-launch-restart'
+    const leafId = '89898989-8989-4989-8989-898989898989'
+    const paneKey = makePaneKey(tabId, leafId)
+    const providerSpawn = vi.fn(async (options: { attachOnly?: boolean }) => {
+      if (!options.attachOnly) {
+        return { id: 'pty-fresh-shell', incarnationId: 'inc-fresh' }
+      }
+      if (daemon === 'live') {
+        return { id: 'pty-survived', incarnationId: 'inc-survived', isReattach: true }
+      }
+      throw daemon === 'exited'
+        ? new SessionNotFoundError('pty-survived')
+        : Object.assign(new Error('connect ECONNREFUSED'), {
+            code: 'ECONNREFUSED',
+            syscall: 'connect'
+          })
+    })
+    setLocalPtyProvider(localProvider(providerSpawn))
+    let session = {
+      tabsByWorktree: { [worktreeId]: [{ id: tabId, worktreeId, ptyId: 'pty-survived' }] },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf' as const, leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-survived' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-survived' }
+    }
+    const store = withDurableRuntimeStore({
+      getWorkspaceSession: vi.fn(() => session),
+      setWorkspaceSession: vi.fn((next) => {
+        session = next
+      }),
+      flushOrThrow: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      getFolderWorkspace: vi.fn(() => undefined),
+      getFolderWorkspaces: vi.fn(() => []),
+      getProjectGroups: vi.fn(() => []),
+      getRepos: vi.fn(() => [])
+    })
+    const runtime = {
+      setPtyController: vi.fn(),
+      resolveTerminalPane: vi.fn(() => {
+        throw new Error('terminal_not_found')
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term-restart'),
+      preAllocateHandleForPty: vi.fn(() => 'term-restart'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      beginPtyRegistration: vi.fn(),
+      cancelPendingPtyRegistration: vi.fn(),
+      assertPtyRegistrationAllowed: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn(),
+      hasLiveTerminalForPaneKey: vi.fn(() => false),
+      reportAgentLaunchPaneVerdict: vi.fn()
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite's window double, carrying the members a renderer spawn reaches.
+    const window = mainWindow as never
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a runtime and store carrying only the members a restored pane's spawn reaches.
+    const [spawnRuntime, spawnStore] = [runtime as never, store as never]
+    registerPtyHandlers(window, spawnRuntime, undefined, undefined, undefined, spawnStore)
+
+    const mounted = Promise.resolve(
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/launch-restart',
+        worktreeId,
+        tabId,
+        leafId,
+        env: { ORCA_PANE_KEY: paneKey, ORCA_TAB_ID: tabId, ORCA_WORKTREE_ID: worktreeId },
+        // A pane that still carries its launch attaches to the agent it started, never plans again.
+        ...(daemon === 'live'
+          ? {
+              agentLaunch: {
+                launch: {
+                  agent: 'claude',
+                  target: { kind: 'existing', worktree: `id:${worktreeId}` }
+                }
+              }
+            }
+          : {})
+      })
+    )
+
+    const ids = { live: 'pty-survived', exited: 'pty-fresh-shell' } as const
+    await (daemon === 'gone'
+      ? expect(mounted).rejects.toThrow('terminal_host_gone')
+      : expect(mounted).resolves.toMatchObject({ id: ids[daemon] }))
+    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
   })
 })

@@ -1,16 +1,22 @@
-import {
-  buildMobileQuickCommandLaunch,
-  type MobileQuickCommandLaunch
-} from '../terminal/quick-commands'
+import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { sessionTabCreateTerminal } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import {
+  hostSupportsMobileChatFork,
+  mobileChatForkCreateReplyMessage,
+  mobileChatForkRequestFailureMessage
+} from './mobile-chat-fork-create-feedback'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
+import { useMobileTerminalCreateRouteOwner } from './use-mobile-terminal-create-route-owner'
+import { launchMobileSessionQuickCommand } from './mobile-session-quick-command-launch'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import { requestMobileSessionTerminalCreate } from './mobile-session-terminal-create-request'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 import { launchesThroughHost, launchNewTabAgentThroughHost } from './new-tab-agent-host-launch'
@@ -29,22 +35,17 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     worktreeId,
     client,
     hostCapabilities,
-    connState,
     setTerminals,
     terminalsRef,
     setSessionTabs,
-    sessionTabsRef,
     defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     activeSessionTabId,
     setActiveSessionTabId,
     setCreating,
     creatingTerminalRef,
-    creatingBrowser,
-    creatingMarkdown,
     setCreateError,
     deviceTokenRef,
-    initializedHandlesRef,
     activeHandleRef,
     activeSessionTabTypeRef,
     pendingSelectionRef,
@@ -54,15 +55,40 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     subscribeToTerminal,
     fetchSessionTabs
   } = scope
+  const captureCreateOwner = useMobileTerminalCreateRouteOwner(scope)
+
+  type CreateOutcome = 'created' | 'accepted' | 'busy' | 'unavailable' | 'reported-failure'
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
     options?: MobileQuickCommandLaunch['options'] & {
       onPromptSent?: () => void
       errorToast?: string
+      sourceChatFork?: { sessionId: string; agent: string }
     }
-  ) {
-    if (!client || creatingTerminalRef.current) {
-      return
+  ): Promise<CreateOutcome | undefined> {
+    const sourceFork = options?.sourceChatFork
+    const sourceOutcome = (value: CreateOutcome): CreateOutcome | undefined =>
+      sourceFork ? value : undefined
+    const agentName = sourceFork ? formatAgentTypeLabel(sourceFork.agent) : ''
+    const { isRouteCurrent, isCurrent } = captureCreateOwner(sourceFork?.sessionId)
+    const reportFork = (message: string): void => {
+      if (!sourceFork || !isCurrent()) {
+        return
+      }
+      setCreateError(message)
+      triggerError()
+      showToast(message, 3000)
+    }
+    if (
+      !client ||
+      (sourceFork && (!hostSupportsMobileChatFork(hostCapabilities) || !isCurrent()))
+    ) {
+      reportFork(`Open the ${agentName} chat on a connected, updated host and try again.`)
+      return sourceOutcome('unavailable')
+    }
+    if (creatingTerminalRef.current) {
+      reportFork(`Another terminal is opening. Wait, then retry the ${agentName} chat.`)
+      return sourceOutcome('busy')
     }
     // Why: idempotency key so a transport retry (reconnect replay) resolves to the same terminal, not a duplicate; kept compact (no worktree id) for the schema length cap.
     const clientMutationId = `mobile-create:${Date.now().toString(36)}-${Math.random()
@@ -77,6 +103,9 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     // Why: the host names the real cause (pty exhaustion, disabled agent, unresolved worktree);
     // collapsing every failure to 'Failed to create terminal' left the phone undiagnosable.
     function reportCreateFailure(hostReason: string): void {
+      if (!isCurrent()) {
+        return
+      }
       const reason = hostReason.trim() || options?.errorToast || 'Failed to create terminal'
       setCreateError(reason)
       // Why: the inline error renders only in an empty session; beside open tabs only a toast is seen.
@@ -98,13 +127,13 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           activeSessionTabId,
           pendingSelectionRef,
           fetchSessionTabs,
-          getSessionTabs: () => sessionTabsRef.current,
+          getSessionTabs: () => scope.sessionTabsRef.current,
           showToast,
           reportCreateFailure,
           setCreateError
         }))
       ) {
-        return
+        return sourceOutcome('accepted')
       }
       // COMPAT(agent.launch.v2): hosts before v1.4.206 keep the paths below; remove once none remain.
       // Bare structured-provider launches follow host createSupport; prompted launches keep their startup semantics.
@@ -122,53 +151,62 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
             reply
           )
           void fetchSessionTabs()
-          return
+          return sourceOutcome('accepted')
         }
         if (structured.kind === 'unknown') {
           // Never create a legacy sibling when the host may already have committed.
           setCreateError(structured.message)
           triggerError()
           showToast(structured.message, 1800)
-          return
+          return sourceOutcome('reported-failure')
         }
       }
       const afterTabId = activeSessionTabId ?? undefined
       const hostSupportsGroupedPlacement =
         hostCapabilities?.includes(SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY) === true
-      const response = await sessionTabCreateTerminal.request(client, {
-        worktree: `id:${worktreeId}`,
+      const response = await requestMobileSessionTerminalCreate({
+        client,
+        worktreeId,
         afterTabId,
         clientMutationId,
-        ...(options?.startupCommand ? { command: options.startupCommand } : {}),
-        ...(options?.startupCommandDelivery
-          ? { startupCommandDelivery: options.startupCommandDelivery }
-          : {}),
-        ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
-        ...(agent ? { agent } : {}),
-        activate: false,
-        select: true,
-        navigation: 'caller'
+        agent,
+        options,
+        ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {})
       })
-      // Why interpret here rather than branching: a refused create throws the host's message,
-      // which the catch below reports exactly as the old `else` branch did.
+      if (!isCurrent()) {
+        return sourceOutcome('accepted')
+      }
+      const forkMessage = sourceFork ? mobileChatForkCreateReplyMessage(agentName, response) : null
+      if (forkMessage && !response.ok) {
+        reportFork(forkMessage)
+        return sourceOutcome('reported-failure')
+      }
+      // A refused ordinary create throws the host's message into the existing catch.
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       const created = sessionTabCreateTerminal.interpret(response) as Extract<
         MobileSessionTab,
         { type: 'terminal' }
       >
+      if (forkMessage) {
+        reportFork(forkMessage)
+      }
       // Why: unsubscribe the old terminal so the server restores its desktop dims; otherwise its restore timer is never set.
       const prev = activeHandleRef.current
       if (prev) {
         unsubscribeTerminal(prev)
-        initializedHandlesRef.current.delete(prev)
+      }
+      if (sourceFork) {
+        scope.nativeChatController.setTabView(created.id, 'terminal')
       }
       pendingSelectionRef.current = { kind: 'tab', tabId: created.id }
       activeSessionTabTypeRef.current = 'terminal'
       setActiveSessionTabId(created.id)
-      // An older headed host places after the parent while an older headless host places after the
-      // leaf. Without the capability, wait for the host snapshot instead of guessing.
-      if (hostSupportsGroupedPlacement) {
+      // Forks and older hosts need the host snapshot's order, including its pin partition.
+      if (hostSupportsGroupedPlacement && !sourceFork) {
         setSessionTabs((prev) => {
+          if (!isCurrent()) {
+            return prev
+          }
           if (prev.some((tab) => tab.id === created.id)) {
             return prev
           }
@@ -185,6 +223,9 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         activeHandleRef.current = createdHandle
         setActiveHandle(createdHandle)
         setTerminals((prev) => {
+          if (!isCurrent()) {
+            return prev
+          }
           const existing = prev.find((terminal) => terminal.handle === createdHandle)
           const createdTerminal: Terminal = {
             handle: createdHandle,
@@ -248,47 +289,34 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         activeHandleRef.current = null
         setActiveHandle(null)
       }
-      scheduleDelayedAction(() => void fetchSessionTabs(), 500)
+      scheduleDelayedAction(() => {
+        if (isCurrent()) {
+          void fetchSessionTabs()
+        }
+      }, 500)
+      return sourceOutcome('created')
     } catch (error) {
+      if (sourceFork) {
+        reportFork(mobileChatForkRequestFailureMessage(agentName, error))
+        return sourceOutcome('reported-failure')
+      }
       reportCreateFailure(error instanceof Error ? error.message : '')
+      return sourceOutcome('reported-failure')
     } finally {
-      pendingSelectionRef.current = withoutUnansweredLaunch(
-        pendingSelectionRef.current,
-        clientMutationId
-      )
-      releaseTerminalCreateLock({ creatingTerminalRef, setCreating }, clientMutationId)
+      if (isRouteCurrent()) {
+        pendingSelectionRef.current = withoutUnansweredLaunch(
+          pendingSelectionRef.current,
+          clientMutationId
+        )
+        releaseTerminalCreateLock({ creatingTerminalRef, setCreating }, clientMutationId)
+      }
     }
   }
 
-  // Quick commands spawn a fresh terminal tab, mirroring desktop's
-  // run-quick-command-in-new-tab: agent prompts and runnable terminal commands
-  // use the host's shell-ready startup path; insert-only commands stay drafts.
-  function launchQuickCommand(command: TerminalQuickCommand): boolean {
-    if (
-      !client ||
-      connState !== 'connected' ||
-      creatingTerminalRef.current ||
-      creatingBrowser ||
-      creatingMarkdown
-    ) {
-      return false
-    }
-    const launch = buildMobileQuickCommandLaunch(command)
-    if (!launch) {
-      triggerError()
-      showToast('Edit this quick command before running it', 1800)
-      return false
-    }
-    const label = command.label.trim() || 'Quick command'
-    void handleCreateTerminal(launch.agent, {
-      ...launch.options,
-      errorToast: `Couldn't run ${label}`
-    })
-    return true
-  }
   return {
     handleCreateTerminal,
-    launchQuickCommand
+    launchQuickCommand: (command: TerminalQuickCommand) =>
+      launchMobileSessionQuickCommand(scope, handleCreateTerminal, command)
   }
 }
 

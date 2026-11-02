@@ -111,7 +111,8 @@ describe('managed server CLI verbs', () => {
       outcome: 'refused',
       verdict: 'live',
       code: 'orcad_stop_active_environment',
-      reason: 'Choose another Active Server in Advanced before stopping this server.'
+      reason:
+        'This server is the default host for new projects. Choose another one in Advanced before stopping it.'
     }
     await expect(run('environment stop', client(refusal), [['yes', true]])).rejects.toMatchObject({
       code: 'managed_server_refused',

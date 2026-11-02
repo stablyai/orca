@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import {
   getLocalProjectWorktreeGitOptions,
   type LocalProjectWorktreeGitOptions
@@ -21,7 +21,7 @@ function getCandidateLocalWorktreePaths(
 
 /** Repos owning a registered worktree at one of `candidatePaths`, in one pass over the meta table. */
 function collectRepoIdsWithRegisteredWorktreeMeta(
-  store: Store,
+  store: RuntimeStore,
   candidatePaths: Set<string>
 ): Set<string> {
   const worktreeMeta =
@@ -37,7 +37,7 @@ function collectRepoIdsWithRegisteredWorktreeMeta(
 }
 
 export function getLocalRepoForRegisteredWorktree(
-  store: Store,
+  store: RuntimeStore,
   worktreePath: string,
   resolvedWorktreePath: string
 ): Repo | undefined {
@@ -64,7 +64,7 @@ export function getLocalRepoForRegisteredWorktree(
 /** Git options for a repo already resolved by `getLocalRepoForRegisteredWorktree`,
  *  so a caller needing both does not walk every repo's worktree meta twice. */
 export function getLocalGitOptionsForRepo(
-  store: Store,
+  store: RuntimeStore,
   repo: Repo | undefined
 ): LocalProjectWorktreeGitOptions {
   if (!repo || typeof store.getProjects !== 'function' || typeof store.getSettings !== 'function') {
@@ -76,7 +76,7 @@ export function getLocalGitOptionsForRepo(
 }
 
 export function getLocalGitOptionsForRegisteredWorktree(
-  store: Store,
+  store: RuntimeStore,
   worktreePath: string,
   resolvedWorktreePath: string
 ): LocalProjectWorktreeGitOptions {

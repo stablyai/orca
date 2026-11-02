@@ -168,7 +168,11 @@ describe('deleting one host copy of a same-named project', () => {
       })
     ])
     expect(reposRemove).not.toHaveBeenCalled()
-    expect(reposRemoveForHost).not.toHaveBeenCalled()
+    // Only this desktop's persisted rows for the remote host, never the local row.
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: 'env-a-uuid',
+      hostId: 'runtime:env-a'
+    })
     expect(remainingRepoIds(store)).toEqual(['local-uuid'])
   })
 

@@ -38,6 +38,8 @@ function renderBanner(
       <NativeChatThreadGoalBanner
         goal={value}
         pending={pending}
+        hostChanges
+        sendUnavailable={false}
         isVisible
         runningTurn={runningTurn}
         onChange={onChange}
@@ -68,6 +70,7 @@ describe('NativeChatThreadGoalBanner', () => {
   it('shows the reported time for an active goal while no turn runs', () => {
     vi.useFakeTimers({ now: NOW })
     renderBanner(goal(), false, null)
+    expect(screen.getByText('Goal set')).toBeInTheDocument()
     expect(screen.getByText('• 1m 0s')).toBeInTheDocument()
   })
 

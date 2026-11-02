@@ -10,6 +10,7 @@ import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-
 import { expect } from './orca-app'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 import { readFreshTerminalInventory } from './terminal-inventory-observation'
+import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
 
 const RECOVERY_DEADLINE_MS = 8_000
 
@@ -39,8 +40,8 @@ function execProfileContents(
   const guard = `ORCA_STA4067_EXEC_${runId.replaceAll(/[^A-Za-z0-9_]/g, '_')}`
   const barrierScript = barrier
     ? [
-        `: > ${shellQuote(barrier.startedPath)}`,
-        `while [[ ! -e ${shellQuote(barrier.releasePath)} ]]; do sleep 0.02; done`
+        `: > ${quotePosixShell(barrier.startedPath)}`,
+        `while [[ ! -e ${quotePosixShell(barrier.releasePath)} ]]; do sleep 0.02; done`
       ].join('\n  ')
     : ''
   return `if [[ -z "\${${guard}:-}" ]]; then
@@ -59,10 +60,6 @@ export function zshExecProfileContents(runId: string, barrier?: BashExecProfileB
   return execProfileContents(runId, ZSH_EXEC_LINE, barrier)
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function splitMarker(marker: string): [string, string] {
   const midpoint = Math.floor(marker.length / 2)
   return [marker.slice(0, midpoint), marker.slice(midpoint)]
@@ -70,7 +67,7 @@ function splitMarker(marker: string): [string, string] {
 
 function markerCommand(marker: string): string {
   const [left, right] = splitMarker(marker)
-  return `printf '%s%s\\n' ${shellQuote(left)} ${shellQuote(right)}`
+  return `printf '%s%s\\n' ${quotePosixShell(left)} ${quotePosixShell(right)}`
 }
 
 function count(text: string, marker: string): number {
@@ -150,7 +147,7 @@ export async function createStartupExecTerminal(
 ): Promise<StartupExecTerminal> {
   const startupMarker = `STA4067_STARTUP_READY_${runId}`
   const command = [
-    `printf '%s|%s\\n' "$$" "$(tty)" > ${shellQuote(ledgerPath)}`,
+    `printf '%s|%s\\n' "$$" "$(tty)" > ${quotePosixShell(ledgerPath)}`,
     markerCommand(startupMarker)
   ].join('; ')
   const created = await callStartupExecRuntime<{

@@ -121,7 +121,7 @@ describe('structured agent-session outbound admission', () => {
     dispose()
   })
 
-  it('splits valid-cursor catch-up into admitted batch frames', () => {
+  it('replaces an over-budget catch-up with one admitted newest page', () => {
     const subscribers = new AgentSessionSubscribers()
     const catchup: AgentSessionSubscribeEvent[] = []
     const firstItemSequence = journal.snapshot().items[0]!.sequence
@@ -135,14 +135,11 @@ describe('structured agent-session outbound admission', () => {
       emit: (event) => catchup.push(event)
     })
 
-    expect(catchup.length).toBeGreaterThan(1)
+    expect(catchup).toHaveLength(1)
     catchup.forEach(expectAdmitted)
-    expect(
-      catchup.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
-    ).toHaveLength(19)
-    expect(catchup.at(-1)).toMatchObject({
-      type: 'batch',
-      batch: { cursor: journal.cursor() },
+    expect(catchup[0]).toMatchObject({
+      type: 'snapshot',
+      page: { hasOlder: true, hasNewer: false, liveCursor: journal.cursor() },
       fence: 2
     })
   })

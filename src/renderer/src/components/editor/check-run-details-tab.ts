@@ -1,18 +1,7 @@
 import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { OpenCheckRunDetailsState } from '../../../../shared/editor-tab-view-types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
-
-export type OpenCheckRunDetailsState = {
-  contextKey: string
-  check: PRCheckDetail
-  requestId?: number
-  details: PRCheckRunDetails | null
-  loading: boolean
-  error: string | null
-  githubRepository?: GitHubRepositoryIdentity | null
-  /** Why: fork/cross-project MR jobs live outside the repo's own project, so reloads need the pipeline's project. */
-  gitlabProjectRef?: GitLabProjectRef | null
-}
 
 export type CheckRunDetailsTabPatch = Pick<
   OpenCheckRunDetailsState,

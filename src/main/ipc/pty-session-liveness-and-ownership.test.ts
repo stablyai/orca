@@ -2,13 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { onMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
-import {
-  registerPtyHandlers,
-  registerSshPtyProvider,
-  setPtyOwnership,
-  setLocalPtyProvider,
-  unregisterSshPtyProvider
-} from './pty'
+import { deletePtyOwnership, setPtyOwnership } from './pty/provider/ownership-state'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { setLocalPtyProvider } from './pty/provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -107,84 +103,6 @@ describe('registerPtyHandlers', () => {
       expect(inspectProcess).not.toHaveBeenCalled()
     }
   )
-  it('lists duplicate SSH relay session ids as distinct app sessions', async () => {
-    registerPtyHandlers(mainWindow as never)
-    const shutdownA = vi.fn(async () => undefined)
-    const shutdownB = vi.fn(async () => undefined)
-    registerSshPtyProvider('ssh-a', {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: shutdownA,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => [
-        { id: 'ssh:ssh-a@@pty-1', cwd: '/repo-a', title: 'ssh-a' }
-      ]),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    registerSshPtyProvider('ssh-b', {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: shutdownB,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => [
-        { id: 'ssh:ssh-b@@pty-1', cwd: '/repo-b', title: 'ssh-b' }
-      ]),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-
-    const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
-      id: string
-      cwd: string
-      title: string
-    }[]
-
-    expect(sessions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'ssh:ssh-a@@pty-1', cwd: '/repo-a' }),
-        expect.objectContaining({ id: 'ssh:ssh-b@@pty-1', cwd: '/repo-b' })
-      ])
-    )
-
-    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-a@@pty-1' })
-    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-b@@pty-1' })
-
-    expect(shutdownA).toHaveBeenCalledWith('ssh:ssh-a@@pty-1', {
-      immediate: true,
-      keepHistory: false
-    })
-    expect(shutdownB).toHaveBeenCalledWith('ssh:ssh-b@@pty-1', {
-      immediate: true,
-      keepHistory: false
-    })
-  })
   it('reports agent ownership through pty:listSessions so the renderer cannot guess it', async () => {
     registerPtyHandlers(mainWindow as never)
     // Why: the renderer's binding map is empty during restore, so agent ownership is the only
@@ -278,72 +196,6 @@ describe('registerPtyHandlers', () => {
 
     expect(sessions.find((s) => s.id === 'legacy-pty')?.agentOwnership).toBe('unknown')
   })
-  it('kills app-scoped SSH PTY ids through the parsed provider when ownership is not rebuilt', async () => {
-    const localShutdown = vi.fn()
-    setLocalPtyProvider({
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: localShutdown,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    const sshShutdown = vi.fn(async () => undefined)
-    const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
-    registerSshPtyProvider('ssh-1', {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: sshShutdown,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    registerPtyHandlers(
-      mainWindow as never,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      store as never
-    )
-
-    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })
-
-    expect(sshShutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', {
-      immediate: true,
-      keepHistory: false
-    })
-    expect(localShutdown).not.toHaveBeenCalled()
-    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
-  })
   it('tombstones app-scoped SSH PTY ids instead of falling back local when ownership and provider are absent', async () => {
     const localShutdown = vi.fn()
     setLocalPtyProvider({
@@ -368,7 +220,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
-    const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
+    const store = { markSshRemotePtyLease: vi.fn() }
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -383,52 +235,11 @@ describe('registerPtyHandlers', () => {
     expect(localShutdown).not.toHaveBeenCalled()
     expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
   })
-  it('ignores fire-and-forget IPC for detached SSH PTYs without a provider', async () => {
-    const store = {
-      upsertSshRemotePtyLease: vi.fn(),
-      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
-      persistPtyBinding: vi.fn(),
-      markSshRemotePtyLease: vi.fn(),
-      clearSshRemotePtyKillIntent: vi.fn()
-    }
-    const provider = {
-      spawn: vi.fn(async () => ({ id: 'remote-pty' })),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(async () => undefined),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      confirmForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    }
-    registerSshPtyProvider('ssh-1', provider as never)
-    registerPtyHandlers(
-      mainWindow as never,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      store as never
-    )
-    await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24,
-      connectionId: 'ssh-1',
-      env: {}
-    })
-    unregisterSshPtyProvider('ssh-1')
+  it('ignores fire-and-forget IPC for SSH-owned PTYs this process cannot dispatch', () => {
+    const local = { write: vi.fn(), resize: vi.fn(), sendSignal: vi.fn() }
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider(local as never)
+    setPtyOwnership('remote-pty', 'ssh:ssh-1')
     const listenerFor = (channel: string): ((event: unknown, args: unknown) => void) => {
       const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === channel)
       if (!call) {
@@ -437,60 +248,50 @@ describe('registerPtyHandlers', () => {
       return call[1] as (event: unknown, args: unknown) => void
     }
 
-    expect(() =>
-      listenerFor('pty:write')(mainWindowIpcEvent, { id: 'remote-pty', data: 'x' })
-    ).not.toThrow()
-    expect(() =>
-      listenerFor('pty:resize')(null, { id: 'remote-pty', cols: 100, rows: 30 })
-    ).not.toThrow()
-    expect(() => listenerFor('pty:ackColdRestore')(null, { id: 'remote-pty' })).not.toThrow()
-    expect(() =>
-      listenerFor('pty:signal')(null, { id: 'remote-pty', signal: 'SIGINT' })
-    ).not.toThrow()
-
-    await expect(handlers.get('pty:kill')!(null, { id: 'remote-pty' })).resolves.toBeUndefined()
-    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'terminated')
+    try {
+      expect(() =>
+        listenerFor('pty:write')(mainWindowIpcEvent, { id: 'remote-pty', data: 'x' })
+      ).not.toThrow()
+      expect(() =>
+        listenerFor('pty:resize')(null, { id: 'remote-pty', cols: 100, rows: 30 })
+      ).not.toThrow()
+      expect(() => listenerFor('pty:ackColdRestore')(null, { id: 'remote-pty' })).not.toThrow()
+      expect(() =>
+        listenerFor('pty:signal')(null, { id: 'remote-pty', signal: 'SIGINT' })
+      ).not.toThrow()
+      expect(local.write).not.toHaveBeenCalled()
+      expect(local.resize).not.toHaveBeenCalled()
+      expect(local.sendSignal).not.toHaveBeenCalled()
+    } finally {
+      deletePtyOwnership('remote-pty')
+    }
   })
-  it('returns idle process inspection results for detached SSH PTYs without a provider', async () => {
-    const provider = {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
+  it('returns idle process inspection results for SSH-owned PTYs without a provider', async () => {
+    const local = {
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
-      confirmForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
+      confirmForegroundProcess: vi.fn()
     }
-    registerSshPtyProvider('ssh-1', provider as never)
     registerPtyHandlers(mainWindow as never)
-    setPtyOwnership('remote-pty', 'ssh-1')
-    unregisterSshPtyProvider('ssh-1')
+    setLocalPtyProvider(local as never)
+    setPtyOwnership('remote-pty', 'ssh:ssh-1')
 
-    await expect(handlers.get('pty:hasChildProcesses')!(null, { id: 'remote-pty' })).resolves.toBe(
-      false
-    )
-    await expect(
-      handlers.get('pty:getForegroundProcess')!(null, { id: 'remote-pty' })
-    ).resolves.toBeNull()
-    await expect(
-      handlers.get('pty:confirmForegroundProcess')!(null, { id: 'remote-pty' })
-    ).resolves.toBeNull()
-    expect(provider.hasChildProcesses).not.toHaveBeenCalled()
-    expect(provider.getForegroundProcess).not.toHaveBeenCalled()
-    expect(provider.confirmForegroundProcess).not.toHaveBeenCalled()
+    try {
+      await expect(
+        handlers.get('pty:hasChildProcesses')!(null, { id: 'remote-pty' })
+      ).resolves.toBe(false)
+      await expect(
+        handlers.get('pty:getForegroundProcess')!(null, { id: 'remote-pty' })
+      ).resolves.toBeNull()
+      await expect(
+        handlers.get('pty:confirmForegroundProcess')!(null, { id: 'remote-pty' })
+      ).resolves.toBeNull()
+      expect(local.hasChildProcesses).not.toHaveBeenCalled()
+      expect(local.getForegroundProcess).not.toHaveBeenCalled()
+      expect(local.confirmForegroundProcess).not.toHaveBeenCalled()
+    } finally {
+      deletePtyOwnership('remote-pty')
+    }
   })
   it('preserves unavailable process inspection results from the provider', async () => {
     const inspectProcess = vi.fn(async () => ({

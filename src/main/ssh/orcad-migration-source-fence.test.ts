@@ -60,7 +60,6 @@ function setup() {
       destinationEnvironmentId: 'env-1',
       destinationName: 'Managed',
       terminalProof: exited,
-      hasDirectSshAuthority: () => false,
       ...overrides
     })
   const target = () => store.getSshTarget(TARGET.id)!
@@ -180,14 +179,6 @@ describe('migration source fence', () => {
     expect(listOrcadMigrationSourceCutovers(harness.userDataPath)).toEqual([])
   })
 
-  it('refuses while the host is still connected directly', async () => {
-    const harness = setup()
-    await expect(harness.fence({ hasDirectSshAuthority: () => true })).resolves.toMatchObject({
-      code: 'orcad_migration_direct_ssh_connected'
-    })
-    expect(harness.target().orcadFence).toBeUndefined()
-  })
-
   it('keeps a blocker it could not read unverifiable, never live', async () => {
     const harness = setup()
     vi.spyOn(harness.store, 'inspectOrcadMigrationUntransferredDependencies').mockImplementation(
@@ -206,11 +197,9 @@ describe('migration source fence', () => {
     const harness = setup()
     const flush = vi.spyOn(harness.claims, 'flush').mockImplementation(async () => {
       if (harness.target().orcadFence) {
-        harness.store.upsertSshRemotePtyLease({
-          targetId: TARGET.id,
-          ptyId: 'late-pty',
-          state: 'detached'
-        })
+        vi.spyOn(harness.store, 'getSshRemotePtyLeases').mockReturnValue([
+          { targetId: TARGET.id, ptyId: 'late-pty', state: 'detached', createdAt: 1, updatedAt: 1 }
+        ])
       }
     })
     await expect(harness.fence()).resolves.toMatchObject({ outcome: 'refused', verdict: 'live' })

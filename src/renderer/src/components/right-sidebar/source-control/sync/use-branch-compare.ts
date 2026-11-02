@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitBranchCompare, type RuntimeGitContext } from '@/runtime/runtime-git-client'
+import { getRuntimeGitBranchCompare } from '@/runtime/runtime-git-diff-client'
 import { useAppStore } from '@/store'
 import { createLoadingBranchCompareSummary } from '@/store/slices/editor/git/branch-compare-state'
 import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
@@ -17,7 +19,7 @@ const BRANCH_REFRESH_MAX_INTERVAL_MS = 5 * 60_000
 type BranchCompareRefreshKind = 'immediate' | 'interval'
 
 export function useSourceControlBranchCompare({
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   worktreePath,
   compareBaseRef,
@@ -27,7 +29,7 @@ export function useSourceControlBranchCompare({
   activeGitStatusHead,
   remoteStatus
 }: {
-  activeRepoSettings: RuntimeGitContext['settings']
+  activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
   compareBaseRef: string | null
@@ -69,7 +71,7 @@ export function useSourceControlBranchCompare({
         const result = await getRuntimeGitBranchCompare(
           {
             // Why: route the branch compare by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
+            target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId: getConnectionId(activeWorktreeId) ?? undefined
@@ -91,7 +93,7 @@ export function useSourceControlBranchCompare({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktreeId,
       beginGitBranchCompareRequest,
       branchName,

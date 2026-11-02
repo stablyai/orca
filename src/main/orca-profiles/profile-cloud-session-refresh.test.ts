@@ -3,9 +3,9 @@ import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type * as ProfileCloudClient from './profile-cloud-client'
 import type { ActiveOrcaProfileState } from './profile-index-store'
 
-const { readMock, saveIfCurrentMock, clearMock, refreshMock, linkMock } = vi.hoisted(() => ({
+const { readMock, saveMock, clearMock, refreshMock, linkMock } = vi.hoisted(() => ({
   readMock: vi.fn(),
-  saveIfCurrentMock: vi.fn((): string | null => 'memory-only'),
+  saveMock: vi.fn(() => 'memory-only'),
   clearMock: vi.fn(),
   refreshMock: vi.fn(),
   linkMock: vi.fn()
@@ -13,19 +13,9 @@ const { readMock, saveIfCurrentMock, clearMock, refreshMock, linkMock } = vi.hoi
 
 vi.mock('./profile-cloud-session-store', () => ({
   readOrcaCloudSession: readMock,
-  saveOrcaCloudSessionIfCurrent: saveIfCurrentMock,
+  saveOrcaCloudSession: saveMock,
+  orcaCloudSessionKey: (profileId: string, userDataPath: string) => `${userDataPath}\0${profileId}`,
   clearOrcaCloudSession: clearMock
-}))
-
-vi.mock('./profile-cloud-session-mutation', () => ({
-  captureCloudSessionMutation: vi.fn(() => ({ epoch: 1, identityKey: 'identity' })),
-  cloudSessionIdentity: vi.fn((localProfileId, cloud) => ({
-    localProfileId,
-    cloudUserId: cloud.userId,
-    cloudProfileId: cloud.cloudProfileId,
-    organizationId: cloud.activeOrgId ?? ''
-  })),
-  tombstoneCloudSession: vi.fn()
 }))
 
 vi.mock('./profile-cloud-client', async (importOriginal) => {
@@ -35,10 +25,32 @@ vi.mock('./profile-cloud-client', async (importOriginal) => {
 
 vi.mock('./profile-cloud-index', () => ({ linkOrcaProfileToCloud: linkMock }))
 
+vi.mock('./profile-index-store', () => ({
+  loadOrCreateProfileIndex: () => ({
+    profiles: [{ id: 'profile-1', cloud: { activeOrgId: 'org-1' } }]
+  }),
+  getOrcaProfileListState: vi.fn()
+}))
+
 import { readFreshOrcaCloudSession } from './profile-cloud-session-refresh'
 import { OrcaCloudRequestError } from './profile-cloud-client'
 import { onOrcaCloudSessionInvalidated } from './profile-cloud-session-invalidation'
 import { forgetAmbiguousRefreshAttempt } from './profile-cloud-refresh-replay-guard'
+import { signInCloudSession, signOutCloudSession } from './profile-cloud-session-owner'
+
+// Owner state outlives a test; a fresh sign-in resets it for the next.
+function resetSessionOwner(): void {
+  signInCloudSession('profile-1', '/data', {
+    ...staleSession,
+    cloud: {
+      userId: 'user-1',
+      cloudProfileId: 'cloud-profile-1',
+      email: 'u@example.com',
+      linkedAt: 1
+    }
+  })
+  saveMock.mockClear()
+}
 
 const config = {} as OrcaCloudAuthConfig
 const active = {
@@ -64,15 +76,15 @@ describe('profile cloud session refresh', () => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
     forgetAmbiguousRefreshAttempt('/data\0profile-1')
-    saveIfCurrentMock.mockReturnValue('memory-only')
+    resetSessionOwner()
     readMock.mockReturnValue({ status: 'found', session: staleSession, persistence: 'memory-only' })
   })
 
-  it('does not publish a refresh whose persistent mutation snapshot became stale', async () => {
+  it('does not publish a refresh that lands after the session was signed out', async () => {
     let resolveRefresh!: (value: Record<string, unknown>) => void
     refreshMock.mockReturnValue(new Promise((resolve) => (resolveRefresh = resolve)))
     const refreshing = readFreshOrcaCloudSession(config, active, '/data')
-    saveIfCurrentMock.mockReturnValue(null)
+    signOutCloudSession('profile-1', '/data')
     resolveRefresh({
       accessToken: 'stale-access',
       refreshToken: 'stale-refresh',
@@ -112,7 +124,7 @@ describe('profile cloud session refresh', () => {
 
     const [firstResult, secondResult] = await Promise.all([first, second])
     expect(firstResult).toEqual(secondResult)
-    expect(saveIfCurrentMock).toHaveBeenCalledTimes(1)
+    expect(saveMock).toHaveBeenCalledTimes(1)
     expect(linkMock).toHaveBeenCalledTimes(1)
   })
 
@@ -176,7 +188,7 @@ describe('refresh-token replay after an ambiguous attempt', () => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
     forgetAmbiguousRefreshAttempt('/data\0profile-1')
-    saveIfCurrentMock.mockReturnValue('memory-only')
+    resetSessionOwner()
     readMock.mockReturnValue({ status: 'found', session: staleSession, persistence: 'memory-only' })
   })
 
@@ -210,7 +222,7 @@ describe('refresh-token replay after an ambiguous attempt', () => {
       session: rotated
     })
     expect(refreshMock).toHaveBeenCalledTimes(1)
-    expect(saveIfCurrentMock).not.toHaveBeenCalled()
+    expect(saveMock).not.toHaveBeenCalled()
   })
 
   it('retries once after a definitive 5xx, which cannot have rotated the token', async () => {

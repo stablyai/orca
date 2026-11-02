@@ -27,6 +27,26 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => mocks.worktreeRuntimeOwnerId
 }))
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    runtimeEnvironmentId: string | null | undefined
+  ) => {
+    const owner =
+      runtimeEnvironmentId === undefined ? mocks.worktreeRuntimeOwnerId : runtimeEnvironmentId
+    return owner
+      ? { kind: 'environment' as const, environmentId: owner }
+      : { kind: 'local' as const }
+  }
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: () => mocks.connectionIdForWorkspace,
   getConnectionIdForFile: () => mocks.connectionIdForFile
@@ -104,7 +124,7 @@ describe('openDocPreviewExternally', () => {
   it('hands a local document straight to the OS', () => {
     openDocPreviewExternally(REMOTE_DOCUMENT)
 
-    expect(mocks.openFilePath).toHaveBeenCalledWith(REMOTE_DOCUMENT.filePath)
+    expect(mocks.openFilePath).toHaveBeenCalledWith(REMOTE_DOCUMENT.filePath, 'local')
     expect(mocks.downloadAndOpen).not.toHaveBeenCalled()
   })
 

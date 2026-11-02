@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '../../shared/child-process/run-process'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { captureDescendantSnapshot, type DescendantSnapshot } from '../pty-descendant-termination'
 import {
   terminateDescendantSnapshotWithVerdict,

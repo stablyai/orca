@@ -9,7 +9,7 @@ import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-w
 import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { Tab } from '../../../../shared/tab-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,

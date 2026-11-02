@@ -75,6 +75,12 @@ export function findCompletedOrphanPaneKeysForTabClose(
     return []
   }
   const openTabIds = new Set((state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+  // Terminal owners must still exist in the terminal inventory; unified metadata can lag a close.
+  for (const tab of state.unifiedTabsByWorktree[worktreeId] ?? []) {
+    if (tab.contentType !== 'terminal') {
+      openTabIds.add(tab.id)
+    }
+  }
   const paneKeys: string[] = []
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     if (paneKey.startsWith(prefix) || entry.state !== 'done' || entry.worktreeId !== worktreeId) {

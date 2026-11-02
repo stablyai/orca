@@ -7,7 +7,7 @@
  */
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
-import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {

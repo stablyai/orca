@@ -28,7 +28,7 @@ const HEARTBEAT_TTL_MS = 45_000
 const START_MS = 100
 const IDENTITY = { userId: 'user-a', relayHostId: 'host000000000001' }
 
-// A connection-limited cell is what makes deadCellRequiresCommittedFence true,
+// A connection-limited cell is what makes deadCellFenceRequirement report capped,
 // which is the branch that answers 503 relay_home_cell_unavailable.
 const CAPPED = {
   capacityRequests: 1_000,

@@ -7,12 +7,14 @@
 // own producer admitted, and never claims an outcome the evidence did not report.
 
 import type { AgentChildWorkAdmission } from './agent-status-child-work-admission'
+import { agentChildWorkFencesEqual } from './agent-status-child-work'
 import { settledOwnersOfLiveWork } from './agent-status-child-work-liveness'
 import type {
   AgentChildWorkEndedEvidence,
   AgentChildWorkEvidence,
   AgentChildWorkOperationEvidence,
-  AgentChildWorkRemovedEvidence
+  AgentChildWorkRemovedEvidence,
+  AgentChildWorkStopAcknowledgedEvidence
 } from './agent-status-child-work-evidence'
 import {
   applyAgentChildWorkLive,
@@ -56,9 +58,27 @@ function applyEnded(ctx: ReconcileContext, edge: AgentChildWorkEndedEvidence): v
   // lands its evidence; a conflicting definite one is refused as `stale-invocation`.
   settleAgentChildWork(ctx, existing, edge.outcome, edge.observedAt, {
     ...(edge.lastMessage !== undefined ? { lastMessage: edge.lastMessage } : {}),
-    ...(edge.totalTokens !== undefined ? { totalTokens: edge.totalTokens } : {}),
-    ...(edge.basis !== undefined ? { basis: edge.basis } : {})
+    ...(edge.totalTokens !== undefined ? { totalTokens: edge.totalTokens } : {})
   })
+}
+
+/** The one rule for an accepted Stop: it settles only the run captured when it was sent, keeps an
+ *  ending that run already reported, and takes the provider's own verdict when the answer had one. */
+function applyStopAcknowledged(
+  ctx: ReconcileContext,
+  edge: AgentChildWorkStopAcknowledgedEvidence
+): void {
+  const record = ownedStructuredChildWork(ctx).find(
+    (candidate) => candidate.childWorkId === edge.childWorkId
+  )
+  if (!record || !agentChildWorkFencesEqual(record.invocation, edge.invocation)) {
+    return
+  }
+  if (edge.outcome !== undefined) {
+    settleAgentChildWork(ctx, record, edge.outcome, edge.observedAt)
+  } else if (record.membership === 'live') {
+    settleAgentChildWork(ctx, record, 'cancelled', edge.observedAt, { basis: 'stop-acknowledged' })
+  }
 }
 
 /** A live child's current operation, and nothing else about it. */
@@ -157,6 +177,8 @@ export function reconcileAgentChildWorkEvidence(
       applyEnded(ctx, edge)
     } else if (edge.type === 'removed') {
       applyRemoved(ctx, edge)
+    } else if (edge.type === 'stop-acknowledged') {
+      applyStopAcknowledged(ctx, edge)
     } else if (edge.type === 'turn-started') {
       removeChildren(ctx, removableSettled(ctx))
     } else {

@@ -90,12 +90,14 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
   it('caches normally when no invalidation interrupts the scan', async () => {
     scanAiVaultSessionsInService.mockResolvedValueOnce(scanResult('scan-A'))
-    await listAiVaultSessions()
+    const request = { limit: 1000, scopePaths: ['/project'] }
+    const first = await listAiVaultSessions(request)
 
-    // Second non-force call is a cache hit — no second scan.
-    const cached = await listAiVaultSessions()
+    // A narrower request reuses the same scan entry and its scan ID.
+    const cached = await listAiVaultSessions({ ...request, limit: 100 })
 
     expect(cached.scannedAt).toBe('scan-A')
+    expect(cached.scanId).toBe(first.scanId)
     expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
     expect(listRunningWslHomeDirsAsync).toHaveBeenCalledTimes(1)
   })

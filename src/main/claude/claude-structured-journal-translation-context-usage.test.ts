@@ -339,7 +339,7 @@ describe('context usage on journal rows', () => {
     const onOpen = vi.fn()
     const turn = new ClaudeOpenTurn({
       sink: journal().sink,
-      settleChildren: () => {},
+      turnSuperseded: () => {},
       endOpenWork: () => {},
       onOpen
     })

@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 /** Session-name namespace Orca gives one daemon per browser tab. */
 export const ORCA_TAB_SESSION_PREFIX = 'orca-tab-'

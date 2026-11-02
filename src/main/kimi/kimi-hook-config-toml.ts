@@ -136,9 +136,8 @@ function findOwnedRegions(
   ]
 }
 
-// TOML basic (double-quoted) string. The managed command may contain single
-// quotes (from POSIX quoting) but no double quotes or backslashes on the paths
-// Orca generates; escape both defensively anyway.
+// TOML basic (double-quoted) string. The Windows encoded-PowerShell fallback
+// carries a backslashed powershell.exe path, so backslashes and quotes are escaped.
 function tomlBasicString(value: string): string {
   const escaped = value
     .replace(/\\/g, '\\\\')

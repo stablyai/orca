@@ -1,157 +1,68 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { runProcess, runProcessSync } from '@orca/process-host'
+import { setWindowsSecurityForTests } from '../shared/windows-security-addon'
+import {
+  createFakeWindowsSecurity,
+  FAKE_USER_SID,
+  type FakeWindowsSecurity
+} from '../shared/windows-security-addon.test-fixture'
+import { grantDirAcl, grantDirAclAsync } from './win32-utils'
 
-const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
-  execFileSyncMock: vi.fn()
+vi.mock('@orca/process-host', () => ({
+  runProcess: vi.fn(),
+  runProcessSync: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  execFile: execFileMock,
-  execFileSync: execFileSyncMock
-}))
+const USER_DIRECTORY_GRANT = {
+  sid: FAKE_USER_SID,
+  mask: 0x1f01ff,
+  options: { inheritable: true, replace: true }
+}
 
-type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void
+describe('grantDirAcl', () => {
+  let fake: FakeWindowsSecurity
 
-const originalUsername = process.env.USERNAME
-
-beforeEach(() => {
-  vi.resetModules()
-  execFileMock.mockReset()
-  execFileSyncMock.mockReset()
-})
-
-afterEach(() => {
-  if (originalUsername === undefined) {
-    delete process.env.USERNAME
-  } else {
-    process.env.USERNAME = originalUsername
-  }
-})
-
-describe('grantDirAclAsync', () => {
-  it('keeps icacls off the synchronous main-process path', async () => {
-    process.env.USERNAME = 'alice'
-    let complete: ExecCallback | undefined
-    execFileMock.mockImplementation(
-      (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-        complete = callback
-        return {} as never
-      }
-    )
-    const { getIcaclsExePath, grantDirAclAsync } = await import('./win32-utils')
-
-    const pending = grantDirAclAsync('C:\\Users\\alice\\Orca')
-    await Promise.resolve()
-
-    expect(execFileSyncMock).not.toHaveBeenCalled()
-    expect(execFileMock).toHaveBeenCalledWith(
-      getIcaclsExePath(),
-      ['C:\\Users\\alice\\Orca', '/grant:r', 'alice:(OI)(CI)(F)'],
-      { encoding: 'utf-8', windowsHide: true, timeout: 10_000 },
-      expect.any(Function)
-    )
-    complete?.(null, '', '')
-    await expect(pending).resolves.toBeUndefined()
+  beforeEach(() => {
+    fake = createFakeWindowsSecurity()
+    setWindowsSecurityForTests(fake)
   })
 
-  it('resolves a missing username through asynchronous whoami before icacls', async () => {
-    delete process.env.USERNAME
-    execFileMock
-      .mockImplementationOnce(
-        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(null, '"DOMAIN\\alice","S-1-5-21-123"\r\n', '')
-          return {} as never
-        }
-      )
-      .mockImplementationOnce(
-        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(null, '', '')
-          return {} as never
-        }
-      )
-    const { getWhoamiExePath, grantDirAclAsync } = await import('./win32-utils')
-
-    await grantDirAclAsync('C:\\Orca')
-
-    expect(execFileMock.mock.calls[0]?.slice(0, 3)).toEqual([
-      getWhoamiExePath(),
-      ['/user', '/fo', 'csv', '/nh'],
-      { encoding: 'utf-8', windowsHide: true, timeout: 5000 }
-    ])
-    expect(execFileMock.mock.calls[1]?.[1]).toEqual([
-      'C:\\Orca',
-      '/grant:r',
-      '*S-1-5-21-123:(OI)(CI)(F)'
-    ])
-    expect(execFileSyncMock).not.toHaveBeenCalled()
+  afterEach(() => {
+    // Neither grant may start a process: no icacls, no whoami.
+    expect(runProcess).not.toHaveBeenCalled()
+    expect(runProcessSync).not.toHaveBeenCalled()
+    setWindowsSecurityForTests(null)
   })
 
-  it('does not overwrite a concurrent cached identity with a late async result', async () => {
-    delete process.env.USERNAME
-    let completeWhoami: ExecCallback | undefined
-    execFileMock
-      .mockImplementationOnce(
-        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          completeWhoami = callback
-          return {} as never
-        }
-      )
-      .mockImplementationOnce(
-        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(null, '', '')
-          return {} as never
-        }
-      )
-    execFileSyncMock.mockReturnValue('"DOMAIN\\sync","S-1-5-21-456"\r\n')
-    const { grantDirAclAsync, resolveCurrentWindowsIdentity } = await import('./win32-utils')
+  it('replaces the user rule with inheritable full control, by SID, in-process', () => {
+    grantDirAcl('C:\\Users\\alice\\Orca')
 
-    const pending = grantDirAclAsync('C:\\Orca')
-    await Promise.resolve()
-    expect(resolveCurrentWindowsIdentity()).toBe('*S-1-5-21-456')
-    completeWhoami?.(null, '"DOMAIN\\async","S-1-5-21-789"\r\n', '')
-    await pending
-
-    expect(execFileMock.mock.calls[1]?.[1]).toEqual([
-      'C:\\Orca',
-      '/grant:r',
-      '*S-1-5-21-456:(OI)(CI)(F)'
+    expect(fake.calls).toMatchObject([
+      { op: 'grant', path: 'C:\\Users\\alice\\Orca', ...USER_DIRECTORY_GRANT }
     ])
   })
 
-  it('retries identity resolution after a transient whoami failure', async () => {
-    delete process.env.USERNAME
-    execFileMock
-      .mockImplementationOnce(
-        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(new Error('whoami timed out'), '', '')
-          return {} as never
-        }
-      )
-      .mockImplementationOnce(
-        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(null, '"DOMAIN\\alice","S-1-5-21-123"\r\n', '')
-          return {} as never
-        }
-      )
-      .mockImplementationOnce(
-        (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(null, '', '')
-          return {} as never
-        }
-      )
-    const { getWhoamiExePath, grantDirAclAsync } = await import('./win32-utils')
+  it('runs the asynchronous grant on the thread pool rather than the main thread', async () => {
+    await grantDirAclAsync('C:\\Users\\alice\\Orca')
 
-    await grantDirAclAsync('C:\\Orca')
-    await grantDirAclAsync('C:\\Orca')
-
-    expect(
-      execFileMock.mock.calls.filter(([command]) => command === getWhoamiExePath())
-    ).toHaveLength(2)
-    expect(execFileMock.mock.calls[2]?.[1]).toEqual([
-      'C:\\Orca',
-      '/grant:r',
-      '*S-1-5-21-123:(OI)(CI)(F)'
+    expect(fake.calls).toMatchObject([
+      { op: 'grantAsync', path: 'C:\\Users\\alice\\Orca', ...USER_DIRECTORY_GRANT }
     ])
-    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  // Callers retry their write after the grant and re-throw the original EPERM if it still fails.
+  it('throws a failed grant so the caller can surface its original error', async () => {
+    fake.failing.add('C:\\Orca')
+
+    expect(() => grantDirAcl('C:\\Orca')).toThrow(/Win32 error 5/)
+    await expect(grantDirAclAsync('C:\\Orca')).rejects.toThrow(/Win32 error 5/)
+  })
+
+  it('is a silent no-op when the addon cannot load', async () => {
+    setWindowsSecurityForTests(null)
+
+    expect(() => grantDirAcl('C:\\Orca')).not.toThrow()
+    await expect(grantDirAclAsync('C:\\Orca')).resolves.toBeUndefined()
+    expect(fake.calls).toEqual([])
   })
 })

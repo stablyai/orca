@@ -1,3 +1,4 @@
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { buildResolvePullRequestConflictsPrompt } from '../SourceControl'
@@ -20,6 +21,7 @@ type ChecksPanelAiQueueInput = Pick<
 > &
   Pick<
     ChecksPanelControllerState,
+    | 'activeWorktree'
     | 'activeWorktreeId'
     | 'activeWorktreePath'
     | 'claimedCommentResolutionRef'
@@ -37,6 +39,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
   const {
     activeConflictReview,
     activeReview,
+    activeWorktree,
     activeWorktreeId,
     activeWorktreePath,
     claimedCommentResolutionRef,
@@ -158,7 +161,12 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
       // may already be showing a different review by then.
       const gitlabTarget =
         activeReview.provider === 'gitlab'
-          ? { repoPath: repo.path, repoId: repo.id, iid: activeReview.number }
+          ? {
+              repoPath: repo.path,
+              repoId: repo.id,
+              iid: activeReview.number,
+              ownerHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+            }
           : undefined
       const commentResolution = {
         reviewContextKey: stateRequestKey,
@@ -207,6 +215,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     },
     [
       activeReview,
+      activeWorktree,
       activeWorktreeId,
       activeWorktreePath,
       pr?.prRepo,

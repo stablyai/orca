@@ -4,10 +4,10 @@ import { waitForSessionReady } from './helpers/store'
 import { startOrcadConvertHost } from './helpers/orcad-convert-host'
 import { reconnect, serverCall } from './helpers/orcad-convert-flow'
 import { runtimeAdvertisesBrowserClientHosting } from '../../src/shared/browser-client-hosting-eligibility'
+import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
 
-const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
-test.skip(!TEMPLATE || process.env.ORCA_E2E_SSH_DOCKER !== '1', 'Needs Docker and server template')
-test.use({ orcaAppExtraEnv: { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE } })
+skipUnlessManagedDockerHost()
+test.use({ orcaAppExtraEnv: { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE } })
 
 test('a backendless managed host does not promise client-hosted browser creation', async ({
   orcaPage: page

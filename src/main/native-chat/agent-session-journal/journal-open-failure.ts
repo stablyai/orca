@@ -115,6 +115,20 @@ export function journalOpenRefusal(error: unknown): AgentSessionWireRefusal {
   return refuse('agent_session_journal_unreadable', { reason }, message)
 }
 
+/** A newer Orca's journal refuses a write with the words a send gets there. */
+export async function refusingNewerOrcaJournal<TOutcome>(
+  run: Promise<TOutcome>
+): Promise<TOutcome | { ok: false; refusal: AgentSessionWireRefusal }> {
+  try {
+    return await run
+  } catch (error) {
+    if (isJournalWrittenByNewerOrca(error)) {
+      return { ok: false, refusal: journalOpenRefusal(error) }
+    }
+    throw error
+  }
+}
+
 /** The same refusal, thrown: for a host that could not open the journal at all. It keeps what
  *  failed as its cause, for the log. */
 export function journalOpenRefusalError(error: unknown): AgentSessionRefusalError {

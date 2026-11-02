@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import type { OpenCodeTranscriptSignal } from './transcript-opencode-sqlite-query'
 import { WslTranscriptFsError } from './wsl-transcript-fs-error'
 
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   ),
   prepare: vi.fn(async () => []),
   configure: vi.fn(),
+  access: vi.fn(async () => true),
   wslPath: vi.fn((_path: string): { distro: string; linuxPath: string } | null => null),
   readSignal: vi.fn(
     async (
@@ -23,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   )
 }))
 vi.mock('../ai-vault/cached-session-list', () => ({ getAiVaultWslHomeDirs: mocks.homes }))
+vi.mock('./wsl-transcript-fs-access', () => ({ wslGatedAccess: mocks.access }))
 vi.mock('../opencode-usage/opencode-database-discovery', () => ({
   listOpenCodeDatabases: mocks.native,
   listOpenCodeDatabasesInDirectory: mocks.directory,
@@ -50,6 +53,54 @@ afterEach(() => {
 })
 
 describe('OpenCode transcript owning-host database discovery', () => {
+  it('reports a missing ZCode install as unavailable without a SQLite refusal', async () => {
+    mocks.access.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    await expect(
+      openCodeTranscriptDefaultDeps.resolveDbPath('z-session', undefined, 'zcode')
+    ).resolves.toBeNull()
+    expect(mocks.readSignal).not.toHaveBeenCalled()
+  })
+  it('opens a native ZCode session before an unresolved WSL lookup', async () => {
+    vi.useFakeTimers()
+    mocks.homes.mockImplementation(() => new Promise(() => {}))
+    mocks.readSignal.mockResolvedValue({
+      messageCount: 1,
+      partCount: 1,
+      maxMessageRowId: 1,
+      maxPartTimeUpdated: 1
+    })
+    const settled = vi.fn()
+    void openCodeTranscriptDefaultDeps
+      .resolveDbPath('z-session', undefined, 'zcode')
+      .then(settled, settled)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(settled).toHaveBeenCalledWith(join(homedir(), '.zcode', 'cli', 'db', 'db.sqlite'))
+    expect(mocks.homes).not.toHaveBeenCalled()
+    expect(mocks.native).not.toHaveBeenCalled()
+  })
+
+  it('finds a WSL ZCode session without probing OpenCode databases', async () => {
+    const home = 'wsl-home'
+    const dbPath = join(home, '.zcode', 'cli', 'db', 'db.sqlite')
+    mocks.homes.mockResolvedValue([home])
+    mocks.readSignal.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      messageCount: 1,
+      partCount: 1,
+      maxMessageRowId: 1,
+      maxPartTimeUpdated: 1
+    })
+    await expect(
+      openCodeTranscriptDefaultDeps.resolveDbPath('z-session', undefined, 'zcode')
+    ).resolves.toBe(dbPath)
+    expect(mocks.prepare).toHaveBeenCalledWith([home])
+    expect(mocks.readSignal).toHaveBeenLastCalledWith(
+      { dbPath, sessionId: 'z-session', agent: 'zcode' },
+      expect.any(AbortSignal)
+    )
+    expect(mocks.native).not.toHaveBeenCalled()
+    expect(mocks.directory).not.toHaveBeenCalled()
+  })
+
   it.each(['homes', 'directory', 'prepare'] as const)(
     'opens a matching native database without waiting for WSL %s',
     async (stage) => {

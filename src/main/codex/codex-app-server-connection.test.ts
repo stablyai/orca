@@ -1,11 +1,12 @@
-import { EventEmitter } from 'node:events'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import type { EventEmitter } from 'node:events'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { ProcessSpec, PipedProcessSpawner } from '@orca/process-host/process-spec'
+
 import {
   isCodexAppServerRequestError,
   openCodexAppServerConnection,
@@ -89,11 +90,11 @@ type StubChild = EventEmitter & {
 
 /** Full control over framing and death, which a real child cannot give. */
 function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
-  child: StubChild
-  spawnImpl: typeof spawnProcess
+  child: ReturnType<typeof createFakePipedChild>
+  spawnImpl: PipedProcessSpawner
   written: Record<string, unknown>[]
 } {
-  const child = new EventEmitter() as StubChild
+  const child = createFakePipedChild(9_999_999)
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   child.stdin = new PassThrough()
@@ -112,7 +113,7 @@ function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
   if (options.exitOnStdinEnd !== false) {
     child.stdin.on('finish', () => child.emit('exit', 0, null))
   }
-  return { child, spawnImpl: (() => child) as unknown as typeof spawnProcess, written }
+  return { child, spawnImpl: () => child, written }
 }
 
 /** Answers the handshake so `openCodexAppServerConnection` can resolve. */
@@ -196,7 +197,7 @@ describe('openCodexAppServerConnection', () => {
       const connection = await openCodexAppServerConnection(
         { command: 'codex', args: ['app-server'] },
         {},
-        (spec: ProcessSpec) => {
+        (spec) => {
           specs.push(spec)
           return spawnImpl(spec)
         }
@@ -572,7 +573,7 @@ describe('openCodexAppServerConnection', () => {
 
   // A root that outlived one kill is killed again by the next ask, which then proves it gone.
   it('kills the root again on a close after an unproven attempt', async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const connection = await openCodexAppServerConnection(
@@ -581,18 +582,21 @@ describe('openCodexAppServerConnection', () => {
       spawnImpl
     )
 
-    const first = connection.close()
-    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 3_500)
-    await expect(first).resolves.toBe(false)
-    child.kill.mockImplementation((signal) => {
-      if (signal === 'SIGKILL') {
-        setTimeout(() => child.emit('exit', null, 'SIGKILL'), 10)
-      }
-      return true
+    await expect(closeWithoutObservedExit(() => connection.close(), child)).resolves.toBe(false)
+    const secondForcedKill = new Promise<void>((resolve) => {
+      child.kill.mockImplementation((signal) => {
+        if (signal === 'SIGKILL') {
+          setTimeout(() => child.emit('exit', null, 'SIGKILL'), 10)
+          resolve()
+        }
+        return true
+      })
     })
 
     const second = connection.close()
-    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 3_500)
+    await flushStreams().then(() => vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS))
+    await secondForcedKill
+    await vi.advanceTimersByTimeAsync(10)
     await expect(second).resolves.toBe(true)
     expect(child.kill.mock.calls.filter(([signal]) => signal === 'SIGKILL')).toHaveLength(2)
   })

@@ -6,8 +6,8 @@ import { useAppStore } from '../../store'
  *
  * Why `getState()` and not one selector each: zustand action identities are fixed when the store
  * is built and no slice ever puts one in a `set()` payload, so subscribing to them can never fire.
- * TerminalPane mounts once per retained tab, so 27 action subscriptions cost 27 live listeners and
- * 27 selector runs per store publication *per mounted tab*. Same pattern as
+ * TerminalPane mounts once per retained tab, so 25 action subscriptions cost 25 live listeners and
+ * 25 selector runs per store publication *per mounted tab*. Same pattern as
  * `useSourceControlStoreActions`.
  */
 export function useTerminalPaneStoreActions() {
@@ -17,18 +17,12 @@ export function useTerminalPaneStoreActions() {
       clearCodexRestartNotice: state.clearCodexRestartNotice,
       clearRuntimePaneTitle: state.clearRuntimePaneTitle,
       clearTabPtyId: state.clearTabPtyId,
-      clearTerminalPaneUnread: state.clearTerminalPaneUnread,
-      clearTerminalTabUnread: state.clearTerminalTabUnread,
-      clearWorktreeUnread: state.clearWorktreeUnread,
-      consumePendingCodexPaneRestart: state.consumePendingCodexPaneRestart,
+      consumePendingPaneAccountRestart: state.consumePendingPaneAccountRestart,
       consumeSuppressedPtyExit: state.consumeSuppressedPtyExit,
       consumeTabIssueCommandSplit: state.consumeTabIssueCommandSplit,
-      consumeTabSetupSplit: state.consumeTabSetupSplit,
       consumeTabStartupCommand: state.consumeTabStartupCommand,
       isPtyShutdownPending: state.isPtyShutdownPending,
-      markTerminalPaneUnread: state.markTerminalPaneUnread,
-      markTerminalTabUnread: state.markTerminalTabUnread,
-      markWorktreeUnread: state.markWorktreeUnread,
+      markTerminalBell: state.markTerminalBell,
       openSpacePage: state.openSpacePage,
       refreshWorkspaceSpace: state.refreshWorkspaceSpace,
       setCacheTimerStartedAt: state.setCacheTimerStartedAt,
@@ -54,18 +48,12 @@ export const TERMINAL_PANE_STORE_ACTION_KEYS = [
   'clearCodexRestartNotice',
   'clearRuntimePaneTitle',
   'clearTabPtyId',
-  'clearTerminalPaneUnread',
-  'clearTerminalTabUnread',
-  'clearWorktreeUnread',
-  'consumePendingCodexPaneRestart',
+  'consumePendingPaneAccountRestart',
   'consumeSuppressedPtyExit',
   'consumeTabIssueCommandSplit',
-  'consumeTabSetupSplit',
   'consumeTabStartupCommand',
   'isPtyShutdownPending',
-  'markTerminalPaneUnread',
-  'markTerminalTabUnread',
-  'markWorktreeUnread',
+  'markTerminalBell',
   'openSpacePage',
   'refreshWorkspaceSpace',
   'setCacheTimerStartedAt',

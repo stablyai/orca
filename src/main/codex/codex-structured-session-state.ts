@@ -1,13 +1,13 @@
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
+  AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
-import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
+import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type {
   CodexAppServerConnection,
   openCodexAppServerConnection
@@ -23,6 +23,7 @@ import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type { StructuredLaunchRequest } from '../runtime/structured-agent-launch-composition'
 import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
@@ -44,8 +45,10 @@ export type CodexStructuredLaunch = {
   permissionPolicy?: CodexStructuredPermissionPolicy
   /** The model the session chose; the thread opens on it so its first turn is not a switch. */
   model?: string
+  /** The child's sealed environment, and the inherited keys it must not keep. */
   env?: Record<string, string>
-  /** This chat's visuals folder and skill; absent when the chat has no visuals. */
+  envToDelete?: readonly string[]
+  /** This chat's scratch folder and visuals skill; absent when the chat has no visuals. */
   visuals?: NativeChatVisualsLaunch
 }
 
@@ -88,14 +91,17 @@ export type CodexStructuredSessionEvent =
 
 export type CodexStructuredSessionAdapterDeps = {
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
-  resolveLaunch: (input: {
-    identity: AgentSessionJournalIdentity
-  }) => Promise<CodexStructuredLaunch>
+  resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>
   onEvent?: (event: CodexStructuredSessionEvent) => void
   /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
   logger?: StructuredAgentSessionLogger
   /** What the session's child work did, delivered after the journal handled the frame. */
-  onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
+  /** `producer`: the reporting child's own sink, which writes what the report changes. */
+  onChildWorkEvidence?: (
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
+  ) => void
   /** A send admitted earlier: its identity once Codex echoes it, or its rejection when the turn
    *  Codex answered it into ended without taking it. */
   onDispatchSettledLate?: (
@@ -107,9 +113,8 @@ export type CodexStructuredSessionAdapterDeps = {
         } & AgentJournalDispatchRejection)
     )
   ) => void
-  /** Codex reported its thread not running with no turn open: a send whose
-   *  dispatch was never answered is owed nothing after this. */
-  onPrimaryThreadStoppedRunning?: (input: { sessionId: string }) => void
+  /** The sends Codex holds (`CodexDispatchEchoes.heldSends`) changed with no journal row. */
+  onHeldSendsChanged?: (input: { sessionId: string }) => void
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string

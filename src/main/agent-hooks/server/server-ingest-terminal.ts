@@ -3,11 +3,64 @@ import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-l
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import {
+  agentProviderSessionsEqual,
+  type AgentProviderSessionMetadata
+} from '../../../shared/agent-session-resume'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
+  /**
+   * A resume launch names its provider session before the agent reports one. Codex runs
+   * SessionStart only at its first turn, so until the user typed, readers had no transcript
+   * to address and native chat stayed empty (#10923). Seeds an identity-only row.
+   */
+  recordLaunchResumeIdentity(event: {
+    paneKey: string
+    worktreeId?: string
+    agentType: string
+    providerSession: AgentProviderSessionMetadata
+    /** When the pane's process launched; a row reported since then is the agent's own. */
+    launchedAt: number
+  }): void {
+    const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
+    const parsedPaneKey = parsePaneKey(paneKey)
+    if (!parsedPaneKey || paneKey.length > MAX_PANE_KEY_LEN) {
+      return
+    }
+    const previous = this.state.lastStatusByPaneKey.get(paneKey)
+    if (
+      previous &&
+      (previous.providerSessionOnly === true
+        ? agentProviderSessionsEqual(
+            event.agentType,
+            previous.providerSession,
+            event.providerSession
+          )
+        : 'receivedAt' in previous &&
+          typeof previous.receivedAt === 'number' &&
+          previous.receivedAt >= event.launchedAt)
+    ) {
+      return
+    }
+    const identity: AgentHookEventPayload &
+      Pick<EnrichedAgentHookEventPayload, 'retainedForLiveness'> = {
+      paneKey,
+      tabId: parsedPaneKey.tabId,
+      ...(event.worktreeId?.trim() ? { worktreeId: event.worktreeId.trim() } : {}),
+      connectionId: null,
+      providerSession: event.providerSession,
+      providerSessionOnly: true,
+      // Why: hydration keeps only marked identity rows; a host restart before the first turn must not lose it.
+      retainedForLiveness: true,
+      payload: { state: 'done', prompt: '', agentType: event.agentType }
+    }
+    this.applyNormalizedStatus(identity, undefined, 'launch')
+  }
+
   ingestTerminalStatus(event: {
     ptyId?: string
     paneKey: string
@@ -67,6 +120,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     )
     if (disposition === 'suppress') {
       return
+    }
+    if (event.origin === 'process' && event.payload.state === 'working') {
+      this.forgetAgentExit(paneKey)
     }
     if (disposition === 'restart') {
       this.observations.rebind(paneKey)
@@ -150,20 +206,24 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.payload.agentType && event.payload.agentType !== 'unknown'
         ? event.payload.agentType
         : undefined
+    // A launch seed's `done` is a placeholder, not a finished turn, so its session carries over.
     const preservedProviderSession =
       previous?.providerSession &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&
-      (previous.payload.state !== 'done' || event.payload.state === 'done')
+      (previous.payload.state !== 'done' ||
+        event.payload.state === 'done' ||
+        previous.observation?.origin === 'launch')
         ? previous.providerSession
         : undefined
     // Why: OSC carries no main agent fact. While it repaints the state the hook row already holds, the
     // main agent behind that state is unchanged too; a different state is a turn edge OSC cannot date.
     const preservedMainAgent =
-      previous?.payload.mainAgent &&
+      event.payload.mainAgent ??
+      (previous?.payload.mainAgent &&
       previous.payload.state === event.payload.state &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
         ? previous.payload.mainAgent
-        : undefined
+        : undefined)
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus(
       {

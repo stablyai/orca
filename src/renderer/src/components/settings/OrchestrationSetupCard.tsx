@@ -1,9 +1,8 @@
 import type { JSX } from 'react'
 import {
   ORCHESTRATION_SKILL_INSTALL_COMMAND,
-  ORCHESTRATION_SKILL_UPDATE_COMMAND
-} from '@/lib/orchestration-install-command'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/agent-feature-install-commands'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
@@ -24,12 +23,6 @@ export function OrchestrationSetupCard(props: {
         activeSkillRuntime.agentRuntime
       )
     : ORCHESTRATION_SKILL_INSTALL_COMMAND
-  const updateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        ORCHESTRATION_SKILL_UPDATE_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : ORCHESTRATION_SKILL_UPDATE_COMMAND
 
   const setupPanel = (
     <AgentSkillSetupPanel
@@ -43,7 +36,6 @@ export function OrchestrationSetupCard(props: {
         'Enables agents to hand off context and coordinate work through Orca.'
       )}
       command={installCommand}
-      installedCommand={updateCommand}
       terminalTitle="Orchestration setup"
       terminalAriaLabel="Orchestration skill install terminal"
       terminalWorktreeId="feature-wall-orchestration-skill-terminal"

@@ -16,7 +16,7 @@ export function sealMobileE2EEV2Frame(args: {
   direction: MobileE2EEDirection
   payloadKind: MobileE2EEPayloadKind
   counter: bigint
-}): Uint8Array {
+}): Uint8Array<ArrayBuffer> {
   validateFrameInputs(args.key, args.sessionId, args.counter)
   const header = encodeHeader(args)
   const nonce = encodeNonce(args)
@@ -119,7 +119,7 @@ function writeUint64(target: Uint8Array, offset: number, value: bigint): void {
   }
 }
 
-function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
+function concatBytes(parts: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
   const result = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
   let offset = 0
   for (const part of parts) {

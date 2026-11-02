@@ -16,7 +16,11 @@ export const pendingAcpResolution = {
   resolvedAt: null
 } as const
 
-export function acpPermissionPresentation(params: unknown): AcpRequestPresentation {
+/** `description`: the agent's own words about what answering means, shown above the choices. */
+export function acpPermissionPresentation(
+  params: unknown,
+  description?: string
+): AcpRequestPresentation {
   // The runtime already read this request and reported any field it dropped.
   const request = readAcpPermissionRequest(params, () => {})
   if (!request) {
@@ -27,6 +31,7 @@ export function acpPermissionPresentation(params: unknown): AcpRequestPresentati
     body: {
       kind: 'approval',
       title: toolCall.title ?? 'Permission requested',
+      ...(description ? { description } : {}),
       detail: null,
       options: options.map((option) => ({
         id: option.optionId,
@@ -105,9 +110,8 @@ export function translateAcpRequest(
     }
   }
   const presentation =
-    method === 'session/request_permission'
-      ? acpPermissionPresentation(params)
-      : options.dialect.request?.(method, params)
+    options.dialect.request?.(method, params) ??
+    (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined)
   if (!presentation) {
     // A file system or terminal call Orca never advertised is the agent's own misstep (OpenCode 1.x
     // repeats each approved edit as a file write it already made): refused, with no row.

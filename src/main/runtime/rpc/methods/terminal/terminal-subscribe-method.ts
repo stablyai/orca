@@ -1,12 +1,12 @@
 import { defineStreamingMethod } from '../../core'
-import { TerminalSubscribe } from './stream-schemas'
+import { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal-stream-params'
 import { isTerminalReadPayloadIncomplete } from './terminal-stream-replay'
-import { runTerminalBinarySubscription } from './terminal-legacy-subscribe-binary'
+import { runTerminalBinarySubscription } from './terminal-subscribe-binary'
 import {
   runTerminalJsonSubscription,
   runTerminalLeaseSubscription
-} from './terminal-legacy-simple-subscriptions'
-import type { TerminalSubscriptionArgs } from './terminal-legacy-subscription-types'
+} from './terminal-subscribe-json-and-lease'
+import type { TerminalSubscriptionArgs } from './terminal-subscribe-types'
 import { registerTerminalSubscription } from './terminal-subscription-registration'
 
 export const TERMINAL_SUBSCRIBE_METHODS = [

@@ -16,6 +16,7 @@ import { getProjectIdForProviderIdentity } from '../../../shared/project-host-se
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { updateProjectHostSetupWithProvenKind } from '../../folder-repo-git-conversion'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
@@ -27,7 +28,11 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { addLocalRepoFromPath } from './local-repo-registration'
-import { addRemoteRepoFromPath } from './remote-repo-registration'
+import { sshTargetNotConnectedMessage } from '../../providers/ssh-host-not-served-error'
+import {
+  assertWslMoveHostSetupIdWritable,
+  assertWslMoveHostSetupWritable
+} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetupResult {
   const setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
@@ -45,6 +50,11 @@ function alignRepoWithRequestedProject(
   setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder',
   requestedProviderIdentity?: ProjectHostSetupExistingFolderArgs['projectProviderIdentity']
 ): ProjectHostSetupResult {
+  assertWslMoveHostSetupWritable(store, {
+    projectId,
+    hostId: getRepoExecutionHostId(repo),
+    repoId: repo.id
+  })
   let setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
   if (setup.projectId !== projectId) {
     const project = store.getProjects().find((entry) => entry.id === projectId)
@@ -86,6 +96,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         rawArgs,
         'project_host_setup_create_invalid_args'
       )
+      assertWslMoveHostSetupWritable(store, args)
       const result = store.createProjectHostSetup(args)
       if (!result) {
         throw new Error(`Project not found: ${args.projectId}`)
@@ -97,13 +108,21 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
 
   ipcMain.handle(
     'projectHostSetups:update',
-    (_event, rawArgs: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult => {
+    async (_event, rawArgs: ProjectHostSetupUpdateArgs): Promise<ProjectHostSetupUpdateResult> => {
       const args = parseProjectGroupIpcArgs(
         ProjectHostSetupUpdateIpcArgs,
         rawArgs,
         'project_host_setup_update_invalid_args'
       )
-      const result = store.updateProjectHostSetup(args)
+      assertWslMoveHostSetupIdWritable(store, args.setupId)
+      const result = await updateProjectHostSetupWithProvenKind(
+        store,
+        (setupArgs) => {
+          assertWslMoveHostSetupIdWritable(store, setupArgs.setupId)
+          return store.updateProjectHostSetup(setupArgs)
+        },
+        args
+      )
       if (!result) {
         throw new Error(`Project host setup not found: ${args.setupId}`)
       }
@@ -124,6 +143,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         rawArgs,
         'project_host_setup_delete_invalid_args'
       )
+      assertWslMoveHostSetupIdWritable(store, args.setupId)
       const result = store.deleteProjectHostSetup(args)
       if (!result) {
         throw new Error(`Project host setup not found: ${args.setupId}`)
@@ -152,12 +172,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         parsedHost.kind === 'local'
           ? await addLocalRepoFromPath(store, args.path, args.kind)
           : parsedHost.kind === 'ssh'
-            ? await addRemoteRepoFromPath(store, {
-                connectionId: parsedHost.targetId,
-                remotePath: args.path,
-                displayName: args.displayName,
-                kind: args.kind
-              })
+            ? { error: sshTargetNotConnectedMessage(parsedHost.targetId) }
             : {
                 error:
                   'Runtime hosts must be set up through the runtime projectHostSetup.setupExistingFolder RPC.'

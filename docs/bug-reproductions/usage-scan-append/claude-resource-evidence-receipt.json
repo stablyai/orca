@@ -1,0 +1,233 @@
+{
+  "purpose": "Final Claude resource evidence provenance; no timing thresholds or whole-app latency claims.",
+  "worktreeHeadDuringCapture": "bcfbb8cb6d543aca516fca346c32c47ec880019f",
+  "runtimeSourceFreeze": {
+    "sha256": "30b34e60311d125d4179edce422b84ffd900c6650915b72f072f24515132cf6c",
+    "fileCount": 56,
+    "allFileHashesVerified": true,
+    "sources": {
+      "src/main/claude-usage/claude-model-pricing.test.ts": "0a2a518fb508a20cd8ceae76e9e0798e18363712bc6e8af7428c6a9f93446492",
+      "src/main/claude-usage/claude-model-pricing.ts": "873e35e9a4f93893828efbcab2c9f2c772633823cf8c7adf7386f6dc53a8b155",
+      "src/main/claude-usage/claude-usage-automation-attribution.ts": "f6674ee444e7836109a4635239205fe3161abe00cdadabb6d1219e858a9e0d38",
+      "src/main/claude-usage/claude-usage-report-aggregation.test.ts": "a467522328a840d712113f7fdb69dcb37a8d711024da43655a1029a1babebb43",
+      "src/main/claude-usage/claude-usage-report-aggregation.ts": "81eef9ee48747653b057342d28a0b029826b9affc2b21948e3f3e34f5f46963d",
+      "src/main/claude-usage/claude-usage-scope-filters.ts": "ef9d3016ce4e912c938134f2854bdedf1675c3eb4a41afb15bde109b2922e416",
+      "src/main/claude-usage/claude-usage-session-rows.ts": "1d4466ba6264a26f7434ce65de2504c096f98f191399bcf446e7b1b7fb8f51e9",
+      "src/main/claude-usage/persisted-projection-validation.ts": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160",
+      "src/main/claude-usage/persisted-source-authority.test.ts": "c1764fb85f10557b23b6fbf2de1fcffd78ebff3dd37780c6a12b23bfbbdb9001",
+      "src/main/claude-usage/persisted-source-cache.ts": "505c5274cb3d92c49b93f6eeb63164b239b6caf7baa550ef20174e60db6a4fa2",
+      "src/main/claude-usage/persisted-token-columns-store.test.ts": "0ea09ea83a5b94048e6930bf7ff7747f58fd5495e85e6064efb53a354459b662",
+      "src/main/claude-usage/persisted-token-columns.test.ts": "f138ca7993f549d0b92b59c396f8b2917aa359ce3aa0e9826b36ebc662c39f75",
+      "src/main/claude-usage/persisted-token-columns.ts": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855",
+      "src/main/claude-usage/persisted-usage-report.ts": "13737060c3fde1287f194ad833e149f596842534e35eb91e8826b289f9686a04",
+      "src/main/claude-usage/persisted-usage-test-fixture.ts": "f05c20c42a0caa4dc5da7bf58d856cba8e060b82a8b9d51da6aa1da9a2b970fe",
+      "src/main/claude-usage/scanner-incremental-append.test.ts": "d060c8232adae13e568abe289c673e0818082b9e7b7f607adf2172d7a02194b0",
+      "src/main/claude-usage/scanner-incremental-ownership.test.ts": "e96be4afb64ad1bf1368f8f6cf85cd7a3d84140b4201d44f14759b8113d2e411",
+      "src/main/claude-usage/scanner-incremental-reader.test.ts": "7c8d42e1d7d4c0cce28a6e23a2533f65b5751d03f2c8001f90895aafcc34207c",
+      "src/main/claude-usage/scanner-large-directory.test.ts": "0d1b2f5906f5d6851aad676242b3605e343774df93ee84d4409bf863e42df979",
+      "src/main/claude-usage/scanner-scan.test.ts": "d33a4f5178d37ffec5f22b4469f37ca7942a577bda9044c098695248eb08c09f",
+      "src/main/claude-usage/scanner.test.ts": "e37c105867db03057b95d4bf728f12ac99fb17e0a0fe3a683e0b3f5b50d29a54",
+      "src/main/claude-usage/scanner.ts": "8174e231f388f5fbc73cdcc2f1216d0cdb5d7213eaa97edd59c304bf76dd219e",
+      "src/main/claude-usage/source-cache-write-retention.test.ts": "0a576e94f71834c690bc9b86a3d9bf69c1c2ca37ff80c64e7f8b437e267638d7",
+      "src/main/claude-usage/store-checkpoint-persistence.test.ts": "790250603ddb4d66c21d252d302a489171748ff7985dd03a35ceb575a7bb0937",
+      "src/main/claude-usage/store-source-authority.test.ts": "8e984f7a3e115276f0a85509f34b2e613aab46fbe6ed2adb892b7ccf261c0ad7",
+      "src/main/claude-usage/store.test.ts": "fd0399132325c4a063a9fe54fb845711eaea600884e1e033fdc42d2d3ed9abb2",
+      "src/main/claude-usage/store.ts": "5beb17f973fbd12b70408e7c8526fda9486ca3fdba2acc89dccb3b0f6d3e8b39",
+      "src/main/claude-usage/transcript-file-discovery-errors.test.ts": "8545264c62296943b46e7b07b1246bc2e69f7f816f651502d47a2ecca8e7e61f",
+      "src/main/claude-usage/transcript-file-discovery.ts": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401",
+      "src/main/claude-usage/transcript-projection-integrity.test.ts": "fa3436b68da877af6a2f37ef6465cafaad7e1f9dc047b4d6dee6ca282ac1211f",
+      "src/main/claude-usage/transcript-projection-integrity.ts": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef",
+      "src/main/claude-usage/transcript-reader-lifetime.test.ts": "2deee32300e3a2682f6211f7345be6e481d0543ea4d5c57750d25a7ba7f19f16",
+      "src/main/claude-usage/transcript-record-parser-prefilter.test.ts": "900ca943a86c79c91cc6e534e86c27d157c559b7f19b040c0e47c8cc4d1a9096",
+      "src/main/claude-usage/transcript-record-parser.ts": "bfd4608941761444fdbc53a3d86f9e401d8d088a77f5d906cc36910786ac937b",
+      "src/main/claude-usage/transcript-resume-projection.ts": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db",
+      "src/main/claude-usage/transcript-token-checkpoint.ts": "6e3ebb95532118730eb7c91d486e6885d429c6cc0c47f4b1078fc71afd910b86",
+      "src/main/claude-usage/transcript-tuple-append.test.ts": "8552ec587d95eeb468951a3c86380bc2ae5ef2a6f6b1c8d9e515576c8548ecb1",
+      "src/main/claude-usage/transcript-usage-projection.ts": "5711193900bcab341c110529c91c973f38dd625d045cbaaab91ac6b0903e118c",
+      "src/main/claude-usage/types.ts": "900f26e7aa69707b9141cd8ef0d27c72ec7c6aab187140d0ec08cd770afe27bf",
+      "src/main/claude-usage/usage-aggregation.ts": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509",
+      "src/main/claude-usage/worktree-attribution-scaling.test.ts": "865805dbb21e59331408ffaaf7f5974630c147226544a2bc34442bd54357f0d3",
+      "src/main/claude-usage/worktree-attribution.ts": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213",
+      "src/main/ipc/usage-provider-handlers-readiness.test.ts": "c82302bfb010cc9b19af685ca407ade48752009dbbe8e0d56546e5fdf7d2b26d",
+      "src/main/ipc/usage-provider-handlers.ts": "4e9402d219ccec926c59aef922395715c8450b61eb9441d69e2faf3a6fddffc0",
+      "src/main/usage/usage-cache-json-integrity.ts": "7fbe3f92f3e59d7f6e55a4edf50899f142a313d8662587c85fdc9489976231d7",
+      "src/main/usage/usage-inline-cache-preservation.ts": "4167fe146fb6c87e2cbed190618fcb9e79166ec60fcc495106428b9fd0eecacf",
+      "src/main/usage/usage-provider-store-initialization.test.ts": "46d39af83e86af1f3b4dbc52ed210e43d71a600b55cc2ea8b566d66230154eed",
+      "src/main/usage/usage-provider-store-lifecycle.test.ts": "99b22e881efdd2adbdbc779f870ff207c592b8ee36833ff4daf5e5814827a87d",
+      "src/main/usage/usage-provider-store-lifecycle.ts": "7dfa6cfdd487149c39c07a491ce4d327ebc366fa4809c695f7eca056e7584901",
+      "src/main/usage/usage-scan-worker-client.test.ts": "c4475d97e4adcea8b4a4562ee5267dc1ebc6d915a1719736dc3a9faef50cbc87",
+      "src/main/usage/usage-scan-worker-client.ts": "fe18350d29970d9100af6518c3d7982308f8e5e232bd956c6d2e07849e8a0386",
+      "src/main/usage/usage-scan-worker-entry.ts": "c21b14b9cfb454422bdfb4acae1252d050b7fa5b00c2e2f938758fcde9854bf3",
+      "src/main/usage/usage-scan-worker-protocol.ts": "5c106a8dea30eed40b2e7deee03af7949ac474bb796089f6e38e3768105dc807",
+      "src/main/usage/usage-scan-worker-spawn.ts": "0aaf1c06dd256c31c481690be518ce16903f8334a9cef489e059f0ebd0f8b4f1",
+      "src/main/usage/usage-source-cache-file.test.ts": "2734ee35f76e2daca1cc9553ffbf3c8f4e47917a126108d345c07742ebfed12e",
+      "src/main/usage/usage-source-cache-file.ts": "ee53cd3c823ce5bd49892bf96486f48d285c0b4e536a295adfe5e94f147712f5"
+    },
+    "verificationTime": "Captured source and test hashes verified after measurement; later test-only changes are recorded in postCaptureTestWiring."
+  },
+  "baselines": {
+    "original": "51e7181850b022bae2d41091fe1229accef4bd50",
+    "published": "8467877ed92aba2ef59737aebf461e9cab52c273",
+    "main": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5"
+  },
+  "esbuildVersion": "0.28.2",
+  "toolsSha256": {
+    "config/scripts/claude-usage-append-benchmark.mjs": "d4f75710ab8c05b473b65a07e402b20588d98fab8091640a7777e575108224bc",
+    "config/scripts/claude-usage-benchmark-scanner.mjs": "cbaf8140fd02f617419548db76bc46eb8235568d61b8ee06cdef6ed104b048a0",
+    "config/scripts/claude-usage-hardening-cost-benchmark.mjs": "6beeed58fe2b4f4a34edafe22bd99364c07103cc1a33989eba4f17f527de7579",
+    "config/scripts/claude-usage-cache-representation-check.mjs": "bc0773e1fd5155bdc74430dc90ba9855b48dccee73e58cba63535b78e8c30e64",
+    "config/scripts/claude-usage-discovery-coverage-check.mjs": "6c33bc67bccf5180f19733a4832538df71549c973a475176368bfa69bfbfa9f9",
+    "config/scripts/claude-usage-benchmark-persistence.mjs": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
+    "config/scripts/claude-usage-persistence-cost-benchmark.mjs": "858f4418ee5a099fb566285538b511827b4367b006a4805b16093ef42732efa5",
+    "config/scripts/claude-usage-benchmark-readiness.mjs": "4927c6ca51f43645cb2faa48804d4d80da4eab52b547f8e997b4c92451c27088",
+    "config/scripts/claude-usage-readiness-cost-benchmark.mjs": "b1d77e6bca0f0f56d5a192400675caa6993339936a744d9979ae5c416c0449bc",
+    "config/scripts/claude-usage-persisted-bytes-check.mjs": "21f2027141170c14fec6d99d2e05a3e2a8c96398d5ac0f010bf46e2189937210",
+    "config/scripts/script-child-process.mjs": "a7441428bf7b5c9a897b6a3c057c50f46acca24c4f218a4b849de5aec53c4173",
+    "config/scripts/counterbalanced-benchmark-schedule.mjs": "bc35b40e954fa7ddec0225ed375bd3b113c2e05b8554bc50734d14f89987294d"
+  },
+  "artifacts": {
+    "docs/bug-reproductions/usage-scan-append/claude-persistence-cost-final-16k.json": {
+      "sha256": "84ada1f73b452cfa50f80a6f64b038c0aeec7eb8650fb510ea298f6318890579",
+      "driver": "config/scripts/claude-usage-persistence-cost-benchmark.mjs",
+      "capturedDriverMatchesFinalFile": true,
+      "sourceGraphs": {
+        "published:scanner": "8467877ed92aba2ef59737aebf461e9cab52c273:scanner",
+        "published:persistence": "8467877ed92aba2ef59737aebf461e9cab52c273:persistence",
+        "main:scanner": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:scanner",
+        "main:persistence": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:persistence",
+        "current:scanner": "worktree:scanner",
+        "current:persistence": "worktree:persistence"
+      }
+    },
+    "docs/bug-reproductions/usage-scan-append/claude-persistence-cost-final-100k.json": {
+      "sha256": "257e792a4e509ed2cbbeec924eb62f7f2b19ecae64e4678f92ec8db619fa6350",
+      "driver": "config/scripts/claude-usage-persistence-cost-benchmark.mjs",
+      "capturedDriverMatchesFinalFile": true,
+      "sourceGraphs": {
+        "published:scanner": "8467877ed92aba2ef59737aebf461e9cab52c273:scanner",
+        "published:persistence": "8467877ed92aba2ef59737aebf461e9cab52c273:persistence",
+        "main:scanner": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:scanner",
+        "main:persistence": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:persistence",
+        "current:scanner": "worktree:scanner",
+        "current:persistence": "worktree:persistence"
+      }
+    },
+    "docs/bug-reproductions/usage-scan-append/claude-readiness-cost-final.json": {
+      "sha256": "2f161f8fd9f9673c35fad6e21ca510b41601b3d021ef1cf0b89093c66921b597",
+      "driver": "config/scripts/claude-usage-readiness-cost-benchmark.mjs",
+      "capturedDriverMatchesFinalFile": true,
+      "sourceGraphs": {
+        "published:scanner": "8467877ed92aba2ef59737aebf461e9cab52c273:scanner",
+        "published:persistence": "8467877ed92aba2ef59737aebf461e9cab52c273:persistence",
+        "main:scanner": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:scanner",
+        "main:persistence": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:persistence",
+        "current:scanner": "worktree:scanner",
+        "current:persistence": "worktree:persistence"
+      }
+    },
+    "docs/bug-reproductions/usage-scan-append/claude-persisted-bytes-final.json": {
+      "sha256": "05454eb7359a337c92480b0edbacfdfc6c0baf09f7741cab89e6891899189ece",
+      "driver": "config/scripts/claude-usage-persisted-bytes-check.mjs",
+      "capturedDriverMatchesFinalFile": true,
+      "sourceGraphs": {
+        "original:scanner": "51e7181850b022bae2d41091fe1229accef4bd50:scanner",
+        "published:scanner": "8467877ed92aba2ef59737aebf461e9cab52c273:scanner",
+        "published:persistence": "8467877ed92aba2ef59737aebf461e9cab52c273:persistence",
+        "main:scanner": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:scanner",
+        "main:persistence": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:persistence",
+        "current:scanner": "worktree:scanner",
+        "current:persistence": "worktree:persistence"
+      }
+    }
+  },
+  "sourceGraphVerification": {
+    "8467877ed92aba2ef59737aebf461e9cab52c273:scanner": {
+      "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+      "kind": "scanner",
+      "fileCount": 13,
+      "fingerprintsSha256": "88f777056a7c2d78cdeac2515496ca35f8180e2c2f93f35c83f648f9591c397a",
+      "allFileHashesVerified": true
+    },
+    "8467877ed92aba2ef59737aebf461e9cab52c273:persistence": {
+      "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+      "kind": "persistence",
+      "fileCount": 13,
+      "fingerprintsSha256": "431eddbd9f8cf0eb0be30500dc04c60fa84e60e7bec60e5155a1e635c66db6b6",
+      "allFileHashesVerified": true
+    },
+    "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:scanner": {
+      "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+      "kind": "scanner",
+      "fileCount": 5,
+      "fingerprintsSha256": "af32b131f5ad0af253e5e9366cd9d004ee4c2762a9c1890bfe0d16a1a498801b",
+      "allFileHashesVerified": true
+    },
+    "b44a5796c1154de84efa25cc09f3dae2b61eb4b5:persistence": {
+      "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+      "kind": "persistence",
+      "fileCount": 10,
+      "fingerprintsSha256": "143777a549c71beb0e609a439dafba8faf16010909a8546c6c037430ef80fcdc",
+      "allFileHashesVerified": true
+    },
+    "worktree:scanner": {
+      "source": "worktree",
+      "kind": "scanner",
+      "fileCount": 16,
+      "fingerprintsSha256": "f97089ffb6992c84089e96e6708f4397f11835cfe12e5e2a237fcff7bbd58e7c",
+      "allFileHashesVerified": true
+    },
+    "worktree:persistence": {
+      "source": "worktree",
+      "kind": "persistence",
+      "fileCount": 20,
+      "fingerprintsSha256": "41ad155f6d608f922666097400f18062967d6f8b0fae4d3a348add1e8b06785b",
+      "allFileHashesVerified": true
+    },
+    "51e7181850b022bae2d41091fe1229accef4bd50:scanner": {
+      "source": "51e7181850b022bae2d41091fe1229accef4bd50",
+      "kind": "scanner",
+      "fileCount": 5,
+      "fingerprintsSha256": "46eebf00139f54e19b8c25bcf8a39cbaca84e5be60576612f88a392ad6424c57",
+      "allFileHashesVerified": true
+    }
+  },
+  "documentationSha256": {
+    "docs/bug-reproductions/usage-scan-append/README.md": "f7b6333c8b92946bef3221acb1e748c60646c2516c8d71f9b887cf9b250f9946",
+    "docs/bug-reproductions/usage-scan-append/hardening-summary.md": "3988f58dee9010b98a7011758fe04cf02732b31badb6213afc4214f940b7adff"
+  },
+  "scope": [
+    "Each artifact retains complete source fingerprints and bundle hashes; this receipt verifies each fingerprint against its named Git commit or final worktree.",
+    "Artifact JSON was formatted before its receipt hash was captured. Captured tool hashes still match final files; no runtime or tool edits occurred after measurement.",
+    "Previously published comparison and hardening artifacts retain their historical source/layout receipts.",
+    "Persistence timings exclude real worker IPC/startup/queueing and rendering; readiness uses prestarted real Node workers and includes message transfer but excludes worker startup.",
+    "Six counterbalanced rounds per timing scenario; scanner-cache cold, operating-system-page-cache warm; logical payload I/O is distinct from physical device I/O."
+  ],
+  "postCaptureTestWiring": {
+    "reason": "Move Electron, worker and discovery mock registrations from the shared test fixture into its three test consumers; inject the checked getPath mock. CI requires mock registration in actual test files.",
+    "changes": {
+      "src/main/claude-usage/persisted-usage-test-fixture.ts": {
+        "capturedSha256": "f05c20c42a0caa4dc5da7bf58d856cba8e060b82a8b9d51da6aa1da9a2b970fe",
+        "finalSha256": "e10b2821f9ef0562ffbe93dffcb3bc0270a5269bcd41c9a5dbc45bb46fcb2cf1"
+      },
+      "src/main/claude-usage/store-checkpoint-persistence.test.ts": {
+        "capturedSha256": "790250603ddb4d66c21d252d302a489171748ff7985dd03a35ceb575a7bb0937",
+        "finalSha256": "e8413312cfeb2da7b41c9d5dd41a3ff1bb321df3457867f73e5ff613b37e6a87"
+      },
+      "src/main/claude-usage/store-source-authority.test.ts": {
+        "capturedSha256": "8e984f7a3e115276f0a85509f34b2e613aab46fbe6ed2adb892b7ccf261c0ad7",
+        "finalSha256": "a907ccf2804569083100fb2580d0bad839bb4ae6dbf39f7137737a496bbde361"
+      },
+      "src/main/claude-usage/persisted-token-columns-store.test.ts": {
+        "capturedSha256": "0ea09ea83a5b94048e6930bf7ff7747f58fd5495e85e6064efb53a354459b662",
+        "finalSha256": "d526a4a8b74e9f0163dec4ed30e315bbb591c75d2f2604af86c09e8db7a6948a"
+      }
+    },
+    "unchangedCapturedFreezeFileCount": 52,
+    "capturedProductionGraphFileCount": 30,
+    "capturedProductionGraphHashesVerifiedUnchanged": true,
+    "capturedToolHashesVerifiedUnchanged": true,
+    "capturedArtifactHashesVerifiedUnchanged": true,
+    "benchmarkRerunRequired": false,
+    "validation": "17 affected tests, Node typecheck, anti-slop, changed-code quality and formatting passed after the test-wiring change."
+  }
+}

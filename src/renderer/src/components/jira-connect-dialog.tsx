@@ -15,9 +15,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  isEnvironmentRuntimeContextKey
+} from '@/lib/provider-runtime-context'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { translate } from '@/i18n/i18n'
+import { JiraConnectCredentialGuide } from './jira-connect-credential-guide'
 
 type JiraConnectDialogProps = {
   open: boolean
@@ -45,6 +49,13 @@ export function JiraConnectDialog({
 }: JiraConnectDialogProps): React.JSX.Element {
   const connectJira = useAppStore((s) => s.connectJira)
   const settings = useAppStore((s) => s.settings)
+  const hostSupportsScopedTokens = useAppStore((s) => s.jiraStatus?.supportsScopedTokens === true)
+  const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
+  const remoteRuntime = isEnvironmentRuntimeContextKey(providerRuntimeContextKey)
+  const supportsScopedTokens =
+    !remoteRuntime ||
+    (jiraStatusContextKey === providerRuntimeContextKey && hostSupportsScopedTokens)
   const mountedRef = useMountedRef()
   const siteUrlId = useId()
   const emailId = useId()
@@ -81,12 +92,13 @@ export function JiraConnectDialog({
   // uses no identity, so the email field is hidden and left empty.
   const isServerBasic = isServer && serverAuthMethod === 'basic'
   const needsIdentity = !isServer || isServerBasic
+  const requiresIdentity = isServerBasic || (!isServer && !supportsScopedTokens)
   const canSubmit =
     Boolean(siteUrl.trim()) &&
-    (!needsIdentity || Boolean(email.trim())) &&
+    (!requiresIdentity || Boolean(email.trim())) &&
     Boolean(apiToken.trim()) &&
     connectState !== 'connecting'
-  const credentialStorageCopy = hasRemoteProviderRuntime(settings)
+  const credentialStorageCopy = remoteRuntime
     ? 'Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.'
     : 'Your token is stored locally and encrypted when local runtime storage supports it.'
 
@@ -124,7 +136,7 @@ export function JiraConnectDialog({
     const trimmedToken = apiToken.trim()
     if (
       !trimmedSite ||
-      (needsIdentity && !trimmedEmail) ||
+      (requiresIdentity && !trimmedEmail) ||
       !trimmedToken ||
       connectState === 'connecting'
     ) {
@@ -179,10 +191,15 @@ export function JiraConnectDialog({
           </DialogTitle>
           <DialogDescription>
             {!isServer
-              ? translate(
-                  'auto.components.jira.connect.dialog.d785c42b8b',
-                  'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
-                )
+              ? supportsScopedTokens
+                ? translate(
+                    'jira.connect.scopedDescription',
+                    'Use a Jira Cloud site URL and API token to browse issues. Scoped tokens can omit the email.'
+                  )
+                : translate(
+                    'auto.components.jira.connect.dialog.d785c42b8b',
+                    'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
+                  )
               : isServerBasic
                 ? translate(
                     'auto.components.jira.connect.dialog.1d947a07ab',
@@ -295,10 +312,15 @@ export function JiraConnectDialog({
                 <Label htmlFor={emailId} className="text-xs">
                   {isServerBasic
                     ? translate('auto.components.jira.connect.dialog.8d1223fa5c', 'Username')
-                    : translate(
-                        'auto.components.jira.connect.dialog.2849ddb295',
-                        'Atlassian email'
-                      )}
+                    : supportsScopedTokens
+                      ? translate(
+                          'jira.connect.optionalEmail',
+                          'Atlassian email (optional for scoped tokens)'
+                        )
+                      : translate(
+                          'auto.components.jira.connect.dialog.2849ddb295',
+                          'Atlassian email'
+                        )}
                 </Label>
                 <Input
                   id={emailId}
@@ -356,49 +378,19 @@ export function JiraConnectDialog({
                   clearErrorOnEdit()
                 }}
                 disabled={connectState === 'connecting'}
-                aria-invalid={connectState === 'error'}
                 aria-describedby={connectState === 'error' ? errorId : undefined}
               />
             </div>
             {connectState === 'error' && connectError ? (
-              <p id={errorId} className="text-xs text-destructive">
+              <p id={errorId} role="alert" className="text-xs text-destructive">
                 {connectError}
               </p>
             ) : null}
-            {isServerBasic ? (
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.jira.connect.dialog.d8737db691',
-                  'Use your Jira Server or Data Center account username and password.'
-                )}
-              </p>
-            ) : isServer ? (
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.jira.connect.dialog.ccfb086d3e',
-                  'Create a personal access token in your Jira profile under Personal Access Tokens.'
-                )}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {translate('auto.components.jira.connect.dialog.8090504a3e', 'Create a token in')}{' '}
-                <button
-                  type="button"
-                  className="text-primary underline-offset-2 hover:underline"
-                  onClick={() =>
-                    window.api.shell.openUrl(
-                      'https://id.atlassian.com/manage-profile/security/api-tokens'
-                    )
-                  }
-                >
-                  {translate(
-                    'auto.components.jira.connect.dialog.fdd26d81cc',
-                    'Atlassian account settings'
-                  )}
-                </button>
-                .
-              </p>
-            )}
+            <JiraConnectCredentialGuide
+              isServer={isServer}
+              isServerBasic={isServerBasic}
+              supportsScopedTokens={supportsScopedTokens}
+            />
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />
               {credentialStorageCopy}

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Pencil, Play, RefreshCw, Trash2 } from 'lucide-react'
+import { Play, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
@@ -7,8 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type {
   ExternalAutomationAction,
   ExternalAutomationJob,
-  ExternalAutomationManager,
-  ExternalAutomationRun
+  ExternalAutomationManager
 } from '../../../../shared/automations-types'
 import type {
   ExternalAutomationScope,
@@ -24,10 +23,6 @@ import {
   getExternalProviderLabel,
   getExternalTargetKindLabel
 } from './external-automation-display'
-import {
-  ExternalAutomationRunTable,
-  type FetchExternalAutomationRuns
-} from './ExternalAutomationRunTable'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { getExternalAutomationActionDisabledMessage } from './external-automation-source-availability'
 import { translate } from '@/i18n/i18n'
@@ -41,17 +36,6 @@ type ExternalAutomationManagersProps = {
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
     action: ExternalAutomationAction,
-    scope: ExternalAutomationScope
-  ) => void
-  onFetchRuns?: FetchExternalAutomationRuns
-  onOpenRun?: (
-    manager: ExternalAutomationManager,
-    job: ExternalAutomationJob,
-    run: ExternalAutomationRun
-  ) => void
-  onEdit?: (
-    manager: ExternalAutomationManager,
-    job: ExternalAutomationJob,
     scope: ExternalAutomationScope
   ) => void
 }
@@ -94,10 +78,7 @@ export function ExternalAutomationManagers({
   managers,
   now,
   runningActionKey,
-  onAction,
-  onFetchRuns,
-  onOpenRun,
-  onEdit
+  onAction
 }: ExternalAutomationManagersProps): React.JSX.Element {
   const automationCount = managers.reduce((sum, { manager }) => sum + manager.jobs.length, 0)
 
@@ -234,24 +215,6 @@ export function ExternalAutomationManagers({
                         {formatExternalDate(job.nextRunAt, now)} ·{' '}
                         {getExternalProviderLabel(manager)} / {manager.targetLabel}
                       </div>
-                      {manager.provider === 'hermes' ? (
-                        <div className="mt-1 truncate text-xs text-muted-foreground">
-                          {job.runCount}{' '}
-                          {job.runCount === 1
-                            ? translate(
-                                'auto.components.automations.ExternalAutomationManagers.8e9165af08',
-                                'run'
-                              )
-                            : translate(
-                                'auto.components.automations.ExternalAutomationManagers.e66091daf4',
-                                'runs'
-                              )}{' '}
-                          {translate(
-                            'auto.components.automations.ExternalAutomationManagers.844f1acb72',
-                            'found'
-                          )}
-                        </div>
-                      ) : null}
                       {job.promptPreview || job.lastError ? (
                         <div className="mt-1 truncate text-xs text-muted-foreground">
                           {job.lastError ?? job.promptPreview}
@@ -284,21 +247,6 @@ export function ExternalAutomationManagers({
                           <Play className="size-3.5" />
                         )}
                       </ExternalActionButton>
-                      {manager.provider === 'hermes' ? (
-                        <ExternalActionButton
-                          label={
-                            disabledMessage ??
-                            translate(
-                              'auto.components.automations.ExternalAutomationManagers.1df491fd00',
-                              'Edit external automation'
-                            )
-                          }
-                          disabled={disabledMessage !== null}
-                          onClick={() => onEdit?.(manager, job, scope)}
-                        >
-                          <Pencil className="size-3.5" />
-                        </ExternalActionButton>
-                      ) : null}
                       <ExternalActionButton
                         label={
                           disabledMessage ??
@@ -318,18 +266,6 @@ export function ExternalAutomationManagers({
                         )}
                       </ExternalActionButton>
                     </div>
-                    {manager.provider === 'hermes' ? (
-                      <div className="col-span-3">
-                        <ExternalAutomationRunTable
-                          scope={scope}
-                          manager={manager}
-                          job={job}
-                          now={now}
-                          onFetchRuns={onFetchRuns}
-                          onOpenRun={(run) => onOpenRun?.(manager, job, run)}
-                        />
-                      </div>
-                    ) : null}
                   </div>
                 )
               })}
@@ -339,15 +275,10 @@ export function ExternalAutomationManagers({
                     'auto.components.automations.ExternalAutomationManagers.3d58d5b67d',
                     'No'
                   )}{' '}
-                  {manager.provider === 'hermes'
-                    ? translate(
-                        'auto.components.automations.ExternalAutomationManagers.766abf833c',
-                        'Hermes'
-                      )
-                    : translate(
-                        'auto.components.automations.ExternalAutomationManagers.5524365227',
-                        'OpenClaw'
-                      )}{' '}
+                  {translate(
+                    'auto.components.automations.ExternalAutomationManagers.5524365227',
+                    'OpenClaw'
+                  )}{' '}
                   {translate(
                     'auto.components.automations.ExternalAutomationManagers.6da3bfba4b',
                     'automations found.'

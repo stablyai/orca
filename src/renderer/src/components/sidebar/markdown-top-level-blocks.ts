@@ -14,6 +14,8 @@ import { unified } from 'unified'
 export type MarkdownBlock = {
   /** Where the block starts in the source; it never moves as text is appended. */
   start: number
+  /** The source line it starts on, from 1; it never moves either. */
+  line: number
   text: string
 }
 
@@ -47,7 +49,7 @@ function reachesAcrossBlocks(node: Nodes): boolean {
 }
 
 function wholeDocument(source: string): MarkdownBlockSplit {
-  return { source, blocks: [{ start: 0, text: source }], whole: true }
+  return { source, blocks: [{ start: 0, line: 1, text: source }], whole: true }
 }
 
 export function splitMarkdownTopLevelBlocks(
@@ -59,19 +61,23 @@ export function splitMarkdownTopLevelBlocks(
     return wholeDocument(source)
   }
   const settled = grewFromPrevious ? previous.blocks.slice(0, -UNSETTLED_BLOCKS) : []
-  const base = grewFromPrevious ? (previous.blocks.at(-UNSETTLED_BLOCKS)?.start ?? 0) : 0
+  const reparsed = grewFromPrevious ? previous.blocks.at(-UNSETTLED_BLOCKS) : undefined
+  const base = reparsed?.start ?? 0
+  const baseLine = reparsed?.line ?? 1
   const tail = source.slice(base)
   const tree = blockParser.parse(tail)
   if (reachesAcrossBlocks(tree)) {
     return wholeDocument(source)
   }
   // Each block runs to the next one's start, so the blank lines between stay in the source.
-  const starts = tree.children.map(
-    (child) => ('position' in child ? child.position?.start.offset : undefined) ?? 0
+  const points = tree.children.map((child) =>
+    'position' in child ? child.position?.start : undefined
   )
+  const starts = points.map((point) => point?.offset ?? 0)
   starts[0] = 0
   const blocks = starts.map((start, index) => ({
     start: base + start,
+    line: baseLine + (index === 0 ? 0 : (points[index]?.line ?? 1) - 1),
     text: tail.slice(start, starts[index + 1])
   }))
   return { source, blocks: [...settled, ...blocks], whole: false }

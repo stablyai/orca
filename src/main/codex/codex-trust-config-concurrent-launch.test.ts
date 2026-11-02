@@ -10,7 +10,7 @@ import type { CodexManagedTrustGrantPlan } from './codex-hook-trust-grant'
 import type { CodexTrustEntry } from './config-toml-trust'
 
 // Why: the guest identity probe needs wsl.exe; a failed probe leaves the grant unstamped.
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(async () => ({
     code: 1,
     signal: null,

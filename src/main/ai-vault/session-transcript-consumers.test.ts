@@ -2,6 +2,7 @@ import { appendFile, mkdir, mkdtemp, rm, stat, truncate, utimes, writeFile } fro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 import {
   parseAgentSessionFileCached,
@@ -115,6 +116,38 @@ async function writeClaudeFixture(): Promise<{
   await writeFile(transcript, `${jsonLines(claudeTurns(1, 4))}\n`)
   return { root, roots, transcript }
 }
+
+it('reports a scan cancelled mid-read as cancelled, and the next scan matches a cold one', async () => {
+  const { roots, transcript } = await writeClaudeFixture()
+  // Several stream chunks, so the cancel lands with most of the file unread.
+  const padding = Array.from({ length: 100 }, (_, index) => ({
+    type: 'user',
+    sessionId: 'claude-session',
+    timestamp: '2026-05-01T11:00:00.000Z',
+    message: { role: 'user', content: `${index} ${'x'.repeat(2_000)}` }
+  }))
+  await appendFile(transcript, `${jsonLines(padding)}\n`)
+  const recorder = recordingConsumer()
+  const controller = new AbortController()
+  const unregister = registerTranscriptConsumer({
+    beginRead: () => ({ message: () => controller.abort(), finish: () => {} })
+  })
+
+  await expect(
+    scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20, signal: controller.signal })
+  ).rejects.toSatisfy(isAiVaultScanCancelledError)
+  unregister()
+  expect(recorder.reads.map((read) => read.outcome)).toEqual([
+    expect.objectContaining({ incomplete: true, cancelled: true })
+  ])
+  expect(recorder.reads[0].messages.length).toBeLessThan(padding.length)
+
+  const next = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+  resetSessionParseCacheForTests()
+  const cold = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+  expect(next.issues).toEqual([])
+  expect(next.sessions).toEqual(cold.sessions)
+})
 
 it('delivers one message stream to every registered consumer', async () => {
   const { roots } = await writeClaudeFixture()

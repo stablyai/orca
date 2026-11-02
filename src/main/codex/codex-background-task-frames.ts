@@ -1,6 +1,6 @@
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 import { readCodexSubagentAnnouncements } from './codex-subagent-activity'
-import { codexChildTurnState } from './codex-subagent-executions'
+import { codexChildTurnState, type CodexSubagentExecutions } from './codex-subagent-executions'
 import { readRecord } from './codex-item-field-readers'
 import { readCodexThreadItem } from './codex-structured-item-translation'
 import { readCodexTurnId } from './codex-structured-thread-facts'
@@ -8,7 +8,6 @@ import { readCodexTurnId } from './codex-structured-thread-facts'
 export type CodexAnnouncedChild = {
   agentThreadId: string
   label: string | null
-  parentTurnId: string | null | undefined
   /** The reporting thread, for a spawn: the agent that spawned the child. */
   spawnerThreadId: string | undefined
 }
@@ -83,10 +82,27 @@ export function readCodexBackgroundTaskFrame(
     (announcement) => ({
       agentThreadId: announcement.agentThreadId,
       label: announcement.label,
-      parentTurnId: announcement.namesParentTurn ? readCodexTurnId(event.params) : undefined,
       // Only a spawn names the spawner: other announcements ride whichever agent acted.
       spawnerThreadId: announcement.spawned ? event.threadId : undefined
     })
   )
   return children.length > 0 ? { kind: 'subagents', children } : null
+}
+
+/** What one frame says about the child executions. Repeating it changes nothing, so the journal
+ *  reads it before it writes the frame's rows and the background tasks read it again after. */
+export function observeCodexExecutionFrame(
+  executions: CodexSubagentExecutions,
+  frame: CodexBackgroundTaskFrame | null,
+  primaryThreadId: string
+): void {
+  if (frame?.kind === 'subagents') {
+    for (const child of frame.children) {
+      executions.register(child.agentThreadId, child.label, child.spawnerThreadId)
+    }
+  } else if (frame?.kind === 'thread-closed') {
+    executions.closeThread(frame.threadId)
+  } else if (frame && frame.threadId !== primaryThreadId) {
+    executions.observeTurn(frame.threadId, frame.turnId, frame.state)
+  }
 }

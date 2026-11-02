@@ -42,7 +42,8 @@ describe('the bridge port pair', () => {
       keyboardInset: 0,
       host: expect.objectContaining({ id: expect.any(String) }),
       storage: expect.any(Object),
-      storageOversize: []
+      storageOversize: [],
+      ownsHostArea: false
     })
   })
 

@@ -9,12 +9,7 @@ import {
   recordE2eRemoteTransportSubscribe,
   unsubscribeRuntimeEnvironmentForE2e
 } from './remote-runtime-terminal-e2e-control'
-import {
-  clearResyncTimer,
-  clearSnapshot,
-  discardOutputAcknowledgements,
-  rejectPendingSnapshotRequest
-} from './remote-runtime-terminal-snapshot-state'
+import { disposeRemoteTerminalStreamState } from './remote-runtime-terminal-snapshot-state'
 import type {
   RemoteRuntimeMultiplexedTerminalState,
   RuntimeEnvironmentSubscriptionHandle
@@ -73,6 +68,13 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     this.nextSnapshotRequestId =
       this.nextSnapshotRequestId >= 0x7fffffff ? 1 : this.nextSnapshotRequestId + 1
     return id
+  }
+
+  /** Opens the shared stream while the caller's create RPC is in flight, so the two round trips
+   *  overlap. The returned release closes it again if the caller never subscribed. */
+  prewarm(): () => void {
+    void this.ensureConnected().catch(() => {})
+    return () => this.closeIfIdle()
   }
 
   protected ensureConnected(): Promise<void> {
@@ -193,11 +195,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     // Why: close callbacks may resubscribe synchronously; release first so every replacement shares the new environment multiplexer.
     this.releaseIfCurrent(this.environmentId, this)
     for (const stream of streams) {
-      discardOutputAcknowledgements(stream)
-      stream.watchdog.dispose()
-      clearSnapshot(stream)
-      clearResyncTimer(stream)
-      rejectPendingSnapshotRequest(stream, message ?? 'Remote runtime connection closed.')
+      disposeRemoteTerminalStreamState(stream, message ?? 'Remote runtime connection closed.')
       const canHandleClose = Boolean(stream.callbacks.onTransportClose)
       stream.callbacks.onTransportClose?.({ recoverable })
       if (message && !canHandleClose) {

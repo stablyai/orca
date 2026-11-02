@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainHttpClient } from '../network/http-client'
 import {
   authJsonGoogle,
   authJsonGoogleExpired,
@@ -6,11 +7,11 @@ import {
   quotaResponse
 } from './gemini-usage-fetcher.test-fixtures'
 
-const { readFileMock, extractCredsMock, netFetchMock } = vi.hoisted(() => ({
+const { readFileMock, extractCredsMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
-  extractCredsMock: vi.fn(),
-  netFetchMock: vi.fn()
+  extractCredsMock: vi.fn()
 }))
+const fetchMock = vi.fn()
 
 // Why: mock the extractor at the module boundary rather than re-routing every
 // child_process/fs call. The extractor is a self-contained dependency with a
@@ -26,9 +27,10 @@ vi.mock('node:fs/promises', () => ({
   writeFile: vi.fn().mockResolvedValue(undefined),
   rename: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+
+setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
 
 describe('fetchGeminiRateLimits', () => {
   beforeEach(() => {
@@ -36,8 +38,8 @@ describe('fetchGeminiRateLimits', () => {
     vi.setSystemTime(new Date('2026-04-24T12:00:00.000Z'))
     readFileMock.mockReset()
     extractCredsMock.mockReset()
-    netFetchMock.mockReset()
-    netFetchMock.mockImplementation((url: string) => {
+    fetchMock.mockReset()
+    fetchMock.mockImplementation((url: string) => {
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       }
@@ -75,7 +77,7 @@ describe('fetchGeminiRateLimits', () => {
 
   it('returns quota via auth.json', async () => {
     setupAuthJsonValid()
-    netFetchMock.mockImplementation((url: string) => {
+    fetchMock.mockImplementation((url: string) => {
       if (url.includes('retrieveUserQuota')) {
         return Promise.resolve(makeResponse(quotaResponse))
       }
@@ -89,9 +91,26 @@ describe('fetchGeminiRateLimits', () => {
     expect(result.buckets).toHaveLength(2)
   })
 
+  it('tags a quota request that throws as a network failure', async () => {
+    setupAuthJsonValid()
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes('retrieveUserQuota')) {
+        return Promise.reject(new Error('net::ERR_PROXY_CONNECTION_FAILED'))
+      }
+      if (url.includes('loadCodeAssist')) {
+        return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
+      }
+      return Promise.resolve(makeResponse({}, 404))
+    })
+    const result = await fetchGeminiRateLimits(true)
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('net::ERR_PROXY_CONNECTION_FAILED')
+    expect(result.usageMetadata?.failureKind).toBe('network')
+  })
+
   it('deduplicates buckets', async () => {
     setupAuthJsonValid()
-    netFetchMock.mockImplementation((url: string) => {
+    fetchMock.mockImplementation((url: string) => {
       if (url.includes('retrieveUserQuota')) {
         return Promise.resolve(
           makeResponse([
@@ -121,7 +140,7 @@ describe('fetchGeminiRateLimits', () => {
 
   it('handles empty bucket list', async () => {
     setupAuthJsonValid()
-    netFetchMock.mockImplementation((url: string) => {
+    fetchMock.mockImplementation((url: string) => {
       if (url.includes('retrieveUserQuota')) {
         return Promise.resolve(makeResponse([]))
       }
@@ -146,7 +165,7 @@ describe('fetchGeminiRateLimits', () => {
 
   it('handles wrapped buckets response', async () => {
     setupAuthJsonValid()
-    netFetchMock.mockImplementation((url: string) => {
+    fetchMock.mockImplementation((url: string) => {
       if (url.includes('retrieveUserQuota')) {
         return Promise.resolve(makeResponse({ buckets: quotaResponse }))
       }
@@ -162,7 +181,7 @@ describe('fetchGeminiRateLimits', () => {
 
   it('filters out NaN buckets', async () => {
     setupAuthJsonValid()
-    netFetchMock.mockImplementation((url: string) => {
+    fetchMock.mockImplementation((url: string) => {
       if (url.includes('retrieveUserQuota')) {
         return Promise.resolve(
           makeResponse([
@@ -193,7 +212,7 @@ describe('fetchGeminiRateLimits', () => {
     setupAuthJsonValid()
     extractCredsMock.mockResolvedValue({ clientId: 'cid', clientSecret: 'csec' })
     let quotaCallCount = 0
-    netFetchMock.mockImplementation((url: string) => {
+    fetchMock.mockImplementation((url: string) => {
       if (url.includes('retrieveUserQuota')) {
         quotaCallCount += 1
         if (quotaCallCount === 1) {

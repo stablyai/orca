@@ -51,7 +51,10 @@ function row(host: ExecutionHostId = 'local', title = 'Codex Chat'): AiVaultSess
     subagentTranscriptCount: 0,
     resumeCommand: 'codex resume provider-session',
     subagent: null,
-    structuredSession: { workspaceId: 'folder-workspace', sessionId: 'native-session' }
+    structuredSession: {
+      workspaceId: 'folder-workspace',
+      sessionId: 'native-session'
+    }
   }
 }
 
@@ -65,9 +68,15 @@ function searchRow(): AiVaultSession {
     updatedAt: null,
     messageCount: 1,
     score: 1,
-    source: { presence: 'present', filePath: '/sessions/provider-session.jsonl' },
+    source: {
+      presence: 'present',
+      filePath: '/sessions/provider-session.jsonl'
+    },
     evidence: null,
-    structuredSession: { workspaceId: 'folder-workspace', sessionId: 'native-session' }
+    structuredSession: {
+      workspaceId: 'folder-workspace',
+      sessionId: 'native-session'
+    }
   }
   return aiVaultSearchHitToSession(hit, 'local')
 }
@@ -166,7 +175,9 @@ afterEach(() => {
 
 describe('native chat names in Vault rows', () => {
   it('shows the name its host publishes with the tab open, and keeps it when the tab closes', async () => {
-    useAppStore.setState({ unifiedTabsByWorktree: { 'folder-workspace': [tab()] } })
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'folder-workspace': [tab()] }
+    })
     await renderRow(row())
     expect(screen.getByText('Codex Chat')).toBeTruthy()
     publish('local', 'Explain the parser')
@@ -182,12 +193,38 @@ describe('native chat names in Vault rows', () => {
   ])(
     'lets a manual tab rename win in a %s row, and returns to the name once cleared',
     async (_kind, make) => {
-      useAppStore.setState({ unifiedTabsByWorktree: { 'folder-workspace': [tab('Manual name')] } })
+      useAppStore.setState({
+        unifiedTabsByWorktree: { 'folder-workspace': [tab('Manual name')] }
+      })
       await renderRow(make())
       publish('local', 'Explain the parser')
       expect(screen.getByText('Manual name')).toBeTruthy()
-      act(() => useAppStore.setState({ unifiedTabsByWorktree: { 'folder-workspace': [tab()] } }))
+      act(() =>
+        useAppStore.setState({
+          unifiedTabsByWorktree: { 'folder-workspace': [tab()] }
+        })
+      )
       expect(screen.getByText('Explain the parser')).toBeTruthy()
+    }
+  )
+
+  it.each(['opencode', 'opencode2', 'grok', 'omp', 'pi'] as const)(
+    'keeps the CLI title on a %s chat row, as its terminal conversations do',
+    async (agent) => {
+      useAppStore.setState({
+        unifiedTabsByWorktree: {
+          'folder-workspace': [
+            {
+              ...tab('Manual name'),
+              agentSessionAgent: agent === 'opencode2' ? 'opencode' : agent
+            }
+          ]
+        }
+      })
+      await renderRow({ ...row('local', 'Fix the parser'), agent })
+      publish('local', 'Explain the parser')
+      expect(screen.getByText('Fix the parser')).toBeTruthy()
+      expect(screen.queryByText('Manual name')).toBeNull()
     }
   )
 
@@ -222,7 +259,9 @@ describe('native chat names in Vault rows', () => {
 
   it('never shows a name another host published for the same session id', async () => {
     mocks.supports.mockResolvedValue(true)
-    const releaseLocal = getStructuredAgentSessionStatusFeed({ kind: 'local' }).activate()
+    const releaseLocal = getStructuredAgentSessionStatusFeed({
+      kind: 'local'
+    }).activate()
     await renderRow(row('runtime:paired'))
     expect(emitters.has('local')).toBe(true)
     publish('local', 'Local chat name')

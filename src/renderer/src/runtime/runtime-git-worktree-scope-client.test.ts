@@ -13,7 +13,7 @@ vi.mock('./runtime-rpc-client', async (importActual) => ({
 import { stageRuntimeGitWorktreeScope } from './runtime-git-working-tree-client'
 
 const REMOTE = {
-  settings: { activeRuntimeEnvironmentId: 'env-1' },
+  target: { kind: 'environment' as const, environmentId: 'env-1' },
   worktreeId: 'wt-1',
   worktreePath: '/repo'
 }
@@ -50,7 +50,7 @@ describe('stageRuntimeGitWorktreeScope', () => {
     mocks.bulkStage.mockResolvedValue(undefined)
 
     await stageRuntimeGitWorktreeScope(
-      { ...REMOTE, settings: { activeRuntimeEnvironmentId: null }, connectionId: 'ssh-1' },
+      { ...REMOTE, target: { kind: 'local' }, connectionId: 'ssh-1' },
       'tracked'
     )
 

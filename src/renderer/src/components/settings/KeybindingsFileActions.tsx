@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import React from 'react'
 import { ChevronDown, Code2, ExternalLink, FileText, FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -129,7 +130,11 @@ export function KeybindingsFileActions(): React.JSX.Element {
         )
         return
       }
-      const result = await window.api.shell.openInExternalEditor({ path: filePath, command })
+      const result = await window.api.shell.openInExternalEditor({
+        path: filePath,
+        command,
+        ownerHostId: LOCAL_EXECUTION_HOST_ID
+      })
       if (!result.ok) {
         toast.error(openFailureMessage(result.reason))
       }

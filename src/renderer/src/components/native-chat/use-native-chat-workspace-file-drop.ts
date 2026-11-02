@@ -13,6 +13,7 @@ import {
   nativeChatWorktreeNotReadyNotice
 } from './native-chat-attachment-upload'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   nativeChatAttachmentOwnerUnchanged,
   nativeChatWorkspaceAttachmentMismatchNotice,
@@ -153,9 +154,12 @@ export function useNativeChatWorkspaceFileDrop({
         )
       }
 
-      attachResolvedPaths(dragPaths.paths, owner.kind === 'ssh' ? owner.connectionId : undefined, {
-        targetOwnerIsCurrent
-      })
+      const targetHost = parseExecutionHostId(targetExecutionHostId)
+      attachResolvedPaths(
+        dragPaths.paths,
+        targetHost?.kind === 'ssh' ? targetHost.targetId : undefined,
+        { targetOwnerIsCurrent }
+      )
     },
     [attachResolvedPaths, disabled, setNotice, structuredWorktreeId, terminalTabId]
   )

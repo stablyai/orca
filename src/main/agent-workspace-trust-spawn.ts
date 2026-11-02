@@ -9,7 +9,7 @@ import {
 import { AGENT_TRUST_KEYED_BY_START_FOLDER } from './execution-host-workspace-trust'
 
 type AgentWorkspaceTrustSetting =
-  | Pick<GlobalSettings, 'agentWorkspaceTrustEnabled'>
+  | Partial<Pick<GlobalSettings, 'agentWorkspaceTrustEnabled'>>
   | null
   | undefined
 

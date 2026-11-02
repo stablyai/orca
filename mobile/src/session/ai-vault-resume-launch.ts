@@ -6,7 +6,11 @@ import {
 } from '../../../src/shared/ai-vault-resume-command'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
-import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../src/shared/agent-session-resume'
+import { getAiVaultAgentProviderSession } from '../../../src/shared/ai-vault-resume-startup'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   resolveTuiAgentLaunchArgs,
@@ -72,6 +76,8 @@ export type MobileAiVaultResumeLaunch = {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  /** The conversation the typed command resumes, so the host can name it before the agent does. */
+  resumeProviderSession?: AgentProviderSessionMetadata
 }
 
 export function buildMobileAiVaultResumeLaunch(args: {
@@ -105,6 +111,10 @@ export function buildMobileAiVaultResumeLaunch(args: {
         : {})
     })
     if (startupPlan) {
+      const resumeProviderSession = getAiVaultAgentProviderSession({
+        ...args.session,
+        ...(resumeFilePath ? { filePath: resumeFilePath } : {})
+      })
       return {
         command:
           args.session.agent === 'omp'
@@ -129,7 +139,8 @@ export function buildMobileAiVaultResumeLaunch(args: {
         // real-home override must strip Codex homes at pane spawn like desktop.
         ...realHomeCodexResumeEnvDeletion(args.session),
         launchConfig: startupPlan.launchConfig,
-        launchAgent: startupPlan.agent
+        launchAgent: startupPlan.agent,
+        ...(resumeProviderSession ? { resumeProviderSession } : {})
       }
     }
   }
@@ -185,6 +196,10 @@ export async function resumeAiVaultSessionInTerminal(
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
       ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
+      // Older hosts strip it and learn the session from the agent's first report instead.
+      ...(launch.resumeProviderSession
+        ? { resumeProviderSession: launch.resumeProviderSession }
+        : {}),
       ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
       activate: false,
       select: true,

@@ -1,7 +1,8 @@
 import { useAppStore } from '@/store'
-import type { PtyConnectResult } from '../pty-transport'
+import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { parseLegacyNumericPaneKey } from '../../../../../shared/stable-pane-id'
+import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-reset'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import {
   agentProviderSessionsEqual,
@@ -195,7 +196,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
       (entry) => entry.id === session.deps.tabId
     )
-    return tab?.defaultTitle?.trim() || 'Terminal'
+    return neutralTerminalTitle(tab?.defaultTitle)
   }
   installCommandInferredPaneAgent(session)
 }

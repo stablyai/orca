@@ -8,6 +8,7 @@ import { Worker } from 'node:worker_threads'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
 import { UsageScanWorkerClient, scanCodexUsageOnWorker } from './usage-scan-worker-client'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import { readUsageSourceCache, type UsageSourceCacheRef } from './usage-source-cache-file'
 
 // Why this test exists: "the scan no longer blocks the main process" is not a
 // stopwatch claim. It measures the *calling* thread's event-loop active time —
@@ -196,16 +197,25 @@ describe('usage scan worker event-loop occupancy', () => {
     expect(caller.value.dailyAggregates[0]?.eventCount).toBe(EXPECTED_EVENTS)
 
     const client = createWorkerClient()
+    const sourceCache: UsageSourceCacheRef = {
+      path: join(corpusRoot, 'orca-codex-usage-sources.json'),
+      schemaVersion: 1,
+      worktreeFingerprint: '[]',
+      reuse: true
+    }
     const worker = await measureCallerOccupancy(() =>
-      withCorpusEnv(() => scanCodexUsageOnWorker((body) => client.scan(body), WORKTREES, []))
+      withCorpusEnv(() =>
+        scanCodexUsageOnWorker((body) => client.scan(body), WORKTREES, sourceCache)
+      )
     )
-    expect(worker.value.source).toHaveLength(FILE_COUNT)
+    // The per-source records stay on the worker's side of the boundary.
+    expect(await readUsageSourceCache(sourceCache)).toHaveLength(FILE_COUNT)
     expect(worker.value.sessions).toHaveLength(FILE_COUNT)
     expect(worker.value.dailyAggregates).toHaveLength(1)
     expect(worker.value.dailyAggregates[0]?.eventCount).toBe(EXPECTED_EVENTS)
 
-    // The caller still pays to post the request and structured-clone a
-    // 600-file result back, so this is a fifth, not a rout. Measured margin is
+    // The caller still pays to post the request and structured-clone 600
+    // sessions back, so this is a fifth, not a rout. Measured margin is
     // ~50x idle and ~90x under CPU contention.
     expect(
       worker.occupancy.activeMs,

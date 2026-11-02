@@ -2,12 +2,13 @@
 
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { XIcon } from 'lucide-react'
+import { Minus, XIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -57,17 +58,45 @@ const dialogContentSurfaceVariants = cva('', {
   defaultVariants: { surface: 'default' }
 })
 
+function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }) {
+  const label =
+    variant === 'minimize'
+      ? translate('auto.components.ui.dialog.minimize', 'Minimize')
+      : translate('auto.components.ui.dialog.f26c4baeda', 'Close')
+  const button = (
+    <DialogPrimitive.Close
+      data-slot="dialog-close"
+      className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+    >
+      {variant === 'minimize' ? <Minus className="size-3.5" /> : <XIcon />}
+      <span className="sr-only">{label}</span>
+    </DialogPrimitive.Close>
+  )
+  return variant === 'minimize' ? (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    button
+  )
+}
+
 function DialogContent({
   className,
   children,
   overlayClassName,
   showCloseButton = true,
+  closeButtonVariant = 'close',
   surface,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> &
   VariantProps<typeof dialogContentSurfaceVariants> & {
     overlayClassName?: string
     showCloseButton?: boolean
+    closeButtonVariant?: 'close' | 'minimize'
   }) {
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -91,17 +120,7 @@ function DialogContent({
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       >
         {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <XIcon />
-            <span className="sr-only">
-              {translate('auto.components.ui.dialog.f26c4baeda', 'Close')}
-            </span>
-          </DialogPrimitive.Close>
-        )}
+        {showCloseButton && <DialogContentCloseButton variant={closeButtonVariant} />}
       </DialogPrimitive.Content>
     </DialogPortal>
   )

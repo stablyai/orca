@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type {
-  AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
@@ -19,7 +18,7 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 
 const SENDING = 'Sending…'
 
-function body(text: string): AgentJournalMessageItem {
+function body(text: string): StructuredAgentSessionPendingSend['body'] {
   return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
 }
 

@@ -7,7 +7,10 @@ import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 import * as claudeConnection from './claude-stream-json-connection'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
+import {
+  CLAUDE_STRUCTURED_BASE_OPTIONS,
+  claudeStructuredPermissionOptions
+} from './claude-structured-launch-resolution'
 import { readClaudeInit } from './claude-structured-init-proof'
 import {
   realClaudeAuthenticated,
@@ -22,7 +25,7 @@ import {
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
-import { claudeStartupSettled } from './claude-structured-session-test-support'
+import { claudeOpened, claudeStartupSettled } from './claude-structured-session-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const command = realClaudeCommand
@@ -38,17 +41,25 @@ function realAdapter(
   waitsForStartup = true
 ): ClaudeStructuredSessionAdapter {
   const adapter = new ClaudeStructuredSessionAdapter({
-    resolveLaunch: async () => ({
-      pathToClaudeCodeExecutable: command,
-      options: { ...CLAUDE_STRUCTURED_BASE_OPTIONS, sessionId: providerSessionId },
-      cwd,
-      env,
-      claudeConfigDir,
-      providerSessionId,
-      resumeLeafUuid: null,
-      resumesTranscript: false,
-      continuesChain: false
-    }),
+    resolveLaunch: async ({ permissionMode }) => {
+      const permission = claudeStructuredPermissionOptions(permissionMode ?? 'ask')
+      return {
+        pathToClaudeCodeExecutable: command,
+        options: {
+          ...CLAUDE_STRUCTURED_BASE_OPTIONS,
+          ...permission,
+          extraArgs: { ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs, ...permission.extraArgs },
+          sessionId: providerSessionId
+        },
+        cwd,
+        env,
+        claudeConfigDir,
+        providerSessionId,
+        resumeLeafUuid: null,
+        resumesTranscript: false,
+        continuesChain: false
+      }
+    },
     onEvent: (event) => events.push(event),
     ...(onDispatchSettledLate ? { onDispatchSettledLate } : {}),
     readProcessStartTime: async () => 1,
@@ -156,18 +167,21 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       const adapter = realAdapter(providerSessionId, claudeConfigDir, events, cwd)
 
       try {
-        const acquisition = await adapter.acquire({
+        await adapter.acquire({
           identity: identity(providerSessionId),
           fence: 1,
           spawnToken: 'real-cli'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const observedSubtypes = events.flatMap((event) =>
           event.type === 'message' ? [event.message.subtype] : []
         )
 
         // Init/SessionStart UUIDs are protocol frames, not resumable
         // main-transcript leaves; no cursor exists before the first user turn.
-        expect(acquisition.link.handle).toEqual(claudeProviderHandle(providerSessionId, null))
+        expect((await claudeOpened(adapter, 'real-cli-handshake')).link?.handle).toEqual(
+          claudeProviderHandle(providerSessionId, null)
+        )
         expect(observedSubtypes).toContain('hook_started')
         expect(adapter.readCommands('real-cli-handshake')).toContainEqual(
           expect.objectContaining({
@@ -205,6 +219,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-effort'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const published = events.flatMap((event) =>
           event.type === 'message' ? [event.message] : []
         )
@@ -249,6 +264,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-transcript'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         await adapter.dispatch({
           sessionId: 'real-cli-handshake',
           clientMessageId: 'real-cli-transcript-1',
@@ -292,6 +308,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-model'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         await adapter.setOption({
           sessionId: 'real-cli-handshake',
           key: 'model',
@@ -338,11 +355,11 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     90_000
   )
 
-  // The host hands a Claude child nothing until `started`, which now follows the initialize answer
+  // The host hands a Claude child nothing until open, which follows the initialize answer
   // alone. Measures what that wait costs against the live binary, so the startup limits are tuned
   // from data: spawn to `started` with nothing sent, then a send to its first output.
   it.skipIf(!realClaudeAuthenticated)(
-    'reports `started` with nothing sent, then answers a send handed over after it',
+    'opens with nothing sent, then answers a send handed over after it',
     async () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
@@ -370,10 +387,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-started-timing'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const publishedAt = Date.now()
-        expect(await until(() => events.some((event) => event.type === 'started'), 30_000)).toBe(
-          true
-        )
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const startedAt = Date.now()
         const before = events.length
         await adapter.dispatch({
@@ -389,7 +405,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         // Reported for tuning; the assertions above are the contract.
         console.info(
           `[real-cli startup timing] acquire->published ${publishedAt - acquireAt} ms, ` +
-            `published->started ${startedAt - publishedAt} ms, ` +
+            `published->open ${startedAt - publishedAt} ms, ` +
             `dispatch->first output ${firstOutputAt - startedAt} ms`
         )
       } finally {
@@ -399,11 +415,14 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     120_000
   )
 
-  // The contract a chat's first message depends on: saved options ride the launch, and the
-  // message is written as soon as the child is published, before the CLI answers initialize.
-  it.skipIf(!realClaudeAuthenticated)(
-    'runs a message written before initialize answers, under the saved options it was launched with',
-    async () => {
+  // The contract a chat's first message depends on: saved options and the chat's permission mode
+  // ride the launch, and the message is written after open answers initialize.
+  it.skipIf(!realClaudeAuthenticated).each([
+    ['accept-edits', 'acceptEdits'],
+    ['full-access', 'bypassPermissions']
+  ] as const)(
+    'runs a message after open with saved options and %s',
+    async (permissionMode, cliPermissionMode) => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
       const events: ClaudeStructuredSessionEvent[] = []
@@ -424,8 +443,10 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           identity: identity(providerSessionId),
           fence: 1,
           spawnToken: 'real-cli-saved-options',
-          options: { model: 'sonnet', permissionMode: 'plan', effort: 'low' }
+          options: { model: 'sonnet', effort: 'low' },
+          permissionMode
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const dispatched = await adapter.dispatch({
           sessionId: 'real-cli-handshake',
           clientMessageId: 'real-cli-saved-options-1',
@@ -437,11 +458,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1
         })
         // Read as the write resolves: the CLI had not answered initialize, so nothing held it.
-        const answeredAtDispatch = adapter['sessions'].get('real-cli-handshake')?.startup.answered
-        const startedAtDispatch = events.some((event) => event.type === 'started')
         expect(dispatched).toEqual({ state: 'admitted' })
-        expect(answeredAtDispatch).toBe(false)
-        expect(startedAtDispatch).toBe(false)
         const deadline = Date.now() + 90_000
         while (!messages().some((m) => m.type === 'result') && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 250))
@@ -453,7 +470,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         // The turn's own init names what the child was launched with.
         expect(messages().find((m) => m.type === 'system' && m.subtype === 'init')).toMatchObject({
           model: 'claude-sonnet-5',
-          permissionMode: 'plan'
+          permissionMode: cliPermissionMode
         })
       } finally {
         await adapter.closeAll()
@@ -506,6 +523,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-stop'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const first = events.length
         await expect(
           send('real-cli-stop-1', 'Count from 1 to 300, one number per line, and nothing else.')
@@ -577,6 +595,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-queued-stop'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         await send('real-cli-queued-stop-a', 'Count from 1 to 400, one number per line.')
         // A's reply is streaming, so the next send queues behind its turn.
         await expect(
@@ -640,6 +659,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-no-hooks'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         expect(frames().filter((frame) => readClaudeInit(frame) !== null)).toEqual([])
         await expect(
           adapter.dispatch({
@@ -675,7 +695,8 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       events,
       process.cwd(),
       undefined,
-      {}
+      {},
+      false
     )
 
     try {
@@ -684,11 +705,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         fence: 1,
         spawnToken: 'real-cli-no-auth'
       })
-      await adapter.drainObservedExits()
-      expect(events.find((event) => event.type === 'ended')).toMatchObject({
-        reason: expect.stringMatching(/not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s),
-        startupUnproven: true
-      })
+      await expect(claudeStartupSettled(adapter, 'real-cli-handshake')).rejects.toThrow(
+        /not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s
+      )
     } finally {
       await adapter.closeAll()
       await rm(claudeConfigDir, { recursive: true, force: true })

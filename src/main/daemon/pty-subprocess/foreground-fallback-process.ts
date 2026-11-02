@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
+import { isTerminalScopeWrapper } from '../terminal-scopes-runtime'
 
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
   const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
@@ -16,7 +17,11 @@ export function resolveFallbackForegroundProcess(
   processName: string | null | undefined,
   shellPath: string
 ): string | null {
-  const normalized = normalizeForegroundProcessName(processName)
+  // Why: node-pty names Orca's exact wrapper path while it execs the shell, and as its spawn file
+  // once the foreground group's leader has exited (`true | claude`); both mean the shell.
+  const normalized = normalizeForegroundProcessName(
+    processName && isTerminalScopeWrapper(processName.trim()) ? shellPath : processName
+  )
   if (normalized || process.platform !== 'win32') {
     return normalized
   }

@@ -21,6 +21,11 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return this.tabIdByWebContentsId.get(webContentsId) ?? null
   }
 
+  /** The page a guest belongs to, following popups back to the page that opened them. */
+  getOwningTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
+    return this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+  }
+
   getWorktreeIdForTab(browserTabId: string): string | undefined {
     return this.worktreeIdByTabId.get(browserTabId)
   }

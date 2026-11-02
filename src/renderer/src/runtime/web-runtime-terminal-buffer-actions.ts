@@ -1,4 +1,4 @@
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 

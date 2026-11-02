@@ -11,12 +11,13 @@ const RESUMABLE = {
   usesSessionWorktree: true
 }
 const OWNED = { sessionId: 'chat-1', workspaceId: 'repo-1::wt' }
+const ROW = { sessionId: 's1', filePath: '/sessions/s1.jsonl' }
 
 describe('resolveAiVaultSessionSurfaceSwitchTargets', () => {
   it('offers the CLI fork for a chat-owned row with turns and a resume target', () => {
     expect(
       resolveAiVaultSessionSurfaceSwitchTargets(
-        { agent: 'codex', structuredSession: OWNED, ...TURNS },
+        { agent: 'codex', ...ROW, structuredSession: OWNED, ...TURNS },
         RESUMABLE,
         null
       )
@@ -29,6 +30,7 @@ describe('resolveAiVaultSessionSurfaceSwitchTargets', () => {
   it('withholds the CLI fork for an empty or blocked chat row', () => {
     const empty = {
       agent: 'claude' as const,
+      ...ROW,
       structuredSession: OWNED,
       messageCount: 0
     }
@@ -38,7 +40,7 @@ describe('resolveAiVaultSessionSurfaceSwitchTargets', () => {
     ).toBeNull()
     expect(
       resolveAiVaultSessionSurfaceSwitchTargets(
-        { agent: 'claude', structuredSession: OWNED, ...TURNS },
+        { agent: 'claude', ...ROW, structuredSession: OWNED, ...TURNS },
         { ...RESUMABLE, blocked: true },
         null
       ).resumeInNewCliWorktreeId
@@ -46,7 +48,7 @@ describe('resolveAiVaultSessionSurfaceSwitchTargets', () => {
   })
 
   it('offers the chat resume only where its eligibility says so', () => {
-    const cliRow = { agent: 'claude' as const, ...TURNS }
+    const cliRow = { agent: 'claude' as const, ...ROW, ...TURNS }
     expect(
       resolveAiVaultSessionSurfaceSwitchTargets(cliRow, RESUMABLE, {
         available: true,

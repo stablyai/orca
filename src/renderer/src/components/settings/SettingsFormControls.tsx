@@ -132,6 +132,7 @@ type SettingsSegmentedControlProps<T extends string | number> = {
   ariaLabel?: string
   size?: 'sm' | 'md'
   equalWidth?: boolean
+  wrap?: boolean
 }
 
 /** Canonical segmented control for theme/ligatures/cursor/shell/etc. */
@@ -141,7 +142,8 @@ export function SettingsSegmentedControl<T extends string | number>({
   options,
   ariaLabel,
   size = 'md',
-  equalWidth = false
+  equalWidth = false,
+  wrap = false
 }: SettingsSegmentedControlProps<T>): React.JSX.Element {
   return (
     <div
@@ -149,7 +151,8 @@ export function SettingsSegmentedControl<T extends string | number>({
       aria-label={ariaLabel}
       className={cn(
         'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
-        equalWidth && 'w-full'
+        equalWidth && 'w-full',
+        wrap && 'flex-wrap'
       )}
     >
       {options.map((opt) => {

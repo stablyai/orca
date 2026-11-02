@@ -118,8 +118,8 @@ export function createAgentCompletionProcessMonitor({
               : {})
           }
           const result = await (Object.keys(inspectOptions).length > 0
-            ? options.inspectProcess(options.getSettings(), ptyId, inspectOptions)
-            : options.inspectProcess(options.getSettings(), ptyId))
+            ? options.inspectProcess(ptyId, inspectOptions)
+            : options.inspectProcess(ptyId))
           if (
             !state.disposed &&
             generationAtRequest === state.inspectionGeneration &&

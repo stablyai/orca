@@ -10,7 +10,7 @@ const control = vi.hoisted(() => ({
   clear: () => {}
 }))
 const ownership = vi.hoisted(() => ({
-  ptyOwnership: new Map<string, null>(),
+  ptyOwnership: new Map<string, string>(),
   ptyIncarnationById: new Map<string, string>()
 }))
 vi.mock('../agent-hooks/server', () => ({
@@ -43,7 +43,7 @@ function fixture() {
     isPtyStopRequested: () => false,
     subscribeToPtyExit: (_ptyId: string, _listener: () => void) => () => {}
   }
-  ownership.ptyOwnership.set(result.id, null)
+  ownership.ptyOwnership.set(result.id, 'local')
   ownership.ptyIncarnationById.set(result.id, result.incarnationId)
   const context = {
     env: {

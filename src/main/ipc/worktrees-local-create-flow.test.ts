@@ -46,18 +46,11 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -105,7 +98,12 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -790,7 +788,7 @@ describe('registerWorktreeHandlers', () => {
     expect(result.setup?.command).toContain('printf')
   })
 
-  it('splits split-mode setup into the startup terminal without surfacing the workspace', async () => {
+  it('opens Setup beside the startup terminal without surfacing the workspace', async () => {
     addWorktreeMock.mockResolvedValue({})
     listWorktreesMock.mockResolvedValueOnce([
       {
@@ -820,12 +818,13 @@ describe('registerWorktreeHandlers', () => {
       startup: { command: 'claude' }
     })
 
-    expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(1)
+    expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
+    expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
     // A user who moved on must not be scrolled to the new workspace by its setup pane (#9944).
-    expect(runtimeStub.splitTerminal).toHaveBeenCalledWith(
-      'term-startup',
+    expect(runtimeStub.createTerminal).toHaveBeenLastCalledWith(
+      'id:repo-1::/workspace/improve-dashboard',
       {
-        direction: 'vertical',
+        title: 'Setup',
         command: expect.stringContaining('setup-runner.sh'),
         env: expect.any(Object),
         activate: false,

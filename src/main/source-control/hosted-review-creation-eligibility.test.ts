@@ -17,7 +17,6 @@ const {
   glabExecFileAsyncMock,
   gitExecFileAsyncMock,
   getUpstreamStatusMock,
-  getSshGitProviderMock,
   getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
@@ -36,7 +35,6 @@ const {
   glabExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getUpstreamStatusMock: vi.fn(),
-  getSshGitProviderMock: vi.fn(),
   getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
@@ -105,9 +103,9 @@ vi.mock('../gitlab/gl-utils', () => ({
 
 vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
-
-vi.mock('./hosted-review', () => ({ getHostedReviewForBranch: getHostedReviewForBranchMock }))
+vi.mock('./hosted-review', () => ({
+  getHostedReviewForBranch: getHostedReviewForBranchMock
+}))
 
 import { createHostedReview, getHostedReviewCreationEligibility } from './hosted-review-creation'
 import { baseRefExistsOnRemote } from './hosted-review-creation-git-state'
@@ -141,7 +139,6 @@ function resetMocks(): void {
     glabExecFileAsyncMock,
     gitExecFileAsyncMock,
     getUpstreamStatusMock,
-    getSshGitProviderMock,
     getEnterpriseGitHubRepoSlugMock
   ]) {
     mock.mockReset()
@@ -757,7 +754,7 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('resolves remote eligibility through SSH repo metadata without generating PR copy', async () => {
+  it('resolves remote eligibility from SSH repo metadata without running git or PR copy', async () => {
     const remoteGit = {
       exec: vi.fn(async (args: string[]) => ({
         stdout:
@@ -769,7 +766,6 @@ describe('getHostedReviewCreationEligibility', () => {
         stderr: ''
       }))
     }
-    getSshGitProviderMock.mockReturnValue(remoteGit)
 
     await expect(
       getHostedReviewCreationEligibility({
@@ -793,13 +789,8 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ repoPath: '/remote/repo', executionHostId: 'ssh:ssh-1' })
     )
-    // Why: the base-on-remote probe must run on the SSH host that will execute
-    // the provider create, so it flows through the relay exec, not local git.
-    expect(remoteGit.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
-    expect(remoteGit.exec).toHaveBeenCalledWith(
-      ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/main'],
-      '/remote/repo'
-    )
+    // An SSH host is not served here, so its base probe never runs as local git either.
+    expect(remoteGit.exec).not.toHaveBeenCalled()
   })
 
   it('offers push as the next action for authenticated branches with local-only commits', async () => {

@@ -180,7 +180,7 @@ describe('runtime host catalog refresh on reposChanged', () => {
 })
 
 describe('repo catalog refresh on repos:changed', () => {
-  it('skips remote catalog RPCs when refreshing local rows under a runtime', async () => {
+  it('refreshes local catalogs and recovers parked panes with and without an active runtime', async () => {
     vi.resetModules()
     let reposChangedListener: (() => void) | undefined
     const fetchRepos = vi.fn(() => Promise.resolve())
@@ -241,6 +241,24 @@ describe('repo catalog refresh on repos:changed', () => {
 
     const { useIpcEvents } = await import('./useIpcEvents')
     useIpcEvents()
+    expect(reposChangedListener).toBeDefined()
+
+    reposChangedListener?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(remountTerminalTabForRecovery).not.toHaveBeenCalled()
+
+    recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
+    reposChangedListener?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+
+    fetchRepos.mockClear()
+    fetchProjectGroups.mockClear()
+    fetchFolderWorkspaces.mockClear()
+    remountTerminalTabForRecovery.mockClear()
+    clearTerminalTabsParkedOnUnresolvedHost()
     state.settings.activeRuntimeEnvironmentId = 'env-1'
     // Why: the local-slice refresh still has to release panes that parked on an unhydrated host.
     recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
@@ -251,94 +269,6 @@ describe('repo catalog refresh on repos:changed', () => {
     expect(fetchRepos).toHaveBeenCalledWith(localOwner)
     expect(fetchProjectGroups).toHaveBeenCalledWith(localOwner)
     expect(fetchFolderWorkspaces).toHaveBeenCalledWith(localOwner)
-    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
-    clearTerminalTabsParkedOnUnresolvedHost()
-  })
-})
-
-describe('parked terminal recovery on repos:changed', () => {
-  it('remounts a pane that parked on an unresolved host once repos hydrate', async () => {
-    vi.resetModules()
-    const remountTerminalTabForRecovery = vi.fn(() => true)
-    let reposChangedListener: (() => void) | undefined
-
-    const state = {
-      settings: { activeRuntimeEnvironmentId: null },
-      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
-      worktreesByRepo: { repo1: [{ id: 'wt-1', repoId: 'repo1' }] },
-      folderWorkspaces: [],
-      projectGroups: [],
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-      ptyIdsByTabId: {},
-      remountTerminalTabForRecovery,
-      fetchRepos: vi.fn(() => Promise.resolve()),
-      fetchProjectGroups: vi.fn(() => Promise.resolve()),
-      fetchFolderWorkspaces: vi.fn(() => Promise.resolve())
-    }
-
-    vi.doMock('react', async () => {
-      const actual = await vi.importActual<typeof ReactModule>('react')
-      return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
-    })
-    vi.doMock('../store', () => ({
-      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => state }
-    }))
-    // Why: this hook registers dozens of IPC namespaces at mount; auto-stub every
-    // unspecified listener so the test asserts the repos:changed wiring, not the mock surface.
-    const noopListener = (): (() => void) => () => {}
-    const autoStubNamespace = new Proxy(
-      {},
-      {
-        get:
-          () =>
-          (...args: unknown[]) => {
-            const maybeCallback = args[0]
-            if (typeof maybeCallback === 'function') {
-              return noopListener()
-            }
-            // Why: a resolving promise would run the hook's .then() handlers against
-            // store setters this test does not model, surfacing as unhandled rejections
-            // that Vitest flags as possible false positives. A pending promise leaves
-            // those unrelated paths dormant.
-            return new Promise(() => {})
-          }
-      }
-    )
-    const api = new Proxy(
-      {
-        repos: {
-          onChanged: (cb: () => void) => {
-            reposChangedListener = cb
-            return () => {}
-          }
-        }
-      } as Record<string, unknown>,
-      {
-        get: (target, prop: string) => target[prop] ?? autoStubNamespace
-      }
-    )
-    vi.stubGlobal('window', { api })
-
-    const { recordTerminalTabParkedOnUnresolvedHost, clearTerminalTabsParkedOnUnresolvedHost } =
-      await import('@/lib/parked-terminal-host-hydration')
-    clearTerminalTabsParkedOnUnresolvedHost()
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-    useIpcEvents()
-    expect(reposChangedListener).toBeDefined()
-
-    // No parked pane yet: a refresh must not remount anything.
-    reposChangedListener?.()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(remountTerminalTabForRecovery).not.toHaveBeenCalled()
-
-    // The pane parks (its repo row had not merged when it mounted), then repos land.
-    recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
-    reposChangedListener?.()
-    await Promise.resolve()
-    await Promise.resolve()
-
     expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
     clearTerminalTabsParkedOnUnresolvedHost()
   })

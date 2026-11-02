@@ -60,13 +60,3 @@ export function resetClaudeRetiredModel(
       })
   )
 }
-
-/** The saved values this child showed it cannot run. Only a retired launch model is one: a launch
- *  never skips a model, so a skipped model is that. */
-export function claudeRetiredOptions(
-  session: Pick<ClaudeSession, 'launchedModel' | 'restoreSkippedOptions'>
-): { retiredOptions?: Record<string, string> } {
-  return session.restoreSkippedOptions.has('model') && session.launchedModel !== null
-    ? { retiredOptions: { model: session.launchedModel } }
-    : {}
-}

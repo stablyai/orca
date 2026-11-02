@@ -10,7 +10,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors } from '../theme/mobile-theme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
-import { styles } from './mobile-native-chat-message-styles'
+import { CHAT_PROSE_SCALE, styles } from './mobile-native-chat-message-styles'
 
 /** A reasoning row, collapsed to its headline; its text mounts only once opened. Desktop parity:
  *  `NativeChatReasoningRow`. */
@@ -92,7 +92,7 @@ export function MobileNativeChatReasoningBody({
         <MobileMarkdown
           content={markdown}
           rangeSelectable
-          textScale={1.25 * fontScale}
+          textScale={CHAT_PROSE_SCALE * fontScale}
           onOpenFile={onOpenFile}
           onLongPress={onLongPress}
         />

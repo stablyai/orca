@@ -22,7 +22,7 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
-const SWEEP_MS = 5
+const MANUAL_SWEEP_INTERVAL_MS = 3_600_000
 const RETRY_GAP_MS = 10 * 60_000
 
 let root: string
@@ -41,11 +41,6 @@ function streamRetry(attempt: number): Record<string, unknown> {
       codexErrorInfo: { responseStreamDisconnected: { httpStatusCode: 502 } }
     }
   }
-}
-
-/** Long enough for many sweep ticks, so "still open" means the sweep declined. */
-function waitOutSeveralSweeps(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
 
 beforeEach(async () => {
@@ -85,7 +80,7 @@ beforeEach(async () => {
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',
-    idleSweep: { intervalMs: SWEEP_MS, idleMs: STRUCTURED_AGENT_SESSION_IDLE_MS },
+    idleSweep: { intervalMs: MANUAL_SWEEP_INTERVAL_MS, idleMs: STRUCTURED_AGENT_SESSION_IDLE_MS },
     now: () => clock
   })
 })
@@ -115,7 +110,8 @@ describe('a Codex reconnecting a dropped stream', () => {
         method: 'error',
         params: streamRetry(attempt)
       })
-      await waitOutSeveralSweeps()
+      await host.flushStreamedEvents(SESSION)
+      await host.collaboratorsForTests().lifetime.idleSweep.tick()
       expect(closeSession).not.toHaveBeenCalled()
       expect(host.hasSession(SESSION)).toBe(true)
     }
@@ -136,6 +132,7 @@ describe('a Codex reconnecting a dropped stream', () => {
 
     // Once the frames stop, the same clock does let the sweep close it.
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS
+    await host.collaboratorsForTests().lifetime.idleSweep.tick()
     await vi.waitFor(() => {
       expect(closeSession).toHaveBeenCalledWith(SESSION)
       expect(host.hasSession(SESSION)).toBe(false)

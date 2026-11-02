@@ -3,7 +3,7 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { captureTerminalDropTarget, getCurrentTerminalDropTransport } from './terminal-drop-target'
 import { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
@@ -48,7 +48,6 @@ function captureNativeTerminalFileDropDestination(
   }
   const dropTarget = captureTerminalDropTarget(pane, transport)
   const state = useAppStore.getState()
-  const settings = state.settings
   const owner = captureTerminalDropTransportOwner(transport)
   const worktreePath = resolveTerminalDropWorktreePath(
     worktreeId,
@@ -80,7 +79,6 @@ function captureNativeTerminalFileDropDestination(
         pane,
         dataPaths: paths,
         dropTarget,
-        settings,
         owner,
         worktreePath,
         localWslDrop

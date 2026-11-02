@@ -1,3 +1,4 @@
+import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   AskAnswerSelection,
@@ -11,6 +12,7 @@ import type {
   NativeChatSettledTurns
 } from '../../../src/shared/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
+import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
@@ -23,6 +25,7 @@ import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-r
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
   isTabChatView: (tabId: string) => boolean
+  setTabView: (tabId: string, view: MobileSessionView) => void
   toggleTabChatView: (tabId: string) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
@@ -46,6 +49,8 @@ export type MobileNativeChatController = {
   nativeChatSettledTurns: NativeChatSettledTurns | null
   /** Structured lane: the journal that places each transcript row in its turn. */
   nativeChatTurnJournal: NativeChatTurnJournal | null
+  nativeChatReceipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
+  nativeChatActionablePromptIds: readonly string[] | undefined
   /** What a refused command's line stands on. */
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses
   nativeChatCanStop: boolean
@@ -93,7 +98,8 @@ export type MobileNativeChatController = {
   /** Outcome-preserving send: callers that pasted terminal input beforehand
    *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. Such a
    *  caller passes its own `deadline` so the paste it already spent and this text
-   *  body share one budget instead of holding the composer for two. */
+   *  body share one budget instead of holding the composer for two, and `sentAt`,
+   *  when Send was pressed, so the sent message is timed before the paste. */
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],
@@ -102,7 +108,8 @@ export type MobileNativeChatController = {
       id?: string
       path: string
       previewUri: string
-    }[]
+    }[],
+    sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Launch-context text still parked on the agent's TUI input line, or null.
    *  Image sends read it to size their leading clear (one Ctrl+U per line). */
@@ -110,4 +117,6 @@ export type MobileNativeChatController = {
   /** Model/session-option pickers for the composer, or null when the active
    *  agent has no session-option catalog. */
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  /** Whether the composer offers images: a structured chat by its options report. */
+  nativeChatAcceptsImages: boolean
 }

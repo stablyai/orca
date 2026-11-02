@@ -7,7 +7,7 @@ import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord,
   type OrcadStateSnapshot
-} from './orcad-activation-record'
+} from '../managed-server/activation/orcad-activation-record'
 
 const PROTOCOL = { protocolVersion: 3, previousProtocolVersions: [1, 2] }
 

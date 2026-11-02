@@ -7,8 +7,7 @@ describe('useIpcEvents updater integration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('clears stale remote PTYs when an SSH connection fully disconnects', async () => {
-    const clearDirectSshTargetPtyBindings = vi.fn(() => 1)
+  it('clears remote agent and port state when an SSH connection fully disconnects', async () => {
     const setSshConnectionState = vi.fn()
     const setSshTargetsMetadata = vi.fn()
     const clearRemovedSshTargetState = vi.fn()
@@ -60,7 +59,6 @@ describe('useIpcEvents updater integration', () => {
       removeSshCredentialRequest: vi.fn(),
       clearRemoteDetectedAgents: vi.fn(),
       clearRemovedSshTargetState,
-      clearDirectSshTargetPtyBindings,
       sshConnectionStates: new Map(),
       repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
       worktreesByRepo: {
@@ -150,6 +148,7 @@ describe('useIpcEvents updater integration', () => {
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
           onPublishAgentLaunchTab: () => () => {},
+          onRevealTerminalPane: () => () => {},
           onAgentLaunchPaneVerdict: () => () => {},
           onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
@@ -169,6 +168,7 @@ describe('useIpcEvents updater integration', () => {
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
+          onRequestRemoteCliBrowserScope: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
           replyTabClose: () => {},
@@ -253,8 +253,6 @@ describe('useIpcEvents updater integration', () => {
       'conn-1',
       expect.objectContaining({ status: 'disconnected' })
     )
-    expect(clearDirectSshTargetPtyBindings).toHaveBeenCalledOnce()
-    expect(clearDirectSshTargetPtyBindings).toHaveBeenCalledWith('conn-1')
     expect(storeState.clearRemoteDetectedAgents).toHaveBeenCalledWith('conn-1')
 
     setSshConnectionState.mockClear()

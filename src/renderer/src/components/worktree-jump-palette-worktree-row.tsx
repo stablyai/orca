@@ -10,9 +10,10 @@ import {
 } from '@/lib/worktree-default-display-name'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import {
   isPaletteCurrentWorktree,
+  getPaletteWorktreeExecutionHostId,
   resolvePaletteRepoForWorktree
 } from '@/lib/palette-repo-resolution'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
@@ -61,7 +62,11 @@ export function WorktreeJumpPaletteWorktreeRow({
     ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
     : null
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-  const hostBadge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
+  const hostBadge = getPaletteHostBadge(
+    getPaletteWorktreeExecutionHostId(worktree) ?? (repo && getRepoExecutionHostId(repo)),
+    hostOptions,
+    hostFilterActive
+  )
 
   return (
     <CommandItem

@@ -123,6 +123,12 @@ describe('web GitLab preload API', () => {
         expectedParams: { repoPath, repo: repoPath }
       },
       {
+        key: 'listAssignableUsers',
+        invoke: (gl) => gl.listAssignableUsers({ repoPath }),
+        expectedMethod: 'gitlab.listAssignableUsers',
+        expectedParams: { repoPath, repo: repoPath }
+      },
+      {
         key: 'todos',
         invoke: (gl) => gl.todos({ repoPath }),
         expectedMethod: 'gitlab.todos',

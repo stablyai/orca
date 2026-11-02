@@ -15,6 +15,11 @@ vi.mock('../worktree-lineage-pruning', () => ({
 vi.mock('../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning', () => ({
   pruneMetadataMissingFromAuthoritativeLocalScan: pruneMetadataMock
 }))
+const { hiddenHostIds } = vi.hoisted(() => ({ hiddenHostIds: new Set<string>() }))
+vi.mock('./runtime-visible-catalog', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runtimeHiddenHostIds: () => hiddenHostIds
+}))
 vi.mock('../project-runtime-git-options', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getLocalProjectWorktreeGitOptions: () => ({})
@@ -193,6 +198,17 @@ describe('RuntimeManagedWorktreeQueries.list host scope', () => {
       hostIds: [],
       omittedHostIds: ['ssh:conn-1']
     })
+  })
+
+  // A selector still resolves a converted host's retained repo; its host must not leak back out.
+  it('never names a hidden host, even for a selector that resolves to its repo', async () => {
+    hiddenHostIds.add('ssh:conn-1')
+    try {
+      const result = await queries(sshStore()).list('repo-ssh', 50)
+      expect(result.hostScope?.omittedHostIds).toEqual([])
+    } finally {
+      hiddenHostIds.clear()
+    }
   })
 
   it('does not report the scoped host as omitted once it contributes rows', async () => {

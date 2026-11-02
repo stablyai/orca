@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { normalizeMachineName } from '../../shared/machine-name'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 

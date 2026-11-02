@@ -35,7 +35,8 @@ type Args = {
       id: string
       path: string
       previewUri: string
-    }[]
+    }[],
+    sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured agent sessions do not have a terminal paste path. */
   readonly structuredNativeChat: boolean

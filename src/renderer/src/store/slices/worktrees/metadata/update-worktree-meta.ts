@@ -14,9 +14,10 @@ import { translate } from '@/i18n/i18n'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
-import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../github-cache-key'
+import { getGitHubPRCacheKeyCandidates } from '../../../../../../shared/github/github-cache-key'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById,
@@ -33,10 +34,8 @@ import {
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
-import {
-  settingsForWorktreeOwner,
-  trySettingsForWorktreeOwner
-} from '../listing/worktree-owner-settings'
+import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 
 import { findRepoForHost } from '../../repo-host-identity'
 export function createUpdateWorktreeMeta(
@@ -98,17 +97,20 @@ export function createUpdateWorktreeMeta(
       ? normalizedUpdates.linkedPR
       : null
     // Why: an ambiguous owner must not throw past this update's { ok, error } contract — skip the lookup instead.
-    const pushTargetOwnerSettings =
+    const pushTargetOwner =
       linkedPrForPushTarget !== null &&
       normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
       !existingWorktree.pushTarget
-        ? trySettingsForWorktreeOwner(get(), worktreeId, executionHostId)
+        ? runtimeTargetForWorkspaceOwner(get(), {
+            workspaceId: worktreeId,
+            ...(executionHostId ? { hostId: executionHostId } : {})
+          })
         : null
     const resolvedPushTarget =
-      pushTargetOwnerSettings && existingWorktree && linkedPrForPushTarget !== null
+      pushTargetOwner && existingWorktree && linkedPrForPushTarget !== null
         ? await resolveGitHubReviewPushTarget(
-            pushTargetOwnerSettings,
+            pushTargetOwner,
             existingWorktree.repoId,
             linkedPrForPushTarget
           )
@@ -164,8 +166,11 @@ export function createUpdateWorktreeMeta(
             firstAgentMessageRenameError: null
           }
         : targetEnriched
+    // Switch point: a comment edit is not a Recent event once the host owns the stamps.
     const enriched =
-      'comment' in renameCleared ? { ...renameCleared, lastActivityAt: Date.now() } : renameCleared
+      'comment' in renameCleared && !ORCA_SIDEBAR_INPUTS_IS_MAIN
+        ? { ...renameCleared, lastActivityAt: Date.now() }
+        : renameCleared
 
     let didApply = false
     set((s) => {
@@ -200,26 +205,9 @@ export function createUpdateWorktreeMeta(
               true
             )
           : null
-      const prCacheKey =
-        reviewRepo && reviewBranch
-          ? getGitHubPRCacheKey(
-              reviewRepo.path,
-              reviewRepo.id,
-              reviewBranch,
-              s.settings,
-              reviewRepo.connectionId,
-              reviewRepo.executionHostId,
-              true
-            )
-          : null
       const prCacheKeys =
-        reviewRepo && reviewBranch
-          ? [
-              prCacheKey,
-              getLegacyGitHubPRCacheKey(reviewRepo.path, reviewRepo.id, reviewBranch),
-              getLegacyGitHubPRCacheKey(reviewRepo.path, undefined, reviewBranch)
-            ].filter((key): key is string => Boolean(key))
-          : []
+        reviewRepo && reviewBranch ? getGitHubPRCacheKeyCandidates(reviewRepo, reviewBranch) : []
+      const prCacheKey = prCacheKeys[0] ?? null
       const hostedReviewCache = s.hostedReviewCache ?? {}
       const prCache = s.prCache ?? {}
       if (
@@ -271,7 +259,7 @@ export function createUpdateWorktreeMeta(
 
     try {
       await persistWorktreeMeta(
-        settingsForWorktreeOwner(get(), worktreeId, executionHostId),
+        runtimeTargetForWorktreeOwner(get(), worktreeId, executionHostId),
         worktreeId,
         getWorkspaceReviewPersistenceUpdates(mutationUpdates, enriched),
         executionHostId ?? existingWorktree?.hostId,

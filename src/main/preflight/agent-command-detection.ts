@@ -1,28 +1,20 @@
-import { z } from 'zod'
-import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
 import { isCommandOnPath } from '../ipc/preflight-command-exec'
+import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
+import { readGuestWindowsDriveMounts } from '../ipc/wsl-guest-windows-drive-path'
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
   options: { connectionId?: string | null; context?: PreflightRuntimeContext } = {}
 ): Promise<Set<string>> {
   if (options.connectionId) {
-    const mux = getActiveMultiplexer(options.connectionId)
-    if (!mux || mux.isDisposed()) {
-      throw new Error('Agent command resolution requires the execution host connection.')
-    }
-    const result = z.object({ agents: z.array(z.string()) }).parse(
-      await mux.request('preflight.detectAgents', {
-        commands: commands.map((cmd) => ({ id: cmd, cmd }))
-      })
-    )
-    return new Set(result.agents.filter((cmd) => commands.includes(cmd)))
+    throw new SshHostNotServedError(options.connectionId)
   }
   const context = options.context
   const wslTarget = getPreflightWslTarget(context)
@@ -38,7 +30,13 @@ export async function detectAgentCommandsOnHost(
   const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
   // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
   // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
+  // Same PATH as the walk above: a WSL host's orcad must not re-admit /mnt/<drive> shims.
+  // Elsewhere (Windows included) keep the process PATH the fallback always searched.
+  const guestMounts = readGuestWindowsDriveMounts()
+  const installDirCommands = detectCommandsInInstallDirs(
+    missedCommands,
+    guestMounts.length > 0 ? buildLocalPreflightEnv(guestMounts)?.PATH : undefined
+  )
   const foundCommands = new Set(
     pathChecks
       .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))

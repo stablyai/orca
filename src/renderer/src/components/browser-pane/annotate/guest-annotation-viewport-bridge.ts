@@ -44,6 +44,7 @@ export function syncGuestAnnotationViewportBridge({
       emitViewport: pendingPayload !== null,
       enabled: surfaceActive && (pendingPayload !== null || markers.length > 0),
       markers,
+      selectionId: pendingPayload?.page.capturedAt,
       token
     })
     .catch(() => {

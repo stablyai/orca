@@ -30,11 +30,22 @@ function declaringNothing(definition: StructuredAgentDefinition): StructuredAgen
   }
 }
 
-/** Claude and Codex declaring no capability and no resting options: what a host over a bare
- *  adapter double declares. */
-export const NO_STRUCTURED_AGENTS = new StructuredAgentRegistry([
-  { definition: declaringNothing(CLAUDE_STRUCTURED_AGENT), adapter: NO_METHODS },
-  { definition: declaringNothing(CODEX_STRUCTURED_AGENT), adapter: NO_METHODS }
+/** These agents declaring no capability and no resting options: what a host over a bare adapter
+ *  double declares. */
+export function structuredAgentsDeclaringNothing(
+  definitions: readonly StructuredAgentDefinition[]
+): StructuredAgentRegistry {
+  return new StructuredAgentRegistry(
+    definitions.map((definition) => ({
+      definition: declaringNothing(definition),
+      adapter: NO_METHODS
+    }))
+  )
+}
+
+export const NO_STRUCTURED_AGENTS = structuredAgentsDeclaringNothing([
+  CLAUDE_STRUCTURED_AGENT,
+  CODEX_STRUCTURED_AGENT
 ])
 
 /** This build's two agents over doubles. Each declares only what its double implements, so a

@@ -200,7 +200,9 @@ describe('floating workspace skill discovery', () => {
   }
   const floatingInputs: NativeChatSkillStateInputs = {
     activeRepoId: null,
+    activeWorkspaceExecutionHostId: null,
     activeWorktreeId: null,
+    detectedWorktreesByRepo: {},
     floatingWorkspacePath: '/home/me/scratch',
     folderWorkspaces: [],
     projectGroups: [],

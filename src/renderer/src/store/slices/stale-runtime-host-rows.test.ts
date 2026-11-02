@@ -59,21 +59,21 @@ describe('dropWorktreeRowsForRemovedRuntimeEnvironments', () => {
     }
     const result = dropWorktreeRowsForRemovedRuntimeEnvironments(rowsByRepo, new Set(['env-a']))
     expect(result.rowsByRepo.repo1).toEqual([row('w-local', 'local')])
-    expect(result.removedWorktreeIds).toEqual(['w-a'])
+    expect(result.removedRows.map((r) => r.id)).toEqual(['w-a'])
   })
 
   it('returns the SAME reference with empty ids when nothing matches', () => {
     const rowsByRepo = { repo1: [row('w-local', 'local'), row('w-b', runtimeB)] }
     const result = dropWorktreeRowsForRemovedRuntimeEnvironments(rowsByRepo, new Set(['env-a']))
     expect(result.rowsByRepo).toBe(rowsByRepo)
-    expect(result.removedWorktreeIds).toEqual([])
+    expect(result.removedRows.map((r) => r.id)).toEqual([])
   })
 
   it('returns the SAME reference with empty ids when the removed set is empty', () => {
     const rowsByRepo = { repo1: [row('w-a', runtimeA)] }
     const result = dropWorktreeRowsForRemovedRuntimeEnvironments(rowsByRepo, new Set())
     expect(result.rowsByRepo).toBe(rowsByRepo)
-    expect(result.removedWorktreeIds).toEqual([])
+    expect(result.removedRows.map((r) => r.id)).toEqual([])
   })
 
   it('keeps the repo key even when all of its rows drop', () => {
@@ -81,7 +81,7 @@ describe('dropWorktreeRowsForRemovedRuntimeEnvironments', () => {
     const result = dropWorktreeRowsForRemovedRuntimeEnvironments(rowsByRepo, new Set(['env-a']))
     expect(Object.keys(result.rowsByRepo)).toEqual(['repoA'])
     expect(result.rowsByRepo.repoA).toEqual([])
-    expect(result.removedWorktreeIds).toEqual(['w-a1', 'w-a2'])
+    expect(result.removedRows.map((r) => r.id)).toEqual(['w-a1', 'w-a2'])
   })
 
   it('gives only the changed repo a new array; unchanged repos keep their reference', () => {
@@ -111,6 +111,6 @@ describe('dropWorktreeRowsForRemovedRuntimeEnvironments', () => {
 
     expect(result.rowsByRepo.removedRepo).toEqual([])
     expect(result.rowsByRepo.ambiguousRepo).toEqual([row('w-ambiguous')])
-    expect(result.removedWorktreeIds).toEqual(['w-legacy'])
+    expect(result.removedRows.map((r) => r.id)).toEqual(['w-legacy'])
   })
 })

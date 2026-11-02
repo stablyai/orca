@@ -5,20 +5,16 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/pro
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { WorktreeRuntimeOwnerState } from '../lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '../lib/worktree-runtime-owner-state'
 import { buildPersistedUnifiedTabSessionData } from '../lib/workspace-session-unified-tabs'
 import { buildHydratedTabState } from '../store/slices/tabs-hydration'
-import {
-  applyLocalStructuredSessionTabSnapshots,
-  projectLocalStructuredSessionTabs,
-  resetLocalStructuredSessionVersionForTests,
-  startLocalStructuredSessionTabsSync
-} from './local-structured-session-tabs-sync'
-import {
-  applyWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+import { applyLocalStructuredSessionTabSnapshots } from './local-structured-session-tabs-sync/snapshot-apply'
+import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
+import { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'
+import { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -316,7 +312,7 @@ describe('local structured session tab projection', () => {
     try {
       vi.resetModules()
       const { restoreLocalStructuredSessionTabsOnce } =
-        await import('./local-structured-session-tabs-sync')
+        await import('./local-structured-session-tabs-sync/inventory-refresh')
       let settled = false
       const restored = restoreLocalStructuredSessionTabsOnce().finally(() => {
         settled = true

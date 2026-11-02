@@ -21,6 +21,7 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
+import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import {
@@ -34,6 +35,8 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
+import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -124,11 +127,10 @@ describe('the chat strip and the session list read the same host child records',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000,
+      ...scriptedCodexTransport(openConnection),
       statusSink
     })
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
@@ -178,6 +180,17 @@ describe('the chat strip and the session list read the same host child records',
     const stripRows = () => rows(strip.at(-1)?.children ?? undefined)
     const both = (expected: Row[]) => {
       expect(summaryRows()).toEqual(expected)
+      const sources = collectRuntimeWorktreeAgentSources({
+        hookSnapshots: server.getStatusSnapshot(),
+        readStructuredSummary: host.readStatusSummary,
+        mirroredWorktreeIdByTabId: new Map(),
+        connectedPtyEvidence: {
+          tabIds: new Set(),
+          paneKeys: new Set(),
+          ptyIdByTerminalHandle: new Map()
+        }
+      })
+      expect([...sources.values()].flatMap((source) => rows(source.children))).toEqual(expected)
       expect(stripRows()).toEqual(expected)
     }
 
@@ -370,3 +383,113 @@ function parentSubject(summaries: AgentSessionStatusSummary[]) {
     summary.sessionId
   )
 }
+
+describe('Claude background-only resume through hook shutdown', () => {
+  let claude = createScriptedClaudeRuntime([SESSION])
+  let server = new AgentHookServer()
+
+  beforeEach(() => {
+    claude = createScriptedClaudeRuntime([SESSION])
+    server = new AgentHookServer()
+  })
+
+  afterEach(async () => {
+    await claude.dispose()
+    server.stop()
+  })
+
+  it.each([
+    { trigger: 'quit', kind: 'agent', settled: false },
+    { trigger: 'update', kind: 'agent', settled: false },
+    { trigger: 'quit', kind: 'command', settled: false },
+    { trigger: 'update', kind: 'command', settled: false },
+    { trigger: 'quit', kind: 'command', settled: true }
+  ] as const)(
+    '$trigger with a background $kind (settled: $settled)',
+    async ({ trigger, kind, settled }) => {
+      const host = await claude.install()
+      host.deps.statusSink = {
+        publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
+        forget: (subject) => server.dropStructuredStatus(subject),
+        publishChildWork: (subject, evidence, provider) =>
+          server.ingestStructuredChildWork(subject, evidence, provider),
+        readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
+      }
+      const params = claude.attachParams(SESSION, null)
+      expect(await host.attach({ callerKey: 'restart-test' }, params)).toMatchObject({ ok: true })
+      if (params.providerHandle?.kind !== 'claude') {
+        throw new Error('missing Claude provider handle')
+      }
+      const providerSession = params.providerHandle.sessionId
+      const message = claude.child(SESSION).handlers.onMessage
+      message?.({
+        type: 'assistant',
+        uuid: 'lead-assistant',
+        session_id: providerSession,
+        parent_tool_use_id: null,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Finished the foreground reply' }]
+        }
+      })
+      message?.({
+        type: 'system',
+        subtype: 'task_started',
+        uuid: 'background-start',
+        session_id: providerSession,
+        task_id: 'background-1',
+        tool_use_id: 'spawn-1',
+        task_type: kind === 'agent' ? 'local_agent' : 'local_bash',
+        description: 'Audit the build',
+        is_backgrounded: true
+      })
+      if (settled) {
+        message?.({
+          type: 'system',
+          subtype: 'task_notification',
+          uuid: 'background-end',
+          session_id: providerSession,
+          task_id: 'background-1',
+          tool_use_id: 'spawn-1',
+          status: 'completed'
+        })
+      }
+      message?.({
+        type: 'result',
+        subtype: 'success',
+        uuid: 'lead-result',
+        session_id: providerSession,
+        result: 'Finished the foreground reply',
+        is_error: false
+      })
+      await host.flushStreamedEvents(SESSION)
+      await vi.waitFor(() =>
+        expect(server.getStatusSnapshot().find((entry) => entry.structuredHost)).toMatchObject({
+          state: settled ? 'done' : 'working',
+          mainAgent: { state: 'done' }
+        })
+      )
+      const stopping = stopStructuredAgentSessionRuntime({ trigger })
+      server.stop({ keepStatus: true })
+      await stopping
+      expect(
+        server
+          .getStructuredChildWorkViews(makeStructuredAgentStatusSubject(params.location, SESSION))
+          .filter((child) => child.state !== 'done')
+      ).toEqual([])
+      const activity = { state: 'done', prompts: [], tasks: [{ kind, label: 'Audit the build' }] }
+      const markers = await host.deps.recoveryCapsule?.list(Date.now())
+      const restarted = await claude.install()
+      const candidates = await restarted.restartResume.list()
+      if (settled) {
+        expect(markers).toEqual([])
+        expect(candidates).toEqual([])
+      } else {
+        expect(markers).toMatchObject([{ sessionId: SESSION, trigger, activity }])
+        expect(candidates).toMatchObject([
+          { sessionId: SESSION, agent: 'claude', trigger, activity }
+        ])
+      }
+    }
+  )
+})

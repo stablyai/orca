@@ -118,6 +118,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   generation = 0
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
+    providerChildPhase: 'starting' as const,
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
@@ -126,8 +127,7 @@ beforeEach(async () => {
       mintedAtFence: fence,
       observedAt: NOW
     },
-    acquisitionGeneration: `generation-${++generation}`,
-    providerChildPhase: 'starting' as const
+    acquisitionGeneration: `generation-${++generation}`
   }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
@@ -254,10 +254,10 @@ describe('an open chat receives each row once', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }
     )
-    host['subscribers'].publish(SESSION, journal)
-
     expect(pane.received().statuses).toEqual(['host row'])
+    const delivered = pane.received().batches
+    host['subscribers'].publish(SESSION, journal)
     // The second publish found nothing past the reader's cursor, so it sent nothing at all.
-    expect(pane.received().batches).toBe(1)
+    expect(pane.received().batches).toBe(delivered)
   })
 })

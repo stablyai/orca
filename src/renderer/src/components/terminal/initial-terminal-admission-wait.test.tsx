@@ -138,6 +138,18 @@ function gateAnsweredLater(): {
 // While this machine decides, a passive first-terminal seeder used to put "Terminal 1" beside the
 // chat, since no launch record exists until the host answers.
 describe('a local chat launch waiting on its host', () => {
+  it('defers the watcher shell for a live host launch, then permits a later ordinary mount', async () => {
+    mocks.gate.mockResolvedValueOnce('blocked').mockResolvedValueOnce('empty')
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(createElement(Watcher)))
+    expect(mocks.createTab).not.toHaveBeenCalled()
+
+    await act(async () => root?.unmount())
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(createElement(Watcher)))
+    expect(mocks.createTab).toHaveBeenCalledOnce()
+  })
+
   it('keeps a watched create free of a stray shell until its chat opens', async () => {
     const { finish } = gateAnsweredLater()
     // A watched create reveals the workspace, then waits for this machine's answer.

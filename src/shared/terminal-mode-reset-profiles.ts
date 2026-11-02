@@ -6,6 +6,8 @@
 // Why: SerializeAddon replays mode bits assuming reattach to a live TUI, but Orca restores against a fresh shell with none, so stale bits (e.g. focus reporting rings the bell on click) must be reset.
 export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
 export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+// Why beside kitty: a dead pi leaves modifyOtherKeys armed, and the shell would get `CSI 27;2;13~` for Shift+Enter.
+export const RESET_MODIFY_OTHER_KEYS = '\x1b[>4m'
 
 /**
  * Re-asserts replayed Kitty flags. Pop-all first, so a push a replay
@@ -25,7 +27,7 @@ export const RESET_MOUSE_REPORTING =
   '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
 
 // Why: serialized panes can end with a live pen, but the following shell assumes default attributes.
-export const POST_REPLAY_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l\x1b[?2004l${SAVE_GROUNDED_CURSOR}`
+export const POST_REPLAY_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_MODIFY_OTHER_KEYS}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l\x1b[?2004l${SAVE_GROUNDED_CURSOR}`
 
 // Why: same-session live replay; keep cursor/focus cleanup (the replay epilogue re-asserts Kitty flags).
 export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
@@ -35,7 +37,7 @@ export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x
 export const POST_REPLAY_REATTACH_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l${SAVE_GROUNDED_CURSOR}`
 
 // Why: a foreground proof says the app is gone, so its Kitty flags go with its other modes.
-export const CONFIRMED_SHELL_MODE_RESET = `${POST_REPLAY_REATTACH_RESET}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+export const CONFIRMED_SHELL_MODE_RESET = `${POST_REPLAY_REATTACH_RESET}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_MODIFY_OTHER_KEYS}`
 
 // Why: a foreground shell proves an alternate-screen owner died without its
 // ?1049l cleanup; leave the renderer on the shell's normal buffer as well.
@@ -95,7 +97,7 @@ export function buildProcessBoundaryGround(opts: { keepFocusReporting: boolean }
   const focus = opts.keepFocusReporting ? '' : RESET_FOCUS_REPORTING
   // RELEASE_SYNCHRONIZED_OUTPUT first: the process that opened a 2026 frame is
   // gone, so nothing will ever close it, and xterm stops repainting until it does.
-  return `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_KITTY_KEYBOARD_PROTOCOL}${LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR}${RESET_MOUSE_REPORTING}${RESET_LEGACY_MOUSE_ENCODINGS}${focus}${RESET_BRACKETED_PASTE}${RESET_APPLICATION_CURSOR_AND_KEYPAD}${SHOW_CURSOR}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_GRAPHIC_RENDITION}${SAVE_GROUNDED_CURSOR}`
+  return `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_KITTY_KEYBOARD_PROTOCOL}${LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR}${RESET_MOUSE_REPORTING}${RESET_LEGACY_MOUSE_ENCODINGS}${focus}${RESET_BRACKETED_PASTE}${RESET_APPLICATION_CURSOR_AND_KEYPAD}${SHOW_CURSOR}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_MODIFY_OTHER_KEYS}${RESET_GRAPHIC_RENDITION}${SAVE_GROUNDED_CURSOR}`
 }
 
 export const PROCESS_BOUNDARY_GROUND = buildProcessBoundaryGround({ keepFocusReporting: false })

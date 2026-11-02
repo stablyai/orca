@@ -3,9 +3,9 @@ import {
   createFakeSpawnedChild,
   fakeSpawnDispatch,
   fakeSpawnReturning
-} from '../../shared/child-process/__fixtures__/fake-spawned-child'
+} from '../../shared/__fixtures__/fake-spawned-child'
 import type * as WslModule from '../wsl'
-import { windowsSystem32Binary } from '../../shared/child-process/windows-system-binary'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { isBuiltin } from 'node:module'
 import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
 
@@ -61,7 +62,9 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'foreign-sqlite-reader-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
+  'worker-thread-child-process-entry',
   'usage-scan-worker-entry',
+  'workspace-space-scan-worker-entry',
   'claude-profile-setup-worker-entry',
   'profile-state-backup-worker-entry',
   'profile-state-writer-worker-entry'
@@ -142,6 +145,43 @@ function assertNoElectronRequire(
       )
     }
     electronFreeChunkCode.set(chunk, code)
+  }
+}
+
+// Why: on packaged Windows the daemon runs from a relocated daemon-host copy that mirrors only
+// these packages (src/main/daemon/daemon-host-manifest.ts). Any other bare require in its graph
+// resolves in the install dir but throws MODULE_NOT_FOUND in the copy, and the desktop silently
+// falls back to an unrelocated daemon that the next update kills.
+const DAEMON_HOST_MIRRORED_PACKAGES = [
+  '@orca/process-host',
+  'node-pty',
+  '@vscode/windows-process-tree'
+]
+const BARE_REQUIRE_RE = /require\(\s*["'`]([^"'`./][^"'`]*)["'`]\s*\)/g
+
+function packageOfSpecifier(specifier: string): string {
+  const parts = specifier.split('/')
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]!
+}
+
+function assertDaemonExternalsAreMirrored(
+  entry: OutputChunk,
+  byFileName: Map<string, OutputChunk>
+): void {
+  for (const chunk of collectReachableChunks(entry, byFileName)) {
+    for (const match of chunk.code.matchAll(BARE_REQUIRE_RE)) {
+      const specifier = match[1]!
+      if (specifier.startsWith('node:') || isBuiltin(specifier)) {
+        continue
+      }
+      if (!DAEMON_HOST_MIRRORED_PACKAGES.includes(packageOfSpecifier(specifier))) {
+        throw new Error(
+          `[plain-node-entry-guard] "daemon-entry" reaches chunk "${chunk.fileName}" that ` +
+            `requires "${specifier}", which the relocated Windows daemon-host does not mirror ` +
+            `(daemon-host-manifest.ts). Keep it out of the daemon graph, or mirror it there.`
+        )
+      }
+    }
   }
 }
 
@@ -306,6 +346,11 @@ export function createPlainNodeEntryGuardPlugin(
             'worker thread'
           )
         }
+      }
+
+      const daemonEntry = entryByName.get('daemon-entry')
+      if (daemonEntry) {
+        assertDaemonExternalsAreMirrored(daemonEntry, byFileName)
       }
 
       if (entryByName.has('daemon-entry') && options.dir) {

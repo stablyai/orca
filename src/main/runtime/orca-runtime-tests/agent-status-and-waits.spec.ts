@@ -5,6 +5,7 @@ import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   expectStablePaneKeyEnv,
+  spawnedPtyEnv,
   store
 } from '../orca-runtime-test-fixtures.spec'
 
@@ -26,8 +27,7 @@ describe('OrcaRuntimeService', () => {
       command: 'codex',
       title: 'worker'
     })
-    const spawnedEnv =
-      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const spawnedEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
     const paneKey = expectStablePaneKeyEnv(spawnedEnv)
 
     runtime.onPtyData('pty-bg', 'before\x1b]999', 123)

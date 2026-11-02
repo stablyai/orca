@@ -17,7 +17,8 @@ import {
   beginResumeRun,
   resumeRunInFlight,
   resumeRunPendingIds,
-  type ResumeRun
+  type ResumeRun,
+  type ResumeRunStarter
 } from './native-chat-resume-run'
 import {
   forgetUnsentResumes,
@@ -198,7 +199,7 @@ export async function refreshNativeChatRestartOffer(): Promise<void> {
   await readNativeChatRestartOffer()
 }
 
-/** The status bar entry and a toast's Show: re-read, then open only over rows, since the dialog
+/** The status bar entry and the toast's action: re-read, then open only over rows, since the dialog
  *  draws nothing without them. Opening a chat from it is read-only and keeps the offer. */
 export async function reopenNativeChatRestartOffer(): Promise<void> {
   // Mid-resume the host's answer is already on its way; a re-read racing it could undo it.
@@ -211,7 +212,10 @@ export async function reopenNativeChatRestartOffer(): Promise<void> {
 }
 
 /** One host action owns the selection; its status feed reports each chat before the reply. */
-export async function continueNativeChatRestartOffer(sessionIds: readonly string[]): Promise<void> {
+export async function continueNativeChatRestartOffer(
+  sessionIds: readonly string[],
+  startedBy: ResumeRunStarter = 'user'
+): Promise<void> {
   const requested = [...new Set(sessionIds)]
   if (requested.length === 0) {
     return
@@ -221,7 +225,8 @@ export async function continueNativeChatRestartOffer(sessionIds: readonly string
   const rows = new Map([...offer.candidates, ...offer.failed].map((row) => [row.sessionId, row]))
   let actionRun = beginResumeRun(
     requested.flatMap((sessionId) => rows.get(sessionId) ?? []),
-    Date.now()
+    Date.now(),
+    startedBy
   )
   setRun(actionRun)
   releaseRunStatus?.()
@@ -347,7 +352,7 @@ async function loadLaunchOffer(): Promise<void> {
     requestNativeChatResumeOnRestartDialog()
     return
   }
-  await continueNativeChatRestartOffer(allResumeSessionIds(offered))
+  await continueNativeChatRestartOffer(allResumeSessionIds(offered), 'launch')
 }
 
 /**

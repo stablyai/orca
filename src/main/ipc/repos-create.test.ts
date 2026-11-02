@@ -87,14 +87,6 @@ vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: vi.fn()
-}))
-
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: vi.fn()
-}))
-
 import { registerRepoHandlers } from './repos'
 
 type CreateArgs = { parentPath: string; name: string; kind: 'git' | 'folder' }

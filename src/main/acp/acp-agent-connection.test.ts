@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
@@ -10,6 +10,7 @@ import {
   type AcpAgentConnection,
   type AcpAgentConnectionOptions
 } from './acp-agent-connection'
+import { AcpAuthRequiredError } from './acp-errors'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
 
 const teardown = vi.hoisted(() =>
@@ -30,16 +31,15 @@ function fixture(
   behavior: { pid?: number | null; exitOnEnd?: boolean } = {}
 ) {
   const agent = new AcpScriptedAgent()
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: behavior.pid === null ? undefined : (behavior.pid ?? 9_999_999),
     stdout: agent.stdout,
     stdin: agent.stdin,
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  const spawn = vi.fn<typeof spawnProcess>(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The supervised connection reads events, pid, piped stdio and kill; this fixture supplies each.
-    return child as unknown as ReturnType<typeof spawnProcess>
+  const spawn = vi.fn<PipedProcessSpawner>(() => {
+    return child
   })
   agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1 }))
   agent.on('session/new', (frame) => agent.reply(frame, { sessionId: 'session-1' }))
@@ -132,6 +132,43 @@ describe('ACP process-owning connection', () => {
     connection.onExit(late)
     expect(late).toHaveBeenCalledOnce()
     await expect(connection.close()).resolves.toBe(true)
+  })
+
+  it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
+    const said: string[] = []
+    const onExit = vi.fn((error: Error) => said.push(error.message))
+    const { connection, child } = fixture({
+      onExit,
+      onDiagnostic: (message) => said.push(message),
+      signIn: {
+        read: (line) =>
+          line.startsWith('Open the following link to authenticate') ? 'link' : undefined
+      }
+    })
+    await connection.start(start)
+    const turn = connection.prompt([...prompt]).catch((error: unknown) => error)
+    child.stderr.write(
+      `warming up\nOpen the following link to authenticate the ACP server: https://accounts.example/auth?state=${'x'.repeat(8192)}`
+    )
+    child.stderr.write('s3cret\n')
+    const error = await turn
+    expect(error).toBeInstanceOf(AcpAuthRequiredError)
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+    said.push(String(error), connection.stderrTail())
+    expect(connection.stderrTail()).toBe('warming up')
+    expect(said.join('\n')).not.toMatch(/s3cret|accounts\.example/)
+  })
+
+  it('drops an overlong stderr line it could not classify instead of keeping its prefix', async () => {
+    const { connection, child } = fixture({
+      signIn: { read: (line) => (line.endsWith('authenticate') ? 'link' : undefined) }
+    })
+    await connection.start(start)
+    const link = `https://accounts.example/auth?state=${'x'.repeat(33_000)}`
+    child.stderr.write(`warming up\nplease visit ${link}`)
+    child.stderr.write('s3cret\nready\n')
+    await vi.waitFor(() => expect(connection.stderrTail()).toContain('ready'))
+    expect(connection.stderrTail()).toBe('warming up\nready')
   })
 
   it('keeps cancel writable after stdout EOF and waits for process exit evidence', async () => {
@@ -285,7 +322,7 @@ describe('ACP process-owning connection', () => {
   })
 
   it('rejects invalid peer options before starting any process', () => {
-    const spawn = vi.fn<typeof spawnProcess>()
+    const spawn = vi.fn<PipedProcessSpawner>()
     expect(() =>
       createAcpAgentConnection(
         { command: 'fixture', args: [] },
@@ -295,4 +332,45 @@ describe('ACP process-owning connection', () => {
     ).toThrow('positive finite integers')
     expect(spawn).not.toHaveBeenCalled()
   })
+})
+
+it.each([true, false])(
+  'settles a typed session response synchronously before the following stdout sign-in line (valid=%s)',
+  async (valid) => {
+    const answers: boolean[] = []
+    const { connection, agent } = fixture({
+      signIn: {
+        read: (line) => (line.startsWith('SIGN IN') ? 'fixture-link' : undefined),
+        answered: (answer) => answers.push(answer)
+      }
+    })
+    agent.on('session/new', (frame) =>
+      agent.stdout.write(
+        `${JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: valid ? { sessionId: 'accepted-session' } : {} })}\nSIGN IN fixture-link\n`
+      )
+    )
+    const result = await connection.start(start).catch((error: unknown) => error)
+    expect(answers).toEqual(valid ? [true, false] : [false])
+    if (valid) {
+      expect(result).toMatchObject({ sessionId: 'accepted-session' })
+    } else {
+      expect(result).toBeInstanceOf(Error)
+    }
+    expect(connection.closed).toBe(true)
+  }
+)
+
+it('closes a recognized stdout prompt over 16 MiB without inventing a signed-out answer', async () => {
+  const answered = vi.fn()
+  const { connection, agent } = fixture({
+    signIn: {
+      read: (line) => (line.startsWith('SIGN IN') ? 'prefix-only' : undefined),
+      answered
+    }
+  })
+  await connection.start(start)
+  expect(answered).toHaveBeenCalledExactlyOnceWith(true)
+  agent.stdout.write(`SIGN IN ${'x'.repeat(16 * 1024 * 1024)}\n`)
+  await vi.waitFor(() => expect(connection.closed).toBe(true))
+  expect(answered).toHaveBeenCalledTimes(1)
 })

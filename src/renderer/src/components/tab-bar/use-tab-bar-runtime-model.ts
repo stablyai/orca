@@ -13,7 +13,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -164,7 +164,7 @@ export function useTabBarRuntimeModel({
     worktreeConnectionId
   )
   const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
+    () => runtimeTargetForOwnerEnvironment(activeRuntimeEnvironmentId),
     [activeRuntimeEnvironmentId]
   )
   const shouldProbeWindowsShellCapabilities =

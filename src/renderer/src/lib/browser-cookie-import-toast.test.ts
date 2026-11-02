@@ -158,6 +158,65 @@ describe('emitBrowserCookieImportToast', () => {
     )
   })
 
+  it('distinguishes unreadable cookies from readable cookies withheld to protect sessions', () => {
+    emitBrowserCookieImportToast(
+      {
+        ...summary,
+        importedCookies: 1,
+        skippedCookies: 2,
+        partitionSkippedCookies: 2,
+        partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 1 }
+      },
+      'Imported 1 cookie.',
+      remoteExecution
+    )
+    expect(warningToastMock).toHaveBeenCalledWith(
+      'Cookies with unreadable site partitions: 1. Related cookies left unimported to protect existing sessions: 1. Existing cookies for these sites were left unchanged. Check these sites in this profile before signing in again.',
+      { duration: 12000 }
+    )
+  })
+
+  it('localizes the count breakdown without changing either count', async () => {
+    const { i18n } = await import('@/i18n/i18n')
+    const originalLanguage = i18n.language
+    try {
+      await i18n.changeLanguage('ja')
+      emitBrowserCookieImportToast(
+        {
+          ...summary,
+          partitionSkippedCookies: 2,
+          partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 1 }
+        },
+        'Imported 1 cookie.',
+        localExecution
+      )
+      expect(warningToastMock.mock.calls[0]?.[0]).toContain('読み取れない Cookie: 1')
+      expect(warningToastMock.mock.calls[0]?.[0]).toContain('インポートしなかった関連 Cookie: 1')
+    } finally {
+      await i18n.changeLanguage(originalLanguage)
+    }
+  })
+
+  it.each([
+    { unreadableCookies: 1, preservedRelatedCookies: 2 },
+    { unreadableCookies: -1, preservedRelatedCookies: 3 },
+    { unreadableCookies: 1.5, preservedRelatedCookies: 0.5 },
+    { unreadableCookies: 0, preservedRelatedCookies: 2 },
+    { unreadableCookies: Number.NaN, preservedRelatedCookies: 1 },
+    { unreadableCookies: 1, preservedRelatedCookies: Number.POSITIVE_INFINITY },
+    { unreadableCookies: Number.MAX_SAFE_INTEGER + 1, preservedRelatedCookies: 0 }
+  ])('uses the existing warning for invalid breakdown counts: %j', (partitionSkipBreakdown) => {
+    emitBrowserCookieImportToast(
+      { ...summary, partitionSkippedCookies: 2, partitionSkipBreakdown },
+      'Imported 1 cookie.',
+      remoteExecution
+    )
+    expect(warningToastMock).toHaveBeenCalledWith(
+      '2 cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.',
+      { duration: 12000 }
+    )
+  })
+
   it('does not infer a Google warning from generic skipped cookies', () => {
     emitBrowserCookieImportToast(
       { ...summary, importedCookies: 2, skippedCookies: 1 },

@@ -15,7 +15,6 @@ import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat-turn-grou
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
-  claudeStartupSettled,
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
@@ -98,7 +97,7 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await claudeStartupSettled(adapter, SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   await Promise.all(lifecycle)
 })
 
@@ -149,7 +148,7 @@ async function snapshot() {
 async function drawn(): Promise<{ text: string; turn: string | undefined }[]> {
   const { items, submissions } = await snapshot()
   const rows = projectNativeChatTranscriptMessages(
-    projectStructuredAgentSessionMessages(items, [], submissions, { rejectedInPlace: true })
+    projectStructuredAgentSessionMessages(items, [], submissions)
   )
   const { drawOrder, turnKeys } = nativeChatTurnMembership(rows, { items, submissions })
   const keyed = rows.map((row, index) => ({

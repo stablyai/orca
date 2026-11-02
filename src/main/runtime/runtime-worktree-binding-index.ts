@@ -87,3 +87,8 @@ export function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
   }
   return true
 }
+
+export type PersistedPtyBindingIndexes = {
+  worktreeIdByPtyId: ReadonlyMap<string, string>
+  surfaceByPtyId: ReturnType<typeof indexPersistedPtySurfaceBindings>
+}

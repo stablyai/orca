@@ -39,6 +39,9 @@ export function useResumeTreeExpansion(): {
 /** The tree depth a chat row renders at; the enclosing workspace node provides it. */
 export const ResumeTreeDepthContext = createContext(0)
 
+/** False once no chat is selectable: the tree drops its checkbox column. */
+export const ResumeTreeSelectingContext = createContext(true)
+
 /** Lets a row that an earlier resume could not carry on show what went wrong and what to do. */
 export type FailureProps = {
   failureFor?: (sessionId: string) => ResumeFailure | undefined

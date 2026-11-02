@@ -190,11 +190,11 @@ test.describe('Terminal attention', () => {
       if (!ownerWorktreeId) {
         throw new Error(`No owner worktree found for terminal tab ${tabId}`)
       }
-      state.markWorktreeUnread(ownerWorktreeId)
-      // Why: the attention contract reads the marker value, not key presence
-      // (#20525). Production always marks with 'terminal-bell'; a bare call
-      // stores undefined, which the DOM correctly ignores.
-      state.markTerminalTabUnread(tabId, 'terminal-bell')
+      const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+      if (!leafId) {
+        throw new Error(`No active leaf found for terminal tab ${tabId}`)
+      }
+      state.markTerminalBell({ worktreeId: ownerWorktreeId, tabId, paneKey: `${tabId}:${leafId}` })
     }, secondTabId)
 
     await expect
@@ -313,9 +313,10 @@ test.describe('Terminal attention', () => {
     // Focused BEL owns the tab indicator; seed pane attention separately so the
     // Escape path proves it clears both store surfaces that pty-connection owns.
     await orcaPage.evaluate((paneKey) => {
-      // Why: consumers read the marker value, not key presence (#20525); a bare
-      // call seeds `undefined`, which the pane attention DOM correctly ignores.
-      window.__store?.getState().markTerminalPaneUnread(paneKey, 'terminal-bell')
+      // Why: consumers read the marker value, not key presence (#20525), so seed the real reason.
+      window.__store?.setState((state) => ({
+        unreadTerminalPanes: { ...state.unreadTerminalPanes, [paneKey]: 'terminal-bell' }
+      }))
     }, activePaneKey)
     await expect
       .poll(async () => (await getUnreadTerminalPaneKeys(orcaPage)).includes(activePaneKey), {

@@ -19,7 +19,8 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { runProcessSync, type ProcessResult } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
 import { cgroupPathFromProcLine, userManagerOutlivesCaller } from './daemon-user-manager-lifetime'
 
@@ -163,6 +164,17 @@ export function isDurableDaemonScopeSupported(deps: ScopeProbeDeps = {}): boolea
     // Throws only when the binary could not be started at all.
     return false
   }
+}
+
+/** The environment that reaches this user's systemd manager (see resolveUserRuntimeDir). */
+export function userManagerEnv(
+  env: NodeJS.ProcessEnv,
+  canonicalRuntimeDir: string | null = CANONICAL_USER_RUNTIME_DIR
+): NodeJS.ProcessEnv {
+  const runtimeDir = resolveUserRuntimeDir(env, canonicalRuntimeDir)
+  const next: NodeJS.ProcessEnv = runtimeDir ? { ...env, XDG_RUNTIME_DIR: runtimeDir } : { ...env }
+  removeChromiumDisabledSessionBus(next)
+  return next
 }
 
 export type DurableDaemonScopeCommand = {
@@ -341,6 +353,22 @@ export function buildDurableDaemonScopeCommand(
     // `XDG_RUNTIME_DIR` says (see `resolveUserRuntimeDir` for why that value can be wrong).
     env: scopeEnv
   }
+}
+
+/**
+ * The daemon's scope unit when the launcher created it for this daemon and the daemon is still in
+ * it. Migrated legacy scopes may also hold the GUI, so a matching name alone never qualifies.
+ */
+export function ownFreshDaemonScope(
+  freshScope: boolean,
+  launchNonce: string | undefined,
+  detectScope: () => string | null = detectOwnCgroupScopeUnit
+): string | null {
+  if (!freshScope || !launchNonce) {
+    return null
+  }
+  const unit = daemonScopeUnitName(launchNonce)
+  return detectScope() === unit ? unit : null
 }
 
 /**

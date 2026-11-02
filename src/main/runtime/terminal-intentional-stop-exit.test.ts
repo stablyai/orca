@@ -17,7 +17,7 @@ import {
 import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-state'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { createPtyIpcSession } from '../ipc/pty/session'
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   INCARNATION_ID,
@@ -82,11 +82,9 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
     leafId: LEAF_ID,
     incarnationId: INCARNATION_ID
   })
-  ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(PTY_ID, 'local')
   ptyIncarnationById.set(PTY_ID, INCARNATION_ID)
-  let emitProviderExit:
-    | ((payload: { id: string; code: number; incarnationId?: string }) => void)
-    | undefined
+  let emitProviderExit: Parameters<IPtyProvider['onExit']>[0] | undefined
   const provider = {
     onData: () => () => {},
     onExit: (listener: typeof emitProviderExit) => {
@@ -124,6 +122,14 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
     deps,
     emitProviderExit: (incarnationId: string) =>
       emitProviderExit?.({ id: PTY_ID, code: 0, incarnationId }),
+    /** The exit main synthesizes for each session when it restarts the daemon. */
+    emitDaemonRestartExit: (replacedByRestart?: true) =>
+      emitProviderExit?.({
+        id: PTY_ID,
+        code: -1,
+        incarnationId: INCARNATION_ID,
+        ...(replacedByRestart ? { replacedByRestart } : {})
+      }),
     boundPtyId: () =>
       store.getWorkspaceSession().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[LEAF_ID] ?? null,
     tabIds: () => (store.getWorkspaceSession().tabsByWorktree[WORKTREE_ID] ?? []).map((t) => t.id),
@@ -207,6 +213,29 @@ describe('intentional stops keep the pane through the exit', () => {
         preserveRendererBinding: true,
         replacedByRestart: true
       }
+    ])
+  })
+
+  it('keeps the pane when main restarts the daemon under it', () => {
+    const harness = createHarness()
+
+    harness.emitDaemonRestartExit(true)
+
+    expect(harness.tabIds()).toEqual([TAB_ID])
+    expect(harness.boundPtyId()).toBe(PTY_ID)
+    expect(harness.rendererExits()).toEqual([
+      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID, replacedByRestart: true }
+    ])
+  })
+
+  it('retires the pane on a daemon-wide exit that no restart claims', () => {
+    const harness = createHarness()
+
+    harness.emitDaemonRestartExit()
+
+    expect(harness.boundPtyId()).toBeNull()
+    expect(harness.rendererExits()).toEqual([
+      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID }
     ])
   })
 

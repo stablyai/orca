@@ -3,6 +3,8 @@ export type ClaudeUsageProcessedFile = {
   mtimeMs: number
   size: number
   lineCount: number
+  physicalFileId?: string | null
+  ctimeMs?: number
 }
 
 export type ClaudeUsageLocationBreakdown = {
@@ -54,6 +56,7 @@ export type ClaudeUsageDailyAggregate = {
 
 export type ClaudeUsagePersistedState = {
   schemaVersion: number
+  usageIntegrity?: string
   worktreeFingerprint: string | null
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
@@ -77,6 +80,7 @@ export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
    *  owner disappears, only deferred files need reparse to reclaim — not the
    *  entire transcript corpus. */
   hasDeferredClaims: boolean
+  parseResumeState?: ClaudeUsageParseResumeState | null
 }
 
 export type ClaudeUsageParsedTurn = {
@@ -99,4 +103,34 @@ export type ClaudeUsageAttributedTurn = ClaudeUsageParsedTurn & {
   projectLabel: string
   repoId: string | null
   worktreeId: string | null
+}
+import type { JsonlFileCheckpoint } from '../usage/jsonl-file-checkpoint'
+
+export type ClaudeUsageTokenTotals = Pick<
+  ClaudeUsageParsedTurn,
+  'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens' | 'cacheWrite1hTokens'
+>
+
+export type ClaudeUsageTurnProjection = {
+  sessionId: string
+  day: string
+  model: string | null
+  projectKey: string
+}
+
+export type ClaudeUsageTokenMaxima = [
+  inputTokens: number,
+  outputTokens: number,
+  cacheReadTokens: number,
+  cacheWriteTokens: number,
+  cacheWrite1hTokens: number,
+  projectionIndex: number | null
+]
+
+export type ClaudeUsageParseResumeState = JsonlFileCheckpoint & {
+  lineCount: number
+  ownedTokenMaxima: ClaudeUsageTokenMaxima[]
+  projections: ClaudeUsageTurnProjection[]
+  encounterOrder: { sessionId: string; projectKeys: string[] }[]
+  projectionIntegrity?: string
 }

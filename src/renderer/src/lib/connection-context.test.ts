@@ -621,7 +621,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('keeps a runtime host nested SSH target, which decides local readability', () => {
-    // `repoWithFetchedOwner` stamps the runtime host and spreads the nested target through. The
+    // `adoptFromEndpoint` stamps the runtime host and spreads the nested target through. The
     // pane pairs it with the environment (`selectRuntimeAwareSshStatus`) for reconnect state, and
     // `isNativeChatTranscriptLocalReadable` treats a null here as "this client can read it" — so
     // dropping it would send a transcript read to the wrong machine.

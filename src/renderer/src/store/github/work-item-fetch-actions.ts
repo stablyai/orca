@@ -6,7 +6,7 @@ import type { WorkItemsCacheError } from './cache-model'
 import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../shared/work-items'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { isGitHubWorkItemsQueryTooLarge } from '../slices/github-work-items-query-bounds'
-import { reconcileCatalogRows } from '../slices/repo-identity-reconcile'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from './cache-policy'
@@ -22,9 +22,9 @@ import {
   getGitHubWorkItemRequestContext,
   getGitHubWorkItemSourceCacheScope,
   getGitHubWorkItemSourceHostId,
-  getGitHubWorkItemSourceSettings,
   getWorkItemsCacheKeyForOwner,
-  listGitHubWorkItemsForRepo
+  listGitHubWorkItemsForRepo,
+  getGitHubSourceTarget
 } from './work-item-routing'
 
 export const createWorkItemFetchActions = (
@@ -89,11 +89,6 @@ export const createWorkItemFetchActions = (
     }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
-    const requestSettings = getGitHubWorkItemSourceSettings(
-      requestState.settings,
-      repo,
-      options?.sourceContext
-    )
     const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, options?.sourceContext)
     const cacheScope = getGitHubWorkItemSourceCacheScope(requestState, repo, options?.sourceContext)
     const key = workItemsCacheKey(repoId, limit, query, cacheScope)
@@ -105,7 +100,7 @@ export const createWorkItemFetchActions = (
     const requestInvalidationNonce = requestState.workItemsInvalidationNonce
     const requestContext = getGitHubWorkItemRequestContext(
       requestState,
-      requestSettings,
+      getGitHubSourceTarget(requestState, repo, options?.sourceContext),
       repoId,
       repoPath,
       options?.sourceContext

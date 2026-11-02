@@ -3,10 +3,12 @@ import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from '../types/open-file-path-rekey'
 import { rekeyFileIdRecord } from '../file-ids/open-file-path-rekey'
 import { migrateHydratedEditorTabsAndGroups } from '../file-ids/hydrated-editor-file-ids'
+import { recordRenamedEditorFilesInLayoutOwner } from '../tabs/editor-tab-layout-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 export function createRekeyOpenFilesAction(
   set: EditorSet,
-  _get: EditorGet
+  get: EditorGet
 ): Pick<EditorSlice, 'rekeyOpenFilesForPathChange'> {
   return {
     rekeyOpenFilesForPathChange: ({ rekeys, moveOperationId }) => {
@@ -14,6 +16,7 @@ export function createRekeyOpenFilesAction(
         return { ok: true }
       }
       let result: RekeyOpenFilesResult = { ok: true }
+      const filesBefore = ORCA_LAYOUT_OWNER_IS_MAIN ? get().openFiles : null
       set((s) => {
         const migrations = new Map<string, string>()
         const rekeyByOldId = new Map<string, OpenFilePathRekey>()
@@ -146,6 +149,9 @@ export function createRekeyOpenFilesAction(
             : {})
         }
       })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && filesBefore && result.ok) {
+        recordRenamedEditorFilesInLayoutOwner(get(), filesBefore, rekeys)
+      }
       return result
     }
   }

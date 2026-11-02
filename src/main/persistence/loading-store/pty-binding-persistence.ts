@@ -22,8 +22,22 @@ import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
 } from '../../../shared/terminal-leaf-move'
-import { moveLeaf } from '../terminal-topology/terminal-topology-commit'
-import { findTerminalBindingConflict } from '../terminal-topology/terminal-owner-invariants'
+import {
+  admitPane,
+  moveLeaf,
+  topologyCommitContext,
+  withdrawPane,
+  type TerminalTopologyCommitContext
+} from '../terminal-topology/terminal-topology-commit'
+import type {
+  TerminalPaneAdmission,
+  TerminalPaneAdmissionOutcome
+} from '../terminal-topology/terminal-pane-admission'
+import type {
+  CommandOf,
+  LayoutRefusalCode
+} from '../../../shared/workspace-layout/workspace-layout-command-types'
+import { findTerminalBindingConflict } from '../../../shared/workspace-layout/terminal-owner-invariants'
 
 type PtyBindingPersistenceOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -46,8 +60,6 @@ export type PersistPtyBindingArgs = {
   startupCwd?: string
   expectedBinding?: { ptyId: string; incarnationId?: string }
   expectedSourceBinding?: PtyBindingSourceExpectation
-  /** Set by host-initiated creates, which have no renderer session writer behind them. */
-  hostAdmittedMembership?: boolean
   /**
    * Defaults true, which is what `pty:spawn` needs — it can beat the debounced layout writer
    * and must be able to mint the surface it is binding. A reattach is the opposite: the pane
@@ -217,15 +229,32 @@ export class PtyBindingPersistenceOperations {
    * the binding domain only for its runtime and partition access; the commit module owns the write.
    */
   moveTerminalLeafToNewTab(request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> {
-    const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
-    return runtime.runDurableMutation(
-      moveLeaf(request, {
-        state: runtime.state,
-        hostIds: () => sessions.getWorkspaceSessionHostIds(),
-        getSession: (hostId) => sessions.getWorkspaceSession(hostId),
-        markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain)
-      })
+    return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
+      moveLeaf(request, this.topology())
     )
+  }
+
+  /** Writes a runtime-started pane before its terminal starts; the commit module owns the write. */
+  admitTerminalPane(
+    admission: TerminalPaneAdmission,
+    hostId?: string | null
+  ): Promise<TerminalPaneAdmissionOutcome> {
+    return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
+      admitPane(resolveHostId(hostId), admission, this.topology())
+    )
+  }
+
+  withdrawTerminalPane(
+    pane: CommandOf<'closePane'>,
+    hostId?: string | null
+  ): Promise<LayoutRefusalCode | null> {
+    return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
+      withdrawPane(resolveHostId(hostId), pane, this.topology())
+    )
+  }
+
+  private topology(): TerminalTopologyCommitContext {
+    return topologyCommitContext(this[ptyBindingPersistenceOperationsContext])
   }
 }
 
@@ -295,13 +324,4 @@ function writePtyBinding(
     restore()
     throw error
   }
-}
-
-export function installPtyBindingPersistenceOperationsContext(
-  target: PtyBindingPersistenceOperations,
-  source: PtyBindingPersistenceOperations
-): void {
-  Object.defineProperty(target, ptyBindingPersistenceOperationsContext, {
-    value: source[ptyBindingPersistenceOperationsContext]
-  })
 }

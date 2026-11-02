@@ -18,15 +18,12 @@ export function applyPtyBinding(
   const reconciledIncarnation =
     args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
   let terminalMembershipChanged = false
-  let hostAdmittedTabCreated = false
   const advanceTopologyFence = (): void => {
     const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
     const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-    // Why: a split, or a host-admitted tab the renderer has never seen, is itself
-    // the authority — with no fence the renderer's pre-create tab list replays
-    // over it and the tab is lost even on the repo's first such change.
-    const establishesMembershipAuthority =
-      args.expectedSourceBinding !== undefined || hostAdmittedTabCreated
+    // Why: a split is itself the authority — with no fence the renderer's pre-split
+    // pane list replays over it and the pane is lost even on the repo's first split.
+    const establishesMembershipAuthority = args.expectedSourceBinding !== undefined
     if (
       !reconciledIncarnation &&
       (!terminalMembershipChanged || (currentRevision <= 0 && !establishesMembershipAuthority))
@@ -62,7 +59,6 @@ export function applyPtyBinding(
     )
   } else {
     terminalMembershipChanged = true
-    hostAdmittedTabCreated = args.hostAdmittedMembership === true
     // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
     const nextTabs = [
       ...(tabs ?? []),
@@ -107,7 +103,7 @@ export function applyPtyBinding(
   if (layout) {
     if (!layout.root) {
       terminalMembershipChanged = true
-      // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
+      // Why: load names every saved root, but the layout type still allows none; the binding needs a durable one.
       layout.root = { type: 'leaf', leafId: args.leafId }
       layout.activeLeafId = args.leafId
       layout.expandedLeafId = null

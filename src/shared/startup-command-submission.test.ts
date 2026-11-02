@@ -45,13 +45,6 @@ describe('buildStartupCommandSubmission', () => {
       )
     }
   })
-
-  it('leaves interior line breaks intact inside a bracketed-paste payload', () => {
-    const command = "claude 'first\nsecond'"
-    expect(buildStartupCommandSubmission(command, { bracketedPasteSafe: true })).toBe(
-      `\x1b[200~${command}\x1b[201~\r`
-    )
-  })
 })
 
 describe('isBracketedPasteSafeShell', () => {

@@ -18,8 +18,9 @@ export function useSourceControlCreateReviewComposer({
   activePullRequestGenerationRecord,
   activePullRequestGenerationSeedRestoreKey,
   activeRepo,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
+  activeWorktree,
   branchName,
   effectiveBaseRef,
   fetchHostedReviewForBranch,
@@ -41,8 +42,9 @@ export function useSourceControlCreateReviewComposer({
   activePullRequestGenerationRecord: SourceControlPullRequestGeneration['activePullRequestGenerationRecord']
   activePullRequestGenerationSeedRestoreKey: SourceControlPullRequestGeneration['activePullRequestGenerationSeedRestoreKey']
   activeRepo: SourceControlWorktreeContext['activeRepo']
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
+  activeWorktree?: SourceControlWorktreeContext['activeWorktree']
   branchName: string
   effectiveBaseRef: string | null
   fetchHostedReviewForBranch: SourceControlStoreActions['fetchHostedReviewForBranch']
@@ -70,6 +72,7 @@ export function useSourceControlCreateReviewComposer({
     setBody: setPrBody,
     draft: prDraft,
     setDraft: setPrDraft,
+    fieldRevisions: prFieldRevisions,
     fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     stackedCreationSupported: prStackedCreationSupported,
     repoDefaultBaseRef: prRepoDefaultBaseRef,
@@ -93,10 +96,12 @@ export function useSourceControlCreateReviewComposer({
     worktreeId: activeWorktreeId,
     worktreePath: worktreePath ?? '',
     branch: branchName,
+    workspace: activeWorktree,
     eligibility: hostedReviewCreation,
     currentBaseRef: effectiveBaseRef,
     repo: activeRepo ?? null,
-    settings: activeRepoSettings,
+    settings,
+    target: activeRepoTarget,
     submitting: isCreatingPr,
     prCreationDefaults: resolvedPrCreationDefaults,
     sourceControlAiActionsVisible,
@@ -105,8 +110,14 @@ export function useSourceControlCreateReviewComposer({
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
       seedRestoreKey: activePullRequestGenerationSeedRestoreKey,
-      seed: activePullRequestGenerationRecord?.seed ?? null,
-      seedFieldRevisions: activePullRequestGenerationRecord?.seedFieldRevisions ?? null,
+      seed:
+        activePullRequestGenerationRecord?.editedFields?.fields ??
+        activePullRequestGenerationRecord?.seed ??
+        null,
+      seedFieldRevisions:
+        activePullRequestGenerationRecord?.editedFields?.revisions ??
+        activePullRequestGenerationRecord?.seedFieldRevisions ??
+        null,
       onSeedRestored: handlePullRequestGenerationSeedRestored,
       onGenerate: handleGeneratePullRequestFieldsForActive,
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
@@ -201,6 +212,7 @@ export function useSourceControlCreateReviewComposer({
     prBaseSearchPending,
     prBody,
     prDraft,
+    prFieldRevisions,
     prFieldsAreSeedPlaceholders,
     prGenerateDisabled,
     prGenerateDisabledReason,

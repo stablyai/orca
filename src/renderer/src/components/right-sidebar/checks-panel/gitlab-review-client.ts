@@ -3,7 +3,7 @@ import type {
   GitLabDiscussionResolveResult,
   GitLabWorkItemDetails
 } from '../../../../../shared/gitlab-types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import type { ChecksPanelReview } from '../checks-panel-review'
 
 export function isGitLabChecksPanelReview(
@@ -25,55 +25,27 @@ export function gitLabMRCommentsToPRComments(
 export async function fetchGitLabMRDetailsForChecks(args: {
   repoPath: string
   repoId?: string
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
   iid: number
   repoOwnerExecutionHostId?: string
 }): Promise<GitLabWorkItemDetails | null> {
-  const target = getActiveRuntimeTarget(args.settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<GitLabWorkItemDetails | null>(
-      target,
-      'gitlab.workItemDetails',
-      {
-        repo: args.repoId ?? args.repoPath,
-        iid: args.iid,
-        type: 'mr'
-      },
-      { timeoutMs: 30_000 }
-    )
-  }
-  return (await window.api.gl.workItemDetails({
+  return gitLabApiFor(args).workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
     repoOwnerExecutionHostId: args.repoOwnerExecutionHostId,
     iid: args.iid,
     type: 'mr'
-  })) as GitLabWorkItemDetails | null
+  })
 }
 
 export async function resolveGitLabMRDiscussionForChecks(args: {
   repoPath: string
   repoId?: string
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
   iid: number
   discussionId: string
   resolved: boolean
+  repoOwnerExecutionHostId?: string
 }): Promise<GitLabDiscussionResolveResult> {
-  const target = getActiveRuntimeTarget(args.settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<GitLabDiscussionResolveResult>(
-      target,
-      'gitlab.resolveMRDiscussion',
-      {
-        repo: args.repoId ?? args.repoPath,
-        iid: args.iid,
-        discussionId: args.discussionId,
-        resolved: args.resolved
-      },
-      { timeoutMs: 30_000 }
-    )
-  }
-  return window.api.gl.resolveMRDiscussion({
+  return gitLabApiFor(args).resolveMRDiscussion({
     repoPath: args.repoPath,
     repoId: args.repoId,
     iid: args.iid,

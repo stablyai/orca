@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
 
@@ -32,6 +33,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount())
+    resetMobileNativeChatDraftStoreForTests()
     renderer = null
     state = null
   })
@@ -101,18 +103,6 @@ describe('useMobileNativeChatDrafts', () => {
     await switchTo('a')
     expect(state?.composerText).toBe('')
     expect(state?.pending.map((pending) => pending.text)).toEqual(['from a'])
-  })
-
-  it('clears the composer at send time, before the RPC settles', async () => {
-    await mount('a')
-    act(() => state?.setComposerText('ping'))
-    const origin = state?.captureSendOrigin('ping')
-    act(() => {
-      if (origin) {
-        state?.clearDraftForSend(origin, 'ping')
-      }
-    })
-    expect(state?.composerText).toBe('')
   })
 
   it('tracks every composer mutation with a stable route-owned generation', async () => {

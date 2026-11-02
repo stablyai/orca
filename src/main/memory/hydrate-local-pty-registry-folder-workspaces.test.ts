@@ -4,7 +4,7 @@ import type { SessionInfo } from '../daemon/types'
 import type { Store } from '../persistence'
 
 const getDaemonProviderMock = vi.fn()
-vi.mock('../daemon/daemon-init', () => ({
+vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
 vi.mock('../project-runtime-git-options', () => ({

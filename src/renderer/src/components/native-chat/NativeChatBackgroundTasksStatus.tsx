@@ -86,7 +86,7 @@ function BackgroundTaskRow(props: {
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
   return (
     <>
-      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground/80">
+      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground">
         <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
         {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
         <AgentChildRowContent
@@ -98,7 +98,7 @@ function BackgroundTaskRow(props: {
           dotTitle={null}
         />
         {meta ? (
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
             {meta}
           </span>
         ) : null}
@@ -145,9 +145,11 @@ export function NativeChatBackgroundTasksStatus(props: {
    *  it every live claim stands as reported. */
   childRowContext?: AgentChildRowContext
   supportsTaskStop: boolean
-  /** False when the provider exposes no honest stop at all; the fallback
-   *  control is hidden rather than offering a button that cannot act. */
-  supportsStopAll: boolean
+  /** The shared view's rule for the untargeted Stop; hidden when the provider exposes no honest
+   *  stop at all, rather than offering a button that cannot act. */
+  offersStopAll: boolean
+  /** Some running work is not listed, so the rows are not the whole roster. */
+  incomplete?: boolean
   stoppingTaskIds: ReadonlySet<string>
   stoppingAll: boolean
   /** True while the session is idle: only then may the strip speak as the
@@ -192,7 +194,7 @@ export function NativeChatBackgroundTasksStatus(props: {
           <div className="flex h-8 items-center px-1.5">
             <button
               type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               aria-expanded={expanded}
               aria-controls={taskListId}
               aria-label={headerText}
@@ -231,7 +233,7 @@ export function NativeChatBackgroundTasksStatus(props: {
               </span>
               <ChevronDown
                 aria-hidden="true"
-                className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                className={`size-3 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`}
               />
             </button>
           </div>
@@ -246,7 +248,7 @@ export function NativeChatBackgroundTasksStatus(props: {
                     key={group.kind}
                     className={index > 0 ? 'mt-1.5 border-t border-border/60 pt-1.5' : ''}
                   >
-                    <p className="px-0.5 pb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <p className="px-0.5 pb-1 font-mono text-3xs uppercase tracking-wider text-muted-foreground">
                       {backgroundTaskGroupLabel(group.kind)}
                     </p>
                     <ul
@@ -270,7 +272,10 @@ export function NativeChatBackgroundTasksStatus(props: {
               ) : (
                 <p>{say('detailsUnavailable')}</p>
               )}
-              {!props.supportsTaskStop && props.supportsStopAll ? (
+              {props.incomplete && groups.length > 0 ? (
+                <p className="mt-1.5">{say('detailsUnavailable')}</p>
+              ) : null}
+              {props.offersStopAll ? (
                 <div className={groups.length > 0 ? 'mt-2 border-t border-border pt-2' : 'mt-2'}>
                   <Button
                     type="button"

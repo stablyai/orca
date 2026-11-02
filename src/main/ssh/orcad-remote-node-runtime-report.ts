@@ -1,5 +1,5 @@
 /** What the host-side runtime-store scripts print, shared by the POSIX and Windows installers. */
-import { RelayHostAnsweredError } from './ssh-relay-host-answered-failure'
+import { RelayHostAnsweredError } from './remote-exec/remote-host-answered-failure'
 
 export const REMOTE_NODE_RUNTIME_READY = 'ORCA_NODE_RUNTIME_READY'
 export const REMOTE_NODE_RUNTIME_MISSING = 'ORCA_NODE_RUNTIME_MISSING'

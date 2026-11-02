@@ -6,6 +6,7 @@ import {
   relayHostCloseReasonFrom,
   type RelayHostCloseReason
 } from '../../../src/shared/relay-host-close-reason'
+import { latchHostToE2EEV2 } from './e2ee-v2-host-latch'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
@@ -16,7 +17,11 @@ import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 const RELAY_ERROR_CLOSE_GRACE_MS = 250
 
 export class RelayOuterError extends Error {
-  constructor(readonly code: number) {
+  // rejectedByRelayHello: the relay refused in a relay-hello frame, not just a close code.
+  constructor(
+    readonly code: number,
+    readonly rejectedByRelayHello = false
+  ) {
     super(`relay_outer_${code}`)
   }
 }
@@ -67,7 +72,10 @@ export class MobileRelayE2eeLink {
       socket: this.socket,
       deviceToken: options.deviceToken,
       decodeBinary: websocketPayloadToUint8,
-      onAuthenticated: options.onAuthenticated,
+      onAuthenticated: () => {
+        latchHostToE2EEV2(options.desktopPublicKeyB64)
+        options.onAuthenticated()
+      },
       onText: options.onText,
       onBinary: options.onBinary,
       onError: (error) => this.fail(error)
@@ -167,7 +175,7 @@ export class MobileRelayE2eeLink {
       throw new Error('invalid relay hello')
     }
     if (!parsed.data.ok) {
-      throw new RelayOuterError(parsed.data.code)
+      throw new RelayOuterError(parsed.data.code, true)
     }
     if (parsed.data.credentialKind !== this.options.expectedCredentialKind) {
       throw new Error('relay credential resolved as an unexpected credential kind')

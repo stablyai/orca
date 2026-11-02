@@ -14,7 +14,7 @@ import {
   renderProbe
 } from './quick-open-file-list-test-harness'
 
-vi.mock('@/runtime/runtime-file-client', async () => {
+vi.mock('@/runtime/runtime-file-search-client', async () => {
   const mocks = await import('./__mocks__/quick-open-runtime-file-client')
   return {
     listRuntimeFiles: mocks.listRuntimeFilesMock,
@@ -57,7 +57,10 @@ describe.each(['paired-detected', 'legacy-ssh'] as const)('%s file catalog', (ow
       expect.objectContaining({
         worktreeId: WORKTREE_ID,
         worktreePath: '/srv/worktree',
-        settings: { activeRuntimeEnvironmentId: owner === 'paired-detected' ? 'hub' : null },
+        target:
+          owner === 'paired-detected'
+            ? { kind: 'environment', environmentId: 'hub' }
+            : { kind: 'local' },
         connectionId: owner === 'legacy-ssh' ? 'box' : undefined
       }),
       expect.objectContaining({ rootPath: '/srv/worktree' })

@@ -42,6 +42,8 @@ import {
   useNativeChatRestartRun
 } from './native-chat-resume-on-restart-store'
 import { useResumeRunPanel } from './NativeChatResumeRunPanel'
+import { NativeChatResumeAutoNote } from './NativeChatResumeAutoNote'
+import { moveInTree } from './native-chat-resume-tree-keys'
 
 /**
  * What would be resumed, shown before anything runs.
@@ -56,7 +58,9 @@ import { useResumeRunPanel } from './NativeChatResumeRunPanel'
  * Resume closes the dialog at once and the status-bar entry carries the run, then any chat it could
  * not carry on. The run lives in the store, as a skill update's does, so the dialog is one view of it:
  * reopened mid-run, each chat in it shows where it stands in its checkbox's place, and the dialog
- * stays on that run until it is closed after the run has finished.
+ * stays on that run until it is closed after the run has finished. Once no chat is left to choose,
+ * it is a result: no Select all and no checkbox column. The "don't ask again" box stays while
+ * the setting is off.
  *
  * A chat an earlier resume could not carry on is listed too, as the same row plus what went wrong
  * and what to do; selecting it and resuming is a retry, unless the host says a retry cannot run.
@@ -76,56 +80,6 @@ function selectedByDefault(failure: ResumeFailure | undefined): boolean {
   return guidance.primary === 'retry' || guidance.secondary === 'retry'
 }
 
-/**
- * Tree keys. On a row's checkbox: Up/Down step between the enabled checkboxes, Home/End jump to the
- * first/last, Left collapses and Right expands the node through its own disclosure; Space toggles
- * natively. On the tree itself (its Tab stop): Down/Home enter at the first checkbox, Up/End at
- * the last.
- */
-function moveInTree(event: React.KeyboardEvent<HTMLElement>): void {
-  const target = event.target
-  if (!(target instanceof HTMLElement)) {
-    return
-  }
-  const boxes = [
-    ...event.currentTarget.querySelectorAll<HTMLElement>('[role="checkbox"]:not(:disabled)')
-  ]
-  const onTree = target === event.currentTarget
-  if (!onTree && target.getAttribute('role') !== 'checkbox') {
-    return
-  }
-  const jump =
-    event.key === 'Home' || (onTree && event.key === 'ArrowDown')
-      ? boxes[0]
-      : event.key === 'End' || (onTree && event.key === 'ArrowUp')
-        ? boxes.at(-1)
-        : undefined
-  if (jump) {
-    event.preventDefault()
-    jump.focus()
-    return
-  }
-  if (onTree) {
-    return
-  }
-  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    event.preventDefault()
-    boxes[boxes.indexOf(target) + (event.key === 'ArrowDown' ? 1 : -1)]?.focus()
-    return
-  }
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    event.preventDefault()
-    // Rows are flat treeitems, so the nearest one is this checkbox's own node.
-    const disclosure = target
-      .closest('[role="treeitem"]')
-      ?.querySelector<HTMLButtonElement>('button[aria-expanded]')
-    const open = disclosure?.getAttribute('aria-expanded') === 'true'
-    if (disclosure && open === (event.key === 'ArrowLeft')) {
-      disclosure.click()
-    }
-  }
-}
-
 export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   const offerEnabled = useNativeChatRestartOfferEnabled()
   const { candidates, failed, listedAt } = useNativeChatRestartOffer(offerEnabled)
@@ -143,6 +97,9 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   )
   const updateSettings = useAppStore((store) => store.updateSettings)
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const autoResumeOn = useAppStore(
+    (store) => store.settings?.nativeChatResumeWorkOnRestart === true
+  )
   const resumeButtonRef = useRef<HTMLButtonElement>(null)
   // The store's: the resume outlives this dialog, which can close or reopen mid-run.
   const resuming = useNativeChatRestartResuming()
@@ -194,25 +151,30 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     run,
     rows,
     failureFor,
+    selectableIds,
     open
   })
   useEffect(() => {
-    if (offerEnabled && open && run) {
+    if (offerEnabled && open && run && runPanel?.finishedRowsVisible) {
       markFinishedNativeChatRestartRunShown(run)
     }
-  }, [offerEnabled, open, run])
+  }, [offerEnabled, open, run, runPanel?.finishedRowsVisible])
   const allSelection = resumeSelectionState(selectable, ticked)
+  const choosing = runPanel?.choosing ?? true
+  // While the setting is off the box stays, before and after Resume; an automatic run explains itself.
+  const showDontAskAgain = !autoResumeOn && runPanel?.startedBy !== 'launch'
 
   const toggleSelected = useCallback((sessionId: string, checked: boolean) => {
     setOverrides((current) => new Map(current).set(sessionId, checked))
   }, [])
 
-  /** Applied on whichever action the user takes, so the box means the same thing every way out. */
+  /** Consume the box's choice once; a hidden box must never replay. */
   const persistPreference = useCallback(async (): Promise<void> => {
-    if (dontAskAgain) {
+    if (dontAskAgain && showDontAskAgain) {
+      setDontAskAgain(false)
       await updateSettings({ nativeChatResumeWorkOnRestart: true }).catch(() => undefined)
     }
-  }, [dontAskAgain, updateSettings])
+  }, [dontAskAgain, showDontAskAgain, updateSettings])
 
   // Never closes the dialog: only the user's own ways out do, and the store once nothing is left.
   const resume = useCallback(
@@ -327,43 +289,53 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
         <div
           role="tree"
           tabIndex={0}
-          aria-label={translate(
-            'auto.components.NativeChatResumeOnRestartModal.listLabel',
-            'Chats that would be resumed'
-          )}
+          aria-label={
+            choosing
+              ? translate(
+                  'auto.components.NativeChatResumeOnRestartModal.listLabel',
+                  'Chats that would be resumed'
+                )
+              : translate(
+                  'auto.components.NativeChatResumeOnRestartModal.resultListLabel',
+                  'Chats in this resume'
+                )
+          }
           // The sidebar's own surface, so its workspaces read here as they do there.
           className="min-h-0 overflow-y-auto scrollbar-sleek rounded-md bg-worktree-sidebar p-1.5 pb-2"
           onKeyDown={moveInTree}
         >
           {/* Here, not in the groups: a list may hold one set of groups per machine. The tree's one
               divider sets it apart from the nodes. */}
-          <div className="mb-1 border-b border-worktree-sidebar-border pb-0.5">
-            <ResumeTreeRow
-              depth={0}
-              name={selectAllLabel}
-              checked={allSelection.checked}
-              disabled={busy || allSelection.total === 0}
-              onCheckedChange={() =>
-                toggleResumeSelection(selectable, allSelection, toggleSelected)
-              }
-              checkboxLabel={translate(
-                'auto.components.NativeChatResumeOnRestartModal.selectAll',
-                'Select all chats'
-              )}
-            >
-              <span className="min-w-0 truncate text-xs font-semibold text-muted-foreground">
-                {selectAllLabel}
-              </span>
-              <span className="ml-auto shrink-0 pl-2 text-[11px] tabular-nums text-muted-foreground">
-                {translate(
-                  'auto.components.NativeChatResumeOnRestartModal.selectedCount',
-                  '{{value0}} of {{value1}} selected',
-                  { value0: allSelection.selectedCount, value1: allSelection.total }
+          {choosing && (
+            <div className="mb-1 border-b border-worktree-sidebar-border pb-0.5">
+              <ResumeTreeRow
+                depth={0}
+                name={selectAllLabel}
+                checked={allSelection.checked}
+                disabled={busy || allSelection.total === 0}
+                onCheckedChange={() =>
+                  toggleResumeSelection(selectable, allSelection, toggleSelected)
+                }
+                checkboxLabel={translate(
+                  'auto.components.NativeChatResumeOnRestartModal.selectAll',
+                  'Select all chats'
                 )}
-              </span>
-            </ResumeTreeRow>
-          </div>
+              >
+                <span className="min-w-0 truncate text-xs font-semibold text-muted-foreground">
+                  {selectAllLabel}
+                </span>
+                <span className="ml-auto shrink-0 pl-2 text-[11px] tabular-nums text-muted-foreground">
+                  {translate(
+                    'auto.components.NativeChatResumeOnRestartModal.selectedCount',
+                    '{{value0}} of {{value1}} selected',
+                    { value0: allSelection.selectedCount, value1: allSelection.total }
+                  )}
+                </span>
+              </ResumeTreeRow>
+            </div>
+          )}
           <ResumeOnRestartGroups
+            key={run?.inFlight ? 'running' : 'finished'}
             candidates={runPanel?.rows ?? rows}
             listedAt={listedAt}
             busy={busy}
@@ -373,36 +345,42 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
             onFailureAction={(action, sessionId) => void actOnFailure(action, sessionId)}
             renderStatus={runPanel?.renderStatus}
             selectableIds={selectableIds}
+            selecting={choosing}
           />
         </div>
 
         {/* Two controls: one deletes the offer, one acts on it. Closing snoozes, so it needs none. */}
         <DialogFooter className="sm:items-center">
-          {/* Why order-last: the narrow footer stacks bottom-up, so this keeps the option above the actions. */}
-          <label className="order-last flex min-w-0 items-start gap-2.5 sm:order-none sm:mr-auto">
-            <Checkbox
-              checked={dontAskAgain}
-              disabled={busy}
-              onCheckedChange={(next) => setDontAskAgain(next === true)}
-              className="mt-0.5"
-            />
-            <span className="min-w-0 space-y-0.5">
-              <span className="block text-sm">
-                {translate(
-                  'auto.components.NativeChatResumeOnRestartModal.dontAskAgain',
-                  "Don't ask again (resume automatically)"
-                )}
-              </span>
-              {/* Where to undo it; what it does is the body copy's job. */}
-              <span className="block text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
-                  'You can turn this off in Settings → Experimental → Chat UI.'
-                )}
-              </span>
-            </span>
-          </label>
-          {rows.length === 0 ? (
+          {runPanel?.startedBy === 'launch' ? (
+            <NativeChatResumeAutoNote inFlight={busy} onOpenSettings={snooze} />
+          ) : (
+            showDontAskAgain && (
+              // Why order-last: the narrow footer stacks bottom-up, so this keeps the option above the actions.
+              <label className="order-last flex min-w-0 items-start gap-2.5 sm:order-none sm:mr-auto">
+                <Checkbox
+                  checked={dontAskAgain}
+                  onCheckedChange={(next) => setDontAskAgain(next === true)}
+                  className="mt-0.5"
+                />
+                <span className="min-w-0 space-y-0.5">
+                  <span className="block text-sm">
+                    {translate(
+                      'auto.components.NativeChatResumeOnRestartModal.dontAskAgain',
+                      "Don't ask again (resume automatically)"
+                    )}
+                  </span>
+                  {/* Where to undo it; what it does is the body copy's job. */}
+                  <span className="block text-xs text-muted-foreground">
+                    {translate(
+                      'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
+                      'You can turn this off in Settings → Experimental → Chat UI.'
+                    )}
+                  </span>
+                </span>
+              </label>
+            )
+          )}
+          {rows.length === 0 || (run?.inFlight === false && !choosing) ? (
             <Button ref={resumeButtonRef} variant="default" size="sm" onClick={snooze}>
               {translate('auto.components.NativeChatResumeOnRestartModal.done', 'Done')}
             </Button>

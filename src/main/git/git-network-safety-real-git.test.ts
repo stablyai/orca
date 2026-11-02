@@ -2,9 +2,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { quotePosixShell } from '../../shared/wsl-login-shell-command'
-import { createGitHandlerRelay } from '../../relay/git-handler-test-harness'
 import { gitExecFileAsync, gitSpawnAfterWindowsEnvironmentReady } from './runner'
 
 let root = ''
@@ -73,26 +72,6 @@ async function expectIdentity(identity: string): Promise<void> {
 }
 
 describe('network SSH configuration with real Git', () => {
-  it.each(['native', 'relay'] as const)(
-    '%s honors repository SSH wrappers on ordinary fetches',
-    async (host) => {
-      await git(['config', 'core.sshCommand', sshCommand('configured identity')])
-      if (host === 'native') {
-        await expect(gitExecFileAsync(['fetch', 'origin'], { cwd: repo, env })).rejects.toThrow()
-      } else {
-        const { dispatcher, handler } = createGitHandlerRelay()
-        try {
-          await expect(
-            dispatcher.callRequest('git.fetch', { worktreePath: repo })
-          ).rejects.toThrow()
-        } finally {
-          handler.dispose()
-        }
-      }
-      await expectIdentity('configured identity')
-    }
-  )
-
   it('preserves command-line SSH configuration ahead of repository configuration', async () => {
     await git(['config', 'core.sshCommand', sshCommand('repository')])
     await expect(
@@ -102,28 +81,6 @@ describe('network SSH configuration with real Git', () => {
       )
     ).rejects.toThrow()
     await expectIdentity('command-line')
-  })
-
-  it.each(['native', 'relay'] as const)('%s preserves an explicit SSH command', async (host) => {
-    await git(['config', 'core.sshCommand', sshCommand('repository')])
-    const command = sshCommand('environment')
-    if (host === 'native') {
-      await expect(
-        gitExecFileAsync(['fetch', 'origin'], {
-          cwd: repo,
-          env: { ...env, GIT_SSH_COMMAND: command }
-        })
-      ).rejects.toThrow()
-    } else {
-      vi.stubEnv('GIT_SSH_COMMAND', command)
-      const { dispatcher, handler } = createGitHandlerRelay()
-      try {
-        await expect(dispatcher.callRequest('git.fetch', { worktreePath: repo })).rejects.toThrow()
-      } finally {
-        handler.dispose()
-      }
-    }
-    await expectIdentity('environment')
   })
 
   it('honors configured global SSH wrappers for streaming clones from a folder', async () => {

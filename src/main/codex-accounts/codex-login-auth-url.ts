@@ -1,6 +1,16 @@
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 
 const AUTH_URL_MARKER = 'navigate to this url to authenticate:'
+const CODEX_AUTH_HOST = 'auth.openai.com'
+
+/** OpenAI's sign-in page, the only link Orca opens for a codex login. */
+export function isCodexLoginAuthUrl(authUrl: string): boolean {
+  try {
+    return new URL(authUrl).hostname === CODEX_AUTH_HOST
+  } catch {
+    return false
+  }
+}
 
 /**
  * The browser sign-in link `codex login` prints, or null while its output has

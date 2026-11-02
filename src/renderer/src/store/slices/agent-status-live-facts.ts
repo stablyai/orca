@@ -1,14 +1,10 @@
 import type { AppState } from '../types'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
-import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isSmartSortRelevantAgentChange } from '../../../../shared/sidebar-list/smart-sort-agent-change'
 import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
   findAgentPaneWorktreeId,
@@ -62,24 +58,10 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     !isAgentCompletionState(existing.state)
       ? (entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey))
       : null
-  const wasFresh =
-    !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
   const attributionChanged =
     existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
-  const sameStateStateStartedAtChanged =
-    !!existing && existing.state === entry.state && entry.stateStartedAt !== existing.stateStartedAt
-  const sameStateDoneAttentionChanged =
-    existing?.state === 'done' &&
-    entry.state === 'done' &&
-    agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
   const sortRelevantChange =
-    !existing ||
-    existing.state !== entry.state ||
-    !wasFresh ||
-    attributionChanged ||
-    commandCodeNewTurn ||
-    sameStateStateStartedAtChanged ||
-    sameStateDoneAttentionChanged
+    isSmartSortRelevantAgentChange(existing, entry, updatedAt) || commandCodeNewTurn
   const doneRetentionFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&

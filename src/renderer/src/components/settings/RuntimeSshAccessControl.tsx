@@ -14,7 +14,7 @@ import { SshTargetSelect } from './SshTargetSelect'
 const DEFAULT_REMOTE_PORT = '6768'
 
 type RuntimeSshAccessControlProps = {
-  api: ManagedOrcadPreloadApi
+  api: Pick<ManagedOrcadPreloadApi, 'linkSshAccess' | 'unlinkSshAccess'>
   environment: PublicKnownRuntimeEnvironment
   targets: SshTarget[]
   onChanged: () => void
@@ -33,25 +33,87 @@ export function RuntimeSshAccessControl({
   const targetFieldId = useId()
   const portFieldId = useId()
   const linked = environment.sshAccess
+  const pending = environment.pendingSshAccessOperation
 
-  const submit = async (): Promise<void> => {
+  const run = async (call: () => Promise<unknown>): Promise<void> => {
     setBusy(true)
     try {
-      const requestId = createBrowserUuid()
-      await (linked
-        ? api.unlinkSshAccess({ selector: environment.id, requestId })
-        : api.linkSshAccess({
-            selector: environment.id,
-            requestId,
-            sshTargetId: targetId,
-            remotePort: Number(remotePort)
-          }))
+      await call()
       onChanged()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
+  }
+
+  if (pending) {
+    // Why the saved request id: main resumes or cancels only the operation it recorded, and a
+    // fresh id made an unfinished link a dead end that also blocked removing the server (#27765).
+    const requestId = pending.requestId
+    const retry = (): Promise<unknown> =>
+      pending.operation === 'link'
+        ? api.linkSshAccess({
+            selector: environment.id,
+            requestId,
+            sshTargetId: pending.sshTargetId,
+            remotePort: pending.remotePort
+          })
+        : api.unlinkSshAccess({ selector: environment.id, requestId })
+    return (
+      <div className="flex items-center gap-2 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm">{environment.name}</div>
+          <p className="text-xs text-muted-foreground">
+            {pending.operation === 'link'
+              ? translate(
+                  'auto.components.settings.managedServers.access.pendingLink',
+                  'Connecting through SSH didn’t finish.'
+                )
+              : translate(
+                  'auto.components.settings.managedServers.access.pendingUnlink',
+                  'Stopping SSH access didn’t finish.'
+                )}
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          disabled={busy}
+          onClick={() => void run(retry)}
+        >
+          {translate('auto.components.settings.managedServers.access.retry', 'Retry')}
+        </Button>
+        {pending.operation === 'link' ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={busy}
+            onClick={() =>
+              void run(() => api.unlinkSshAccess({ selector: environment.id, requestId }))
+            }
+          >
+            {translate('auto.components.settings.managedServers.access.cancelLink', 'Cancel')}
+          </Button>
+        ) : null}
+      </div>
+    )
+  }
+
+  const submit = (): Promise<void> => {
+    const requestId = createBrowserUuid()
+    return run(() =>
+      linked
+        ? api.unlinkSshAccess({ selector: environment.id, requestId })
+        : api.linkSshAccess({
+            selector: environment.id,
+            requestId,
+            sshTargetId: targetId,
+            remotePort: Number(remotePort)
+          })
+    )
   }
 
   if (linked) {

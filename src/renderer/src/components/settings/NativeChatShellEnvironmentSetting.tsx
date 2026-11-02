@@ -6,7 +6,8 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { SettingsSwitch } from './SettingsFormControls'
+import { SettingsSwitchRow } from './SettingsFormControls'
+import { getChatBehaviorEntriesByKey } from './chat-behavior-search'
 
 type NativeChatShellEnvironmentSettingProps = {
   settings: GlobalSettings
@@ -129,33 +130,21 @@ export function NativeChatShellEnvironmentSetting({
 }: NativeChatShellEnvironmentSettingProps): React.JSX.Element {
   const inheritAll = settings.nativeChatInheritShellEnvironment !== false
   const savedNames = settings.nativeChatShellEnvironmentVariables ?? []
+  const entry = getChatBehaviorEntriesByKey().shellEnvironment
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 shrink space-y-0.5">
-          <Label>
-            {translate(
-              'auto.components.settings.ExperimentalPane.nativeChat.shellEnvTitle',
-              'Use your shell environment'
-            )}
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.ExperimentalPane.nativeChat.shellEnvCopy',
-              'Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.'
-            )}
-          </p>
-        </div>
-        <SettingsSwitch
-          checked={inheritAll}
-          ariaLabel={translate(
-            'auto.components.settings.ExperimentalPane.nativeChat.shellEnvToggleLabel',
-            'Toggle using your shell environment'
-          )}
-          onChange={() => updateSettings({ nativeChatInheritShellEnvironment: !inheritAll })}
-        />
-      </div>
+    <div className="space-y-3 pb-3">
+      <SettingsSwitchRow
+        className="pb-0"
+        label={entry.title}
+        description={entry.description}
+        checked={inheritAll}
+        ariaLabel={translate(
+          'auto.components.settings.ExperimentalPane.nativeChat.shellEnvToggleLabel',
+          'Toggle using your shell environment'
+        )}
+        onChange={() => updateSettings({ nativeChatInheritShellEnvironment: !inheritAll })}
+      />
       {inheritAll ? null : (
         <ShellEnvironmentNamesField
           savedNames={savedNames}

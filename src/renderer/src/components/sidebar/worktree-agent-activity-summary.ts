@@ -1,11 +1,11 @@
 import type { AppState } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import {
   mergeAgentStatusOrchestration,
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId
-} from '@/lib/agent-status-worktree-attribution'
+} from '../../../../shared/agent-status-worktree-attribution'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusOrchestrationContext

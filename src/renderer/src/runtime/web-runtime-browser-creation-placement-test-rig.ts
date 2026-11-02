@@ -5,7 +5,7 @@ import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { ENV, NOW, WT, makeSnapshot } from './web-session-tabs-sync-test-harness'
 
 export const HOST: ExecutionHostId = `runtime:${ENV}`

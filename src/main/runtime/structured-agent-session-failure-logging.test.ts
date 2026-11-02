@@ -26,6 +26,7 @@ import {
   neverThrowingStructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { StructuredAgentSessionDeliveryOrder } from '../native-chat/agent-session-wire/structured-agent-session-delivery-order'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
@@ -110,9 +111,7 @@ describe('failures the desktop host used to drop', () => {
       sessionId: SESSION,
       fence: 1,
       acquisitionGeneration: 'generation-1',
-      reportedOptions: { model: 'gpt-5' },
-      restoreSkippedOptions: [],
-      optionRevision: 0
+      reportedOptions: { model: 'gpt-5' }
     })
     lifecycle.deliver({
       type: 'ended',
@@ -173,6 +172,8 @@ describe('host collaborators log with their own scope', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a step that rejects at its first serialize reads only these members.
       {
         serialize: rejectingSerialize,
+        sessions: new Map(),
+        deliveryOrder: new StructuredAgentSessionDeliveryOrder(),
         trackStart: <T>(start: Promise<T>) => start,
         logger: log.logger
       } as unknown as StructuredAgentSessionDeliveryLoopDeps
@@ -302,14 +303,14 @@ describe('installing the runtime', () => {
 
     await expect(
       ensureStructuredAgentSessionHost(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliberately missing the logger, as a `@ts-nocheck` caller could drop it.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliberately omits the logger to verify installation rejects it.
         {
           stateDirectory: root,
           hostId: 'local',
           claimKeyId: 'key-1',
           resolveWorkspacePath: async () => root,
           resolveLaunchArgs: () => [],
-          resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
+          resolveClaudeAuthPolicy: () => ({ account: 'managed' })
         } as unknown as Parameters<typeof ensureStructuredAgentSessionHost>[0]
       )
     ).rejects.toThrow(STRUCTURED_AGENT_SESSION_LOGGER_REQUIRED)
@@ -326,7 +327,7 @@ describe('installing the runtime', () => {
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       logger: {
         warn: () => {
           throw new Error('logger broke')

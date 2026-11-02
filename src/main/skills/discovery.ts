@@ -19,6 +19,7 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
+import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
@@ -283,16 +284,21 @@ export async function discoverSkills(args: {
       : [])
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   const scans = await Promise.all(roots.map((root) => scanRootShared(root, refresh)))
-  const sources: SkillDiscoverySource[] = roots.map((root, index) => ({
-    ...root,
-    providers: [...root.providers],
-    exists: scans[index].value.exists,
-    skippedReason: scans[index].value.unavailable
-      ? 'unavailable'
-      : scans[index].value.exists
-        ? undefined
-        : 'missing'
-  }))
+  const sources: SkillDiscoverySource[] = [
+    ...roots.map((root, index): SkillDiscoverySource => ({
+      ...root,
+      providers: [...root.providers],
+      exists: scans[index].value.exists,
+      skippedReason: scans[index].value.unavailable
+        ? 'unavailable'
+        : scans[index].value.exists
+          ? undefined
+          : 'missing'
+    })),
+    ...(!args.sourceKinds?.length || args.sourceKinds.includes('repo')
+      ? buildRemoteRepoSkillSources(args.repos ?? [])
+      : [])
+  ]
   const normalizedNames = args.names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   const seen = new Map<string, DiscoveredSkill>()

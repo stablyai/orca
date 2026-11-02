@@ -286,6 +286,21 @@ describe('acquisition path', () => {
       )
     ).rejects.toThrow('agent_session_conflict')
   })
+
+  it("takes request options only for a record it creates, so an existing chat's are kept", async () => {
+    const store = await open()
+    await establishOwner(store, { options: { permissionMode: 'ask' } })
+    await store.reserveOwner(
+      reserveRequest({
+        options: { permissionMode: 'full-access' },
+        expectedFence: 1,
+        probe: { outcome: 'pid-absent' },
+        operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
+      })
+    )
+    expect(store.getRecord('session-alpha')?.lease.runtimeFence).toBe(2)
+    expect(store.getRecord('session-alpha')?.permissionMode).toBe('ask')
+  })
 })
 
 describe('concurrent claims', () => {
@@ -730,9 +745,10 @@ describe('claim keys and unreadable rows', () => {
         Object.assign(record.lease, { journalCheckpoint: { epoch: 'bad', sequence: 1 } })
     ],
     [
-      'missing live proof',
+      // No proof yet is a live owner whose provider has not answered; a proof naming no link is not.
+      'live proof naming no handle',
       (record: PersistedAgentSessionRecord) =>
-        Object.assign(record.lease, { provenHandleLinkId: null })
+        Object.assign(record.lease, { provenHandleLinkId: 'link-never-minted' })
     ]
   ])('quarantines a record with %s', async (_name, corrupt) => {
     const first = await open()

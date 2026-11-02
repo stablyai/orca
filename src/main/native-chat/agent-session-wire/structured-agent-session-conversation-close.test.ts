@@ -224,10 +224,7 @@ describe('a start that never finishes (P2-15)', () => {
   it('is stopped by the sweep, and the message held for it carries its one row and rejection', async () => {
     const stopReason = 'Codex never finished starting, so Orca stopped it.'
     const spawn = rig.adapter.acquire.getMockImplementation()!
-    rig.adapter.acquire.mockImplementationOnce(async (input) => ({
-      ...(await spawn(input)),
-      providerChildPhase: 'starting' as const
-    }))
+    rig.adapter.acquire.mockImplementationOnce(rig.heldStart(spawn))
     // Held for the starting child, which never proves its start.
     const reader = collectSubscriber()
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))

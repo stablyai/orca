@@ -14,20 +14,18 @@ import {
   type TerminalLinkActionContext
 } from './terminal-link-action-request'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
-import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { translate } from '@/i18n/i18n'
-import {
-  getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
-  revealInFileManager
-} from '@/lib/reveal-in-file-manager'
+import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
 import { useAppStore } from '@/store'
+import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 
 export type TerminalFileLinkActionDeps = {
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
+  /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
+  terminalHandle?: string | null
   onOpenFailure?: (failure: FileOpenFailure) => void
 }
 
@@ -83,7 +81,7 @@ export function buildFileLinkActions(
     useAppStore.getState(),
     fileContext
   )
-  const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, mappedPath)
+  const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
   const isMac = navigator.userAgent.includes('Mac')
 
   // Why: the OS can only launch a local file, so remote links keep the same row by
@@ -125,23 +123,29 @@ export function buildFileLinkActions(
                 'auto.components.terminal.pane.TerminalLinkActionPopover.downloadOpenWithDefaultApp',
                 'Download & open with default app'
               ),
-              run: () => downloadAndOpenRemoteTerminalFile(fileContext, mappedPath)
+              // Why the open flow, not a direct download: a path the host disowns may be on this computer.
+              run: () =>
+                openDetectedFilePath(filePath, line, column, {
+                  ...deps,
+                  openWithSystemDefault: true
+                })
             }
   // Why omit, not disable: the popover has no disabled rows. The OS file manager can only show a
-  // file on this machine, and the main process refuses every reveal while a remote runtime is focused.
+  // file on this machine.
+  const revealOwner = getLocalPathOpenOwnerForRoute({
+    runtimeEnvironmentId: deps.runtimeEnvironmentId
+  })
   const canReveal =
     !worktreeRoot &&
     canOpenWithSystemDefault &&
     sourceOwner?.kind === 'local' &&
-    !isRevealInFileManagerBlocked(useAppStore.getState().settings, {
-      runtimeEnvironmentId: deps.runtimeEnvironmentId
-    })
+    !isLocalPathOpenBlocked(revealOwner)
   // Why the shared reveal: it selects a folder (or a macOS .app bundle) in its parent, never opens it.
   const revealRow = canReveal
     ? {
         external: true,
         label: getRevealInFileManagerLabel(),
-        run: () => revealInFileManager(mappedPath)
+        run: () => revealInFileManager(mappedPath, revealOwner)
       }
     : null
   return {

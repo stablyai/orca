@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { translate } from '@/i18n/i18n'
@@ -6,9 +8,8 @@ import { readIpcErrorMessage } from '@/lib/ipc-error'
 import {
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
-  stageRuntimeGitWorktreeScope,
-  type RuntimeGitContext
-} from '@/runtime/runtime-git-client'
+  stageRuntimeGitWorktreeScope
+} from '@/runtime/runtime-git-working-tree-client'
 import {
   getStageAllPaths,
   getUnstageAllPaths,
@@ -36,7 +37,7 @@ function reportBulkMutationFailure(error: unknown): void {
 export function useSourceControlBulkActions({
   selectedKeys,
   flatEntriesByKey,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   worktreePath,
   grouped,
@@ -46,7 +47,7 @@ export function useSourceControlBulkActions({
 }: {
   selectedKeys: ReadonlySet<string>
   flatEntriesByKey: ReadonlyMap<string, FlatEntry>
-  activeRepoSettings: RuntimeGitContext['settings']
+  activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
   grouped: SourceControlEntryGroups
@@ -95,7 +96,7 @@ export function useSourceControlBulkActions({
       await bulkStageRuntimeGitPaths(
         {
           // Why: route staging by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
+          target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -110,7 +111,7 @@ export function useSourceControlBulkActions({
       setIsExecutingBulk(false)
     }
   }, [
-    activeRepoSettings,
+    activeRepoTarget,
     worktreePath,
     bulkStagePaths,
     clearSelection,
@@ -129,7 +130,7 @@ export function useSourceControlBulkActions({
       await bulkUnstageRuntimeGitPaths(
         {
           // Why: route unstaging by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
+          target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -144,7 +145,7 @@ export function useSourceControlBulkActions({
       setIsExecutingBulk(false)
     }
   }, [
-    activeRepoSettings,
+    activeRepoTarget,
     worktreePath,
     bulkUnstagePaths,
     clearSelection,
@@ -163,7 +164,7 @@ export function useSourceControlBulkActions({
       try {
         const context = {
           // Why: route staging by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
+          target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId: getConnectionId(activeWorktreeId ?? null) ?? undefined
@@ -180,7 +181,7 @@ export function useSourceControlBulkActions({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktreeId,
       clearSelection,
       isExecutingBulk,
@@ -212,7 +213,7 @@ export function useSourceControlBulkActions({
         await bulkUnstageRuntimeGitPaths(
           {
             // Why: route unstaging by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
+            target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -228,7 +229,7 @@ export function useSourceControlBulkActions({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktreeId,
       clearSelection,
       isExecutingBulk,

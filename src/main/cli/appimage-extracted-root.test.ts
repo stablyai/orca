@@ -9,6 +9,7 @@ import {
   isAppImageExtractedLauncherPath,
   isAppImageExtractionComplete,
   isAppImageInstalledLauncherOwnedBySibling,
+  readAppImageSourceOfNamespace,
   resolveAppImageCacheKey,
   resolveAppImageExtractedRoot
 } from './appimage-extracted-root'
@@ -88,6 +89,22 @@ describe('appimage extracted root', () => {
     expect(extractCount).toBe(1)
     expect(second?.stableLauncherPath).toBe(first?.stableLauncherPath)
     expect(isAppImageExtractionComplete(first!)).toBe(true)
+  })
+
+  // Why: a server running from the copy has no $APPIMAGE; this record is how it finds the file.
+  it('records which AppImage a namespace came from, and rejects a record for another path', async () => {
+    const { appImagePath, cacheRootPath } = await makeFixture()
+    const root = await ensureAppImageExtractedRoot({
+      appImagePath,
+      cacheRootPath,
+      runExtract: async (_path, cwd) => writePayload(cwd)
+    })
+    const namespacePath = dirname(root!.rootPath)
+    const namespaceKey = namespacePath.slice(namespacePath.lastIndexOf('/') + 1)
+
+    expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBe(appImagePath)
+    await writeFile(join(namespacePath, 'source-appimage'), '/elsewhere/Orca.AppImage')
+    expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBeNull()
   })
 
   // Why: an update replaces the file in place, so stat identity must change the key or the command

@@ -1,9 +1,12 @@
-import type { RuntimeEnvironmentStatus } from './runtime-host-status'
+import type { RuntimeEnvironmentStatus, RuntimeHostBlockedReason } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
+  getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  getSshTargetIdForExecutionHost,
   isRuntimeOwnedSshTargetId,
+  normalizeHostPart,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
@@ -17,15 +20,13 @@ import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
-import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
+import {
+  annotateManagedOrcadExecutionHosts,
+  type ManagedOrcadDeploymentSummary
+} from './managed-orcad-execution-host'
+import { getSshConnectionHealth, type ExecutionHostHealth } from './execution-host-health'
 
-export type ExecutionHostHealth =
-  | 'local'
-  | 'available'
-  | 'connecting'
-  | 'blocked'
-  | 'disconnected'
-  | 'error'
+export type { ExecutionHostHealth } from './execution-host-health'
 
 export type ExecutionHostRegistryEntry = {
   id: ExecutionHostId
@@ -35,6 +36,8 @@ export type ExecutionHostRegistryEntry = {
   health: ExecutionHostHealth
   connectionStatus?: SshConnectionStatus
   compatibility?: RuntimeCompatVerdict
+  /** Present only while health is blocked; local evidence, never published to peers. */
+  blockedReason?: RuntimeHostBlockedReason
   capabilities?: readonly string[]
   appVersion?: string | null
   protocolVersion?: number | null
@@ -51,17 +54,12 @@ type RuntimeEnvironmentSummary = {
   id: string
   name?: string | null
   source?: RuntimeEnvironmentSource
-  orcadDeployment?: { sshTargetId: string } | null
+  orcadDeployment?: ManagedOrcadDeploymentSummary | null
 }
 
 type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeEnvironmentStatus>
 
 export type ExecutionHostSource = 'configured-only' | 'include-references'
-
-function normalizeHostPart(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
-}
 
 function runtimeCompatibility(
   status: RuntimeStatus | null | undefined
@@ -111,24 +109,6 @@ function runtimeControlHealth(
   }
 }
 
-function sshHealth(state: SshConnectionState | undefined): ExecutionHostHealth {
-  switch (state?.status) {
-    case 'connected':
-      return 'available'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'connecting'
-    case 'auth-failed':
-    case 'error':
-    case 'reconnection-failed':
-      return 'error'
-    case 'disconnected':
-    case undefined:
-      return 'disconnected'
-  }
-}
-
 function setHost(
   hosts: Map<ExecutionHostId, ExecutionHostRegistryEntry>,
   entry: ExecutionHostRegistryEntry
@@ -162,26 +142,38 @@ function addRuntimeHost(
   const metadata = status ?? snapshot?.status
   const compatibility = runtimeCompatibility(metadata)
   const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
+  // Why: the status owner withdraws `verified` whenever a ready socket drops, so a verified
+  // answer proves the host reachable while shared control is still connecting (#10704).
+  const reachable =
+    snapshot?.transport === 'ready'
+      ? snapshot.verification !== 'checking'
+      : snapshot?.verification === 'verified' && snapshot.transport !== 'disconnected'
   const controlHealth = snapshot?.retired
     ? 'disconnected'
     : snapshot?.verification === 'blocked'
       ? 'blocked'
-      : !runtimeStatus ||
-          snapshot?.verification === 'checking' ||
-          snapshot?.transport === 'disconnected' ||
-          snapshot?.transport === 'connecting'
-        ? 'connecting'
-        : snapshot?.transport === 'ready'
-          ? compatibility?.kind === 'blocked'
-            ? 'blocked'
-            : 'available'
+      : reachable
+        ? compatibility?.kind === 'blocked'
+          ? 'blocked'
+          : 'available'
+        : !runtimeStatus ||
+            snapshot?.verification === 'checking' ||
+            snapshot?.transport === 'disconnected' ||
+            snapshot?.transport === 'connecting'
+          ? 'connecting'
           : runtimeControlHealth(remoteControl)
+  const health = controlHealth ?? runtimeHealth(status, compatibility, remoteControl)
+  const blockedReason =
+    health === 'blocked'
+      ? (snapshot?.verification === 'blocked' && snapshot.blockedReason) || 'incompatible'
+      : undefined
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
     label,
     detail: 'Orca server',
-    health: controlHealth ?? runtimeHealth(status, compatibility, remoteControl),
+    health,
+    ...(blockedReason ? { blockedReason } : {}),
     compatibility: compatibility ?? undefined,
     capabilities: metadata?.capabilities,
     appVersion: runtimeStatus?.appVersion ?? metadata?.appVersion ?? null,
@@ -278,7 +270,9 @@ export function buildExecutionHostRegistry(args: {
   }
   if (args.hostSource !== 'configured-only') {
     for (const repo of args.repos) {
-      const targetId = normalizeHostPart(repo.connectionId)
+      // Why the host, not `connectionId`: a paired-server repo's `connectionId` is the server's
+      // own SSH target, which this client cannot dial.
+      const targetId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
       if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
         sshTargetIds.add(targetId)
       }
@@ -292,7 +286,7 @@ export function buildExecutionHostRegistry(args: {
       kind: 'ssh',
       label: args.sshTargetLabels?.get(targetId) || targetId,
       detail: 'SSH',
-      health: sshHealth(state),
+      health: getSshConnectionHealth(state?.status),
       connectionStatus: state?.status
     })
   }

@@ -323,12 +323,3 @@ export function removeWorkspaceLineageForFolderParent(
     }
   }
 }
-
-export function installMetadataLineageOperationsContext(
-  target: MetadataLineageOperations,
-  source: MetadataLineageOperations
-): void {
-  Object.defineProperty(target, metadataLineageOperationsContext, {
-    value: source[metadataLineageOperationsContext]
-  })
-}

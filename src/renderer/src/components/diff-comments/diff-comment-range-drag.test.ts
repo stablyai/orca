@@ -11,6 +11,8 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import { getGutterPressLine, installDiffCommentRangeDrag } from './diff-comment-range-drag'
 import type { DiffCommentLineRange } from './diff-comment-line-range'
 
+vi.mock('monaco-editor', () => import('monaco-editor/esm/vs/editor/editor.api.js'))
+
 // Frames are pumped by hand so "one hit-test per frame, whatever the OS delivered" is an
 // assertion rather than a hope.
 const frameCallbacks: FrameRequestCallback[] = []

@@ -32,4 +32,21 @@ describe('mobile subagent roster bounds', () => {
     const block = sanitizeNativeChatRpcBlock(rosterBlock(['task-1']), 'mobile')
     expect(block.type === 'subagent-group' && block.agents[0]?.id).toBe('task-1')
   })
+
+  it('bounds a subagent’s own row like a roster’s entry, and leaves other clients its fields', () => {
+    const own: NativeChatBlock = {
+      type: 'subagent',
+      id: `${'p'.repeat(512)}a`,
+      label: 'l'.repeat(600),
+      state: 'working',
+      groupId: 'turn-1',
+      run: 'call-1',
+      outcomeBasis: 'stop-acknowledged'
+    }
+    const block = sanitizeNativeChatRpcBlock(own, 'mobile')
+    expect(block).toMatchObject({ type: 'subagent', groupId: 'turn-1', run: 'call-1' })
+    expect(block.type === 'subagent' && block.id.length).toBe(512)
+    expect(block.type === 'subagent' && block.label.length).toBeLessThan(600)
+    expect(sanitizeNativeChatRpcBlock(own, 'runtime')).toBe(own)
+  })
 })

@@ -238,12 +238,14 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
           success: true,
           message: 'Update README'
         })
+        // Not an npm shim, so process-host falls back to its own cmd.exe line.
         expect(spawnMock).toHaveBeenCalledWith(
           'C:\\Windows\\System32\\cmd.exe',
-          ['/d', '/c', 'C:/tools/agent.cmd'],
+          ['/d /v:off /s /c ""C:/tools/agent.cmd""'],
           expect.objectContaining({
             cwd: 'C:\\repo',
-            windowsHide: true
+            windowsHide: true,
+            windowsVerbatimArguments: true
           })
         )
       })
@@ -278,7 +280,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       expect(result).toEqual({
         success: false,
         error:
-          'C:/tools/agent.cmd cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so Orca sends the prompt on stdin.'
+          "C:/tools/agent.cmd runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin."
       })
       expect(spawnMock).not.toHaveBeenCalled()
     })

@@ -1,23 +1,35 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
 
-const source = vi.hoisted(() => {
-  const chunks: Buffer[] = []
-  return { chunks, closed: false }
-})
+type ChunkSource = {
+  chunks: Buffer[]
+  closed: boolean
+  opens: number
+  beforeChunk?: (index: number) => void
+}
+
+const source = vi.hoisted((): ChunkSource => ({ chunks: [], closed: false, opens: 0 }))
 vi.mock('../native-chat/wsl-transcript-fs-access', () => ({
   openTranscriptReadStream: async function* () {
+    source.opens += 1
     source.closed = false
     try {
-      yield* source.chunks
+      for (const [index, chunk] of source.chunks.entries()) {
+        source.beforeChunk?.(index)
+        yield chunk
+      }
     } finally {
       source.closed = true
     }
   }
 }))
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  source.beforeChunk = undefined
+  vi.restoreAllMocks()
+})
 
 it('decodes a single owned unterminated tail without copying it or advancing its cursor', async () => {
   const tail = JSON.stringify({ text: 'é😀 growing final record' })
@@ -327,4 +339,59 @@ it('counts UTF-8 bytes instead of decoded characters at the record cap', async (
   expect(lines).toEqual(['{"a":1}'])
   expect(result.skippedRecords).toEqual([{ byteOffset: 0, approximateBytes: 3 * (chars + 1) }])
   expect(result.consumedThrough).toBe(3 * (chars + 1) + 1 + 8)
+})
+
+it('never opens the transcript once the scan is cancelled', async () => {
+  source.chunks = [Buffer.from('{"a":1}\n')]
+  source.opens = 0
+  const onLine = vi.fn()
+  const read = consumeCompleteJsonlLines({
+    path: '/log',
+    start: 0,
+    onLine,
+    signal: AbortSignal.abort()
+  })
+  await expect(read).rejects.toSatisfy(isAiVaultScanCancelledError)
+  expect(source.opens).toBe(0)
+  expect(onLine).not.toHaveBeenCalled()
+})
+
+it('stops between chunks on cancel and releases the stream', async () => {
+  source.chunks = [Buffer.from('{"a":1}\n'), Buffer.from('{"b":2}\n'), Buffer.from('{"c":3}\n')]
+  const controller = new AbortController()
+  const lines: string[] = []
+  const read = consumeCompleteJsonlLines({
+    path: '/log',
+    start: 0,
+    onLine: (line) => {
+      lines.push(line)
+      controller.abort()
+    },
+    signal: controller.signal
+  })
+  await expect(read).rejects.toSatisfy(isAiVaultScanCancelledError)
+  expect(lines).toEqual(['{"a":1}'])
+  expect(source.closed).toBe(true)
+})
+
+it('stops inside an over-budget record that is being discarded', async () => {
+  const buffer = Buffer.from(`${OVERSIZED}${OVERSIZED}\n{"a":1}\n`, 'utf-8')
+  source.chunks = chunksAt(buffer, OVERSIZED.length, OVERSIZED.length * 2)
+  const controller = new AbortController()
+  // The first chunk alone is over budget; cancel while the rest is still skipped.
+  source.beforeChunk = (index) => {
+    if (index === 1) {
+      controller.abort()
+    }
+  }
+  const onLine = vi.fn()
+  const read = consumeCompleteJsonlLines({
+    path: '/log',
+    start: 0,
+    onLine,
+    signal: controller.signal
+  })
+  await expect(read).rejects.toSatisfy(isAiVaultScanCancelledError)
+  expect(onLine).not.toHaveBeenCalled()
+  expect(source.closed).toBe(true)
 })

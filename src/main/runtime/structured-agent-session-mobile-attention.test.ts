@@ -62,6 +62,7 @@ function settings(overrides: Partial<NotificationSettings> = {}): NotificationSe
     customSoundPath: null,
     customSoundVolume: 1,
     mutedNotificationSourceIds: [],
+    notifyHiddenWorkspaces: true,
     ...overrides
   }
 }
@@ -72,6 +73,7 @@ function harness(overrides: Partial<StructuredAttentionMobileDeliveryDeps> = {})
   const delivery = createStructuredAttentionMobileDelivery({
     readNotificationSettings: () => settings(),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
+    isWorkspaceHidden: () => false,
     dispatch: (event) => sent.push(event),
     reconcile: (state) => reconciled.push(state),
     now: () => 42,
@@ -110,6 +112,22 @@ describe('structured attention mobile delivery', () => {
       ['blocked', 'orca / feature - Claude needs input'],
       ['done', 'orca / feature - Claude failed']
     ])
+  })
+
+  it('sends nothing for a workspace the desktop Filters hide, unless hidden workspaces notify', () => {
+    const isWorkspaceHidden = vi.fn(() => true)
+    const quiet = harness({
+      isWorkspaceHidden,
+      readNotificationSettings: () => settings({ notifyHiddenWorkspaces: false })
+    })
+    quiet.delivery.deliver(PROMPT, SUMMARY)
+    quiet.delivery.deliver(completion('success'), SUMMARY)
+    expect(quiet.sent).toEqual([])
+    expect(isWorkspaceHidden).toHaveBeenCalledWith(SCOPE)
+
+    const optedIn = harness({ isWorkspaceHidden })
+    optedIn.delivery.deliver(PROMPT, SUMMARY)
+    expect(optedIn.sent).toHaveLength(1)
   })
 
   it('still sends when labels cannot be read, worded generically', () => {
@@ -173,4 +191,17 @@ describe('readStructuredAttentionWorkspaceLabels', () => {
     )
     expect(labels).toEqual({ worktreeLabel: 'Notes' })
   })
+})
+
+it('preserves the missing notification settings failure before dispatch', () => {
+  let reads = 0
+  const h = harness({
+    readNotificationSettings() {
+      reads += 1
+      return undefined
+    }
+  })
+  expect(() => h.delivery.deliver(PROMPT, SUMMARY)).toThrow(TypeError)
+  expect(reads).toBe(1)
+  expect(h.sent).toEqual([])
 })

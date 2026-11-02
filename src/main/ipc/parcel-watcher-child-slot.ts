@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { removeWatcherCanaryDirectory } from './parcel-watcher-canary-directory'
 
 /** The supervisor's one watcher child: the live one, the one being terminated, and its canary. */

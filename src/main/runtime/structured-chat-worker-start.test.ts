@@ -24,10 +24,21 @@ import {
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
+import type { placeWorkerAgent } from './rpc/methods/orchestration/worker/worker-start-agent-placement'
+
+type WorkspaceLookup = {
+  showManagedTerminalWorkspace: (
+    ...args: Parameters<typeof runtime.showManagedTerminalWorkspace>
+  ) => Promise<Awaited<ReturnType<typeof placeWorkerAgent>>['worktree']>
+}
+
 const WORKER = formatOrcaSessionAddress(testOrcaSessionId(PEER_CHAT))
 
 beforeEach(() => {
-  vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockImplementation(async (selector) => ({
+  vi.spyOn<WorkspaceLookup, 'showManagedTerminalWorkspace'>(
+    runtime,
+    'showManagedTerminalWorkspace'
+  ).mockImplementation(async (selector) => ({
     id: selector.replace(/^id:/, ''),
     repoId: 'repo'
   }))

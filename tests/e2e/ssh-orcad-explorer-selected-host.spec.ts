@@ -9,9 +9,9 @@ import { waitForSessionReady, waitForStartupWorktreeRefresh } from './helpers/st
 import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
+import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
 
-const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
-test.skip(!TEMPLATE || process.env.ORCA_E2E_SSH_DOCKER !== '1', 'Needs Docker and server template')
+skipUnlessManagedDockerHost()
 
 for (const selectedHost of ['A', 'B'] as const) {
   test(`same-ID folder explorer follows selected host ${selectedHost}`, async (// oxlint-disable-next-line no-empty-pattern -- This exercise owns its app launch.
@@ -19,8 +19,10 @@ for (const selectedHost of ['A', 'B'] as const) {
     test.setTimeout(5 * 60_000)
     const hostA = startOrcadConvertHost('docker', testInfo)
     const hostB = startOrcadConvertHost('docker', testInfo)
-    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
-    const otherSession = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE! })
+    const otherSession = createRestartSession(testInfo, {
+      ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE!
+    })
     let app: ElectronApplication | null = null
     let otherApp: ElectronApplication | null = null
     try {

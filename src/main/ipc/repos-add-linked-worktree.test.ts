@@ -44,12 +44,14 @@ vi.mock('electron', () => ({
 
 vi.mock('../git/repo', () => ({
   isGitRepo: isGitRepoMock,
-  inspectGitRepoForRegistration: vi.fn((path: string) => ({
+  isGitRepoAsync: isGitRepoMock,
+  inspectGitRepoForRegistrationAsync: vi.fn((path: string) => ({
     isRepo: isGitRepoMock(path),
     rootPath: getGitRepoRootMock(path),
     mainRepoPath: getLinkedWorktreeMainRepoRootMock(path)
   })),
   getGitRepoRoot: getGitRepoRootMock,
+  getGitRepoRootAsync: getGitRepoRootMock,
   getLinkedWorktreeMainRepoRoot: getLinkedWorktreeMainRepoRootMock,
   getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
   getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
@@ -67,9 +69,6 @@ vi.mock('./registered-worktree-roots-cache', () => ({
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: vi.fn() }))
-vi.mock('./ssh', () => ({ getActiveMultiplexer: vi.fn() }))
 
 import { registerRepoHandlers } from './repos'
 

@@ -267,6 +267,23 @@ describe('worktree agent activation gate', () => {
     )
   })
 
+  it('blocks seeding while the queried snapshot names a live launch', async () => {
+    const { deps, resume } = testDeps({})
+    const snapshot = {
+      ...runtimeSnapshot('tab', LIVE_LEAF_ID, []),
+      tabs: [],
+      initialSurfaceLaunch: { launchId: 'launch-1', agent: 'claude' as const }
+    }
+    await expect(
+      runWorktreeAgentActivationGate(WORKTREE_ID, {
+        ...deps,
+        hasStructuredSession: async () => ({ snapshot, ownerBySessionId: new Map() })
+      })
+    ).resolves.toBe('blocked')
+    expect(deps.listSessions).not.toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
+  })
+
   it('blocks automatic resume when packaged restore never becomes ready', async () => {
     const { deps, createTab, resume } = testDeps({})
 

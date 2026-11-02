@@ -20,9 +20,6 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
-import { OrchestrationDb } from './orchestration/db'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
 // Why: Vitest runs tests with `process.cwd()` pinned to the repo root, so
 // join against it to locate the compiled CLI regardless of where this test
@@ -30,6 +27,14 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
 
 const describeIfBuilt = existsSync(CLI_PATH) ? describe : describe.skip
+
+function loadRuntimeModules() {
+  return Promise.all([
+    import('./orca-runtime'),
+    import('./orchestration/db'),
+    import('./runtime-rpc')
+  ])
+}
 
 async function runBuiltCli(
   userDataPath: string,
@@ -67,6 +72,8 @@ async function runBuiltCli(
 
 describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
   it('emits newline-flushed JSON keepalives to stderr while waiting', async () => {
+    const [{ OrcaRuntimeService }, { OrchestrationDb }, { OrcaRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-sub-'))
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
@@ -203,6 +210,8 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
 
 describeIfBuilt('orca orchestration reset subprocess', () => {
   it('validates reset scopes against an isolated runtime through the built CLI', async () => {
+    const [{ OrcaRuntimeService }, { OrchestrationDb }, { OrcaRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-reset-'))
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
@@ -329,6 +338,8 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
 
 describeIfBuilt('orca orchestration task readiness subprocess', () => {
   it('creates a late dependent as ready through the built CLI and runtime', async () => {
+    const [{ OrcaRuntimeService }, { OrchestrationDb }, { OrcaRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-task-readiness-'))
     const dbPath = join(userDataPath, 'orchestration.db')
     const runtime = new OrcaRuntimeService()

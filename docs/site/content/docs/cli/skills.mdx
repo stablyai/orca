@@ -53,15 +53,15 @@ Add `--json` when an agent needs deterministic output for automation. `skills sh
 
 When Orca ships a newer skill package than the one installed globally, the app can:
 
-- Show an **update available** nudge (and **Needs attention** when a copy is out of date somewhere the updater cannot safely rewrite).
-- Open **Update skills** — list of placements and skip reasons, then run **`npx --yes skills update <names> --global -y`** headlessly (no embedded terminal).
+- Show an **update available** nudge for skills Orca installed (and **Needs attention** when a copy is out of date somewhere the updater cannot safely rewrite).
+- Open **Update skills** — list of placements and skip reasons, with a checkbox per skill. Orca's own skills start ticked; a same-named skill installed from somewhere else is marked **Not from Orca** and starts unticked. The selected skills are reinstalled headlessly (no embedded terminal) with **`npx --yes skills@1.7.2 add https://github.com/stablyai/orca/tree/<commit> --skill <name>… --global -y`**, pinned to the commit the running Orca build was made from (so it works on hourly, daily, RC and stable builds alike) and to a known skills CLI version.
 - Keep the run in the **background**: closing the dialog does not cancel it. A status-bar segment shows progress (spinner while running, brief success check, persistent failure until you act). Click the segment to reopen the dialog.
 - Surface freshness on **Settings → Agents** for installed skills (global install rail), including **Details** when a row needs review.
 
-Manual equivalent (desktop Settings still shows the same `npx` form):
+Manual equivalent (desktop Settings shows the same pinned form for the running build):
 
 ```bash
-npx skills update orca-cli orchestration computer-use --global
+npx skills@1.7.2 add https://github.com/stablyai/orca/tree/<commit> --skill orca-cli --skill orchestration --global
 ```
 
 On headless hosts (SSH, containers, CI, `orca serve`) with no Settings UI, use the local CLI wrappers — they resolve the same `npx` commands, add non-interactive flags, and do **not** need a running Orca runtime:
@@ -77,10 +77,10 @@ orca skills update --skill orca-cli --dry-run
 
 - Default scope is **global** (`--global`); pass `--local` for the current project only.
 - `install` targets agents Orca detects on the host (plus the shared `.agents/skills` directory). Use `--agent <name>[,<name>…]` or `--agent universal` to override; if no agent is detected, `--agent` is required.
-- `update` only refreshes skills that are already installed.
+- `update` runs the same pinned `skills add` as `install`. With no agent detected it targets only `.agents/skills` instead of refusing.
 - `--dry-run` prints the resolved command; `--json` is only valid with listing / `--dry-run`.
 
-Prefer the in-app updater when Orca offers it so the same global placements the app scanned get rewritten. Rows marked **Skipped** explain why that skill cannot be updated automatically (for example missing source registration) — fix the placement, then re-check.
+Prefer the in-app updater when Orca offers it so the same global placements the app scanned get rewritten. Rows marked **Skipped** explain why that skill cannot be updated automatically (for example a read-only folder or a link pointing outside Orca's skill folders) — fix the placement, then re-check.
 
 ## Install and delete from the Skills page
 

@@ -3,6 +3,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { ContextMenuItem } from '@/components/ui/context-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { ResumeInNewCliTooltipText } from './ai-vault-session-cli-fork-copy'
 
 /** "Resume in New Native Chat" / "Resume in New CLI", shared by the session-history row menus and
@@ -11,12 +12,14 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
   menuKind,
   tooltipSide,
   onResumeInNewChat,
-  onResumeInNewCli
+  onResumeInNewCli,
+  cliPending = false
 }: {
   menuKind: 'dropdown' | 'context'
   tooltipSide: 'left' | 'right'
   onResumeInNewChat?: () => void
-  onResumeInNewCli?: () => void
+  onResumeInNewCli?: (event: Event) => void
+  cliPending?: boolean
 }): React.JSX.Element {
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   return (
@@ -33,8 +36,12 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
       {onResumeInNewCli ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Item onSelect={onResumeInNewCli}>
-              <SquareTerminal className="size-3.5" />
+            <Item onSelect={onResumeInNewCli} disabled={cliPending} aria-busy={cliPending}>
+              {cliPending ? (
+                <LoadingSpinner className="size-3.5" />
+              ) : (
+                <SquareTerminal className="size-3.5" />
+              )}
               {translate(
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
                 'Resume in New CLI'

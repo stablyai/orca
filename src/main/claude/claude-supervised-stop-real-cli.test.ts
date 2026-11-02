@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from './claude-child-exit-proof-ladder'
 import {
@@ -80,7 +80,7 @@ async function until<T>(read: () => Promise<T | null> | T | null, what: string, 
 
 async function open(sessionId: string, cwd: string, resume: boolean, frames: Frame[]) {
   const settings = process.env.ORCA_REAL_CLAUDE_SETTINGS
-  const permission = claudeStructuredPermissionOptions('bypassPermissions')
+  const permission = claudeStructuredPermissionOptions('full-access')
   const connection = await openClaudeStreamJsonConnection(
     {
       pathToClaudeCodeExecutable: CLAUDE_BIN,

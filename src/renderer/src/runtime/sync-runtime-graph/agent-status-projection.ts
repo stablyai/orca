@@ -1,7 +1,19 @@
 import type { AppState } from '@/store/types'
 import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
-import { AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS, graphState } from './graph-state'
-import type { AgentStatusProjectionCacheEntry } from './types'
+
+const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
+
+type AgentStatusProjectionCacheEntry = {
+  entry: AppState['agentStatusByPaneKey'][string]
+  projection: string
+}
+type AgentStatusProjectionCache = {
+  source: AppState['agentStatusByPaneKey']
+  entries: Map<string, AgentStatusProjectionCacheEntry>
+  projection: string
+}
+
+let cachedAgentStatusProjection: AgentStatusProjectionCache | null = null
 
 function mainAgentKey(mainAgent: AgentMainAgentStatus | undefined) {
   return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
@@ -44,7 +56,7 @@ function serializeAgentStatusEntry(
 export function buildRuntimeMobileAgentStatusProjection(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey']
 ): string {
-  const cached = graphState.cachedAgentStatusProjection
+  const cached = cachedAgentStatusProjection
   if (cached?.source === agentStatusByPaneKey) {
     return cached.projection
   }
@@ -59,7 +71,7 @@ export function buildRuntimeMobileAgentStatusProjection(
     nextEntries.length === cached.entries.size &&
     nextEntries.every(([paneKey, entry]) => cached.entries.get(paneKey)?.entry === entry)
   ) {
-    graphState.cachedAgentStatusProjection = {
+    cachedAgentStatusProjection = {
       ...cached,
       source: agentStatusByPaneKey
     }
@@ -85,7 +97,7 @@ export function buildRuntimeMobileAgentStatusProjection(
   }
   // Same-bucket heartbeats must not rejoin every pane's accumulated preview text.
   const projection = projectionUnchanged && cached ? cached.projection : `[${parts.join(',')}]`
-  graphState.cachedAgentStatusProjection = {
+  cachedAgentStatusProjection = {
     source: agentStatusByPaneKey,
     entries,
     projection
@@ -103,5 +115,5 @@ export const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS =
   AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS
 
 export function resetRuntimeMobileAgentStatusProjectionCacheForTests(): void {
-  graphState.cachedAgentStatusProjection = null
+  cachedAgentStatusProjection = null
 }

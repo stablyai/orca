@@ -2,10 +2,6 @@ import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { unwrapMuseLogRecords } from '../../shared/muse-session-log'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import {
-  remoteSessionContentLines,
-  type RemoteSessionContent
-} from './remote-session-content-lines'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
@@ -227,27 +223,6 @@ function foldMuseLines(
       foldMuseRecord(accumulator, record, dedupe)
     }
   }
-}
-
-/** Parses remote transcript chunks without requiring the scanner to buffer the file. */
-export async function parseMuseSessionRemoteContent(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {},
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'muse',
-    file,
-    sessionId: museSessionIdFromFilePath(file.path)
-  })
-  const lines = remoteSessionContentLines(content, signal)
-  const dedupe: MuseDedupeState = { text: null, ms: null }
-  for await (const line of lines) {
-    foldMuseLines(accumulator, [line], dedupe)
-  }
-  return finalizeSession(accumulator, platform, options)
 }
 
 export async function parseMuseSessionFile(

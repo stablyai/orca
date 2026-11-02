@@ -162,6 +162,24 @@ export type NativeChatSubagentGroupBlock = {
   agents: NativeChatSubagentEntry[]
 }
 
+/** One subagent's own row: written where it was spawned and revised in place for every later
+ *  change and run. Siblings sharing `groupId` and `parentId` draw as one group, which readers
+ *  derive; no row lists them together. */
+export type NativeChatSubagentBlock = NativeChatSubagentEntry & {
+  type: 'subagent'
+  /** The turn that spawned it: siblings with the same key draw together. */
+  groupId: string
+  /** The subagent that spawned it. Absent ⇒ the session's own agent did. */
+  parentId?: string
+  /** The provider's id for the run `state` describes. Absent when the provider names none. */
+  run?: string
+  /** `stop-acknowledged`: stopped because the agent accepted a Stop, not because the child
+   *  reported its own end; that run's own ending may still replace it. */
+  outcomeBasis?: 'stop-acknowledged'
+  /** Told to outlive the turn that spawned it. */
+  background?: true
+}
+
 /** One provider background task — a shell command, workflow or monitor run
  *  beside the turn — as its own durable row, revised in place from the
  *  provider's lifecycle frames. Sibling of the roster block rather than a
@@ -203,6 +221,7 @@ export type NativeChatBlock =
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
   | NativeChatSubagentGroupBlock
+  | NativeChatSubagentBlock
   | NativeChatBackgroundTaskBlock
 
 /** A transcript row. Structured rows carry the journal row's producer linkage, so
@@ -219,6 +238,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   source: NativeChatSource
   /** Optional provider row cursor; split projections share it for whole-row paging. */
   transcriptOffset?: number
+  /** Display order when the provider's sequence differs from its stable paging cursor. */
+  transcriptOrder?: number
   /** Model id that produced an assistant response, as the provider API names it. */
   model?: string
   /** The agent's provider that served `model`, where the agent records one. */
@@ -260,6 +281,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Set only by the tool fold, on a row that absorbed later tool rows: the newest
    *  absorbed row's journal position. The row still sorts by its own. */
   foldedJournalPosition?: AgentJournalPosition
+  /** Private presentation row; raw host messages never publish this fold-only marker. */
+  unpairedToolResults?: true
 }
 
 /** Split reasoning and its answer share the provider's row identity. */
@@ -356,6 +379,10 @@ export function isSubagentGroupBlock(
   block: NativeChatBlock
 ): block is NativeChatSubagentGroupBlock {
   return block.type === 'subagent-group'
+}
+
+export function isSubagentBlock(block: NativeChatBlock): block is NativeChatSubagentBlock {
+  return block.type === 'subagent'
 }
 
 export function isBackgroundTaskBlock(

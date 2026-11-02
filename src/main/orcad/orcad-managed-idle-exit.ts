@@ -10,11 +10,8 @@ import { join } from 'node:path'
 import { RELAY_INSTALL_LOCK_NAME } from '../../shared/relay-install-lock-name'
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 import type { RuntimeRpcClientActivity } from '../runtime/runtime-rpc/runtime-rpc-shutdown'
-import {
-  ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
-  ORCAD_IDLE_EXIT_TIMEOUT_MS,
-  readOrcadE2EIdleTimeoutMs
-} from '../../shared/orcad-idle-exit'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
+import { ORCAD_IDLE_EXIT_TIMEOUT_MS, readOrcadE2EIdleTimeoutMs } from '../../shared/orcad-idle-exit'
 import {
   OrcadIdleExitMonitor,
   type OrcadIdleExitEvidence,
@@ -46,6 +43,7 @@ export type OrcadManagedIdleExitPorts = {
   countDaemonSessions: () => Promise<number | null>
   hasDaemon: () => boolean
   agentStates: () => readonly { state: string }[]
+  hasChatProviders: () => boolean
   hasStagedMigration: () => boolean
   /** An enabled schedule or an unsettled run; nothing would fire either once the host exits. */
   automationsBusy: () => boolean
@@ -84,6 +82,7 @@ export function createOrcadIdleProbes(
       name: 'agents',
       read: () => verdict(ports.agentStates().some((entry) => entry.state === 'working'))
     },
+    { name: 'chat-providers', read: () => verdict(ports.hasChatProviders()) },
     { name: 'migration', read: () => verdict(ports.hasStagedMigration()) },
     { name: 'automations', read: () => verdict(ports.automationsBusy()) },
     {
@@ -110,7 +109,7 @@ export function installOrcadManagedIdleExit(input: {
   config: OrcadManagedIdleExitConfig
   ports: OrcadManagedIdleExitPorts
   /** Records the clean stop, then runs the same graceful shutdown as SIGTERM. */
-  stop: (evidence: OrcadIdleExitEvidence) => void
+  stop: (evidence: OrcadIdleExitEvidence) => void | boolean | Promise<void | boolean>
 }): () => void {
   const monitor = new OrcadIdleExitMonitor({
     timeoutMs: input.config.timeoutMs,

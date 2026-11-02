@@ -8,6 +8,11 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import {
+  beginAgentInputFocusGuard,
+  clearAgentInputFocusGuards,
+  endAgentInputFocusGuard
+} from '@/components/browser-pane/host-guest/agent-input-focus-guard'
 
 /**
  * A client-hosted page is a local Electron webview on this desktop that happens to belong to a
@@ -94,6 +99,22 @@ export function registerBrowserStateIpcBridge(
         releaseBrowserAutomationVisibility(token)
       }
       capturePaintHoldTokens.clear()
+    })
+  }
+  const unsubscribeAgentInputFocusGuard = window.api.browser.onAgentInputFocusGuard?.(
+    ({ browserPageId, token, active }) => {
+      if (active) {
+        beginAgentInputFocusGuard(browserPageId, token)
+        window.api.browser.agentInputFocusGuardReady(token)
+      } else {
+        endAgentInputFocusGuard(token)
+      }
+    }
+  )
+  if (unsubscribeAgentInputFocusGuard) {
+    unsubs.push(() => {
+      unsubscribeAgentInputFocusGuard()
+      clearAgentInputFocusGuards()
     })
   }
   unsubs.push(

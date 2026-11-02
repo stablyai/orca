@@ -23,7 +23,7 @@ import {
   cancelRuntimeFileList,
   listRuntimeFiles,
   searchRuntimeFilePaths
-} from '@/runtime/runtime-file-client'
+} from '@/runtime/runtime-file-search-client'
 import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
 import { splitFileNameFilterTokens } from '../../../shared/file-name-filter-tokens'
 import {
@@ -38,6 +38,7 @@ import {
   getFileExplorerOwnerUnresolvedMessage,
   getFileExplorerOperationRoute
 } from '@/components/right-sidebar/file-explorer-operation-owner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export type RuntimeFileListState = {
   files: string[]
@@ -116,7 +117,8 @@ export function useRuntimeFileListForWorktree({
   const operationRoute = getFileExplorerOperationRoute(operationOwner)
   const operationRouteAvailable = operationRoute !== null
   const connectionId = operationRoute?.connectionId
-  const runtimeEnvironmentId = operationRoute?.settings.activeRuntimeEnvironmentId ?? null
+  const runtimeEnvironmentId =
+    operationOwner.kind === 'runtime' ? operationOwner.environmentId : null
   const activeTargetStatus = useAppStore((state) =>
     connectionId ? state.sshConnectionStates.get(connectionId)?.status : undefined
   )
@@ -189,7 +191,7 @@ export function useRuntimeFileListForWorktree({
     const requestAbortController = new AbortController()
     const requestOperationOwner = operationOwnerRef.current
     const requestContext = {
-      settings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
+      target: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
       worktreeId,
       worktreePath,
       connectionId

@@ -7,6 +7,8 @@ import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatPaneCover } from '../terminal-pane/NativeChatPaneCover'
+import { NativeChatQuestionCard } from './NativeChatQuestionCard'
+import { focusNativeChatCover } from '../terminal-pane/native-chat-covered-pane'
 import { registerTerminalPanePasteListeners } from '../terminal-pane/terminal-pane-paste-listeners'
 import type { TerminalPaneCloseController } from '../terminal-pane/use-terminal-pane-close-actions'
 import type { TerminalPanePasteExecution } from '../terminal-pane/terminal-pane-paste-execution'
@@ -223,6 +225,42 @@ function menuContext(): TerminalPaneMenuPasteContext {
 }
 
 describe('a chat cover owns focus over its terminal', () => {
+  it.each([false, true])(
+    'hands the covered keyboard to a shown question (cover already mounted: %s)',
+    (alreadyCovered) => {
+      const f = fixture()
+      const onAnswer = vi.fn()
+      if (alreadyCovered) {
+        f.cover()
+      }
+      f.cover(
+        <div data-native-chat-root>
+          <NativeChatQuestionCard
+            shouldFocus
+            prompt={{
+              questions: [
+                {
+                  question: 'Choose',
+                  multiSelect: false,
+                  options: [{ label: 'First' }, { label: 'Second' }]
+                }
+              ]
+            }}
+            onAnswer={onAnswer}
+            onCancel={() => {}}
+          />
+        </div>
+      )
+      const first = f.shell().querySelector('button[aria-pressed]')
+      expect(document.activeElement).toBe(first)
+      expect(first?.getAttribute('aria-pressed')).toBe('false')
+      f.sibling.helper.focus()
+      focusNativeChatCover(f.pane)
+      expect(document.activeElement).toBe(first)
+      expect(onAnswer).not.toHaveBeenCalled()
+    }
+  )
+
   it('moves focus off the covered xterm and keeps it off', () => {
     const f = fixture()
     expect(document.activeElement).toBe(f.pane.helper)

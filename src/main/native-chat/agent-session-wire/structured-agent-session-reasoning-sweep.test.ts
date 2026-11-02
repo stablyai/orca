@@ -12,10 +12,8 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import {
-  settleStaleStructuredAgentSessionState,
-  settleStructuredAgentSessionDeadGeneration
-} from './structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import { captureUnfinishedStructuredAgentSessionWork } from './structured-agent-session-unfinished-work'
 
 const SESSION = 'session-reasoning-sweep'
@@ -72,7 +70,7 @@ describe('an open reasoning row a dead generation left', () => {
   it('ends, with no claimed time, when the generation is settled at its exit', async () => {
     await seedOpenReasoning('running')
     await expect(
-      settleStructuredAgentSessionDeadGeneration({
+      settleObservedExitForTest({
         journal,
         sessionId: SESSION,
         fence: 8,
@@ -81,7 +79,7 @@ describe('an open reasoning row a dead generation left', () => {
         verdict: { state: 'interrupted', completedAt: 1_500 },
         showUnexpectedExitOutcome: false
       })
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toMatchObject({ ok: true })
     expect(reasoningBody()).toEqual({
       kind: 'message',
       role: 'reasoning',

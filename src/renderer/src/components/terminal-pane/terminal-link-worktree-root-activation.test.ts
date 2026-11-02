@@ -94,7 +94,7 @@ describe('handleOscLink', () => {
       expect.objectContaining({ filePath: '/tmp/other-worktree' })
     )
     expect(statMock).toHaveBeenCalled()
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/other-worktree')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/other-worktree', 'local')
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
   })

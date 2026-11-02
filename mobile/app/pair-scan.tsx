@@ -17,7 +17,7 @@ import {
   type PreProfilePairingAttempt
 } from '../src/transport/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
-import { useRefreshHostClient } from '../src/transport/client-context'
+import { useRefreshHostClient } from '../src/transport/host-client-hooks'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ConnectionLog } from '../src/components/ConnectionLog'

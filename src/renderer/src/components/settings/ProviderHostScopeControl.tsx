@@ -1,12 +1,12 @@
 import { ServerCog } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import type { ProviderAccountScope, ProviderRateLimitScope } from './provider-account-scope'
+import type { ProviderHostScope } from './provider-account-scope'
 import { translate } from '@/i18n/i18n'
 
 type ProviderHostScopeControlProps = {
   labelPrefix: string
-  scope: ProviderAccountScope | ProviderRateLimitScope
+  scope: ProviderHostScope
   className?: string
 }
 

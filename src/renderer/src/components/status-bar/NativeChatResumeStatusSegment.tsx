@@ -1,4 +1,4 @@
-import { AlertCircle, Loader2, RotateCcw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
 import { useNativeChatRestartOfferEnabled } from '../native-chat-restart-offer-gate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -13,8 +13,9 @@ import { resumeRunView } from '../native-chat-resume-run-view'
 // Why: closing the resume dialog is a snooze, not a decline — the host keeps the offer. This is
 // then the only surface left carrying it, so it is always rendered rather than gated by
 // `statusBarItems`. Pressing Resume closes the dialog too, so this entry carries the run while it
-// is in flight. It is also the lasting summary of chats the resume could not carry on: its
-// toast says so once, and each chat it reached carries its own note.
+// is in flight, then says it resumed them until that summary has been seen. It is also the lasting
+// summary of chats the resume could not carry on: its toast says so once, and each chat it reached
+// carries its own note.
 
 function Segment({
   icon,
@@ -104,6 +105,37 @@ function failedText(count: number): SegmentText {
   }
 }
 
+function resumedText(count: number): SegmentText {
+  return {
+    label:
+      count === 1
+        ? translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelOne',
+            '1 chat resumed'
+          )
+        : translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabel',
+            '{{value0}} chats resumed',
+            { value0: count }
+          ),
+    ariaLabel:
+      count === 1
+        ? translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaOne',
+            '1 chat resumed. Click to see it.'
+          )
+        : translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAria',
+            '{{value0}} chats resumed. Click to see them.',
+            { value0: count }
+          ),
+    tooltip: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.resumedTooltip',
+      'Chats Orca resumed after the restart. Click to see them.'
+    )
+  }
+}
+
 /** True of a refused chat and an unconfirmed one alike, for a list holding either. */
 function checkText(count: number): SegmentText {
   return {
@@ -158,6 +190,14 @@ export function NativeChatResumeStatusSegment({
   const failures = waiting.length
   // An unconfirmed chat may be working, so "failed" would invite a duplicate "continue".
   const unconfirmed = waiting.some((failure) => failure.outcome === 'unconfirmed')
+  // Only this run's own completed rows establish its success; older host failures are separate.
+  const resumed =
+    run !== null &&
+    !running &&
+    !run.finishedViewShown &&
+    view?.counts.resumed === run.entries.length
+      ? (view?.counts.resumed ?? 0)
+      : 0
   return (
     <>
       {running && (
@@ -211,6 +251,14 @@ export function NativeChatResumeStatusSegment({
           count={failures}
           icon={<AlertCircle className="size-3 text-status-warning" />}
           {...(unconfirmed ? checkText(failures) : failedText(failures))}
+        />
+      )}
+      {resumed > 0 && (
+        <Segment
+          iconOnly={iconOnly}
+          count={resumed}
+          icon={<CheckCircle2 className="size-3 text-status-success" />}
+          {...resumedText(resumed)}
         />
       )}
     </>

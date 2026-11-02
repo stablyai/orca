@@ -12,12 +12,7 @@ import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagn
 import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
 import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
 import { isHiddenPtyDeliveryGateEnabled } from '../../pty-hidden-delivery-gate'
-import {
-  appendPendingProjectionAdmission,
-  compactPendingProjectionAdmissions,
-  type PendingProjectionAdmissions
-} from '../../pty-pending-projection-admissions'
-import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
+import type { PendingPtyData } from '../../pty-pending-data-drain-contract'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import type { PtyIpcSession } from '../session'
 
@@ -63,40 +58,6 @@ export function getDroppedSynchronizedOutputRendererData(pending: PendingPtyData
   return pending.droppedSynchronizedOutputState?.active === true ? '\x1b[?2026l' : ''
 }
 
-export function pendingProjectionAdmissionOptions(session: PtyIpcSession) {
-  return {
-    isPending: (id: string) => session.sshOutputIntake?.hasUnpublishedProjection(id) ?? false,
-    transfer: (ids: readonly string[], reason: string) =>
-      session.sshOutputIntake?.transferProjections(ids, reason)
-  }
-}
-
-export function updatePendingProjectionAdmissions(
-  pending: PendingPtyData,
-  state: PendingProjectionAdmissions
-): void {
-  delete pending.projectionAdmissionIds
-  delete pending.projectionAdmissionsTransferred
-  if (state.projectionAdmissionIds) {
-    pending.projectionAdmissionIds = state.projectionAdmissionIds
-  }
-  if (state.projectionAdmissionsTransferred) {
-    pending.projectionAdmissionsTransferred = true
-  }
-}
-
-export function compactPendingProjectionState(
-  session: PtyIpcSession,
-  pending: PendingProjectionAdmissions,
-  projectionSemanticsId?: string
-): PendingProjectionAdmissions {
-  const options = pendingProjectionAdmissionOptions(session)
-  const compacted = compactPendingProjectionAdmissions(pending, options)
-  return projectionSemanticsId
-    ? appendPendingProjectionAdmission(compacted, projectionSemanticsId, options)
-    : compacted
-}
-
 export function dropOversizedPendingPtyData(
   session: PtyIpcSession,
   id: string,
@@ -124,9 +85,6 @@ export function dropOversizedPendingPtyData(
     session.pendingOverflowMarkedPtys.add(id)
   }
   session.pendingDroppedChars += pending.data.length
-  if (pending.projectionAdmissionIds) {
-    session.sshOutputIntake?.transferProjections(pending.projectionAdmissionIds, 'pending-cap')
-  }
   const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
   const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
     pending.data,
@@ -151,14 +109,10 @@ export function appendPendingPtyData(
   preservesSeq: boolean,
   containsBackgroundOutput: boolean,
   rawLength = data.length,
-  transformed = false,
-  projectionSemanticsId?: string
+  transformed = false
 ): PendingPtyData {
   // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
   if (existing?.droppedOutput === true) {
-    if (projectionSemanticsId) {
-      session.sshOutputIntake?.transferProjections([projectionSemanticsId], 'pending-cap')
-    }
     const mode2031 = scanDroppedMode2031Data(
       data,
       existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
@@ -180,11 +134,6 @@ export function appendPendingPtyData(
       droppedSynchronizedOutputState: synchronizedOutput.state
     }
   }
-  const projectionState = compactPendingProjectionState(
-    session,
-    existing ?? {},
-    projectionSemanticsId
-  )
   const nextContainsBackgroundOutput =
     existing?.containsBackgroundOutput === true || containsBackgroundOutput
   if (!existing) {
@@ -195,7 +144,6 @@ export function appendPendingPtyData(
       ...(transformed ? { transformed: true } : {}),
       ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
     }
-    updatePendingProjectionAdmissions(pending, projectionState)
     return dropOversizedPendingPtyData(session, id, pending)
   }
   const existingRawLength = existing.rawLength ?? existing.data.length
@@ -206,7 +154,6 @@ export function appendPendingPtyData(
       : {}),
     ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
   }
-  updatePendingProjectionAdmissions(next, projectionState)
   if (typeof existing.startSeq === 'number') {
     next.startSeq = existing.startSeq
   }

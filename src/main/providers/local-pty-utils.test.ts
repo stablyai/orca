@@ -1,15 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as fs from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import type { Stats } from 'node:fs'
 
-const { existsSyncMock, statSyncMock, accessSyncMock, wslUncDirectoryExistsMock, wrapSpawnMock } =
-  vi.hoisted(() => ({
-    existsSyncMock: vi.fn(),
-    statSyncMock: vi.fn(),
-    accessSyncMock: vi.fn(),
-    wslUncDirectoryExistsMock: vi.fn(),
-    wrapSpawnMock: vi.fn()
-  }))
+const {
+  existsSyncMock,
+  statSyncMock,
+  statMock,
+  accessSyncMock,
+  wslUncDirectoryExistsAsyncMock,
+  wrapSpawnMock
+} = vi.hoisted(() => ({
+  existsSyncMock: vi.fn(),
+  statSyncMock: vi.fn(),
+  statMock: vi.fn(),
+  accessSyncMock: vi.fn(),
+  wslUncDirectoryExistsAsyncMock: vi.fn(),
+  wrapSpawnMock: vi.fn()
+}))
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
@@ -21,12 +29,17 @@ vi.mock('fs', async (importOriginal) => {
   }
 })
 
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof FsPromises>()),
+  stat: statMock
+}))
+
 function dirStats(isDirectory: boolean): Stats {
   return { isDirectory: () => isDirectory } as Stats
 }
 
 vi.mock('../wsl', () => ({
-  wslUncDirectoryExists: wslUncDirectoryExistsMock
+  wslUncDirectoryExistsAsync: wslUncDirectoryExistsAsyncMock
 }))
 
 vi.mock('./macos-tcc-login-shell', () => ({
@@ -39,6 +52,7 @@ import {
   spawnShellWithFallback,
   validateWorkingDirectory
 } from './local-pty-utils'
+import { _resetWorkingDirectoryValidationStateForTest } from './working-directory-validation'
 import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 
 const WSL_UNC_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
@@ -48,61 +62,81 @@ describe('validateWorkingDirectory', () => {
   beforeEach(() => {
     existsSyncMock.mockReset()
     statSyncMock.mockReset()
-    wslUncDirectoryExistsMock.mockReset()
+    statMock.mockReset()
+    wslUncDirectoryExistsAsyncMock.mockReset()
+    _resetWorkingDirectoryValidationStateForTest()
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('accepts a WSL UNC worktree that exists inside the distro even when fs.statSync would fail', () => {
+  it('accepts a WSL UNC worktree that exists inside the distro even when fs.statSync would fail', async () => {
     // Why: the Win32 9P stat is the exact path that falsely reported ENOENT and
     // broke opening WSL worktrees. The distro answer must win.
-    wslUncDirectoryExistsMock.mockReturnValue(true)
+    wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
     existsSyncMock.mockReturnValue(false)
 
-    expect(() => validateWorkingDirectory(WSL_UNC_DIR)).not.toThrow()
-    expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith(WSL_UNC_DIR)
+    await expect(validateWorkingDirectory(WSL_UNC_DIR)).resolves.toBeUndefined()
+    expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(WSL_UNC_DIR)
     // The fs fallback must not run when the distro confirmed existence.
     expect(existsSyncMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a WSL UNC worktree that does not exist inside the distro', () => {
-    wslUncDirectoryExistsMock.mockReturnValue(false)
+  it('returns to the event loop while the distro probe is still running', async () => {
+    const probe = Promise.withResolvers<boolean | null>()
+    wslUncDirectoryExistsAsyncMock.mockReturnValue(probe.promise)
+    let settled = false
 
-    expect(() => validateWorkingDirectory(WSL_UNC_DIR)).toThrow(/does not exist/)
+    const validation = validateWorkingDirectory(WSL_UNC_DIR).finally(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(settled).toBe(false)
+
+    probe.resolve(true)
+    await validation
+    expect(settled).toBe(true)
+  })
+
+  it('rejects a WSL UNC worktree that does not exist inside the distro', async () => {
+    wslUncDirectoryExistsAsyncMock.mockResolvedValue(false)
+
+    await expect(validateWorkingDirectory(WSL_UNC_DIR)).rejects.toThrow(/does not exist/)
+    expect(existsSyncMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the fs check when the distro answer is inconclusive', async () => {
+    wslUncDirectoryExistsAsyncMock.mockResolvedValue(null)
+    statMock.mockResolvedValue(dirStats(true))
+
+    await expect(validateWorkingDirectory(WSL_UNC_DIR)).resolves.toBeUndefined()
+    expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(WSL_UNC_DIR)
+    expect(statMock).toHaveBeenCalledWith(WSL_UNC_DIR)
     expect(existsSyncMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to the fs check when the distro answer is inconclusive', () => {
-    wslUncDirectoryExistsMock.mockReturnValue(null)
+  it('validates native Windows paths via fs without consulting the distro', async () => {
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue(dirStats(true))
 
-    expect(() => validateWorkingDirectory(WSL_UNC_DIR)).not.toThrow()
-    expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith(WSL_UNC_DIR)
-    expect(existsSyncMock).toHaveBeenCalledWith(WSL_UNC_DIR)
-  })
-
-  it('validates native Windows paths via fs without consulting the distro', () => {
-    existsSyncMock.mockReturnValue(true)
-    statSyncMock.mockReturnValue(dirStats(true))
-
-    expect(() => validateWorkingDirectory(NATIVE_DIR)).not.toThrow()
-    expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+    await expect(validateWorkingDirectory(NATIVE_DIR)).resolves.toBeUndefined()
+    expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
     expect(existsSyncMock).toHaveBeenCalledWith(NATIVE_DIR)
   })
 
-  it('rejects a missing native Windows path', () => {
+  it('rejects a missing native Windows path', async () => {
     existsSyncMock.mockReturnValue(false)
     const previousVersion = process.env.ORCA_APP_VERSION
     process.env.ORCA_APP_VERSION = '1.4.178-test'
 
     try {
-      expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(
+      await expect(validateWorkingDirectory(NATIVE_DIR)).rejects.toThrow(
         /does not exist.*orca: 1\.4\.178-test/
       )
-      expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+      expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
     } finally {
       if (previousVersion === undefined) {
         delete process.env.ORCA_APP_VERSION
@@ -112,11 +146,11 @@ describe('validateWorkingDirectory', () => {
     }
   })
 
-  it('rejects a native Windows path that exists but is not a directory', () => {
+  it('rejects a native Windows path that exists but is not a directory', async () => {
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue(dirStats(false))
 
-    expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/is not a directory/)
+    await expect(validateWorkingDirectory(NATIVE_DIR)).rejects.toThrow(/is not a directory/)
   })
 })
 

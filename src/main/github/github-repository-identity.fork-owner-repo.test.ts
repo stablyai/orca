@@ -20,10 +20,6 @@ vi.mock('../git/runner', async (importOriginal) => ({
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: () => null
-}))
-
 vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))

@@ -16,8 +16,7 @@ import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-sessi
 import { structuredAgentSessionAttemptFailureParts } from '../../../src/shared/structured-agent-session-rejection-words'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionQueuedMessage,
-  type AgentSessionQueuePause
+  type AgentSessionQueuedMessage
 } from '../../../src/shared/agent-session-wire'
 import { readAgentMessageSource } from '../../../src/shared/agent-session-message-source'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
@@ -30,7 +29,8 @@ export type MobileQueuedMessageCard = {
   paused: boolean
   /** Returned, or its own send failed: the row leads with an alert. */
   needsAttention: boolean
-  /** Status under the text; null for a card plainly waiting its turn, the paused queue's too. */
+  /** Status under the text; null for a card plainly waiting its turn, also behind an open
+   *  question or in a paused queue: the question and the pause row say why. */
   caption: string | null
   /** "From <name>" on another agent's card; null on the person's. */
   attribution: string | null
@@ -68,7 +68,7 @@ function returnedCaption(
   )
 }
 
-/** One card's own hold: a failed conversion; the queue's pause is the list's first row. */
+/** One card's own hold: a failed conversion; the queue's pause is the list's header. */
 function pausedCaption(reason: string | undefined, waitsForAgent: boolean): string {
   if (reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
     return waitsForAgent
@@ -77,10 +77,6 @@ function pausedCaption(reason: string | undefined, waitsForAgent: boolean): stri
   }
   // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
   return 'Paused'
-}
-
-const QUEUE_PAUSE_LABELS: Readonly<Record<string, string>> = {
-  stopped: 'Queue paused because you interrupted'
 }
 
 /** Whether Resume would send anything: a waiting card with no hold of its own, ahead of any
@@ -97,12 +93,6 @@ export function mobileQueueHasResumableCard(cards: readonly MobileQueuedMessageC
   return false
 }
 
-/** The paused queue's first row. A reason this build does not know (a newer host's) reads as a
- *  plain pause. */
-export function mobileQueuePauseLabel(pause: Pick<AgentSessionQueuePause, 'reason'>): string {
-  return QUEUE_PAUSE_LABELS[pause.reason] ?? 'Queue paused'
-}
-
 /** Cards in published order. A waiting card is hidden once a live hand-off of it arrived — a
  *  submission naming it as its `queuedMessageId` that was not rejected — as the desktop hides it:
  *  on a multi-page catch-up the shrunk list rides only the final page, so the bubble and the card
@@ -112,12 +102,10 @@ export function mobileQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null,
   submissions: readonly Pick<AgentJournalSubmission, 'queuedMessageId' | 'dispatchState'>[],
   facts: {
-    pendingPrompt: boolean
-    queuePaused?: boolean
     agentWorking?: boolean
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]
-  }
+  } = {}
 ): MobileQueuedMessageCard[] {
   if (!queuedMessages || queuedMessages.length === 0) {
     return []
@@ -146,12 +134,7 @@ export function mobileQueuedMessageCards(
             )
           : behindReturned
             ? 'Waiting — a message ahead needs attention'
-            : facts.queuePaused
-              ? // The pause row says why and offers Resume; the card promises no send time.
-                null
-              : facts.pendingPrompt
-                ? 'Waiting for your answer'
-                : null
+            : null
     cards.push({
       messageId: draft.messageId,
       text: queuedMessageBodyText(draft.body),

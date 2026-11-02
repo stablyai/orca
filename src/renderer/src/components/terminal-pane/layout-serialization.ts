@@ -14,11 +14,8 @@ import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewp
 import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
 import { readSplitRatio, SPLIT_RATIO_TOLERANCE } from '@/lib/pane-manager/pane-split-ratio'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
-import {
-  getLeftmostLeafId,
-  normalizeTerminalLayoutSnapshot,
-  resolveRootlessTerminalLayoutLeafId
-} from './terminal-layout-leaf-ids'
+import { getLeftmostLeafId, normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
 export {
   collectLeafIdsInOrder,
@@ -109,7 +106,9 @@ export function restoreScrollbackBuffers(
   savedBuffers: Record<string, string> | undefined,
   restoredPaneByLeafId: Map<string, number>,
   replayingPanesRef: ReplayingPanesRef,
-  restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
+  restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef,
+  /** Leaves whose TUI is still live on its host, so the reveal keeps its last frame. */
+  liveAltScreenLeafIds?: ReadonlySet<string>
 ): void {
   if (!savedBuffers) {
     return
@@ -141,6 +140,18 @@ export function restoreScrollbackBuffers(
       const lastOn = buf.lastIndexOf(ALT_SCREEN_ON)
       const lastOff = buf.lastIndexOf(ALT_SCREEN_OFF)
       if (lastOn > lastOff) {
+        if (liveAltScreenLeafIds?.has(oldLeafId)) {
+          // Why: stripping the frame would show the pre-TUI shell rows until the host
+          // snapshot repaints (#22087); the reattach replay leaves alt itself if needed.
+          replayIntoTerminal(
+            pane,
+            replayingPanesRef,
+            `${RESET_GRAPHIC_RENDITION}${buf}`,
+            renderOptions
+          )
+          restoredViewportBlankingPanesRef?.current.add(pane.id)
+          continue
+        }
         buf = buf.slice(0, lastOn)
       }
       if (buf.length > 0) {

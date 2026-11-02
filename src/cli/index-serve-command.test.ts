@@ -74,6 +74,28 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'turns on supervision only for an explicit --supervise, and never with --recipe-json',
+    async () => {
+      serveOrcaAppMock.mockResolvedValue(0)
+
+      await main(['serve', '--supervise', '--no-pairing'], '/tmp/repo')
+      expect(serveOrcaAppMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ supervise: true, noPairing: true })
+      )
+
+      await main(['serve', '--no-pairing'], '/tmp/repo')
+      expect(serveOrcaAppMock.mock.lastCall?.[0]).not.toHaveProperty('supervise')
+
+      serveOrcaAppMock.mockClear()
+      await main(
+        ['serve', '--supervise', '--recipe-json', '--project-root', '/workspace/repo'],
+        '/tmp/repo'
+      )
+      expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    }
+  )
+
   it('forwards the pairing-time desktop-control grant', async () => {
     serveOrcaAppMock.mockResolvedValue(0)
 

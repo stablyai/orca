@@ -66,6 +66,28 @@ afterEach(() => {
 })
 
 describe('restoreSshConnectionsForStartup', () => {
+  it('dials as an automatic connect, so a sign-in the user cancelled stays cancelled', async () => {
+    installWindowApi([target('ssh-eager'), target('ssh-background')])
+    const connectArgs: unknown[] = []
+    window.api.ssh.connect = async (args) => {
+      connectArgs.push(args)
+      return connectedState(args.targetId)
+    }
+
+    await restoreSshConnectionsForStartup({
+      connectionIds: ['ssh-eager', 'ssh-background'],
+      blockingConnectionIds: ['ssh-eager'],
+      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
+      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
+      publishSshConnectionState: harness.publishSshConnectionState
+    })
+
+    expect(connectArgs).toEqual([
+      { targetId: 'ssh-background', automatic: true },
+      { targetId: 'ssh-eager', automatic: true }
+    ])
+  })
+
   it('does not wait on a target that owns no immediately-mounted pane', async () => {
     vi.useFakeTimers()
     installWindowApi([target('ssh-active'), target('ssh-asleep')])

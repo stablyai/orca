@@ -8,6 +8,7 @@ import {
   recordWslCliRegistrationRemoved
 } from '../cli/wsl-cli-registration-registry'
 import { WslCliInstaller } from '../cli/wsl-cli-installer'
+import { unreachableWslCliStatus, WslCliUnreachableError } from '../cli/wsl-cli-status'
 import { runSerializedWslCliRegistrationOperation } from '../cli/wsl-cli-registration-operation'
 import { getCanonicalUserDataPath } from '../persistence'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
@@ -143,7 +144,17 @@ export function registerCliHandlers(): void {
       // Why: status is a read-only probe; queuing it behind a long-running
       // repair/install would hang the Settings spinner for its duration, and
       // Settings re-polls, so a rare transient read self-corrects.
-      return new WslCliInstaller({ distro: resolveWslCliDistro(args) }).getStatus()
+      const distro = resolveWslCliDistro(args)
+      try {
+        return await new WslCliInstaller({ distro }).getStatus()
+      } catch (error) {
+        // Why: a cold or busy distro is a retryable state for the Settings row,
+        // not a raw IPC rejection (#29497).
+        if (distro && error instanceof WslCliUnreachableError) {
+          return unreachableWslCliStatus(distro)
+        }
+        throw error
+      }
     }
   )
 

@@ -1,6 +1,6 @@
 import { isTerminalSessionStorageCapacityFailure } from '../../../shared/terminal-session-state-save-failure'
 import { afterEach, expect, it, vi } from 'vitest'
-import { deferred, fixture } from './profile-state-delayed-authority-fixture'
+import { deferred, fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
@@ -16,7 +16,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -72,6 +72,7 @@ it.each(
       const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
+      await admitRuntimeSpawnPane(store, binding)
       ctx.hostSessionBinding = { store, ...binding }
       shutdown = vi.spyOn(ctx.provider, 'shutdown').mockImplementation(holdShutdown)
       commit = () => commitRuntimePtySpawn(ctx)
@@ -94,7 +95,7 @@ it.each(
     await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
     runtime.onPtySpawned(binding.ptyId, replacementIncarnation)
     ptyIncarnationById.set(binding.ptyId, replacementIncarnation)
-    ptyOwnership.set(binding.ptyId, 'successor-host')
+    ptyOwnership.set(binding.ptyId, 'ssh:successor-host')
     if (replacementDuring === 'save') {
       gate.finish.reject(Object.assign(new Error('worker exited'), { code }))
     }
@@ -109,7 +110,7 @@ it.each(
       })
     }
     expect(ptyIncarnationById.get(binding.ptyId)).toBe(replacementIncarnation)
-    expect(ptyOwnership.get(binding.ptyId)).toBe('successor-host')
+    expect(ptyOwnership.get(binding.ptyId)).toBe('ssh:successor-host')
     await runtime.onPtyExit(binding.ptyId, 0, replacementIncarnation, {
       providerExitObserved: true
     })
@@ -137,6 +138,7 @@ it.each(['ipc', 'runtime'])(
       const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
+      await admitRuntimeSpawnPane(store, binding)
       ctx.hostSessionBinding = { store, ...binding }
       commit = () => commitRuntimePtySpawn(ctx)
     }

@@ -12,8 +12,17 @@ import {
   mapWorkflowJobs,
   getWorkflowRunIdFromCheckRun
 } from './check-detail-field-mapping'
-import { rethrowCheckDetailsAbort, waitForCheckDetailsResolution } from './check-details-abort'
+import {
+  createCheckDetailsAbortError,
+  rethrowCheckDetailsAbort,
+  waitForCheckDetailsResolution
+} from './check-details-abort'
 import { attachFailedJobLogTails } from './check-job-log-tails'
+import {
+  createCheckDetailsAdmissionLifetime,
+  runCheckDetailsCall
+} from './check-details-admission-lifetime'
+import { snapshotCheckJobLogExecution } from './check-job-log-execution'
 export async function getPRCheckDetails(
   repoPath: string,
   args: {
@@ -35,11 +44,12 @@ export async function getPRCheckDetails(
   } else {
     callerSignal?.addEventListener('abort', forwardCallerAbort, { once: true })
   }
+  const deadlineAt = Date.now() + GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS
   const hostDeadline = setTimeout(() => {
     hostDeadlineExpired = true
     controller.abort(new Error(GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE))
   }, GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS)
-  let acquired = false
+  let admission: ReturnType<typeof createCheckDetailsAdmissionLifetime> | undefined
   try {
     const resolved = await waitForCheckDetailsResolution(
       resolveGitHubRepoExecution(repoPath, args.prRepo, connectionId, localGitOptions),
@@ -49,54 +59,74 @@ export async function getPRCheckDetails(
       return null
     }
     const ownerRepo = resolved.ownerRepo
-    const ghOptions: GhExecOptions = { ...resolved.ghOptions, signal: controller.signal }
+    const snapshot = snapshotCheckJobLogExecution(ownerRepo, resolved.ghOptions)
+    const ghOptions: GhExecOptions = { ...snapshot.ghOptions, signal: controller.signal }
     await acquire(controller.signal)
-    acquired = true
+    admission = createCheckDetailsAdmissionLifetime(release)
+    const retainUntil = admission.retainUntil
+    let previous: Promise<void> = Promise.resolve()
+    const waitPrevious = (): Promise<void> =>
+      waitForCheckDetailsResolution(previous, controller.signal)
+    const fetchMetadata = async (argv: string[]): Promise<{ stdout: string; stderr: string }> => {
+      await waitPrevious()
+      const call = runCheckDetailsCall(
+        (hooks) => ghExecFileAsync(argv, ghOptions, hooks),
+        controller.signal,
+        retainUntil
+      )
+      previous = call.terminated
+      return call.result
+    }
     let checkRun: Record<string, unknown> | null = null
     let annotations: PRCheckRunDetails['annotations'] = []
     if (args.checkRunId) {
-      const { stdout } = await ghExecFileAsync(
-        ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`],
-        ghOptions
-      )
-      checkRun = JSON.parse(stdout) as Record<string, unknown>
+      const { stdout } = await fetchMetadata([
+        'api',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`
+      ])
+      const parsed: unknown = JSON.parse(stdout)
+      checkRun =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? Object.fromEntries(Object.entries(parsed))
+          : null
       try {
-        const annotationsResult = await ghExecFileAsync(
-          [
-            'api',
-            `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}/annotations?per_page=20`
-          ],
-          ghOptions
-        )
+        const annotationsResult = await fetchMetadata([
+          'api',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}/annotations?per_page=20`
+        ])
         annotations = mapCheckAnnotations(JSON.parse(annotationsResult.stdout))
       } catch (err) {
         rethrowCheckDetailsAbort(controller.signal, err)
-        console.warn('getPRCheckDetails annotations fetch failed:', err)
+        console.warn('getPRCheckDetails', 'annotations_failed')
       }
+      await waitPrevious()
     }
 
     const workflowRunId = args.workflowRunId ?? getWorkflowRunIdFromCheckRun(checkRun)
     let jobs: PRCheckRunDetails['jobs'] = []
     if (workflowRunId) {
       try {
-        const { stdout } = await ghExecFileAsync(
-          [
-            'api',
-            `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/runs/${workflowRunId}/jobs?per_page=100`
-          ],
-          ghOptions
-        )
+        const { stdout } = await fetchMetadata([
+          'api',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/runs/${workflowRunId}/jobs?per_page=100`
+        ])
         jobs = mapWorkflowJobs(JSON.parse(stdout), args.checkName)
-        await attachFailedJobLogTails(jobs, ownerRepo, ghOptions)
+        await waitPrevious()
+        await attachFailedJobLogTails(jobs, ownerRepo, ghOptions, {
+          deadlineAt,
+          executionScope: snapshot.executionScope,
+          retainUntil
+        })
       } catch (err) {
         rethrowCheckDetailsAbort(controller.signal, err)
-        console.warn('getPRCheckDetails workflow jobs fetch failed:', err)
+        console.warn('getPRCheckDetails', 'workflow_jobs_failed')
       }
+      await waitPrevious()
     }
 
     const output =
       checkRun?.output && typeof checkRun.output === 'object'
-        ? (checkRun.output as Record<string, unknown>)
+        ? Object.fromEntries(Object.entries(checkRun.output))
         : null
     return {
       name: nullableString(checkRun?.name) ?? args.checkName ?? 'Check',
@@ -112,17 +142,21 @@ export async function getPRCheckDetails(
       annotations,
       jobs
     }
-  } catch (err) {
-    console.warn('getPRCheckDetails failed:', err)
+  } catch {
+    console.warn(
+      'getPRCheckDetails',
+      hostDeadlineExpired ? 'deadline' : callerSignal?.aborted ? 'cancelled' : 'request_failed'
+    )
     if (hostDeadlineExpired && !callerSignal?.aborted) {
       throw new Error(GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE)
     }
-    throw err
+    if (callerSignal?.aborted) {
+      throw createCheckDetailsAbortError()
+    }
+    throw new Error('Could not load check details.')
   } finally {
     clearTimeout(hostDeadline)
     callerSignal?.removeEventListener('abort', forwardCallerAbort)
-    if (acquired) {
-      release()
-    }
+    admission?.finish()
   }
 }

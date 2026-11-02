@@ -7,6 +7,7 @@ import { loadWorktreesUntilPathsPresent } from './helpers/worktree-registration'
 
 test.describe('Workspace Space git status checks', () => {
   test('checks every scanned deletable row, including rows after the first 50', async ({
+    electronApp,
     orcaPage,
     testRepoPath
   }) => {
@@ -137,16 +138,26 @@ test.describe('Workspace Space git status checks', () => {
       // Why: `toHaveCount(0)` passes trivially while the list is still empty, so
       // every row has to be on screen before the absent-status assertion means
       // anything.
-      const rowCheckboxes = orcaPage.getByRole('checkbox', {
+      // Why: Space opens in its own window (#29513), so the rows render there.
+      const findSpacePage = () =>
+        electronApp.windows().find((page) => page.url().endsWith('/space.html'))
+      await expect.poll(() => Boolean(findSpacePage())).toBe(true)
+      const spacePage = findSpacePage()
+      if (!spacePage) {
+        throw new Error('Expected the Space window to open')
+      }
+      const rowCheckboxes = spacePage.getByRole('checkbox', {
         name: new RegExp(
           `^Select (?:${rowDisplayNames
             .map((displayName) => displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
             .join('|')})$`
         )
       })
-      await expect(rowCheckboxes).toHaveCount(rowDisplayNames.length, { timeout: 30_000 })
+      await expect(rowCheckboxes).toHaveCount(rowDisplayNames.length, {
+        timeout: 30_000
+      })
 
-      await expect(orcaPage.getByText('Keep: git not checked')).toHaveCount(0, { timeout: 30_000 })
+      await expect(spacePage.getByText('Keep: git not checked')).toHaveCount(0, { timeout: 30_000 })
     } finally {
       for (const worktreePath of worktreePaths) {
         try {

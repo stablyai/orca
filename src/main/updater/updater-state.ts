@@ -17,6 +17,8 @@ export const PRE_QUIT_CLEANUP_TIMEOUT_MS = 2_500
 export const REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS = 90_000
 export const UPDATE_CHECK_SILENT_SETTLE_DELAY_MS = 1_000
 export const UPDATE_CHECK_STALL_TIMEOUT_MS = 45_000
+// Why: Squirrel re-reads the whole bundle from the localhost proxy and verifies its signature; past this, a silent Squirrel is reported instead of left invisible.
+export const MAC_DEFERRED_STAGING_TIMEOUT_MS = 120_000
 
 export type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 export type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
@@ -56,6 +58,7 @@ export abstract class UpdaterState {
   protected autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
   protected nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
   protected pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
+  protected macDeferredStagingTimer: ReturnType<typeof setTimeout> | null = null
   protected quitAndInstallInProgress = false
   protected updateInstallMode: UpdateInstallMode = 'interactive'
   protected lastInstallDeferralVersion = {

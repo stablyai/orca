@@ -48,11 +48,12 @@ describe('an option picked while the chat is at rest', () => {
         store: {
           getRecord: () =>
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the intent reads only the record's provider and options.
-            ({ provider: 'codex', options: {} }) as unknown as AgentSessionRecord
+            ({ provider: 'codex', options: {} }) as unknown as AgentSessionRecord,
+          replaceSessionOptions: vi.fn()
         },
         agents: claudeAndCodexAgents()
       },
-      { sessionId: SESSION, persistOptions, publish: () => {} },
+      { sessionId: SESSION, fence: 1, persistOptions, publish: () => {}, now: () => 0 },
       { key: 'notAnOption', value: 'x' }
     )
 

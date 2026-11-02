@@ -7,6 +7,7 @@
 
 import { vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import type { WorktreeLineageWarning } from '../../../../shared/worktree/lineage-types'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
 import type { RpcContext } from '../core'
 import { resolveRpcCallerIdentity } from '../rpc-caller-identity'
@@ -31,6 +32,7 @@ export type AgentLaunchRuntimeStubOptions = {
   }
   /** What `createManagedWorktree` reports when the workspace exists but is incomplete. */
   createWarning?: string
+  createLineageWarnings?: WorktreeLineageWarning[]
   /** What `createTerminal` reports when the surface itself came up degraded. */
   terminalWarning?: string
   /** The pane `createTerminal` minted. Off by default so the existing outcome assertions keep
@@ -79,6 +81,9 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
   )
   return {
     getClientSettings: vi.fn(() => options.settings ?? STRUCTURED_PREFERENCE),
+    requireStore: vi.fn(() => ({
+      getSettings: () => options.settings ?? STRUCTURED_PREFERENCE
+    })),
     getStructuredAgentSessionCreateSupport: vi.fn(
       async () => options.createSupport ?? { supported: true }
     ),
@@ -114,7 +119,8 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
             }
           : undefined,
         ...(options.setupReceipt ? { setupReceipt: options.setupReceipt } : {}),
-        ...(options.createWarning ? { warning: options.createWarning } : {})
+        ...(options.createWarning ? { warning: options.createWarning } : {}),
+        ...(options.createLineageWarnings ? { warnings: options.createLineageWarnings } : {})
       }
     }),
     // Args are declared so a test can assert what the launch asked for, not merely that it asked.

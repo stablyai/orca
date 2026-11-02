@@ -11,6 +11,8 @@ import {
 } from './cdp-pointer-input'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-commands'
+import { isEmbeddedGuest } from './guest-direct-key-input'
+import { enablePageFocusEmulation } from './agent-input-focus-guard'
 
 type CdpPointerEventParams = {
   type: 'mouseMoved' | 'mousePressed' | 'mouseReleased' | 'mouseWheel'
@@ -38,7 +40,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     describe: string,
     build: (state: CdpPointerState) => {
       params: CdpPointerEventParams
-      focus?: boolean
+      press?: boolean
       result: T
     }
   ): Promise<T> {
@@ -55,11 +57,12 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     // keeping the mutation would leave a phantom held button on every later event.
     const preDispatch = { ...state }
     let releaseDebugger = (): void => {}
+    let releaseFocusGuard = (): void => {}
     try {
       releaseDebugger = acquireElectronDebugger(wc).release
-      const { params, focus, result } = build(state)
-      if (focus) {
-        wc.focus()
+      const { params, press, result } = build(state)
+      if (press) {
+        releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
       }
       await wc.debugger.sendCommand('Input.dispatchMouseEvent', params)
       return result
@@ -79,8 +82,24 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
         `Failed to ${describe} in browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
       )
     } finally {
+      releaseFocusGuard()
       releaseDebugger()
     }
+  }
+
+  // Why: a press on an embedded guest takes Chromium focus whatever we do; its pane gives the
+  // user's focus back (#20595) and emulation keeps the page from seeing that as a blur.
+  // Offscreen pages keep the native focus their caret and IME need.
+  protected async focusPageForPress(
+    wc: Electron.WebContents,
+    webContentsId: number
+  ): Promise<() => void> {
+    if (!isEmbeddedGuest(wc)) {
+      wc.focus()
+      return () => {}
+    }
+    await enablePageFocusEmulation((method, params) => wc.debugger.sendCommand(method, params))
+    return await this.browserManager.guardUserFocusForAgentInput(webContentsId)
   }
 
   async mouseMove(
@@ -121,9 +140,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
           const cdpButton = normalizeCdpPointerButton(button)
           pressCdpPointerButton(state, cdpButton)
           return {
-            // Why: mirrors mouseClick — a press that does not focus the guest leaves
-            // keyboard input going to whatever held focus before.
-            focus: true,
+            press: true,
             params: {
               type: 'mousePressed',
               x: state.x,

@@ -209,6 +209,14 @@ runs:
           git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
         fi
 
+    # Why: the script-free install leaves node_modules/.bin/bun as a stub that shadows setup-bun under `pnpm run`.
+    - name: Link pinned Bun
+      shell: bash
+      run: |
+        if [ -d node_modules/bun ]; then
+          pnpm rebuild bun
+        fi
+
     # Why --if-present: release cuts run main's workflows against older release tags that predate this script.
     - name: Build internal packages
       shell: bash

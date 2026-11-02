@@ -243,13 +243,13 @@ describeRender(
     it('serves the shipped image policy and neither route violates it', async () => {
       // The policy the shells send, read from the Kotlin source rather than restated, so this
       // cannot pass against a header the app does not use.
-      expect(cspHeader).toContain("img-src 'self' data: https:")
+      expect(cspHeader).toContain("img-src 'self' data: blob: https:")
       const swift = await readFile(
         join(projectDir, 'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift'),
         'utf8'
       )
       // The other shell says the same thing, which no served header can show.
-      expect(swift).toContain(`"img-src 'self' data: https:"`)
+      expect(swift).toContain(`"img-src 'self' data: blob: https:"`)
 
       for (const [route, text] of [
         [HUB_ROUTE, 'Source Control'],

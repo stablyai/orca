@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { useIssueSourceActions } from './issue-source-actions'
 import { useMultipleCreateReset } from './multiple-create-reset'
-import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import type { SmartSourceSelection } from './source-selection-decisions'
 
 const sources: LinkedWorkItemSummary[] = [
   {
@@ -30,9 +30,10 @@ function useSelectedSourceReset(
   const lastAutoNameRef = useRef(name)
   const branchAutoNameRef = useRef('fix-checkout')
   const lastAutoNoteRef = useRef('Generated note')
-  const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(
+  const smartSourceSelectionRef = useRef<SmartSourceSelection | null>(
     initialItem?.provider === 'github' && initialItem.type === 'pr'
       ? {
+          kind: 'github-pr',
           repoId: 'repo-1',
           item: {
             ...initialItem,
@@ -75,7 +76,7 @@ function useSelectedSourceReset(
     setReuseEligibleBranch: vi.fn(),
     setReuseSelectedBranch: vi.fn(),
     setStartFromResetHint: vi.fn(),
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   })
   const reset = useMultipleCreateReset({
     handleClearSmartNameSelection: source.handleClearSmartNameSelection,
@@ -95,7 +96,7 @@ function useSelectedSourceReset(
     name,
     note,
     branchAutoNameRef,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   }
 }
 
@@ -107,12 +108,12 @@ describe('create more source reset', () => {
       expect(result.current.selection?.label).toContain('Fix checkout')
 
       if (item.provider === 'github' && item.type === 'pr') {
-        expect(result.current.smartGitHubPrStartPointSelectionRef.current).not.toBeNull()
+        expect(result.current.smartSourceSelectionRef.current).not.toBeNull()
       }
 
       act(() => result.current.resetForNextCreate())
 
-      expect(result.current.smartGitHubPrStartPointSelectionRef.current).toBeNull()
+      expect(result.current.smartSourceSelectionRef.current).toBeNull()
       expect(result.current.selection).toBeNull()
       expect(result.current.linkedWorkItem).toBeNull()
       expect(result.current.baseBranch).toBeUndefined()

@@ -155,10 +155,11 @@ describe('codex dispatch admission', () => {
     // Codex's own words reach the sentence and the fact; Orca's prefix reaches neither.
     expect(await send(adapter, 'client-1')).toEqual({
       state: 'rejected',
-      reason: 'The provider did not accept this message: thread not found.',
+      reason: "Codex didn't accept this message: thread not found.",
       rejection: {
         kind: 'providerRejected',
-        detail: { text: 'thread not found', audience: 'person' }
+        detail: { text: 'thread not found', audience: 'person' },
+        neverReachedAgent: true
       }
     })
 

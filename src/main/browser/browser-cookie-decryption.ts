@@ -43,12 +43,6 @@ export function cookieEncryptionVersion(encryptedBuffer: Buffer): string | null 
   return /^v\d\d$/.test(version) ? version : null
 }
 
-// Why: Chrome/Edge 140+ on Windows prefix every cookie with `v20` (app-bound encryption), which
-// only the writing browser can unwrap. Classify it before decrypt so it is not folded into corruption.
-export function isAppBoundEncryptedCookie(encryptedBuffer: Buffer): boolean {
-  return cookieEncryptionVersion(encryptedBuffer) === 'v20'
-}
-
 // Why: a named cause must carry only its exact count; tied causes fall back to unknown.
 export function buildUndecryptableWarning(counts: {
   decryptFailed: number

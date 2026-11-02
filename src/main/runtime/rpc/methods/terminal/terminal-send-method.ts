@@ -1,8 +1,9 @@
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
+import { isUntypedTerminalInput } from '../../../../../shared/terminal-untyped-input'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
-import { TerminalSend } from './unary-schemas'
+import { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import {
   assertTerminalSendExactPtyBinding,
   assertTerminalSendTextWithinLimit,
@@ -102,7 +103,15 @@ export const TERMINAL_SEND_METHODS = [
         leaf?.ptyId &&
         params.client?.type === 'desktop' &&
         params.claimViewport === true &&
-        params.viewport
+        params.viewport &&
+        // Why: clients attach their viewport to every send, so a focus report or query reply
+        // would otherwise claim the PTY and start a resize war between two mirrors (#26469).
+        !(
+          typeof params.text === 'string' &&
+          isUntypedTerminalInput(params.text) &&
+          params.enter !== true &&
+          params.interrupt !== true
+        )
       ) {
         const claim = await updateViewportForClient(
           runtime,

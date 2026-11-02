@@ -53,9 +53,8 @@ and `orca-terminal-daemon.exe` report `Valid CN=SignPath Foundation`.
 ### The daemon runs from a copy of our own image
 
 `src/main/daemon/daemon-host-relocation.ts` copies the Electron runtime into
-`%LOCALAPPDATA%\<executable basename>\daemon-host\<version>\` and forks the terminal daemon from
-there. Upstream Orca uses `%LOCALAPPDATA%\Orca\daemon-host`; the private Windows POC uses
-`%LOCALAPPDATA%\Phorca\daemon-host`.
+`%LOCALAPPDATA%\<executable basename>\daemon-host-profiles\<profile key>\<version>\` and forks the terminal daemon from
+there. The executable basename and profile key isolate separately named installs and user-data profiles.
 
 It exists because the NSIS installer deletes the old install directory and force-
 kills every process imaged under it. Without relocation, an auto-update kills the
@@ -426,18 +425,18 @@ on:
   this list.
 - **File paths** — upstream `Orca.exe` or private-POC `Phorca.exe` under the corresponding
   `%LOCALAPPDATA%\Programs\<product>\` install directory, plus that same executable name under
-  `%LOCALAPPDATA%\<product>\daemon-host\`. A rule scoped only to
+  `%LOCALAPPDATA%\<product>\daemon-host-profiles\<profile key>\`. A rule scoped only to
   `Programs\Phorca\Phorca.exe` misses the relocated process that actually spawns shells.
 
 Scope it as narrowly as your tenant will tolerate, and review it when Orca
-updates: the `daemon-host` path carries a `<version>` segment, so a rule pinned
+updates: the `daemon-host-profiles` path carries a `<version>` segment, so a rule pinned
 to one version will silently stop matching. Two traps in that path in particular.
 Materialization stages into a `<version>.staging-<hex>` sibling before renaming
 it into place, so an exact-version rule misses the tree **mid-update** — which is
 precisely when the update-cluster incidents fire. And the root falls back to the
 Electron `userData` path when `LOCALAPPDATA` is unset, so the product-specific LOCALAPPDATA path is
 the normal location rather than a guaranteed one. Prefer a prefix match on
-`…\<product>\daemon-host\` over a rule pinned to one full path.
+`…\<product>\daemon-host-profiles\` over a rule pinned to one full path.
 
 Add AV path exclusions for those two directories as well — they cut scan cost on
 a tree that is rewritten on every update — but understand the division of

@@ -1,3 +1,4 @@
+import { deepStrictEqual } from 'node:assert'
 import { describe, expect, it, vi } from 'vitest'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 import { MAX_TAIL_LINES } from './terminal-tail-limits'
@@ -109,7 +110,7 @@ describe('retained tail buffer prefix reuse', () => {
           const lineCountBefore = warm.lines.length
           const warmStep = feed(warm, chunk, false)
           const coldStep = feed(cold, chunk, true)
-          expect(warmStep.lines, `step ${step} lines`).toEqual(coldStep.lines)
+          deepStrictEqual(warmStep.lines, coldStep.lines, `step ${step} lines`)
           expect(warmStep.partialLine, `step ${step} partial`).toBe(coldStep.partialLine)
           expect(warmStep.truncated, `step ${step} truncated`).toBe(coldStep.truncated)
           expect(warmStep.redrawCursor, `step ${step} cursor`).toEqual(coldStep.redrawCursor)

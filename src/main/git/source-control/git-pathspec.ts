@@ -3,6 +3,7 @@ import {
   MAX_COMMAND_LINE_CHARS
 } from '../../../shared/windows-command-line-budget'
 import { resolveGitCommandWithoutProbe } from '../command-runner/git-command-resolution'
+import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../wsl-windows-checkout-git-config'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 
 /** Ceiling on argv entries per invocation; under WSL the byte budget bites first. */
@@ -37,7 +38,9 @@ function finishedCommandLineLength(
   worktreePath: string,
   options: GitRuntimeOptions
 ): number {
-  const resolved = resolveGitCommandWithoutProbe([...args], {
+  // Why worst case: the Windows-checkout config can be prepended at spawn, after this chunking.
+  const budgetArgs = options.wslDistro ? [...WINDOWS_CHECKOUT_GIT_CONFIG_ARGS, ...args] : [...args]
+  const resolved = resolveGitCommandWithoutProbe(budgetArgs, {
     cwd: worktreePath,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
   })

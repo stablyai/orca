@@ -96,7 +96,7 @@ async function resolveWorkspaceCleanupActivityAt(
 }
 
 // Why: best-effort only. Win32 stat over \\wsl.localhost (9P) can falsely
-// report ENOENT (see wslUncDirectoryExists), so a failed stat degrades to the
+// report ENOENT (see wslUncDirectoryExistsAsync), so a failed stat degrades to the
 // persisted activity timestamp instead of blocking or mislabeling the row.
 async function getNewestLocalWorktreeActivityAt(
   worktreePath: string,

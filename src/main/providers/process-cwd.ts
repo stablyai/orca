@@ -1,13 +1,9 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { readlink } from 'node:fs/promises'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
 
 /**
  * Resolve the current working directory of a local process by pid.
- *
- * Why duplicated from `src/relay/pty-shell-utils.ts`: the relay and Electron
- * main process have separate build graphs, and cross-importing across them
- * is not a pattern used in this repo. The function is short and pure, and
- * the duplication is cheaper than reshaping both bundle graphs.
  *
  * Tries `/proc/<pid>/cwd` on Linux, falls back to `lsof -d cwd` on macOS.
  * Returns `''` when neither works (including Windows, where `/proc` is
@@ -133,7 +129,7 @@ function readCwdWithLsof(pid: number): Promise<string> {
     try {
       child = execFileCb(
         'lsof',
-        ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
+        [...LSOF_NONBLOCKING_ARGS, '-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
         {
           encoding: 'utf-8',
           timeout: LSOF_TIMEOUT_MS

@@ -8,7 +8,7 @@ import { FilledBellIcon } from '@/components/sidebar/WorktreeCardHelpers'
 import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
-} from '@/components/sidebar/smart-attention'
+} from '../../../../shared/sidebar-list/smart-attention'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import {

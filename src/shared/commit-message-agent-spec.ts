@@ -37,6 +37,8 @@ export type CommitMessageModel = {
   defaultThinkingLevel?: string
   /** Whether the model exposes Claude's mid-session Fast mode toggle. */
   supportsFastMode?: boolean
+  /** Whether Claude's listing says the model runs its auto permission mode; absent is unknown. */
+  supportsAutoMode?: boolean
   /** Set when the listing marks this as the id the CLI runs with no --model flag.
    *  Optional so an older remote host that never reports it simply omits it. */
   isDefault?: boolean

@@ -17,10 +17,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import {
-  formatActiveFilterLabel,
-  OptionsFilterCountBadge
-} from '@/components/sidebar/options-filter-count-badge'
+import { OptionsFilterCountBadge } from '@/components/sidebar/options-filter-count-badge'
+import { formatActiveFilterLabel } from '../../../../shared/workspace-view/workspace-row-filters'
 import {
   ActivityScopeFilterMenuItems,
   useActivityScopeFilterCount

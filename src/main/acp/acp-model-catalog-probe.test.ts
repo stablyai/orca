@@ -69,6 +69,7 @@ function scriptedGrok(initializeMeta: Record<string, unknown>): {
     closed: () => closes,
     deps: {
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
+      dataDirectory: '/orca-data',
       resolveLaunchEnv: () => ({ XAI_API_KEY: 'from-settings' }),
       resolveCommand: () => '/opt/grok/bin/grok',
       homePath: '/home/user',
@@ -155,6 +156,7 @@ describe('ACP model catalog probes', () => {
     const connect = vi.fn()
     const probe = createAcpModelCatalogProbe(OPENCODE, {
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
+      dataDirectory: '/orca-data',
       resolveCommand: () => '/opt/opencode/bin/opencode',
       probeVersion: async () => true,
       homePath: '/home/user',
@@ -180,6 +182,7 @@ describe('ACP model catalog probes', () => {
     const runListing = vi.fn()
     const probe = createAcpModelCatalogProbe(OPENCODE, {
       resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
+      dataDirectory: '/orca-data',
       resolveCommand: () => '/opt/opencode/bin/opencode',
       probeVersion: async () => false,
       runListing

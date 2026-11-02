@@ -29,7 +29,7 @@ function context(overrides: Partial<MergeContext> = {}): MergeContext {
     workspaceSessionReady: true,
     repoDisplayNameById: new Map([[workspace.repoId, 'Documentation']]),
     repoConnectionIdById: new Map(),
-    repoRuntimeScopedById: new Map(),
+    repoRuntimeHostIdById: new Map(),
     worktreeById: new Map([
       [workspace.id, workspace],
       [secondWorkspace.id, secondWorkspace]

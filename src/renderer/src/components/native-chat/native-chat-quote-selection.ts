@@ -2,6 +2,22 @@
 export const NATIVE_CHAT_QUOTE_SOURCE_PROPS = { 'data-native-chat-quote-source': '' } as const
 
 const QUOTE_SOURCE_SELECTOR = '[data-native-chat-quote-source]'
+const TRANSCRIPT_SELECTOR = '[data-native-chat-scroll]'
+
+/** The selected text when both its ends sit in this chat's transcript (not the composer), else ''. */
+export function readNativeChatTranscriptSelection(root: HTMLElement): string {
+  const selection = window.getSelection()
+  const transcript = root.querySelector(TRANSCRIPT_SELECTOR)
+  if (
+    !selection ||
+    selection.isCollapsed ||
+    !transcript?.contains(selection.anchorNode) ||
+    !transcript.contains(selection.focusNode)
+  ) {
+    return ''
+  }
+  return selection.toString()
+}
 
 /** The selection when all of it sits inside one agent reply of this chat, else null. */
 export function readNativeChatQuotableSelection(

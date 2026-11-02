@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type {
   WorktreeCreationPhase,
@@ -39,7 +40,11 @@ export function getWorktreeCreationIndeterminate(request: WorktreeCreationReques
   if (request.worktreeCreateProgressMode) {
     return request.worktreeCreateProgressMode === 'indeterminate'
   }
-  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+  // Why: progress follows the host the workspace is created on, not the focused one.
+  const target = request.executionHostId
+    ? ipcOrRuntimeTargetForHostId(request.executionHostId)
+    : runtimeTargetForRepoOwner(useAppStore.getState(), request.repoId)
+  return target?.kind !== 'local'
 }
 
 export function getInitialWorktreeCreationPhase(

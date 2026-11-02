@@ -303,12 +303,3 @@ export function writeGithubCacheSnapshotSync(owner: WriteFlushBarrierOperations)
     console.warn('[persistence] Failed to write github cache snapshot:', err)
   }
 }
-
-export function installWriteFlushBarrierOperationsContext(
-  target: WriteFlushBarrierOperations,
-  source: WriteFlushBarrierOperations
-): void {
-  Object.defineProperty(target, writeFlushBarrierOperationsContext, {
-    value: source[writeFlushBarrierOperationsContext]
-  })
-}

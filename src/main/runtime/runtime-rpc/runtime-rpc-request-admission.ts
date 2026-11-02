@@ -6,7 +6,6 @@ import { errorResponse } from '../rpc/errors'
 import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
 import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
 import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../rpc/rpc-caller-scope'
-import { sshBridgeCredentials } from '../rpc/ssh-bridge-credentials'
 
 export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
   // Why: Unix socket dispatch is one-shot and auths via the shared token from the 0o600 metadata file. See §3.1.
@@ -38,7 +37,12 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
 
     try {
       return await this.dispatcher.dispatch(request, {
-        signal: longPoll ? context?.signal : undefined,
+        signal:
+          longPoll ||
+          request.method === 'linear.commentEdit' ||
+          request.method === 'linear.commentDelete'
+            ? context?.signal
+            : undefined,
         callerScope
       })
     } finally {
@@ -135,11 +139,6 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
     if (request.authToken === this.authToken) {
       return { request, callerScope: OWNER_RPC_CALLER_SCOPE }
-    }
-    // Why: a bridged SSH CLI holds only its invocation's credential, scoped to that SSH target.
-    const bridgeScope = sshBridgeCredentials.resolve(request.authToken)
-    if (bridgeScope) {
-      return { request, callerScope: bridgeScope }
     }
     return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
   }

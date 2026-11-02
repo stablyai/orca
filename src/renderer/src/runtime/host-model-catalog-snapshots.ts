@@ -1,5 +1,5 @@
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from './structured-agent-session-client'
 import { structuredAgentSessionHostKey } from './structured-agent-session-host-capability'
 

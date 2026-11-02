@@ -2,12 +2,14 @@
  * What orchestration mail delivery reads of a host-owned structured ("native") agent session.
  *
  * A structured session has no PTY the pointer can be typed into, so the nudge travels as a session
- * turn instead of as bytes, and a busy session's own queue holds it until the turn ends.
+ * turn instead of as bytes: steered into a busy session's running turn, or held by its queue until
+ * the turn ends when its agent cannot take a message mid-turn.
  * Everything here is pure. Orchestration's database stays the source of truth: nothing here
  * consumes mail.
  */
 
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
 import {
   activeStructuredAgentSessionTurnId,
   projectStructuredAgentSessionStatus
@@ -46,11 +48,17 @@ export type StructuredSessionGateFacts = {
  * and idle-with-history is the normal steady state of a working agent.
  */
 export function structuredSessionGateFacts(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  /** The host's projection of current work (`structuredAgentSessionCurrentWork`). */
+  scope?: StructuredAgentSessionWorkScope
 ): StructuredSessionGateFacts {
   return {
-    turnRunning: activeStructuredAgentSessionTurnId(items) !== null,
-    awaitingHuman: projectStructuredAgentSessionStatus(items) === 'attention'
+    turnRunning:
+      activeStructuredAgentSessionTurnId(
+        items,
+        scope && ((item) => scope.isCurrentItem(item.itemId))
+      ) !== null,
+    awaitingHuman: projectStructuredAgentSessionStatus(items, [], undefined, scope) === 'attention'
   }
 }
 

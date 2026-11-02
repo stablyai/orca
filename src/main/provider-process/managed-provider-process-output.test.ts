@@ -1,11 +1,10 @@
-import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
 function launchWithOutput(onOutput: () => void) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: 9_999_999,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -15,8 +14,7 @@ function launchWithOutput(onOutput: () => void) {
   const managed = spawnManagedProviderProcess(
     { command: 'fixture-provider', args: [] },
     {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The managed lifecycle reads only events, pid, streams and kill from this fixture.
-      spawnImpl: () => child as unknown as ReturnType<typeof spawnProcess>,
+      spawnImpl: () => child,
       platform: 'win32',
       site: 'fixture-provider-teardown',
       onOutput

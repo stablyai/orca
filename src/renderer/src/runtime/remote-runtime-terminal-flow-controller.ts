@@ -61,7 +61,7 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     stream: RemoteRuntimeMultiplexedTerminalState,
     paused: boolean
   ): boolean {
-    if (!stream.supportsOutputPause || this.streams.get(stream.streamId) !== stream) {
+    if (!stream.supportsOutputPause || !this.isRegisteredStream(stream)) {
       return false
     }
     if (stream.outputPaused === paused) {

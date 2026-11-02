@@ -7,7 +7,7 @@ import { providerSequenceFromCreateOrAttach } from './daemon-pty-provider-sequen
 import { takeHistoryRecoveryFreeze } from './daemon-history-recovery-freeze'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { SessionNotFoundError, type CreateOrAttachResult } from './types'
-import type { PtySpawnResult } from '../providers/types'
+import type { PtySpawnResult } from '../providers/pty-provider-contract'
 
 export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
   protected async finishSpawn(

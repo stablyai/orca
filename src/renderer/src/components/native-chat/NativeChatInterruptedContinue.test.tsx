@@ -40,9 +40,9 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
-  NativeChatInterruptedContinue,
+  NativeChatInterruptedContinueButton,
   useNativeChatInterruptedContinuation
 } from './NativeChatInterruptedContinue'
 
@@ -78,7 +78,7 @@ function Harness(props: Props): React.JSX.Element {
   // The chat's own composer error, as NativeChatStructuredSession holds it.
   const [composerError, setComposerError] = useState<string | null>(null)
   const continuation = useNativeChatInterruptedContinuation({
-    composer: { clearError: () => setComposerError(null) },
+    reportComposerError: setComposerError,
     target: props.target ?? PAIRED,
     sessionId: 'session-1',
     journalItems: props.journalItems ?? cutChat,
@@ -87,13 +87,17 @@ function Harness(props: Props): React.JSX.Element {
   })
   return (
     <TooltipProvider delayDuration={0}>
-      <span data-testid="offered">{continuation.offeredTurnItemId ?? 'none'}</span>
+      <span data-testid="offered">{continuation.view.offeredTurnItemId ?? 'none'}</span>
       <span data-testid="available">{String(continuation.view.continueAvailable)}</span>
+      <span data-testid="remote">{String(continuation.view.remoteHost)}</span>
       <span data-testid="error">{composerError ?? continuation.continueError?.text ?? 'none'}</span>
       <button type="button" onClick={() => setComposerError(ATTACHMENTS)}>
         compose
       </button>
-      <NativeChatInterruptedContinue continuation={continuation} />
+      {/* As the cut's own row shows it. */}
+      {continuation.view.offeredTurnItemId === null ? null : (
+        <NativeChatInterruptedContinueButton onContinue={continuation.view.continueNow} />
+      )}
     </TooltipProvider>
   )
 }
@@ -127,6 +131,14 @@ describe('Continue on a reply an Orca stop cut off', () => {
     // Gone once asked, and the row gets its own way on back: the journal shows what came of it.
     expect(continueButton()).toBeNull()
     expect(screen.getByTestId('offered')).toHaveTextContent('none')
+  })
+
+  it("tells the chat's rows whether its host is remote", () => {
+    render(<Harness />)
+    expect(screen.getByTestId('remote')).toHaveTextContent('true')
+    cleanup()
+    render(<Harness target={{ kind: 'local' }} />)
+    expect(screen.getByTestId('remote')).toHaveTextContent('false')
   })
 
   it('says what it does, for a reader and on hover', () => {

@@ -66,12 +66,6 @@ function routesDeclaring(token) {
   ).map((route) => route.pathname)
 }
 
-describe('the grant token this census is written against', () => {
-  it('is the one the shell declares', () => {
-    expect(externalNavigationGrantToken()).toBe('externalNavigation')
-  })
-})
-
 describeClosure(
   'the routes that render an HTML artifact',
   () => {
@@ -112,7 +106,7 @@ describeClosure(
       )
       expect(closure.local).toContain(SEAM)
       expect(closure.local).not.toContain(NATIVE)
-      expect(linkGrantCallers(closure)).toEqual(['src/components/MobileHtmlPreview.web.tsx'])
+      expect(linkGrantCallers(closure)).toEqual(['src/components/MobileHtmlPreview.tsx'])
       // The preview is mounted by the session's file reader rather than by a route of its own,
       // which is why the grant has no route to be pinned against except this one.
       expect(closure.local).toContain('src/session/MobileSessionFileReader.tsx')

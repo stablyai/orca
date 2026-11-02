@@ -1,7 +1,7 @@
 import { createServer } from 'node:https'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 /**
  * A real TLS origin for the artifact's images, because interception could not measure them.

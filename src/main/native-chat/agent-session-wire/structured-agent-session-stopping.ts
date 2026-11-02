@@ -10,6 +10,8 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { stopIsAPersons } from '../agent-session-journal/journal-stop-turn-end'
 import type { JournalStopFailedOn } from '../agent-session-journal/queued-message-pause'
@@ -19,7 +21,9 @@ import type { JournalStopFailedOn } from '../agent-session-journal/queued-messag
 export function structuredAgentSessionStopping(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly AgentJournalSubmission[] = [],
+  /** The host's projection of current work: a Stop bound to an ended generation's turn is over. */
+  scope?: StructuredAgentSessionWorkScope
 ): boolean {
   const stop = journal.stopMarks.latest()
   if (stop === null || !stopIsAPersons(stop.event.reason)) {
@@ -33,7 +37,10 @@ export function structuredAgentSessionStopping(
     stop.event.turnId ??
     stop.settle?.turnId ??
     (failed && 'turnId' in failed ? failed.turnId : undefined)
-  const live = activeStructuredAgentSessionTurnId(items)
+  const live = activeStructuredAgentSessionTurnId(
+    items,
+    scope && ((item) => scope.isCurrentItem(item.itemId))
+  )
   if (bound !== undefined) {
     return bound === live
   }
@@ -64,9 +71,10 @@ function firstSendHandedOverAfter(
 /** Where a Stop that failed leaves "Stopping…" (display only): the turn running now, or, with
  *  none, the first that opens after this position. */
 export function structuredAgentSessionFailedStopMark(
-  journal: Pick<AgentSessionJournal, 'activeTurnId' | 'cursor'>
+  work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId'>,
+  journal: Pick<AgentSessionJournal, 'cursor'>
 ): JournalStopFailedOn {
-  const live = journal.activeTurnId()
+  const live = work.activeTurnId()
   return live !== null ? { turnId: live } : { openedAfter: journal.cursor().sequence }
 }
 

@@ -29,7 +29,7 @@ const LARGE_SESSION_COUNT = 150_000
 // getter. Stubbing it lets us drive the offline / throwing / live paths
 // without spinning up real sockets.
 const getDaemonProviderMock = vi.fn()
-vi.mock('../daemon/daemon-init', () => ({
+vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
 

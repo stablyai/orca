@@ -1,11 +1,9 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import {
-  createRuntimePath,
-  statRuntimePath,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import { createRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import {

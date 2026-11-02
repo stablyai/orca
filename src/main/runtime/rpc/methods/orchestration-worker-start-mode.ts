@@ -55,10 +55,7 @@ export function decideWorkerStartMode(args: {
   return decideAgentLaunchMode({
     placement: args.params,
     settings: args.settings,
-    vocabulary: WORKER_START_VOCABULARY,
-    // The structured worker factory creates Claude and Codex only; any other agent (Grok included)
-    // starts as a terminal worker until structured workers take registered agents.
-    registeredStructuredAgents: []
+    vocabulary: WORKER_START_VOCABULARY
   })
 }
 
@@ -79,7 +76,7 @@ export function downgradeWorkerStartModeForHost(
 }
 
 export function readWorkerStartModeSettings(
-  runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
+  runtime: Parameters<typeof readAgentLaunchModeSettings>[0]
 ): AgentLaunchModeSettings | null {
   return readAgentLaunchModeSettings(runtime)
 }

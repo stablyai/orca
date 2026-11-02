@@ -248,15 +248,16 @@ it('hands over a message held behind the command when the command ends just as t
   await state.host.conversationCommand(CALLER, compactParams())
   await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   const { journal: live } = state.host['sessions'].get(SESSION)!
-  const activeTurnId = live.activeTurnId
+  const runningTurn = live.runningTurn
   let ended = false
-  vi.spyOn(live, 'activeTurnId').mockImplementation(() => {
-    const read = activeTurnId()
+  // The loop reads the command through the host's current-work projection, which asks this.
+  vi.spyOn(live, 'runningTurn').mockImplementation(() => {
+    const read = runningTurn()
     // The provider's end lands the moment the loop's own step reads the command as running and
     // stops; no other reader's view of it matters here.
     if (
       !ended &&
-      read?.startsWith('compact:') &&
+      read?.turnId.startsWith('compact:') &&
       /at (?:StructuredAgentSessionDeliveryLoop\.)?prepare \(.*structured-agent-session-delivery-loop/.test(
         new Error('who reads').stack ?? ''
       )
@@ -298,7 +299,7 @@ it('settles a command the provider refused as a failure with its reason, and mov
   // The message was not sent, in the provider's words; the command's row says the compaction failed.
   expect(snapshot.submissions.find((entry) => entry.clientMessageId === cmid)).toMatchObject({
     dispatchState: 'rejected',
-    reason: 'The provider did not accept this message: Not enough messages to compact.',
+    reason: "The agent didn't accept this message: Not enough messages to compact.",
     rejection: { kind: 'providerRejected', detail: NOT_ENOUGH }
   })
   expect(
@@ -739,7 +740,7 @@ it('delivers the next message after a command whose child died and whose settlem
   expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).not.toBe('running')
 })
 
-it("ignores an older build's unconfirmed compaction record, and answers its operation without rerunning it (B15)", async () => {
+it('ignores a ledger-only compaction record with no command receipt (B15)', async () => {
   await attach()
   const older = compactParams()
   // An older build admitted this operation and died before recording its outcome.
@@ -780,13 +781,10 @@ it("ignores an older build's unconfirmed compaction record, and answers its oper
 
   await expect(state.host.conversationCommand(CALLER, older)).resolves.toMatchObject({
     ok: true,
-    value: {
-      state: 'unknown',
-      error: 'Compaction completion is unconfirmed.',
-      failure: { kind: 'compactionUnconfirmed' }
-    }
+    replayed: false,
+    value: { state: 'completed' }
   })
-  expect(compact).toHaveBeenCalledOnce()
+  expect(compact).toHaveBeenCalledTimes(2)
 })
 
 it('never lets a provider echo alias the command entry', async () => {

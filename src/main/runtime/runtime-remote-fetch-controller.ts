@@ -31,14 +31,6 @@ export class RuntimeRemoteFetchController {
   private readonly fetchLastCompletedAt = new Map<string, number>()
   private readonly canonicalFetchKeyCache = new Map<string, string>()
 
-  getCanonicalFetchKeyCache(): ReadonlyMap<string, string> {
-    return this.canonicalFetchKeyCache
-  }
-
-  getFetchLastCompletedAt(): ReadonlyMap<string, number> {
-    return this.fetchLastCompletedAt
-  }
-
   /** `${runtimeKey}::${gitCommonDir}` -- one repo on one execution host. */
   async getCanonicalRepoKey(repoPath: string, gitOptions: GitOptions = {}): Promise<string> {
     return getCanonicalRepoKey(repoPath, gitOptions)

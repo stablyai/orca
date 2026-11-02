@@ -2,8 +2,9 @@ import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
+import { isFolderRepo } from '../../../shared/repo-kind'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
@@ -14,13 +15,18 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../shared/worktree/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { commitProvenRepoKindChange } from '../../folder-repo-git-conversion'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
+import {
+  assertWslMoveProjectWritable,
+  isWslMoveSourceHost
+} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle(
     'repos:update',
-    (
+    async (
       _event,
       args: {
         repoId: string
@@ -57,7 +63,10 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           ghAccount?: GhAccountBinding | null
         }
       }
-    ) => {
+    ): Promise<Repo | null> => {
+      if (isWslMoveSourceHost(args.hostId)) {
+        assertWslMoveProjectWritable(store, { repoId: args.repoId })
+      }
       // Why: TS is erased at runtime, so a garbage preference would silently collapse to 'auto' in resolveIssueSource; strip it, keeping other fields.
       const updates = { ...args.updates }
       if (
@@ -218,9 +227,29 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       if (args.hostId && !hostId) {
         return null
       }
-      const updated = hostId
-        ? store.updateRepo(args.repoId, updates, hostId)
-        : store.updateRepo(args.repoId, updates)
+      const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
+        if (isWslMoveSourceHost(args.hostId)) {
+          assertWslMoveProjectWritable(store, { repoId: args.repoId })
+        }
+        return hostId
+          ? store.updateRepo(args.repoId, { ...updates, ...proven }, hostId)
+          : store.updateRepo(args.repoId, { ...updates, ...proven })
+      }
+      let updated: Repo | null
+      if (updates.kind === 'git') {
+        const target = store
+          .getRepos()
+          .find(
+            (repo) =>
+              repo.id === args.repoId && (!hostId || getRepoExecutionHostId(repo) === hostId)
+          )
+        updated =
+          target && isFolderRepo(target)
+            ? await commitProvenRepoKindChange(store, target, write)
+            : write({})
+      } else {
+        updated = write({})
+      }
       if (updated) {
         if ('worktreeBasePath' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)

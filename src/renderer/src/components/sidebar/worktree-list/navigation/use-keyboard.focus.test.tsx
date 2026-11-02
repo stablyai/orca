@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostSectionRow } from '../../host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -32,7 +32,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activate(...args)
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
   focusRuntimeTerminalSurface: (...args: unknown[]) => focusRuntime(...args)
 }))
 const { useWorktreeListKeyboardNavigation } = await import('./use-keyboard')
@@ -46,7 +46,6 @@ const rows: HostSectionRow[] = ['a', 'b', 'c'].map((id) => ({
   repo,
   depth: 0,
   groupDepth: 0,
-  lineageTrail: [],
   isLastLineageChild: false,
   lineageChildCount: 0
 }))

@@ -14,7 +14,7 @@ import { applyScrubSafeAgentEnvAliases } from '../../shared/agent-hook-scrub-saf
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 /** Pane ownership must be fresh even when Orca itself was launched inside an agent. */
 export function buildLocalPtySpawnEnvironment(args: {

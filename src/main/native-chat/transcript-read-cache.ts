@@ -107,7 +107,12 @@ export async function readNativeChatTranscriptCached(
   transcriptPath?: string
 ): Promise<ReadTranscriptResult> {
   if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
-    return readOpenCodeNativeChatTranscriptFull(sessionId)
+    return readOpenCodeNativeChatTranscriptFull(
+      sessionId,
+      {},
+      undefined,
+      agent === 'zcode' ? 'zcode' : undefined
+    )
   }
   const epoch = cacheEpoch
   let filePath: string | null

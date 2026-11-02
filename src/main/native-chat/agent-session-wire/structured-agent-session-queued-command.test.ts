@@ -10,6 +10,7 @@ import {
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
+  hostTestAttachParams,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 
@@ -194,4 +195,90 @@ describe('/clear', () => {
     ).toHaveLength(1)
     expect(journal.submission(sent.clientMessageId)?.dispatchState).toBe('accepted')
   })
+})
+
+it('replays /compact across callers with one submission and one provider command', async () => {
+  const id = hostTestOperationId()
+  const fields = { command: 'compact' as const }
+  const params = {
+    ...fields,
+    envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+  }
+  const admit = vi
+    .spyOn(rig.store, 'admitMutationOperation')
+    .mockRejectedValue(new Error('ledger unavailable'))
+  const original = await rig.host.conversationCommand(CALLER, params)
+  expect(original).toMatchObject({ ok: true, replayed: false })
+  await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+  const replay = await rig.host.conversationCommand({ callerKey: 'second-caller' }, params)
+  expect(replay).toMatchObject({ ok: true, replayed: true })
+  if (!original.ok || !replay.ok) {
+    throw new Error('expected accepted commands')
+  }
+  expect(replay.value).toEqual(original.value)
+  expect((await rig.host.journalSnapshot(params.envelope.sessionId)).submissions).toHaveLength(1)
+  expect(rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)).toEqual({
+    verdict: 'absent'
+  })
+  expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
+    verdict: 'readable',
+    receipt: { callerKey: CALLER.callerKey }
+  })
+  expect(admit).not.toHaveBeenCalled()
+  expect(rig.compact).toHaveBeenCalledOnce()
+})
+
+it('refuses another caller reusing a send id for /compact as a receipt conflict', async () => {
+  const { id, result } = rig.send('a different request')
+  await result
+  const fields = { command: 'compact' as const }
+  await expect(
+    rig.host.conversationCommand(
+      { callerKey: 'second-caller' },
+      {
+        ...fields,
+        envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+      }
+    )
+  ).resolves.toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
+  })
+  expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect(rig.compact).not.toHaveBeenCalled()
+})
+
+it("refuses /compact reusing another caller's id for a different conversation", async () => {
+  const id = hostTestOperationId()
+  const fields = { command: 'compact' as const }
+  await expect(
+    rig.host.conversationCommand(CALLER, {
+      ...fields,
+      envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+    })
+  ).resolves.toMatchObject({ ok: true })
+  const otherSessionId = 'session-beta'
+  const caller = { callerKey: 'second-caller' }
+  const attach = hostTestAttachParams(null)
+  await expect(
+    rig.host.attach(
+      caller,
+      hostTestAttachParams(null, {
+        envelope: { ...attach.envelope, sessionId: otherSessionId },
+        providerHandle: { kind: 'codex', threadId: '019fd532-7c11-7a90-b6de-4e1a2c3d5f61' }
+      })
+    )
+  ).resolves.toMatchObject({ ok: true })
+  await expect(
+    rig.host.conversationCommand(caller, {
+      ...fields,
+      envelope: rig.envelope(fields, 'agentSession.conversationCommand', id, otherSessionId)
+    })
+  ).resolves.toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
+  })
+  expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect((await rig.host.journalSnapshot(otherSessionId)).submissions).toHaveLength(0)
+  expect(rig.compact).toHaveBeenCalledOnce()
 })

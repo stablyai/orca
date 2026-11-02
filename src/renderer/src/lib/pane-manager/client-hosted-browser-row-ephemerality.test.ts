@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { buildWorkspaceSessionPayload } from '../workspace-session'
 import { buildWorkspaceSessionPatch } from '../workspace-session-patch'
-import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph'
+import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph/mobile-session-snapshots'
 import {
   applyClientHostedBrowserRows,
   getClientHostedBrowserRows,

@@ -46,7 +46,7 @@ export type PopupOwnerContext = {
 }
 
 /**
- * What a guest is allowed to be. A browsing guest is the web — popups, clicked-link routing and
+ * What a guest is allowed to be. A browsing guest is the web — popups, link gestures and
  * auth-identity tracking all apply. A workspace-document guest renders one granted document and gets none
  * of that; `host` is the renderer that minted its grant, and the only sink for what it reports.
  */

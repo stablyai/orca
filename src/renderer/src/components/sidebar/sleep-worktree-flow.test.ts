@@ -48,7 +48,11 @@ vi.mock('@/lib/worktree-sleep-intent', () => ({
   withWorktreeSleepTeardown: (_worktreeId: string, teardown: () => Promise<unknown>) => teardown()
 }))
 
-import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
+import {
+  runSleepWorktree,
+  runSleepWorktrees,
+  sleepWorktreesReportingFailures
+} from './sleep-worktree-flow'
 
 describe('runSleepWorktree', () => {
   beforeEach(() => {
@@ -310,6 +314,18 @@ describe('runSleepWorktree', () => {
     )
   })
 
+  it('reports failed worktrees to a caller that answers for them, without a toast', async () => {
+    mocks.state.shutdownWorktreeBrowsers.mockImplementation((worktreeId: string) =>
+      worktreeId === 'wt-1' ? Promise.reject(new Error('first failed')) : Promise.resolve()
+    )
+
+    const outcome = await sleepWorktreesReportingFailures(['wt-1', 'wt-2'])
+
+    expect(outcome.failedWorktreeIds).toEqual(['wt-1'])
+    expect(outcome.errors).toHaveLength(1)
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
   it('sleeps multiple worktrees and clears active only once when included', async () => {
     mocks.state.activeWorktreeId = 'wt-2'
 
@@ -327,5 +343,12 @@ describe('runSleepWorktree', () => {
     })
     expect(mocks.suspendWorkspace).toHaveBeenNthCalledWith(1, { workspaceId: 'wt-1' })
     expect(mocks.suspendWorkspace).toHaveBeenNthCalledWith(2, { workspaceId: 'wt-2' })
+  })
+
+  it('sleeps a workspace named by both copies of a twin once', async () => {
+    await runSleepWorktrees(['wt-1', 'wt-1'])
+
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledTimes(1)
+    expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledTimes(1)
   })
 })

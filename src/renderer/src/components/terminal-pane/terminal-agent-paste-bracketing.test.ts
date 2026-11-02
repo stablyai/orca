@@ -4,12 +4,9 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { pasteTerminalText } from './terminal-bracketed-paste'
-import {
-  executeTerminalPastePlan,
-  planTerminalPaste,
-  type TerminalPasteTarget,
-  type TerminalPasteTextOptions
-} from './terminal-paste-coordinator'
+import { executeTerminalPastePlan } from './terminal-paste-executor'
+import { planTerminalPaste } from './terminal-paste-coordinator'
+import type { TerminalPasteTarget, TerminalPasteTextOptions } from './terminal-paste-model'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 
 const TAB_ID = 'tab-1'

@@ -1,4 +1,7 @@
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import {
+  getOrcadSshDeployment,
+  type PublicKnownRuntimeEnvironment
+} from '../../../../shared/runtime-environments'
 
 type CatalogEnvironment = Pick<
   PublicKnownRuntimeEnvironment,
@@ -30,8 +33,9 @@ function sameRegistration(
   before: CatalogEnvironment | undefined,
   after: CatalogEnvironment | undefined
 ): boolean {
-  const left = before?.orcadDeployment
-  const right = after?.orcadDeployment
+  // Why SSH only: a WSL deployment takes the stricter re-pair path until its host identity lands.
+  const left = before && getOrcadSshDeployment(before)
+  const right = after && getOrcadSshDeployment(after)
   return Boolean(
     left &&
     right &&

@@ -7,6 +7,7 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
+import { isFolderRepo } from '../../shared/repo-kind'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import {
   cleanupClaimedCloneTarget,
@@ -18,12 +19,13 @@ import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../git/
 import { reuseSavedCloneTarget } from '../git/saved-clone-target'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
-import { isFolderRepo } from '../../shared/repo-kind'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { getRepoName } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { resolveClonedFolderConversion } from '../folder-repo-git-conversion'
+import { findExtraFolderWorkspaceIds } from '../folder-workspace-meta-presence'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null
@@ -154,8 +156,17 @@ export class RuntimeRepositoryCloneController {
 
     const existing = findSaved()
     if (existing) {
-      if (isFolderRepo(existing)) {
-        const updated = store.updateRepo(existing.id, { kind: 'git' })
+      const conversion = await resolveClonedFolderConversion(store, existing)
+      const current = findSaved()
+      if (
+        current &&
+        conversion &&
+        findExtraFolderWorkspaceIds(current, store.getAllWorktreeMeta()).length === 0 &&
+        current.path === existing.path &&
+        isFolderRepo(current) &&
+        runtimeRepoMatchesExecutionHost(current, executionHostId)
+      ) {
+        const updated = store.updateRepo(current.id, { kind: 'git', ...conversion })
         if (updated) {
           await prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()
@@ -165,10 +176,12 @@ export class RuntimeRepositoryCloneController {
       }
       // Why: git re-created this project's folder, so its worktree root is gone with it and the
       // authorized-roots cache still holds the answers from before the folder came back.
-      await prepareLocalWorktreeRootForRepo(store, existing)
-      invalidateAuthorizedRootsCache()
-      this.invalidate(existing.id)
-      return existing
+      if (current) {
+        await prepareLocalWorktreeRootForRepo(store, current)
+        invalidateAuthorizedRootsCache()
+        this.invalidate(current.id)
+        return current
+      }
     }
     // `cloneRepo` ran `git clone` in this process (see `assertCloneHostIsSupported`), so the
     // checkout is here regardless of the host id stamped on the row.

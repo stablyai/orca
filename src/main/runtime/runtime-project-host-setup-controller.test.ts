@@ -1,107 +1,106 @@
-// The CLI/runtime RPC used to refuse `--host ssh:*` with "set the project up from the Orca desktop
-// app" — while the desktop IPC handler in the *same process* routed it correctly through
-// addRemoteRepoFromPath. Safe but wrong: the process refusing is the one that owns the connection.
 import { describe, expect, it, vi } from 'vitest'
-import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
+import {
+  RuntimeProjectHostSetupController,
+  SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
+} from './runtime-project-host-setup-controller'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import type { Repo } from '../../shared/repo-types'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const TARGET_ID = 'target-1'
-const REMOTE_PATH = '/srv/app'
+const REPO_PATH = '/srv/app'
 
-const remoteRepo = {
-  id: 'repo-remote',
-  path: REMOTE_PATH,
+const repo: Repo = {
+  id: 'repo-1',
+  path: REPO_PATH,
   displayName: 'app',
   badgeColor: 'blue',
   addedAt: 1,
-  kind: 'git',
-  connectionId: TARGET_ID
-} as unknown as Repo
+  kind: 'git'
+}
 
 function makeController(): {
   controller: RuntimeProjectHostSetupController
   addRepo: ReturnType<typeof vi.fn>
-  addRemoteRepo: ReturnType<typeof vi.fn>
   cloneRepo: ReturnType<typeof vi.fn>
   projectId: string
 } {
   const store = {
-    getProjects: () => projectHostSetupProjectionFromRepos([remoteRepo]).projects,
+    getProjects: () => projectHostSetupProjectionFromRepos([repo]).projects,
     getProjectHostSetups: () => [],
-    updateRepo: (_id: string, updates: Record<string, unknown>) => ({ ...remoteRepo, ...updates })
+    updateRepo: (_id: string, updates: Record<string, unknown>) => ({ ...repo, ...updates })
   }
-  const addRepo = vi.fn().mockResolvedValue(remoteRepo)
-  const addRemoteRepo = vi.fn().mockResolvedValue(remoteRepo)
-  const cloneRepo = vi.fn().mockResolvedValue(remoteRepo)
+  const addRepo = vi.fn().mockResolvedValue(repo)
+  const cloneRepo = vi.fn().mockResolvedValue(repo)
   const controller = new RuntimeProjectHostSetupController({
     getStore: () => store as never,
-    listRepos: () => [remoteRepo],
+    listRepos: () => [repo],
     addRepo,
-    addRemoteRepo,
     cloneRepo,
     invalidateResolvedWorktrees: vi.fn(),
     invalidateWorktreeScan: vi.fn(),
-    notifyReposChanged: vi.fn()
+    notifyReposChanged: vi.fn(),
+    countLiveTerminalsForRepo: () => 0
   })
   return {
     controller,
     addRepo,
-    addRemoteRepo,
     cloneRepo,
-    projectId: getProjectHostSetupForRepo([], remoteRepo).projectId
+    projectId: getProjectHostSetupForRepo([], repo).projectId
   }
 }
 
 describe('RuntimeProjectHostSetupController host routing', () => {
-  it('registers an existing folder on an SSH host instead of refusing it (#11163)', async () => {
-    const { controller, addRepo, addRemoteRepo, projectId } = makeController()
+  it('refuses an existing folder on an SSH target with the not-connected text, never locally', async () => {
+    const { controller, addRepo, projectId } = makeController()
 
-    const result = await controller.setupExistingFolder({
+    const setup = controller.setupExistingFolder({
       projectId,
       hostId: `ssh:${TARGET_ID}`,
-      path: REMOTE_PATH,
+      path: REPO_PATH,
       kind: 'git'
     })
 
-    expect(addRemoteRepo).toHaveBeenCalledWith({
-      connectionId: TARGET_ID,
-      remotePath: REMOTE_PATH,
-      kind: 'git'
-    })
-    // The local registration path validates the path against the client filesystem.
+    await expect(setup).rejects.toThrow(SshHostNotServedError)
+    await expect(setup).rejects.toThrow(`SSH connection "${TARGET_ID}" not found or not connected`)
     expect(addRepo).not.toHaveBeenCalled()
-    expect(result.repo.id).toBe(remoteRepo.id)
   })
 
-  it('decodes a percent-encoded SSH target back to its connection id', async () => {
-    const { controller, addRemoteRepo, projectId } = makeController()
+  it('names the decoded connection id of a percent-encoded SSH target', async () => {
+    const { controller, addRepo, projectId } = makeController()
 
-    await controller.setupExistingFolder({
-      projectId,
-      hostId: 'ssh:my%20host',
-      path: REMOTE_PATH,
-      kind: 'folder'
-    })
+    await expect(
+      controller.setupExistingFolder({
+        projectId,
+        hostId: 'ssh:my%20host',
+        path: REPO_PATH,
+        kind: 'folder'
+      })
+    ).rejects.toThrow('SSH connection "my host" not found or not connected')
+    expect(addRepo).not.toHaveBeenCalled()
+  })
 
-    expect(addRemoteRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'my host', kind: 'folder' })
+  it('refuses repo.addRemote by saying where the project can be added instead', () => {
+    const { controller, addRepo } = makeController()
+
+    expect(() => controller.addSshRepo({ connectionId: TARGET_ID })).toThrow(
+      SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
     )
+    expect(addRepo).not.toHaveBeenCalled()
   })
 
   it('still uses the local registration for local and runtime hosts', async () => {
-    const { controller, addRepo, addRemoteRepo, projectId } = makeController()
+    const { controller, addRepo, projectId } = makeController()
 
     await controller.setupExistingFolder({
       projectId,
       hostId: 'local',
-      path: REMOTE_PATH,
+      path: REPO_PATH,
       kind: 'git'
     })
 
-    expect(addRepo).toHaveBeenCalledWith(REMOTE_PATH, 'git', 'local')
-    expect(addRemoteRepo).not.toHaveBeenCalled()
+    expect(addRepo).toHaveBeenCalledWith(REPO_PATH, 'git', 'local')
   })
 
   it('refuses to clone onto an SSH host, because nothing here clones remotely', async () => {
@@ -112,7 +111,7 @@ describe('RuntimeProjectHostSetupController host routing', () => {
         projectId,
         hostId: `ssh:${TARGET_ID}`,
         url: 'https://example.com/app.git',
-        destination: REMOTE_PATH
+        destination: REPO_PATH
       })
     ).rejects.toThrow(/Cloning onto an SSH host is not supported/)
     expect(cloneRepo).not.toHaveBeenCalled()

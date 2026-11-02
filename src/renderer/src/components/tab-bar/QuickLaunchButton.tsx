@@ -9,6 +9,7 @@ import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
@@ -63,44 +64,6 @@ function orderAgents(
   return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
-export function shouldShowLaunchWatchdogTimeout({ hasPty }: { hasPty: boolean }): boolean {
-  return !hasPty
-}
-
-function getLaunchWatchdogTimeoutMessage(label: string): string {
-  return `Couldn't launch ${label} — the terminal did not start.`
-}
-
-function getTerminalLaunchState(tabId: string): { stillOpen: boolean; hasPty: boolean } {
-  const state = useAppStore.getState()
-  const hasPtyBinding = (state.ptyIdsByTabId[tabId]?.length ?? 0) > 0
-  let stillOpen = false
-  let tabPtyId: string | null = null
-
-  for (const tabs of Object.values(state.tabsByWorktree)) {
-    const tab = tabs.find((t) => t.id === tabId)
-    if (tab) {
-      stillOpen = true
-      tabPtyId = tab.ptyId
-      break
-    }
-  }
-
-  return { stillOpen, hasPty: hasPtyBinding || tabPtyId !== null }
-}
-
-async function waitForTerminalPty(tabId: string, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    const launchState = getTerminalLaunchState(tabId)
-    if (launchState.hasPty) {
-      return true
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 100))
-  }
-  return getTerminalLaunchState(tabId).hasPty
-}
-
 function QuickLaunchAgentMenuItemsInner({
   worktreeId,
   groupId,
@@ -117,7 +80,8 @@ function QuickLaunchAgentMenuItemsInner({
   // instead of the remote server's. Use the same ssh/runtime/local owner
   // resolution as the rest of the tab bar.
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
-  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
+  const { detectedIds, detectionFailed, needsServerUpdate } =
+    useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
@@ -140,6 +104,7 @@ function QuickLaunchAgentMenuItemsInner({
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
         requestId: newAgentLaunchRequestId(),
+        focusIntent: captureNativeChatComposerFocusIntent(),
         agent,
         worktreeId,
         groupId,
@@ -184,27 +149,6 @@ function QuickLaunchAgentMenuItemsInner({
         return
       }
       onFocusTerminal(result.surface.tabId)
-
-      // Why: launch success means the terminal session exists. Agent readiness
-      // can lag behind on slow machines, and prompt paste flows already own
-      // their own readiness timeout once a PTY exists.
-      const launchedTabId = result.surface.tabId
-      void waitForTerminalPty(launchedTabId, 5000).then((hasPty) => {
-        if (hasPty) {
-          return
-        }
-        const launchState = getTerminalLaunchState(launchedTabId)
-        if (!launchState.stillOpen) {
-          return
-        }
-        if (useAppStore.getState().activeWorktreeId !== worktreeId) {
-          return
-        }
-        if (!shouldShowLaunchWatchdogTimeout({ hasPty: launchState.hasPty })) {
-          return
-        }
-        toast.message(getLaunchWatchdogTimeoutMessage(label))
-      })
     },
     [
       worktreeId,
@@ -229,12 +173,25 @@ function QuickLaunchAgentMenuItemsInner({
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
-          {detectedIds && detectedIds.length > 0
-            ? translate('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
-            : translate(
-                'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
-                'No agents detected'
-              )}
+          {needsServerUpdate
+            ? translate(
+                'auto.components.tab.bar.QuickLaunchButton.needsServerUpdate',
+                'Update Orca on this server to list this workspace’s agents'
+              )
+            : detectionFailed
+              ? translate(
+                  'auto.components.tab.bar.QuickLaunchButton.hostUnreachable',
+                  'Can’t reach this workspace’s host to list its agents'
+                )
+              : detectedIds && detectedIds.length > 0
+                ? translate(
+                    'auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf',
+                    'No enabled agents'
+                  )
+                : translate(
+                    'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
+                    'No agents detected'
+                  )}
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {

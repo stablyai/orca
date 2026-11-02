@@ -1,21 +1,25 @@
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnResult } from '../../../providers/types'
-import { isCurrentPtyExit, ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
+import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
+import {
+  isCurrentPtyExit,
+  ptyIncarnationById,
+  ptyOwnership,
+  setAdoptedPtyOwnership
+} from '../provider/ownership-state'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { retirePersistedStablePaneOwner } from './stable-owner'
 
 export function admitPtyReattachOwnership(
   runtime: OrcaRuntimeService | undefined,
-  result: PtySpawnResult,
-  connectionId: string | null | undefined
+  result: PtySpawnResult
 ): void {
   if (!result.isReattach && result.agentSessionEnsure?.disposition !== 'adopted') {
     return
   }
   runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
   // A failed local save must not strand a live process already admitted by its host.
-  ptyOwnership.set(result.id, connectionId ?? ptyOwnership.get(result.id) ?? null)
+  setAdoptedPtyOwnership(result.id)
   if (result.incarnationId) {
     ptyIncarnationById.set(result.id, result.incarnationId)
   }
@@ -23,8 +27,7 @@ export function admitPtyReattachOwnership(
 
 export async function discardUnpersistedPtySpawn(
   provider: IPtyProvider,
-  result: PtySpawnResult,
-  onDiscarded?: () => void
+  result: PtySpawnResult
 ): Promise<void> {
   if (
     result.isReattach ||
@@ -45,7 +48,6 @@ export async function discardUnpersistedPtySpawn(
   if (isCurrentPtyExit(result)) {
     clearProviderPtyState(result.id)
     ptyOwnership.delete(result.id)
-    onDiscarded?.()
   }
 }
 

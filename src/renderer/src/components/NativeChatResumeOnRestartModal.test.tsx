@@ -48,7 +48,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: activate
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 const { mount, button, offerIds, toasts, fakeHost, runStatus, calls } = createResumeModalFixture(
   rpc,
@@ -223,13 +225,13 @@ it('closes on Resume and shows the resume in the status bar until the host answe
   expect(rpc.mock.calls.length).toBe(reads)
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resuming 2 chats')
   expect(button('Resuming…').disabled).toBe(true)
-  // Each chat being resumed shows a spinner where its checkbox was; tree nodes stay disabled.
+  // With nothing left to choose there is no checkbox column; each spinner sits beside its chat.
   expect(runStatus('Prompt a')).toMatch(/^Prompt a: Waiting to start · \d+s$/)
   expect(runStatus('Prompt b')).toMatch(/^Prompt b: Waiting to start · \d+s$/)
   expect(chatBoxes()).toHaveLength(0)
   const status = document.querySelector('[role="img"][aria-label^="Prompt a: "]')
-  expect(status?.parentElement?.classList.contains('w-7')).toBe(true)
-  expect(status?.parentElement?.parentElement?.firstElementChild?.contains(status)).toBe(true)
+  expect(document.querySelector('[role="tree"] .w-7')).toBeNull()
+  expect(status?.parentElement?.classList.contains('size-4.5')).toBe(true)
   expect(status?.closest('[role="treeitem"]')?.getAttribute('aria-level')).toBe('2')
   expect(status?.closest('label')).toBeNull()
 
@@ -569,7 +571,9 @@ it('lists a chat the resume could not carry on when the dialog reopens, with wha
   const dialog = document.querySelector('[role="dialog"]')
   expect(dialog).not.toBeNull()
   expect(dialog?.textContent).toContain('Resumed 1 of 2 chats')
-  expect(dialog?.textContent).toContain("Don't ask again (resume automatically)")
+  // The setting is still off, so the box stays after Resume.
+  expect(dialog?.textContent).toContain("Don't ask again")
+  expect(dialog?.textContent).not.toContain('Resumed automatically')
   expect(dialog?.textContent).not.toContain('Dismiss failed')
   expect(runStatus('Prompt a')).toBe('Prompt a: Resumed')
   expect(chatBoxes()).toHaveLength(1)

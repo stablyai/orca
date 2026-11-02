@@ -22,7 +22,7 @@ import {
   type ExitCallback
 } from './local-pty-provider-state'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
-import type { PtyProcessInfo } from './types'
+import type { PtyProcessInfo } from './pty-provider-contract'
 
 export function writeLocalPty(id: string, data: string): boolean {
   // Cooked PTYs echo private DSR/OSC replies; CPR/DA stay immediate unless one of

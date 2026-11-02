@@ -113,12 +113,35 @@ export function shouldUseNonLatinShortcutPhysicalFallback(
   return key !== '' && !MODIFIER_KEYS.has(key) && !isLatinShortcutKey(key)
 }
 
+export function shouldUseImeProcessChordPhysicalFallback(
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: a chord pressed while an IME has marked text reports key 'Process' (#28159); a modifier chord isn't IME text, so match its physical code.
+  if (input.key !== 'Process') {
+    return false
+  }
+  const control = hasModifier(input, 'control')
+  const alt = hasModifier(input, 'alt')
+  if (getKeybindingPlatform(platform) === 'darwin') {
+    // Option alone composes text on macOS, so only Cmd/Ctrl chords qualify.
+    return control || hasModifier(input, 'meta')
+  }
+  // AltGr surfaces as Ctrl+Alt on Windows/Linux; treat it as text, not a chord.
+  if (control && alt) {
+    return false
+  }
+  return control || alt || hasModifier(input, 'meta')
+}
+
 export function canFallBackToPhysicalCode(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
   return (
-    canUsePhysicalCodeFallback(input) || shouldUseNonLatinShortcutPhysicalFallback(input, platform)
+    canUsePhysicalCodeFallback(input) ||
+    shouldUseNonLatinShortcutPhysicalFallback(input, platform) ||
+    shouldUseImeProcessChordPhysicalFallback(input, platform)
   )
 }
 
@@ -175,9 +198,8 @@ export function keyTokenFromInput(
     return logicalKey
   }
   if (
-    !canUsePhysicalCodeFallback(input) &&
-    !shouldUseMacOptionComposedCaptureFallback(input, platform) &&
-    !shouldUseNonLatinShortcutPhysicalFallback(input, platform)
+    !canFallBackToPhysicalCode(input, platform) &&
+    !shouldUseMacOptionComposedCaptureFallback(input, platform)
   ) {
     return null
   }

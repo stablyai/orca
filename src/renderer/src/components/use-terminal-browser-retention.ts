@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { onBrowserGuestPaintRetentionChange } from './browser-pane/host-guest/browser-guest-paint-retention'
+import { browserTabsVetoGuestEviction } from './browser-pane/host-guest/browser-guest-eviction-veto'
 import {
-  browserTabsVetoGuestEviction,
   selectBrowserGuestEvictionWorktreeIds,
   touchBrowserGuestWorktreeRecency,
   worktreeHoldsLiveBrowserGuests

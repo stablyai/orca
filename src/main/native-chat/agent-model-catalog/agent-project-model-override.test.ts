@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -131,7 +131,7 @@ describe('workspaceMayOverrideDefaultModel', () => {
   })
 
   it('never vouches for an agent whose project config it does not know', async () => {
-    expect(await mayOverride('pi', join(root, 'anywhere'))).toBe(true)
+    expect(await mayOverride('unknown-agent', join(root, 'anywhere'))).toBe(true)
   })
 
   it('ignores OpenCode project config that picks no model, effort or provider', async () => {
@@ -205,4 +205,65 @@ describe('workspaceMayOverrideDefaultModel', () => {
     write(join(worktree, 'opencode.json'), '{"mcp":{}}')
     expect(await mayOverride('omp', worktree, join(root, 'omp-home'))).toBe(false)
   })
+
+  it.each([
+    ['.pi/settings.json', '{"defaultProvider":"openai","defaultModel":"gpt-6"}'],
+    ['.pi/settings.json', '{"defaultThinkingLevel":"low"}'],
+    ['.pi/settings.json', '{"modelThinkingLevels":{"openai/gpt-6":"high"}}'],
+    ['.pi/settings.json', '{"enabledModels":["openai/*"]}'],
+    ['.pi/settings.json', '{"extensions":["./tools/pick-model.ts"]}'],
+    ['.pi/settings.json', '{"packages":["npm:pi-model-router"]}'],
+    ['.pi/settings.json', '{"defaultModel":'],
+    ['.pi/extensions/pick-model.ts', 'export default () => {}\n']
+  ])(
+    'counts Pi project config in %s that may pick a model or thinking level',
+    async (file, text) => {
+      const worktree = join(root, 'pi-model')
+      write(join(worktree, '.git'), 'gitdir: /elsewhere')
+      write(join(worktree, file), text)
+      expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(true)
+    }
+  )
+
+  it('ignores Pi project settings that pick no model, and the account home’s own settings', async () => {
+    const worktree = join(root, 'pi-plain')
+    write(join(worktree, '.git'), 'gitdir: /elsewhere')
+    expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
+    write(join(worktree, '.pi', 'settings.json'), '\uFEFF{"theme":"dark","defaultTools":["+grep"]}')
+    // Another agent's model settings are not Pi's.
+    write(join(worktree, '.omp', 'settings.json'), '{"defaultModel":"gpt-6"}')
+    expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
+    write(join(worktree, '.pi', 'settings.json'), '{"defaultModel":"gpt-6"}')
+    expect(await mayOverride('pi', worktree, join(worktree, '.pi'))).toBe(false)
+  })
+
+  it('ignores an empty Pi settings file and an extensions folder of only dotfiles', async () => {
+    const worktree = join(root, 'pi-empty')
+    write(join(worktree, '.git'), 'gitdir: /elsewhere')
+    write(join(worktree, '.pi', 'settings.json'), '')
+    write(join(worktree, '.pi', 'extensions', '.DS_Store'), 'x')
+    write(join(worktree, '.pi', 'extensions', '.gitkeep'))
+    expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
+    write(join(worktree, '.pi', 'settings.json'), '\uFEFF  \n')
+    expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
+  })
+
+  // Windows has no permission bits to make a folder unreadable.
+  it.skipIf(process.platform === 'win32')(
+    'counts a Pi extensions folder it cannot read',
+    async () => {
+      const worktree = join(root, 'pi-locked')
+      write(join(worktree, '.git'), 'gitdir: /elsewhere')
+      const extensions = join(worktree, '.pi', 'extensions')
+      write(join(extensions, '.gitkeep'))
+      expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
+      // Unreadable, it might hold anything.
+      chmodSync(extensions, 0o000)
+      try {
+        expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(true)
+      } finally {
+        chmodSync(extensions, 0o755)
+      }
+    }
+  )
 })

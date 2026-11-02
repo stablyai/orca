@@ -1,24 +1,27 @@
 import {
   SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
-  type SkillFreshnessInstallation
+  type SkillFreshnessInstallation,
+  type SkillInstallationTopology
 } from '../../shared/skill-freshness'
 
+// Why: `skills add` rewrites the skill in every agent folder it targets with an rm-then-copy.
+// Through a link out of tree that deletes someone else's files (#22897); into a read-only or
+// dangling placement it fails half-way. Any such home placement keeps the name skipped.
+const UNWRITABLE_HOME_TOPOLOGIES: ReadonlySet<SkillInstallationTopology> = new Set([
+  'external-link',
+  'broken-link',
+  'read-only'
+])
+
 /**
- * Names the global update command can actually converge.
+ * Names the pinned install can safely bring to this build's version.
  *
- * Eligibility is decided purely over the placements that command touches — the
- * canonical copy and its symlink aliases. Copies it provably leaves alone (standalone
- * duplicates, project skills, plugin caches, links out of tree) neither authorize an
- * update nor withhold one: the badge would otherwise promise work the command cannot
- * do, or refuse work it could, over a copy that is never at stake either way. A
- * blocked *convergent* copy still withholds it, because that is the placement the
- * command would write to and overwriting it is the real data-loss case.
- * `globallyUpdatableNames` comes from the updater's lock; an unregistered copied
- * bundle is installed but `skills update` cannot identify its source.
+ * Ownership is deliberately not consulted: whether to preselect a copy someone else
+ * installed is presentation policy. Copies the command never writes (project skills,
+ * plugin caches) neither authorize an update nor withhold one.
  */
 export function eligibleSkillUpdateNames(
-  installations: readonly SkillFreshnessInstallation[],
-  globallyUpdatableNames: ReadonlySet<string>
+  installations: readonly SkillFreshnessInstallation[]
 ): string[] {
   const byName = new Map<string, SkillFreshnessInstallation[]>()
   for (const installation of installations) {
@@ -28,26 +31,16 @@ export function eligibleSkillUpdateNames(
   }
 
   const eligible: string[] = []
-  for (const [, entries] of byName) {
-    if (!globallyUpdatableNames.has(entries[0].name)) {
-      continue
-    }
+  for (const [name, entries] of byName) {
     const convergent = entries.filter((entry) =>
       SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(entry.topology)
     )
-    // Why: without a convergent placement the command has no anchor, so it would
-    // no-op or error against a canonical install that isn't there.
-    if (convergent.length === 0) {
-      continue
-    }
-    const hasOutdated = convergent.some((entry) => entry.status === 'outdated')
-    const everyConvergentCopyIsSafeToWrite = convergent.every(
-      (entry) =>
-        (entry.status === 'current' || entry.status === 'outdated') &&
-        Boolean(entry.resolvedPath && entry.physicalIdentity)
-    )
-    if (hasOutdated && everyConvergentCopyIsSafeToWrite) {
-      eligible.push(entries[0].name)
+    if (
+      convergent.some((entry) => entry.status === 'outdated') &&
+      convergent.every((entry) => entry.status !== 'inaccessible') &&
+      entries.every((entry) => !UNWRITABLE_HOME_TOPOLOGIES.has(entry.topology))
+    ) {
+      eligible.push(name)
     }
   }
   return eligible.sort((left, right) => left.localeCompare(right, 'en'))

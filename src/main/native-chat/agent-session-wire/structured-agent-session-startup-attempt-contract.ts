@@ -5,6 +5,7 @@ import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 
 /** A spawned child with no stdout frame or stderr line for this long has stopped starting. */
 export const STRUCTURED_AGENT_SESSION_STARTUP_SILENCE_MS = 60_000
@@ -28,6 +29,8 @@ export type StructuredAgentSessionStartupAttempt = {
   readonly launch: Pick<AgentSessionRecord, 'location' | 'accountHome' | 'launchDirectory'>
   /** The saved options the start launches with, as intent; never a catalog guess. */
   readonly options?: Readonly<Record<string, string>>
+  /** The permission mode the start launches with; absent for an agent with none. */
+  readonly permissionMode?: AgentChatPermissionMode
   /** Provider events may begin before acquisition returns. */
   readonly events?: StructuredAgentSessionEventSink
   /** Background work this start's child reports, scoped to the attempt. Unset until the host routes
@@ -38,6 +41,4 @@ export type StructuredAgentSessionStartupAttempt = {
   readonly signal?: AbortSignal
   /** Any stdout frame or stderr line from the child: proof the start is still moving. */
   readonly onOutput?: () => void
-  /** The conversation's option revision now; a report stamps it as its read begins. */
-  readonly optionRevision: () => number
 }

@@ -30,6 +30,7 @@ import {
   holdWindowGraphPublication,
   releaseWindowGraphPublication
 } from './helpers/hold-window-graph-publication'
+import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-host-quit-input-'))
 const fixturePath = path.join(scratch, 'paired-host-quit-terminal.mjs')
@@ -59,16 +60,12 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
     ? // Why: the isolated Windows profile starts PowerShell, which parses a leading quoted path as a string, not a command.
       `& ${command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')}`
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 function seededRepoPathOrSkip(): string {

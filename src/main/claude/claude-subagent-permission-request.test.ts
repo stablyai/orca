@@ -23,7 +23,8 @@ import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-sta
 import { AgentHookServer } from '../agent-hooks/server'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { settleStructuredAgentSessionDeadGeneration } from '../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from '../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
+import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -243,7 +244,10 @@ async function pipeline() {
       await journal.appendItem(
         identity,
         { ...card.body, resolution: { ...resolution, resolvedBy: 'client-1', resolvedAt: now() } },
-        { fence: FENCE, turnScope: journal.liveTurnScope() }
+        {
+          fence: FENCE,
+          turnScope: new StructuredAgentSessionCurrentWork(journal, FENCE).turnScope()
+        }
       )
     }
   const cardId = (): string => {
@@ -629,7 +633,7 @@ describe("a Claude subagent's permission request", () => {
     let settled: Promise<unknown> | undefined
     hooks.onEvent = (event) => {
       if (event.type === 'ended') {
-        settled = settleStructuredAgentSessionDeadGeneration({
+        settled = settleObservedExitForTest({
           journal: run.journal,
           sessionId: SESSION,
           fence: FENCE,

@@ -1,7 +1,5 @@
 import type { TerminalOscLinkRange } from '../../../../../shared/terminal-osc-link-ranges'
 import type { TerminalSnapshotUnavailableReason } from '../../../../../shared/terminal-snapshot-unavailability'
-import type { TerminalSourceRangeLedger } from '../../terminal-source-range-ledger'
-import type { RemoteTerminalSourceRangeReplacementReservation } from '../../../remote-terminal-source-range-consumer'
 import type {
   TerminalOutputFrameChunk,
   TerminalOutputMeta
@@ -62,15 +60,15 @@ export type TerminalMultiplexStream = {
   client: TerminalViewportClient | undefined
   isMobile: boolean
   ackOutput: boolean
-  ackOutputSourceRanges: boolean
-  streamGeneration: string
-  sourceRangeLedger: TerminalSourceRangeLedger | null
-  sourceRangeConsumerAttached: boolean
-  sourceRangeReplacement: RemoteTerminalSourceRangeReplacementReservation | null
   ackInFlightBytes: number
   ackWindowBytes: number
   supportsOutputPause: boolean
+  // Why: lets the client skip the reveal snapshot when a pause discarded nothing.
+  supportsOutputPauseDropNotice: boolean
+  pausedOutputDropNoticeSent: boolean
   supportsWriteUnavailable: boolean
+  // Also sends WriteUnavailable unprompted when the PTY's daemon endpoint drops.
+  supportsEndpointLossNotice: boolean
   // Set only when the client negotiated `inputAck`; sequenced Input frames are then deduped and acked.
   inputSessionId: string | null
   outputPaused: boolean

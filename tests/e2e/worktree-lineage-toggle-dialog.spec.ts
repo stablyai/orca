@@ -27,7 +27,7 @@ test('locally controlled project-group modal keeps child-toggle input', async ({
     if (!parent) {
       throw new Error('Missing parent')
     }
-    const group = await store.getState().createProjectGroup('Shortcut dialog group')
+    const group = await store.getState().createProjectGroup('Shortcut dialog group', 'local')
     if (!group) {
       throw new Error('Missing project group')
     }

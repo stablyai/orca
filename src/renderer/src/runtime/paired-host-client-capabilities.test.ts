@@ -1,4 +1,9 @@
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from '../../../shared/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import nacl from 'tweetnacl'
 import { WebSocketServer } from 'ws'
 import {
   decrypt,
@@ -9,13 +14,18 @@ import {
   publicKeyToBase64
 } from '../../../shared/e2ee-crypto'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../../shared/pairing'
+import { encodePairingOffer, parsePairingCode } from '../../../shared/pairing'
+import { createPairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/paired-e2ee-node-primitives'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
 
 const mocks = vi.hoisted(() => ({ isWebClient: false }))
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.isWebClient }))
 
-import { routeWebRuntimeConnectionFrame } from '@/web/web-runtime-connection-frame-router'
+import {
+  routeWebRuntimeConnectionFrame,
+  sealWebRuntimeAuth
+} from '@/web/web-runtime-connection-frame-router'
 import { pairedHostClientCapabilities } from './paired-host-client-capabilities'
 
 const servers: WebSocketServer[] = []
@@ -36,7 +46,10 @@ afterEach(async () => {
 })
 
 /** A paired host that records the capabilities a client authenticates with, then answers. */
-async function recordingHost(): Promise<{ pairing: PairingOffer; auth: Promise<unknown> }> {
+async function recordingHost(): Promise<{
+  pairing: PairedRuntimeConnection
+  auth: Promise<unknown>
+}> {
   const keys = generateKeyPair()
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
@@ -87,7 +100,7 @@ async function recordingHost(): Promise<{ pairing: PairingOffer; auth: Promise<u
   if (!pairing) {
     throw new Error('test pairing did not parse')
   }
-  return { pairing, auth }
+  return { pairing: pairedRuntimeConnectionFromOffer(pairing), auth }
 }
 
 // The route decides whether a paired host will admit a chat from these; a list that differs from
@@ -114,27 +127,35 @@ describe("this client's capabilities as a paired host receives them", () => {
 
   it("are the browser client's handshake", async () => {
     mocks.isWebClient = true
-    const sendEncrypted = vi.fn((_message: unknown) => true)
+    const host = nacl.box.keyPair()
+    const client = nacl.box.keyPair()
+    const handshake = createPairedE2EEClientHandshake({
+      primitives: NODE_PAIRED_E2EE_PRIMITIVES,
+      hostPublicKeyB64: publicKeyToBase64(host.publicKey),
+      framing: 'legacy',
+      clientKeyPair: client
+    })
+    const sendAuth = vi.fn()
 
     await routeWebRuntimeConnectionFrame(JSON.stringify({ type: 'e2ee_ready' }), undefined, {
       getState: () => 'handshaking',
-      getSharedKey: () => new Uint8Array([1]),
+      getHandshake: () => handshake,
       getSocket: () => null,
-      pairingToken: 'token',
       pending: new Map(),
       subscriptions: new Map(),
-      sendEncrypted,
+      sendAuth,
       setConnected: vi.fn(),
-      setAuthFailed: vi.fn(),
-      rejectUnauthorized: vi.fn(),
-      notifyUnauthorized: vi.fn()
+      authRejected: vi.fn()
     })
 
-    expect(sendEncrypted).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'e2ee_auth',
-        clientCapabilities: [...pairedHostClientCapabilities()]
-      })
+    expect(sendAuth).toHaveBeenCalledWith(handshake)
+    const shared = deriveSharedKey(host.secretKey, client.publicKey)
+    const auth: unknown = JSON.parse(
+      decrypt(await sealWebRuntimeAuth(handshake, 'device-token'), shared)!
     )
+    expect(auth).toMatchObject({
+      type: 'e2ee_auth',
+      clientCapabilities: [...pairedHostClientCapabilities()]
+    })
   })
 })

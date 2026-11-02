@@ -4,18 +4,20 @@ const mocks = vi.hoisted(() => ({
   supportsCapability: vi.fn()
 }))
 
-vi.mock('./runtime-rpc-client', () => ({
+vi.mock('./runtime-rpc-result', () => ({
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     code: string
     constructor(response: { error: { code: string; message: string } }) {
       super(response.error.message)
       this.code = response.error.code
     }
-  },
+  }
+}))
+vi.mock('./runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
-import { RuntimeRpcCallError } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 

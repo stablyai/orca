@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Plus
 } from './mobile-tasks-dependencies'
+import { MobileTasksHostSubtitle } from './mobile-tasks-host-subtitle'
 import { styles } from './mobile-tasks-legacy-styles'
 import { renderMobileTasksProviderControls } from './mobile-tasks-provider-controls'
 import { renderMobileTasksSearchControl } from './mobile-tasks-search-control'
@@ -32,6 +33,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
     githubMode,
     githubProjectLoading,
     headerVerdict,
+    hostId,
     linearConnected,
     loading,
     provider,
@@ -61,8 +63,11 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
         <ChevronLeft size={22} color={colors.textPrimary} />
       </Pressable>
       <View style={styles.titleWrap}>
-        <StatusDot state={connState} verdict={headerVerdict} />
-        <Text style={styles.title}>Tasks</Text>
+        <View style={styles.titleLine}>
+          <StatusDot state={connState} verdict={headerVerdict} />
+          <Text style={styles.title}>Tasks</Text>
+        </View>
+        <MobileTasksHostSubtitle hostId={hostId} />
       </View>
       <Pressable
         style={styles.iconButton}

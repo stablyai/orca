@@ -14,6 +14,7 @@
 
 import type { Automation } from './automations-types'
 import type { AutomationUsageSummary } from './automation-usage-summary'
+import type { FolderWorkspaceHost } from './folder-workspace-execution-host'
 import { getAutomationRunRepoId } from './automation-run-identity'
 import { parseExecutionHostId } from './execution-host'
 import { sanitizeSshTargetGeneration } from './ssh-target-generation'
@@ -67,9 +68,7 @@ export const AUTOMATION_ORPHAN_ISSUES = {
 /** Where a record's workspace executes; `unpinned` leaves the repo to decide. */
 export type AutomationWorkspaceHost =
   | { kind: 'unpinned' }
-  | { kind: 'local' }
-  | { kind: 'ssh'; targetId: string }
-  | { kind: 'ambiguous' }
+  | Exclude<FolderWorkspaceHost, { kind: 'missing' }>
 
 export type AutomationProjectionContext = {
   /** The process that owns this store; runtime scheduling markers are local only on a runtime. */
@@ -163,6 +162,9 @@ export function projectAutomationSelector(
   const workspaceHost = context.workspaceHost?.(automation) ?? { kind: 'unpinned' }
   if (workspaceHost.kind === 'ambiguous') {
     return orphan(AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous)
+  }
+  if (workspaceHost.kind === 'runtime') {
+    return orphan(AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere)
   }
   // A pinned workspace is where the run actually goes, so the row belongs to that host, not Self.
   if (workspaceHost.kind === 'ssh') {

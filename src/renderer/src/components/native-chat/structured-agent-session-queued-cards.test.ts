@@ -56,7 +56,7 @@ function handOff(
   return submission(id, dispatchState, draftId)
 }
 
-const IDLE = { hasPendingPrompt: false }
+const IDLE = {}
 
 describe('queued message cards', () => {
   it('orders by host position whatever order the list arrives in', () => {
@@ -65,11 +65,8 @@ describe('queued message cards', () => {
     expect(cards[0]?.text).toBe('text of a')
   })
 
-  it('holds: waiting defaults to the turn, a pending prompt changes the caption', () => {
+  it('holds: a waiting card waits its turn', () => {
     expect(projectQueuedMessageCards([draft('a', 1)], [], IDLE)[0]?.hold).toBe('turn')
-    expect(
-      projectQueuedMessageCards([draft('a', 1)], [], { hasPendingPrompt: true })[0]?.hold
-    ).toBe('awaiting-answer')
   })
 
   it('a returned card carries its stored reason and blocks the label of drafts behind it', () => {
@@ -139,7 +136,7 @@ describe('queued message cards', () => {
     expect(cards.map((card) => card.messageId)).toEqual(['kept', 'refused'])
   })
 
-  it('a paused queue outranks a pending prompt: an answer does not drain it', () => {
+  it("a paused queue holds its waiting cards; a card's own hold or return still shows", () => {
     const cards = projectQueuedMessageCards(
       [
         draft('waiting', 1),
@@ -148,7 +145,7 @@ describe('queued message cards', () => {
         draft('behind', 4)
       ],
       [],
-      { hasPendingPrompt: true, queuePaused: true }
+      { queuePaused: true }
     )
     expect(cards.map((card) => card.hold)).toEqual([
       'queue-paused',
@@ -156,14 +153,10 @@ describe('queued message cards', () => {
       'returned',
       'behind-returned'
     ])
-    expect(
-      projectQueuedMessageCards([draft('waiting', 1)], [], { hasPendingPrompt: true })[0]?.hold
-    ).toBe('awaiting-answer')
   })
 
-  it('a paused queue holds every waiting card, in order: an answer does not drain it', () => {
+  it('a paused queue holds every waiting card, in order', () => {
     const cards = projectQueuedMessageCards([draft('held', 1), draft('typed-after', 2)], [], {
-      hasPendingPrompt: true,
       queuePaused: true
     })
     expect(cards.map((card) => card.hold)).toEqual(['queue-paused', 'queue-paused'])
@@ -174,7 +167,7 @@ describe('queued message cards', () => {
   it("the header names the queue's pause while it holds a card, and none over cards Resume would not send", () => {
     const stopped = { reason: 'stopped' } as const
     const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>
-      projectQueuedMessageCards(messages, [], { hasPendingPrompt: false, queuePaused })
+      projectQueuedMessageCards(messages, [], { queuePaused })
     expect(queuedMessagesQueuePause(project([draft('held', 1)]), stopped)).toEqual(stopped)
     const unsendable = [
       draft('returned', 1, { state: 'returned', returnedReason: null }),
@@ -309,7 +302,7 @@ describe("another agent's card", () => {
     const cards = projectQueuedMessageCards(
       [{ ...agentDraft, body: { ...agentDraft.body, from } }, draft('b', 2)],
       [],
-      { hasPendingPrompt: false }
+      IDLE
     )
     expect(cards.map((card) => card.from)).toEqual([from, undefined])
   })

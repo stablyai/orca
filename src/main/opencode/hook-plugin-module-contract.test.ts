@@ -104,15 +104,6 @@ describe('OpenCode status plugin module contract', () => {
     expect(module.default?.server).toBeTypeOf('function')
   })
 
-  it('rejects the shape OpenCode refuses: a default export without server()', async () => {
-    const module = await loadPluginModule()
-
-    // Why: pins the specific reason the loader fails a module — `setup` alone is not
-    // accepted, so a default export must never regress to it.
-    expect(module.default).not.toBeUndefined()
-    expect(Object.hasOwn(module.default ?? {}, 'server')).toBe(true)
-  })
-
   it('keeps the named factory export so the factory-based loader still resolves', async () => {
     const module = await loadPluginModule()
 

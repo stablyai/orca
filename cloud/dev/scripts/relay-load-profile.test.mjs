@@ -393,3 +393,20 @@ test('requires queue, memory, and expected close evidence', () => {
     /did not close with 4429/
   )
 })
+
+test('bounds duplicate-assign probes to a director run', () => {
+  const config = parseRelayLoadArguments([...required, '--duplicate-assign-probes', '100'])
+  assert.equal(config.duplicateAssignProbes, 100)
+  assert.equal(config.duplicateAssignHoldMs, 20_000)
+  assert.equal(parseRelayLoadArguments(required).duplicateAssignProbes, 0)
+  assert.throws(() => parseRelayLoadArguments([
+    '--auth-origin', 'https://auth.test', '--target-origin', 'https://cell.test',
+    '--duplicate-assign-probes', '1'
+  ]), /require --director-origin/)
+  assert.throws(() => parseRelayLoadArguments([
+    ...required, '--duplicate-assign-probes', '1001'
+  ]), /cannot exceed 1000/)
+  assert.throws(() => parseRelayLoadArguments([
+    ...required, '--duplicate-assign-probes', '1', '--duplicate-assign-hold-ms', '500'
+  ]), /between 1000 and 120000/)
+})

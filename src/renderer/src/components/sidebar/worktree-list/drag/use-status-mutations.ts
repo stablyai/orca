@@ -15,7 +15,7 @@ import {
   type WorktreeDragGroup
 } from '../../worktree-manual-order'
 import { buildWorkspaceKanbanSidebarDropUpdates } from '../../workspace-kanban-sidebar-drop'
-import type { SortBy } from '../../smart-sort'
+import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import { switchSortToManualAfterDrop } from '../../manual-sort-switch-toast'
 import type { WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 import type { WorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'

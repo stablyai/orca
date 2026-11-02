@@ -13,7 +13,7 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
-  mutateStructuredAgentSession,
+  runStructuredAgentSessionMutation,
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
@@ -26,6 +26,10 @@ import {
   structuredAgentSessionFailureWordsContext,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
+import {
+  runAfterRewindStart,
+  type ReadyOperationSelection
+} from './structured-agent-session-ready-operation'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from './structured-agent-session-send-settlement'
 import {
   conversationCommandFailure,
@@ -146,7 +150,20 @@ function acceptStructuredConversationCommand(
     ...(params.delivery ? { delivery: params.delivery } : {}),
     priorRecord
   })
-  return mutateStructuredAgentSession(
+  return runAfterRewindStart(context, caller.callerKey, params.envelope, plan, (selection) =>
+    acceptUnderSerialize(context, caller, params, plan, arrival, selection)
+  )
+}
+
+function acceptUnderSerialize(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  params: ConversationCommandParams,
+  plan: ReturnType<typeof conversationCommandPlan>,
+  arrival: { clearInFlight?: boolean },
+  selection: ReadyOperationSelection
+): Promise<AgentSessionMutationResult<ConversationCommandAcceptance>> {
+  return runStructuredAgentSessionMutation(
     context,
     caller,
     params.envelope,
@@ -181,7 +198,10 @@ function acceptStructuredConversationCommand(
           conversationCommandBlocked(
             ctx,
             record,
-            context.readChildWork(ctx.sessionId),
+            {
+              views: context.readChildWork(ctx.sessionId),
+              open: context.childWorkOpen(ctx.sessionId)
+            },
             context.sessions.get(ctx.sessionId)?.child ? undefined : 'at-rest'
           )
         const blocked =
@@ -190,13 +210,9 @@ function acceptStructuredConversationCommand(
         if (blocked) {
           return blocked
         }
-        const accepted = await plan.run(ctx)
-        if (accepted.ok) {
-          context.wakeDelivery(ctx.sessionId)
-        }
-        return accepted
+        return plan.run(ctx)
       }
     },
-    sendPreparation(context, params.envelope, arrival)
+    sendPreparation(context, params.envelope, arrival, selection)
   )
 }

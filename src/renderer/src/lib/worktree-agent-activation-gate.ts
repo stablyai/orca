@@ -152,6 +152,12 @@ export async function runWorktreeAgentActivationGate(
   let structuredInventory: StructuredActivationInventory | null = null
   try {
     const reportedStructuredSession = await deps.hasStructuredSession?.(worktreeId)
+    if (
+      typeof reportedStructuredSession === 'object' &&
+      reportedStructuredSession.snapshot.initialSurfaceLaunch
+    ) {
+      return 'blocked'
+    }
     structuredInventory =
       typeof reportedStructuredSession === 'object' ? reportedStructuredSession : null
     structured = Boolean(
@@ -257,11 +263,22 @@ export async function runWorktreeAgentActivationGate(
 }
 
 export function gateWorktreeAgentActivation(
-  worktreeId: string
+  worktreeId: string,
+  resumeOptions?: ResumeSleepingAgentSessionsOptions
 ): Promise<WorktreeAgentActivationOutcome> {
   const existing = inFlightByWorktreeId.get(worktreeId)
   if (existing) {
     return existing
+  }
+  const resume = (id: string, options?: ResumeSleepingAgentSessionsOptions): number => {
+    if (!resumeOptions) {
+      return resumeSleepingAgentSessionsForWorktree(id, options)
+    }
+    const skipClaimKeys = new Set([
+      ...(resumeOptions.skipClaimKeys ?? []),
+      ...(options?.skipClaimKeys ?? [])
+    ])
+    return resumeSleepingAgentSessionsForWorktree(id, { ...resumeOptions, skipClaimKeys })
   }
   const gate = runWorktreeAgentActivationGate(worktreeId, {
     getState: () => useAppStore.getState(),
@@ -272,7 +289,7 @@ export function gateWorktreeAgentActivation(
         : listActivationPtySessions(useAppStore.getState(), worktreeId),
     listSurfaceOwners: readWorktreeLiveTerminalSurfaceOwners,
     hasStructuredSession: readWorktreeStructuredActivationInventory,
-    resume: resumeSleepingAgentSessionsForWorktree
+    resume
   }).finally(() => {
     if (inFlightByWorktreeId.get(worktreeId) === gate) {
       inFlightByWorktreeId.delete(worktreeId)

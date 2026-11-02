@@ -1,7 +1,10 @@
 import { withSpan } from '../../../observability/tracer'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { defineMethod } from '../core'
-import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
+import {
+  CloseLifecycleTab,
+  CloseTab
+} from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'

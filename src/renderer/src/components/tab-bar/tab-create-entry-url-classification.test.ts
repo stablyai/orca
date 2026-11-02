@@ -16,7 +16,6 @@ describe('classifyHostUrl suffix gate', () => {
     })
   })
 
-  // The PRIVATE section has to stay in: these are navigable hosts, not search terms.
   it('navigates for a private-section suffix carrying a path', () => {
     expect(classifyHostUrl('foo.github.io/bar')).toEqual({
       kind: 'host-url',
@@ -28,12 +27,25 @@ describe('classifyHostUrl suffix gate', () => {
     })
   })
 
+  it.each(['github.io', 'blogspot.com', 'readthedocs.io', 'vercel.app'])(
+    'navigates to the hosting-provider domain %s itself',
+    (host) => {
+      expect(classifyHostUrl(host, { requireListedDomain: true })).toEqual({
+        kind: 'host-url',
+        url: `https://${host}/`
+      })
+      expect(classifyHostUrl(`${host}/foo`)).toEqual({
+        kind: 'host-url',
+        url: `https://${host}/foo`
+      })
+    }
+  )
+
   // Why this is the fix: psl's 2024 snapshot did not know `api.br`, so `isValid` called it a domain
   // and a typed `api.br/x` navigated to a bare public suffix instead of searching.
   it('refuses a bare public suffix carrying a path', () => {
     expect(classifyHostUrl('api.br/foo')).toBeNull()
     expect(classifyHostUrl('co.uk/foo')).toBeNull()
-    expect(classifyHostUrl('github.io/foo')).toBeNull()
   })
 
   it('keeps localhost and IPv4 on http without consulting the suffix list', () => {

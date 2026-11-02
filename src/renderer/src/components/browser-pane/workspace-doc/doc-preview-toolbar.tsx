@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import {
   BrowserChromeToolbar,
-  type BrowserChromeElementTools
+  type BrowserChromeElementTools,
+  type BrowserChromeShareControl
 } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 import { BrowserReloadControl } from '@/components/browser-pane/assemble-chrome/browser-reload-control'
 import { translate } from '@/i18n/i18n'
@@ -29,7 +30,8 @@ export function DocPreviewToolbar({
   elementTools,
   markupActive,
   onToggleMarkup,
-  markupDisabled
+  markupDisabled,
+  shareControl
 }: {
   identity: DocPreviewDocumentIdentity
   /** The browser page this preview is open in — what an address commit converts. */
@@ -48,6 +50,8 @@ export function DocPreviewToolbar({
   markupActive: boolean
   onToggleMarkup: () => void
   markupDisabled: boolean
+  /** Absent for documents a share link can't render. */
+  shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
 }): React.JSX.Element {
   const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
   const reloadLabel = translate(
@@ -97,6 +101,7 @@ export function DocPreviewToolbar({
         // be the one who spends it.
         canShowDiscoveryHint: false
       }}
+      shareControl={shareControl}
       viewSource={{
         onSelect: onOpenSource,
         label: translate(

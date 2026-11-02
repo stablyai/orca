@@ -9,16 +9,14 @@ import {
   resolveLocalRequestPath
 } from './local-file-access-resolution'
 import type { LocalFileAccess } from '../../shared/local-file-access'
-import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
-import { importExternalPathsSsh } from './filesystem-import-ssh'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 import { assertNotExists, rethrowWithUserMessage } from './filesystem-create-path-guards'
 import type {
   ImportItemResult,
-  ImportSkipReason,
   ResolveDroppedPathsResult,
   StagedExternalImportSource
 } from '../../shared/filesystem-import-result-types'
@@ -51,8 +49,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedExecutionHostId
       )
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.createFile(args.filePath)
+        throw new SshHostNotServedError(args.connectionId)
       }
       const filePath = await resolveDesktopAuthorizedPath(args.filePath, store)
       await mkdir(dirname(filePath), { recursive: true })
@@ -78,8 +75,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedExecutionHostId
       )
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.createDir(args.dirPath)
+        throw new SshHostNotServedError(args.connectionId)
       }
       const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
       await assertNotExists(dirPath)
@@ -108,8 +104,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedExecutionHostId
       )
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.renameNoClobber(args.oldPath, args.newPath)
+        throw new SshHostNotServedError(args.connectionId)
       }
       // Why: rename() operates on directory entries, not file contents. If
       // oldPath is a symlink, we must rename the link itself rather than
@@ -145,8 +140,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedExecutionHostId
       )
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.copy(args.sourcePath, args.destinationPath)
+        throw new SshHostNotServedError(args.connectionId)
       }
       const sourcePath = await resolveDesktopAuthorizedPath(args.sourcePath, store, {
         preserveSymlink: true
@@ -180,22 +174,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedExecutionHostId
       )
       if (args.connectionId) {
-        return importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId, {
-          ensureDir: args.ensureDir,
-          assertCurrent: () =>
-            assertSshMutationExpectation(
-              args.connectionId,
-              args.expectedSshTargetId,
-              args.expectedSshConnectionGeneration,
-              args.expectedExecutionHostId
-            )
-        })
+        throw new SshHostNotServedError(args.connectionId)
       }
 
       // Why: destDir must be authorized before any copy work begins. If the
       // destination is outside allowed roots, the entire import fails.
-      // This only applies to local imports — remote paths are authorized by
-      // the SSH connection boundary (see importExternalPathsSsh).
       // An image inserted into a document the user opened lands in that document's own folder.
       const resolvedDest = await resolveLocalRequestPath(
         args.destDir,
@@ -275,11 +258,9 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   )
 
   // Why: terminal drag-and-drop resolver. Local worktrees pass paths through
-  // unchanged (reference-in-place; preserves zero-latency drop). SSH worktrees
-  // upload each path into `${worktreePath}/.orca/drops/` and return remote
-  // paths the remote agent can read. Kept as a separate IPC from
-  // fs:importExternalPaths because terminal semantics differ from the
-  // explorer's "copy into user-picked destDir". See docs/terminal-drop-ssh.md.
+  // unchanged (reference-in-place; preserves zero-latency drop). Kept as a
+  // separate IPC from fs:importExternalPaths because terminal semantics differ
+  // from the explorer's "copy into user-picked destDir".
   ipcMain.handle(
     'fs:resolveDroppedPathsForAgent',
     async (
@@ -305,32 +286,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
           failed: []
         }
       }
-      const worktreePath = args.worktreePath.replace(/\/+$/, '')
-      const destDir = `${worktreePath}/.orca/drops`
-      const { results } = await importExternalPathsSsh(args.paths, destDir, args.connectionId, {
-        ensureDir: true,
-        assertCurrent: () =>
-          assertSshMutationExpectation(
-            args.connectionId,
-            args.expectedSshTargetId,
-            args.expectedSshConnectionGeneration,
-            args.expectedExecutionHostId
-          )
-      })
-      const resolvedPaths: string[] = []
-      const skipped: { sourcePath: string; reason: ImportSkipReason }[] = []
-      const failed: { sourcePath: string; reason: string }[] = []
-      // Iterate in input order so injected paths align with the user's drop order.
-      for (const r of results) {
-        if (r.status === 'imported') {
-          resolvedPaths.push(r.destPath)
-        } else if (r.status === 'skipped') {
-          skipped.push({ sourcePath: r.sourcePath, reason: r.reason })
-        } else {
-          failed.push({ sourcePath: r.sourcePath, reason: r.reason })
-        }
-      }
-      return { resolvedPaths, skipped, failed }
+      throw new SshHostNotServedError(args.connectionId)
     }
   )
 }

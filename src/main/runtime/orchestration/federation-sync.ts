@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { FederationRuntime } from './federation-runtime'
 import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import { OrchestrationError } from './orchestration-error'
@@ -38,7 +38,7 @@ const PulledRelayPage = z
   .passthrough()
 
 export async function syncFederatedDispatch(
-  runtime: OrcaRuntimeService,
+  runtime: FederationRuntime,
   dispatchId: string,
   isCurrent: () => boolean = () => true
 ): Promise<{ imported: number; acknowledgedThrough: number }> {
@@ -51,7 +51,7 @@ export async function syncFederatedDispatch(
 }
 
 async function syncFederatedDispatchPages(
-  runtime: OrcaRuntimeService,
+  runtime: FederationRuntime,
   dispatchId: string,
   remainingPages: number,
   isCurrent: () => boolean

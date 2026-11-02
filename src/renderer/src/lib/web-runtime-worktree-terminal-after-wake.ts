@@ -1,11 +1,9 @@
 import { useAppStore } from '@/store'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import {
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive,
-  isWebTerminalSurfaceTabId
-} from '@/runtime/web-runtime-session'
-import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
+import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import {
   beginWebRuntimeWakeTerminalRespawn,
   endWebRuntimeWakeTerminalRespawn
@@ -15,6 +13,8 @@ import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
@@ -23,6 +23,8 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     startup?: WorktreeStartupPayload
     agent?: TuiAgent | null
     activate?: boolean
+    /** The caller knows an unlisted workspace is empty: it just created it, or the host never answers. */
+    unknownHostCountIsEmpty?: boolean
   }
 ): void {
   const state = useAppStore.getState()
@@ -63,7 +65,32 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
       return
     }
 
-    if (getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) > 0) {
+    const hostTerminalTabCount =
+      getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) ??
+      (opts?.unknownHostCountIsEmpty ? 0 : null)
+    if (hostTerminalTabCount !== null && hostTerminalTabCount > 0) {
+      return
+    }
+    if (hostTerminalTabCount === null && !opts?.startup) {
+      // Why: the host has not listed this workspace yet; its first real answer seeds the terminal if
+      // empty. Delete this capability check once every supported host advertises it.
+      void runtimeEnvironmentSupportsCapability(
+        runtimeEnvironmentId,
+        SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY
+      )
+        .catch(() => false)
+        .then((hostAnswersLater) => {
+          if (!hostAnswersLater) {
+            ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
+              ...opts,
+              runtimeEnvironmentId,
+              unknownHostCountIsEmpty: true
+            })
+          }
+        })
+        .catch((error) => {
+          console.error('web runtime terminal after wake failed', worktreeId, error)
+        })
       return
     }
 

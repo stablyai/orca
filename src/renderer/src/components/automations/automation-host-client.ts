@@ -4,7 +4,6 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
@@ -131,20 +130,6 @@ export async function listAutomationRunsForTarget(
     { timeoutMs: 15_000 }
   )
   return result.runs
-}
-
-export async function listAutomationRunsPageForTarget(
-  target: AutomationHostTarget,
-  automationId: string,
-  options: { limit?: number; cursor?: string } = {}
-): Promise<AutomationRunsPage> {
-  const result = await callRuntimeRpc<AutomationRunsPage | { runs: AutomationRun[] }>(
-    target,
-    'automation.runs',
-    { automationId, ...options },
-    { timeoutMs: 15_000 }
-  )
-  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
 export async function updateAutomationForTarget(

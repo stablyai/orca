@@ -10,24 +10,27 @@
 import {
   ORCAD_FENCE_OWNER_FILENAME,
   posixOrcadFenceOwnedTest
-} from './orcad-activation-fence-scope'
+} from '../managed-server/activation/orcad-activation-fence-scope'
 import {
   forgetHeldOrcadFence,
   orcadFenceTokensHeldByExitedProcesses
 } from './orcad-held-fence-tokens'
-import { readBoundedOrcadRemoteRecord } from './orcad-remote-record-file'
-import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
+import { readBoundedOrcadRemoteRecord } from '../managed-server/install/orcad-remote-record-file'
+import {
+  execOrcadRemote,
+  type OrcadRemoteExecTarget
+} from '../managed-server/install/orcad-remote-runtime-control'
 import {
   installOrcadWindowsHostScript,
   orcadWindowsHostOpCommand
-} from './orcad-remote-windows-node'
+} from '../managed-server/install/orcad-remote-windows-node'
 import {
   ORCAD_EXITED_OWN_LOCK_QUIET_SECONDS,
   ORCAD_STATE_MUTATION_LOCK_DIRNAME
-} from './orcad-state-snapshot-members'
+} from '../managed-server/host-state/orcad-state-snapshot-members'
 import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../providers/windows-shell-args'
 import { shellEscape } from './ssh-connection-utils'
-import type { InstallLockExitedOwnerProof } from './ssh-relay-install-lock'
+import type { InstallLockExitedOwnerProof } from '../managed-server/install/remote-install-lock'
 import { isWindowsRemoteHost, joinRemotePath } from './ssh-remote-platform'
 
 // Keeps the Windows command line short; an older token left out only waits out the stale window.

@@ -289,9 +289,11 @@ describe('RuntimeEnvironmentsPane host details', () => {
     ).toBe('disconnected')
   })
 
-  it('explains that selecting a saved server is the explicit default Host mode', () => {
-    expect(getActiveServerModeDescription(true)).toContain('Use this computer by default')
-    expect(getActiveServerModeDescription(true)).toContain('browser/mobile handoff')
+  it('explains that the choice only picks the host for new projects', () => {
+    expect(getActiveServerModeDescription(true)).toContain(
+      'New projects are created on this computer'
+    )
+    expect(getActiveServerModeDescription(true)).toContain('stay on their own host')
     expect(getActiveServerModeDescription(false)).toContain('default Host')
     expect(getActiveServerModeDescription(false)).toContain('paired Orca runtime')
   })

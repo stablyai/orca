@@ -48,17 +48,14 @@ export const resolveCommitMessageSettingsMock: IpcMock = vi.fn()
 export const generateCommitMessageFromContextMock: IpcMock = vi.fn()
 export const generatePullRequestFieldsFromContextMock: IpcMock = vi.fn()
 export const discoverCommitMessageModelsLocalMock: IpcMock = vi.fn()
-export const discoverCommitMessageModelsRemoteMock: IpcMock = vi.fn()
 export const cancelGenerateCommitMessageLocalMock: IpcMock = vi.fn()
 export const cancelGeneratePullRequestFieldsLocalMock: IpcMock = vi.fn()
 export const getPullRequestDraftContextMock: IpcMock = vi.fn()
 export const resolveHostedReviewBodyForGenerationMock: IpcMock = vi.fn()
 export const loadPullRequestLinkedIssueMock: IpcMock = vi.fn()
 export const getSshFilesystemProviderMock: IpcMock = vi.fn()
-export const getSshGitProviderMock: IpcMock = vi.fn()
 export const tryDeleteWslUncPathMock: IpcMock = vi.fn()
 export const recordCrashBreadcrumbMock: IpcMock = vi.fn()
-export const promoteLocalDownloadedFolderMock: IpcMock = vi.fn()
 
 export const electronMock = {
   app: { getPath: () => '/orca-test-user-data' },
@@ -83,10 +80,6 @@ export const fsPromisesMock = {
 export const wslUncDeleteMock = { tryDeleteWslUncPath: tryDeleteWslUncPathMock }
 
 export const crashBreadcrumbMock = { recordCrashBreadcrumb: recordCrashBreadcrumbMock }
-
-export const folderPromotionMock = {
-  promoteLocalDownloadedFolder: promoteLocalDownloadedFolderMock
-}
 
 export const gitStatusModuleMock = {
   commitChanges: commitChangesMock,
@@ -115,24 +108,8 @@ export const gitWorktreeMock = {
   listWorktreesStrict: listWorktreesMock
 }
 
-const PROVIDER_UNAVAILABLE_MESSAGE =
-  'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-
 export const sshFilesystemDispatchMock = {
-  getSshFilesystemProvider: getSshFilesystemProviderMock,
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE,
-  requireSshFilesystemProvider: (connectionId: string) => {
-    const provider = getSshFilesystemProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(PROVIDER_UNAVAILABLE_MESSAGE)
-    }
-    return provider
-  }
-}
-
-export const sshGitDispatchMock = {
-  getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE
+  getSshFilesystemProvider: getSshFilesystemProviderMock
 }
 
 export const textGenerationModuleMock = {
@@ -140,7 +117,6 @@ export const textGenerationModuleMock = {
   generateCommitMessageFromContext: generateCommitMessageFromContextMock,
   generatePullRequestFieldsFromContext: generatePullRequestFieldsFromContextMock,
   discoverCommitMessageModelsLocal: discoverCommitMessageModelsLocalMock,
-  discoverCommitMessageModelsRemote: discoverCommitMessageModelsRemoteMock,
   cancelGenerateCommitMessageLocal: cancelGenerateCommitMessageLocalMock,
   cancelGeneratePullRequestFieldsLocal: cancelGeneratePullRequestFieldsLocalMock
 }
@@ -228,12 +204,10 @@ const ALL_MOCKS = [
   fsPromisesMock,
   wslUncDeleteMock,
   crashBreadcrumbMock,
-  folderPromotionMock,
   gitStatusModuleMock,
   gitIgnoredPathsMock,
   gitWorktreeMock,
   sshFilesystemDispatchMock,
-  sshGitDispatchMock,
   textGenerationModuleMock,
   pullRequestContextMock,
   pullRequestTemplateMock,
@@ -297,12 +271,14 @@ export function resetFilesystemIpcMocks(): void {
   trashItemMock.mockResolvedValue(undefined)
   // Default: not a WSL UNC path, so deletePath falls through to shell.trashItem.
   tryDeleteWslUncPathMock.mockResolvedValue(false)
-  promoteLocalDownloadedFolderMock.mockResolvedValue(undefined)
   showSaveDialogMock.mockResolvedValue({ canceled: true })
   showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
   fromWebContentsMock.mockReturnValue(null)
-  getSshGitProviderMock.mockReturnValue(null)
-  statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
+  statMock.mockResolvedValue({
+    size: 10,
+    isDirectory: () => false,
+    mtimeMs: 123
+  })
   renameMock.mockResolvedValue(undefined)
   rmMock.mockResolvedValue(undefined)
   openMock.mockResolvedValue(localFileHandleMock(Buffer.from('a'.repeat(10))))

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as CodexCommand from '../codex-cli/command'
 import type * as TrustDerivation from './codex-hook-trust-derivation'
+import { fingerprintCodex } from './codex-hook-trust-derivation'
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-derivation'
 
 const mocks = vi.hoisted(() => ({
@@ -220,10 +222,13 @@ describe('what a lookup may spawn', () => {
 
 describe('the answer status reads', () => {
   it("does not report a replaced Codex's answer as its own", async () => {
+    const originalFingerprint = fingerprintCodex(mocks.codexPath)
+    expect(originalFingerprint).not.toBeNull()
     allowAsking()
     await resolveCodexHookAnswer()
-    // Why new bytes: a codex the lookup has not asked about yet.
-    writeFileSync(mocks.codexPath, 'codex 0.161.0')
+    // Replace the file itself so equal-size writes cannot reuse its cached identity.
+    writeFileAtomically(mocks.codexPath, 'codex 0.161.0')
+    expect(fingerprintCodex(mocks.codexPath)).not.toBe(originalFingerprint)
 
     expect(readKnownCodexHookAnswer()).toBeNull()
   })

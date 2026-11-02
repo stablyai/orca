@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { listRuntimeFiles } from './runtime-file-client'
+import { listRuntimeFiles } from './runtime-file-search-client'
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall
@@ -26,7 +26,7 @@ for (const version of [1, 2]) {
       })
     )
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: `freshness-${version}`,
       worktreePath: '/host/repo'
     }

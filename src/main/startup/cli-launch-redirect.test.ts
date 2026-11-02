@@ -1,6 +1,12 @@
 import { posix, win32 } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { getCliLaunchArgs, maybeRedirectCliLaunch } from './cli-launch-redirect'
+import {
+  getCliLaunchArgs,
+  maybeRedirectCliLaunch,
+  type CliLaunchRedirectOptions
+} from './cli-launch-redirect'
+
+vi.mock('electron', () => ({ app: { commandLine: { getSwitchValue: () => '' } } }))
 
 const COMMAND_NAMES = ['project', 'serve', 'status', 'skills', 'worktree']
 
@@ -337,6 +343,119 @@ describe('CLI launch redirect: spawning', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('execs a direct serve into the CLI so it keeps its pid and honours profile and supervise', () => {
+    const run = vi.fn<NonNullable<CliLaunchRedirectOptions['run']>>()
+    const execve = vi.fn<NonNullable<CliLaunchRedirectOptions['execve']>>()
+
+    const result = maybeRedirectCliLaunch({
+      argv: [
+        linux.execPath,
+        '--no-sandbox',
+        '--user-data-dir',
+        '/home/u/profiles/b1',
+        'serve',
+        '--supervise',
+        '--port',
+        '6792',
+        '--no-sandbox'
+      ],
+      env: { NODE_OPTIONS: '--inspect', APPIMAGE: '/home/u/Orca.AppImage' },
+      platform: 'linux',
+      isPackaged: true,
+      resourcesPath: linux.resourcesPath,
+      execPath: linux.execPath,
+      commandNames: COMMAND_NAMES,
+      exists: () => true,
+      run,
+      execve
+    })
+
+    expect(run).not.toHaveBeenCalled()
+    expect(result).toEqual({ redirected: false })
+    expect(execve).toHaveBeenCalledWith(
+      linux.execPath,
+      [linux.execPath, linux.cliEntryPath, 'serve', '--supervise', '--port', '6792'],
+      expect.objectContaining({
+        ELECTRON_RUN_AS_NODE: '1',
+        ORCA_USER_DATA_PATH: '/home/u/profiles/b1',
+        ORCA_NODE_OPTIONS: '--inspect',
+        APPIMAGE: '/home/u/Orca.AppImage'
+      })
+    )
+    const env = execve.mock.calls[0]?.[2]
+    // Why: the CLI must still start its Electron server with the caller's --no-sandbox.
+    expect(env).toHaveProperty('ORCA_ELECTRON_NO_SANDBOX', '1')
+    expect(env).not.toHaveProperty('ORCA_CLI_LAUNCH_REDIRECTED')
+    expect(env).not.toHaveProperty('NODE_OPTIONS')
+  })
+
+  it('keeps ORCA_USER_DATA_PATH for a direct serve without --user-data-dir', () => {
+    const execve = vi.fn<NonNullable<CliLaunchRedirectOptions['execve']>>()
+    maybeRedirectCliLaunch({
+      argv: [linux.execPath, 'serve', '--no-pairing'],
+      env: { ORCA_USER_DATA_PATH: '/home/u/profiles/b1' },
+      platform: 'linux',
+      isPackaged: true,
+      resourcesPath: linux.resourcesPath,
+      execPath: linux.execPath,
+      commandNames: COMMAND_NAMES,
+      exists: () => true,
+      execve
+    })
+    expect(execve).toHaveBeenCalledWith(
+      linux.execPath,
+      [linux.execPath, linux.cliEntryPath, 'serve', '--no-pairing'],
+      expect.objectContaining({ ORCA_USER_DATA_PATH: '/home/u/profiles/b1' })
+    )
+    expect(execve.mock.calls[0]?.[2]).not.toHaveProperty('ORCA_ELECTRON_NO_SANDBOX')
+  })
+
+  it('serves in-process when this runtime cannot exec or the exec fails', () => {
+    const base = {
+      argv: [linux.execPath, 'serve'],
+      env: {},
+      platform: 'linux' as const,
+      isPackaged: true,
+      resourcesPath: linux.resourcesPath,
+      execPath: linux.execPath,
+      commandNames: COMMAND_NAMES,
+      exists: () => true
+    }
+    expect(maybeRedirectCliLaunch({ ...base, execve: null })).toEqual({ redirected: false })
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    expect(
+      maybeRedirectCliLaunch({
+        ...base,
+        execve: () => {
+          throw new Error('ENOEXEC')
+        }
+      })
+    ).toEqual({ redirected: false })
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('ENOEXEC'))
+    stderr.mockRestore()
+  })
+
+  it('never execs the --serve child the CLI itself spawns, or serve on other platforms', () => {
+    const execve = vi.fn()
+    for (const [argv, platform] of [
+      [[linux.execPath, '--user-data-dir=/p', '--serve', '--serve-port', '0'], 'linux'],
+      [[linux.execPath, 'serve'], 'darwin']
+    ] as const) {
+      maybeRedirectCliLaunch({
+        argv: [...argv],
+        env: {},
+        platform,
+        isPackaged: true,
+        resourcesPath: linux.resourcesPath,
+        execPath: linux.execPath,
+        commandNames: COMMAND_NAMES,
+        exists: () => true,
+        execve
+      })
+    }
+    expect(execve).not.toHaveBeenCalled()
+  })
+
   it('surfaces a spawn failure as a non-zero exit', () => {
     const result = maybeRedirectCliLaunch({
       argv: [linux.execPath, 'status'],
@@ -353,5 +472,40 @@ describe('CLI launch redirect: spawning', () => {
     })
 
     expect(result).toEqual({ redirected: true, status: 1 })
+  })
+})
+
+describe('CLI launch redirect: in-process serve on Wayland (#25400)', () => {
+  const redirect = (argv: string[], readOzonePlatform: () => string): ReturnType<typeof vi.fn> => {
+    const execve = vi.fn()
+    maybeRedirectCliLaunch({
+      argv,
+      env: { XDG_SESSION_TYPE: 'wayland' },
+      platform: 'linux',
+      isPackaged: true,
+      resourcesPath: linux.resourcesPath,
+      execPath: linux.execPath,
+      commandNames: COMMAND_NAMES,
+      exists: () => true,
+      execve,
+      readOzonePlatform
+    })
+    return execve
+  }
+
+  it('re-execs a direct --serve onto X11 when Electron resolved Wayland', () => {
+    const execve = redirect([linux.execPath, '--serve', '--serve-port', '6768'], () => 'wayland')
+    expect(execve).toHaveBeenCalledExactlyOnceWith(
+      linux.execPath,
+      [linux.execPath, '--ozone-platform=x11', '--serve', '--serve-port', '6768'],
+      { XDG_SESSION_TYPE: 'wayland' }
+    )
+  })
+
+  it.each([
+    { name: 'a serve already on X11', argv: [linux.execPath, '--serve'], platform: 'x11' },
+    { name: 'a desktop launch', argv: [linux.execPath], platform: 'wayland' }
+  ])('leaves $name alone', ({ argv, platform }) => {
+    expect(redirect(argv, () => platform)).not.toHaveBeenCalled()
   })
 })

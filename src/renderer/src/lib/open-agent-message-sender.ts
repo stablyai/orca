@@ -10,11 +10,9 @@ import type {
   OrchestrationPartyLocationResult
 } from '../../../shared/orchestration-caller-status'
 import { useAppStore } from '@/store'
-import {
-  callRuntimeRpc,
-  RuntimeRpcCallError,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import {
   focusRendererTerminalHandle,

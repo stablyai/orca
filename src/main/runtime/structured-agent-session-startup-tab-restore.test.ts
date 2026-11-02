@@ -186,7 +186,7 @@ function startupRuntime(options: { afterInstall?: () => void; profileChats?: str
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' })
     })
     options.afterInstall?.()
     return installed

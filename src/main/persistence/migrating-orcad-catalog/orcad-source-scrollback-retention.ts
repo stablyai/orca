@@ -5,7 +5,10 @@ import {
   writeTerminalScrollbackSnapshotSync
 } from '../../terminal-scrollback-snapshots'
 import { deleteUnreferencedOrcadMigrationScrollback } from './orcad-source-scrollback-cleanup'
-import { findSnapshotBytes } from './orcad-source-scrollback-state'
+import {
+  findSnapshotBytes,
+  matchesOrcadMigrationSnapshotBytes
+} from './orcad-source-scrollback-state'
 
 type RetentionRuntime = Pick<
   StoreRuntimeState,
@@ -51,7 +54,9 @@ function persistInlineSnapshot(
   >[number]
 ): void {
   const storage = runtime.terminalScrollbackSnapshotStorage
-  if (readTerminalScrollbackStoredBytesSync(descriptor.ref, storage)) {
+  // A newer inline copy (local-only park) can supersede a file under the same ref; keep what was signed.
+  const stored = readTerminalScrollbackStoredBytesSync(descriptor.ref, storage)
+  if (matchesOrcadMigrationSnapshotBytes(stored, descriptor)) {
     return
   }
   const bytes = findSnapshotBytes(runtime.state, descriptor, storage)

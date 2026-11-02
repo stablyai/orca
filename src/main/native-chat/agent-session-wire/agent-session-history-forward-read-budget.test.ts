@@ -8,7 +8,6 @@ import {
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-import * as journalReducer from '../agent-session-journal/journal-reducer'
 import * as rowSchema from '../agent-session-journal/journal-row-schema'
 import {
   createTrackedJournalOpener,
@@ -101,8 +100,7 @@ function observeForwardReads() {
 }
 
 describe('forward history SQL read budget', () => {
-  it('reconnects through every page with one lookahead row per page', async () => {
-    const count = 2_000
+  it.each([200, 2_000, 20_000])('bounds reconnect reads after %i missed rows', async (count) => {
     const journal = await seedJournal(count)
     const { returnedRows, parse } = observeForwardReads()
     const events: AgentSessionSubscribeEvent[] = []
@@ -114,30 +112,16 @@ describe('forward history SQL read budget', () => {
       cursor: { epoch: journal.epoch, sequence: 1 },
       emit: (event) => events.push(event)
     })
-    const batches = events.filter((event) => event.type === 'batch')
-    expect(batches.flatMap((event) => event.batch.items.map((item) => item.itemId))).toEqual(
-      Array.from({ length: count }, (_, index) => `item-${index}`)
+    expect(events).toHaveLength(1)
+    const event = events[0]!
+    expect(event.type).toBe(count > 200 ? 'snapshot' : 'batch')
+    const items =
+      event.type === 'snapshot' ? event.page.items : event.type === 'batch' ? event.batch.items : []
+    expect(items.map((item) => item.itemId)).toEqual(
+      Array.from({ length: 200 }, (_, index) => `item-${count - 200 + index}`)
     )
-    expect(batches.at(-1)?.batch.cursor).toEqual(journal.cursor())
-    expect(returnedRows).toEqual([...Array<number>(9).fill(201), 200])
-    expect(parse).toHaveBeenCalledTimes(2_009)
-  })
-
-  it('reduces the timeline once for the whole catch-up, not once per page', async () => {
-    const journal = await seedJournal(2_000)
-    const render = vi.spyOn(journalReducer, 'renderJournalState')
-    const events: AgentSessionSubscribeEvent[] = []
-    new AgentSessionSubscribers().open({
-      id: 'reader',
-      sessionId: identity.sessionId,
-      journal,
-      fence: 1,
-      cursor: { epoch: journal.epoch, sequence: 1 },
-      emit: (event) => events.push(event)
-    })
-    // Catch-up is synchronous, so the reduced timeline cannot change between pages.
-    expect(events.filter((event) => event.type === 'batch')).toHaveLength(10)
-    expect(render).toHaveBeenCalledTimes(1)
+    expect(returnedRows).toEqual([Math.min(count, 201)])
+    expect(parse).toHaveBeenCalledTimes(Math.min(count, 201))
   })
 
   it('keeps an exact final page final and preserves unlimited journal readers', async () => {

@@ -3,6 +3,9 @@
 // One transaction: discard the old epoch's rows, insert the epoch row plus the
 // replacement items, and move the session projection.
 
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -13,8 +16,16 @@ import type {
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
-import { applyJournalRow, createJournalReducerState } from './journal-reducer'
-import { buildJournalItemRow, journalRowBase } from './journal-row-builders'
+import {
+  applyJournalRow,
+  createJournalReducerState,
+  type JournalReducerState
+} from './journal-reducer'
+import {
+  buildJournalItemRow,
+  buildJournalSubmissionRow,
+  journalRowBase
+} from './journal-row-builders'
 import {
   buildJournalQueueReopenRow,
   buildJournalQueueClearRow,
@@ -38,6 +49,11 @@ export type JournalReplacementItem = AgentJournalProducerLinkage & {
   /** Absent for history rebuilt from a source that never stated one: derived from position, as
    *  a legacy row's is, and then written down. */
   turnScope?: AgentJournalTurnScope
+  /** Carried from the epoch it came from (`JournalItemRow.ownerFence`), never the replacing
+   *  writer's fence: replacing history does not make it the current generation's work. */
+  ownerFence: number
+  /** Carried the same way (`JournalItemRow.executionOwner`). */
+  executionOwner?: number
 }
 
 export function replaceJournalEpoch(input: {
@@ -46,6 +62,7 @@ export function replaceJournalEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   items: readonly JournalReplacementItem[]
+  previous?: JournalReducerState
   /** Restated in the new epoch, or the rewind would release cards the person stopped, or bring
    *  back a /clear pause they already lifted. */
   queuePause: JournalQueuePauseRestatement
@@ -71,11 +88,36 @@ export function replaceJournalEpoch(input: {
       body: item.body,
       seq: state.lastSequence + 1,
       fence: input.fence,
+      ownerFence: item.ownerFence,
+      executionOwner: item.executionOwner,
       ts: item.observedAt ?? input.now(),
       linkage: item,
       turnScope: item.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
     })
     assertJournalFence(row.fence, state.highestFence)
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+  // An accepted message that never reached the agent survives a provider history replacement.
+  const queued = [...(input.previous?.submissions.values() ?? [])]
+    .filter(isQueuedAgentJournalSubmission)
+    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
+  for (const submission of queued) {
+    const body = input.previous?.items.get(
+      agentJournalSubmissionKey(submission.clientMessageId)
+    )?.body
+    if (body?.kind !== 'message') {
+      throw new Error('journal_queued_submission_body_missing')
+    }
+    const row = buildJournalSubmissionRow({
+      ...submission,
+      state,
+      body,
+      providerHandle: agentSessionJournalProviderHandle(input.identity),
+      seq: state.lastSequence + 1,
+      fence: input.fence,
+      ts: submission.submittedAt
+    })
     applyJournalRow(state, row)
     rows.push(row)
   }

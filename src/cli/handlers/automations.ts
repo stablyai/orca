@@ -19,6 +19,7 @@ import {
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,
+  formatAutomationRunsPage,
   formatAutomationShow,
   printResult,
   type AutomationShowPayload
@@ -29,6 +30,12 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { resolveAutomationDestination } from '../automation-destination'
+import {
+  AUTOMATION_RUNS_PAGE_SIZE,
+  automationRunsRpc,
+  readAllAutomationRuns,
+  readAutomationRunsPage
+} from '../automation-runs-paging'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import {
@@ -281,9 +288,26 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatAutomationRun)
   },
   'automations runs': async ({ flags, client, json }) => {
-    const result = await client.call<{ runs: AutomationRun[] }>('automation.runs', {
-      automationId: getOptionalStringFlag(flags, 'id')
+    const automationId = getOptionalStringFlag(flags, 'id')
+    const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
+    const cursor = getOptionalStringFlag(flags, 'cursor')
+    if (limit === undefined && cursor === undefined) {
+      printResult(
+        await readAllAutomationRuns(automationRunsRpc(client), automationId),
+        json,
+        formatAutomationRuns
+      )
+      return
+    }
+    const page = await readAutomationRunsPage(automationRunsRpc(client), {
+      automationId,
+      limit: limit ?? AUTOMATION_RUNS_PAGE_SIZE,
+      cursor
     })
-    printResult(result, json, formatAutomationRuns)
+    printResult(
+      { ...page, result: { runs: page.result.runs, nextCursor: page.result.nextCursor ?? null } },
+      json,
+      formatAutomationRunsPage
+    )
   }
 }

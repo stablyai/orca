@@ -13,7 +13,8 @@ import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-clos
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
-import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { recordBrowserTabClose } from './browser-layout-owner-commands'
 
 export function createBrowserCloseActions(
   set: BrowserSliceSet,
@@ -29,7 +30,6 @@ export function createBrowserCloseActions(
       // grant is the only authority the preview scheme honors — a closed document must stop being
       // readable, and it must stop being readable even if the reducer bails out below.
       let docPageIdsToRelease: string[] = []
-      let closedPagesForMountRelease: string[] = []
       let activeBrowserWorktreeIdToNotify: string | null = null
       set((s) => {
         let owningWorktreeId: string | null = null
@@ -51,7 +51,6 @@ export function createBrowserCloseActions(
         }
 
         const closedPages = s.browserPagesByWorkspace[tabId] ?? []
-        closedPagesForMountRelease = closedPages.map((page) => page.id)
         const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
         delete nextBrowserPagesByWorkspace[tabId]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
@@ -186,14 +185,20 @@ export function createBrowserCloseActions(
       for (const docPageId of docPageIdsToRelease) {
         releaseDocPreviewGrant(docPageId)
       }
-      for (const pageId of closedPagesForMountRelease) {
-        releaseBrowserPageMount(pageId)
-      }
 
       for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
         const workspaceItem = tabs.find(
           (entry) => entry.contentType === 'browser' && entry.entityId === tabId
         )
+        // Switch point: main records the close while the tab-bar entry still names the tab.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN && workspaceItem) {
+          recordBrowserTabClose(
+            get(),
+            workspaceItem.worktreeId,
+            tabId,
+            isCleanup ? 'cleanup' : 'user'
+          )
+        }
         if (workspaceItem) {
           get().closeUnifiedTab(
             workspaceItem.id,

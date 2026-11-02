@@ -10,6 +10,7 @@ import { isUnresolvedSshHostAlias } from '../shared/git-remote-host-alias'
 import { getProjectProviderIdentity } from '../shared/project-host-setup-projection'
 import { getStoredRepoExecutionHostId } from './repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
+import { isWslMoveRepoBlocked } from './persistence/moving-wsl-projects/wsl-move-background-backoff'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
 // Why 6h: a resolved identity only changes when a remote is added or the project is renamed or
@@ -158,7 +159,8 @@ function writeIdentity(
 
 async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo): Promise<boolean> {
   const hostId = getRepoProbeHostId(repo)
-  if (!hostId) {
+  // No probe and no deadline: the next sweep after the move picks it up.
+  if (!hostId || isWslMoveRepoBlocked(repo)) {
     return false
   }
   const locationKey = getRepoLocationKey(repo)
@@ -184,6 +186,11 @@ async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo)
     // `unavailable`, so a retired probe would otherwise re-seed a deadline for a location that no
     // longer has a repo. Do not simplify this into a rejection path.
     if (controller.signal.aborted) {
+      return false
+    }
+    // A move started during the probe: drop the answer and its deadline so the next sweep retries.
+    if (isWslMoveRepoBlocked(repo)) {
+      probeRetryAfterByLocation.delete(locationKey)
       return false
     }
     if (result.status !== 'resolved') {

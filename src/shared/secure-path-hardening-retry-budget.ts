@@ -11,7 +11,7 @@ type HardeningFailureRecord = { at: number; attempts: number }
  * How often a path whose hardening keeps failing may be retried.
  *
  * Why throttle at all: the env store re-hardens on the *read* path at ~2/s (#4901), so retrying
- * every failure is an icacls-and-log storm on hosts where hardening cannot work — FAT32/exFAT have
+ * every failure is a log storm on hosts where hardening cannot work — FAT32/exFAT have
  * no ACLs, and network paths, redirected profiles and restricted tokens refuse.
  *
  * Why exponential and not a cap: a cap that never expires latches a *transient* failure — one AV

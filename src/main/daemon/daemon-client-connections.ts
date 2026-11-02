@@ -4,6 +4,7 @@ import { isDaemonRequestFrame, isHelloFrame } from './daemon-client-frame-guards
 import type { DaemonFileLog } from './daemon-file-log'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { createNdjsonParser, encodeNdjson } from './ndjson'
+import { BINARY_STREAM_FRAMING, type DaemonStreamFraming } from './daemon-stream-binary-framing'
 import type { DaemonRequest } from './types'
 
 // Idle time before the first probe. How long the close then takes is the OS's probe schedule, not
@@ -14,6 +15,8 @@ export type ConnectedDaemonClient = {
   clientId: string
   controlSocket: Socket
   streamSocket: Socket | null
+  /** Set per stream socket by its hello; absent means NDJSON. */
+  streamFraming?: DaemonStreamFraming
   authenticatedPairEstablished: boolean
 }
 
@@ -140,12 +143,22 @@ export class DaemonClientConnections {
       return
     }
 
-    this.options.log.log('client-hello-accepted', { role: hello.role, clientId: hello.clientId })
+    const streamFraming: DaemonStreamFraming =
+      hello.role === 'stream' && hello.streamFraming === BINARY_STREAM_FRAMING
+        ? BINARY_STREAM_FRAMING
+        : 'ndjson'
+    this.options.log.log('client-hello-accepted', {
+      role: hello.role,
+      clientId: hello.clientId,
+      ...(hello.role === 'stream' ? { streamFraming } : {})
+    })
     const identity = this.options.identity
     socket.write(
       encodeNdjson({
         type: 'hello',
         ok: true,
+        // Why: this hello line is the socket's last NDJSON; the client switches readers on this field.
+        ...(streamFraming === BINARY_STREAM_FRAMING ? { streamFraming } : {}),
         ...(identity.launchNonce && identity.startedAtMs
           ? {
               daemonIdentity: {
@@ -171,7 +184,7 @@ export class DaemonClientConnections {
         socket.destroy()
         return
       }
-      this.installStreamSocket(socket, client)
+      this.installStreamSocket(socket, client, streamFraming)
       client.authenticatedPairEstablished = true
       this.options.onAuthenticatedPair()
       return
@@ -239,7 +252,11 @@ export class DaemonClientConnections {
     }
   }
 
-  private installStreamSocket(socket: Socket, client: ConnectedDaemonClient): void {
+  private installStreamSocket(
+    socket: Socket,
+    client: ConnectedDaemonClient,
+    streamFraming: DaemonStreamFraming
+  ): void {
     const previous = client.streamSocket
     socket.removeAllListeners('data')
     // A half-open peer (slept laptop, dropped NAT state) stops draining without closing, which would
@@ -248,6 +265,7 @@ export class DaemonClientConnections {
     // that dies — the producer-stall watchdog, not this, is what bounds those.
     socket.setKeepAlive(true, STREAM_SOCKET_KEEPALIVE_DELAY_MS)
     client.streamSocket = socket
+    client.streamFraming = streamFraming
     socket.on('drain', () => this.options.streamDataBatcher.flush(client.clientId))
     const cleanup = (): void => {
       socket.removeListener('close', cleanup)

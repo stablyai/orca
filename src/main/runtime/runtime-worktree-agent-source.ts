@@ -1,8 +1,13 @@
 import type { StructuredHostStatus } from '../../shared/agent-hook-listener/listener-event'
-import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import type {
+  AgentStatusIpcPayload,
+  ParsedAgentStatusPayload
+} from '../../shared/agent-status-types'
+import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
 import type { AgentMainAgentStatus } from '../../shared/main-agent-status'
 
-export type RuntimeWorktreeAgentSource = {
+export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'> & {
+  children?: AgentChildWorkView[]
   paneKey: string
   ptyId?: string
   tabId?: string

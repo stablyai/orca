@@ -170,6 +170,9 @@ describe('disposeDivider', () => {
     } as unknown as HTMLElement
     const refitPanesUnder = vi.fn()
     const onLayoutChanged = vi.fn()
+    const onDividerRatiosCommitted = vi.fn(() =>
+      expect(onLayoutChanged).toHaveBeenCalledWith('gesture')
+    )
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -189,7 +192,7 @@ describe('disposeDivider', () => {
     )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
-    createDivider(true, {}, { refitPanesUnder, onLayoutChanged })
+    createDivider(true, {}, { refitPanesUnder, onLayoutChanged, onDividerRatiosCommitted })
     dividerListeners.get('pointerdown')?.(
       createPointerEvent({ pointerId: 9, clientX: 100, clientY: 0 })
     )
@@ -206,6 +209,7 @@ describe('disposeDivider', () => {
     expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
     expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
     expect(onLayoutChanged).toHaveBeenCalledExactlyOnceWith('gesture')
+    expect(onDividerRatiosCommitted).toHaveBeenCalledOnce()
     expect(divider.classList.remove).toHaveBeenCalledWith('is-dragging')
     expect(divider.releasePointerCapture).toHaveBeenCalledWith(9)
     expect(windowListeners.has('pointermove')).toBe(false)
@@ -301,6 +305,7 @@ describe('disposeDivider', () => {
     } as unknown as HTMLElement
     const refitPanesUnder = vi.fn()
     const onLayoutChanged = vi.fn()
+    const onDividerRatiosCommitted = vi.fn()
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -319,7 +324,7 @@ describe('disposeDivider', () => {
     )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
-    createDivider(true, {}, { refitPanesUnder, onLayoutChanged })
+    createDivider(true, {}, { refitPanesUnder, onLayoutChanged, onDividerRatiosCommitted })
     dividerListeners.get('pointerdown')?.(
       createPointerEvent({ pointerId: 9, clientX: 100, clientY: 0 })
     )
@@ -338,6 +343,7 @@ describe('disposeDivider', () => {
     expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
     expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
     expect(onLayoutChanged).not.toHaveBeenCalled()
+    expect(onDividerRatiosCommitted).not.toHaveBeenCalled()
   })
 
   it('drops held PTY resize updates when an active resize is cancelled', () => {

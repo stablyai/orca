@@ -11,17 +11,17 @@ import { DelayedAuthority } from '../loading-store/profile-state-delayed-authori
 import { Store } from '../loading-store/store'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
-import type * as OwnerInvariants from './terminal-owner-invariants'
+import type * as OwnerInvariants from '../../../shared/workspace-layout/terminal-owner-invariants'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
 
 // Off = the binding write as it was before the report-only check.
 const check = vi.hoisted(() => ({ enabled: true, throws: false, calls: 0 }))
-vi.mock('./terminal-owner-invariants', async (importOriginal) => {
+vi.mock('../../../shared/workspace-layout/terminal-owner-invariants', async (importOriginal) => {
   const actual = await importOriginal<typeof OwnerInvariants>()
   return {
     ...actual,

@@ -33,14 +33,14 @@ const USER_IDENTITY = {
   ordinal: 1
 } as const
 /** The legacy row an older client reads for `childView()`, derived from it. These sessions are
- *  Codex's, so a subagent keeps the id its row carried before views. */
+ *  Codex's, so a subagent keeps the id its row carried before views, which no Stop can name. */
 const LEGACY_TASK = {
   id: 'codex-agent:task-1',
   kind: 'agent',
   name: 'deep_review',
   state: 'working',
   startedAt: 100,
-  stoppable: true
+  stoppable: false
 } as const
 
 let root: string
@@ -72,7 +72,9 @@ async function feedWithChildren(provider: AgentSessionHandleProvider = 'codex') 
   const sink: StructuredAgentSessionStatusSink = {
     publish: () => {},
     forget: () => {},
-    publishChildWork: (_subject, evidence) => admitted.push(evidence),
+    publishChildWork: (_subject, evidence) => {
+      admitted.push(evidence)
+    },
     readChildWork: () => views.current()
   }
   let now = 1_000

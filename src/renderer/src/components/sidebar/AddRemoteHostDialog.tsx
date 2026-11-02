@@ -13,6 +13,7 @@ import {
 import { AddRemoteHostSshConfigPicker } from './AddRemoteHostSshConfigPicker'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { AddRemoteHostServerFormPanel } from './AddRemoteHostServerFormPanel'
+import { AddWslHostDialogBody } from './AddWslHostDialogBody'
 import {
   addAllSshConfigHostsToOrca,
   loadSshConfigHostsForPicker,
@@ -20,7 +21,7 @@ import {
   saveNewSshHostFromForm
 } from './add-remote-host-ssh-actions'
 
-export type AddRemoteHostMode = 'ssh' | 'server'
+export type AddRemoteHostMode = 'ssh' | 'server' | 'wsl'
 
 type AddRemoteHostDialogProps = {
   mode: AddRemoteHostMode | null
@@ -339,6 +340,16 @@ export function AddRemoteHostDialog({
               onAddAllToOrca={() => void addAllConfigHostsToOrca()}
             />
           </div>
+        ) : renderMode === 'wsl' ? (
+          <AddWslHostDialogBody
+            adding={isSaving}
+            onAddingChange={setIsSaving}
+            onAdded={() => {
+              reset()
+              onOpenChange(null)
+            }}
+            onCancel={close}
+          />
         ) : renderMode === 'ssh' ? (
           <AddRemoteHostSshFormPanel
             form={sshForm}

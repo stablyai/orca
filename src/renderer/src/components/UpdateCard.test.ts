@@ -4,9 +4,9 @@ import { getDefaultUIState } from '../../../shared/constants'
 import type { ChangelogData, UpdateStatus } from '../../../shared/update-status-types'
 import { createUISlice } from '../store/slices/ui'
 import type { AppState } from '../store/types'
-import { isHttp2ProtocolError } from './UpdateCard'
 import {
   getUpdateCardAriaLabel,
+  isHttp2ProtocolError,
   isUpdateCardVisible
 } from './maintenance/update-card/update-card-visibility'
 
@@ -474,16 +474,6 @@ describe('UpdateCard visibility gates', () => {
   })
 
   it('shows card-initiated download errors', () => {
-    expect(
-      computeVisibility({
-        status: { state: 'error', message: 'ENOSPC' },
-        dismissedVersion: null,
-        cachedVersion: '1.2.0'
-      })
-    ).toBe('visible')
-  })
-
-  it('shows settings-initiated download errors when a version is cached', () => {
     expect(
       computeVisibility({
         status: { state: 'error', message: 'ENOSPC' },

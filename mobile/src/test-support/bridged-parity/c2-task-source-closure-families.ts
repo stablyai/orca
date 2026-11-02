@@ -28,6 +28,7 @@ export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
   'settings.task-hydration': {
     'lifecycle-settings-task-hydration-fulfilled': 'identical',
     'matrix-settings.task-hydration-linear.status-1': 'result-absent-settlement',
+    'matrix-settings.task-hydration-jira.status-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-preflight.check-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-settings.get-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-status.get-1': 'result-absent-settlement',

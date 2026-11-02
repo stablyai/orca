@@ -18,11 +18,11 @@ export function routeNativeChatRootKeyToInput(
   composer: NativeChatComposerHandle | null,
   questionAnswerInput: HTMLInputElement | null
 ): void {
-  // The focused transcript owns Space paging; typing elsewhere still reaches the composer.
+  // A focused transcript or code box owns Space paging; typing elsewhere still reaches the composer.
   if (
     event.key === ' ' &&
     event.target instanceof HTMLElement &&
-    event.target.matches('[data-native-chat-scroll]') &&
+    event.target.matches('[data-native-chat-scroll], [data-native-chat-code-content]') &&
     event.target.ownerDocument.activeElement === event.target
   ) {
     return
@@ -35,12 +35,13 @@ export function routeNativeChatRootKeyToInput(
   }
   // The question card replaces the composer, so at most one input exists. If it
   // cannot take focus (disabled), the paste reaches the bridge, which explains why.
-  if (shouldFocusNativeChatInputForPaste(event, getShortcutPlatform() === 'darwin')) {
+  const isMac = getShortcutPlatform() === 'darwin'
+  if (shouldFocusNativeChatInputForPaste(event, isMac)) {
     const input = composer ?? questionAnswerInput
     input?.focus()
     return
   }
-  if (!shouldRedirectNativeChatTyping(event)) {
+  if (!shouldRedirectNativeChatTyping(event, isMac)) {
     return
   }
   if (!composer?.insertTypedText(event.key)) {

@@ -6,6 +6,8 @@ import type { Repo } from '../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import type { PersistedState } from '../shared/persisted-state-types'
+import { getDefaultPersistedState } from '../shared/constants'
+import type { SshRemotePtyLease } from '../shared/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './persistence/loading-store/worktree-meta-alias-projection'
 import { Store } from './persistence/loading-store/store'
 import { getDataFile, initDataPath } from './persistence/loading-store/user-data-path'
@@ -84,10 +86,18 @@ export function readPersistedStateJson(path = dataFile(), profileId = 'persisten
 }
 
 /** Create a profile store without rebuilding its large module graph inside each test timeout. */
-export function createStore(): Store {
+export function createStore(options: Pick<StoreRuntimeOptions, 'paneShellPath'> = {}): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return createSqliteTestStore(Store, { dataFile: dataFile() })
+  return createSqliteTestStore(Store, { ...options, dataFile: dataFile() })
+}
+
+/** Leases now arrive only from a relay-era profile, so tests seed them on disk before load. */
+export function createStoreWithSshRemotePtyLeases(
+  leases: (Pick<SshRemotePtyLease, 'targetId' | 'ptyId' | 'state'> & Partial<SshRemotePtyLease>)[]
+): Store {
+  writeDataFile({ ...getDefaultPersistedState(testState.dir), sshRemotePtyLeases: leases })
+  return createStore()
 }
 
 export async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {

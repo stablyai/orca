@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 /**
  * A phone subscribing to an idle reattached PTY must get its first snapshot on the phone grid.
  *

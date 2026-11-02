@@ -6,6 +6,7 @@ import type {
   EnqueueTargetedCommandOptions,
   ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
+import { captureRemoteCliBrowserRevocation } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
   // Why: route tab switch through the command queue so it can't race in-flight commands targeting the old tab.
@@ -59,6 +60,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     this.assertCommandAdmission()
+    const assertNotRevoked = captureRemoteCliBrowserRevocation()
+    assertNotRevoked()
     const { browserPageId: pageId } = this.resolveCommandTarget(
       worktreeId,
       browserPageId,
@@ -73,7 +76,18 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         this.commandQueues.set(sessionName, queue)
       }
       queue.push({
-        execute: () => this.executeQueuedCommand(worktreeId, pageId, execute, options),
+        execute: () => {
+          assertNotRevoked()
+          return this.executeQueuedCommand(
+            worktreeId,
+            pageId,
+            (session, target) => {
+              assertNotRevoked(target.webContentsId)
+              return execute(session, target)
+            },
+            options
+          )
+        },
         resolve: resolve as (value: unknown) => void,
         reject
       })

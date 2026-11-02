@@ -2,7 +2,7 @@ import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { writeRuntimeFile } from '@/runtime/runtime-file-client'
+import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import {
   canAutoSaveOpenFile,

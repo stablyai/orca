@@ -4,8 +4,8 @@ import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wi
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import {
   interruptedRestart,
-  startAgent,
-  throwAfterContinuationAccepted
+  continuationCannotFold,
+  startAgent
 } from './structured-agent-session-restart-interruption-test-harness'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import { createRestartResumeProgress } from './structured-agent-session-restart-resume-progress'
@@ -178,7 +178,7 @@ it.each(['continued', 'refused', 'unconfirmed'] as const)(
       acquire.mockRejectedValueOnce(new Error('start refused'))
     }
     if (phase === 'unconfirmed') {
-      throwAfterContinuationAccepted()
+      continuationCannotFold()
     }
     const bookkeeping = Promise.withResolvers<void>()
     const complete = AgentSessionRecoveryCapsule.prototype.completeResume

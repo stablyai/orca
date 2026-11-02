@@ -4,9 +4,9 @@ import {
   getCheckDetailsPromptKey
 } from '@/components/pr-checks-fix-prompt'
 import { gitHubPRToChecksPanelReview } from '@/components/right-sidebar/checks-panel-review'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'

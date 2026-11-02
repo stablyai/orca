@@ -6,6 +6,10 @@ import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compati
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import {
+  beginWorktreeLineageRefresh,
+  isRemoteWorktreeLineageFresh
+} from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
 
 const initialState = useAppStore.getState()
 
@@ -108,7 +112,13 @@ function createHarness() {
     ipc,
     activateNotifiedWorktree,
     enqueue,
-    emit: (index: number, replay = false, event?: RuntimeClientEvent) => {
+    emit: (
+      index: number,
+      replay = false,
+      event?:
+        | RuntimeClientEvent
+        | { type: 'worktreesChanged'; repoId: string; sortOrderOnly: unknown; sortOrders?: unknown }
+    ) => {
       const response = {
         id: 'r',
         ok: true as const,
@@ -177,6 +187,110 @@ it('does not navigate for an unaddressed activation from an older remote host', 
       repoId: 'remote-repo',
       executionHostId: 'runtime:host-a'
     })
+  } finally {
+    await h.finish()
+  }
+})
+
+it.each([true, false, undefined, 'true', 1, null])(
+  'forwards only an explicit order-only host hint (%s)',
+  async (sortOrderOnly) => {
+    const h = createHarness()
+    try {
+      h.start()
+      h.emit(0, false, { type: 'worktreesChanged', repoId: 'remote-repo', sortOrderOnly })
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve()
+      }
+      expect(h.enqueue).toHaveBeenCalledWith({
+        repoId: 'remote-repo',
+        executionHostId: 'runtime:host-a',
+        ...(sortOrderOnly === true ? { sortOrderOnly: true } : {})
+      })
+    } finally {
+      await h.finish()
+    }
+  }
+)
+
+it.each([
+  { sortOrderOnly: true, valid: true, known: true, kept: true },
+  { sortOrderOnly: undefined, valid: true, known: true, kept: false },
+  { sortOrderOnly: true, valid: false, known: true, kept: false },
+  // An unknown repo refetches so a slow discovery cannot replay older values last.
+  { sortOrderOnly: true, valid: true, known: false, kept: false }
+])('forwards published order values only on a valid order-only event (%o)', async (input) => {
+  const h = createHarness()
+  const sortOrders = input.valid
+    ? [{ worktreeId: 'remote-repo::/a', sortOrder: 5 }]
+    : [{ worktreeId: 'remote-repo::/a' }]
+  if (input.known) {
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'remote-repo',
+          path: '/remote/repo',
+          displayName: 'Remote repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          executionHostId: 'runtime:host-a'
+        }
+      ]
+    })
+  }
+  try {
+    h.start()
+    h.emit(0, false, {
+      type: 'worktreesChanged',
+      repoId: 'remote-repo',
+      sortOrderOnly: input.sortOrderOnly,
+      sortOrders
+    })
+    for (let index = 0; index < 10; index += 1) {
+      await Promise.resolve()
+    }
+    expect(h.enqueue).toHaveBeenCalledWith({
+      repoId: 'remote-repo',
+      executionHostId: 'runtime:host-a',
+      ...(input.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
+      ...(input.kept ? { sortOrders } : {})
+    })
+  } finally {
+    await h.finish()
+  }
+})
+
+it('invalidates lineage before unknown-repository discovery can block a structural event', async () => {
+  const h = createHarness()
+  const repos = Promise.withResolvers<never[]>()
+  h.fetchRuntimeEnvironmentRepos.mockImplementation(() => repos.promise)
+  try {
+    h.start()
+    beginWorktreeLineageRefresh(useAppStore.getState, {
+      kind: 'environment',
+      environmentId: 'host-a'
+    })(true)
+    expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(true)
+    h.emit(0, false, { type: 'worktreesChanged', repoId: 'unknown-repo' })
+    expect(h.enqueue).not.toHaveBeenCalled()
+    expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(false)
+  } finally {
+    repos.resolve([])
+    await h.finish()
+  }
+})
+
+it('invalidates hydrated lineage as soon as a project change is queued', async () => {
+  const h = createHarness()
+  try {
+    h.start()
+    beginWorktreeLineageRefresh(useAppStore.getState, {
+      kind: 'environment',
+      environmentId: 'host-a'
+    })(true)
+    h.emit(0, false, { type: 'reposChanged' })
+    expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(false)
+    expect(h.fetchRuntimeEnvironmentRepos).not.toHaveBeenCalled()
   } finally {
     await h.finish()
   }

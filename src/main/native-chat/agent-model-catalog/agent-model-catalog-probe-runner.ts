@@ -1,9 +1,9 @@
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 // The one way a catalog probe runs an agent CLI: a disposable child under the provider supervisor,
 // one budget for the whole listing, bounded output, and a teardown awaited on every path. A probe
 // only names what to run and how to read its answer.
 
-import { createOutputSink } from '../../../shared/child-process/bounded-output-sink'
-import type { spawnProcess } from '../../../shared/child-process/run-process'
+import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import type { ProviderProcessClosePolicy } from '../../provider-process/provider-process-close'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
@@ -60,7 +60,7 @@ export type AgentModelCatalogRunnerOptions = {
   /** Stops the listing and its child, as the deadline would. */
   signal?: AbortSignal
   /** Test seams. */
-  spawnImpl?: typeof spawnProcess
+  spawnImpl?: PipedProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
 }

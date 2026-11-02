@@ -7,7 +7,7 @@
     "dev": "next dev --port 3004",
     "build": "next build",
     "start": "next start --port 3004",
-    "lint": "eslint",
+    "lint": "oxlint --config .oxlintrc.json .",
     "test": "node --test tests/*.test.mjs",
     "postinstall": "fumadocs-mdx",
     "prebuild": "fumadocs-mdx"
@@ -18,7 +18,7 @@
     "fumadocs-mdx": "^14.3.1",
     "fumadocs-ui": "^16.8.4",
     "lucide-react": "^1.6.0",
-    "next": "16.3.6",
+    "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.7.0",
@@ -31,11 +31,10 @@
     "@types/node": "^22.20.4",
     "@types/react": "~19.2.18",
     "@types/react-dom": "~19.2.7",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.6",
+    "oxlint": "1.88.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vercel": "59.11.1"
+    "vercel": "64.0.2"
   },
   "engines": {
     "node": "22.x"
@@ -44,27 +43,22 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "sharp",
-      "unrs-resolver"
+      "sharp"
     ],
     "overrides": {
-      "@vercel/fun>tar": "7.5.22",
-      "@vercel/fun>@tootallnate/once": "2.0.1",
       "@vercel/node>undici": "6.28.1",
       "@vercel/python-analysis>js-yaml": "4.3.2",
       "@vercel/python-analysis>minimatch": "10.2.6",
-      "vercel>smol-toml": "1.8.0",
+      "vercel>smol-toml": "1.9.1",
       "vercel>undici": "6.28.1",
-      "@vercel/python-analysis>smol-toml": "1.8.0",
-      "@vercel/rust>smol-toml": "1.8.0",
-      "@vercel/sandbox>undici": "7.29.1",
+      "@vercel/python-analysis>smol-toml": "1.9.1",
+      "@vercel/rust>smol-toml": "1.9.1",
       "@vercel/static-config>ajv": "8.18.0",
       "@vercel/backends>path-to-regexp": "8.4.0",
-      "@vercel/fun>path-to-regexp": "8.4.0",
-      "brace-expansion@<2": "1.1.21",
-      "brace-expansion@>=4 <5.0.12": "5.0.12",
       "@vercel/express>path-to-regexp": "8.4.0",
-      "@vercel/hono>path-to-regexp": "8.4.0"
+      "@vercel/hono>path-to-regexp": "8.4.0",
+      "@vercel/container>tar": "7.5.22",
+      "@vercel/container>smol-toml": "1.9.1"
     }
   }
 }

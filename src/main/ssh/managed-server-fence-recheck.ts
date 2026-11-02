@@ -84,7 +84,3 @@ export function scheduleManagedServerFenceRecheck(targetId: string, loop: FenceR
   }
   timer = setTimeout(() => void tick(0), loop.intervalMs ?? FENCE_RECHECK_INTERVAL_MS)
 }
-
-export function cancelManagedServerFenceRecheck(targetId: string): void {
-  loops.get(targetId)?.()
-}

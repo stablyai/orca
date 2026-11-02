@@ -180,6 +180,18 @@ describe('Markdown document ripgrep lifecycle', () => {
     child.emit('close', 1, null)
     await result
   })
+
+  it('keeps the host binary for a Windows-drive root under a WSL runtime', async () => {
+    const result = listMarkdownDocuments('C:\\repo', { wslDistro: 'Ubuntu' })
+    expect(spawnMock).toHaveBeenCalledWith(expect.any(Array), {
+      cwd: 'C:\\repo',
+      wslDistro: undefined,
+      wslDistroForOutput: undefined,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    child.emit('close', 1, null)
+    await result
+  })
 })
 
 it('returns the complete 20,000-document boundary', async () => {

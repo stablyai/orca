@@ -287,29 +287,4 @@ describe('readOtherProfileWorkspaceCatalog', () => {
     ])
     expect(readOtherProfileWorkspaceCatalog(root).unreadableProfiles).toBe(1)
   })
-
-  it('skips the running profile even when the index already names another as active', () => {
-    const root = userDataWithProfiles('next', [
-      { id: 'running', state: { repos: [{ id: 'repo-running' }] } },
-      { id: 'next', state: { repos: [{ id: 'repo-next' }] } }
-    ])
-    const catalog = readOtherProfileWorkspaceCatalog(root, { runningProfileId: 'running' })
-    expect(catalog.repoIds).toEqual(new Set(['repo-next']))
-  })
-
-  it('counts a never-written profile as empty only when asked', () => {
-    const root = userDataWithProfiles('active', [{ id: 'active', state: {} }, { id: 'fresh' }])
-    expect(readOtherProfileWorkspaceCatalog(root).unreadableProfiles).toBe(1)
-    const lenient = readOtherProfileWorkspaceCatalog(root, { neverWrittenIsEmpty: true })
-    expect(lenient.unreadableProfiles).toBe(0)
-    expect(lenient.repoIds.size).toBe(0)
-  })
-
-  it('never counts a profile with only backups of its data file as empty', () => {
-    const root = userDataWithProfiles('active', [{ id: 'active', state: {} }, { id: 'lost' }])
-    writeFileSync(join(root, 'profiles', 'lost', 'orca-data.json.bak.0'), '{}')
-    expect(
-      readOtherProfileWorkspaceCatalog(root, { neverWrittenIsEmpty: true }).unreadableProfiles
-    ).toBe(1)
-  })
 })

@@ -231,9 +231,9 @@ describe('codex wrapper --no-daemon rule', () => {
 
       it('adds nothing when --help does not list the flag (0.155 and older)', () => {
         const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
-        const result = run(shell, ALL.map((argv) => codexCall(shell, argv)).join('\n'), sandbox)
+        const result = run(shell, ADDED.map((argv) => codexCall(shell, argv)).join('\n'), sandbox)
 
-        expect(lines(result.stdout)).toEqual(ALL.map((argv) => expectedLine(argv, false)))
+        expect(lines(result.stdout)).toEqual(ADDED.map((argv) => expectedLine(argv, false)))
       })
 
       it('adds nothing with ORCA_CODEX_ISOLATE=0, read on every call', () => {

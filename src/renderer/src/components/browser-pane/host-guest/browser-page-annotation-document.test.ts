@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
 import { createBrowserMockApi, createTestStore } from '@/store/slices/browser-slice-test-harness'
 import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
 import { syncGuestAnnotationViewportBridge } from '../annotate/guest-annotation-viewport-bridge'
@@ -106,6 +107,34 @@ function navigationEvent(
 }
 
 describe('browser annotation document boundaries', () => {
+  it('still accepts token-authenticated live target reports', () => {
+    const h = createHarness()
+    const report = JSON.stringify({
+      scrollX: 0,
+      scrollY: 0,
+      viewportWidth: 900,
+      target: { x: 40, y: 120, width: 120, height: 30 }
+    })
+    h.navigation.handleAnnotationViewportMessage({
+      message: `${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}wrong:${report}`
+    })
+    expect(h.setBrowserOverlayViewport).not.toHaveBeenCalled()
+
+    h.navigation.handleAnnotationViewportMessage({
+      message: `${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}token:${report}`
+    })
+    expect(h.setBrowserOverlayViewport).toHaveBeenCalledOnce()
+    expect(
+      h.setBrowserOverlayViewport.mock.calls[0][0]({ scrollX: 0, scrollY: 0, version: 0 })
+    ).toEqual({
+      scrollX: 0,
+      scrollY: 0,
+      viewportWidth: 900,
+      target: { x: 40, y: 120, width: 120, height: 30 },
+      version: 1
+    })
+  })
+
   it('retains the exact saved notes on actual same-URL loading-start, including untracked loads', () => {
     const h = createHarness()
     const saved = h.store.getState().browserAnnotationsByPageId[h.pageId]

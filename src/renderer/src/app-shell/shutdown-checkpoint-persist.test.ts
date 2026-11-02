@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import {
   createShutdownCheckpointPersist,
   type ShutdownCheckpointPersistDeps
@@ -21,6 +22,30 @@ function makeDeps(
 }
 
 describe('createShutdownCheckpointPersist', () => {
+  it('stages the resume records the quit capture changed, for main to record', () => {
+    const records: SleepingAgentSessionRecord[] = [
+      {
+        paneKey: 'tab-1:leaf-1',
+        worktreeId: 'wt-1',
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'session-1' },
+        prompt: '',
+        state: 'working',
+        capturedAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const deps = makeDeps({ captureSleepingAgentSessions: () => records })
+
+    createShutdownCheckpointPersist(deps).run()
+
+    expect(deps.stageBeforeUnloadSync).toHaveBeenCalledWith({
+      sessions: [{ state: { activeTabId: 't1' } }],
+      ui: { activeView: 'workspace' },
+      sleepRecords: records
+    })
+  })
+
   it('does not fail the checkpoint when the sleeping-agent quit capture throws (STA-5505)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const deps = makeDeps({

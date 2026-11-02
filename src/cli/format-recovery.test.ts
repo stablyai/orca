@@ -163,3 +163,51 @@ describe('CLI error recovery', () => {
     expect(output).not.toContain('orca open')
   })
 })
+
+describe('stale terminal handle recovery', () => {
+  function staleHandle(): RuntimeRpcFailureError {
+    return new RuntimeRpcFailureError({
+      id: 'req_stale',
+      ok: false,
+      error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' },
+      _meta: { runtimeId: 'runtime_local' }
+    })
+  }
+
+  it('points a terminal verb with no server selected at --environment', () => {
+    const output = formatCliError(staleHandle(), {
+      commandPath: ['terminal', 'send'],
+      remoteServerSelected: false
+    })
+
+    expect(output).toContain('terminal_handle_stale')
+    expect(output).toContain('Next step: Terminal handles belong to the Orca server')
+    expect(output).toContain('--environment <server>')
+  })
+
+  it('adds the hint to the --json failure envelope', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    reportCliError(staleHandle(), true, {
+      commandPath: ['terminal', 'read'],
+      remoteServerSelected: false
+    })
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      error: {
+        code: 'terminal_handle_stale',
+        data: { nextSteps: [expect.stringContaining('--environment <server>')] }
+      }
+    })
+    log.mockRestore()
+  })
+
+  it('stays silent once a server was already selected', () => {
+    expect(
+      formatCliError(staleHandle(), {
+        commandPath: ['terminal', 'send'],
+        remoteServerSelected: true
+      })
+    ).toBe('terminal_handle_stale')
+  })
+})

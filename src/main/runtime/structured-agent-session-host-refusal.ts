@@ -38,6 +38,25 @@ export async function ensureStructuredAgentSessionHostUnlessRefused(
   }
 }
 
+/** Chat-host setup is bookkeeping for a terminal resume; an existing owner is checked afterward. */
+export async function tryEnsureStructuredAgentSessionHostForResume(
+  ensureHost: () => Promise<unknown>
+): Promise<void> {
+  try {
+    await ensureStructuredAgentSessionHostUnlessRefused(ensureHost)
+  } catch (error) {
+    const code = isAgentSessionRefusalError(error)
+      ? error.refusal.code
+      : error instanceof Error
+        ? error.message
+        : null
+    if (code === 'agent_session_conflict' || code === 'agent_session_ownership_unknown') {
+      throw error
+    }
+    console.warn('[ai-vault] native chat host setup failed during terminal resume:', error)
+  }
+}
+
 /** Set when the journal database would not open; cleared by a later install. The install retries
  *  on the next call, so a refusal that can clear does. */
 export function recordStructuredAgentSessionHostInstallRefusal(

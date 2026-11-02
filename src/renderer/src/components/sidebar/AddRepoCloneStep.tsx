@@ -14,7 +14,6 @@ type CloneStepProps = {
   isCloning: boolean
   disableDestinationPicker?: boolean
   runtimeEnvironmentId?: string | null
-  sshTargetId?: string | null
   cloneTargetLabel?: string | null
   /** No host resolved yet (its server is still coming up): never clone onto this computer. */
   submitDisabled?: boolean
@@ -32,7 +31,6 @@ export function CloneStep({
   isCloning,
   disableDestinationPicker = false,
   runtimeEnvironmentId,
-  sshTargetId,
   cloneTargetLabel,
   onUrlChange,
   onDestChange,
@@ -41,8 +39,7 @@ export function CloneStep({
   submitDisabled = false
 }: CloneStepProps): React.JSX.Element {
   const [browsingDestination, setBrowsingDestination] = useState(false)
-  const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
-  const canBrowseRemoteDestination = isRemoteClone
+  const canBrowseRemoteDestination = Boolean(runtimeEnvironmentId)
   const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
@@ -53,7 +50,7 @@ export function CloneStep({
     }
   }
 
-  if (browsingDestination && (runtimeEnvironmentId || sshTargetId)) {
+  if (browsingDestination && runtimeEnvironmentId) {
     return (
       <>
         <DialogHeader>
@@ -67,27 +64,15 @@ export function CloneStep({
             )}
           </DialogDescription>
         </DialogHeader>
-        {sshTargetId ? (
-          <RemoteFileBrowser
-            targetId={sshTargetId}
-            initialPath={cloneDestination || '~'}
-            onSelect={(path) => {
-              onDestChange(path)
-              setBrowsingDestination(false)
-            }}
-            onCancel={() => setBrowsingDestination(false)}
-          />
-        ) : (
-          <RemoteFileBrowser
-            runtimeEnvironmentId={runtimeEnvironmentId as string}
-            initialPath={cloneDestination || '~'}
-            onSelect={(path) => {
-              onDestChange(path)
-              setBrowsingDestination(false)
-            }}
-            onCancel={() => setBrowsingDestination(false)}
-          />
-        )}
+        <RemoteFileBrowser
+          runtimeEnvironmentId={runtimeEnvironmentId}
+          initialPath={cloneDestination || '~'}
+          onSelect={(path) => {
+            onDestChange(path)
+            setBrowsingDestination(false)
+          }}
+          onCancel={() => setBrowsingDestination(false)}
+        />
       </>
     )
   }
@@ -141,7 +126,7 @@ export function CloneStep({
               onChange={(e) => onDestChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
-                isRemoteClone
+                runtimeEnvironmentId
                   ? translate(
                       'auto.components.sidebar.AddRepoSteps.remoteCloneParentPlaceholder',
                       '/home/user/projects'

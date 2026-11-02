@@ -595,6 +595,60 @@ describe('structured agent session reducer', () => {
     })
   })
 
+  it("keeps the host's working answer and prompts across a quiet frame, takes a row-less restatement, and drops them for rows that name none", () => {
+    const pending: AgentJournalRenderItem = {
+      itemId: 'prompt',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: {
+        kind: 'approval',
+        title: 'Run command?',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    }
+    const frame = (
+      items: AgentJournalRenderItem[],
+      host: { working?: boolean; actionablePromptIds?: string[] } = {}
+    ) => ({
+      type: 'event' as const,
+      event: {
+        type: 'batch' as const,
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 1 },
+          items,
+          removedItemIds: [],
+          submissions: []
+        },
+        ...host
+      }
+    })
+    const opened = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: { ...hydrationPage([pending]), working: true, actionablePromptIds: ['prompt'] }
+      }
+    })
+    const quiet = reduceStructuredAgentSession(opened, frame([]))
+    expect(quiet).toMatchObject({ working: true, actionablePromptIds: ['prompt'] })
+    // The generation ended with no row written: the host restates both.
+    const ended = reduceStructuredAgentSession(
+      quiet,
+      frame([], { working: false, actionablePromptIds: [] })
+    )
+    expect(ended).toMatchObject({ working: false, actionablePromptIds: [] })
+    // Rows from a downgraded host name neither: back to deriving from rows.
+    const downgraded = reduceStructuredAgentSession(ended, frame([{ ...pending, revision: 2 }]))
+    expect(downgraded.working).toBeUndefined()
+    expect(downgraded.actionablePromptIds).toBeUndefined()
+  })
+
   it('records the host clock from frames that carry it and keeps it otherwise', () => {
     const snapshot = reduceStructuredAgentSession(
       EMPTY_STRUCTURED_AGENT_SESSION,

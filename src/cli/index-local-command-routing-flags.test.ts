@@ -156,6 +156,39 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'm4air')
   })
 
+  /** The selectors an agent's environment carries: set empty, which the CLI reads as unset. */
+  function agentSelectors(): void {
+    process.env.ORCA_ENVIRONMENT = ''
+    process.env.ORCA_PAIRING_CODE = ''
+    process.env.ORCA_REMOTE_PAIRING = ''
+  }
+
+  it("keeps explicit --environment routing under an agent's empty selectors", async () => {
+    agentSelectors()
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
+    fakeMachineNameRuntime('M4 Air')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['host', 'name', '--environment', 'm4air', '--json'], '/tmp/repo')
+    expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.machineName).toBe('M4 Air')
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'm4air')
+  })
+
+  it("keeps --host runtime:<id> routing under an agent's empty selectors", async () => {
+    agentSelectors()
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
+    queueFixtures(callMock, okFixture('req_project_setups', { setups: [] }))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(['project', 'setups', '--host', 'runtime:gpu', '--json'], '/tmp/repo')
+    expect([...log.mock.calls, ...err.mock.calls].flat().join('\n')).not.toContain(
+      'name different Orca servers'
+    )
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.list')
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'gpu')
+    process.exitCode = priorExitCode
+  })
+
   it('routes `host name` through an ambient ORCA_ENVIRONMENT, unlike the pinned `host list`', async () => {
     // Why: the pin used to cover the whole `host` family, which silently answered for this machine
     // when the shell was pointed at another one. `host name` describes one runtime, so it routes.

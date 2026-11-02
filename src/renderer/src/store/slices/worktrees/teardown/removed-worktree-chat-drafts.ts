@@ -31,22 +31,27 @@ export function captureWorkspaceChatDraftKeys(
   workspaces: readonly {
     readonly workspaceId: string
     readonly executionHostId: ExecutionHostId | null | undefined
+    /** Limits the tab-found keys to these tab/conversation ids, for an id another host also holds. */
+    readonly onlyEntityIds?: ReadonlySet<string>
   }[]
 ): WorkspaceChatDraftKeys {
   const owners: NativeChatComposerDraftOwner[] = []
   const conversations: string[] = []
   const terminalTabIds: string[] = []
-  for (const { workspaceId, executionHostId } of workspaces) {
+  for (const { workspaceId, executionHostId, onlyEntityIds } of workspaces) {
+    const included = (entityId: string): boolean => !onlyEntityIds || onlyEntityIds.has(entityId)
     if (executionHostId) {
       owners.push({ workspaceId, executionHostId })
     }
     for (const tab of state.unifiedTabsByWorktree[workspaceId] ?? []) {
-      if (tab.contentType === 'agent-session') {
+      if (tab.contentType === 'agent-session' && included(tab.entityId)) {
         conversations.push(structuredAgentSessionDraftScopeKey(tab.entityId))
       }
     }
     for (const tab of state.tabsByWorktree[workspaceId] ?? []) {
-      terminalTabIds.push(tab.id)
+      if (included(tab.id)) {
+        terminalTabIds.push(tab.id)
+      }
     }
   }
   return { owners, conversations, terminalTabIds }

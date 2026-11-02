@@ -6,6 +6,9 @@ import {
 } from './agent-prompt-submission-runtime-test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { settledWriteStub } from '../providers/settled-pty-write-stub'
+import type { RuntimeTerminalWriter } from './runtime-terminal-writer'
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
 const createPromptRuntime = createAgentPromptSubmissionRuntime
 
@@ -495,4 +498,282 @@ describe('agent prompt submission runtime', () => {
 
   // Why: hook rows reach the runtime through this provider, which has no window and no OSC title —
   // the same path a headless `orca serve` host and a minimized desktop window take.
+})
+
+const PTY = 'pty-input-dispatch'
+const HANDLE = 'term_input_dispatch'
+
+function inputDispatchRuntime() {
+  const result = new OrcaRuntimeService()
+  const write = vi.fn(() => true)
+  result.setPtyController({
+    write,
+    writeWithSettlement: settledWriteStub(write),
+    kill: () => true,
+    getForegroundProcess: async () => null
+  })
+  result.registerPty(PTY, 'repo::/tmp/input-dispatch', null, {
+    tabId: '11111111-1111-4111-8111-111111111111',
+    leafId: '22222222-2222-4222-8222-222222222222',
+    incarnationId: 'input-dispatch-test'
+  })
+  result.registerPreAllocatedHandleForPty(PTY, HANDLE)
+  return result
+}
+
+describe('terminal input dispatch through the current runtime', () => {
+  it.each(['pty', 'leaf'])('uses the runtime writer override in the %s lane', async (lane) => {
+    const target = inputDispatchRuntime()
+    if (lane === 'leaf') {
+      Object.defineProperties(target, {
+        getLivePtyForHandle: { value: () => null },
+        getLiveLeafForHandle: { value: () => ({ leaf: { writable: true, ptyId: PTY } }) },
+        isLeafPtyProvenAbsent: { value: async () => false }
+      })
+    }
+    const writer = vi.fn(function (
+      this: OrcaRuntimeService,
+      ...args: Parameters<RuntimeTerminalWriter['writeAction']>
+    ) {
+      expect(this).toBe(target)
+      expect(args).toHaveLength(4)
+      expect(args[0]).toBe(PTY)
+      return Promise.resolve()
+    })
+    Object.defineProperty(target, 'writeTerminalAction', { value: writer })
+
+    await expect(
+      target.sendTerminal(HANDLE, { text: 'hello' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({ accepted: true, bytesWritten: 5 })
+    expect(writer).toHaveBeenCalledOnce()
+  })
+
+  it.each(['pty', 'leaf'])(
+    'captures the prompt writer before spreading options in the %s lane',
+    async (lane) => {
+      const target = inputDispatchRuntime()
+      const calls: string[] = []
+      if (lane === 'leaf') {
+        Object.defineProperties(target, {
+          getLivePtyForHandle: { value: () => null },
+          getLiveLeafForHandle: { value: () => ({ leaf: { writable: true, ptyId: PTY } }) },
+          isLeafPtyProvenAbsent: { value: async () => false }
+        })
+      }
+      const captured = function (this: OrcaRuntimeService, ...args: unknown[]) {
+        expect(this).toBe(target)
+        expect(args).toHaveLength(5)
+        calls.push('captured')
+        return Promise.resolve({ submits: 1 })
+      }
+      Object.defineProperties(target, {
+        serializeAgentPromptSubmission: {
+          value: (_id: string, _generation: number, submit: () => Promise<{ submits: number }>) =>
+            submit()
+        },
+        assertLiveTerminalHandleTargetsPty: { value: () => {} },
+        assertAgentPromptGeneration: { value: () => {} },
+        writeTerminalAgentPrompt: { value: captured, configurable: true }
+      })
+      const options = { inputKind: 'launch' as const }
+      Object.defineProperty(options, 'marker', {
+        enumerable: true,
+        get() {
+          Object.defineProperty(target, 'writeTerminalAgentPrompt', {
+            value: () => {
+              calls.push('late')
+              return Promise.resolve({ submits: 1 })
+            }
+          })
+          return true
+        }
+      })
+
+      await target.sendTerminalAgentPrompt(HANDLE, 'hello', options)
+      expect(calls).toEqual(['captured'])
+    }
+  )
+
+  it('captures permission validation before the nested activity lookup replaces it', async () => {
+    const target = inputDispatchRuntime()
+    let activityReads = 0
+    Object.defineProperties(target, {
+      assertAgentPromptGeneration: { value: () => {} },
+      getPtyWriteHostPlatform: { value: () => 'linux' },
+      getAgentPromptActivity: {
+        value: () => {
+          activityReads += 1
+          if (activityReads === 2) {
+            Object.defineProperty(target, 'assertAgentPromptPermissionSafe', {
+              value: () => {
+                throw new Error('late')
+              }
+            })
+          }
+          return {}
+        }
+      },
+      assertAgentPromptPermissionSafe: {
+        configurable: true,
+        value: function (this: OrcaRuntimeService) {
+          expect(this).toBe(target)
+          expect(arguments.length).toBe(2)
+          if (activityReads === 2) {
+            throw new Error('captured')
+          }
+        }
+      }
+    })
+
+    await expect(
+      target['writeTerminalAgentPrompt'](HANDLE, PTY, 1, 'hello', {
+        inputKind: 'driving',
+        composerReady: true
+      })
+    ).rejects.toThrow('captured')
+    expect(activityReads).toBe(2)
+  })
+
+  it('keeps the activity cache omitted in the baseline read', async () => {
+    const target = inputDispatchRuntime()
+    Object.defineProperty(target, 'assertAgentPromptGeneration', { value: () => {} })
+    const activity = vi.fn(function (this: OrcaRuntimeService) {
+      expect(this).toBe(target)
+      expect(arguments.length).toBe(2)
+      throw new Error('baseline reached')
+    })
+    Object.defineProperty(target, 'getAgentPromptActivity', { value: activity })
+
+    await expect(
+      target['writeTerminalAgentPrompt'](HANDLE, PTY, 1, 'hello', { inputKind: 'driving' })
+    ).rejects.toThrow('baseline reached')
+    expect(activity).toHaveBeenCalledOnce()
+  })
+})
+
+describe('input original queue, callback and private method contracts', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('keeps the private retry lookup on the Root receiver before any delay', async () => {
+    const target = inputDispatchRuntime()
+    const read = vi.fn(function (this: OrcaRuntimeService, ...args: unknown[]) {
+      expect(this).toBe(target)
+      expect(args).toEqual([PTY])
+      return null
+    })
+    Object.defineProperty(target, 'getPtyAgent', { value: read })
+    await expect(
+      target['resubmitAgentPromptAfterRetryDelay'](PTY, 1, { inputKind: 'driving' })
+    ).resolves.toBe(0)
+    expect(read).toHaveBeenCalledOnce()
+  })
+
+  it('serializes rejected submissions, isolates generations and keeps a replacement tail', async () => {
+    const target = inputDispatchRuntime()
+    const gate = Promise.withResolvers<void>()
+    const calls: string[] = []
+    const first = target['serializeAgentPromptSubmission'](PTY, 1, async () => {
+      calls.push('first')
+      await gate.promise
+      throw new Error('rejected submission')
+    })
+    const rejected = expect(first).rejects.toThrow('rejected submission')
+    const second = target['serializeAgentPromptSubmission'](PTY, 1, async () => {
+      calls.push('second')
+      return 2
+    })
+    const freshGeneration = target['serializeAgentPromptSubmission'](PTY, 2, async () => {
+      calls.push('fresh')
+      return 'fresh result'
+    })
+    await expect(freshGeneration).resolves.toBe('fresh result')
+    expect(calls).toEqual(['first', 'fresh'])
+    const replacement = Promise.resolve()
+    const key = `${PTY}\u00001`
+    target['agentPromptSubmissionTailByPtyId'].set(key, replacement)
+    gate.resolve()
+    await rejected
+    await expect(second).resolves.toBe(2)
+    expect(calls).toEqual(['first', 'fresh', 'second'])
+    expect(target['agentPromptSubmissionTailByPtyId'].get(key)).toBe(replacement)
+    expect(target['agentPromptSubmissionTailByPtyId'].has(`${PTY}\u00002`)).toBe(false)
+  })
+
+  it('keeps hook presence callback receivers and preserves invalidation failure', async () => {
+    const target = inputDispatchRuntime()
+    const check = vi.fn(async function (this: OrcaRuntimeService, ...args: unknown[]) {
+      expect(this).toBe(target)
+      expect(args).toHaveLength(1)
+      return 'live' as const
+    })
+    Object.defineProperty(target, 'checkHookAgentPresenceFn', {
+      configurable: true,
+      writable: true,
+      value: check
+    })
+    Object.defineProperty(target, 'collectAgentStatusPaneKeysForPty', {
+      configurable: true,
+      value: () => new Set(['pane-first', 'pane-second'])
+    })
+    await expect(target['recheckHookAgentPresenceForPty'](PTY)).resolves.toBe('live')
+    expect(check.mock.calls).toEqual([['pane-first'], ['pane-second']])
+    Object.defineProperty(target, 'collectAgentStatusPaneKeysForPty', {
+      value: () => {
+        Object.defineProperty(target, 'checkHookAgentPresenceFn', { value: null })
+        return new Set(['pane-first'])
+      }
+    })
+    await expect(target['recheckHookAgentPresenceForPty'](PTY)).rejects.toBeInstanceOf(TypeError)
+    expect(check).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    { recover: false, hasHandle: false },
+    { recover: true, hasHandle: false },
+    { recover: true, hasHandle: true }
+  ])('keeps captured recovery handle semantics for %j', async ({ recover, hasHandle }) => {
+    const target = inputDispatchRuntime()
+    const pty = target['ptysById'].get(PTY)
+    if (!pty) {
+      throw new Error('registered fixture PTY missing')
+    }
+    pty.lastOscTitleAt = 0
+    pty.lastAgentStatusObservedLive = true
+    if (!hasHandle) {
+      target['handleByPtyId'].delete(PTY)
+    }
+    const foreground = Promise.withResolvers<{
+      controller: RuntimePtyController | null
+      available: boolean
+      process: string | null
+    }>()
+    const reads = vi.fn(() => foreground.promise)
+    const explicit = vi.fn(() => ({ status: 'idle' as const, updatedAt: 0, stateStartedAt: 0 }))
+    Object.defineProperties(target, {
+      readPtyForegroundProcessFromController: { value: reads },
+      getFreshExplicitAgentStatusForPty: { value: explicit },
+      recordTerminalSideEffectFact: { value: vi.fn() }
+    })
+    target['confirmLegacyPtyAgentExit'](PTY, recover, false)
+    target['handleByPtyId'].set(PTY, 'late-handle')
+    foreground.resolve({ controller: target['ptyController'], available: false, process: null })
+    await Promise.resolve()
+    if (recover && !hasHandle) {
+      expect(reads).not.toHaveBeenCalled()
+      expect(explicit).not.toHaveBeenCalled()
+    } else {
+      expect(reads).toHaveBeenCalledOnce()
+      expect(explicit.mock.calls).toEqual(
+        recover
+          ? [
+              [HANDLE, PTY],
+              [HANDLE, PTY]
+            ]
+          : []
+      )
+    }
+  })
 })

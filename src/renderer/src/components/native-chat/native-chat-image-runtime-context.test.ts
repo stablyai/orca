@@ -64,7 +64,7 @@ describe('resolveNativeChatImageRuntimeContext', () => {
     const second = resolveNativeChatImageRuntimeContext(storeState, 'tab-1')
 
     expect(first).not.toBeNull()
-    expect(second?.settings).toBe(first?.settings)
+    expect(second?.target).toBe(first?.target)
     expect(shallow(second, first)).toBe(true)
   })
 
@@ -91,8 +91,20 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo/worktree',
       expectedExecutionHostId: 'local',
-      settings: { activeRuntimeEnvironmentId: 'owner-a' }
+      target: { kind: 'environment' as const, environmentId: 'owner-a' }
     })
+  })
+
+  it('reads nothing for an SSH-owned workspace with no paired server to serve it', () => {
+    const worktree = worktreeFixture('wt-1', '/remote/worktree', { hostId: 'ssh:ssh-1' })
+    const sshState = state({
+      activeWorkspaceExecutionHostId: 'ssh:ssh-1',
+      getKnownWorktreeById: () => worktree,
+      repos: [repoFixture({ connectionId: 'ssh-1' })],
+      worktreesByRepo: { repo: [worktree] }
+    })
+
+    expect(resolveNativeChatImageRuntimeContext(sshState, 'tab-1')).toBeNull()
   })
 
   it('resolves a floating chat to its pinned folder on the local host, and nothing before the pin', () => {
@@ -136,7 +148,7 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       worktreePath: '/home/me/pinned',
       expectedExecutionHostId: 'local',
-      settings: { activeRuntimeEnvironmentId: null }
+      target: { kind: 'local' as const }
     })
   })
 })

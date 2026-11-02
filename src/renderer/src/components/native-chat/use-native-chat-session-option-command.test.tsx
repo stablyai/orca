@@ -42,12 +42,7 @@ describe('useNativeChatSessionOptionCommand', () => {
     await act(() => hook.result.current.dispatch('/model'))
     expect(onSubmitted).toHaveBeenCalledOnce()
 
-    expect(typeNativeChatCommand).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      '/model',
-      expect.any(AbortSignal)
-    )
+    expect(typeNativeChatCommand).toHaveBeenCalledWith('pty-1', '/model', expect.any(AbortSignal))
     expect(sendNativeChatMessageVerified).not.toHaveBeenCalled()
   })
 
@@ -56,7 +51,6 @@ describe('useNativeChatSessionOptionCommand', () => {
     await act(() => hook.result.current.dispatch('/model sonnet', { delivery: 'type' }))
 
     expect(sendNativeChatMessageVerified).toHaveBeenCalledWith(
-      {},
       'pty-1',
       '/model sonnet',
       expect.any(AbortSignal)

@@ -47,3 +47,14 @@ export function findBrowserClientPageByWebContentsId(
   }
   return undefined
 }
+
+/** Drops `page` unless a newer page already took its id. */
+export function forgetBrowserClientRetainedPage(
+  pages: Map<string, BrowserClientRetainedPage>,
+  browserPageId: string,
+  page: BrowserClientRetainedPage
+): void {
+  if (pages.get(browserPageId) === page) {
+    pages.delete(browserPageId)
+  }
+}

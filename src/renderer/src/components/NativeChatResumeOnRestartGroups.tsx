@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 import { Folder, FolderTree, GitBranch, Monitor } from 'lucide-react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
@@ -26,6 +26,7 @@ import {
   chatState,
   coveredKeys,
   ResumeTreeDepthContext,
+  ResumeTreeSelectingContext,
   useResumeTreeExpansion,
   type FailureProps,
   type TreeProps
@@ -82,6 +83,7 @@ function GroupNode({
 }): React.JSX.Element {
   const selection = resumeSelectionState(covered, tree.selected)
   const expanded = tree.isExpanded(nodeKey)
+  const selecting = useContext(ResumeTreeSelectingContext)
   return (
     <>
       <ResumeTreeRow
@@ -95,7 +97,9 @@ function GroupNode({
         checkboxLabel={checkboxLabel}
       >
         {label}
-        <ResumeTreeCount selectedCount={selection.selectedCount} total={selection.total} />
+        {selecting && (
+          <ResumeTreeCount selectedCount={selection.selectedCount} total={selection.total} />
+        )}
       </ResumeTreeRow>
       {/* Collapsing unmounts the rows only; their selection lives with the dialog. */}
       {expanded && children}
@@ -346,13 +350,16 @@ export function ResumeOnRestartGroups({
   failureFor,
   onFailureAction,
   renderStatus,
-  selectableIds
+  selectableIds,
+  selecting = true
 }: {
   candidates: readonly ResumeCandidate[]
   listedAt: number
   busy: boolean
   selected: ReadonlySet<string>
   onToggle: (sessionId: string, checked: boolean) => void
+  /** False once every chat shows a run status, so no checkbox is left to act on. */
+  selecting?: boolean
 } & FailureProps): React.JSX.Element {
   const machines = useMemo(
     () =>
@@ -388,27 +395,29 @@ export function ResumeOnRestartGroups({
   const showMachines =
     machines.length > 1 || machines.some((machine) => machine.hostId !== LOCAL_EXECUTION_HOST_ID)
   return (
-    <div className="flex flex-col">
-      {machines.map((machine) =>
-        showMachines ? (
-          <MachineNode
-            key={machine.hostId}
-            hostId={machine.hostId}
-            candidates={machine.candidates}
-            workspaces={machine.workspaces}
-            hostLabelById={hostLabelById}
-            tree={tree}
-          />
-        ) : (
-          <MachineContents
-            key={machine.hostId}
-            hostId={machine.hostId}
-            workspaces={machine.workspaces}
-            depth={0}
-            tree={tree}
-          />
-        )
-      )}
-    </div>
+    <ResumeTreeSelectingContext.Provider value={selecting}>
+      <div className="flex flex-col">
+        {machines.map((machine) =>
+          showMachines ? (
+            <MachineNode
+              key={machine.hostId}
+              hostId={machine.hostId}
+              candidates={machine.candidates}
+              workspaces={machine.workspaces}
+              hostLabelById={hostLabelById}
+              tree={tree}
+            />
+          ) : (
+            <MachineContents
+              key={machine.hostId}
+              hostId={machine.hostId}
+              workspaces={machine.workspaces}
+              depth={0}
+              tree={tree}
+            />
+          )
+        )}
+      </div>
+    </ResumeTreeSelectingContext.Provider>
   )
 }

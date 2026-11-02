@@ -5,7 +5,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { isStructuredAgentSessionMainAgentWorking } from '../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
@@ -23,7 +22,7 @@ import {
   type StructuredAgentSessionChildExitSession
 } from '../native-chat/agent-session-wire/structured-agent-session-child-exit'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { pendingPromptExists } from '../native-chat/agent-session-wire/structured-agent-session-queued-messages'
+import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { handleCodexSessionExit } from './codex-structured-session-close'
 import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
@@ -46,15 +45,14 @@ afterEach(async () => {
   }
 })
 
-function userVisible(journal: AgentSessionJournal) {
+/** What the chat shows with the live generation at `liveFence`: 7 while the child runs, none once
+ *  its exit released it (`structuredAgentSessionCurrentWork`). */
+function userVisible(journal: AgentSessionJournal, liveFence: number | null) {
   const items = journal.snapshot().items
+  const work = new StructuredAgentSessionCurrentWork(journal, liveFence)
   return {
-    working: isStructuredAgentSessionMainAgentWorking(
-      journal.activeTurnId(),
-      journal.submissions(),
-      8
-    ),
-    prompt: pendingPromptExists(journal),
+    working: work.working(),
+    prompt: work.hasActionablePrompt(),
     turnStates: items.flatMap((item) => readAgentJournalTurn(item.body)?.state ?? []),
     runningCalls: items.filter(
       (item) => item.body.kind === 'tool-call' && item.body.state === 'running'
@@ -149,7 +147,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   ).toEqual({ accepted: true })
   await expect(deferred.drained()).resolves.toEqual({ ok: true })
   expect(deferred.state().queuedBytes).toBe(0)
-  expect(userVisible(journal)).toEqual({
+  expect(userVisible(journal, 7)).toEqual({
     working: true,
     prompt: true,
     turnStates: ['running'],
@@ -234,13 +232,13 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
       },
       sessions: new Map([[SESSION, hostSession]]),
       flushLifecycle: () => deferred.lifecycleBarrier(),
-      publishFence: vi.fn(),
+      generationEnded: vi.fn(),
       serialize: async (_sessionId, task) => task(),
       now: () => 5_000
     },
     event
   )
-  expect(userVisible(journal)).toEqual({
+  expect(userVisible(journal, null)).toEqual({
     working: false,
     prompt: false,
     turnStates: ['interrupted'],

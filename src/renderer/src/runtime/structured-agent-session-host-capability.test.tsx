@@ -15,9 +15,7 @@ const mocks = vi.hoisted(() => ({
   contactRegained: new Map<string, () => void>()
 }))
 
-vi.mock('./runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: mocks.supports
-}))
+vi.mock('./runtime-rpc-client', () => ({ runtimeEnvironmentSupportsCapability: mocks.supports }))
 
 vi.mock('./runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (environmentId: string, listener: () => void) => {

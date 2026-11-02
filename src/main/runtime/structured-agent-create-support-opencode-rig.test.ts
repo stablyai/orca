@@ -49,7 +49,10 @@ const managedAccounts = {
 
 /** OpenCode's account binding, as create resolves it: the account a new chat would pin. */
 function pinnedAccount(launchEnv: Record<string, string>) {
-  return openCodeAcpAccountBinding(() => managedAccounts).resolve({ launchEnv })
+  return openCodeAcpAccountBinding(() => managedAccounts).resolve({
+    launchEnv,
+    stateDirectory: '/orca-data'
+  })
 }
 
 /** `agentSession.createSupport` on this host for a local git worktree under the rig's settings. */
@@ -66,8 +69,7 @@ function createSupport(settings: ReturnType<typeof rigSettings>) {
     runtime: {
       requireStore: () => ({ getSettings: () => settings }),
       resolveRuntimeFileTarget: async () => ({ worktree: { path: join(root, 'proj') } })
-    },
-    getSettings: () => ({ claudeManagedAccounts: [], activeClaudeManagedAccountId: null })
+    }
   })
 }
 

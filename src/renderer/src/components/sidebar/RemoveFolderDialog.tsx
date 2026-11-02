@@ -15,6 +15,8 @@ import {
   isRuntimeOwnedSshTargetId,
   normalizeExecutionHostId
 } from '../../../../shared/execution-host'
+import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
+import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
 
 // Why: interpolated into the sentence so locales control where the name sits;
 // U+0000 cannot appear in a real project name, so the split is unambiguous.
@@ -53,26 +55,53 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
     )
   })
 
+  const onRecipeVmServer = useAppStore(
+    (s) =>
+      getRecipeVmSshTargetForHost(s.runtimeEnvironments, hostId) !== null ||
+      (s.worktreesByRepo[repoId] ?? []).some(
+        (worktree) =>
+          worktree.hostId === hostId && worktree.ephemeralVmCheckoutMode === 'provisioned-root'
+      )
+  )
+
+  const openTerminalCount = useAppStore((s) =>
+    repoId && hostId ? countOpenRepoTerminalTabs(s, repoId, hostId) : 0
+  )
+  const openTerminalWarning =
+    openTerminalCount === 0
+      ? null
+      : openTerminalCount === 1
+        ? translate(
+            'auto.components.sidebar.RemoveFolderDialog.openTerminalWarningOne',
+            '1 open terminal in this project will be closed.'
+          )
+        : translate(
+            'auto.components.sidebar.RemoveFolderDialog.openTerminalWarningMany',
+            '{{count}} open terminals in this project will be closed.',
+            { count: openTerminalCount }
+          )
+
   // Why: fragment concatenation around the styled name cannot be reordered by
   // SOV locales (#9294). Translate one full sentence with the name as a
   // sentinel token, then split on it to re-apply the inline emphasis.
-  const description = isRuntimeOwnedSshTargetId(sshConnectionId)
-    ? translate(
-        'auto.components.sidebar.RemoveFolderDialog.removeDescriptionVmRecipe',
-        'This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.',
-        { name: NAME_TOKEN }
-      )
-    : sshHostLabel
+  const description =
+    onRecipeVmServer || isRuntimeOwnedSshTargetId(sshConnectionId)
       ? translate(
-          'auto.components.sidebar.RemoveFolderDialog.removeDescriptionSsh',
-          'This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.',
-          { name: NAME_TOKEN, host: sshHostLabel }
-        )
-      : translate(
-          'auto.components.sidebar.RemoveFolderDialog.removeDescriptionLocal',
-          'This only removes {{name}} from Orca. It is still on your disk.',
+          'auto.components.sidebar.RemoveFolderDialog.removeDescriptionVmRecipe',
+          'This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.',
           { name: NAME_TOKEN }
         )
+      : sshHostLabel
+        ? translate(
+            'auto.components.sidebar.RemoveFolderDialog.removeDescriptionSsh',
+            'This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.',
+            { name: NAME_TOKEN, host: sshHostLabel }
+          )
+        : translate(
+            'auto.components.sidebar.RemoveFolderDialog.removeDescriptionLocal',
+            'This only removes {{name}} from Orca. It is still on your disk.',
+            { name: NAME_TOKEN }
+          )
   const [descriptionBeforeName, descriptionAfterName] = description.split(NAME_TOKEN)
 
   const handleConfirm = useCallback(() => {
@@ -104,6 +133,9 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
             <span className="break-all font-medium text-foreground">{displayName}</span>
             {descriptionAfterName}
           </DialogDescription>
+          {openTerminalWarning ? (
+            <p className="text-xs font-medium text-foreground">{openTerminalWarning}</p>
+          ) : null}
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>

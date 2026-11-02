@@ -26,10 +26,12 @@ vi.mock('@/components/editor/editor-autosave', () => ({
   requestEditorFileSave: save,
   requestEditorSaveQuiesce: quiesce
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-mutation-client', () => ({
   deleteRuntimePath: remove,
-  readRuntimeFileContent: vi.fn().mockResolvedValue({ content: 'owner', isBinary: false }),
   writeRuntimeFile: vi.fn()
+}))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: vi.fn().mockResolvedValue({ content: 'owner', isBinary: false })
 }))
 vi.mock('@/components/right-sidebar/fileExplorerUndoRedo', () => ({
   commitFileExplorerOp: vi.fn()

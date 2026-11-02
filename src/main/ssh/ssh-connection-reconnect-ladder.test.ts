@@ -1,15 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   advanceToNextSshClient,
-  clientInstances,
-  connectAttempts,
   connectWithFakeTimers,
-  emitSshEvent,
   nextSshClientCreation,
   resetSshConnectionMocks,
-  spawnSystemSshCommandMock,
-  ssh2Mock
+  spawnSystemSshCommandMock
 } from './ssh-connection-test-harness'
+import {
+  clientInstances,
+  connectAttempts,
+  emitSshEvent,
+  ssh2Mock
+} from './__tests__/ssh-connection-test-client'
 import {
   createCallbacks,
   createHangingSystemCommandChannel,
@@ -17,22 +19,42 @@ import {
   createTarget
 } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
-import { resolveWithSshG } from './ssh-config-parser'
+import { resolveWithSshG } from './config/ssh-g-config-resolution'
 import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-utils'
 import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
 
-vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
-vi.mock('./system-ssh-binary', async () =>
+vi.mock('ssh2', async () =>
+  (await import('./__tests__/ssh-connection-test-client')).createSsh2Module()
+)
+vi.mock('./system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
-vi.mock('./ssh-system-fallback', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
+vi.mock('./system-transport/system-ssh-args', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSystemSshArgsMocks(await importOriginal())
+)
+vi.mock('./system-transport/system-ssh-command', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
+)
+vi.mock('./system-transport/system-ssh-file-binary-transfer', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+    await importOriginal()
+  )
+)
+vi.mock('./system-transport/system-ssh-file-transfer', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSystemSshFileTransferMocks(
+    await importOriginal()
+  )
 )
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
-vi.mock('./ssh-config-parser', async () =>
+vi.mock('./config/ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
+)
+vi.mock('./config/ssh-g-config-resolution', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+    await importOriginal()
+  )
 )
 
 describe('SshConnection', () => {
@@ -103,7 +125,7 @@ describe('SshConnection', () => {
       expect(
         published.filter((e) => e.status === 'reconnecting').map((e) => e.reconnectAttempt)
       ).toEqual([0, 1, 2])
-      // src/main/ipc/ssh.ts gates the relay redeploy on reconnectAttempt === 0 at 'connected'.
+      // src/main/ipc/ssh/ssh.ts gates the relay redeploy on reconnectAttempt === 0 at 'connected'.
       expect(
         published.filter((e) => e.status === 'connected').map((e) => e.reconnectAttempt)
       ).toEqual([0, 0, 0, 0])

@@ -12,8 +12,7 @@ type Launch = {
 const mocks = vi.hoisted(() => ({
   beginStructuredAgentSessionProvisionalLaunch: vi.fn<(args: BeginArgs) => Launch | null>(),
   prepareAiVaultSessionForResume: vi.fn<() => Promise<{ sessionId: string }>>(),
-  activateAndRevealWorktree: vi.fn<(worktreeId: string) => unknown>(),
-  activateAndRevealFolderWorkspace: vi.fn<(workspaceId: string) => unknown>(),
+  activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
   toastError: vi.fn<(message: string) => void>(),
   activeWorktreeId: 'other-worktree'
 }))
@@ -25,8 +24,7 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: mocks.prepareAiVaultSessionForResume
 }))
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree,
-  activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/store', () => ({
@@ -62,7 +60,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.prepareAiVaultSessionForResume.mockResolvedValue({ sessionId: 'provider-1' })
-    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null })
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
       args.beforeOpen?.('session-1')
       return {
@@ -91,13 +89,36 @@ describe('resumeAiVaultSessionInNewChat', () => {
         hooks: {}
       })
     )
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1')
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1')
     expect(mocks.toastError).not.toHaveBeenCalled()
     settle({ kind: 'structured', sessionId: 'session-1' })
   })
 
-  it('toasts a conflict reported by the eventual settlement', async () => {
-    const error = Object.assign(new Error('held'), { code: 'agent_session_conflict' })
+  it('opens an OpenCode 2 row in an OpenCode chat', async () => {
+    await resumeAiVaultSessionInNewChat(session, 'opencode2', 'worktree-1', 'resume-click')
+
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({ plan: expect.objectContaining({ agent: 'opencode' }) })
+    )
+  })
+
+  it.each([
+    ['agent_session_conflict', undefined, 'Another chat is already holding this conversation.'],
+    [
+      'agent_session_identity_required',
+      'transcriptNotFound',
+      "Codex hasn't saved this conversation yet. Try again after it replies."
+    ],
+    [
+      'agent_session_identity_required',
+      'transcriptUnreadable',
+      "This conversation's history could not be loaded, so it cannot be resumed in chat."
+    ]
+  ])('toasts the eventual %s refusal', async (code, reason, message) => {
+    const error = Object.assign(new Error('Host diagnostic'), {
+      code,
+      ...(reason ? { refusal: { code, details: { reason } } } : {})
+    })
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue({
       sessionId: 'session-1',
       tab: { id: 'agent-session:session-1' },
@@ -105,11 +126,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
     })
 
     await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1', 'resume-click')
-    await vi.waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith(
-        'Another chat is already holding this conversation.'
-      )
-    )
+    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(message))
   })
 
   it('keeps unknown outcomes silent for reconciliation', async () => {

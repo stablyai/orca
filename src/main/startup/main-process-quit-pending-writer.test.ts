@@ -4,25 +4,27 @@ import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
+const stopAgentHookServer = idle()
+const stopStructuredAgentSessionRuntime = settled()
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/filesystem-watcher': { closeAllWatchers: settled() },
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
-  '../ipc/pty': { killAllPty: idle() },
-  '../daemon/daemon-init': { disconnectDaemon: settled(), shutdownDaemon: settled() },
+  '../ipc/pty/kill-all': { killAllPty: idle() },
+  '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
   '../ipc/ssh-shutdown-drain': { beginSshShutdown: settled() },
-  '../agent-hooks/server': { agentHookServer: { stop: idle() } },
+  '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
   '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime: settled() },
+  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
   '../runtime/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
-  '../runtime/orca-runtime-files': { awaitRuntimeFileWatcherUnsubscribes: settled() },
+  '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
   '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
   '../browser/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
@@ -57,7 +59,10 @@ afterEach(() => {
   vi.resetModules()
 })
 
-async function startQuit(flushFinalOrThrowAsync: () => Promise<void>) {
+async function startQuit(
+  flushFinalOrThrowAsync: () => Promise<void>,
+  services: Record<string, unknown> = {}
+) {
   vi.resetModules()
   vi.useFakeTimers()
   const app = Object.assign(new EventEmitter(), { quit: vi.fn() })
@@ -67,7 +72,13 @@ async function startQuit(flushFinalOrThrowAsync: () => Promise<void>) {
     freezeWritesAsync: settled()
   }
   const profileStateAdmission: typeof admission | undefined = admission
-  const state = { isQuitting: false, watcherShutdownDone: true, store, profileStateAdmission }
+  const state = {
+    isQuitting: false,
+    watcherShutdownDone: true,
+    store,
+    profileStateAdmission,
+    ...services
+  }
   vi.doMock('electron', () => ({ app }))
   vi.doMock('./main-process-state', () => ({ mainProcessState: state }))
   for (const [moduleName, exports] of Object.entries(dependencies)) {
@@ -105,3 +116,51 @@ it('releases admission only after the final flush and freeze complete', async ()
   expect(admission.release).toHaveBeenCalledOnce()
   expect(app.quit).toHaveBeenCalledOnce()
 })
+
+// The chat teardown decides which chats to offer to resume from the hook server's status store,
+// and finishes after the hook server stops: that stop must leave the store readable.
+it('stops the hook server without clearing the status store the chat teardown reads', async () => {
+  await startQuit(async () => {})
+  expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })
+})
+
+it.each([
+  ['chat teardown', 'RPC stop'],
+  ['RPC stop', 'chat teardown']
+] as const)(
+  'closes notification dismissals only once %s and then %s settle',
+  async (first, second) => {
+    const sessionTeardown = Promise.withResolvers<void>()
+    const rpcStop = Promise.withResolvers<void>()
+    const release = { 'chat teardown': sessionTeardown.resolve, 'RPC stop': rpcStop.resolve }
+    stopStructuredAgentSessionRuntime.mockClear()
+    stopStructuredAgentSessionRuntime.mockImplementationOnce(() => sessionTeardown.promise)
+    const closeNotificationDismissals = vi.fn(() => new Promise<void>(() => {}))
+    const { app } = await startQuit(async () => {}, {
+      runtime: {
+        getOffscreenBrowserBackend: () => null,
+        getAgentBrowserBridge: () => null,
+        getEmulatorBridge: () => null,
+        disposeSkillUploadSessions: settled(),
+        getRuntimeId: () => undefined,
+        closeNotificationDismissals
+      },
+      runtimeRpc: { setMobileRelayPairingProvider: idle(), stop: vi.fn(() => rpcStop.promise) }
+    })
+    expect(stopStructuredAgentSessionRuntime).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(closeNotificationDismissals).not.toHaveBeenCalled()
+    release[first]()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(closeNotificationDismissals).not.toHaveBeenCalled()
+    release[second]()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(closeNotificationDismissals).toHaveBeenCalledOnce()
+    expect(app.quit).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS)
+    expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
+      pendingTeardowns: ['notification-dismissals']
+    })
+    expect(app.quit).toHaveBeenCalledOnce()
+  }
+)

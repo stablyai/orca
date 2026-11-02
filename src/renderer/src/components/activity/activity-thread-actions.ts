@@ -109,6 +109,9 @@ export function createActivityThreadActions({
     if (
       activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })
     ) {
+      if (isFloatingTerminal) {
+        revealFloatingWorkspacePanel(useAppStore.getState())
+      }
       return
     }
     // Read post-activation: the tab this thread points at may have only just been revived.

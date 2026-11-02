@@ -36,6 +36,15 @@ export const ANTIGRAVITY_USAGE_ARGS: readonly string[] = [
  */
 export const ANTIGRAVITY_USAGE_TIMEOUT_MS = 30_000
 
+/**
+ * Added to every probe's environment.
+ *
+ * Why: a due update check makes agy start `--bg-updater`, whose own console child opens a visible
+ * window on Windows and takes focus (#27390); a background quota read must not update the CLI
+ * either. Verified on agy 1.4.2: only `true` disables it (`1` still spawns the updater).
+ */
+export const ANTIGRAVITY_PROBE_ENV = { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' } as const
+
 // Before agy 1.1.11, `/usage` in print mode spends a model turn (agy's bundled changelog).
 export const ANTIGRAVITY_MIN_USAGE_VERSION = '1.1.11'
 
@@ -51,18 +60,4 @@ export const ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES = 512 * 1024
 /** The command name Orca already uses to detect Antigravity, so both agree on the binary. */
 export function antigravityCommandName(): string {
   return TUI_AGENT_CONFIG.antigravity.detectCmd
-}
-
-/**
- * Why the args are never appended to a configured launch command: a user's Antigravity launch
- * command may carry its own flags, a wrapper script, or a shell pipeline, and appending `-p /usage`
- * to that either runs the wrong program or feeds the slash command to the wrong argv slot. The quota
- * read resolves the plain executable itself instead.
- */
-export function isPlainAntigravityExecutable(command: string): boolean {
-  const trimmed = command.trim()
-  if (trimmed.length === 0) {
-    return false
-  }
-  return !/[\s"'|&;<>$`()]/.test(trimmed)
 }

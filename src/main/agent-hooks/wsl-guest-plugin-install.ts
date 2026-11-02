@@ -6,7 +6,7 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
 import { selectOpenCodePluginSources } from './opencode-plugin-settings'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
-import type { PluginSources } from '../../relay/plugin-overlay'
+import type { PluginSources } from '../../wsl-guest/plugin-overlay'
 
 /** Structural, not the deps type itself, so this stays free of the deps module. */
 type GuestPluginInstallDeps = {

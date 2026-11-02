@@ -232,17 +232,17 @@ export function EditorEditFileSurface({
         markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
         conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
         revealLine={
-          matchesPendingEditorReveal(pendingEditorReveal, activeFile)
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
             ? pendingEditorReveal.line
             : undefined
         }
         revealColumn={
-          matchesPendingEditorReveal(pendingEditorReveal, activeFile)
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
             ? pendingEditorReveal.column
             : undefined
         }
         revealMatchLength={
-          matchesPendingEditorReveal(pendingEditorReveal, activeFile)
+          matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
             ? pendingEditorReveal.matchLength
             : undefined
         }
@@ -318,9 +318,10 @@ export function EditorEditFileSurface({
 
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
-  file: Pick<OpenFile, 'id' | 'filePath'>
+  file: Pick<OpenFile, 'id' | 'filePath'>,
+  viewStateId: string
 ): reveal is PendingEditorReveal {
-  if (!reveal) {
+  if (!reveal || (reveal.viewStateId && reveal.viewStateId !== viewStateId)) {
     return false
   }
   return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath

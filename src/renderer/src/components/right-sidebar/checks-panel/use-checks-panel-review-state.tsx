@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/github/cache-identity'
-import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/github-cache-key'
 import {
   buildChecksPanelEligibilityGitFingerprint,
   readChecksPanelGitStatusSnapshot,
@@ -28,7 +28,7 @@ import {
   resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../../shared/source-control-ai'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { ChecksPanelReviewStateInput } from './review-state-dependencies'
 
 export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
@@ -53,6 +53,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     linkedPR,
     linkedReviewNumber,
     localExecutionScope,
+    ownerTarget,
     panelContextKey,
     pr,
     prCacheKey,
@@ -263,7 +264,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
           context.connectionId,
           undefined,
           {
-            runtimeTargetSettings: context.runtimeTargetSettings
+            runtimeTarget: context.runtimeTarget
           }
         )
       } catch (error) {
@@ -277,7 +278,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
     }
     const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(
-      getRuntimeGitScope(settings, repo?.connectionId)
+      getRuntimeGitScope(ownerTarget ?? { kind: 'local' }, repo?.connectionId)
     )
     const resolved = resolveSourceControlAiForOperation({
       settings,
@@ -293,7 +294,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
           repo,
           prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
         })
-  }, [repo, settings])
+  }, [ownerTarget, repo, settings])
   const sourceControlAiActionsVisible = useMemo(
     () => (settings ? resolveSourceControlAiEnabled({ settings, repo }) : false),
     [repo, settings]

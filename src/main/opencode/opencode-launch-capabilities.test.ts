@@ -38,6 +38,9 @@ describe('OpenCode execution-host launch capability probe', () => {
   })
   it('recognizes quoted executables and preserves explicit run commands', () => {
     expect(getOpenCodeLaunchExecutable('"/app dir/opencode" run task')).toBe('/app dir/opencode')
+    expect(getOpenCodeLaunchExecutable('sleep 30 && "/app dir/opencode2"')).toBe(
+      '/app dir/opencode2'
+    )
     expect(getOpenCodeLaunchExecutable('custom-launcher --standalone', 'opencode')).toBe(
       'custom-launcher'
     )

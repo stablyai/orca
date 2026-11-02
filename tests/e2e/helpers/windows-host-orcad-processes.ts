@@ -3,7 +3,7 @@
  * provisioned it: the lane's sshd listens on 127.0.0.1, so the account's processes are local here.
  */
 import path from 'node:path'
-import { runProcess } from '../../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 export type HostProcess = { pid: number; commandLine: string }
 

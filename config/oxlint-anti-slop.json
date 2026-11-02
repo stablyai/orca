@@ -49,6 +49,8 @@
       "files": [
         "**/*.test.{ts,tsx}",
         "**/*.spec.{ts,tsx}",
+        // Extracted React Native mocks remain test-only.
+        "**/mobile/src/session/MobileNativeChatView.harness.test-fixture.ts",
         "tests/**/*.{ts,tsx}",
         "**/__mocks__/**"
       ],
@@ -75,6 +77,22 @@
     // Test-only side effect for explicit RPC registries; real catalog tests never import it.
     {
       "files": ["**/src/main/runtime/rpc/unused-default-rpc-methods.test-fixture.ts"],
+      "rules": {
+        "anti-slop/no-module-mocking": "off"
+      }
+    },
+    // Shared render harness for the split MobileNativeChatView suites; it registers the same
+    // hoisted mocks every suite needs and is only imported by those test files.
+    {
+      "files": ["**/mobile/src/session/MobileNativeChatView.harness.test-fixture.ts"],
+      "rules": {
+        "anti-slop/no-module-mocking": "off"
+      }
+    },
+    // Mobile's test-only setup supplies SVG host primitives without loading native Flow code.
+    // The shared fixture preserves native module boundaries in Node-based render tests.
+    {
+      "files": ["**/mobile/vitest.setup.ts"],
       "rules": {
         "anti-slop/no-module-mocking": "off"
       }

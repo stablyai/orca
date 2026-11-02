@@ -3,15 +3,10 @@ import { spawnSync } from 'node:child_process'
 const defaultFiles = [
   'src/main/ssh/sftp-upload.test.ts',
   'src/main/ssh/ssh-file-transfer-abort.test.ts',
-  'src/main/ssh/ssh-relay-deploy-staged-upload.test.ts',
-  'src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts',
-  'src/main/ssh/ssh-relay-sftp-namespace-install.test.ts',
   'src/main/ssh/ssh-relay-install-namespace.test.ts',
-  'src/main/ssh/ssh-relay-upload-stage-commands.test.ts',
   'src/main/ssh/sftp-namespace-resolution.test.ts',
   'src/main/ssh/ssh-connection-sftp-wire.test.ts',
-  'src/main/ssh/ssh-remote-commands.test.ts',
-  'src/main/ssh/ssh-relay-cross-version-isolation.test.ts'
+  'src/main/ssh/ssh-remote-commands.test.ts'
 ]
 
 const cliArguments = process.argv.slice(2)

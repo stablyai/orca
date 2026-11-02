@@ -1,13 +1,39 @@
 import type { Dirent } from 'node:fs'
 import { extname, join } from 'node:path'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import { SessionNewestFiles } from './session-newest-files'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue } from './session-scan-issues'
-import type { SessionFileDiscovery } from './session-scanner-types'
+import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import {
+  noteAiVaultScanFileFound,
+  noteAiVaultScanWorkChanged,
+  openAiVaultScanSource
+} from './ai-vault-scan-progress'
+
+const NATIVE_DISCOVERY_CONCURRENCY = 4
+const NATIVE_DISCOVERY_BATCH_SIZE = 16
+const nativeDiscoverySlots = new PrioritySemaphore(8)
+
+type SessionFileObservation =
+  | { file: Omit<FileWithMtime, 'modifiedAt'>; sidecarPath?: string }
+  | { issue: { path: string; message: string } }
+
+async function withNativeDiscoverySlot<T>(read: () => Promise<T>): Promise<T> {
+  const release = await nativeDiscoverySlots.acquire(0)
+  try {
+    return await read()
+  } finally {
+    release()
+  }
+}
 
 export async function discoverFiles(args: {
   rootDir: string
@@ -18,54 +44,133 @@ export async function discoverFiles(args: {
   filePredicate?: (path: string) => boolean
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
+  signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
   let refusedSidecar = false
-  try {
-    await forEachSessionFile(
-      args.rootDir,
-      args.agent,
-      args.issues,
-      {
-        extensions: new Set(args.extensions),
-        filePredicate: args.filePredicate,
-        directoryPredicate: args.directoryPredicate
-      },
-      async (path) => {
-        try {
-          const fileStat = await wslGatedStat(path, 'scan')
-          const sidecarPath = await args.contentDependencyPath?.(path)
-          const sidecar = await observeSessionSidecar(sidecarPath)
-          if (sidecar === 'unknown' && !refusedSidecar) {
-            // One issue per root: a refused sibling is a property of the tree,
-            // not of each transcript that happens to point at it.
-            refusedSidecar = true
-            recordSessionScanIssue(args.issues, {
-              agent: args.agent,
-              path: sidecarPath ?? args.rootDir,
-              message: 'Session metadata could not be read this scan.'
-            })
-          }
+  let paths: string[] = []
+  let pending: Promise<SessionFileObservation[]> | null = null
+  const native = !isWslUncPath(args.rootDir)
+  const source = { close: (): void => undefined }
+
+  function consume(observations: readonly SessionFileObservation[]): void {
+    // A stat the cancel cut short is not an unreadable file; never record it.
+    throwIfAiVaultScanCancelled(args.signal)
+    for (const observation of observations) {
+      if ('issue' in observation) {
+        recordSessionScanIssue(args.issues, {
+          agent: args.agent,
+          ...observation.issue
+        })
+        continue
+      }
+      noteAiVaultScanFileFound(args.signal, args.agent, observation.file)
+      if (observation.file.sidecar === 'unknown' && !refusedSidecar) {
+        refusedSidecar = true
+        recordSessionScanIssue(args.issues, {
+          agent: args.agent,
+          path: observation.sidecarPath ?? args.rootDir,
+          message: 'Session metadata could not be read this scan.'
+        })
+      }
+      try {
+        const modifiedAt = new Date(observation.file.mtimeMs)
+        if (Number.isNaN(modifiedAt.getTime()) || files.wouldRetain(observation.file.mtimeMs)) {
           files.add({
-            path,
-            mtimeMs: fileStat.mtimeMs,
-            modifiedAt: new Date(fileStat.mtimeMs).toISOString(),
-            sizeBytes: fileStat.size,
-            sidecar,
-            dev: fileStat.dev,
-            ino: fileStat.ino,
-            nlink: fileStat.nlink
-          })
-        } catch (err) {
-          recordSessionScanIssue(args.issues, {
-            agent: args.agent,
-            path,
-            message: errorMessage(err)
+            ...observation.file,
+            modifiedAt: modifiedAt.toISOString()
           })
         }
+      } catch (err) {
+        recordSessionScanIssue(args.issues, {
+          agent: args.agent,
+          path: observation.file.path,
+          message: errorMessage(err)
+        })
       }
+    }
+    noteAiVaultScanWorkChanged(args.signal)
+  }
+
+  async function finishPending(): Promise<void> {
+    if (pending) {
+      consume(await pending)
+      pending = null
+    }
+  }
+
+  function queueNativeFile(path: string): void | Promise<void> {
+    paths.push(path)
+    if (paths.length < NATIVE_DISCOVERY_BATCH_SIZE) {
+      return
+    }
+    return finishPending().then(() => {
+      pending = readBatch(paths)
+      paths = []
+    })
+  }
+
+  async function readBatch(batch: readonly string[]): Promise<SessionFileObservation[]> {
+    const groups: string[][] = []
+    const groupSize = Math.ceil(batch.length / NATIVE_DISCOVERY_CONCURRENCY)
+    for (let index = 0; index < batch.length; index += groupSize) {
+      groups.push(batch.slice(index, index + groupSize))
+    }
+    const observations = await mapWithConcurrency(groups, NATIVE_DISCOVERY_CONCURRENCY, (group) =>
+      withNativeDiscoverySlot(async () => {
+        const files: SessionFileObservation[] = []
+        // Breaks rather than throws: `pending` is not awaited until the next
+        // batch, and `consume` reports the cancel when it is.
+        for (const path of group) {
+          if (args.signal?.aborted) {
+            break
+          }
+          files.push(await observeSessionFile(path, args.contentDependencyPath, args.signal))
+        }
+        return files
+      })
     )
+    return observations.flat()
+  }
+
+  async function readDirectory(path: string): Promise<Dirent[]> {
+    const entries = native
+      ? await withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan', args.signal))
+      : await wslGatedReaddir(path, 'scan', args.signal)
+    // A listed root is a history folder being walked; a missing one never shows.
+    if (path === args.rootDir) {
+      source.close = openAiVaultScanSource(args.signal, args.agent)
+    }
+    return entries
+  }
+
+  try {
+    try {
+      await forEachSessionFile(
+        args.rootDir,
+        args.agent,
+        args.issues,
+        {
+          extensions: new Set(args.extensions),
+          filePredicate: args.filePredicate,
+          directoryPredicate: args.directoryPredicate,
+          signal: args.signal,
+          readDirectory
+        },
+        native
+          ? queueNativeFile
+          : async (path) =>
+              consume([await observeSessionFile(path, args.contentDependencyPath, args.signal)])
+      )
+    } finally {
+      // One read batch overlaps directory traversal; commit in traversal order.
+      await finishPending()
+      if (paths.length) {
+        consume(await readBatch(paths))
+      }
+    }
   } catch (err) {
+    throwIfAiVaultScanCancelled(args.signal)
     // Why: discoverAiVaultSessionSources fans out with Promise.all, so one
     // stalled distro would otherwise reject the whole vault scan — including
     // every healthy local agent. Contain it to this root.
@@ -78,8 +183,36 @@ export async function discoverFiles(args: {
       message: err.message
     })
     return { agent: args.agent, rootDir: args.rootDir, files: [] }
+  } finally {
+    source.close()
   }
   return { agent: args.agent, rootDir: args.rootDir, files: files.newest() }
+}
+
+async function observeSessionFile(
+  path: string,
+  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>,
+  signal?: AbortSignal
+): Promise<SessionFileObservation> {
+  try {
+    const fileStat = await wslGatedStat(path, 'scan', signal)
+    const sidecarPath = contentDependencyPath ? await contentDependencyPath(path) : undefined
+    const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath, signal) : 'none'
+    return {
+      file: {
+        path,
+        mtimeMs: fileStat.mtimeMs,
+        sizeBytes: fileStat.size,
+        sidecar,
+        dev: fileStat.dev,
+        ino: fileStat.ino,
+        nlink: fileStat.nlink
+      },
+      sidecarPath
+    }
+  } catch (err) {
+    return { issue: { path, message: errorMessage(err) } }
+  }
 }
 
 /**
@@ -90,14 +223,19 @@ export async function discoverFiles(args: {
  * a stalled WSL distro, EACCES, EIO — is `'unknown'`.
  */
 async function observeSessionSidecar(
-  filePath: string | undefined
+  filePath: string | undefined,
+  signal?: AbortSignal
 ): Promise<SessionSidecarObservation> {
   if (!filePath) {
     return 'none'
   }
   try {
-    const fileStat = await wslGatedStat(filePath, 'scan')
-    return { path: filePath, mtimeMs: fileStat.mtimeMs, sizeBytes: fileStat.size }
+    const fileStat = await wslGatedStat(filePath, 'scan', signal)
+    return {
+      path: filePath,
+      mtimeMs: fileStat.mtimeMs,
+      sizeBytes: fileStat.size
+    }
   } catch (error) {
     return isMissingSidecarError(error) ? 'none' : 'unknown'
   }
@@ -120,6 +258,7 @@ export type SessionFileWalkOptions = {
   // Return false to skip descending into a directory; depth 0 is a child of
   // rootDir, so pruned subtrees are never stat'd or parsed.
   directoryPredicate?: (name: string, depth: number) => boolean
+  strictErrors?: boolean
   readDirectory?: (dirPath: string) => Promise<Dirent[]>
   signal?: AbortSignal
 }
@@ -144,7 +283,7 @@ export async function forEachSessionFile(
   agent: AiVaultAgent,
   issues: AiVaultScanIssue[],
   options: SessionFileWalkOptions,
-  onFile: (path: string) => Promise<void>,
+  onFile: (path: string) => void | Promise<void>,
   depth = 0
 ): Promise<void> {
   options.signal?.throwIfAborted()
@@ -157,7 +296,7 @@ export async function forEachSessionFile(
     options.signal?.throwIfAborted()
     // Why: a gate refusal means the scan could not run, not that the tree is
     // empty — swallowing it would misreport a stalled distro as "no transcript".
-    if (error instanceof WslTranscriptFsError) {
+    if (error instanceof WslTranscriptFsError || (options.strictErrors && !isMissingSidecarError(error))) {
       throw error
     }
     return
@@ -179,7 +318,10 @@ export async function forEachSessionFile(
       options.extensions.has(extname(entry.name).toLowerCase()) &&
       (options.filePredicate?.(fullPath) ?? true)
     ) {
-      await onFile(fullPath)
+      const observation = onFile(fullPath)
+      if (observation) {
+        await observation
+      }
     }
   }
 }

@@ -5,7 +5,7 @@ import type { CreateWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-logic'
+import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-display-name'
 
 export function createFolderWorkspace(
   args: CreateWorktreeArgsWithSystemProvenance,

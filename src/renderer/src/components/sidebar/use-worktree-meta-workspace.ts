@@ -4,7 +4,7 @@ import {
   findIndexedWorktreeOwner,
   findIndexedWorktreeOwnerForHost
 } from '@/lib/worktree-runtime-owner-index'
-import { getFolderWorkspaceHostId } from '@/store/folder-workspaces/folder-workspace-catalog'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'

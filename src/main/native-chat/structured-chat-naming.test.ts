@@ -44,7 +44,7 @@ function rig(provider: 'claude' | 'codex') {
     getStore: () => ({ getRecord, compareAndSetConversationName: setConversationName }),
     getSettings: () => ({}),
     now: () => 100,
-    hasOpenDispatch: vi.fn(() => false),
+    workerTaskTitle: vi.fn(() => null),
     readFirstPrompt: vi.fn(async () => 'Please repair the login flow'),
     generate: vi.fn(async () => 'auth/login'),
     onNamed: vi.fn(),
@@ -104,21 +104,45 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     expect(state.deps.generate).not.toHaveBeenCalled()
   })
 
-  it.each(['missing', 'named', 'worker'] as const)('skips a %s record', async (kind) => {
+  it.each(['missing', 'named'] as const)('skips a %s record', async (kind) => {
     const state = rig(provider)
     const record = state.read()
     if (!record) {
       throw new Error('Missing fixture')
     }
-    if (kind === 'missing') {
-      state.replace(null)
-    } else if (kind === 'named') {
-      state.replace({ ...record, conversationName: 'Existing name' })
-    } else {
-      state.deps.hasOpenDispatch = () => true
-    }
+    state.replace(kind === 'missing' ? null : { ...record, conversationName: 'Existing name' })
     state.handle(state.summary, { replay: false })
     await settle()
+    expect(state.deps.readFirstPrompt).not.toHaveBeenCalled()
+    expect(state.deps.generate).not.toHaveBeenCalled()
+  })
+
+  it('names an orchestration worker after its task without generating', async () => {
+    const state = rig(provider)
+    state.deps.workerTaskTitle = () => ({ title: 'PR27814 final readiness review' })
+    state.handle(state.summary, { replay: false })
+    await settle()
+    expect(state.read()?.conversationName).toBe('PR27814 final readiness review')
+    expect(state.deps.onNamed).toHaveBeenCalledTimes(1)
+    expect(state.deps.readFirstPrompt).not.toHaveBeenCalled()
+    expect(state.deps.generate).not.toHaveBeenCalled()
+  })
+
+  it('leaves a worker unnamed when naming is off', async () => {
+    const state = rig(provider)
+    state.deps.workerTaskTitle = () => ({ title: 'PR27814 final readiness review' })
+    state.deps.getSettings = () => ({ nativeChatAutoName: false })
+    state.handle(state.summary, { replay: false })
+    await settle()
+    expect(state.read()?.conversationName).toBeUndefined()
+  })
+
+  it('does not generate from a worker preamble when its task has no usable title', async () => {
+    const state = rig(provider)
+    state.deps.workerTaskTitle = () => ({ title: '' })
+    state.handle(state.summary, { replay: false })
+    await settle()
+    expect(state.read()?.conversationName).toBeUndefined()
     expect(state.deps.readFirstPrompt).not.toHaveBeenCalled()
     expect(state.deps.generate).not.toHaveBeenCalled()
   })

@@ -1,19 +1,9 @@
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { toWindowsWslPath } from '../wsl'
-import { runWslProcess } from '../wsl/wsl-runner'
-import type { CapturedClaudeAuth } from './claude-auth-capture'
+import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../shared/claude-sign-in-link'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
-import type { ClaudeManagedAuthLocation } from './claude-managed-auth-storage'
-import {
-  deleteActiveClaudeKeychainCredentialsStrict,
-  readActiveClaudeKeychainCredentials,
-  writeActiveClaudeKeychainCredentials
-} from './keychain'
+import { prepareClaudeSignInBrowser, type ClaudeSignInBrowser } from './claude-sign-in-browser'
 
-const LOGIN_TIMEOUT_MS = 180_000
-const STATUS_TIMEOUT_MS = 20_000
+// Why 10 minutes: copying the link into a private window takes longer than one click.
+const LOGIN_TIMEOUT_MS = 600_000
 
 type ClaudeLoginSessionDependencies = {
   runCommand: (
@@ -22,20 +12,21 @@ type ClaudeLoginSessionDependencies = {
     timeoutMs: number,
     options?: ClaudeCommandOptions
   ) => Promise<string>
-  capture: (
-    configDir: string,
-    statusOutput: string,
-    previousLegacyKeychain: string | null
-  ) => Promise<CapturedClaudeAuth>
   setCancel: (cancel: (() => boolean) | null) => void
+  /** Opens a WSL login's sign-in link on this computer; absent where Orca cannot open one. */
+  openWslSignInLink?: ((signInLink: string) => void) | null
 }
 
+/** Runs a hidden `claude auth login` that writes its login straight into the account's folder.
+ *  With `onLink`, no browser opens: the sign-in link goes there, and no link ends the sign-in. */
 export async function runClaudeLoginSession(
-  location: ClaudeManagedAuthLocation,
-  dependencies: ClaudeLoginSessionDependencies
-): Promise<CapturedClaudeAuth> {
-  const tempConfig = await createTemporaryClaudeConfigDir(location)
+  folder: ClaudeCommandConfig,
+  dependencies: ClaudeLoginSessionDependencies,
+  onLink?: (signInLink: string) => void
+): Promise<void> {
   const controller = new AbortController()
+  const watch = new AbortController()
+  let linkMissing = false
   dependencies.setCancel(() => {
     if (controller.signal.aborted) {
       return false
@@ -43,107 +34,65 @@ export async function runClaudeLoginSession(
     controller.abort()
     return true
   })
-  const previousLegacyKeychain = await readActiveClaudeKeychainCredentials()
-  let captured: CapturedClaudeAuth | null = null
-  let captureError: unknown = null
-  let cleanupError: unknown = null
   try {
-    if (controller.signal.aborted) {
-      throw new Error('Claude sign-in was cancelled.')
-    }
-    await dependencies.runCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS, {
-      signal: controller.signal,
-      keepStdinOpen: true
+    // Why: stock distros have no xdg-open, wslview or BROWSER, so Claude in WSL opens nothing.
+    const openLink =
+      !onLink && folder.linuxPath !== null && folder.wslDistro !== null
+        ? (dependencies.openWslSignInLink ?? undefined)
+        : undefined
+    // Why: if setup fails this throws; falling back would let Claude open the browser the user avoided.
+    const browser = onLink
+      ? await prepareClaudeSignInBrowser(folder)
+      : openLink
+        ? await prepareOpenerBrowser(folder)
+        : null
+    const deliverLink = onLink ?? openLink
+    // Why both signals: a cancelled login must not open a tab for a link Claude wrote as it died.
+    const stopped = AbortSignal.any([watch.signal, controller.signal])
+    // Why the full login window: auto-open never ends the login, and a cold distro can be slow.
+    const waitMs = onLink ? undefined : LOGIN_TIMEOUT_MS
+    void browser?.nextLink(stopped, waitMs).then((signInLink) => {
+      if (stopped.aborted) {
+        return
+      }
+      if (signInLink) {
+        deliverLink?.(signInLink)
+        return
+      }
+      if (onLink) {
+        linkMissing = true
+        controller.abort()
+      } else {
+        // Why not end it: the login stays cancellable and Copy link remains the fallback.
+        console.warn('[claude-accounts] Claude handed over no WSL sign-in link to open.')
+      }
     })
-    dependencies.setCancel(null)
-    const status = await dependencies.runCommand(
-      ['auth', 'status', '--json'],
-      tempConfig,
-      STATUS_TIMEOUT_MS,
-      { allowFailure: true }
-    )
-    captured = await dependencies.capture(tempConfig.windowsPath, status, previousLegacyKeychain)
-  } catch (error) {
-    captureError = error
-  } finally {
-    if (process.platform === 'darwin') {
-      try {
-        await deleteActiveClaudeKeychainCredentialsStrict(tempConfig.windowsPath)
-      } catch (error) {
-        console.warn('[claude-accounts] Failed to clean temporary Claude Keychain item:', error)
-      }
-      try {
-        await (previousLegacyKeychain
-          ? writeActiveClaudeKeychainCredentials(previousLegacyKeychain)
-          : deleteActiveClaudeKeychainCredentialsStrict())
-      } catch (error) {
-        cleanupError = error
-      }
-    }
-    await removeTemporaryClaudeConfigDir(tempConfig)
-    dependencies.setCancel(null)
-  }
-  if (captureError) {
-    throw captureError
-  }
-  if (cleanupError) {
-    throw cleanupError
-  }
-  return captured!
-}
-
-async function createTemporaryClaudeConfigDir(
-  location: ClaudeManagedAuthLocation
-): Promise<ClaudeCommandConfig> {
-  if (location.managedAuthRuntime !== 'wsl') {
-    const created = mkdtempSync(join(tmpdir(), 'orca-claude-login-'))
-    let windowsPath = created
     try {
-      windowsPath = realpathSync(created)
-    } catch {
-      // Keep the mkdtemp path if the temp root cannot be resolved.
-    }
-    return {
-      windowsPath,
-      linuxPath: null,
-      wslDistro: null
-    }
-  }
-  if (!location.wslDistro) {
-    throw new Error('Could not resolve the active WSL distribution for Claude login.')
-  }
-  const created = await runWslProcess({
-    distro: location.wslDistro,
-    loginPath: 'none',
-    shell: 'bash',
-    script: 'mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"',
-    timeoutMs: 5000
-  })
-  const linuxPath = created.stdout.replaceAll(String.fromCharCode(0), '').trim()
-  if (created.code !== 0 || created.timedOut || !linuxPath.startsWith('/')) {
-    throw new Error('Could not create a temporary WSL Claude login directory.')
-  }
-  return {
-    windowsPath: toWindowsWslPath(linuxPath, location.wslDistro),
-    linuxPath,
-    wslDistro: location.wslDistro
-  }
-}
-
-async function removeTemporaryClaudeConfigDir(config: ClaudeCommandConfig): Promise<void> {
-  if (config.linuxPath && config.wslDistro) {
-    try {
-      await runWslProcess({
-        distro: config.wslDistro,
-        loginPath: 'none',
-        program: 'rm',
-        args: ['-rf', '--', config.linuxPath],
-        timeoutMs: 5000
+      await dependencies.runCommand(['auth', 'login', '--claudeai'], folder, LOGIN_TIMEOUT_MS, {
+        signal: controller.signal,
+        keepStdinOpen: true,
+        browser: browser?.path
       })
-    } catch {
-      // Cleanup cannot mask the login result.
+    } catch (error) {
+      throw linkMissing ? new Error(CLAUDE_SIGN_IN_FAILED_MESSAGE) : error
+    } finally {
+      watch.abort()
+      await browser?.dispose().catch((error: unknown) => {
+        console.warn('[claude-accounts] Could not remove the Claude sign-in browser:', error)
+      })
     }
-    return
+  } finally {
+    dependencies.setCancel(null)
   }
-  rmSync(config.windowsPath, { recursive: true, force: true })
+}
+
+// Why null on failure: an auto-open that cannot be set up leaves the login as it was before.
+async function prepareOpenerBrowser(
+  folder: ClaudeCommandConfig
+): Promise<ClaudeSignInBrowser | null> {
+  try {
+    return await prepareClaudeSignInBrowser(folder)
+  } catch {
+    return null
+  }
 }

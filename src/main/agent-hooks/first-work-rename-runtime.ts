@@ -5,13 +5,24 @@ import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './first-work-folder-rename'
 import { moveWorktree } from '../git/worktree'
+import { isWslMoveFolderWorkspaceBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 const ENABLE_FIRST_WORK_FOLDER_RENAME = false
 
 export function firstWorkRenameDeps(
-  store: Store,
+  store: Pick<
+    RuntimeStore,
+    | 'getSettings'
+    | 'getRepo'
+    | 'getWorktreeMeta'
+    | 'setWorktreeMeta'
+    | 'getFolderWorkspace'
+    | 'updateFolderWorkspace'
+  > &
+    Partial<Pick<Store, 'migrateWorktreeIdentity' | 'getWorktreeIdForTab'>>,
   runtime: Pick<
     OrcaRuntimeService,
     | 'getCommitMessageAgentEnvironmentResolvers'
@@ -27,19 +38,26 @@ export function firstWorkRenameDeps(
     getCurrentDisplayName: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
       return scope?.type === 'folder'
-        ? store.getFolderWorkspace(scope.folderWorkspaceId)?.name
+        ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.name
         : store.getWorktreeMeta(worktreeId)?.displayName
     },
     getFolderWorkspacePath: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
       return scope?.type === 'folder'
-        ? store.getFolderWorkspace(scope.folderWorkspaceId)?.folderPath
+        ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.folderPath
         : undefined
+    },
+    isFolderWorkspaceWslMoveBlocked: (worktreeId) => {
+      const scope = parseWorkspaceKey(worktreeId)
+      const folder =
+        scope?.type === 'folder' ? store.getFolderWorkspace!(scope.folderWorkspaceId) : undefined
+      return !!folder && isWslMoveFolderWorkspaceBlocked(folder)
     },
     isPendingFirstAgentMessageRename: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
       return scope?.type === 'folder'
-        ? store.getFolderWorkspace(scope.folderWorkspaceId)?.pendingFirstAgentMessageRename === true
+        ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.pendingFirstAgentMessageRename ===
+            true
         : store.getWorktreeMeta(worktreeId)?.pendingFirstAgentMessageRename === true
     },
     canRenameOrcaCreatedBranch: (worktreeId) => {
@@ -51,7 +69,7 @@ export function firstWorkRenameDeps(
       rememberBranchRenameFailureOutput(worktreeId, null)
       const scope = parseWorkspaceKey(worktreeId)
       if (scope?.type === 'folder') {
-        store.updateFolderWorkspace(scope.folderWorkspaceId, {
+        store.updateFolderWorkspace!(scope.folderWorkspaceId, {
           name: displayName,
           pendingFirstAgentMessageRename: false,
           firstAgentMessageRenameError: null
@@ -74,7 +92,7 @@ export function firstWorkRenameDeps(
           renameWorktreeFolderOnFirstWork(worktreeId, newLeaf, {
             getRepo: (repoId) => store.getRepo(repoId),
             getSettings: () => store.getSettings(),
-            migrateWorktreeIdentity: (oldId, newId) => store.migrateWorktreeIdentity(oldId, newId),
+            migrateWorktreeIdentity: (oldId, newId) => store.migrateWorktreeIdentity!(oldId, newId),
             notifyWorktreeRenamed: (repoId, oldId, newId) =>
               runtime.notifyWorktreeFolderRenamed(repoId, oldId, newId),
             pathExists: async (candidate) => existsSync(candidate),
@@ -87,13 +105,13 @@ export function firstWorkRenameDeps(
       // Skip the write + push when unchanged — most settled worktrees never had an error to clear.
       const scope = parseWorkspaceKey(worktreeId)
       if (scope?.type === 'folder') {
-        const current = store.getFolderWorkspace(
+        const current = store.getFolderWorkspace!(
           scope.folderWorkspaceId
         )?.firstAgentMessageRenameError
         if ((current ?? null) === (error ?? null)) {
           return
         }
-        store.updateFolderWorkspace(scope.folderWorkspaceId, {
+        store.updateFolderWorkspace!(scope.folderWorkspaceId, {
           firstAgentMessageRenameError: error
         })
         runtime.notifyFolderWorkspaceChanged()
@@ -107,7 +125,7 @@ export function firstWorkRenameDeps(
       // Why: the hook only knows the worktreeId, so derive the repoId notifyBranchRenamed expects.
       runtime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
     },
-    resolveWorktreeIdForTab: (tabId) => store.getWorktreeIdForTab(tabId),
+    resolveWorktreeIdForTab: (tabId) => store.getWorktreeIdForTab!(tabId),
     onRenamed: (repoIdOrWorktreeId) => {
       if (parseWorkspaceKey(repoIdOrWorktreeId)?.type === 'folder') {
         runtime.notifyFolderWorkspaceChanged()

@@ -11,12 +11,11 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     expect(tracker.flags).toBe(0)
   })
 
-  // Why: the main-process capture provider is @ts-nocheck and scans a snapshot
-  // field older providers omit, so a nullish chunk must stay a no-op.
+  // Missing snapshot data must not reset already observed mode flags.
   it('treats a nullish chunk as a no-op', () => {
     const tracker = new TerminalKittyKeyboardModeTracker()
     tracker.scan('\x1b[>5u')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reproduces the unchecked call site that passes an absent field.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliberately passes absent snapshot data to verify the runtime guard.
     const absent = undefined as unknown as string
     expect(() => tracker.scan(absent)).not.toThrow()
     expect(() => tracker.scanReplay(absent)).not.toThrow()

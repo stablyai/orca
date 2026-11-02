@@ -103,11 +103,8 @@ export function runQuickCommandInNewTab({
   }
   const store = useAppStore.getState()
   const tab = store.createTab(worktreeId, targetGroupId, undefined, {
-    quickCommandLabel: command.label
-  })
-
-  store.queueTabStartupCommand(tab.id, {
-    command: flattenTerminalQuickCommand(command).command
+    quickCommandLabel: command.label,
+    pendingStartup: { command: flattenTerminalQuickCommand(command).command }
   })
 
   // Why: match `+` button's createNewTerminalTab — without this, a worktree

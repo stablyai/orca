@@ -1,8 +1,9 @@
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
-import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-watch-client'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export function subscribeEditorRuntimeFileWatch(
   target: EditorExternalWatchTarget & { runtimeEnvironmentId: string },
@@ -23,7 +24,7 @@ export function subscribeEditorRuntimeFileWatch(
     const isCurrent = (): boolean => !disposed && attempt === currentAttempt
     void subscribeRuntimeFileChanges(
       {
-        settings: { activeRuntimeEnvironmentId: target.runtimeEnvironmentId },
+        target: runtimeTargetForOwnerEnvironment(target.runtimeEnvironmentId),
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
         connectionId: target.connectionId

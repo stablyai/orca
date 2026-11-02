@@ -20,7 +20,6 @@ export type PanePtyBinding = IDisposable & {
   requestWindowsShiftEnterReconfirmation: () => void
   /** Refresh interactive redraw scheduling after captured shortcut input. */
   markShortcutTerminalInputSent: () => void
-  reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
   /** This session fresh-spawned the PTY (onPtySpawn fired for it) and never
    *  sent terminal input — the sole-newborn diagnostic case pty-exit-hibernate

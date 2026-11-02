@@ -80,22 +80,6 @@ export type WorkspaceSessionWrite = {
   patch: WorkspaceSessionPatch
 }
 
-/**
- * Why the two are one unit and not two optional callbacks: a gate can reopen on a wall clock (the
- * direct-SSH apply's suppression tail) with no store update behind it. A caller that supplies the
- * gate but no wake-up would strand every write deferred in that window until some unrelated
- * mutation happened along — the failure this deferral exists to prevent. Pairing them in the type
- * makes that combination unwriteable rather than merely discouraged.
- */
-type SessionWritePersistGate =
-  | { shouldSchedulePersist?: undefined; subscribeToPersistGateOpen?: undefined }
-  | {
-      /** False defers the write; it never drops it. */
-      shouldSchedulePersist: () => boolean
-      /** Called when the gate may have reopened. Returns an unsubscribe. */
-      subscribeToPersistGateOpen: (onGateOpen: () => void) => () => void
-    }
-
 export type SessionWriteSubscriberDeps = {
   store: {
     subscribe: (listener: (state: AppState) => void) => () => void
@@ -104,7 +88,7 @@ export type SessionWriteSubscriberDeps = {
   persist: (payload: WorkspaceSessionWrite) => void | Promise<void>
   onPersistError?: (error: unknown) => void
   debounceMs?: number
-} & SessionWritePersistGate
+}
 
 /**
  * Why: factored out so a vitest can drive the real Zustand store and assert
@@ -116,8 +100,6 @@ export function createSessionWriteSubscriber({
   store,
   persist,
   onPersistError,
-  shouldSchedulePersist,
-  subscribeToPersistGateOpen,
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -142,7 +124,6 @@ export function createSessionWriteSubscriber({
   const pendingChangedFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
-
   const flushPendingWrite = (): void => {
     timer = null
     if (disposed || writing || pendingChangedFields.size === 0) {
@@ -157,13 +138,9 @@ export function createSessionWriteSubscriber({
     // builder — without this, such a change would silently start emitting
     // stale values for that field.
     const fresh = store.getState()
-    // Why: a closed gate defers, it never discards. Returning with the pending set intact leaves
-    // the write owed; the next store update or gate-open wake-up re-arms it. Nothing re-arms from
-    // here, so a gate that never reopens costs no timer.
+    // Why: a closed shouldPersistWorkspaceSession defers, never discards. The pending set stays, so
+    // the next store update re-arms the write; nothing re-arms here, so staying closed costs no timer.
     if (!shouldPersistWorkspaceSession(fresh)) {
-      return
-    }
-    if (shouldSchedulePersist && !shouldSchedulePersist()) {
       return
     }
     const changed = new Set(pendingChangedFields)
@@ -182,7 +159,7 @@ export function createSessionWriteSubscriber({
         for (const field of changed) {
           pendingChangedFields.add(field)
         }
-        // A rejection waits for the next store/gate wake, not a retry loop.
+        // A rejection waits for the next store wake, not a retry loop.
         onPersistError?.(error)
       } else if (pendingChangedFields.size > 0) {
         armFlushTimer()
@@ -250,9 +227,6 @@ export function createSessionWriteSubscriber({
       if (pendingChangedFields.size === 0) {
         return
       }
-      if (shouldSchedulePersist && !shouldSchedulePersist()) {
-        return
-      }
       // An unrelated update may wake a deferred write but must never reset an armed debounce.
       if (timer !== null) {
         return
@@ -284,9 +258,6 @@ export function createSessionWriteSubscriber({
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }
-    if (shouldSchedulePersist && !shouldSchedulePersist()) {
-      return
-    }
     // Why: an unrelated update may wake a deferred write but must never reset an armed debounce —
     // that reset storm is exactly what the changed-field gate above exists to prevent.
     if (timer !== null && changedFields.length === 0) {
@@ -302,17 +273,9 @@ export function createSessionWriteSubscriber({
   evaluateSessionState(store.getState())
   const unsub = store.subscribe(evaluateSessionState)
 
-  const unsubGateOpen = subscribeToPersistGateOpen?.(() => {
-    if (pendingChangedFields.size === 0 || timer !== null) {
-      return
-    }
-    armFlushTimer()
-  })
-
   return () => {
     disposed = true
     unsub()
-    unsubGateOpen?.()
     if (timer !== null) {
       clearTimeout(timer)
     }

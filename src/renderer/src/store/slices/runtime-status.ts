@@ -1,6 +1,8 @@
-import type { StateCreator } from 'zustand'
-import type { AppState } from '../types'
-import type { RuntimeStatusSlice } from './runtime-status-types'
+import type {
+  RuntimeStatusSlice,
+  RuntimeStatusStoreSetState,
+  RuntimeStatusStoreState
+} from './runtime-status-types'
 export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -15,7 +17,7 @@ import {
   dismissRuntimeDisconnectedToast,
   showRuntimeDisconnectedToast
 } from './runtime-environment-disconnect-toast'
-import { reconcileCatalogRows } from './repo-identity-reconcile'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
@@ -40,10 +42,11 @@ export {
   setRuntimeEnvironmentConnectionGenerationForTests
 } from './runtime-status-connection-generation'
 
-export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeStatusSlice> = (
-  set,
-  get
-) => ({
+export const createRuntimeStatusSlice: (
+  set: RuntimeStatusStoreSetState,
+  get: () => RuntimeStatusStoreState,
+  store?: unknown
+) => RuntimeStatusSlice = (set, get) => ({
   runtimeEnvironments: [],
   runtimeEnvironmentCatalogHydrated: false,
   runtimeEnvironmentCatalogSettled: false,
@@ -145,6 +148,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
     for (const id of replacedEnvironmentIds) {
       clearRuntimeCompatibilityCache(id)
+      get().clearRuntimeDetectedAgents?.(id)
       get().markEnvironmentSshStateStale?.(id)
     }
     // Why: a same-id re-pair to another peer retires it as surely as a removal.

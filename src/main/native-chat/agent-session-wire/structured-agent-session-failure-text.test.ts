@@ -194,7 +194,7 @@ describe('structuredAgentSessionStartFailure', () => {
     ],
     [
       'accountSwitchInProgress',
-      'A Claude account switch is in progress. Try again after it finishes.'
+      "Claude's setup is changing on this host. Try again after it finishes."
     ],
     [
       'managedAccountUnsupported',

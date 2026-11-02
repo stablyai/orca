@@ -245,7 +245,6 @@ describe('agent status identity across every producer and consumer path', () => 
     try {
       installMainWindowAgentStatusListeners({
         window: window as never,
-        maybeAutoRenameBranchOnFirstWork: () => {},
         onRecordAgentState: () => {}
       })
       for (const listener of listeners) {

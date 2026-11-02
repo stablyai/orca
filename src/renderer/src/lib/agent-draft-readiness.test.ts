@@ -45,7 +45,7 @@ describe('waitForAgentDraftInputReady', () => {
     const primary = vi.fn()
 
     await expect(
-      waitForAgentDraftInputReady(PTY_ID, 20_000, 'codex-composer-prompt', {})
+      waitForAgentDraftInputReady(PTY_ID, 20_000, 'codex-composer-prompt')
     ).resolves.toBe(true)
     drainPreHandlerPtyData(PTY_ID, primary)
 
@@ -61,7 +61,7 @@ describe('waitForAgentDraftInputReady', () => {
     vi.useFakeTimers()
     vi.stubGlobal('window', globalThis)
     let settled: boolean | null = null
-    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row', {}).then(
+    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row').then(
       (ready) => (settled = ready)
     )
     testState.observer!(OPENCODE_BOX)
@@ -78,7 +78,7 @@ describe('waitForAgentDraftInputReady', () => {
     vi.useFakeTimers()
     vi.stubGlobal('window', globalThis)
     let settled: boolean | null = null
-    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row', {}).then(
+    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row').then(
       (ready) => (settled = ready)
     )
     await vi.advanceTimersByTimeAsync(19_000)
@@ -94,7 +94,7 @@ describe('waitForAgentDraftInputReady', () => {
     vi.useFakeTimers()
     vi.stubGlobal('window', globalThis)
     let settled: boolean | null = null
-    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row', {}).then(
+    void waitForAgentDraftInputReady(PTY_ID, 20_000, 'opencode-agent-row').then(
       (ready) => (settled = ready)
     )
     testState.observer!(OPENCODE_BOX)

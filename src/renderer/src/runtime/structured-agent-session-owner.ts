@@ -5,13 +5,12 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { Tab } from '../../../shared/tab-types'
-import {
-  getExecutionHostIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { resolveIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-import { runtimeTargetForExecutionHostId, type RuntimeClientTarget } from './runtime-client-target'
+import { runtimeRpcTargetForAuthorityKey } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /**
  * The one mapping from a chat's owning host to the runtime that serves it. Null for an owner no
@@ -21,10 +20,7 @@ export function structuredAgentSessionTargetForHost(
   executionHostId: string | null | undefined
 ): RuntimeClientTarget | null {
   const host = parseExecutionHostId(executionHostId)
-  if (!host || (host.kind === 'runtime' && host.environmentId === 'unresolved-owner')) {
-    return null
-  }
-  return runtimeTargetForExecutionHostId(host.id)
+  return host ? runtimeRpcTargetForAuthorityKey(host.id) : null
 }
 
 /**

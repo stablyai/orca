@@ -30,7 +30,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
   }
 })
 
-vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
@@ -86,7 +86,7 @@ vi.mock('@/lib/launch-agent-in-new-tab', async () => {
 })
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
+import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { runSourceControlAgentActionStart } from '@/components/right-sidebar/runSourceControlAgentActionStart'
 import {
   getStructuredAgentLaunchStatus,

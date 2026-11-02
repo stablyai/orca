@@ -10,29 +10,31 @@ import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/ime-text-field'
 
-const commandSurfaceVariants = cva('', {
+const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded-md', {
   variants: {
     surface: {
       default: 'bg-popover text-popover-foreground',
       inline: 'bg-transparent text-foreground'
+    },
+    density: {
+      default: '',
+      // Why: matches DropdownMenuItem type so a searchable picker reads like its sibling menus.
+      menu: '[&_[cmdk-empty]]:text-[12px] [&_[cmdk-input-wrapper]_svg]:size-3.5 [&_[cmdk-input]]:h-8 [&_[cmdk-input]]:text-[12px] [&_[cmdk-item]]:rounded-md [&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px] [&_[cmdk-item]]:leading-[17px] [&_[cmdk-item]]:font-[450]'
     }
   },
-  defaultVariants: { surface: 'default' }
+  defaultVariants: { surface: 'default', density: 'default' }
 })
 
 function Command({
   className,
   surface,
+  density,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive> & VariantProps<typeof commandSurfaceVariants>) {
+}: React.ComponentProps<typeof CommandPrimitive> & VariantProps<typeof commandVariants>) {
   return (
     <CommandPrimitive
       data-slot="command"
-      className={cn(
-        'flex h-full w-full flex-col overflow-hidden rounded-md',
-        commandSurfaceVariants({ surface }),
-        className
-      )}
+      className={cn(commandVariants({ surface, density }), className)}
       {...props}
     />
   )

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyTerminalGitCredentialPromptGuard,
   TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV
-} from './terminal-git-credential-guard'
+} from '../../shared/terminal-git-credential-guard'
 
 function expectGuarded(env: Record<string, string>): void {
   expect(env.GIT_TERMINAL_PROMPT).toBe('0')
@@ -13,6 +13,14 @@ function expectGuarded(env: Record<string, string>): void {
 }
 
 describe('applyTerminalGitCredentialPromptGuard', () => {
+  it.each(['win32', 'darwin', 'linux'] as const)('guards a delayed agent on %s', (platform) => {
+    const env: Record<string, string> = {}
+    expect(
+      applyTerminalGitCredentialPromptGuard(env, { launchCommand: 'sleep 30 && claude', platform })
+    ).toBe(true)
+    expectGuarded(env)
+  })
+
   it('guards an agent terminal on every platform', () => {
     for (const platform of ['win32', 'darwin', 'linux'] as const) {
       const env: Record<string, string> = { PATH: '/usr/bin' }

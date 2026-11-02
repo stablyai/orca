@@ -1,4 +1,6 @@
 import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
+import { workspaceRouteHref } from '../navigation/workspace-execution-host'
+import { taskRepoServer } from './task-repo-host-routing'
 import { settingsRead } from '../transport/settings-read-operations'
 import type { WorkspaceSshStateModel } from './use-mobile-tasks-workspace-ssh-state'
 import {
@@ -267,11 +269,14 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         // The shared builder, not a template: it encodes the host id, which this did not, and a
         // host id carrying `/`, `#` or whitespace reaches the wire as an href the bridge refuses.
         router.push(
-          hostNewWorktreeSessionRoute(
-            hostId,
-            result.worktree.id,
-            result.worktree.displayName ?? item.title,
-            result.warning
+          workspaceRouteHref(
+            hostNewWorktreeSessionRoute(
+              hostId,
+              result.worktree.id,
+              result.worktree.displayName ?? item.title,
+              result.warning
+            ),
+            taskRepoServer(targetRepo)
           )
         )
       } catch (err) {

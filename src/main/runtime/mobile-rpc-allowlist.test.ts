@@ -110,6 +110,29 @@ function registeredRuntimeMethods(): Set<string> {
 }
 
 describe('mobile RPC allowlist', () => {
+  it('grants Jira reads while keeping credentials, writes, and desktop site selection private', () => {
+    const allowed = mobileRpcAllowlist()
+    for (const method of [
+      'jira.status',
+      'jira.listIssues',
+      'jira.searchIssues',
+      'jira.getIssue',
+      'jira.issueComments'
+    ]) {
+      expect(allowed.has(method), method).toBe(true)
+    }
+    for (const method of [
+      'jira.connect',
+      'jira.disconnect',
+      'jira.selectSite',
+      'jira.createIssue',
+      'jira.updateIssue',
+      'jira.addIssueComment'
+    ]) {
+      expect(allowed.has(method), method).toBe(false)
+    }
+  })
+
   it('allows every RPC method used by the mobile app', () => {
     // Why: mobile-scoped runtime tokens are checked before dispatch. A mobile
     // feature can compile and still fail at runtime if its method is missing here.
@@ -156,6 +179,8 @@ describe('mobile RPC allowlist', () => {
       'agentSession.cancel',
       'agentSession.queuedMessageSend',
       'agentSession.queuedMessageDelete',
+      'agentSession.queuedMessageUpdate',
+      'agentSession.queuedMessageEditHold',
       'agentSession.queuedMessagesResume',
       'agentSession.close',
       'agentSession.respondToApproval',
@@ -167,6 +192,7 @@ describe('mobile RPC allowlist', () => {
       'agentSession.conversationCommand',
       'agentSession.commands',
       'agentSession.history',
+      'agentSession.currentRequests',
       'agentSession.subscribe',
       'agentSession.unsubscribe',
       'agentSession.subscribeStatus',

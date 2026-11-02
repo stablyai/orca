@@ -20,13 +20,13 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   }
 }))
 
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
-  closeAllWatchers,
   closeRemoteWatcherForWorktreePath,
   forgetRemoteWatcherRemovalSnapshot,
-  registerFilesystemWatcherHandlers,
   restoreRemoteWatcherAfterFailedRemoval
-} from './filesystem-watcher'
+} from './filesystem-watcher-remote-removal'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 type TerminalErrorHandler = (error: Error) => void

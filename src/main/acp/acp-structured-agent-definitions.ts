@@ -19,6 +19,7 @@ export function isAcpStructuredOptionKey(key: string): boolean {
 
 /** What the host knows about an ACP agent before any of its sessions runs. */
 export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAgentDefinition {
+  const { managedRuntime } = spec
   return {
     agent: spec.agent,
     handleTransport: ACP_HANDLE_TRANSPORT,
@@ -35,6 +36,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       // Orca answers every permission request the agent sends; the agent decides when it asks.
       approvalEnforcement: 'orca'
     },
+    ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
     restingOptions: {
       acceptsKey: isAcpStructuredOptionKey,
       // The agent lists its models over the protocol once it runs; Orca keeps no list of its own.

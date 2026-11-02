@@ -1,6 +1,6 @@
 import type { UsageProvider } from '../usage/usage-provider-contract'
 import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
-import type { CodexUsageDailyAggregate, CodexUsagePersistedFile, CodexUsageSession } from './types'
+import type { CodexUsageDailyAggregate, CodexUsageSession } from './types'
 
 // Why: v5 keys Codex ownership on raw token_count identity without session id
 // so forks that rewrite session_meta still match. Older caches used session-
@@ -13,9 +13,4 @@ export const codexUsageProvider = {
   label: 'Codex',
   schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
   scan: scanCodexUsageFilesViaWorker
-} satisfies UsageProvider<
-  'processedFiles',
-  CodexUsagePersistedFile,
-  CodexUsageSession,
-  CodexUsageDailyAggregate
->
+} satisfies UsageProvider<CodexUsageSession, CodexUsageDailyAggregate>

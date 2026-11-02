@@ -16,6 +16,8 @@ import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import type { TerminalHostTombstones } from './terminal-host-tombstones'
 import type { TerminalSessionTeardown } from './terminal-session-teardown'
+import type { TerminalSpawnGate } from './terminal-spawn-gate'
+import type { LegacyRestoreDetails } from './legacy-restore-records'
 import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
@@ -29,6 +31,7 @@ type TerminalHostSessionCreateDependencies = {
   sessionTeardown: TerminalSessionTeardown
   killedTombstones: TerminalHostTombstones
   spawnSubprocess: TerminalHostOptions['spawnSubprocess']
+  spawnGate: TerminalSpawnGate | undefined
   onDeadSessionRemoved: (sessionId: string) => void
   onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
   onSessionExit: (sessionId: string, generation: string | undefined) => void
@@ -107,13 +110,42 @@ export async function createOrAttachTerminalSession(
   deps.killedTombstones.clearForCreate(opts.sessionId)
   const size = normalizePtySize(opts.cols, opts.rows)
   const wslDistro = resolveWslSessionContext(opts)?.distro
-  return await spawnAndPublishSession(opts, deps, { size, wslDistro })
+  const sessionId = opts.sessionId
+  let lease = deps.spawnGate?.admit(
+    {
+      clientId: opts.spawnAdmission?.clientId ?? 'in-process',
+      declaredIntent: opts.spawnAdmission?.declaredIntent ?? null,
+      hasAgentSessionClaim: opts.agentSessionEnsure !== undefined,
+      hasHistorySeed: (opts.historySeedChunks?.length ?? 0) > 0,
+      deadlineAt: opts.spawnAdmission?.deadlineAt ?? Number.POSITIVE_INFINITY
+    },
+    opts.cancelSignal
+      ? { signal: opts.cancelSignal, error: () => new TerminalAttachCanceledError(sessionId) }
+      : undefined,
+    describeAgentRestore(opts)
+  )
+  const paced = lease instanceof Promise
+  if (lease instanceof Promise) {
+    lease = await lease
+  }
+  try {
+    if (paced) {
+      // Why: a paced wait can outlast the host's shutdown fence or the caller's cancellation.
+      deps.assertCreateAllowed()
+    }
+    return await spawnAndPublishSession(opts, deps, { size, wslDistro }, (publishedId, isAlive) =>
+      lease?.commit(publishedId, isAlive)
+    )
+  } finally {
+    lease?.abandon()
+  }
 }
 
 async function spawnAndPublishSession(
   opts: InternalCreateOrAttachOptions,
   deps: TerminalHostSessionCreateDependencies,
-  ctx: { size: { cols: number; rows: number }; wslDistro: string | undefined }
+  ctx: { size: { cols: number; rows: number }; wslDistro: string | undefined },
+  onPublished: (sessionId: string, isAlive: boolean) => void
 ): Promise<CreateOrAttachResult> {
   const { size, wslDistro } = ctx
   // Why before the fork: the shell's own cwd may already have fallen back, so probe the requested path.
@@ -164,7 +196,8 @@ async function spawnAndPublishSession(
       deps.onSessionExit,
       opts.sessionId,
       opts.agentSessionGeneration,
-      () => discardStagedStartupCommand(staging)
+      () => discardStagedStartupCommand(staging),
+      deps.spawnGate
     ),
     ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
@@ -175,17 +208,21 @@ async function spawnAndPublishSession(
   if (opts.isCanceled?.()) {
     // Retain cleanup ownership if the native child refuses to exit.
     deps.sessions.set(opts.sessionId, session)
+    // Why: a child that refuses to die stays charged against the live cap until it is reaped.
+    onPublished(opts.sessionId, session.isAlive)
     await session.forceKillAndDisposeSubprocess()
     if (deps.sessions.get(opts.sessionId) === session) {
       session.dispose()
       deps.sessions.delete(opts.sessionId)
       deps.onDeadSessionRemoved(opts.sessionId)
+      deps.spawnGate?.onSessionExit(opts.sessionId)
     }
     throw new TerminalAttachCanceledError(opts.sessionId)
   }
 
   deps.sessions.set(opts.sessionId, session)
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
+  onPublished(opts.sessionId, session.isAlive)
   const token = session.attachClient(opts.streamClient)
 
   const startupCommandWritten =
@@ -246,11 +283,30 @@ function createSessionExitHandler(
   onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
   sessionId: string,
   generation: string | undefined,
-  discardStagedCommand: () => void
+  discardStagedCommand: () => void,
+  spawnGate: TerminalSpawnGate | undefined
 ): () => void {
   return () => {
     discardStagedCommand()
+    spawnGate?.onSessionExit(sessionId)
     onSessionExit(sessionId, generation)
+  }
+}
+
+/** What an agent launch resumes, never its environment, which can carry credentials. */
+function describeAgentRestore(
+  opts: InternalCreateOrAttachOptions
+): LegacyRestoreDetails | undefined {
+  if (!opts.command || (!opts.launchAgent && !opts.agentSessionEnsure)) {
+    return undefined
+  }
+  return {
+    sessionId: opts.sessionId,
+    agent: opts.launchAgent ?? opts.agentSessionEnsure?.claim.agent ?? null,
+    cwd: opts.cwd ?? null,
+    worktreeId: opts.agentSessionEnsure?.surface.worktreeId ?? null,
+    command: opts.command,
+    identityDigest: opts.agentSessionEnsure?.claim.identityDigest ?? null
   }
 }
 

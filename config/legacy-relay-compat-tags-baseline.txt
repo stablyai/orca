@@ -1,0 +1,42 @@
+# Files outside src/main/ssh/legacy-relay/ tagged COMPAT(legacy-relay-bridge). RATCHET: may only SHRINK.
+# Each tag marks code the relay retirement (2027-01-15) deletes or edits.
+# Prune: pnpm check:legacy-relay-fence-ratchet --prune
+config/scripts/pr-code-change-scope.mjs
+config/scripts/pr-e2e-source-routing.mjs
+src/main/ipc/ssh/ssh-connect-flow.ts
+src/main/ipc/ssh/ssh-host-server-connect.ts
+src/main/ipc/ssh/ssh-host-server-on-connect-wiring.test.ts
+src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
+src/main/ipc/ssh/ssh-session-teardown.ts
+src/main/ipc/ssh/ssh.ts
+src/main/runtime/orchestration/terminal-authority/verify-orchestration-compatibility-caller.ts
+src/main/runtime/runtime-terminal-contracts.ts
+src/main/ssh/orcad-migration-delta-move.test.ts
+src/main/ssh/orcad-migration-delta-move.ts
+src/main/ssh/orcad-migration-repository-link.test.ts
+src/main/ssh/orcad-migration-terminal-gate-host-wide.test.ts
+src/main/ssh/orcad-migration-terminal-gate.test.ts
+src/main/ssh/orcad-migration-terminal-gate.ts
+src/main/managed-server/lifecycle/orcad-runtime-conversion.test.ts
+src/main/ssh/ssh-host-server-on-connect.test.ts
+src/main/ssh/ssh-host-server-on-connect.ts
+src/main/ssh/ssh-target-orcad-preflight.ts
+src/preload/api-types.ts
+src/preload/api/legacy-relay-bridge-api.ts
+src/renderer/src/components/terminal-pane/legacy-relay-bridge-panes.ts
+src/renderer/src/components/terminal-pane/legacy-relay-bridge-transport.ts
+src/renderer/src/components/terminal-pane/pty-connection/foreground-output-refresh.ts
+src/renderer/src/components/terminal-pane/pty-connection/unserved-ssh-pane-connect.ts
+src/renderer/src/hooks/ipc-events/ssh-managed-server-state-effects.ts
+src/renderer/src/runtime/web-runtime-session-legacy-relay-bridged-activation.test.ts
+src/renderer/src/store/terminals/legacy-relay-bridged-tab-close.ts
+src/shared/legacy-relay-bridge-contract.ts
+src/shared/ssh-types.ts
+src/shared/telemetry-ssh-host-server-event-schemas.ts
+tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
+tests/e2e/cross-version-wire/released-relay-daemon.ts
+tests/e2e/cross-version-wire/released-relay-transport.ts
+tests/e2e/helpers/build-released-relay-bundle.mts
+tests/e2e/helpers/legacy-relay-docker-host.ts
+tests/e2e/helpers/orcad-upgrade-profile.ts
+tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts

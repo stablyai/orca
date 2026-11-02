@@ -9,7 +9,7 @@
  * confirmed on the surviving row carried the wrong host.
  */
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { repo, worktree } from './worktree-list-groups-test-fixtures'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'

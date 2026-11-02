@@ -25,6 +25,7 @@ import {
   readPairedPaneContent,
   waitForPairedPaneMarker
 } from './helpers/paired-host-terminal'
+import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
 
 const LINE_COUNT = 300
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-initial-scrollback-'))
@@ -48,7 +49,7 @@ function fixtureCommand(): string {
   const command = [process.execPath, fixturePath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map((value) => `'${value.replaceAll("'", `'\\''`)}'`).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 test('a desktop client opening a remote terminal receives its scrollback, not just the screen', async ({

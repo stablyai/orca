@@ -9,18 +9,15 @@ import {
   getCommitMessageModelDiscoveryHostKeyForScope,
   LOCAL_COMMIT_MESSAGE_HOST_KEY
 } from '../../../../shared/commit-message-host-key'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 import { hasExplicitTuiLaunchCommand } from '../../../../shared/tui-agent-launch-command-override'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getLocalProjectExecutionRuntimeContext,
   getWslDistroFromPath
 } from '@/lib/local-preflight-context'
-import {
-  discoverRuntimeCommitMessageModels,
-  getRuntimeGitScope,
-  type RuntimeGitContext
-} from '@/runtime/runtime-git-client'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
+import { getRuntimeGitScope, type RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type {
   AgentSessionModelCatalogResult,
@@ -63,13 +60,20 @@ export function resolveNativeChatModelDiscoveryContext(
   if (worktreeId && connectionId === undefined) {
     return null
   }
-  const settings = getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+  // Why: discovery asks the worktree's owner; an owner the rows can't name gets no models.
+  const target = worktreeId
+    ? runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId })
+    : ({ kind: 'local' } as const)
+  if (!target) {
+    return null
+  }
   const worktreePath = worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : ''
-  const scope = getRuntimeGitScope(settings, connectionId)
+  const scope = getRuntimeGitScope(target, connectionId)
   return {
     hostKey: resolveNativeChatModelDiscoveryHostKey(state, worktreeId, worktreePath, scope),
     runtime: {
-      settings,
+      target,
+      prefs: state.settings,
       worktreeId,
       worktreePath,
       ...(connectionId ? { connectionId } : {})
@@ -132,7 +136,7 @@ export async function discoverNativeChatCatalogModels(
   if (
     hostCatalogAgent &&
     hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY &&
-    !hasExplicitTuiLaunchCommand(context.settings, hostCatalogAgent)
+    !hasExplicitTuiLaunchCommand(context.prefs, hostCatalogAgent)
   ) {
     const fromHost = await readLocalHostCatalogModels(hostCatalogAgent)
     if (fromHost) {

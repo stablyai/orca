@@ -6,7 +6,10 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+/** Startup commands published with the created tabs, in creation order. */
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 const mockSetActiveTabType = vi.fn()
 const mockSeedNativeChatAppliedSessionOptions = vi.fn()
 
@@ -42,7 +45,6 @@ const store = {
   tabBarOrderByWorktree: {},
   createTab: mockCreateTab,
   queueTabInitialCwd: vi.fn(),
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: vi.fn()
 }
@@ -61,7 +63,7 @@ vi.mock('@/lib/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: () => false
 }))
 
@@ -130,7 +132,8 @@ describe('launchAgentInNewTab terminal tab activation', () => {
       undefined,
       {
         launchAgent: 'codex',
-        quickCommandLabel: undefined
+        quickCommandLabel: undefined,
+        pendingStartup: expect.anything()
       }
     )
     expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith(
@@ -138,6 +141,6 @@ describe('launchAgentInNewTab terminal tab activation', () => {
       FLOATING_TERMINAL_WORKTREE_ID
     )
     // Chat UI model preferences belong to structured chats, not a terminal fallback.
-    expect(mockQueueTabStartupCommand.mock.calls[0]?.[1]).not.toHaveProperty('sessionOptions')
+    expect(queuedStartups()[0]).not.toHaveProperty('sessionOptions')
   })
 })

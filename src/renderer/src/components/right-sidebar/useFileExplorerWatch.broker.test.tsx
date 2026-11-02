@@ -19,7 +19,9 @@ vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => owner.current,
   getFileExplorerOperationOwnerFromState: () => owner.current
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({ subscribeRuntimeFileChanges: runtime.subscribe }))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({
+  subscribeRuntimeFileChanges: runtime.subscribe
+}))
 
 const refreshDir = vi.fn(async () => {})
 const refreshTree = vi.fn(async () => 'refreshed' as const)

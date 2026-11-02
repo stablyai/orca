@@ -35,6 +35,11 @@ export const AiVaultListSessionsParams = z
     includeAntigravityIdeSessions: OptionalBoolean,
     unlimited: OptionalBoolean,
     force: OptionalBoolean,
+    afterFingerprint: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .nullable()
+      .optional(),
     scopePaths: z
       .array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH))
       // Why: clamp instead of reject — scope paths only ever widen discovery, and
@@ -53,14 +58,32 @@ export const AiVaultListSessionsParams = z
     }
   })
 
-export const AiVaultPrepareSessionResumeParams = z.object({
-  agent: z.enum(AI_VAULT_AGENTS),
-  sessionId: z.string().min(1).max(512).optional(),
-  filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH),
-  codexHome: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).nullable(),
-  executionHostId: z.string().optional(),
-  fork: z.boolean().optional()
-})
+const AiVaultRowResumeParams = z
+  .object({
+    agent: z.enum(AI_VAULT_AGENTS),
+    sessionId: z.string().min(1).max(512).optional(),
+    filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH),
+    codexHome: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).nullable(),
+    executionHostId: z.string().optional(),
+    fork: z.boolean().optional()
+  })
+  .strict()
+
+export const AiVaultPrepareSessionResumeParams = z.union([
+  AiVaultRowResumeParams,
+  z
+    .object({
+      sourceChat: z
+        .object({
+          sessionId: z.string().min(1).max(512),
+          workspaceId: z.string().min(1).max(512)
+        })
+        .strict(),
+      executionHostId: z.string().optional(),
+      fork: z.literal(true)
+    })
+    .strict()
+])
 
 export const AiVaultSessionTitlesParams = z.object({
   requests: z

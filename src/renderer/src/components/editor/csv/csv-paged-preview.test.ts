@@ -15,7 +15,7 @@ vi.mock('./csv-preview-worker-client', () => ({
 }))
 
 const snapshot = { size: 1024 * 1024, mtime: 1, isDirectory: false }
-const file = { readArgs: { settings: null, filePath: '/repo/a.csv' }, snapshot }
+const file = { readArgs: { target: { kind: 'local' as const }, filePath: '/repo/a.csv' }, snapshot }
 beforeEach(() => {
   vi.resetAllMocks()
   mocks.stat.mockResolvedValue(snapshot)

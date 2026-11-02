@@ -3,53 +3,56 @@
  * layout and what a view shows. Per-viewer state (selection, focus, sizes) is never compared.
  */
 
-import { isTerminalOwnerPartition } from '../../../src/main/persistence/terminal-topology/terminal-owner-invariants'
-import { leafIdsInOrder, type WorkspaceLayoutPartition } from './workspace-layout-oracle-model'
+import { isTerminalOwnerPartition } from '../../../src/shared/workspace-layout/terminal-owner-invariants'
+import type { LiveWorkspace } from './workspace-layout-oracle-feed'
 import type { ClientView, DrawnLayout, DrawnTerminalSurface } from './workspace-layout-oracle-views'
 
 type RuntimeTab = {
-  hostId: string
   worktreeId: string
   customTitle: string | null
   panes: { leafId: string; ptyId: string | null }[]
 }
 
-function indexRuntimeTabs(
-  partitions: readonly WorkspaceLayoutPartition[]
-): Map<string, RuntimeTab[]> {
+/** Terminal tabs by id; a tab listed in two workspaces keeps both entries. */
+function indexRuntimeTabs(entries: readonly LiveWorkspace[]): Map<string, RuntimeTab[]> {
   const tabs = new Map<string, RuntimeTab[]>()
-  for (const { hostId, session } of partitions) {
-    for (const [worktreeId, rows] of Object.entries(session.tabsByWorktree ?? {})) {
-      for (const row of rows) {
-        const layout = session.terminalLayoutsByTabId?.[row.id]
-        const entry: RuntimeTab = {
-          hostId,
-          worktreeId,
-          customTitle: row.customTitle ?? null,
-          panes: leafIdsInOrder(layout?.root).map((leafId) => ({
-            leafId,
-            ptyId: layout?.ptyIdsByLeafId?.[leafId] ?? null
-          }))
-        }
-        tabs.set(row.id, [...(tabs.get(row.id) ?? []), entry])
+  for (const { layout } of entries) {
+    for (const tab of layout.tabs) {
+      if (!tab.terminal) {
+        continue
       }
+      const entry: RuntimeTab = {
+        worktreeId: layout.worktreeId,
+        customTitle: tab.customTitle,
+        panes: tab.terminal.panes.map((pane) => ({
+          leafId: pane.leafId,
+          ptyId: pane.ptyId ?? null
+        }))
+      }
+      tabs.set(tab.id, [...(tabs.get(tab.id) ?? []), entry])
     }
   }
   return tabs
 }
 
+function worktreeEntries(entries: readonly LiveWorkspace[], worktreeId: string): LiveWorkspace[] {
+  return entries.filter((entry) => entry.layout.worktreeId === worktreeId)
+}
+
 function runtimeGroups(
-  partitions: readonly WorkspaceLayoutPartition[],
+  entries: readonly LiveWorkspace[],
   worktreeId: string
 ): Map<string, string[]> {
   const groups = new Map<string, string[]>()
-  for (const { session } of partitions) {
-    for (const group of session.tabGroups?.[worktreeId] ?? []) {
-      groups.set(group.id, group.tabOrder)
+  for (const { layout } of worktreeEntries(entries, worktreeId)) {
+    for (const group of layout.groups) {
+      groups.set(group.id, group.tabIds)
     }
   }
   return groups
 }
+
+const orderText = (order: readonly string[]): string => JSON.stringify(order)
 
 /** A binding to a terminal that is no longer running is a resume hint, not something shown. */
 function shownPanes(
@@ -79,11 +82,11 @@ function surfacesByTab(drawn: DrawnLayout): DrawnTerminalSurface[] {
 
 /** The window draws the layouts of the partitions it owns (local and SSH); a remote mirror is not checked. */
 export function compareDrawnToRuntime(
-  partitions: readonly WorkspaceLayoutPartition[],
+  entries: readonly LiveWorkspace[],
   drawn: DrawnLayout,
   livePtyIds: ReadonlySet<string>
 ): string[] {
-  const owned = partitions.filter((partition) => isTerminalOwnerPartition(partition.hostId))
+  const owned = entries.filter((entry) => isTerminalOwnerPartition(entry.hostId))
   const differences: string[] = []
   const tabs = indexRuntimeTabs(owned)
   const drawnWorktrees = new Set(drawn.strips.map((strip) => strip.worktreeId))
@@ -94,9 +97,9 @@ export function compareDrawnToRuntime(
       const order = groups.get(strip.groupId)
       if (!order) {
         differences.push(`drawn group ${strip.groupId} is not in the runtime (${worktreeId})`)
-      } else if (JSON.stringify(order) !== JSON.stringify(strip.tabIds)) {
+      } else if (orderText(order) !== orderText(strip.tabIds)) {
         differences.push(
-          `group ${strip.groupId}: runtime order ${JSON.stringify(order)} but drawn ${JSON.stringify(strip.tabIds)}`
+          `group ${strip.groupId}: runtime order ${orderText(order)} but drawn ${orderText(strip.tabIds)}`
         )
       }
     }
@@ -105,21 +108,20 @@ export function compareDrawnToRuntime(
         differences.push(`runtime group ${groupId} is not drawn (${worktreeId})`)
       }
     }
-    for (const [tabId, entries] of tabs) {
-      const listed = strips.some((strip) => strip.tabIds.includes(tabId))
-      if (entries.some((entry) => entry.worktreeId === worktreeId) && !listed) {
-        differences.push(`runtime terminal tab ${tabId} has no drawn tab (${worktreeId})`)
+    for (const tab of worktreeEntries(owned, worktreeId).flatMap(({ layout }) => layout.tabs)) {
+      if (!strips.some((strip) => strip.tabIds.includes(tab.id))) {
+        differences.push(`runtime ${tab.kind} tab ${tab.id} has no drawn tab (${worktreeId})`)
       }
     }
   }
   const shownBy = new Map<string, string>()
   for (const surface of surfacesByTab(drawn)) {
-    const entries = tabs.get(surface.tabId) ?? []
-    if (entries.length === 0) {
+    const runtime = tabs.get(surface.tabId) ?? []
+    if (runtime.length === 0) {
       differences.push(`drawn terminal tab ${surface.tabId} is not in the runtime`)
     } else {
       // Compared on running terminals only; both sides may keep or drop an exited binding.
-      const want = panesText(shownPanes(entries[0]!.panes, livePtyIds))
+      const want = panesText(shownPanes(runtime[0]!.panes, livePtyIds))
       const got = panesText(shownPanes(surface.panes, livePtyIds))
       if (want !== got) {
         differences.push(`tab ${surface.tabId}: runtime panes ${want} but drawn ${got}`)
@@ -141,17 +143,19 @@ export function compareDrawnToRuntime(
 
 /** What a paired client (session tabs) and the CLI (terminal list) are told for one worktree. */
 export function compareClientToRuntime(
-  partitions: readonly WorkspaceLayoutPartition[],
+  entries: readonly LiveWorkspace[],
   view: ClientView
 ): string[] {
   if (view.error || !view.tabs) {
     return [`client view of ${view.worktreeId} failed: ${view.error ?? 'no snapshot'}`]
   }
   const differences: string[] = []
-  const tabs = indexRuntimeTabs(partitions)
+  const tabs = indexRuntimeTabs(entries)
   const runtimePanes = new Map<string, string | null>()
-  for (const [tabId, entries] of tabs) {
-    for (const entry of entries.filter((candidate) => candidate.worktreeId === view.worktreeId)) {
+  for (const [tabId, tabEntries] of tabs) {
+    for (const entry of tabEntries.filter(
+      (candidate) => candidate.worktreeId === view.worktreeId
+    )) {
       for (const pane of entry.panes) {
         runtimePanes.set(`${tabId}:${pane.leafId}`, pane.ptyId)
       }
@@ -186,14 +190,37 @@ export function compareClientToRuntime(
       differences.push(`client pane ${key} is not in the runtime`)
     }
   }
-  const groups = runtimeGroups(partitions, view.worktreeId)
-  for (const group of view.tabs.tabGroups ?? []) {
-    const order = groups.get(group.id)
-    if (order && JSON.stringify(order) !== JSON.stringify(group.tabOrder)) {
-      differences.push(
-        `group ${group.id}: runtime order ${JSON.stringify(order)} but client ${JSON.stringify(group.tabOrder)}`
-      )
+  // Groups carry every tab kind, so exact group orders compare editor, browser and agent tabs too.
+  const groups = runtimeGroups(entries, view.worktreeId)
+  const clientGroups = new Map(
+    (view.tabs.tabGroups ?? []).map((group) => [group.id, group.tabOrder])
+  )
+  const unmatchedRuntime = new Map([...groups].filter(([groupId]) => !clientGroups.has(groupId)))
+  for (const [groupId, order] of clientGroups) {
+    const want = groups.get(groupId)
+    if (want) {
+      if (orderText(want) !== orderText(order)) {
+        differences.push(
+          `group ${groupId}: runtime order ${orderText(want)} but client ${orderText(order)}`
+        )
+      }
+      continue
     }
+    // The same tabs in the same order under another id is a renamed group, not a lost one.
+    const renamed = [...unmatchedRuntime].find(
+      ([, runtime]) => orderText(runtime) === orderText(order)
+    )
+    if (renamed) {
+      unmatchedRuntime.delete(renamed[0])
+      differences.push(
+        `group id differs: runtime ${renamed[0]}, client ${groupId} (tabs ${orderText(order)})`
+      )
+    } else {
+      differences.push(`client group ${groupId} is not in the runtime`)
+    }
+  }
+  for (const groupId of unmatchedRuntime.keys()) {
+    differences.push(`runtime group ${groupId} is missing from the client`)
   }
   for (const terminal of view.terminals) {
     const key = `${terminal.tabId}:${terminal.leafId}`

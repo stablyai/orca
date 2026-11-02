@@ -13,7 +13,7 @@ import {
   readHostKeyType,
   type KnownHostsOutcome,
   type KnownHostsQuery
-} from './ssh-known-hosts'
+} from './config/ssh-known-hosts'
 
 const STORE_FILE_NAME = 'ssh-host-keys.json'
 const STORE_VERSION = 1

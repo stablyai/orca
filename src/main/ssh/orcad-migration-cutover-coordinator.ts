@@ -26,13 +26,13 @@ import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
 } from './orcad-migration-cutover-journal'
-import { releaseOrcadMigrationFence } from './orcad-migration-source-fence'
+import type { OrcadMigrationSourceCutoverPort } from './orcad-migration-source'
 import {
   transferOrcadMigrationSnapshots,
   type OrcadMigrationSnapshotSource
 } from './orcad-migration-snapshot-coordinator'
-import { assertOrcadMigrationSourceUnchanged } from './orcad-migration-source-assertions'
 import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import { sshRelayMigrationCutoverPort } from './orcad-migration-ssh-relay-source'
 import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
 
 /** The destination's catalog operations, served by the T6-9 orcad.migration.* client. */
@@ -53,7 +53,13 @@ export type OrcadMigrationCutoverContext = {
   destination: OrcadMigrationDestinationCatalog
   /** Rebuilt for every check when `store` is a copy that would never see a later edit. */
   freshSource?: () => OrcadMigrationPreflightStore
+  /** The fenced source; defaults to the relay-era SSH target the journal names. */
+  source?: OrcadMigrationSourceCutoverPort
   now?: () => Date
+}
+
+function cutoverSource(context: OrcadMigrationCutoverContext): OrcadMigrationSourceCutoverPort {
+  return context.source ?? sshRelayMigrationCutoverPort(context)
 }
 
 export async function stageOrcadMigrationDestination(
@@ -121,7 +127,7 @@ export async function abortOrcadMigrationCutover(
   context: OrcadMigrationCutoverContext,
   migrationId: string,
   release: (cutover: OrcadMigrationSourceCutover) => Promise<void> = (cutover) =>
-    releaseOrcadMigrationFence(context, cutover)
+    cutoverSource(context).releaseFence(cutover)
 ): Promise<OrcadMigrationAbortResult> {
   const cutover = requireCutover(context.userDataPath, migrationId)
   if (cutover.phase === 'destination-committed' || cutover.phase === 'source-retired') {
@@ -172,8 +178,7 @@ function assertSourceUnchanged(
   context: OrcadMigrationCutoverContext,
   cutover: OrcadMigrationSourceCutover
 ): void {
-  const store = context.freshSource?.() ?? context.store
-  assertOrcadMigrationSourceUnchanged({ userDataPath: context.userDataPath, store }, cutover)
+  cutoverSource(context).verifyFence(cutover)
 }
 
 /** Moves the journal to what the destination reported; durable before it returns. */

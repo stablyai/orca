@@ -694,7 +694,7 @@ describe('RemoteBrowserStreamLifecycle stop announcements', () => {
 // Two writers, one value — the shape every round of this review has found. The stream token is
 // claimed before subscribe is awaited, so a close can arrive and arm a restart while the subscribe
 // promise is still rejecting. The host does exactly this: it closes the subscription and only then
-// throws (src/main/ipc/runtime-environments.ts, stale pairing).
+// throws (src/main/ipc/runtime-environments/runtime-environments.ts, stale pairing).
 describe('RemoteBrowserStreamLifecycle close racing a rejected subscribe', () => {
   beforeEach(() => {
     vi.useFakeTimers()

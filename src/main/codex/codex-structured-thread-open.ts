@@ -28,41 +28,6 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-const resumeMetadataUnsupported = new WeakSet<object>()
-
-function isExcludeTurnsUnsupported(error: unknown): boolean {
-  return (
-    isCodexAppServerRequestError(error) &&
-    error.code === -32602 &&
-    /(?:unknown|unexpected|unsupported|unrecognized).{0,80}excludeTurns|excludeTurns.{0,80}(?:unknown|unexpected|unsupported|unrecognized)/i.test(
-      error.message
-    )
-  )
-}
-
-async function resumeCodexThread(
-  connection: Pick<CodexAppServerConnection, 'request'>,
-  params: Record<string, unknown>,
-  timeoutMs: number | undefined
-): Promise<unknown> {
-  if (resumeMetadataUnsupported.has(connection)) {
-    return connection.request('thread/resume', params, { timeoutMs })
-  }
-  try {
-    return await connection.request(
-      'thread/resume',
-      { ...params, excludeTurns: true },
-      { timeoutMs }
-    )
-  } catch (error) {
-    if (!isExcludeTurnsUnsupported(error)) {
-      throw error
-    }
-    resumeMetadataUnsupported.add(connection)
-    return connection.request('thread/resume', params, { timeoutMs })
-  }
-}
-
 /**
  * Codex's own answer that it holds no rollout for this exact thread: the thread was started but
  * never given input, so there is no conversation to lose. Codex matches the same exact text
@@ -120,7 +85,11 @@ export async function openCodexThread(
       ...(launch.resumePath ? { path: launch.resumePath } : {})
     }
     try {
-      opened = await resumeCodexThread(connection, resumeParams, timeoutMs)
+      opened = await connection.request(
+        'thread/resume',
+        { ...resumeParams, excludeTurns: true },
+        { timeoutMs }
+      )
     } catch (error) {
       if (!launch.supersedeIfUnsaved || !isCodexNoRolloutError(error, resumeThreadId)) {
         throw error

@@ -12,7 +12,7 @@ import {
 } from '../../../shared/protocol-version'
 installRuntimeFileClientEnvironment()
 const context = {
-  settings: { activeRuntimeEnvironmentId: 'owner-a' },
+  target: { kind: 'environment' as const, environmentId: 'owner-a' },
   worktreeId: 'folder-1',
   worktreePath: '/folder'
 }

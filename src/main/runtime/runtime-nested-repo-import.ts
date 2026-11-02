@@ -9,7 +9,7 @@ import type {
 } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
-import { getRepoName, isGitRepo } from '../git/repo'
+import { getRepoName, isGitRepoAsync } from '../git/repo'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
@@ -77,7 +77,7 @@ export class RuntimeNestedRepoImport {
     for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
       try {
         await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-        if (!isGitRepo(repoPath)) {
+        if (!(await isGitRepoAsync(repoPath))) {
           results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
           continue
         }

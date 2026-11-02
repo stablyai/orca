@@ -1,10 +1,11 @@
-import {
-  normalizeOrcadMigrationImportReceipts,
-  type OrcadMigrationCatalogAbortResult,
-  type OrcadMigrationCatalogState,
-  type OrcadMigrationManifest
+import { normalizeOrcadMigrationImportReceipts } from './orcad-migration-manifest-validation'
+import type {
+  OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogState,
+  OrcadMigrationManifest
 } from './orcad-migration-manifest'
 import { parseOrcadMigrationSnapshotUploadStates } from './orcad-migration-scrollback'
+import { parseOrcadMigrationBlobUploadStates } from './orcad-migration-blob-transfer'
 import { isRecord } from './orcad-migration-manifest-fields'
 
 export function parseOrcadMigrationCatalogState(
@@ -27,11 +28,13 @@ export function parseOrcadMigrationCatalogState(
       record.snapshotUploads,
       manifest.payload.dormantState?.terminalScrollbackSnapshots ?? []
     )
+    const blobUploads = parseOrcadMigrationBlobUploadStates(record.blobUploads)
     return {
       state: 'staged',
       ...migrationIdentity(manifest),
       stagedAt,
-      ...(snapshotUploads ? { snapshotUploads } : {})
+      ...(snapshotUploads ? { snapshotUploads } : {}),
+      ...(blobUploads ? { blobUploads } : {})
     }
   }
   if (record.state === 'committed') {

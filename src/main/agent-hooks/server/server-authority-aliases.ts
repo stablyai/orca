@@ -16,6 +16,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     this.paneKeyAliasPersistenceListener = listener
   }
 
+  /** The pane key that owns `paneKey`'s agent status once aliases are followed. */
+  resolvePaneAuthorityOwner(paneKey: string): string {
+    return this.resolvePaneKeyAlias(paneKey)
+  }
+
   protected getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[] {
     return Array.from(this.legacyPaneKeyAliases.entries()).flatMap(([legacyPaneKey, entry]) =>
       entry.ptyId
@@ -208,6 +213,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     this.restartedStatusLaunchTokenHashByPaneKey.delete(toPaneKey)
     if (restartedTokenHash) {
       this.restartedStatusLaunchTokenHashByPaneKey.set(toPaneKey, restartedTokenHash)
+    }
+    const agentExit = this.agentExitedAtByPaneKey.get(previousOwnerPaneKey)
+    if (agentExit) {
+      agentExit.paneKeys.add(toPaneKey)
+      this.agentExitedAtByPaneKey.set(toPaneKey, agentExit)
     }
     const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(previousOwnerPaneKey)
     if (activeTurnCompletedAt !== undefined) {

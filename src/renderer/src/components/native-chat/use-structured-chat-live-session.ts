@@ -13,6 +13,7 @@ type StructuredChatController = Pick<
   | 'loadingOlder'
   | 'olderHistoryGeneration'
   | 'loadOlder'
+  | 'readCurrent'
 >
 
 /** The structured chat as the shared transcript reads it: its rows, and a status that stays
@@ -50,7 +51,8 @@ export function useStructuredChatLiveSession(
           ? 'loading'
           : controller.status === 'error'
             ? 'error'
-            : 'ready'
+            : 'ready',
+      readCurrent: controller.readCurrent
     }),
     [controller, historyPhase, agent, sessionId, hostReachable]
   )

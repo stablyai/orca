@@ -1,22 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type DownloadRequestedCallback = (event: { downloadId: string; browserPageId: string }) => void
-type DownloadProgressCallback = (event: {
-  downloadId: string
-  state: 'progressing' | 'interrupted' | null
-}) => void
 type DownloadFinishedCallback = (event: { downloadId: string }) => void
 
 describe('browser page download activity', () => {
   let requestedCallbacks: DownloadRequestedCallback[]
-  let progressCallbacks: DownloadProgressCallback[]
   let finishedCallbacks: DownloadFinishedCallback[]
   let removedListenerCount: number
 
   beforeEach(() => {
     vi.resetModules()
     requestedCallbacks = []
-    progressCallbacks = []
     finishedCallbacks = []
     removedListenerCount = 0
     const removeListener = (): void => {
@@ -27,10 +21,6 @@ describe('browser page download activity', () => {
         browser: {
           onDownloadRequested: (callback: DownloadRequestedCallback) => {
             requestedCallbacks.push(callback)
-            return removeListener
-          },
-          onDownloadProgress: (callback: DownloadProgressCallback) => {
-            progressCallbacks.push(callback)
             return removeListener
           },
           onDownloadFinished: (callback: DownloadFinishedCallback) => {
@@ -71,56 +61,16 @@ describe('browser page download activity', () => {
     expect(hasActiveBrowserPageDownload('page-2')).toBe(false)
   })
 
-  it('deactivates an interrupted download (no finished event ever fires) and reactivates on resume', async () => {
-    const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
-      await import('./browser-page-download-activity')
-    const onEvictionVetoChange = vi.fn()
-    installBrowserPageDownloadActivityTracking(onEvictionVetoChange)
-
-    requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
-    progressCallbacks[0]({ downloadId: 'dl-1', state: 'interrupted' })
-    expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
-    expect(onEvictionVetoChange).toHaveBeenCalledTimes(2)
-
-    progressCallbacks[0]({ downloadId: 'dl-1', state: 'progressing' })
-    expect(hasActiveBrowserPageDownload('page-1')).toBe(true)
-
-    // Duplicate progress and null transport noise are not transitions.
-    progressCallbacks[0]({ downloadId: 'dl-1', state: 'progressing' })
-    progressCallbacks[0]({ downloadId: 'dl-1', state: null })
-    expect(hasActiveBrowserPageDownload('page-1')).toBe(true)
-    expect(onEvictionVetoChange).toHaveBeenCalledTimes(3)
-
-    finishedCallbacks[0]({ downloadId: 'dl-1' })
-    expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
-    expect(onEvictionVetoChange).toHaveBeenCalledTimes(4)
-  })
-
-  it('ignores duplicate start events, unknown progress and unknown finish events', async () => {
+  it('ignores duplicate start events and unknown finish events', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')
     installBrowserPageDownloadActivityTracking()
 
     requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
     requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
-    progressCallbacks[0]({ downloadId: 'dl-unknown', state: 'interrupted' })
     finishedCallbacks[0]({ downloadId: 'dl-unknown' })
     expect(hasActiveBrowserPageDownload('page-1')).toBe(true)
     finishedCallbacks[0]({ downloadId: 'dl-1' })
-    expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
-  })
-
-  it('finishing an already-interrupted download stays balanced', async () => {
-    const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
-      await import('./browser-page-download-activity')
-    installBrowserPageDownloadActivityTracking()
-
-    requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
-    requestedCallbacks[0]({ downloadId: 'dl-2', browserPageId: 'page-1' })
-    progressCallbacks[0]({ downloadId: 'dl-1', state: 'interrupted' })
-    finishedCallbacks[0]({ downloadId: 'dl-1' })
-    expect(hasActiveBrowserPageDownload('page-1')).toBe(true)
-    finishedCallbacks[0]({ downloadId: 'dl-2' })
     expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
   })
 
@@ -132,7 +82,7 @@ describe('browser page download activity', () => {
     requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
     cleanup()
 
-    expect(removedListenerCount).toBe(3)
+    expect(removedListenerCount).toBe(2)
     // A host remount tears down every guest; stale entries must not veto eviction.
     expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
   })

@@ -9,9 +9,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
     cwd: session.deps.cwd,
-    ...(session.deps.cwdPromise ||
-    session.deps.preconnectInput?.length ||
-    session.buffersInputOnlyForReattach
+    ...(session.deps.cwdPromise || session.deps.preconnectInput?.length
       ? { bufferInputUntilConnect: true }
       : {}),
     ...(session.deps.preconnectInput?.length
@@ -21,31 +19,22 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       ? { onPreconnectInput: session.deps.onPreconnectInput }
       : {}),
     // Why: only fresh local IPC spawns may recover from a saved startup cwd
-    // whose directory was deleted (#7239); remote-runtime and SSH spawns
-    // resolve cwd on another host and must keep exact cwd semantics.
-    ...(session.runtimeEnvironmentId === null && !session.connectionId
-      ? { cwdFallback: 'worktree' as const }
-      : {}),
+    // whose directory was deleted (#7239); remote-runtime spawns resolve cwd
+    // on another host and must keep exact cwd semantics.
+    ...(session.runtimeEnvironmentId === null ? { cwdFallback: 'worktree' as const } : {}),
     env: session.paneEnv,
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
     command: session.shouldDeliverStartupViaTerminalPaste
       ? undefined
       : session.paneStartup?.command,
-    ...(session.shouldUseProviderSshStartupDelivery
-      ? { commandDelivery: 'provider' as const }
-      : {}),
     startupCommandDelivery: session.shouldDeliverStartupViaTerminalPaste
       ? undefined
-      : session.connectionId && session.paneStartup?.command
-        ? 'shell-ready'
-        : session.paneStartup?.startupCommandDelivery,
-    connectionId: session.connectionId,
+      : session.paneStartup?.startupCommandDelivery,
     executionHostId: session.executionHostId,
     worktreeId: session.deps.worktreeId,
     // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
     // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
-    // pty:spawn returns. Daemon-host-only: SSH path leaves these undefined
-    // and the main-side guard short-circuits.
+    // pty:spawn returns.
     tabId: session.deps.tabId,
     leafId: session.pane.leafId,
     ...(session.deps.placement ? { placement: session.deps.placement } : {}),
@@ -80,6 +69,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : {}),
     ...(session.launchToken ? { launchToken: session.launchToken } : {}),
     ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
+    ...(session.paneStartup?.agentLaunch ? { agentLaunch: session.paneStartup.agentLaunch } : {}),
     ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
     onPtyExit: session.onExit,
     onPtySpawn: session.onPtySpawn,

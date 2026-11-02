@@ -34,6 +34,20 @@ type ChatLinkMouseEvent = Pick<
   preventDefault: () => void
 }
 
+/** Opens a chat link at a chosen destination, or the routed one when none is chosen. */
+export function openNativeChatWebLink(
+  url: string,
+  deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner'>,
+  destination: HttpLinkDestination | undefined
+): void {
+  openRoutedHttpLink(url, {
+    worktreeId: deps.worktreeId,
+    sourceOwner: deps.sourceOwner,
+    modifierHeld: false,
+    ...(destination ? { forceDestination: destination } : {})
+  })
+}
+
 /** Returns true when the click was consumed; false leaves the anchor's default. */
 export function handleNativeChatWebLink(
   event: ChatLinkMouseEvent,
@@ -41,12 +55,7 @@ export function handleNativeChatWebLink(
   deps: NativeChatWebLinkDeps
 ): boolean {
   const open = (destination: HttpLinkDestination | undefined): void =>
-    openRoutedHttpLink(url, {
-      worktreeId: deps.worktreeId,
-      sourceOwner: deps.sourceOwner,
-      modifierHeld: false,
-      ...(destination ? { forceDestination: destination } : {})
-    })
+    openNativeChatWebLink(url, deps, destination)
 
   if (isTerminalLinkDirectActivation(event)) {
     event.preventDefault()

@@ -96,6 +96,55 @@ afterEach(() => {
 })
 
 describe('UpdateCard staged install recovery', () => {
+  it('explains background blockers and retries installation without a manual download', async () => {
+    renderWithInitialStatus({
+      state: 'error',
+      version: '1.4.200',
+      message: 'Diagnostic process IDs: 12345',
+      retryAction: 'install',
+      installBlock: { reason: 'running-instances', instances: [{ pid: 12345, kind: 'browser' }] }
+    })
+    expect(screen.getByText('Your update is ready')).toBeTruthy()
+    expect(screen.getByText('Background browser')).toBeTruthy()
+    expect(screen.getByText('PID 12345')).toBeTruthy()
+    expect(screen.getByText(/Connected devices will disconnect/)).toBeTruthy()
+    expect(screen.queryByText('Diagnostic process IDs: 12345')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.getByText('Diagnostic process IDs: 12345')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry installation' }))
+    expect(quitAndInstall).toHaveBeenCalledOnce()
+    expect(download).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Later' }))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 200)))
+    expect(useAppStore.getState().updateCardCollapsed).toBe(true)
+    expect(useAppStore.getState().updateStatus.state).toBe('error')
+  })
+
+  it.each([
+    ['busy', 'Another Orca is updating', /Wait a moment/],
+    ['unresponsive', 'Waiting for background servers', /Stop it from the terminal/]
+  ] as const)('gives a specific next step for %s', (reason, title, guidance) => {
+    renderWithInitialStatus({
+      state: 'error',
+      version: '1.4.200',
+      message: 'Raw diagnostic',
+      retryAction: 'install',
+      installBlock: { reason, instances: [{ pid: 12345, kind: 'server' }] }
+    })
+    expect(screen.getByText(title)).toBeTruthy()
+    expect(screen.getByText(guidance)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
+  })
+
+  it('shows preparation feedback without another install button while recovery runs', () => {
+    renderWithInitialStatus({ state: 'downloaded', version: '1.4.200', installing: true })
+    expect(screen.getByText('Preparing your update')).toBeTruthy()
+    expect(screen.getByText(/Checking running Orca instances/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Restart to Update' })).toBeNull()
+    expect(quitAndInstall).not.toHaveBeenCalled()
+  })
+
   it.each([undefined, 'local'] as const)(
     'retries a blocked staged install without downloading again (source %s)',
     (source) => {

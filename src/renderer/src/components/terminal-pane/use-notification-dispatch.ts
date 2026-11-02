@@ -2,7 +2,10 @@ import {
   resolveTerminalNotificationOwner,
   type TerminalNotificationBinding
 } from '@/attention/notification-subject-owner'
-import { notificationSourceForOwner } from '../../../../shared/notification-source'
+import {
+  notificationExecutionHostForOwner,
+  notificationSourceForOwner
+} from '../../../../shared/notification-source'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
@@ -129,8 +132,7 @@ export function dispatchTerminalNotification(
       // Why: main-process hook IPC can update inactive worktrees before the renderer's live-PTY
       // map catches up. An accepted fresh hook snapshot is authority that the turn ended;
       // title/BEL-only paths still need surface liveness.
-      hasFreshActivityEvidence: Boolean(agentStatus),
-      groupAttentionEnabled: state.settings?.experimentalTerminalAttention === true
+      hasFreshActivityEvidence: Boolean(agentStatus)
     },
     createTerminalAttentionSurface(state)
   )
@@ -167,17 +169,17 @@ export function dispatchTerminalNotification(
       : null
 
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
+    const owner = resolveTerminalNotificationOwner(state, worktreeId, event)
+    const executionHost = notificationExecutionHostForOwner(owner)
     deliverAgentAttentionNotification(
       {
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
+        ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
         ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),
-        notificationSourceId: notificationSourceForOwner(
-          resolveTerminalNotificationOwner(state, worktreeId, event),
-          state
-        ),
+        notificationSourceId: notificationSourceForOwner(owner, state),
         terminalTitle: event.terminalTitle,
         isActiveWorktree: request.workspaceIsActive,
         ...agentSnapshot
@@ -187,12 +189,7 @@ export function dispatchTerminalNotification(
   }
 
   applyAgentAttention(attentionDecision, {
-    unread: {
-      markWorkspaceUnread: state.markWorktreeUnread,
-      markSubjectUnread: state.markAgentCompletionPaneUnread,
-      markGroupUnread: state.markTerminalTabUnread,
-      markSurfaceUnread: state.markTerminalPaneUnread
-    },
+    unread: state.markAgentAttentionUnread,
     requestDelivery
   })
 }

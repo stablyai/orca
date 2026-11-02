@@ -12,10 +12,10 @@ export const MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS = 512
 export const MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES = 256 * 1024 * 1024
 export const ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES = 128 * 1024
 
-const Identity = z.string().min(1).max(256)
-const Digest = z.string().regex(/^[a-f0-9]{64}$/)
+export const OrcadMigrationIdentitySchema = z.string().min(1).max(256)
+export const OrcadMigrationDigestSchema = z.string().regex(/^[a-f0-9]{64}$/)
 const SnapshotRef = z.string().regex(/^v1-[a-f0-9]{32}$/)
-const CanonicalBase64Chunk = z
+export const OrcadMigrationChunkBase64Schema = z
   .string()
   .max(Math.ceil(ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES / 3) * 4)
   .refine((value) => {
@@ -36,11 +36,11 @@ export type OrcadMigrationTerminalScrollbackSnapshot = {
 
 // Not strict: an older host must ignore optional fields a newer client adds.
 export const OrcadMigrationSnapshotChunkRequestSchema = z.object({
-  migrationId: Identity,
-  manifestSha256: Digest,
+  migrationId: OrcadMigrationIdentitySchema,
+  manifestSha256: OrcadMigrationDigestSchema,
   ref: SnapshotRef,
   offset: z.number().int().nonnegative().max(MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES),
-  bytesBase64: CanonicalBase64Chunk
+  bytesBase64: OrcadMigrationChunkBase64Schema
 })
 
 export type OrcadMigrationSnapshotChunkRequest = z.infer<
@@ -151,13 +151,18 @@ export function assertOrcadMigrationScrollbackReferences(
 }
 
 export function decodeOrcadMigrationSnapshotChunk(bytesBase64: string): Buffer {
+  return decodeOrcadMigrationChunk(bytesBase64, 'orcad_migration_snapshot_chunk_invalid')
+}
+
+/** One canonical, non-empty chunk of at most the shared transfer size; `error` names the channel. */
+export function decodeOrcadMigrationChunk(bytesBase64: string, error: string): Buffer {
   const bytes = Buffer.from(bytesBase64, 'base64')
   if (
     bytes.length === 0 ||
     bytes.length > ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES ||
     bytes.toString('base64') !== bytesBase64
   ) {
-    throw new Error('orcad_migration_snapshot_chunk_invalid')
+    throw new Error(error)
   }
   return bytes
 }
@@ -166,7 +171,10 @@ function parseSnapshot(value: unknown): OrcadMigrationTerminalScrollbackSnapshot
   const record = requiredRecord(value, 'orcad_migration_dormant_scrollback_snapshot_invalid')
   const ref = requiredString(record.ref, 'orcad_migration_dormant_scrollback_ref_invalid')
   const sha256 = requiredString(record.sha256, 'orcad_migration_dormant_scrollback_digest_invalid')
-  if (!SnapshotRef.safeParse(ref).success || !Digest.safeParse(sha256).success) {
+  if (
+    !SnapshotRef.safeParse(ref).success ||
+    !OrcadMigrationDigestSchema.safeParse(sha256).success
+  ) {
     throw new Error('orcad_migration_dormant_scrollback_identity_invalid')
   }
   if (

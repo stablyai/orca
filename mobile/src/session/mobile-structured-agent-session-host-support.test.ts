@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
+import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
+import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-permission-modes-capability'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
 describe('structuredAgentSessionHostSupport', () => {
@@ -16,8 +20,12 @@ describe('structuredAgentSessionHostSupport', () => {
       questionAnswers: false,
       queuedMessages: false,
       queuedCommands: false,
+      queuedMessageEdit: false,
       quietRepeatedStop: false,
-      statusFeed: false
+      statusFeed: false,
+      sendOptions: false,
+      conversationStop: false,
+      permissionModes: false
     }
     expect(structuredAgentSessionHostSupport([])).toEqual(none)
     expect(
@@ -33,10 +41,22 @@ describe('structuredAgentSessionHostSupport', () => {
       structuredAgentSessionHostSupport([AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, queuedCommands: true })
     expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, queuedMessageEdit: true })
+    expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, quietRepeatedStop: true })
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, statusFeed: true })
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, sendOptions: true })
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, conversationStop: true })
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, permissionModes: true })
   })
 })

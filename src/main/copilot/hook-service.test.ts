@@ -1,9 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
+import { readHooksJson, wrapWindowsHookCommand } from '../agent-hooks/installer-utils'
+import { createAgentHookMemorySftp } from '../agent-hooks/agent-hook-memory-sftp.test-fixture'
+import { COPILOT_EVENTS, getManagedCommand } from './copilot-managed-hook-definitions'
+import { getManagedScript } from './copilot-managed-script'
 import { CopilotHookService } from './hook-service'
 
 let tmpDir: string
@@ -24,6 +28,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   if (originalCopilotHome === undefined) {
     delete process.env.COPILOT_HOME
   } else {
@@ -88,13 +93,8 @@ describe('CopilotHookService', () => {
     expect(firstPromptHook.type).toBe('command')
     expect(firstPromptHook.timeoutSec).toBe(5)
     if (process.platform === 'win32') {
-      const powershell = firstPromptHook.powershell as string
-      expect(powershell).toContain('-EncodedCommand')
-      const encoded = powershell.match(/ -EncodedCommand (\S+)$/)?.[1]
-      const decoded = Buffer.from(encoded!, 'base64').toString('utf16le')
-      expect(decoded).toContain('agent-hooks')
-      expect(decoded).toContain('copilot-hook.ps1')
-      expect(decoded).toContain("$env:ORCA_COPILOT_HOOK_EVENT = 'UserPromptSubmit'")
+      const scriptPath = join(tmpDir, '.orca', 'agent-hooks', 'copilot-hook.cmd')
+      expect(firstPromptHook.powershell).toBe(getManagedCommand(scriptPath, 'UserPromptSubmit'))
     } else {
       expect(firstPromptHook.bash).toContain('if [ -f ')
       expect(firstPromptHook.bash).toContain('] && [ -x ')
@@ -104,6 +104,107 @@ describe('CopilotHookService', () => {
     expect(existsSync(join(tmpDir, '.orca', 'agent-hooks', 'copilot-hook.sh'))).toBe(
       process.platform !== 'win32'
     )
+    expect(existsSync(join(tmpDir, '.orca', 'agent-hooks', 'copilot-hook.cmd'))).toBe(
+      process.platform === 'win32'
+    )
+  })
+
+  describe('on Windows', () => {
+    beforeEach(() => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    })
+
+    it('runs the .cmd through cmd.exe /d with the event as its argument', () => {
+      vi.stubEnv('SystemRoot', 'C:\\Windows')
+      for (const eventName of COPILOT_EVENTS) {
+        expect(
+          getManagedCommand('C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.cmd', eventName)
+        ).toBe(
+          `C:/Windows/System32/cmd.exe /d /c C:/Users/alice/.orca/agent-hooks/copilot-hook.cmd ${eventName}`
+        )
+      }
+      vi.unstubAllEnvs()
+    })
+
+    it('passes the event through the encoded launcher when the path is not cmd-safe', () => {
+      const scriptPath = 'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\copilot-hook.cmd'
+      for (const eventName of COPILOT_EVENTS) {
+        expect(getManagedCommand(scriptPath, eventName)).toBe(
+          wrapWindowsHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+        )
+      }
+    })
+
+    it('writes a cmd script that answers first and posts the event name with curl', () => {
+      const script = getManagedScript()
+      const lines = script.split('\r\n')
+      expect(lines.slice(0, 3)).toEqual(['@echo off', 'setlocal', 'echo {}'])
+      expect(script).toContain('if not "%~1"=="" set "ORCA_COPILOT_HOOK_EVENT=%~1"')
+      expect(script).toContain('"%SystemRoot%\\System32\\curl.exe" -sS -X POST')
+      expect(script).toContain('/hook/copilot')
+      expect(script).toContain('--data-urlencode "hookEventName=%ORCA_COPILOT_HOOK_EVENT%" ^')
+      expect(script).not.toMatch(/powershell|Invoke-WebRequest/i)
+      // #11549: the env guard must run before curl owns stdin.
+      expect(script.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')).toBeLessThan(
+        script.indexOf('payload@-')
+      )
+      expect(script.indexOf('set "ORCA_COPILOT_HOOK_EVENT')).toBeLessThan(
+        script.indexOf('hookEventName=')
+      )
+    })
+
+    it('replaces the legacy .ps1 registration on install and keeps user hooks', () => {
+      const legacyPath = join(tmpDir, '.orca', 'agent-hooks', 'copilot-hook.ps1')
+      const configPath = join(copilotHome, 'hooks', 'orca.json')
+      mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+      const userHook = { type: 'command', powershell: 'Write-Output user-hook', timeoutSec: 3 }
+      const legacyHooks = Object.fromEntries(
+        COPILOT_EVENTS.map((eventName) => [
+          eventName,
+          [
+            {
+              type: 'command',
+              powershell: wrapWindowsHookCommand(legacyPath, {
+                ORCA_COPILOT_HOOK_EVENT: eventName
+              }),
+              timeoutSec: 5
+            }
+          ]
+        ])
+      )
+      legacyHooks.UserPromptSubmit.unshift(userHook)
+      writeFileSync(configPath, JSON.stringify({ version: 1, hooks: legacyHooks }, null, 2))
+      const service = new CopilotHookService()
+      expect(service.getStatus().state).toBe('partial')
+
+      expect(service.install().state).toBe('installed')
+      const hooks = readHooksJson(configPath)?.hooks ?? {}
+      const scriptPath = join(tmpDir, '.orca', 'agent-hooks', 'copilot-hook.cmd')
+      for (const eventName of COPILOT_EVENTS) {
+        const managed = {
+          type: 'command',
+          powershell: getManagedCommand(scriptPath, eventName),
+          timeoutSec: 5
+        }
+        expect(hooks[eventName]).toEqual(
+          eventName === 'UserPromptSubmit' ? [userHook, managed] : [managed]
+        )
+      }
+      expect(JSON.stringify(hooks)).not.toContain('copilot-hook.ps1')
+      expect(existsSync(scriptPath)).toBe(true)
+    })
+
+    it('keeps installing the POSIX script on SSH hosts', async () => {
+      const remote = createAgentHookMemorySftp()
+      const status = await new CopilotHookService().installRemote(remote.sftp, '/home/alice')
+      expect(status.state).toBe('installed')
+      const installed = remote.fs.files.get('/home/alice/.copilot/hooks/orca.json')
+      expect(installed).toContain('/home/alice/.orca/agent-hooks/copilot-hook.sh')
+      expect(installed).not.toMatch(/powershell|EncodedCommand|copilot-hook\.cmd/)
+      expect(remote.fs.files.get('/home/alice/.orca/agent-hooks/copilot-hook.sh')).toContain(
+        '#!/bin/sh'
+      )
+    })
   })
 
   it.skipIf(process.platform === 'win32')('writes syntactically valid POSIX commands', () => {

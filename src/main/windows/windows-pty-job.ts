@@ -31,6 +31,8 @@ type ConptyNative = {
   terminateJob: (id: number, shellPid: number) => boolean
   listJobProcessIds: (id: number, shellPid: number) => number[] | null
   assignCurrentProcessToJob: () => boolean
+  /** Absent on builds that predate the terminal process ceiling. */
+  setActiveProcessLimit?: (limit: number) => boolean
 }
 
 type SelfOwnedPty = IPty & {
@@ -224,6 +226,19 @@ function assignHostProcessOnce(): boolean {
   }
   try {
     return native.assignCurrentProcessToJob()
+  } catch {
+    return false
+  }
+}
+
+/** An ActiveProcessLimit for every later ConPTY's job; false when this build cannot set one. */
+export function setPtyActiveProcessLimit(limit: number): boolean {
+  const native = nativeLoader()
+  if (typeof native?.setActiveProcessLimit !== 'function') {
+    return false
+  }
+  try {
+    return native.setActiveProcessLimit(limit)
   } catch {
     return false
   }

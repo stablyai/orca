@@ -8,7 +8,7 @@ import {
   writeOrcadMigrationSourceCutover
 } from './orcad-migration-cutover-journal'
 import { orcadMigrationCutoverFixture } from './orcad-migration-cutover-fixture'
-import { listPendingManagedOrcadMigrations } from './orcad-managed-migration-status'
+import { listPendingManagedOrcadMigrations } from '../managed-server/lifecycle/orcad-managed-migration-status'
 import { retainOrcadMigrationSource } from './orcad-migration-source-retention'
 
 let userDataPath: string

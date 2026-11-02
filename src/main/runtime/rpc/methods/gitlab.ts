@@ -90,6 +90,12 @@ export const GITLAB_METHODS = [
     handler: async (params, { runtime }) => runtime.listGitLabRepoLabels(params.repo)
   }),
   defineMethod({
+    name: 'gitlab.listAssignableUsers',
+    permission: 'workspace',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.listGitLabRepoAssignableUsers(params.repo)
+  }),
+  defineMethod({
     name: 'gitlab.createIssue',
     permission: 'workspace',
     params: CreateIssue,

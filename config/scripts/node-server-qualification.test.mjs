@@ -32,12 +32,13 @@ it.each([
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   'src/main/ssh/ssh-provider.ts',
   'src/main/providers/local-pty-provider.ts',
-  'src/shared/child-process/run-process.ts',
+  'src/packages/process-host/src/run-process.ts',
+  'src/packages/process-host/src/growing-byte-buffer.ts',
+  'src/packages/process-host/package.json',
   'src/main/persistence/profile-state/store.ts',
   'src/main/sqlite/database.ts',
   'src/main/orcad/entry.ts',
   'src/main/daemon/entry.ts',
-  'src/relay/index.ts',
   'config/scripts/build-orcad-prebuilds.mjs',
   'config/scripts/orcad-prebuild-slot-contents.mjs',
   'src/shared/node-runtime-pin.ts'
@@ -70,6 +71,16 @@ it.each([
     false
   ],
   ['src/main/wsl/runner.ts', ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'], false],
+  [
+    'src/packages/process-host/src/windows-command-line.ts',
+    ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
+    false
+  ],
+  [
+    'src/shared/__tests__/process-host/windows-command-line.win32.test.ts',
+    ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
+    false
+  ],
   [
     'src/main/orcad/orcad-launcher.win32.test.ts',
     ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
@@ -108,11 +119,10 @@ it('keeps all hosts for shared changes alongside a platform-specific change', ()
 })
 
 it.each([
-  'src/main/ssh/remote-node-runtime-store-windows.ts',
-  'src/main/ssh/orcad-remote-node-runtime-windows.ts',
+  'src/main/managed-server/install/remote-node-runtime-store-windows.ts',
+  'src/main/managed-server/install/orcad-remote-node-runtime-windows.ts',
   'src/main/ssh/ssh-posix-command-wrapper.test.ts',
   'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
-  'src/relay/windows-port-scan.ts',
   'src/main/runtime/windows-firewall-remote-scope.ts',
   'src/shared/remote-windows-path.ts'
 ])('qualifies every client platform for a remote execution input: %s', (file) => {

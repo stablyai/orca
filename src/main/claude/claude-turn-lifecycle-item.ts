@@ -16,8 +16,9 @@ export type ClaudeCurrentTurn = {
   /** Host clock at the send that opened the turn; absent when the provider
    *  resumed on its own and no send of Orca's names this turn. */
   requestedAt?: number
-  /** Provider key of the user echo, or the lifecycle row itself when provider
-   *  output opened a turn with no user row to receive its timing. */
+  /** Provider key of the user echo; the send's own key when output the CLI
+   *  wrote for a started send came before its echo; or the lifecycle row itself
+   *  when the provider resumed on its own. */
   userItemId: string
   /** Present when the turn is the host's record of a conversation command. */
   command?: ClaudeCommandTurn

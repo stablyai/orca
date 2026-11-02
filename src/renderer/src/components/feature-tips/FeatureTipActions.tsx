@@ -29,6 +29,7 @@ export function FeatureTipActions({
   onPrimaryAction: () => void
   onSkip: () => void
   showSkip?: boolean
+  /** Fills the footer row, or what a sibling button leaves of it. */
   fullWidth?: boolean
   primaryButtonRef?: Ref<HTMLButtonElement>
   /** Overrides the tip's CTA for tips whose button changes with their state. */
@@ -43,7 +44,7 @@ export function FeatureTipActions({
       ) : null}
       <Button
         ref={primaryButtonRef}
-        className={fullWidth ? 'w-full' : undefined}
+        className={fullWidth ? 'w-full flex-1' : undefined}
         onClick={onPrimaryAction}
         disabled={primaryBusy}
       >

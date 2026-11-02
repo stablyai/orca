@@ -8,6 +8,41 @@ import { matchPaletteField } from './match-field'
 import { createPaletteQueryToken } from './palette-query'
 
 describe('palette field quality allocation', () => {
+  it('does not filter quality arrays for identifier-like queries', () => {
+    const profiles: PaletteFieldProfile[] = [
+      'structured-label',
+      'identifier',
+      'path',
+      'prose',
+      'exact-alias'
+    ]
+    const fields = profiles.map((profile) =>
+      indexPaletteField({
+        id: profile,
+        profile,
+        text: 'scan1',
+        role: 'primary',
+        destinationEligible: true
+      })!
+    )
+    const token = createPaletteQueryToken('scan1', 0)
+    const matches: ReturnType<typeof matchPaletteField>[] = []
+    const filter = vi.spyOn(Array.prototype, 'filter')
+    let allocations = 0
+    try {
+      for (const field of fields) {
+        matches.push(matchPaletteField(field, token))
+      }
+      allocations = filter.mock.calls.length
+    } finally {
+      filter.mockRestore()
+    }
+    expect(allocations).toBe(0)
+    expect(matches).toEqual(
+      profiles.map(() => ({ quality: 'field-exact', ranges: [{ start: 0, end: 5 }] }))
+    )
+  })
+
   it.each(['scan', 's', '123', 'scna', 'zzz'])(
     'does not allocate a Set per field for %s',
     (query) => {
@@ -95,6 +130,12 @@ describe('palette quality restrictions remain local to each match', () => {
           ? { quality: 'typo', ranges: [{ start: 0, end: 4 }] }
           : null
       )
+      expect(
+        matchPaletteField(field, {
+          ...createPaletteQueryToken('scam', 0),
+          isIdentifierLike: true
+        })
+      ).toBeNull()
     }
   )
 })

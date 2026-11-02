@@ -4,8 +4,9 @@
  */
 import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
+import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import {
-  getPreferredPairingOffer,
+  getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
 import {
@@ -14,9 +15,9 @@ import {
   type OrcadTerminalCensus
 } from '../../shared/orcad-terminal-census'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
-import type { OrcadActivationRecord } from './orcad-activation-record'
-import { ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
-import { verifyOrcadManagedServing } from './orcad-managed-serving-verify'
+import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
+import { ensureOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
+import { verifyOrcadManagedServing } from '../managed-server/lifecycle/orcad-managed-serving-verify'
 
 const UNVERIFIABLE: OrcadTerminalCensus = {
   liveSessions: null,
@@ -46,8 +47,27 @@ export async function collectManagedTerminalCensus(
     await ensureOrcadManagedTunnel(userDataPath, environment.id)
     // A server that idled out behind a forward still up is started first, or it never answers.
     await verifyOrcadManagedServing(userDataPath, environment.id)
+    return await requestOrcadTerminalCensus(
+      getPreferredPairedRuntimeConnection(environment),
+      activatedAt,
+      timeoutMs,
+      options
+    )
+  } catch {
+    return UNVERIFIABLE
+  }
+}
+
+/** The census over an already-open connection; any failure is unverifiable, never zero. */
+export async function requestOrcadTerminalCensus(
+  connection: PairedRuntimeConnection,
+  activatedAt: number,
+  timeoutMs = 15_000,
+  options: { releaseFinishedAutomationTerminals?: boolean } = {}
+): Promise<OrcadTerminalCensus> {
+  try {
     const response = await sendRemoteRuntimeRequestWithStatusPreflight<unknown>(
-      getPreferredPairingOffer(environment),
+      connection,
       ORCAD_TERMINAL_CENSUS_METHOD,
       {
         activatedAt,

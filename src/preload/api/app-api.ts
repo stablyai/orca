@@ -1,4 +1,5 @@
 import type { AppIdentity } from '../../shared/app-identity'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 import type { E2EConfig } from '../../shared/e2e-config'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -19,6 +20,10 @@ export type AppApi = {
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
+  /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
+  getWindowsAdministratorStatus: () => Promise<boolean | null>
+  /** Restarts the installed Windows desktop with administrator approval and replaces its local terminal host. */
+  restartAsAdministrator: () => Promise<void>
   /** Returns a URL base for feature-wall assets. In dev this is Vite /@fs;
    *  in packaged builds this is file:// resources. Renderer appends filenames. */
   getFeatureWallAssetBaseUrl: () => Promise<string>
@@ -34,6 +39,8 @@ export type AppApi = {
   stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
+    /** Layout-owner builds: the resume records the quit capture changed. */
+    sleepRecords?: SleepingAgentSessionRecord[]
   }) => void
   /** Resolves once the last staged checkpoint is durably written; rejects if that
    *  write failed, so a reload/restart can abort instead of losing the snapshot. */

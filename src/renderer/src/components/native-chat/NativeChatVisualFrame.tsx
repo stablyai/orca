@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
 import {
   NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX,
@@ -12,7 +11,9 @@ import {
 } from '../../../../shared/native-chat-visual-shell'
 import type { NativeChatVisualDocument } from './native-chat-visual-read-client'
 import { createNativeChatVisualHeightGovernor } from '../../../../shared/native-chat-visual-height-governor'
+import type { ReaderGesture } from './native-chat-autoscroll'
 import { useNativeChatVisualTheme } from './use-native-chat-visual-theme'
+import { useWebviewDragPassthroughActive } from '../browser-pane/host-guest/use-webview-drag-passthrough-active'
 
 /** Height reserved before a visual reports its own, so the reply below does not jump far. */
 export const NATIVE_CHAT_VISUAL_RESERVED_HEIGHT = 160
@@ -27,33 +28,38 @@ function newChannel(): string {
 }
 
 /**
- * One agent-written visual in an opaque-origin frame that may run scripts and nothing else. Inline
- * it fits its height to the page; in a panel it fills the panel. A theme change restyles the page in
- * place, so interaction state survives it. On desktop the main process refuses the frame's
+ * One agent-written visual in an opaque-origin frame that may run scripts and nothing else. It fits
+ * its height to the page. A theme change restyles the page in place, so interaction state survives
+ * it. On desktop the main process refuses the frame's
  * navigation; a later load that nothing answers (the frame gone blank or showing another page)
  * retires it, as a tripwire rather than a boundary.
  */
 export function NativeChatVisualFrame({
   document: visual,
   title,
-  layout,
   themeScope,
-  onRetired
+  onRetired,
+  onReaderGesture
 }: {
   document: NativeChatVisualDocument
   title: string
-  layout: 'inline' | 'panel'
   /** An element already mounted where the frame sits, so the first paint wears that scope's theme. */
   themeScope: RefObject<Element | null>
   onRetired: () => void
+  /** Uncancelled input; the transcript owner checks whether the conversation moved. */
+  onReaderGesture?: (gesture: ReaderGesture) => void
 }): React.JSX.Element {
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const theme = useNativeChatVisualTheme(themeScope)
+  // Why: a frame takes the pointer stream from Orca's document, so a tab dragged over it could not drop here.
+  const dragPassthrough = useWebviewDragPassthroughActive()
   // The latest theme for the next document build and the load-time post, without rebuilding on it.
   const themeRef = useRef(theme)
+  const onReaderGestureRef = useRef(onReaderGesture)
   useLayoutEffect(() => {
     themeRef.current = theme
-  }, [theme])
+    onReaderGestureRef.current = onReaderGesture
+  }, [onReaderGesture, theme])
   const [height, setHeight] = useState(NATIVE_CHAT_VISUAL_RESERVED_HEIGHT)
   const loadsRef = useRef(0)
   // The latest later load still awaiting an answer, and the timer that retires the frame.
@@ -108,12 +114,18 @@ export function NativeChatVisualFrame({
         return
       }
       if (message.kind === 'size') {
-        if (layout === 'inline') {
-          latestReported = message.height
-          if (!deferred) {
-            applyHeight()
-          }
+        latestReported = message.height
+        if (!deferred) {
+          applyHeight()
         }
+        return
+      }
+      if (message.kind === 'reader-scroll') {
+        onReaderGestureRef.current?.(
+          message.input === 'wheel'
+            ? { kind: 'wheel', deltaY: message.deltaY, zoom: false }
+            : { kind: 'touch-drag' }
+        )
         return
       }
       // A link opens only from a real gesture in this very frame: it must hold focus and the user
@@ -137,7 +149,7 @@ export function NativeChatVisualFrame({
         clearTimeout(deferred)
       }
     }
-  }, [built.channel, layout])
+  }, [built.channel])
 
   // A frame rebuilt for a new revision, or unmounted, owes no answer.
   useEffect(
@@ -160,10 +172,7 @@ export function NativeChatVisualFrame({
   }, [built.channel, theme])
 
   return (
-    <div
-      className={cn('w-full', layout === 'panel' && 'flex min-h-0 flex-1')}
-      style={layout === 'inline' ? { height } : undefined}
-    >
+    <div className="w-full" style={{ height }}>
       <iframe
         key={built.channel}
         ref={frameRef}
@@ -174,7 +183,10 @@ export function NativeChatVisualFrame({
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         className="block size-full border-0 bg-transparent"
-        style={{ colorScheme: theme.colorScheme }}
+        style={{
+          colorScheme: theme.colorScheme,
+          pointerEvents: dragPassthrough ? 'none' : undefined
+        }}
         onLoad={() => {
           loadsRef.current += 1
           const frameWindow = frameRef.current?.contentWindow

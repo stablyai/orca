@@ -11,12 +11,17 @@ type Statuses = Map<string, RuntimeEnvironmentStatus>
 type StoreState = {
   runtimeStatusByEnvironmentId: Statuses
   settings: { experimentalNativeChat: boolean } | null
+  ensureNativeDetectedAgents: () => Promise<string[]>
 }
 
 const ON = { experimentalNativeChat: true }
 
 const mocks = vi.hoisted(() => {
-  const state: StoreState = { runtimeStatusByEnvironmentId: new Map(), settings: null }
+  const state: StoreState = {
+    runtimeStatusByEnvironmentId: new Map(),
+    settings: null,
+    ensureNativeDetectedAgents: async () => []
+  }
   return {
     callRuntimeRpc: vi.fn(),
     ensureLocalRuntimeCapabilities: vi.fn(),
@@ -98,7 +103,11 @@ let uninstall: (() => void) | undefined
 
 beforeEach(() => {
   resetHostStructuredAgentsForTests()
-  mocks.state = { runtimeStatusByEnvironmentId: new Map(), settings: ON }
+  mocks.state = {
+    runtimeStatusByEnvironmentId: new Map(),
+    settings: ON,
+    ensureNativeDetectedAgents: async () => []
+  }
   mocks.listeners.clear()
   mocks.capabilitiesKnown.clear()
   mocks.callRuntimeRpc.mockReset().mockResolvedValue(GROK_LIST)

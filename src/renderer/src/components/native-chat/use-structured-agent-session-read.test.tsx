@@ -8,7 +8,8 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage
+  type AgentSessionHistoryPage,
+  type AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
@@ -337,6 +338,72 @@ describe('useStructuredAgentSessionRead history window', () => {
       cursor: view.result.current.first.state.cursor
     })
     expect(unsubscribe).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('useStructuredAgentSessionRead currency', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+  })
+
+  it('is current only once a run has been caught up with the host', async () => {
+    const emits: ((event: AgentSessionSubscribeEvent) => void)[] = []
+    mocks.call.mockResolvedValue({
+      ok: true,
+      page: page('tail', [message('m-1', 1, 'user')], false)
+    })
+    const closes: (() => void)[] = []
+    mocks.subscribe.mockImplementation((_target, _params, onEvent, _onError, onClose) => {
+      emits.push(onEvent)
+      closes.push(onClose)
+      return Promise.resolve({ unsubscribe: vi.fn() })
+    })
+    const frame = (sequence: number, hasNewer: boolean): AgentSessionSubscribeEvent => ({
+      type: 'batch',
+      sessionId: 'session-a',
+      batch: {
+        cursor: { epoch: 'epoch-a', sequence },
+        items: [],
+        removedItemIds: [],
+        submissions: []
+      },
+      ...(hasNewer ? { hasNewer: true as const } : {})
+    })
+    const view = renderHook(
+      ({ isVisible }: { isVisible: boolean }) =>
+        useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET, isVisible }),
+      { initialProps: { isVisible: true } }
+    )
+    await waitFor(() => expect(emits).toHaveLength(1))
+    // History alone is not the host's present.
+    expect(view.result.current.readCurrent).toBe(false)
+
+    // A resume with nothing missed is an empty frame that changes no state.
+    act(() => emits[0]!(frame(view.result.current.state.cursor!.sequence, false)))
+    expect(view.result.current.readCurrent).toBe(true)
+
+    view.rerender({ isVisible: false })
+    expect(view.result.current.readCurrent).toBe(false)
+
+    view.rerender({ isVisible: true })
+    await waitFor(() => expect(emits).toHaveLength(2))
+    act(() => emits[1]!(frame(700, true)))
+    expect(view.result.current.readCurrent).toBe(false)
+    act(() => emits[1]!(frame(900, false)))
+    await waitFor(() => expect(view.result.current.readCurrent).toBe(true))
+
+    // The stream closing under a pane that is showing: what it holds is stale until the reconnect,
+    // and an update still waiting to be applied when it closed must not say otherwise.
+    act(() => {
+      emits[1]!(frame(950, false))
+      closes[1]!()
+    })
+    expect(view.result.current.readCurrent).toBe(false)
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)))
+    expect(view.result.current.readCurrent).toBe(false)
   })
 })
 

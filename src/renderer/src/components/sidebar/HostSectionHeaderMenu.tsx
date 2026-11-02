@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react'
 import {
   AlertTriangle,
   Ellipsis,
+  Link2,
   Loader2,
   Pencil,
   Plug,
@@ -27,15 +28,14 @@ import { translate } from '@/i18n/i18n'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
-import {
-  clearRuntimeCompatibilityCache,
-  unwrapRuntimeRpcResult
-} from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { HostHeaderRow } from './host-section-rows'
+import type { HostHeaderRow } from '../../../../shared/sidebar-list/host-section-rows'
 import { buildHostHeaderMenuModel } from './host-header-menu-items'
 import { HostRenameDialog } from './HostRenameDialog'
 import { HostRemoveDialog } from './HostRemoveDialog'
+import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
 import { resolveHostRemoval } from './host-rename-remove'
 
 function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
@@ -74,6 +74,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const [busy, setBusy] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
+  const [repairOpen, setRepairOpen] = useState(false)
   const mountedRef = useMountedRef()
   const sshStatus = useAppStore((s) => {
     const parsed = parseExecutionHostId(row.hostId)
@@ -87,9 +88,12 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     kind: row.kind,
     health: row.health,
     sshConnected: sshStatus === 'connected',
-    compatibility: row.compatibility
+    compatibility: row.compatibility,
+    blockedReason: row.blockedReason
   })
   const removalTarget = resolveHostRemoval(row.hostId)
+  const parsedHost = parseExecutionHostId(row.hostId)
+  const runtimeEnvironmentId = parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
 
   const handleManage = useCallback(() => {
     openManageHost(row)
@@ -206,6 +210,18 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
+        {model.actions.includes('runtime-repair') && (
+          <>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => setRepairOpen(true)}
+            >
+              <Link2 className="size-3.5" />
+              {translate('auto.components.sidebar.HostSectionHeaderMenu.repair', 'Re-pair…')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         {model.blocked && (
           <>
             <Tooltip>
@@ -282,6 +298,14 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         hostId={row.hostId}
         derivedLabel={row.label}
       />
+      {runtimeEnvironmentId && (
+        <RuntimeRepairDialog
+          open={repairOpen}
+          onOpenChange={setRepairOpen}
+          environmentId={runtimeEnvironmentId}
+          name={row.label}
+        />
+      )}
       {removalTarget && (
         <HostRemoveDialog
           open={removeOpen}

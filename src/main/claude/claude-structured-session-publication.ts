@@ -6,7 +6,6 @@ import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
-import { createClaudeSessionStartup } from './claude-structured-session-startup-state'
 
 /** The session as published at spawn: nothing the CLI reports at init is assumed yet. */
 export function createClaudeSessionPublication(input: {
@@ -27,18 +26,19 @@ export function createClaudeSessionPublication(input: {
   linkId?: string
   observedAt: number
   options?: ReadonlyMap<string, string>
+  initialization: ClaudeSession['initialization']
 }): { acquisition: AgentSessionAcquisition; session: ClaudeSession } {
+  const link = claudeProviderHandleLink({
+    sessionId: input.providerSessionId,
+    leafUuid: input.leafUuid,
+    resumed: input.continuesChain,
+    fence: input.fence,
+    ...(input.linkId ? { linkId: input.linkId } : {}),
+    observedAt: input.observedAt
+  })
   return {
     acquisition: {
       process: input.process,
-      link: claudeProviderHandleLink({
-        sessionId: input.providerSessionId,
-        leafUuid: input.leafUuid,
-        resumed: input.continuesChain,
-        fence: input.fence,
-        ...(input.linkId ? { linkId: input.linkId } : {}),
-        observedAt: input.observedAt
-      }),
       acquisitionGeneration: input.acquisitionGeneration
     },
     session: {
@@ -69,7 +69,8 @@ export function createClaudeSessionPublication(input: {
       translator: input.translator,
       events: input.events,
       ...(input.unbindReadingControl ? { unbindReadingControl: input.unbindReadingControl } : {}),
-      startup: createClaudeSessionStartup()
+      link,
+      initialization: input.initialization
     }
   }
 }

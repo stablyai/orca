@@ -60,6 +60,10 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
     customSoundVolume,
     mutedNotificationSourceIds: normalizeMutedNotificationSourceIds(
       candidate.mutedNotificationSourceIds
+    ),
+    notifyHiddenWorkspaces: booleanOr(
+      candidate.notifyHiddenWorkspaces,
+      defaults.notifyHiddenWorkspaces
     )
   }
 }

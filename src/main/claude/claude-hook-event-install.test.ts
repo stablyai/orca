@@ -14,7 +14,7 @@ const topLevelSettings: Record<string, { keys: string[] }> = fixture.topLevelSet
 function install(config: HooksConfig, claudeVersion: string | undefined): HooksConfig {
   return applyManagedHooks(
     config,
-    managedHook,
+    () => managedHook,
     SCRIPT_FILE_NAME,
     getClaudeManagedHookPlan(claudeVersion)
   )

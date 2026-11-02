@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../shared/child-process/run-process'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 const { runProcessMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
@@ -8,7 +9,7 @@ const { runProcessMock } = vi.hoisted(() => ({
 // Why mock the chokepoint rather than child_process: the timeout, the output
 // cap and the hidden console are runProcess's contract now, so this suite
 // asserts what font discovery asks for, not how a process gets started.
-vi.mock('../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
 

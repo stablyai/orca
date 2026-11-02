@@ -1,11 +1,11 @@
-import { useId, useMemo, useState } from 'react'
+import { useCallback, useId, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -21,14 +21,12 @@ import type { NativeChatComposerNoticeContent } from './native-chat-composer-not
 type ContinueAnswer = { outcome?: string }
 
 export type NativeChatInterruptedContinuation = {
-  /** What the chat's rows are told: the machine's name and whether its host can continue a cut. */
+  /** Told to the chat's rows: the machine's name, whether it is remote, if it can continue, and the
+   *  cut row that carries Continue. */
   view: NativeChatOrcaStopView
-  /** The cut turn Continue is offered on right now, if any. */
-  offeredTurnItemId: string | null
   /** A Continue that did not go through, for the composer's notice card: shown while the chat
    *  still sits on that cut and gone once it is continued from anywhere. */
   continueError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
-  continueNow: () => void
 }
 
 /**
@@ -41,11 +39,12 @@ export function useNativeChatInterruptedContinuation(input: {
   sessionId: string
   journalItems: readonly AgentJournalRenderItem[]
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  /** Also true while the host may take no turn: Continue starts one. */
   isWorking: boolean
-  /** The composer's own error; a Continue click is the user's newer action, so it clears it. */
-  composer: { clearError: () => void }
+  /** Stable; a Continue click is the user's newer action, so it clears the composer's error. */
+  reportComposerError: (text: null) => void
 }): NativeChatInterruptedContinuation {
-  const { target, sessionId } = input
+  const { target, sessionId, reportComposerError } = input
   const hostLabel = useStructuredAgentSessionHostLabel(target)
   const capability = useStructuredAgentSessionHostCapabilityState(
     target,
@@ -66,7 +65,7 @@ export function useNativeChatInterruptedContinuation(input: {
     capability === 'supported' && cut && !input.isWorking && !resuming && asked !== cut.turnItemId
       ? cut.turnItemId
       : null
-  const continueNow = (): void => {
+  const continueNow = useCallback((): void => {
     if (offered === null) {
       return
     }
@@ -78,16 +77,26 @@ export function useNativeChatInterruptedContinuation(input: {
     }
     setAsked(turnItemId)
     setFailedOn(null)
-    input.composer.clearError()
+    reportComposerError(null)
     void callStructuredAgentSession<ContinueAnswer>(target, 'agentSession.continueInterrupted', {
       sessionId,
       turnItemId
     }).then((answer) => (answer.outcome === 'refused' ? failed() : undefined), failed)
-  }
+  }, [offered, target, sessionId, reportComposerError])
   // Unknown counts as able: a host that writes cause rows has Continue, and the words stay put.
   const continueAvailable = capability !== 'unsupported'
   // One object per change, so the chat's rows re-render only when what they show changes.
-  const view = useMemo(() => ({ hostLabel, continueAvailable }), [hostLabel, continueAvailable])
+  const remoteHost = target.kind === 'environment'
+  const view = useMemo(
+    () => ({
+      hostLabel,
+      remoteHost,
+      continueAvailable,
+      offeredTurnItemId: offered,
+      continueNow
+    }),
+    [hostLabel, remoteHost, continueAvailable, offered, continueNow]
+  )
   const failedHere =
     failedOn !== null && cut?.turnItemId === failedOn
       ? translate(
@@ -97,37 +106,27 @@ export function useNativeChatInterruptedContinuation(input: {
       : null
   return {
     view,
-    offeredTurnItemId: offered,
-    continueError: failedHere ? { text: failedHere, onDismiss: () => setFailedOn(null) } : null,
-    continueNow
+    continueError: failedHere ? { text: failedHere, onDismiss: () => setFailedOn(null) } : null
   }
 }
 
-export function NativeChatInterruptedContinue({
-  continuation
+/** Continue, on the row that says Orca stopped this reply: the one action that picks it back up. */
+export function NativeChatInterruptedContinueButton({
+  onContinue
 }: {
-  continuation: NativeChatInterruptedContinuation
-}): React.JSX.Element | null {
+  onContinue: () => void
+}): React.JSX.Element {
   const explanationId = useId()
-  if (continuation.offeredTurnItemId === null) {
-    return null
-  }
   const explanation = translate(
     'components.native-chat.interruptedContinue.explanation',
     'Continue, and the agent first checks whether its last step finished.'
   )
   return (
-    <div className="mx-auto flex w-full max-w-4xl items-center justify-end px-4 py-1">
+    <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-describedby={explanationId}
-            onClick={continuation.continueNow}
-          >
-            <Play className="size-3" />
+          <Button type="button" size="xs" aria-describedby={explanationId} onClick={onContinue}>
+            <Play />
             {translate('components.native-chat.interruptedContinue.continue', 'Continue')}
           </Button>
         </TooltipTrigger>
@@ -138,6 +137,6 @@ export function NativeChatInterruptedContinue({
       <span id={explanationId} className="sr-only">
         {explanation}
       </span>
-    </div>
+    </>
   )
 }

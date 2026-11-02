@@ -385,17 +385,19 @@ describe('structured child-work reconciliation', () => {
     ])
   })
 
-  it('bounds the live children one session may admit', () => {
+  it('bounds the live tasks one session may admit, and never refuses a subagent for it', () => {
     const { store, apply } = harness()
+    const command = (id: string) => child(id, { kind: 'command' })
     apply(
       ...Array.from({ length: STRUCTURED_CHILD_WORK_MAX_LIVE }, (_, index) =>
-        live(child(`task-${index}`))
+        live(command(`task-${index}`))
       )
     )
-    expect(apply(live(child('one-too-many'))).rejected).toEqual([
+    expect(apply(live(command('one-too-many'))).rejected).toEqual([
       { handleId: 'one-too-many', reason: 'ingestion-limit' }
     ])
-    expect(records(store)).toHaveLength(STRUCTURED_CHILD_WORK_MAX_LIVE)
+    expect(apply(live(child('agent-past-the-limit'))).rejected).toEqual([])
+    expect(records(store)).toHaveLength(STRUCTURED_CHILD_WORK_MAX_LIVE + 1)
   })
 
   it('keeps every settled child until the parent row goes', () => {
@@ -516,17 +518,24 @@ describe('structured child-work reconciliation', () => {
       outcome,
       ...extra
     })
-    const stopped = { basis: 'stop-acknowledged' as const }
     const { store, apply } = harness()
     apply(live(child('replaced')), live(child('kept')), live(child('same')))
-    apply(
-      ended('replaced', 'cancelled', 101, stopped),
-      ended('replaced', 'succeeded', 102, { lastMessage: 'all tests passed' }),
-      ended('kept', 'failed', 101, { lastMessage: 'Exit code 1' }),
-      ended('kept', 'cancelled', 102, stopped),
-      ended('same', 'cancelled', 101, stopped),
-      ended('same', 'cancelled', 102)
-    )
+    const stopped = (id: string, observedAt: number): AgentChildWorkEvidence => {
+      const record = records(store).find((candidate) => candidate.description === `Task ${id}`)!
+      return {
+        type: 'stop-acknowledged',
+        observedAt,
+        childWorkId: record.childWorkId,
+        handleId: id,
+        invocation: record.invocation
+      }
+    }
+    apply(stopped('replaced', 101))
+    apply(ended('replaced', 'succeeded', 102, { lastMessage: 'all tests passed' }))
+    apply(ended('kept', 'failed', 101, { lastMessage: 'Exit code 1' }))
+    apply(stopped('kept', 102))
+    apply(stopped('same', 101))
+    apply(ended('same', 'cancelled', 102))
     expect(
       records(store).map((record) => [
         record.description,
@@ -540,6 +549,6 @@ describe('structured child-work reconciliation', () => {
       ['Task same', 'cancelled', 'reported', null]
     ])
     // Once the child reported its ending, a later acknowledged Stop changes nothing either.
-    expect(apply(ended('same', 'failed', 103, stopped))).toMatchObject({ settled: 0 })
+    expect(apply(stopped('same', 103))).toMatchObject({ settled: 0 })
   })
 })

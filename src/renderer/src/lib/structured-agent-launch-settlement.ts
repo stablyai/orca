@@ -7,7 +7,6 @@ import {
   type StructuredAgentLaunchOptions
 } from '@/lib/structured-agent-session-launch'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import { findIdleEmptyStructuredChat } from '@/lib/structured-agent-session-idle-empty-chat'
 
 export type StructuredAgentLaunchSettlement =
   | {
@@ -102,30 +101,6 @@ export function beginStructuredAgentLaunchSettlement(
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): StructuredAgentLaunchHandle {
-  // A new chat with nothing to say reuses an empty published one open here (the launch joins an
-  // empty starting one); the reused chat is not this caller's to cancel.
-  const idle =
-    options.resumeFrom || options.prompt?.trim()
-      ? undefined
-      : findIdleEmptyStructuredChat(
-          worktreeId,
-          agent,
-          options.executionHostId,
-          options.targetGroupId
-        )
-  if (idle) {
-    return {
-      ...idle,
-      settlement: Promise.resolve().then((): StructuredAgentLaunchSettlement => {
-        if (hooks.signal?.aborted) {
-          return { kind: 'cancelled', sessionId: idle.sessionId }
-        }
-        hooks.onStructuredReady?.(idle.sessionId)
-        return { kind: 'structured', sessionId: idle.sessionId }
-      }),
-      cancel: () => {}
-    }
-  }
   const launch = startStructuredAgentLaunch(worktreeId, agent, options)
   return {
     sessionId: launch.sessionId,

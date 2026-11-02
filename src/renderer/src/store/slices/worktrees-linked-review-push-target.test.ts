@@ -475,7 +475,8 @@ describe('worktree remote runtime mutations', () => {
       id: 'repo1::/path/runtime-wt',
       repoId: 'repo1',
       path: '/path/runtime-wt',
-      linkedPR: 5571
+      linkedPR: 5571,
+      hostId: 'runtime:env-1'
     })
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       if (method === 'worktree.resolvePrBase') {

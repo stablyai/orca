@@ -6,29 +6,40 @@ import { RemoteRuntimeTerminalFlowController } from './remote-runtime-terminal-f
 import {
   clearResyncTimer,
   clearSnapshot,
-  discardOutputAcknowledgements,
+  disposeRemoteTerminalStreamState,
   isTerminalDriverState,
   rejectPendingSnapshotRequest
 } from './remote-runtime-terminal-snapshot-state'
 import type { TerminalMultiplexEvent } from './remote-runtime-terminal-multiplexer-types'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 
 type SubscribedCapabilities = {
   ackOutputSourceRanges: boolean
   outputPause: boolean
+  outputPauseDropNotice: boolean
   inputAck: boolean
 }
 
 // Why parse: the frame comes off the wire, so a malformed or legacy capabilities value must read as "unsupported".
 function parseSubscribedCapabilities(value: unknown): SubscribedCapabilities {
   if (typeof value !== 'object' || value === null) {
-    return { ackOutputSourceRanges: false, outputPause: false, inputAck: false }
+    return {
+      ackOutputSourceRanges: false,
+      outputPause: false,
+      outputPauseDropNotice: false,
+      inputAck: false
+    }
   }
-  const record: { ackOutputSourceRanges?: unknown; outputPause?: unknown; inputAck?: unknown } =
-    value
+  const record: {
+    ackOutputSourceRanges?: unknown
+    outputPause?: unknown
+    outputPauseDropNotice?: unknown
+    inputAck?: unknown
+  } = value
   return {
     ackOutputSourceRanges: record.ackOutputSourceRanges === 1,
     outputPause: record.outputPause === 1,
+    outputPauseDropNotice: record.outputPause === 1 && record.outputPauseDropNotice === 1,
     inputAck: record.inputAck === 1
   }
 }
@@ -75,6 +86,7 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         stream.streamGeneration = event.streamGeneration
       }
       stream.supportsOutputPause = capabilities.outputPause
+      stream.supportsPausedOutputDropNotice = capabilities.outputPauseDropNotice
       // Why require the ledger id: without it a runtime restart could not be told apart, and replay would run input twice.
       stream.inputLedgerId =
         capabilities.inputAck &&
@@ -86,12 +98,11 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
       if (stream.supportsOutputPause) {
         stream.callbacks.onOutputPauseCapability?.()
       }
+      if (!stream.initialSnapshotReceived) {
+        stream.callbacks.onSubscribeAcknowledged?.()
+      }
     } else if (event.type === 'end') {
-      discardOutputAcknowledgements(stream)
-      stream.watchdog.dispose()
-      clearSnapshot(stream)
-      clearResyncTimer(stream)
-      rejectPendingSnapshotRequest(stream, 'Remote terminal stream ended.')
+      disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')
       this.streams.delete(event.streamId)
       if (stream.capacityRejected) {
         if (stream.callbacks.onTransportClose) {

@@ -14,6 +14,7 @@ import {
 import {
   hasExactTerminalRetirementProof,
   hasStrongOrphanIdentity,
+  withoutHostAttestation,
   type RecoveryDisposition,
   type RecoverySurface
 } from './web-session-terminal-orphan-recovery-surface'
@@ -41,7 +42,7 @@ function fallback(
   removed: ReadonlySet<string>
 ): TerminalOrphanInventoryResolution {
   return {
-    retained: [...retainedBeforeListing, ...inventorySurfaces],
+    retained: [...retainedBeforeListing, ...inventorySurfaces.map(withoutHostAttestation)],
     removed: new Set(removed),
     claims: [],
     topologyRevision: 0
@@ -104,7 +105,7 @@ export async function resolveTerminalOrphanInventory(args: {
   const retainedBeforeListing = [...duplicateSurfaces, ...stableRetained]
   if (inventorySurfaces.length > 64) {
     return {
-      retained: [...retainedBeforeListing, ...inventorySurfaces],
+      retained: [...retainedBeforeListing, ...inventorySurfaces.map(withoutHostAttestation)],
       removed: provenRemoved,
       claims: [],
       topologyRevision: 0
@@ -238,9 +239,11 @@ export async function resolveTerminalOrphanInventory(args: {
     }
     dispositions.set(surface.surfaceKey, disposition)
   }
-  const retainedAfterListing = inventorySurfaces.filter(
-    (surface) => dispositions.get(surface.surfaceKey) === 'retain'
-  )
+  const retainedAfterListing = inventorySurfaces
+    .filter((surface) => dispositions.get(surface.surfaceKey) === 'retain')
+    .map((surface) =>
+      listedByHandle.has(surface.handle) ? surface : withoutHostAttestation(surface)
+    )
   const removed = new Set(
     [
       ...retiredSurfaces,

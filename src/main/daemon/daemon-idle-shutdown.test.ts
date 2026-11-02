@@ -464,10 +464,14 @@ describe('current daemon lifecycle retirement', () => {
       liveSessions: 1,
       admissionReopened: true
     })
+    const alreadyLiveSubprocess = subprocess
+    subprocess = createMockSubprocess()
     await expect(
       adapter.spawn({ sessionId: 'allowed-after-refusal', cols: 80, rows: 24 })
     ).resolves.toMatchObject({ id: 'allowed-after-refusal' })
     expect(onIdleShutdown).not.toHaveBeenCalled()
+    alreadyLiveSubprocess.exit(0)
+    subprocess.exit(0)
     adapter.dispose()
   })
 

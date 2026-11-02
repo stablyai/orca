@@ -166,6 +166,32 @@ describe('WorktreeCreationPanel', () => {
     expect(container.textContent).toContain('Retry')
   })
 
+  it("shows git's checkout meter as a labelled bar while the checkout runs", async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      checkoutProgress: { percent: 42, completed: 420, total: 1000 }
+    }
+
+    const container = await renderPanel(false)
+
+    const bar = container.querySelector('[role="progressbar"]')
+    expect(bar?.getAttribute('aria-valuenow')).toBe('42')
+    const label = document.getElementById(bar?.getAttribute('aria-labelledby') ?? '')
+    expect(label?.textContent).toBe('Checking out files… 42%')
+  })
+
+  it('shows no bar when git printed no checkout meter, or after the create failed', async () => {
+    expect((await renderPanel(false)).querySelector('[role="progressbar"]')).toBeNull()
+
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      status: 'error',
+      error: 'git worktree add failed',
+      checkoutProgress: { percent: 42, completed: 420, total: 1000 }
+    }
+    expect((await renderPanel(false)).querySelector('[role="progressbar"]')).toBeNull()
+  })
+
   it('omits the recipe output panel for a non-VM creation failure', async () => {
     mocks.state.pendingWorktreeCreations['create-1'] = {
       ...mocks.state.pendingWorktreeCreations['create-1'],

@@ -29,6 +29,7 @@ import type {
 } from '@/runtime/client-hosted-browser-close-intents'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { TabSplitTarget } from '../tabs/tabs-slice-contract'
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
@@ -39,6 +40,8 @@ export type CreateBrowserTabOptions = {
   sessionPartition?: string | null
   // Place the new tab in a specific group (e.g. "Open Preview to the Side"); defaults to the worktree's active group.
   targetGroupId?: string
+  /** Creates the tab in a new split group instead of targetGroupId. */
+  split?: TabSplitTarget
   /** Client-local unified tab id of the source; the new tab lands right after it when still live. */
   afterTabId?: string
   /** Verified execution host for the new wrapper; unset keeps createUnifiedTab's active-workspace fallback. */

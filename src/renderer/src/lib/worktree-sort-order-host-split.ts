@@ -1,8 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import {
-  getRuntimeEnvironmentIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from './worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 export type WorktreeSortOrderHostGroup = {
   hostId: string

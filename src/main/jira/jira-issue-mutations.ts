@@ -92,6 +92,9 @@ export async function updateIssue(
   if (!entry) {
     return { ok: false, error: 'Not connected to Jira.' }
   }
+  if (updates.labels && updates.labelOperations) {
+    return { ok: false, error: 'Pass labels or labelOperations, not both.' }
+  }
   await acquire()
   try {
     const fields: JiraRecord = {}
@@ -105,10 +108,17 @@ export async function updateIssue(
       fields.priority = updates.priorityId ? { id: updates.priorityId } : null
     }
     const issueBase = `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}`
-    if (Object.keys(fields).length > 0) {
+    const labelOperations: ({ add: string } | { remove: string })[] = [
+      ...[...new Set(updates.labelOperations?.add ?? [])].map((add) => ({ add })),
+      ...[...new Set(updates.labelOperations?.remove ?? [])].map((remove) => ({ remove }))
+    ]
+    if (Object.keys(fields).length > 0 || labelOperations.length > 0) {
       await jiraRequest(entry, issueBase, {
         method: 'PUT',
-        body: JSON.stringify({ fields })
+        body: JSON.stringify({
+          fields,
+          ...(labelOperations.length ? { update: { labels: labelOperations } } : {})
+        })
       })
     }
     if (updates.assigneeAccountId !== undefined) {
@@ -119,9 +129,18 @@ export async function updateIssue(
       })
     }
     if (updates.transitionId) {
+      const transitionBody: JiraRecord = { transition: { id: updates.transitionId } }
+      if (updates.transitionFields && Object.keys(updates.transitionFields).length > 0) {
+        transitionBody.fields = updates.transitionFields
+      }
+      if (updates.transitionComment?.trim()) {
+        transitionBody.update = {
+          comment: [{ add: { body: toBodyText(entry.site, updates.transitionComment.trim()) } }]
+        }
+      }
       await jiraRequest(entry, `${issueBase}/transitions`, {
         method: 'POST',
-        body: JSON.stringify({ transition: { id: updates.transitionId } })
+        body: JSON.stringify(transitionBody)
       })
     }
     return { ok: true }

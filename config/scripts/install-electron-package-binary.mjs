@@ -29,7 +29,6 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
 const electronRequire = createRequire(resolve(electronPackageDir, 'package.json'))
 const { version: electronVersion } = electronRequire('./package.json')
-const { downloadArtifact } = electronRequire('@electron/get')
 const targetPlatform = getElectronTargetPlatform()
 const targetArch = getElectronTargetArch()
 const platformPath = getElectronPlatformPath(targetPlatform)
@@ -249,6 +248,7 @@ function formatShareError(error) {
 }
 
 async function downloadElectronArtifactWithRetry(downloadOptions, { cacheRootIsPersistent }) {
+  const { downloadArtifact } = electronRequire('@electron/get')
   const retryDelays = getDownloadRetryDelays()
 
   for (let attempt = 0; ; attempt += 1) {

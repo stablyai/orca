@@ -1,6 +1,6 @@
 import { spawnBundledRipgrep } from '../ripgrep/bundled-ripgrep-spawn'
 import { stopBundledRipgrep } from '../ripgrep/bundled-ripgrep-stop'
-import { parseWslPath } from '../wsl'
+import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-routing'
 import {
   collectMarkdownDocuments,
   MARKDOWN_DOCUMENT_LISTING_ARGS
@@ -13,10 +13,13 @@ export async function listMarkdownDocuments(
   options: { wslDistro?: string; signal?: AbortSignal } = {}
 ): Promise<MarkdownDocument[]> {
   options.signal?.throwIfAborted()
-  const distro = parseWslPath(rootPath)?.distro ?? options.wslDistro
+  const { wslDistro, wslDistroForOutput: distro } = resolveBundledRipgrepWslRouting(
+    rootPath,
+    options.wslDistro
+  )
   const child = spawnBundledRipgrep(MARKDOWN_DOCUMENT_LISTING_ARGS, {
     cwd: rootPath,
-    wslDistro: options.wslDistro,
+    wslDistro,
     wslDistroForOutput: distro,
     stdio: ['ignore', 'pipe', 'pipe']
   })

@@ -27,6 +27,7 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -49,6 +50,7 @@ beforeEach(async () => {
   hostErrors = []
   let generation = 0
   spawnChild = async ({ fence, spawnToken }) => ({
+    providerChildPhase: 'starting' as const,
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     acquisitionGeneration: `generation-${++generation}`,
     link: {
@@ -79,15 +81,18 @@ beforeEach(async () => {
       error: (_message, fields) => hostErrors.push(fields.error)
     },
     store,
-    adapter: {
-      acquire,
-      dispatch,
-      closeSession: vi.fn(async () => true),
-      releaseAcquisition: vi.fn(async () => true),
-      cancelTurn: vi.fn(async () => ({ cancelled: false })),
-      answerPrompt: vi.fn(async () => undefined),
-      setOption: vi.fn(async () => undefined)
-    },
+    adapter: startsWhenPublished(
+      {
+        acquire,
+        dispatch,
+        closeSession: vi.fn(async () => true),
+        releaseAcquisition: vi.fn(async () => true),
+        cancelTurn: vi.fn(async () => ({ cancelled: false })),
+        answerPrompt: vi.fn(async () => undefined),
+        setOption: vi.fn(async () => undefined)
+      },
+      () => host
+    ),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
@@ -187,7 +192,7 @@ describe('a send with no live owner', () => {
     await accept(sendParams('accept first'))
     await eventually(async () => expect(dispatch).toHaveBeenCalledOnce())
 
-    expect(order).toEqual(['admit', 'acquire'])
+    expect(order).toEqual(['acquire'])
   })
 
   it('leaves a live owner alone', async () => {
@@ -326,16 +331,16 @@ describe('a send with no live owner', () => {
     expect(acquire).toHaveBeenCalledOnce()
   })
 
-  it("restarts nothing for an older build's unknown row the journal never saw", async () => {
+  it('accepts afresh when only an older ledger row exists without a command receipt', async () => {
     const resent = await admittedThenHostDied(sendParams('marked unknown, then died'), 'unknown')
 
     await expect(host.send(CALLER, resent)).resolves.toMatchObject({
       ok: true,
-      replayed: true,
-      value: { submission: { dispatchState: 'unknown', recovered: true } }
+      replayed: false,
+      value: { submission: { dispatchState: 'pending' } }
     })
-    expect(acquire).not.toHaveBeenCalled()
-    expect(dispatch).not.toHaveBeenCalled()
+    await eventually(async () => expect(dispatch).toHaveBeenCalledOnce())
+    expect(acquire).toHaveBeenCalledOnce()
   })
 
   it('accepts a send that arrives while a restart holds the queue, and hands both over in order', async () => {
@@ -688,7 +693,8 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
     expect(await submission(firstParams.envelope.clientOperationId)).toMatchObject({
       dispatchState: 'rejected'
     })
-    expect(acquire).toHaveBeenCalledOnce()
+    // The Stop ended the child still proving its start, so the late send started another.
+    expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 })

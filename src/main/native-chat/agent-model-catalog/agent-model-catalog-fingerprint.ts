@@ -13,7 +13,7 @@ import {
  * Everything that changes which models a listing can answer with: the agent,
  * the account home the CLI reads credentials/config from, and the execution
  * host that runs the binary. Login-state or CLI-version drift under the same
- * key is corrected by the next refresh, never by the fingerprint.
+ * key is corrected by later listings, never by the fingerprint.
  */
 export type AgentModelCatalogIdentity = {
   agent: string

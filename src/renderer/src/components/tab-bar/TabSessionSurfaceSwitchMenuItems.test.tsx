@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -20,13 +21,28 @@ const mocks = vi.hoisted(() => {
   } = { subject: null, move: null, launchActionArgs: [] }
   return {
     ...state,
+    pending: false,
+    pendingListeners: new Set<() => void>(),
     handleResumeInNewChat: vi.fn(),
     handleResumeInNewCli: vi.fn(),
     resolveSwitch: vi.fn(),
+    runNativeChatCliFork: vi.fn(),
     listSessions: vi.fn(),
     cancelListSessions: vi.fn(async () => {})
   }
 })
+
+vi.mock('./native-chat-cli-fork-run', () => ({
+  runNativeChatCliFork: mocks.runNativeChatCliFork,
+  useNativeChatCliForkPending: () =>
+    useSyncExternalStore(
+      (listener) => {
+        mocks.pendingListeners.add(listener)
+        return () => mocks.pendingListeners.delete(listener)
+      },
+      () => mocks.pending
+    )
+}))
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
@@ -103,6 +119,8 @@ function listResult(sessions: AiVaultSession[]) {
 beforeEach(() => {
   resetAiVaultForcedRescanThrottleForTest()
   mocks.subject = null
+  mocks.pending = false
+  mocks.runNativeChatCliFork.mockReset()
   mocks.move = null
   mocks.launchActionArgs = []
   mocks.handleResumeInNewChat.mockReset()
@@ -134,8 +152,10 @@ function renderItemsNow(structuredSessionId?: string): void {
         <DropdownMenuTrigger>Open</DropdownMenuTrigger>
         <DropdownMenuContent>
           <TabSessionSurfaceSwitchMenuItems
-            tab={{ id: 'tab-1', worktreeId: 'wt-1', launchAgent: 'claude' }}
-            structuredSessionId={structuredSessionId}
+            tab={{ id: 'tab-1', worktreeId: 'wt-1' }}
+            nativeChat={
+              structuredSessionId ? { sessionId: structuredSessionId, agent: 'claude' } : undefined
+            }
             leadingSeparator
           />
         </DropdownMenuContent>
@@ -157,26 +177,19 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     expect(screen.queryByRole('separator')).toBeNull()
   })
 
-  it('hides the move when the Session History gate withholds it', async () => {
+  it('offers the native chat action immediately while History never answers', async () => {
     mocks.subject = CHAT_SUBJECT
-    await renderItems('orca-chat-1')
-    expect(mocks.listSessions).toHaveBeenCalled()
-    expect(screen.queryByRole('menuitem')).toBeNull()
-  })
-
-  it('runs the Session History "Resume in New CLI" handler on the row, in the tab workspace', async () => {
-    mocks.subject = CHAT_SUBJECT
-    mocks.move = { action: 'resume-in-new-cli', worktreeId: 'wt-1' }
-    await renderItems('orca-chat-1')
-
-    expect(screen.getByRole('separator')).toBeTruthy()
-    expect(screen.queryByText('Resume in New Native Chat')).toBeNull()
+    mocks.listSessions.mockReturnValue(new Promise(() => {}))
+    renderItemsNow('orca-chat-1')
+    expect(mocks.listSessions).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Resume in New CLI' }))
-    expect(mocks.handleResumeInNewCli).toHaveBeenCalledWith(CHAT_ROW, 'wt-1')
-    expect(mocks.launchActionArgs.at(-1)).toMatchObject({
-      activeWorktree: null,
-      activeWorktreeId: 'wt-1'
-    })
+    expect(mocks.runNativeChatCliFork).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: CHAT_SUBJECT,
+        tab: { id: 'tab-1', worktreeId: 'wt-1' },
+        agent: 'claude'
+      })
+    )
   })
 
   it('runs the Session History "Resume in New Native Chat" handler for a CLI tab', async () => {
@@ -202,22 +215,27 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     mocks.listSessions.mockResolvedValue(listResult([CHAT_ROW]))
     mocks.subject = CLI_SUBJECT
     mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
+    // The real gate refuses a chat-owned row (pinned in tab-session-history-switch.parity.test.ts).
+    mocks.resolveSwitch.mockImplementation((_state: unknown, session: AiVaultSession) =>
+      session.structuredSession ? null : mocks.move
+    )
     renderItemsNow()
 
     expect(screen.queryByRole('menuitem')).toBeNull()
     await act(async () => {})
     expect(mocks.listSessions).toHaveBeenCalledWith(expect.objectContaining({ force: undefined }))
+    expect(mocks.resolveSwitch).toHaveBeenCalledWith(expect.anything(), CHAT_ROW, CLI_SUBJECT)
     expect(screen.queryByRole('menuitem')).toBeNull()
   })
 
   it('offers the move once the fresh answer has it', async () => {
-    mocks.subject = CHAT_SUBJECT
-    mocks.move = { action: 'resume-in-new-cli', worktreeId: 'wt-1' }
-    renderItemsNow('orca-chat-1')
+    mocks.subject = CLI_SUBJECT
+    mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
+    renderItemsNow()
 
     expect(screen.queryByRole('menuitem')).toBeNull()
     await act(async () => {})
-    expect(screen.getByRole('menuitem', { name: 'Resume in New CLI' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Resume in New Native Chat' })).toBeTruthy()
   })
 
   it('ignores a lookup that settles after the menu closed', async () => {
@@ -227,9 +245,9 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
         settle = resolve
       })
     )
-    mocks.subject = CHAT_SUBJECT
-    mocks.move = { action: 'resume-in-new-cli', worktreeId: 'wt-1' }
-    await renderItems('orca-chat-1')
+    mocks.subject = CLI_SUBJECT
+    mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
+    await renderItems()
     cleanup()
     await act(async () => settle(listResult([CHAT_ROW])))
 
@@ -238,20 +256,34 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
 
   it('shows nothing when the lookup fails', async () => {
     mocks.listSessions.mockRejectedValue(new Error('scanner crashed'))
-    mocks.subject = CHAT_SUBJECT
-    mocks.move = { action: 'resume-in-new-cli', worktreeId: 'wt-1' }
-    await renderItems('orca-chat-1')
+    mocks.subject = CLI_SUBJECT
+    mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
+    await renderItems()
 
     expect(screen.queryByRole('menuitem')).toBeNull()
   })
 
   it('cancels its lookup when the menu closes', async () => {
-    mocks.subject = CHAT_SUBJECT
+    mocks.subject = CLI_SUBJECT
     mocks.listSessions.mockReturnValue(new Promise(() => {}))
-    await renderItems('orca-chat-1')
+    await renderItems()
     cleanup()
     expect(mocks.cancelListSessions).toHaveBeenCalledWith({
       requestToken: expect.any(String)
     })
   })
+})
+
+it('keeps an accepted native action visible with shared disabled spinner feedback', async () => {
+  mocks.subject = CHAT_SUBJECT
+  mocks.runNativeChatCliFork.mockImplementation(() => {
+    mocks.pending = true
+    mocks.pendingListeners.forEach((listener) => listener())
+  })
+  await renderItems('orca-chat-1')
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Resume in New CLI' }))
+  const item = screen.getByRole('menuitem', { name: 'Resume in New CLI' })
+  expect(item.getAttribute('aria-busy')).toBe('true')
+  expect(item.getAttribute('data-disabled')).not.toBeNull()
+  expect(item.querySelector('.animate-spin')).not.toBeNull()
 })

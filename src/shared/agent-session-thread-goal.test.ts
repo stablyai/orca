@@ -8,7 +8,7 @@ import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalStatusChange,
   currentAgentSessionThreadGoal,
-  currentAgentSessionThreadGoalBySequence,
+  currentAgentSessionThreadGoalSourceBySequence,
   isAgentSessionThreadGoalOpen
 } from './agent-session-thread-goal'
 
@@ -75,8 +75,8 @@ describe('current thread goal', () => {
       ['b', goalRow(5, 'set', paused)],
       ['a', goalRow(2, 'set')]
     ])
-    expect(currentAgentSessionThreadGoalBySequence(unordered.values())).toEqual(paused)
-    expect(currentAgentSessionThreadGoalBySequence([])).toBeUndefined()
+    expect(currentAgentSessionThreadGoalSourceBySequence(unordered.values())?.goal).toEqual(paused)
+    expect(currentAgentSessionThreadGoalSourceBySequence([])?.goal).toBeUndefined()
   })
 
   it('answers null once the latest transition cleared the goal', () => {

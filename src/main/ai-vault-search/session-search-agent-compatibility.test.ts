@@ -76,8 +76,8 @@ test.each(['qoder', 'jcode'] as const)(
         filters: {
           agents: AI_VAULT_AGENTS.filter((candidate) =>
             agent === 'qoder'
-              ? candidate !== 'jcode'
-              : !['codebuddy', 'zcode', 'qoder'].includes(candidate)
+              ? !['jcode', 'kiro'].includes(candidate)
+              : !['codebuddy', 'zcode', 'qoder', 'kiro'].includes(candidate)
           )
         }
       },

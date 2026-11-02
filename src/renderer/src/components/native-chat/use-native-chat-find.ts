@@ -21,6 +21,8 @@ export type NativeChatFind = {
   query: string
   setQuery: (query: string) => void
   close: () => void
+  /** Opens the bar, or refocuses it when open; absent where the chat's find does not run. */
+  open: ((returnFocusTo?: Element | null) => void) | undefined
   /** For the chat root's onKeyDownCapture: an Escape while open closes the bar. */
   onKeyDownCapture: (event: ReactKeyboardEvent) => void
   rootRef: RefObject<HTMLDivElement | null>
@@ -87,6 +89,19 @@ export function useNativeChatFind(
     }
   }, [composerRef, rootRef])
 
+  const open = useCallback(
+    (returnFocusTo = rootRef.current?.ownerDocument.activeElement) => {
+      // A mounted input means the bar is open: refocus it, keeping the current match.
+      if (inputRef.current) {
+        focusInput(inputRef.current)
+        return
+      }
+      focusBeforeOpenRef.current = returnFocusTo instanceof HTMLElement ? returnFocusTo : null
+      setIsOpen(true)
+    },
+    [rootRef]
+  )
+
   useEffect(() => {
     // Out of scope in the web client: the browser's own find keeps Mod+F there.
     if (!enabled || isWebClientLocation()) {
@@ -103,21 +118,13 @@ export function useNativeChatFind(
       }
       e.preventDefault()
       e.stopPropagation()
-      if (e.repeat) {
-        return
+      if (!e.repeat) {
+        open()
       }
-      // A mounted input means the bar is open: refocus it, keeping the current match.
-      if (inputRef.current) {
-        focusInput(inputRef.current)
-        return
-      }
-      const active = root.ownerDocument.activeElement
-      focusBeforeOpenRef.current = active instanceof HTMLElement ? active : null
-      setIsOpen(true)
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [enabled, rootRef])
+  }, [enabled, open, rootRef])
 
   // Why React capture on the root: it runs before the composer's own onKeyDownCapture (outer
   // first), so the composer never interrupts the turn; layers that close on Escape at the
@@ -155,6 +162,7 @@ export function useNativeChatFind(
     query,
     setQuery,
     close,
+    open: isWebClientLocation() ? undefined : open,
     onKeyDownCapture,
     rootRef,
     barRef,

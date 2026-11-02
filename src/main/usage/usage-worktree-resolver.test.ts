@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WorktreeLogic from '../ipc/worktree-logic'
+import type * as WorktreePathComparison from '../git/worktree-path-comparison'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 
 const { worktreePathComparisons } = vi.hoisted(() => ({
   worktreePathComparisons: { count: 0 }
 }))
 
-vi.mock('../ipc/worktree-logic', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeLogic>()
+vi.mock('../git/worktree-path-comparison', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreePathComparison>()
   return {
     ...actual,
     areWorktreePathsEqual: (left: string, right: string) => {

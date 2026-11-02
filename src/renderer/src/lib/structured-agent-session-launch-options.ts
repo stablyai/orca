@@ -3,7 +3,8 @@ import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
 } from '../../../shared/agent-session-wire'
-import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../../shared/native-chat-session-option-defaults'
+import { STRUCTURED_LAUNCH_OPTION_IDS } from '../../../shared/native-chat-session-option-defaults'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
@@ -26,7 +27,7 @@ import {
   agentSessionThrownFailure,
   type AgentSessionWriteFailure
 } from '../../../shared/agent-session-write-failure'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -68,16 +69,18 @@ export function holdStructuredAgentSessionLaunchOption(
     return null
   }
   const replies = repliesFor(state)
-  const { held } = state.selection
-  // A model pick drops picks held under the model it replaces.
-  for (const key of id === 'model' ? Object.keys(held) : [id]) {
+  const held = { ...state.selection.held }
+  // A model pick drops picks held under the model it replaces; the permission mode is the chat's.
+  const dropped =
+    id === 'model'
+      ? Object.keys(held).filter((key) => key !== AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
+      : [id]
+  for (const key of dropped) {
     replies.get(key)?.({ kind: 'superseded' })
     replies.delete(key)
+    delete held[key]
   }
-  state.selection = {
-    ...state.selection,
-    held: id === 'model' ? { model: encoded } : { ...held, [id]: encoded }
-  }
+  state.selection = { ...state.selection, held: { ...held, [id]: encoded } }
   notifyStructuredLaunchListeners()
   return new Promise((resolve) => replies.set(id, resolve))
 }
@@ -142,6 +145,17 @@ function settleHeldOption(
     replies.delete(id)
   }
   notifyStructuredLaunchListeners()
+  state.callers.onSettled()
+}
+
+/** Selections included in the durable create are already the host's option intent. */
+export function settleStructuredLaunchCreateOptions(
+  state: StructuredLaunchState,
+  options: Readonly<Record<string, string>>
+): void {
+  for (const [id, encoded] of Object.entries(options)) {
+    settleHeldOption(state, id, encoded, { kind: 'accepted', options })
+  }
 }
 
 /**
@@ -158,7 +172,7 @@ export async function applyStructuredLaunchHeldOptions(
       throw new StructuredAgentSessionLaunchCancelledError()
     }
     const { held } = state.selection
-    const id = STRUCTURED_LAUNCH_SEED_OPTION_IDS.find((key) => held[key] !== undefined)
+    const id = STRUCTURED_LAUNCH_OPTION_IDS.find((key) => held[key] !== undefined)
     const encoded = id ? held[id] : undefined
     if (!id || encoded === undefined) {
       return receipt

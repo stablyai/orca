@@ -1,8 +1,7 @@
 import { ipcMain } from 'electron'
 import { readLocalFileRange } from './local-file-range-read'
 import { validateFileRangeRequest } from '../../../shared/file-range-read'
-import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
-import { readSshFileExplorerChunk } from '../../runtime/ssh-file-explorer-chunk-read'
+import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveLocalFileRequestPath } from '../local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -22,18 +21,7 @@ export function registerFilesystemChunkReadHandler({ store }: FilesystemHandlerC
     ) => {
       validateFileRangeRequest(args.offset, args.length)
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        const stats = await provider.stat(args.filePath)
-        if (stats.type === 'directory') {
-          throw new Error('Cannot read a directory')
-        }
-        return readSshFileExplorerChunk(
-          provider,
-          args.filePath,
-          stats.size,
-          args.offset,
-          args.length
-        )
+        throw new SshHostNotServedError(args.connectionId)
       }
       const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
       return readLocalFileRange(filePath, args.offset, args.length)

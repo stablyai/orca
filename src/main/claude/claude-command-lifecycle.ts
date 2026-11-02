@@ -20,7 +20,7 @@ import {
 } from './claude-structured-dispatch'
 import { readClaudeFrameString } from './claude-structured-init-proof'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession, ClaudeStartedSend } from './claude-structured-session-state'
 
 const UNSTARTED_VERDICT = {
   cancelled: 'cancelled',
@@ -64,6 +64,20 @@ export function observeClaudeCommandLifecycle(
       onSettledLate
     )
   }
+}
+
+/** The send the CLI reported `started` and has not echoed: output it writes now is that send's
+ *  turn. A local command (`/goal`) answers before its echo, so the echo cannot be what binds it. */
+export function claudeStartedUnechoedSend(session: ClaudeSession): ClaudeStartedSend | null {
+  const waiter = session.dispatchWaiters.find(
+    (candidate) => candidate.commandLifecycle === 'started' && candidate.clientMessageId !== null
+  )
+  return waiter?.clientMessageId
+    ? {
+        clientMessageId: waiter.clientMessageId,
+        ...(waiter.requestedAt === null ? {} : { requestedAt: waiter.requestedAt })
+      }
+    : null
 }
 
 /** A send the CLI took, until its echo, a terminal state or exit: the sweep must not rest its child. */

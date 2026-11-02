@@ -10,22 +10,6 @@ export type RuntimeWorktreeRemovalTarget = {
   pushTarget?: GitPushTarget
 }
 
-export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
-  const message =
-    error instanceof Error
-      ? error.message
-      : error && typeof error === 'object' && 'message' in error
-        ? String((error as { message: unknown }).message)
-        : typeof error === 'string'
-          ? error
-          : ''
-  const stderr =
-    error && typeof error === 'object' && 'stderr' in error
-      ? String((error as { stderr: unknown }).stderr)
-      : ''
-  return /not a git repository/i.test(`${message}\n${stderr}`)
-}
-
 /**
  * Options for `removeManagedWorktree`. Named rather than positional on purpose: three of the
  * four are interchangeable booleans that each waive a different safety check on a destructive

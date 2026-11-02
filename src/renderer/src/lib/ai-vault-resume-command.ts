@@ -3,46 +3,28 @@ import {
   buildAntigravityReferenceStartup
 } from './ai-vault-antigravity-reference-startup'
 import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
-import {
-  buildAiVaultResumeCommand,
-  buildAiVaultResumeShellCommand,
-  realHomeCodexResumeEnvDeletion
-} from '../../../shared/ai-vault-resume-command'
-import {
-  isResumableTuiAgent,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+import { realHomeCodexResumeEnvDeletion } from '../../../shared/ai-vault-resume-command'
 import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
-import { getAiVaultResumeCodexHome, getAiVaultResumePlatform } from '@/lib/ai-vault-resume-platform'
+import { getAiVaultResumePlatform } from '@/lib/ai-vault-resume-platform'
+import {
+  buildAiVaultLocalResumeStartup,
+  getAiVaultAgentProviderSession,
+  getAiVaultResumeCodexHome,
+  type AiVaultResumeCommandSession,
+  type AiVaultResumeHostShell,
+  type AiVaultResumeStartup
+} from '../../../shared/ai-vault-resume-startup'
 
-export type AiVaultResumeCommandSession = Pick<
-  AiVaultSession,
-  'agent' | 'sessionId' | 'cwd' | 'codexHome'
-> &
-  Partial<
-    Pick<AiVaultSession, 'executionHostId' | 'executionHostPlatform' | 'resumeCommand' | 'filePath'>
-  >
-
-export type AiVaultResumeStartup = {
-  command: string
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  launchConfig?: SleepingAgentLaunchConfig
-  providerSession?: AgentProviderSessionMetadata
-}
+export type {
+  AiVaultResumeCommandSession,
+  AiVaultResumeStartup
+} from '../../../shared/ai-vault-resume-startup'
+export { getAiVaultAgentProviderSession }
 
 export type AiVaultResumeWorktreeArgs = {
   state: Pick<
@@ -59,6 +41,7 @@ export type AiVaultResumeWorktreeArgs = {
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null
+  agentArgs?: string
 }
 
 export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWorktreeArgs): string {
@@ -141,103 +124,36 @@ function buildAiVaultResumeForWorktree(
       ...(providerSession ? { providerSession } : {})
     }
   }
-  const { platform, codexHome, liveShell } = resolveAiVaultResumeHost(args)
-  const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
-  const cwd = embedCwd ? args.session.cwd : null
-  const startupCwd = !embedCwd && args.session.cwd ? { cwd: args.session.cwd } : {}
+  const host = resolveAiVaultResumeHost(args)
   if (isAntigravityReferenceSession(args.session)) {
     const reference = buildAntigravityReferenceStartup({
-      session: { ...args.session, filePath: resumeFilePath },
-      cwd,
-      platform,
-      shell: liveShell,
+      session: {
+        ...args.session,
+        filePath: normalizeAiVaultResumeFilePath(args.session.filePath, host.platform)
+      },
+      cwd: embedCwd ? args.session.cwd : null,
+      platform: host.platform,
+      shell: host.liveShell,
       commandOverride: args.commandOverride,
       settings: args.state.settings
     })
     if (reference) {
-      return { ...reference, ...startupCwd }
+      return { ...reference, ...(!embedCwd && args.session.cwd ? { cwd: args.session.cwd } : {}) }
     }
   }
-  if (providerSession && isResumableTuiAgent(args.session.agent)) {
-    const startupPlan = buildAgentResumeStartupPlan({
-      agent: args.session.agent,
-      providerSession,
-      cmdOverrides: {
-        ...args.state.settings?.agentCmdOverrides,
-        ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
-      },
-      platform,
-      shell: liveShell,
-      agentArgs: resolveTuiAgentLaunchArgs(
-        args.session.agent,
-        args.state.settings?.agentDefaultArgs
-      ),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
-      resumeInLaunchCwd: true,
-      ...(args.session.agent === 'omp' && resumeFilePath
-        ? { ompResumeFilePath: resumeFilePath }
-        : {})
-    })
-    if (startupPlan) {
-      return {
-        command:
-          args.session.agent === 'omp'
-            ? buildAiVaultResumeCommand({
-                agent: args.session.agent,
-                sessionId: args.session.sessionId,
-                resumeFilePath,
-                cwd,
-                platform,
-                commandOverride: startupPlan.launchConfig.agentCommand,
-                codexHome,
-                shell: liveShell,
-                clearEnvNames
-              })
-            : buildAiVaultResumeShellCommand({
-                resumeCommand: startupPlan.launchCommand,
-                cwd,
-                platform,
-                codexHome,
-                shell: liveShell,
-                clearEnvNames
-              }),
-        ...(startupPlan.env ? { env: startupPlan.env } : {}),
-        ...realHomeCodexResumeEnvDeletion(args.session),
-        ...startupCwd,
-        launchConfig: startupPlan.launchConfig,
-        providerSession
-      }
-    }
-  }
-
-  return {
-    command: buildAiVaultResumeCommand({
-      agent: args.session.agent,
-      sessionId: args.session.sessionId,
-      // Why: OMP resumes by absolute transcript path, so local rebuilds must
-      // forward it too — otherwise a custom OMP_CODING_AGENT_DIR / WSL-store
-      // session would resume by id against the default store and miss.
-      resumeFilePath,
-      cwd,
-      platform,
-      commandOverride: args.commandOverride,
-      codexHome,
-      // Why: non-resumable agents queue through this fallback too, so it must
-      // quote for the live Windows shell like the startup-plan branch above.
-      shell: liveShell,
-      clearEnvNames
-    }),
-    ...startupCwd,
-    ...realHomeCodexResumeEnvDeletion(args.session)
-  }
+  return buildAiVaultLocalResumeStartup({
+    session: args.session,
+    host,
+    settings: args.state.settings,
+    commandOverride: args.commandOverride,
+    agentArgs: args.agentArgs,
+    embedCwd,
+    clearEnvNames
+  })
 }
 
 /** The platform and live shell a resume line is written for, and the Codex home it pins. */
-export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): {
-  platform: NodeJS.Platform
-  codexHome: string | null
-  liveShell: AgentStartupShell | undefined
-} {
+export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVaultResumeHostShell {
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
   const platform =
@@ -262,24 +178,4 @@ export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): {
     codexHome: getAiVaultResumeCodexHome(args.session.codexHome, platform),
     liveShell
   }
-}
-
-export function getAiVaultAgentProviderSession(
-  session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
-): AgentProviderSessionMetadata | null {
-  if (!isResumableTuiAgent(session.agent)) {
-    return null
-  }
-  if (isAntigravityReferenceSession(session)) {
-    return null
-  }
-  if (session.agent === 'antigravity' || session.agent === 'cursor') {
-    return { key: 'conversation_id', id: session.sessionId }
-  }
-  if (session.agent === 'pi' || session.agent === 'prime-agent') {
-    return session.filePath
-      ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
-      : null
-  }
-  return { key: 'session_id', id: session.sessionId }
 }

@@ -7,7 +7,7 @@ import {
   runtimeHostConnectionStateForEntry,
   type RuntimeHostConnectionState
 } from '@/runtime/runtime-host-connection-state'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type NativeChatHostOutageKind = 'reconnecting' | 'offline'
 

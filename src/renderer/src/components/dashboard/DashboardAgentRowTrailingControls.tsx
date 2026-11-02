@@ -76,8 +76,9 @@ export function DashboardAgentRowTrailingControls({
   return (
     <span
       className={cn(
-        'relative ml-auto flex shrink-0 items-center justify-end',
-        hasChildDisclosure ? 'h-5 gap-1' : 'h-3.5 w-12'
+        // Reserve the disclosure height even when there are no children.
+        'relative ml-auto flex h-5 shrink-0 items-center justify-end',
+        hasChildDisclosure ? 'gap-1' : 'w-12'
       )}
     >
       {(sendTargetStatus === 'eligible' || sendTargetStatus === 'sending') && (

@@ -1,5 +1,6 @@
 /** @vitest-environment happy-dom */
 import { act } from 'react'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control-huge-repo-warning-dismissals'
@@ -53,7 +54,7 @@ async function renderOwner(
 ) {
   function Probe() {
     useSourceControlStatusRefresh({
-      activeRepoSettings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
+      activeRepoTarget: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
       activeWorktreeId: 'repo::/same/path',
       worktreePath: '/same/path',
       isFolder: false,

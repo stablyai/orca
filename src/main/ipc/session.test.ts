@@ -52,10 +52,5 @@ describe('registerSessionHandlers', () => {
       'ssh:open',
       undefined
     ])
-
-    const event: { returnValue?: unknown } = {}
-    handlers.get('session:set-sync')?.(event, {}, 'ssh:fenced')
-    await vi.waitFor(() => expect(event.returnValue).toBe(true))
-    expect(store.setWorkspaceSession).toHaveBeenCalledTimes(2)
   })
 })

@@ -173,14 +173,14 @@ describe('desktop words for a failure fact', () => {
     )
     const detail = 'Uses {{agent}} $t(components.native-chat.failureWords.theAgent) <b>&</b>'
     const rejected = structuredAgentSessionRejectionParts(
-      `The provider did not accept this message: ${detail}.`,
+      `Codex didn't accept this message: ${detail}.`,
       'send',
       { kind: 'providerRejected', detail: { text: detail, audience: 'person' } },
       { agentName: 'Codex' }
     )
     // The provider's own words stay as written: placeholders, nesting and markup are not read.
     expect(agentSessionWriteNoticeText(rejected)).toBe(
-      `Le fournisseur n'a pas accepté ce message : ${detail}.`
+      `Codex n'a pas accepté ce message : ${detail}.`
     )
     expect(
       agentSessionWriteNoticeText(

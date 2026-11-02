@@ -12,7 +12,6 @@ import type {
   DirectSshDetectedWorktreeRequest
 } from '../../../../shared/detected-worktree-provider-contract'
 import { isCurrentSshProviderAuthority } from '../../../ssh/ssh-provider-authority'
-import { getSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import {
   hasValidDirectSshAuthority,
   listDetectedWorktreesForCapturedRepo
@@ -22,6 +21,8 @@ import {
   isCapturedRepoCurrent,
   resolveRepoOwnershipEvidence
 } from './worktree-host-ownership'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { dropWorkspacesTheListingInvalidates } from '../../../persistence/restoring-sessions/invalid-workspace-layout-purge'
 
 export async function listHostQualifiedDetectedWorktrees(
   store: Store,
@@ -75,7 +76,6 @@ export async function listHostQualifiedDetectedWorktrees(
   ) {
     return rejected('rejected')
   }
-  const provider = parsedHost.kind === 'ssh' ? getSshGitProvider(parsedHost.targetId) : undefined
   const isCurrent = (): boolean => {
     if (!isCapturedRepoCurrent(store, repo, args.executionHostId)) {
       return false
@@ -89,19 +89,12 @@ export async function listHostQualifiedDetectedWorktrees(
     if (parsedHost.kind !== 'ssh') {
       return true
     }
-    return (
-      capturedAuthority !== null &&
-      getSshGitProvider(parsedHost.targetId) === provider &&
-      isCurrentSshProviderAuthority(capturedAuthority)
-    )
+    return capturedAuthority !== null && isCurrentSshProviderAuthority(capturedAuthority)
   }
-  const result = await listDetectedWorktreesForCapturedRepo(
-    store,
-    repo,
-    isCurrent,
-    provider,
-    providerAbort
-  )
+  const result = await listDetectedWorktreesForCapturedRepo(store, repo, isCurrent, providerAbort)
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    dropWorkspacesTheListingInvalidates(store, result)
+  }
   if (!result) {
     return rejected('stale')
   }

@@ -1,5 +1,5 @@
 import { useAppStore } from '../store'
-import { createWebRuntimeSessionTerminal } from './web-runtime-session'
+import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
 import type { WebRuntimeTerminalCreateOutcome } from './web-runtime-session-types'
 import {
   beginWebRuntimeInitialTerminalBootstrap,

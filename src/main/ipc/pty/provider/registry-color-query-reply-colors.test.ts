@@ -5,9 +5,7 @@ import {
   _resetColorQueryReplyColorsForTest,
   getLocalPtyProvider,
   publishColorQueryReplyColors,
-  registerSshPtyProvider,
-  setLocalPtyProvider,
-  unregisterSshPtyProvider
+  setLocalPtyProvider
 } from './registry'
 
 class RecordingProvider extends LocalPtyProvider {
@@ -26,25 +24,21 @@ describe('PTY owner colour publication', () => {
 
   afterEach(() => {
     _resetColorQueryReplyColorsForTest()
-    unregisterSshPtyProvider('ssh-colors')
     setLocalPtyProvider(originalLocal)
   })
 
-  it('pushes every change to each owner, and the latest to owners that register later', () => {
+  it('pushes every change to the owner, and the latest to an owner installed later', () => {
     const local = new RecordingProvider()
     setLocalPtyProvider(local)
-    const early = new RecordingProvider()
-    registerSshPtyProvider('ssh-colors', early)
     // Why nothing yet: pushing "unknown" would wipe the theme a surviving daemon still holds.
-    expect([...local.pushes, ...early.pushes]).toEqual([])
+    expect(local.pushes).toEqual([])
 
     publishColorQueryReplyColors(DARK)
     publishColorQueryReplyColors(LIGHT)
     const late = new RecordingProvider()
-    registerSshPtyProvider('ssh-colors', late)
+    setLocalPtyProvider(late)
 
     expect(local.pushes).toEqual([DARK, LIGHT])
-    expect(early.pushes).toEqual([DARK, LIGHT])
     expect(late.pushes).toEqual([LIGHT])
   })
 

@@ -50,7 +50,6 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
@@ -71,7 +70,6 @@ describe('remote agent completion authority', () => {
         getPtyId: () => `${REMOTE_PTY_ID}-${index}`,
         isRemotePtyId: () => true,
         getExpectedIncarnationId: () => 'inc-remote',
-        getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
         inspectProcess: inspectRuntimeTerminalProcess,
         dispatchCompletion: vi.fn(),
         isLive: () => true
@@ -92,7 +90,6 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
@@ -116,7 +113,6 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
@@ -143,7 +139,6 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
@@ -169,7 +164,6 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
@@ -211,7 +205,6 @@ describe('remote agent completion authority', () => {
         getPtyId: () => REMOTE_PTY_ID,
         isRemotePtyId: () => true,
         getExpectedIncarnationId: () => 'inc-remote',
-        getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
         inspectProcess: inspectRuntimeTerminalProcess,
         dispatchCompletion: (_title: string, meta?: AgentCompletionDispatchMeta) => {
           outcomes.push({

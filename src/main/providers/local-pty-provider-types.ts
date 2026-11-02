@@ -1,5 +1,5 @@
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 export type LocalPtyProviderOptions = {
   /** Why: `ctx.command` (pi/omp/claude) must drive overlay source-dir selection — a disk-presence fallback shadows the other agent's extensions. */

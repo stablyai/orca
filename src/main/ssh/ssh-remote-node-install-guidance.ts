@@ -1,6 +1,6 @@
 import type { SshConnection } from './ssh-connection'
 import { createSshOperationAbortError } from './ssh-connection-utils'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execCommand } from './remote-exec/remote-exec-command'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 export type RemoteNodeResolutionOptions = {

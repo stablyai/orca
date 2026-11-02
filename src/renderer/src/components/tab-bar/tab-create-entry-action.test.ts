@@ -1,11 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  classifyTabEntryQuery,
+  getTabEntryOptions,
   openTabEntryWithOperations,
   TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  validateNewTabEntryAbsolutePath,
+  validateNewTabEntryRelativePath,
   type TabEntryOperations
 } from './tab-create-entry-action'
+import * as classifier from './tab-create-entry-classifier'
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
+
+it('keeps the pure classifier available through the tab action module', () => {
+  expect(classifyTabEntryQuery).toBe(classifier.classifyTabEntryQuery)
+  expect(getTabEntryOptions).toBe(classifier.getTabEntryOptions)
+  expect(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE).toBe(
+    classifier.TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
+  )
+  expect(validateNewTabEntryAbsolutePath).toBe(classifier.validateNewTabEntryAbsolutePath)
+  expect(validateNewTabEntryRelativePath).toBe(classifier.validateNewTabEntryRelativePath)
+})
 
 describe('openTabEntryWithOperations', () => {
   function makeOperations(overrides: Partial<TabEntryOperations> = {}): TabEntryOperations {
@@ -26,7 +41,7 @@ describe('openTabEntryWithOperations', () => {
     groupId: 'group-1',
     worktreePath: '/repo',
     runtimeContext: {
-      settings: null,
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     },

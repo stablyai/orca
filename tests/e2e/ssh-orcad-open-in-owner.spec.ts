@@ -9,24 +9,20 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { ElectronApplication } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { createRestartSession } from './helpers/orca-restart'
-import { startOrcadConvertHost } from './helpers/orcad-convert-host'
-import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
-import { convertAndRetain, serverCall } from './helpers/orcad-convert-flow'
-import { waitForSessionReady } from './helpers/store'
+import { serverCall } from './helpers/orcad-convert-flow'
+import {
+  launchConvertedProfile,
+  skipUnlessManagedDockerHost,
+  withManagedHost
+} from './helpers/orcad-managed-workspace'
 import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
-import { shellQuote } from './helpers/docker-ssh-relay-target'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
+import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
 
-const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
-
-test.skip(
-  !TEMPLATE || process.env.ORCA_E2E_SSH_DOCKER !== '1' || process.platform === 'win32',
-  'Needs a POSIX recorder, Docker, and a server template'
-)
+skipUnlessManagedDockerHost()
+test.skip(process.platform === 'win32', 'Needs a POSIX recorder')
 
 for (const surface of [
   'source-control',
@@ -52,51 +48,39 @@ for (const surface of [
     // This recorder writes argv/content and exits; it never opens or focuses a window.
     writeFileSync(
       recorder,
-      `#!/bin/sh\nprintf 'DESKTOP_PID=%s\\nARG=%s\\n' "$$" "$1" > ${shellQuote(receiptPath)}\nif [ -d "$1" ]; then cat "$1/README.md"; else cat "$1"; fi >> ${shellQuote(receiptPath)}\n`
+      `#!/bin/sh\nprintf 'DESKTOP_PID=%s\\nARG=%s\\n' "$$" "$1" > ${quotePosixShell(receiptPath)}\nif [ -d "$1" ]; then cat "$1/README.md"; else cat "$1"; fi >> ${quotePosixShell(receiptPath)}\n`
     )
     chmodSync(recorder, 0o755)
     const receipt = (): string => (existsSync(receiptPath) ? readFileSync(receiptPath, 'utf8') : '')
-    const host = startOrcadConvertHost('docker', testInfo)
-    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
-    let app: ElectronApplication | null = null
-    try {
+    await withManagedHost(testInfo, async (fixture) => {
+      const { host } = fixture
       if (!host.exec) {
         throw new Error('Missing owned Docker controls')
       }
       const execute = host.exec
       execute(
-        `mkdir -p ${shellQuote(owned)} && git clone --quiet ${shellQuote(host.remoteRepoPath)} ${shellQuote(repoPath)} && printf '%s\\n' ${shellQuote(`# ${remoteMarker}`)} > ${shellQuote(filePath)} && mkdir -p ${shellQuote(folderPath)} && printf '%s\\n' ${shellQuote(`# ${remoteMarker}`)} > ${shellQuote(path.join(folderPath, 'README.md'))}`
+        `mkdir -p ${quotePosixShell(owned)} && git clone --quiet ${quotePosixShell(host.remoteRepoPath)} ${quotePosixShell(repoPath)} && printf '%s\\n' ${quotePosixShell(`# ${remoteMarker}`)} > ${quotePosixShell(filePath)} && mkdir -p ${quotePosixShell(folderPath)} && printf '%s\\n' ${quotePosixShell(`# ${remoteMarker}`)} > ${quotePosixShell(path.join(folderPath, 'README.md'))}`
       )
-      const first = await session.launch()
-      app = first.app
-      await waitForSessionReady(first.page)
-      expect(
-        await first.page.evaluate(
-          async ({ filePath, recorder }) =>
-            window.api.shell.openInExternalEditor({ path: filePath, command: recorder }),
-          { filePath, recorder }
-        )
-      ).toEqual({ ok: true })
-      await expect.poll(receipt).toContain(localMarker)
-      console.log('[local-recorder-control]', receipt())
-      rmSync(receiptPath)
-      await session.close(app)
-      app = null
-      const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
+      const { page, seeded, environmentId } = await launchConvertedProfile(fixture, {
         repoPath,
-        folderPath
+        folderPath,
+        beforeSeed: async (page) => {
+          expect(
+            await page.evaluate(
+              async ({ filePath, recorder }) =>
+                window.api.shell.openInExternalEditor({
+                  path: filePath,
+                  command: recorder,
+                  ownerHostId: 'local'
+                }),
+              { filePath, recorder }
+            )
+          ).toEqual({ ok: true })
+          await expect.poll(receipt).toContain(localMarker)
+          console.log('[local-recorder-control]', receipt())
+          rmSync(receiptPath)
+        }
       })
-      const launched = await session.launch()
-      app = launched.app
-      const page = launched.page
-      await waitForSessionReady(page)
-      await convertAndRetain(page, session.userDataDir, seeded)
-      const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-        (entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId
-      )
-      if (!environment) {
-        throw new Error('Missing managed environment')
-      }
       const readConvertedFolderId = () =>
         page.evaluate(
           (folderPath) =>
@@ -115,7 +99,7 @@ for (const surface of [
       const workspaceId = convertedFolderId
         ? folderWorkspaceKey(convertedFolderId)
         : seeded.worktreeId
-      const content = await serverCall(page, environment.id, 'files.read', {
+      const content = await serverCall(page, environmentId, 'files.read', {
         worktree: `id:${workspaceId}`,
         relativePath: 'README.md'
       })
@@ -134,7 +118,7 @@ for (const surface of [
           state.setRightSidebarTab('explorer')
           state.setRightSidebarOpen(true)
         },
-        { id: workspaceId, hostId: toRuntimeExecutionHostId(environment.id), recorder }
+        { id: workspaceId, hostId: toRuntimeExecutionHostId(environmentId), recorder }
       )
       expect(
         await page.evaluate(() => window.__store?.getState().settings?.activeRuntimeEnvironmentId)
@@ -185,16 +169,6 @@ for (const surface of [
       await page.screenshot({
         path: testInfo.outputPath(`${surface}-editor-owner-corrected.png`)
       })
-    } finally {
-      try {
-        if (app) {
-          await session.close(app)
-        }
-        await session.dispose()
-      } finally {
-        host.cleanup()
-        rmSync(owned, { recursive: true, force: true })
-      }
-    }
+    }).finally(() => rmSync(owned, { recursive: true, force: true }))
   })
 }

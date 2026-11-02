@@ -2,22 +2,20 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { track } from '@/lib/telemetry'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { rankWorktreesForSort, type SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type {
+  SmartClass,
+  WorktreeAttention
+} from '../../../../../../shared/sidebar-list/smart-attention'
 import {
-  buildWorktreeComparator,
-  buildWorktreeSortLabels,
-  compareWorktreeSortLabel,
-  type SortBy
-} from '../../smart-sort'
-import {
-  buildAttentionByWorktree,
-  hasFreshAttributedAgentStatus,
-  type SmartClass,
-  type WorktreeAttention
-} from '../../smart-attention'
+  ranksFollowPersistedOrder,
+  smartSortPhase
+} from '../../../../../../shared/sidebar-list/smart-sort-phase'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
+import { useSidebarListSession } from '@/lib/sidebar-list-session'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 
 function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAttention>): void {
   let class1 = 0
@@ -58,70 +56,42 @@ export function useSidebarWorktreeSortOrder(args: {
   const { repoMap, sortBy } = args
   // Why settled (not live): the store coalesces bump bursts so rows don't jump (store/settled-sort-epoch.ts).
   const settledSortEpoch = useAppStore((s) => s.settledSortEpoch)
+  const sortOrderEpoch = useAppStore((s) => s.sortOrderEpoch)
+  // Switch point: the host's stamps arrive on the rows, so a re-list is what re-sorts.
+  const stampedRows = useAppStore((s) => (ORCA_SIDEBAR_INPUTS_IS_MAIN ? s.worktreesByRepo : null))
 
   // Why a latching ref: a live signal makes Smart authoritative for the session, even after that activity ends.
   const sessionHasHadLiveSmartSignal = useRef(false)
+  // Why: cold Smart and Manual fallback rows rank by sortOrder and never persist it, so they can follow another client's save without looping.
+  const followsPersistedRanks = ranksFollowPersistedOrder(
+    sortBy,
+    sessionHasHadLiveSmartSignal.current
+  )
+  const persistedRankTrigger = followsPersistedRanks ? sortOrderEpoch : 0
 
   const recomputedSort = useMemo(() => {
     const state = useAppStore.getState()
-    const nonArchivedWorktrees = getAllWorktreesFromState(state).filter(
-      (worktree) => !worktree.isArchived
-    )
-    const now = Date.now()
-    // Why precompute: the label tiebreaker runs on every comparison in every mode.
-    const labels = buildWorktreeSortLabels(nonArchivedWorktrees)
-    let detectedLiveSmartSignal = false
-
-    // Why cold-start detection: agent-status hydrates async, so the warm comparator would collapse all to Class 4; keep the persisted order until a live signal appears.
-    if (sortBy === 'smart' && !sessionHasHadLiveSmartSignal.current) {
-      // Why tabHasLivePty over tab.ptyId: slept terminals keep tab.ptyId as a wake hint, so it'd falsely keep cold-start ordering off.
-      const hasAnyLivePty = Object.values(state.tabsByWorktree).some((tabs) =>
-        tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
-      )
-      if (
-        hasAnyLivePty ||
-        hasFreshAttributedAgentStatus(state.agentStatusByPaneKey, now, state.tabsByWorktree)
-      ) {
-        detectedLiveSmartSignal = true
-      } else {
-        nonArchivedWorktrees.sort(
-          (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b, labels)
-        )
-        return {
-          sortedIds: nonArchivedWorktrees.map((w) => w.id),
-          attentionByWorktree: null,
-          detectedLiveSmartSignal: false
-        }
-      }
-    }
-
-    // Why precompute: hot sort — build the attention map once so the O(N log N) comparator does O(1) lookups.
-    const attentionByWorktree =
-      sortBy === 'smart'
-        ? buildAttentionByWorktree(
-            nonArchivedWorktrees,
-            state.tabsByWorktree,
-            state.agentStatusByPaneKey,
-            state.runtimePaneTitlesByTabId,
-            state.ptyIdsByTabId,
-            now,
-            state.migrationUnsupportedByPtyId,
-            state.terminalLayoutsByTabId
-          )
-        : new Map<string, WorktreeAttention>()
-    nonArchivedWorktrees.sort(
-      buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree, labels)
-    )
+    const ranking = rankWorktreesForSort({
+      worktrees: getAllWorktreesFromState(state).filter((worktree) => !worktree.isArchived),
+      sortBy,
+      latched: sessionHasHadLiveSmartSignal.current,
+      repoMap,
+      now: Date.now(),
+      sources: state
+    })
     return {
-      sortedIds: nonArchivedWorktrees.map((w) => w.id),
-      attentionByWorktree: sortBy === 'smart' ? attentionByWorktree : null,
-      detectedLiveSmartSignal
+      sortedIds: ranking.sorted.map((w) => w.id),
+      attentionByWorktree: ranking.attentionByWorktree,
+      detectedLiveSmartSignal: ranking.detectedLiveSmartSignal
     }
-    // settledSortEpoch is an intentional trigger not read in the memo; its change signals a recompute.
+    // settledSortEpoch and stampedRows are triggers not read in the memo; a change signals a recompute.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [settledSortEpoch, repoMap, sortBy])
+  }, [settledSortEpoch, persistedRankTrigger, stampedRows, repoMap, sortBy])
   // Why: stable ID order prevents rank-only refreshes from echoing an unchanged snapshot.
   const sortedIds = useReusedArrayIdentity(recomputedSort.sortedIds)
+
+  // Why: main's copy of the latch and retention lives as long as this list, as the ref above does.
+  useSidebarListSession(sortBy, sortedIds)
 
   // Why after commit: a discarded render must not latch Smart onto a live signal that never committed.
   useEffect(() => {
@@ -183,7 +153,10 @@ export function useSidebarWorktreeSortOrder(args: {
 
   // Why: only persist during live sessions so cold start reads the persisted order instead of overwriting it.
   useEffect(() => {
-    if (sortBy !== 'smart' || sortedIds.length === 0 || !sessionHasHadLiveSmartSignal.current) {
+    if (
+      sortedIds.length === 0 ||
+      smartSortPhase(sortBy, sessionHasHadLiveSmartSignal.current) !== 'live'
+    ) {
       return
     }
     // Why: sortOrder lives in each host's worktreeMeta, so persist each host's ids on that host.

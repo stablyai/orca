@@ -1,4 +1,5 @@
 import { expect } from 'vitest'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-current-requests-capability'
 
 export const SESSION = 'session-alpha'
 export const WORKSPACE = 'workspace-1'
@@ -22,6 +23,7 @@ export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletion
 export const STRUCTURED_CALLS: {
   method: string
   hostMethod: string | null
+  clientCapability?: string
   result?: Record<string, unknown>
 }[] = [
   { method: 'agentSession.createSupport', hostMethod: null, result: { supported: true } },
@@ -58,6 +60,18 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.queuedMessagesResume',
     hostMethod: 'queuedMessagesResume',
     result: { ok: true, replayed: false }
+  },
+  // Editing a queued card in place. Clients call these only on a host advertising
+  // `agent-session.queued-message-edit.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.queuedMessageUpdate',
+    hostMethod: 'queuedMessageUpdate',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageEditHold',
+    hostMethod: 'queuedMessageEditHold',
+    result: { status: 'held' }
   },
   {
     method: REWIND_METHOD,
@@ -151,6 +165,12 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.history',
     hostMethod: 'history',
     result: { ok: true, page: { items: [] } }
+  },
+  {
+    method: 'agentSession.currentRequests',
+    hostMethod: 'readCurrentRequests',
+    clientCapability: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+    result: { json: '[]', nextCursor: null }
   },
   {
     method: CONVERSATION_OUTLINE_METHOD,

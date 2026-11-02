@@ -2,8 +2,6 @@ import type { PtyProcessInfo } from '../../providers/pty-process-info'
 
 // One reader for the durable `host_scope` column; re-exported so the process-liveness
 // path keeps its import site while the parse itself lives beside the fleet consumers.
-export type { WorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
-export { parseWorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
 
 /**
  * Does `processIncarnation` name exactly this pty's live incarnation? Requires exact

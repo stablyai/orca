@@ -43,7 +43,7 @@ export class TerminalHost {
   private pendingCreations = new Map<string, Promise<void>>()
   private sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones: TerminalHostTombstones
-  private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
+  private readonly spawnOptions: Pick<TerminalHostOptions, 'spawnSubprocess' | 'spawnGate'>
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
   private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
@@ -59,7 +59,7 @@ export class TerminalHost {
   >()
 
   constructor(opts: TerminalHostOptions) {
-    this.spawnSubprocess = opts.spawnSubprocess
+    this.spawnOptions = opts
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
@@ -107,7 +107,8 @@ export class TerminalHost {
             assertCreateAllowed: () => this.assertCreateOrAttachAllowed(options),
             sessionTeardown: this.sessionTeardown,
             killedTombstones: this.killedTombstones,
-            spawnSubprocess: this.spawnSubprocess,
+            spawnSubprocess: this.spawnOptions.spawnSubprocess,
+            spawnGate: this.spawnOptions.spawnGate,
             onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
             onSessionCreated: (sessionId, generation, isAlive) =>
               this.agentSessionGenerations.remember(sessionId, generation, isAlive),

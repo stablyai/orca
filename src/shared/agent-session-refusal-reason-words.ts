@@ -5,7 +5,7 @@ import type { AgentSessionFailureKind } from './agent-session-failure'
 import type { AgentSessionRefusalReason } from './agent-session-refusal-details'
 import type { AgentSessionWriteNoticeSentence } from './agent-session-write-notice-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
-import type { AgentSessionWriteRefusal } from './agent-session-write-failure'
+import type { AgentSessionWriteKind, AgentSessionWriteRefusal } from './agent-session-write-failure'
 
 /** What the person can do about a refusal with this reason. */
 export type AgentSessionRefusalAction =
@@ -37,6 +37,13 @@ export type AgentSessionRefusalReasonWords =
     }
   /** A start that failed: the sentence that failure has everywhere, whose next step is a send. */
   | { fact: AgentSessionFailureKind; action: AgentSessionRefusalAction }
+  /** A failure's sentence, naming the agent, then `step`: the whole notice for `writes`. */
+  | {
+      fact: AgentSessionFailureKind
+      action: AgentSessionRefusalAction
+      step: AgentSessionWriteNoticeSentence
+      writes: readonly AgentSessionWriteKind[]
+    }
 
 function codeWords(action: AgentSessionRefusalAction): AgentSessionRefusalReasonWords {
   return { words: 'code', action }
@@ -66,6 +73,10 @@ const REASON_WORDS = {
     // Settled under that id, so the control's retry goes out under a new one.
     operationRefusedEarlier: codeWords('retry'),
     journalWriteFailed: causeWords('recordFailed', 'retry'),
+    // Any other write reads the code's words, as a client before this reason does.
+    stopFailed: { fact: 'stopFailed', action: 'retry', step: 'tryAgain', writes: ['stop'] },
+    // The card's Cancel button stays; its notice names the step.
+    cancelNotSaved: causeWords('cancelNotSaved', 'retry', 'tryAgain'),
     attachmentExpired: causeWords('attachmentExpired', 'actFirst', 'reattachFile'),
     conversationCleared: causeWords(
       'conversationCleared',
@@ -88,6 +99,9 @@ const REASON_WORDS = {
     rewindRefused: codeWords('hostFinding'),
     rewindUnconfirmed: codeWords('hostFinding'),
     promptGone: causeWords('questionChanged', 'nothingLeft'),
+    // An approval or question waited on the person when its agent stopped: said naming the agent,
+    // with sending a message as the step on.
+    promptOwnerEnded: { fact: 'providerExited', action: 'nothingLeft' },
     optionRejected: causeWords('optionRejected', 'retry'),
     providerStarting: AGENT_STARTING,
     goalsUnsupported: causeWords('goalsUnsupported', 'hostFinding'),
@@ -101,7 +115,10 @@ const REASON_WORDS = {
     managedAccountUnsupported: { fact: 'managedAccountUnsupported', action: 'actFirst' },
     launchFolderMissing: { fact: 'launchFolderMissing', action: 'actFirst' },
     historyInOtherAccount: { fact: 'historyInOtherAccount', action: 'actFirst' },
+    claudeAccountFolderMissing: { fact: 'claudeAccountFolderMissing', action: 'actFirst' },
+    claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
+    runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
     attachFailed: codeWords('retry')
   },
   agent_session_ownership_unknown: {
@@ -141,7 +158,7 @@ const REASON_WORDS = {
   agent_session_identity_required: {
     recordMissing: causeWords('chatNotFound', 'goElsewhere', 'startNewChat'),
     transcriptNotFound: codeWords('retry'),
-    transcriptUnreadable: codeWords('hostFinding')
+    transcriptUnreadable: causeWords('historyUnavailable', 'retry', 'tryAgain')
   },
   agent_session_operation_conflict: {
     fingerprintMismatch: codeWords('hostFinding'),

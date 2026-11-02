@@ -28,6 +28,10 @@ export function generateKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Arra
   return { publicKey: u8(kp.publicKey), secretKey: u8(kp.secretKey) }
 }
 
+export function randomBytes(length: number): Uint8Array {
+  return u8(nacl.randomBytes(length))
+}
+
 export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Array): Uint8Array {
   return u8(nacl.box.before(u8(peerPublicKey), u8(ourSecretKey)))
 }
@@ -57,7 +61,10 @@ export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 
-function encryptBytes(plaintext: Uint8Array, sharedKey: Uint8Array): Uint8Array {
+export function encryptBytes(
+  plaintext: Uint8Array,
+  sharedKey: Uint8Array
+): Uint8Array<ArrayBuffer> {
   const nonce = u8(nacl.randomBytes(nacl.box.nonceLength))
   const ciphertext = nacl.box.after(u8(plaintext), nonce, u8(sharedKey))
 

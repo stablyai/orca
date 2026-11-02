@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { RichMarkdownEditorDocument } from './document-host-seams'
@@ -47,11 +48,13 @@ function runtime(
   // happy-dom implements no `execCommand`; what these cases read is the caret it would act on.
   Object.defineProperty(document, 'execCommand', { value: () => true, configurable: true })
 
-  const document_ = createRichMarkdownEditorDocument({
-    postToHost: () => {},
-    keyboardInsetSource: () => null,
-    ...(options.promptForUrl ? { promptForUrl: options.promptForUrl } : {})
-  })
+  const document_ = createRichMarkdownEditorDocument(
+    quietRichMarkdownEditorHost({
+      postToHost: () => {},
+      keyboardInsetSource: () => null,
+      ...(options.promptForUrl ? { promptForUrl: options.promptForUrl } : {})
+    })
+  )
   started.push(document_)
 
   if (options.caret) {

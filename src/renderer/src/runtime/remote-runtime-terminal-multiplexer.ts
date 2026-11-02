@@ -10,23 +10,6 @@ import {
   onRuntimeEnvironmentsRetired
 } from './runtime-environment-revision'
 
-export {
-  REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS,
-  REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE
-} from './remote-runtime-terminal-snapshot-state'
-export { isHostAnsweredSnapshotRetryCause } from './remote-runtime-terminal-multiplexer-types'
-export type {
-  RemoteRuntimeMultiplexedTerminal,
-  RemoteRuntimeMultiplexedTerminalCallbacks,
-  RemoteRuntimeSnapshotAvailability,
-  RemoteRuntimeSnapshotHostRetryCause,
-  RemoteRuntimeSnapshotImage,
-  RemoteRuntimeSnapshotLocalRetryCause,
-  RemoteRuntimeSnapshotOutcome,
-  RemoteRuntimeSnapshotPermanentReason,
-  RemoteRuntimeSnapshotRetryCause
-} from './remote-runtime-terminal-multiplexer-types'
-
 const multiplexers = new Map<string, RemoteRuntimeTerminalMultiplexer>()
 
 // Why: a removed or replaced machine's streams end for good, before its new revision is published.

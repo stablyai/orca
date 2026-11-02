@@ -187,9 +187,9 @@ describeDrawer('the bottom drawer on the page', () => {
           () => document.documentElement.dataset.orcaWebEntry === 'mounted',
           { timeout: 30_000, polling: 250 }
         )
-        // The filter sheet, not the row's action sheet: both are the same MountedBottomDrawer, and
+        // The Workspace options sheet, not the row's action sheet: both are the same MountedBottomDrawer, and
         // this one opens from the header, which needs nothing of the list's own layout.
-        const chip = await page.waitForFunction(centreOf, 'Filter', {
+        const chip = await page.waitForFunction(centreOf, 'Workspace options', {
           timeout: 30_000,
           polling: 250
         })
@@ -313,7 +313,7 @@ describeDrawer('the device Back key reaching a sheet on the page', () => {
       // leaves today's pop as the fallback.
       expect(await page.evaluate(notifyNames)).not.toContain(backNames.claim)
 
-      const chip = await page.waitForFunction(centreOf, 'Filter', {
+      const chip = await page.waitForFunction(centreOf, 'Workspace options', {
         timeout: 30_000,
         polling: 250
       })

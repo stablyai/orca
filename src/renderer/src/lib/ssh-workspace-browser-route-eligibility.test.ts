@@ -42,6 +42,21 @@ describe('SSH workspace browser route eligibility', () => {
     }
   )
 
+  it('leaves a WSL deployment on its paired runtime tunnel', () => {
+    const wsl = [
+      {
+        id: 'env-a',
+        orcadDeployment: {
+          kind: 'wsl' as const,
+          distro: 'target-a',
+          localPort: 41000,
+          remotePort: 6768
+        }
+      }
+    ]
+    expect(resolveSshWorkspaceBrowserRouteEligibility('runtime:env-a', {}, wsl)).toBeNull()
+  })
+
   it('keeps a paired runtime-owned deployment on its owning runtime', () => {
     const nested = [
       { id: 'env-a', orcadDeployment: { ...deployment, sshTargetId: 'runtime-ssh-a' } }

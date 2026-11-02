@@ -1,3 +1,4 @@
+import type * as HostProtocolGatesContext from '../../../components/host-protocol-gates-context'
 import { createElement } from 'react'
 import { screenMount } from '../mounted-screen-tree'
 import { performHookAction } from '../hook-mount'
@@ -6,6 +7,7 @@ import { hostClientContextExposure, loadHostClientContext } from '../host-client
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
+import type { HostStatusGates } from '../../../transport/host-status-gates'
 
 const HOST = 'host-1'
 
@@ -26,6 +28,19 @@ export function tasksRouteScreenMountAdapters(
         'mobile/src/tasks/use-mobile-tasks-route-and-item-state.tsx'
       ).useMobileTasksRouteAndItemState
       const hostClientContext = loadHostClientContext(modules)
+      // The screen sits under the host route's protocol gate; this one advertises no capabilities.
+      const gatesContext = modules.load<typeof HostProtocolGatesContext>(
+        'mobile/src/components/host-protocol-gates-context.ts'
+      ).HostStatusGatesContext
+      const gates: HostStatusGates = {
+        hostCapabilities: [],
+        floatingWorkspaceEnabled: false,
+        desktopAppVersion: null,
+        compatVerdict: { kind: 'ok' },
+        hostProtocolWindow: { protocolVersion: undefined, minCompatibleMobileVersion: undefined },
+        statusPending: false,
+        statusReadable: true
+      }
       const context = mountFixture<RpcClientContextValue>({
         acquire: () => client,
         release: () => {},
@@ -48,7 +63,12 @@ export function tasksRouteScreenMountAdapters(
         return null
       }
       const screen = screenMount(
-        () => createElement(hostClientContext.Provider, { value: context }, createElement(Harness)),
+        () =>
+          createElement(
+            hostClientContext.Provider,
+            { value: context },
+            createElement(gatesContext.Provider, { value: gates }, createElement(Harness))
+          ),
         effect
       )
       const model = (): ReturnType<typeof useRoute> => {

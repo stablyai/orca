@@ -7,11 +7,11 @@
 
 import { readFile } from 'node:fs/promises'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
-import { CODEX_SPAWN_TOKEN_ENV } from '../codex/codex-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 
 export function spawnTokenFromEnvironBlock(
   block: string,
-  variable: string = CODEX_SPAWN_TOKEN_ENV
+  variable: string = ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 ): string | null {
   for (const entry of block.split('\0')) {
     if (entry.startsWith(`${variable}=`)) {

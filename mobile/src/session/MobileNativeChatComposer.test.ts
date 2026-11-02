@@ -47,13 +47,10 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-vi.mock('../components/BottomDrawer', async () => {
-  const React = await import('react')
-  return {
-    BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
-      visible ? React.createElement('BottomDrawer', { visible }, children) : null
-  }
-})
+vi.mock('../components/mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'BottomDrawer' }))
+vi.mock('../components/bottom-drawer-modal-host-scope', () => ({
+  useBottomDrawerModalHost: () => null
+}))
 
 describe('MobileNativeChatComposer', () => {
   let renderer: ReactTestRenderer | null = null
@@ -149,7 +146,7 @@ describe('MobileNativeChatComposer', () => {
     expect(onSend).toHaveBeenCalledWith(' /clear is prose ')
   })
 
-  it('locks the option pickers while a composer send is in flight', async () => {
+  it('locks pickers during a pending send while keeping Stop and the next draft usable', async () => {
     // The reverse of the test below. The host spaces a send's body and its Enter
     // ~500ms apart, so an apply tapped inside that window would be submitted as
     // part of the user's prompt instead of running as its own command.
@@ -182,17 +179,19 @@ describe('MobileNativeChatComposer', () => {
       invokeAction: vi.fn(),
       recordCommand: vi.fn()
     }
+    const onStop = vi.fn()
+    const draw = (value: string) =>
+      createElement(MobileNativeChatComposer, {
+        value,
+        onChangeText: vi.fn(),
+        onSend,
+        sendSurfaceId: 'tab-a',
+        getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+        sessionOptions: { isWorking: false, controller },
+        stop: { onStop, held: false }
+      })
     await act(async () => {
-      renderer = create(
-        createElement(MobileNativeChatComposer, {
-          value: 'run the tests',
-          onChangeText: vi.fn(),
-          onSend,
-          sendSurfaceId: 'tab-a',
-          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
-          sessionOptions: { isWorking: false, controller }
-        })
-      )
+      renderer = create(draw('run the tests'))
     })
     const modelPill = (): { props: { accessibilityState: { disabled: boolean } } } =>
       renderer!.root.find(
@@ -206,12 +205,21 @@ describe('MobileNativeChatComposer', () => {
       await Promise.resolve()
     })
     expect(onSend).toHaveBeenCalled()
+    await act(async () => renderer!.update(draw('')))
+    await act(async () => renderer!.update(draw('next draft')))
+    await act(async () =>
+      renderer!.root.findByProps({ accessibilityLabel: 'Stop the agent' }).props.onPress()
+    )
+    expect(onStop).toHaveBeenCalledTimes(1)
+    expect(onSend).toHaveBeenCalledTimes(1)
+    expect(renderer!.root.findByType('TextInput').props.value).toBe('next draft')
     expect(modelPill().props.accessibilityState).toMatchObject({ disabled: true })
     await act(async () => {
       releaseSend?.(true)
       await pressed
     })
     expect(modelPill().props.accessibilityState).toMatchObject({ disabled: false })
+    expect(sendButton().props.disabled).toBe(false)
   })
 
   it('blocks composer submission while a session-option command is pending', async () => {
@@ -302,6 +310,112 @@ describe('MobileNativeChatComposer', () => {
     })
     inputRef.current?.focus()
     expect(focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('is one row until focused or drafted, keeps its field across the switch, and puts Stop in Send’s slot', async () => {
+    let fieldMounts = 0
+    const props = {
+      onChangeText: vi.fn(),
+      onSend: vi.fn().mockResolvedValue(true),
+      onAttachImage: vi.fn(),
+      onMicPress: vi.fn(),
+      sendSurfaceId: 'tab-a',
+      getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+      stop: { onStop: vi.fn(), held: false }
+    }
+    const draw = (value: string, sendDisabled = false) =>
+      createElement(MobileNativeChatComposer, { ...props, value, sendDisabled })
+    await act(async () => {
+      renderer = create(draw(''), {
+        createNodeMock: (element) => {
+          fieldMounts += element.type === 'TextInput' ? 1 : 0
+          return {}
+        }
+      })
+    })
+    const bar = () => renderer!.root.findByProps({ testID: 'native-chat-composer' })
+    const labelled = (label: string) => renderer!.root.findAllByProps({ accessibilityLabel: label })
+    const field = () => renderer!.root.findByType('TextInput')
+    expect(bar().props.style).toMatchObject({ flexDirection: 'row' })
+    expect(labelled('Stop the agent')).toHaveLength(1)
+    expect(labelled('Send message')).toHaveLength(0)
+
+    await act(async () => field().props.onFocus())
+    expect(bar().props.style).not.toHaveProperty('flexDirection')
+    await act(async () => field().props.onBlur())
+    expect(bar().props.style).toMatchObject({ flexDirection: 'row' })
+
+    // A typed draft stays expanded unfocused and takes Send back, unless a prompt card owns Send.
+    await act(async () => renderer!.update(draw('queue this')))
+    expect(bar().props.style).not.toHaveProperty('flexDirection')
+    expect(labelled('Send message')).toHaveLength(1)
+    await act(async () => renderer!.update(draw('queue this', true)))
+    expect(labelled('Stop the agent')).toHaveLength(1)
+    expect(fieldMounts).toBe(1)
+  })
+
+  it('holds each picker through dismissal and restores only pill-displaced focus', async () => {
+    const focus = vi.fn()
+    const controller = {
+      snapshot: ['model', 'effort'].map((id) => ({
+        id,
+        label: id,
+        category: id === 'model' ? ('model' as const) : ('thought_level' as const),
+        kind: { type: 'select' as const, choices: [] },
+        valueSource: 'unknown' as const,
+        settable: true
+      })),
+      pendingId: null,
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      recordCommand: vi.fn(),
+      optionPickerRequest: { id: 'model', sequence: 0 }
+    }
+    const draw = () =>
+      createElement(MobileNativeChatComposer, {
+        value: '',
+        onChangeText: vi.fn(),
+        onSend: vi.fn().mockResolvedValue(true),
+        sendSurfaceId: 'tab-a',
+        getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+        sessionOptions: { controller, isWorking: false }
+      })
+    await act(async () => {
+      renderer = create(draw(), {
+        createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
+      })
+    })
+    const field = () => renderer!.root.findByType('TextInput')
+    const bar = () => renderer!.root.findByProps({ testID: 'native-chat-composer' })
+    const press = async (label: string) =>
+      act(async () => renderer!.root.findByProps({ accessibilityLabel: label }).props.onPress())
+    expect(renderer!.root.findAllByType('BottomDrawer')).toHaveLength(0)
+    await act(async () => field().props.onFocus())
+    await press('Model, Model effort')
+    await act(async () => field().props.onBlur())
+    await press('effort, Not set')
+    await press('Back to models')
+    await press('Close picker')
+    expect(bar().props.style).not.toHaveProperty('flexDirection')
+    await act(async () => renderer!.root.findByType('BottomDrawer').props.onHidden())
+    expect(focus).toHaveBeenCalledTimes(1)
+    for (const id of ['model', 'effort']) {
+      await act(async () => field().props.onFocus())
+      controller.optionPickerRequest = { id, sequence: controller.optionPickerRequest.sequence + 1 }
+      await act(async () => renderer!.update(draw()))
+      await act(async () => field().props.onBlur())
+      expect(bar().props.style).not.toHaveProperty('flexDirection')
+      await act(async () => renderer!.root.findByType('BottomDrawer').props.onClose())
+      expect(bar().props.style).not.toHaveProperty('flexDirection')
+      await act(async () => renderer!.root.findByType('BottomDrawer').props.onHidden())
+      expect(bar().props.style).toMatchObject({ flexDirection: 'row' })
+      expect(focus).toHaveBeenCalledTimes(1)
+    }
+    await act(async () => renderer!.unmount())
+    await act(async () => {
+      renderer = create(draw())
+    })
+    expect(renderer!.root.findAllByType('BottomDrawer')).toHaveLength(0)
   })
 
   it('renders a removable thumbnail for each pending image attachment', async () => {

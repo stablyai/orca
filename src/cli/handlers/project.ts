@@ -208,7 +208,8 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       client,
       'projectHostSetup.delete',
       {
-        setupId: getRequiredStringFlag(flags, 'setup')
+        setupId: getRequiredStringFlag(flags, 'setup'),
+        force: flags.get('force') === true
       }
     )
     printResult(result, json, formatProjectHostSetupDeleteResult)

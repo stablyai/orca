@@ -18,7 +18,7 @@ import { GROK, GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-ad
 import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
 import { replayJournal } from '../native-chat/agent-session-journal/journal-open'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createAcpStructuredLaunchResolver } from './acp-structured-launch-resolution'
+import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import {
   attachParams,
   openHostRig,
@@ -76,6 +76,12 @@ async function openRestoreRig(code: number, message: string) {
           throw new Error('launch resolver not ready')
         }
         return resolver.resolve(input)
+      },
+      readLaunch: (identity) => {
+        if (!resolver.resolve) {
+          throw new Error('launch resolver not ready')
+        }
+        return resolver.resolve({ identity })
       }
     }
   })

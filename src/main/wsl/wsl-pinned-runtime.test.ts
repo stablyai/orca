@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
       'C:/cache/pinned.tar.gz'
   )
 }))
-vi.mock('../ssh/pinned-runtime-materializer', () => ({
+vi.mock('../node-runtime/pinned-runtime-materializer', () => ({
   materializeNodeRuntimeArchive: mocks.download
 }))
 function runner(present = false, libc = 'glibc 2.31', promoted = 'ORCA_NODE_RUNTIME_READY') {

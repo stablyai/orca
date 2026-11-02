@@ -52,6 +52,10 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
   if (element.classList.contains('xterm-helper-textarea') || element.closest('.xterm')) {
     return false
   }
+  // Why: a field in a just-hidden pane keeps focus until Chromium drops it to body a task later.
+  if (element.closest('[hidden], [inert]')) {
+    return false
+  }
   // Why: deferred fit/focus work can run after inline rename or settings
   // fields take focus. Layout maintenance must not blur user edits closed.
   return (

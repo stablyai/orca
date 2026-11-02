@@ -32,6 +32,7 @@ import { useTaskPageGitHubIssueCreation } from '../use-task-page-github-issue-cr
 import { useTaskPageLinearProjectCreation } from '../use-task-page-linear-project-creation'
 import { useTaskPageLinearIssueCreation } from '../use-task-page-linear-issue-creation'
 import { useTaskPageJiraIssueCreation } from '../use-task-page-jira-issue-creation'
+import { useTaskPageJiraSummaryGeneration } from '../use-task-page-jira-summary-generation'
 import { useTaskPageGlobalEffects } from '../use-task-page-global-effects'
 import { useTaskPageLinearListEffects } from '../use-task-page-linear-list-effects'
 import { useTaskPageLinearInOrcaEffects } from '../use-task-page-linear-in-orca-effects'
@@ -74,11 +75,12 @@ export default function TaskPage(): React.JSX.Element {
   const stage31 = useTaskPageLinearProjectCreation(stage30)
   const stage32 = useTaskPageLinearIssueCreation(stage31)
   const stage33 = useTaskPageJiraIssueCreation(stage32)
-  const stage34 = useTaskPageGlobalEffects(stage33)
-  const stage35 = useTaskPageLinearListEffects(stage34)
-  const stage36 = useTaskPageLinearInOrcaEffects(stage35)
-  const stage37 = useTaskPageLinearCollectionEffects(stage36)
-  const stage38 = useTaskPageJiraListEffects(stage37)
-  const stage39 = useTaskPageComposerActions(stage38)
-  return <TaskPageSurface model={stage39} />
+  const stage34 = useTaskPageJiraSummaryGeneration(stage33)
+  const stage35 = useTaskPageGlobalEffects(stage34)
+  const stage36 = useTaskPageLinearListEffects(stage35)
+  const stage37 = useTaskPageLinearInOrcaEffects(stage36)
+  const stage38 = useTaskPageLinearCollectionEffects(stage37)
+  const stage39 = useTaskPageJiraListEffects(stage38)
+  const stage40 = useTaskPageComposerActions(stage39)
+  return <TaskPageSurface model={stage40} />
 }

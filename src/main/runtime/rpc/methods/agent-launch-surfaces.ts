@@ -1,3 +1,4 @@
+import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 /**
  * How `agent.launch` builds the surface the executor decided on.
  *
@@ -39,7 +40,8 @@ import {
 import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
 import {
   agentLaunchMovesHostWindow,
-  type EarlyAgentLaunchTab
+  agentLaunchTabViewerRule,
+  type AgentLaunchView
 } from './agent-launch-tab-publication'
 
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
@@ -52,9 +54,10 @@ export function agentLaunchSurfaceFactory(
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
   // The tab shown before the launch ran; asked at spawn, since the window's answer and the user's
   // close can both land after admission.
-  earlyTab: Pick<EarlyAgentLaunchTab, 'windowShowsTab' | 'closedByUser'> | null = null
+  view: AgentLaunchView = { early: null, presentation: undefined }
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
+  const { early: earlyTab, presentation } = view
   return {
     createStructuredSession: async ({
       worktreeId,
@@ -88,8 +91,9 @@ export function agentLaunchSurfaceFactory(
         agent,
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
-        // The user asked for this chat, so it takes the surface — unlike a dispatched worker.
-        activate: !callerPresentsSurface
+        activate:
+          !callerPresentsSurface &&
+          (presentation === undefined || (presentation === 'focused' && movesHostWindow))
       })
       if (!created.ok) {
         // The caller named this session, so a taken id is its answer, not an opaque refusal; and not
@@ -128,10 +132,12 @@ export function agentLaunchSurfaceFactory(
       launchSource,
       paneKey,
       options,
-      viewMode
+      viewMode,
+      accountEnv
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
+      const hasEarlyTab = earlyTab !== null
       if (earlyTab?.closedByUser()) {
         // The user closed its tab while it waited: nothing is spawned, and that is the answer.
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
@@ -140,6 +146,7 @@ export function agentLaunchSurfaceFactory(
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
         startupAgent: agent,
+        terminalImageViewerSupported: terminalImageViewerSupported(context),
         // Offered to that launcher's startup plan; it rides only when the typed line can carry it,
         // and the runtime reports which so an uncarried prompt is pasted once the agent is ready.
         ...(startupPrompt
@@ -158,7 +165,19 @@ export function agentLaunchSurfaceFactory(
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
-        ...(earlyTab?.windowShowsTab() || !movesHostWindow ? { surfaceOwner: false as const } : {}),
+        ...(accountEnv ? { accountEnv: { ...accountEnv } } : {}),
+        ...(presentation && (!movesHostWindow || !hasEarlyTab || presentation === 'background')
+          ? { presentation: movesHostWindow ? presentation : ('background' as const) }
+          : {}),
+        ...(hasEarlyTab || !movesHostWindow ? { surfaceOwner: false as const } : {}),
+        ...(earlyTab
+          ? {
+              agentLaunchViewer: () =>
+                earlyTab.windowOwnsPresentation()
+                  ? ('none' as const)
+                  : agentLaunchTabViewerRule(context, presentation)
+            }
+          : {}),
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)

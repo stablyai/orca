@@ -68,21 +68,26 @@ describe('a Grok model pick Grok never answers', () => {
   })
 
   it('fails at its bound, frees the chat, and keeps what Grok answers late', async () => {
-    const { rig, host } = await openAttachedHostRig({ optionWriteTimeoutMs: 100 })
+    const { rig, host, store, fence } = await openAttachedHostRig({ optionWriteTimeoutMs: 100 })
     const picking = pick(host, 'grok-4.6')
     await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(1))
     expect(failed(await within(picking, 2_000))).toBe(true)
     // The chat's queue moved on: a later operation runs.
     expect(await within(host.readOptions(SESSION), 1_000)).not.toBe('pending')
     const [frame] = framesOf(rig.child(), 'session/set_config_option')
+    const savedModel = store.getRecord(SESSION)?.options?.model
     rig.child().agent.reply(frame!, {
       configOptions: GROK_CONFIG_OPTIONS.map((option) =>
         option.id === 'model' ? { ...option, currentValue: 'grok-4.6' } : option
       )
     })
     await waitFor(async () =>
-      expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
+      expect(
+        (await rig.adapter.readOptions({ sessionId: SESSION, fence: fence() })).current.model
+      ).toBe('grok-4.6')
     )
+    expect((await host.readOptions(SESSION)).current.model).toBe(savedModel)
+    expect(store.getRecord(SESSION)?.options?.model).toBe(savedModel)
     await host.close(SESSION, 'user-close')
   })
 })

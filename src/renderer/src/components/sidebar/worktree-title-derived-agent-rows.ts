@@ -2,7 +2,7 @@ import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
 import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -14,7 +14,7 @@ import {
   resolveRuntimePaneTitleLeafIdFromRoot,
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
   collectRuntimePaneLeafIds
-} from '@/lib/runtime-pane-title-leaf-id'
+} from '../../../../shared/runtime-pane-title-leaf-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
@@ -231,12 +231,12 @@ function buildTitleDerivedAgentRow(args: {
     agentType,
     rowSource: 'live',
     state: rowState,
-    // Load-bearing zero, not a placeholder: `dashboardRowBucketProjection` reads `startedAt === 0`
-    // as "title-derived" and short-circuits `unseen`. That is the ONLY reason the `args.now` stamps
-    // on `entry` above (updatedAt / stateStartedAt / observation) cannot move this row's bucket.
-    // Dashboard bucket caches key their invalidation on the freshness boundary in
-    // `isExplicitAgentStatusFresh` alone; give this a real timestamp and every one of them starts
-    // serving stale counts, with no test failing at the point of the change.
+    // Load-bearing zero, not a placeholder: dashboard readers treat `startedAt === 0` as
+    // "title-derived" and hide its synthetic prompt text. The `args.now` stamps on `entry` above
+    // never reach unread, which reads the store's turn records (`readAgentRowTurnRecords`);
+    // this row has none.
+    // Dashboard bucket caches key their invalidation on the freshness boundary alone, so a bucket
+    // that read these stamps would serve stale counts with no test failing at the change.
     startedAt: 0
   }
 }

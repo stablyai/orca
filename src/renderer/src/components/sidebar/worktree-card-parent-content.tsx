@@ -22,7 +22,6 @@ export function WorktreeCardParentContent({
     worktree,
     affiliateListMode,
     newCardStyle,
-    lineageChildren,
     showStatus,
     unreadTooltip,
     stopQuickActionPointerPropagation,
@@ -166,9 +165,7 @@ export function WorktreeCardParentContent({
         className={cn(
           'flex min-w-0 flex-1 flex-col gap-1.5',
           // Why: inline agent rows intentionally outdent into the card gutter; inner elements handle truncation.
-          showInlineAgentList ||
-            getWorkspaceAttachments(worktree).length > 1 ||
-            (!newCardStyle && lineageChildren)
+          showInlineAgentList || getWorkspaceAttachments(worktree).length > 1
             ? 'overflow-visible'
             : 'overflow-hidden'
         )}

@@ -1,4 +1,3 @@
-import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -15,6 +14,7 @@ import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 import { installTerminalMouseEncodingTracker } from './terminal-mouse-encoding-tracker'
+import { StableCellFitAddon } from './terminal-stable-cell-fit-addon'
 
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
   return `${uri} (${openLinkHint})`
@@ -54,7 +54,7 @@ export function createPaneDOM(
   installWindowsCtrlAltChordRepair(terminal)
   // Why here: the tracker must see every byte, including the first snapshot replay.
   const mouseEncodingTrackerDisposable = installTerminalMouseEncodingTracker(terminal)
-  const fitAddon = new FitAddon()
+  const fitAddon = new StableCellFitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
   // Why: async tooltip formatting can resolve after hover changes, so stale

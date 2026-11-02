@@ -4,10 +4,15 @@ import { decideAgentLaunchMode } from './agent-launch-mode'
 import { AgentLaunchStartupAgentNotCreatedError } from './agent-launch-legacy-host'
 import type { AgentLaunchSurfaceFactory } from './agent-launch-surface-factories'
 
+const detectInstalledAgents = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
+vi.mock('../preflight/agent-detection', () => ({
+  detectInstalledAgentsWithShellPathHydration: detectInstalledAgents
+}))
+
 const getStructuredAgentSessionCreateSupport = vi.fn(async () => ({ supported: true }))
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the two runtime methods the executor reaches; the chat default is on so a terminal-only launch is proven to ignore it.
 const runtime = {
-  getClientSettings: () => ({ experimentalNativeChat: true }),
+  requireStore: () => ({ getSettings: () => ({ experimentalNativeChat: true }) }),
   getStructuredAgentSessionCreateSupport
 } as unknown as AgentLaunchExecution['runtime']
 
@@ -40,6 +45,16 @@ function legacyLaunch(
 }
 
 describe('terminal-only launches', () => {
+  it('does not wait for native discovery on an untouched non-built-in', async () => {
+    const result = await legacyLaunch('aider', undefined)
+    expect(result.receipt).toMatchObject({
+      mode: 'terminal',
+      preferred: 'terminal',
+      reason: 'user_default'
+    })
+    expect(detectInstalledAgents).not.toHaveBeenCalled()
+  })
+
   it('settle as a terminal whatever the chat default says', () => {
     expect(
       decideAgentLaunchMode({

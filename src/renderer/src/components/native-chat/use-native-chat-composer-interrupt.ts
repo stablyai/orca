@@ -30,7 +30,7 @@ export function useNativeChatComposerInterrupt(args: {
     }
     const target = resolveTarget()
     if (target) {
-      sendRuntimePtyInput(target.settings, target.ptyId, ESC, 'driving')
+      sendRuntimePtyInput(target.ptyId, ESC, 'driving')
     }
   }, [inert, cancelPendingSends, isWorking, onStop, resolveTarget])
 }

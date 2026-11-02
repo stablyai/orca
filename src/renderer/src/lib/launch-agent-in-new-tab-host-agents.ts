@@ -55,6 +55,7 @@ export function launchOnceHostAnswered(
   relaunch: (args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult
 ): LaunchAgentInNewTabResult {
   if (args.beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
+    args.focusIntent?.cancel()
     return null
   }
   const opened = route.awaited.then(() =>
@@ -70,7 +71,10 @@ export function launchOnceHostAnswered(
       !result
         ? { kind: 'cancelled', sessionId: null }
         : (result.structuredSettlement ?? { kind: 'terminal' }),
-    (error: unknown): StructuredAgentLaunchSettlement => ({ kind: 'failed', error })
+    (error: unknown): StructuredAgentLaunchSettlement => {
+      args.focusIntent?.cancel()
+      return { kind: 'failed', error }
+    }
   )
   const deliversPrompt =
     Boolean(args.prompt?.trim()) && (args.promptDelivery ?? 'auto-submit') !== 'draft'

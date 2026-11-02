@@ -42,13 +42,13 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   }
 }))
 
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
-  closeAllWatchers,
   closeRemoteWatcherForWorktreePath,
   forgetRemoteWatcherRemovalSnapshot,
-  registerFilesystemWatcherHandlers,
   restoreRemoteWatcherAfterFailedRemoval
-} from './filesystem-watcher'
+} from './filesystem-watcher-remote-removal'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { createWslWatcher } from './filesystem-watcher-wsl'

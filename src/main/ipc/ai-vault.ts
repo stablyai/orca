@@ -2,6 +2,7 @@ import { app, ipcMain } from 'electron'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions as listCachedLocalAiVaultSessions,
+  AiVaultLocalScanError,
   resetAiVaultSessionListCacheForTests,
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
@@ -12,7 +13,6 @@ import {
   cancelledAiVaultListResult,
   mergeAiVaultListResults
 } from '../ai-vault/session-list-results'
-import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
 import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
@@ -29,13 +29,11 @@ import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
+  parseRoutableExecutionHostId,
   requestedExecutionHostScope,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostScope
 } from '../../shared/execution-host'
-import { getActiveSshAiVaultHostInfos } from './ssh'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
 import {
@@ -57,8 +55,12 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
-import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
+import {
+  OPENS_EVERY_STRUCTURED_CHAT,
+  projectStructuredAiVaultSessions
+} from '../ai-vault/structured-session-ownership'
 import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
+import { registerAiVaultScanProgressBroadcast } from './ai-vault-scan-progress-broadcast'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
@@ -97,11 +99,15 @@ async function listAiVaultSessions(
     includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
   })
   const depth = requestedAiVaultSessionDepth(args)
+  const afterFingerprint =
+    parseRoutableExecutionHostId(executionHostScope)?.kind === 'runtime'
+      ? args?.afterFingerprint
+      : undefined
   // Why: every renderer request carries its own cancellation signal, so
   // coalescing has to survive them — the coordinator hands all same-key callers
   // one scan and only aborts it once every one of them has cancelled.
   return scanCoordinator.run({
-    key: JSON.stringify({ key, depth }),
+    key: JSON.stringify({ key, depth, afterFingerprint }),
     force: args?.force,
     signal: options.signal,
     start: (scanSignal) => {
@@ -114,6 +120,7 @@ async function listAiVaultSessions(
         depth,
         scopePaths,
         force: args?.force === true,
+        afterFingerprint,
         scan
       })
     }
@@ -133,27 +140,9 @@ async function scanAiVaultSessionsByHostScope(
   }
   if (executionHostScope === 'all') {
     const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
-    const sshHosts = getActiveSshAiVaultHostInfosResult()
-    const runtimeResults = [
-      ...(runtimeHosts.issue ? [runtimeHosts.issue] : []),
-      ...(sshHosts.issue ? [sshHosts.issue] : [])
-    ]
+    const runtimeResults = runtimeHosts.issue ? [runtimeHosts.issue] : []
     const scannedResults = await Promise.all([
       scanLocalAiVaultSessionsAsIssue(args, signal),
-      ...sshHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${toSshExecutionHostId(hostInfo.targetId)}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanSshAiVaultSessions(hostInfo.targetId, args, {
-              signal,
-              timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScan,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScanRelay
-            })
-        })
-      ),
       ...runtimeHosts.hostInfos.map((hostInfo) =>
         scanHostLegWithCache({
           cacheKey: `${cacheKey}|${hostInfo.executionHostId}`,
@@ -164,8 +153,11 @@ async function scanAiVaultSessionsByHostScope(
             scanRuntimeAiVaultSessions({
               hostInfo,
               scanner: handlerOptions.scanRuntimeAiVaultSessions,
-              listArgs: args,
-              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.runtimeScan }
+              listArgs: args ? { ...args, afterFingerprint: undefined } : undefined,
+              options: {
+                signal,
+                timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.runtimeScan
+              }
             })
         })
       )
@@ -177,10 +169,7 @@ async function scanAiVaultSessionsByHostScope(
     )
   }
 
-  const parsed = parseExecutionHostId(executionHostScope)
-  if (parsed?.kind === 'ssh') {
-    return scanSshAiVaultSessions(parsed.targetId, args, { signal })
-  }
+  const parsed = parseRoutableExecutionHostId(executionHostScope)
   if (parsed?.kind === 'runtime') {
     return scanRuntimeAiVaultSessions({
       hostInfo: {
@@ -207,15 +196,6 @@ export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryRe
   })
 }
 
-export function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{
-  targetId: string
-}> {
-  return discoverAiVaultHosts(getActiveSshAiVaultHostInfos, {
-    path: 'SSH hosts',
-    fallbackMessage: 'SSH hosts are unavailable.'
-  })
-}
-
 // Why: the SSH legs already degrade to an issue row so one bad host can't take
 // the shared Promise.all down; the local leg can throw too (parse-cache load,
 // WSL home resolution, scanner service supervision) and would otherwise discard
@@ -235,11 +215,12 @@ async function scanLocalAiVaultSessionsAsIssue(
     // so the row carries actionable copy and the log keeps the original.
     const raw = error instanceof Error ? error.message : 'Local session scan failed.'
     console.error('[ai-vault] local session scan failed:', raw)
-    return aiVaultScanIssueResult({
+    const result = aiVaultScanIssueResult({
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       path: 'this computer',
       message: describeAiVaultScanError(raw)
     })
+    return error instanceof AiVaultLocalScanError ? { ...result, scanId: error.scanId } : result
   }
 }
 
@@ -268,8 +249,10 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     const controller = listCancellations.begin(event, requestToken)
     try {
       await handlerOptions.ensureStructuredSessionOwnership?.()
-      const result = await listAiVaultSessions(args, { signal: controller?.signal })
-      return projectStructuredAiVaultSessions(result, true)
+      const result = await listAiVaultSessions(args, {
+        signal: controller?.signal
+      })
+      return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
       // rejected handler — report it as a result so the log stays truthful.
@@ -304,6 +287,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     handleAiVaultGetFirstUserPrompt(args)
   )
   registerAiVaultDeleteHandler(aiVaultDeleteDeps)
+  registerAiVaultScanProgressBroadcast()
   // macOS app activation skips DOM focus events, so emit the refresh signal here.
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {

@@ -1,10 +1,10 @@
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  type ExecutionHostId
 } from './execution-host'
 import {
   areTaskProviderIdentitiesEqual,
@@ -113,7 +113,7 @@ export function buildTaskSourceContextFromRepo(args: {
   return normalizeTaskSourceContext({
     provider: args.provider,
     projectId: args.projectId,
-    hostId: getRepoHostId(args.repo),
+    hostId: getRepoExecutionHostId(args.repo),
     repoId: args.repo.id,
     projectHostSetupId: args.projectHostSetupId,
     providerIdentity: args.providerIdentity,
@@ -140,6 +140,21 @@ export function areTaskSourceContextsEqual(
     (a.accountLabel ?? null) === (b.accountLabel ?? null) &&
     areTaskProviderIdentitiesEqual(a.providerIdentity, b.providerIdentity)
   )
+}
+
+/** Jira identity is siteId (site + login); its label is display-only. Callers match providers first. */
+export function haveConflictingTaskSourceAccounts(
+  a: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>,
+  b: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>
+): boolean {
+  if (a.provider === 'jira') {
+    const left = a.providerIdentity?.provider === 'jira' ? a.providerIdentity.siteId : null
+    const right = b.providerIdentity?.provider === 'jira' ? b.providerIdentity.siteId : null
+    return Boolean(left && right && left !== right)
+  }
+  const left = a.accountLabel?.trim()
+  const right = b.accountLabel?.trim()
+  return Boolean(left && right && left !== right)
 }
 
 export function getTaskSourceRuntimeSettings(
@@ -193,15 +208,6 @@ export function buildWorkspaceRunContext(args: {
     repoId,
     path: repoPath
   }
-}
-
-function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): ExecutionHostId {
-  const explicit = normalizeExecutionHostId(repo.executionHostId)
-  if (explicit) {
-    return explicit
-  }
-  const connectionId = normalizeNonEmptyString(repo.connectionId)
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
 function normalizeTaskProvider(value: unknown): TaskProvider | null {

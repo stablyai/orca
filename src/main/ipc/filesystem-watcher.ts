@@ -10,15 +10,6 @@ import {
   restoreRemoteWatcherAfterFailedRemoval
 } from './filesystem-watcher-remote-removal'
 
-export { closeLocalWatcherForWorktreePath } from './filesystem-watcher-local-removal'
-export { restoreLocalWatcherAfterFailedRemoval } from './filesystem-watcher-local-removal'
-export { forgetLocalWatcherRemovalSnapshot } from './filesystem-watcher-local-removal'
-export { closeRemoteWatcherForWorktreePath } from './filesystem-watcher-remote-removal'
-export { restoreRemoteWatcherAfterFailedRemoval } from './filesystem-watcher-remote-removal'
-export { forgetRemoteWatcherRemovalSnapshot } from './filesystem-watcher-remote-removal'
-export { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
-export { closeAllWatchers } from './filesystem-watcher-shutdown'
-
 // ── Public API ───────────────────────────────────────────────────────
 
 /** The desktop binding for {@link WorktreeWatcherRemoval}. Installed during startup. */

@@ -30,6 +30,7 @@ vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => false }
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({}))
 
+import * as localCapabilities from '@/runtime/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import {
   refreshLocalRuntimeCapabilities,
@@ -103,8 +104,9 @@ describe('a new tab whose chat route waits on the host agent list', () => {
       throw new Error('expected the launch to wait for the host agent list')
     }
     const relaunch = fakeRelaunch()
+    const focusIntent = { request: vi.fn(), cancel: vi.fn() }
 
-    const result = launchOnceHostAnswered(route, args, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, { ...args, focusIntent }, startupPlan, relaunch)
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(relaunch).not.toHaveBeenCalled()
@@ -114,8 +116,37 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     })
     expect(relaunch.mock.calls[0]?.[0]).toMatchObject({
       requestId: undefined,
+      focusIntent,
       agentSessionLaunchPlan: { route: 'structured-native-chat', requestId: 'request-1' }
     })
+  })
+
+  it('releases a timed-out capability waiter without starting host discovery', async () => {
+    vi.useFakeTimers()
+    setLocalRuntimeCapabilitiesForTests(null)
+    const waitForCapabilities = localCapabilities.awaitLocalRuntimeCapabilities
+    const stop = vi.fn()
+    vi.spyOn(localCapabilities, 'awaitLocalRuntimeCapabilities').mockImplementation(() => {
+      const wait = waitForCapabilities()
+      return {
+        known: wait.known,
+        stop: () => {
+          stop()
+          wait.stop()
+        }
+      }
+    })
+    const route = routeNewTabLaunch(storeWithSettings(SETTINGS), args, request)
+    if (!('awaited' in route)) {
+      throw new Error('expected bounded preparation')
+    }
+    await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS)
+    await route.awaited
+    setLocalRuntimeCapabilitiesForTests(REGISTERED)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(stop).toHaveBeenCalledOnce()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(console.warn).not.toHaveBeenCalled()
   })
 
   it('decides without the list once the bounded wait runs out', async () => {

@@ -40,6 +40,7 @@ export type UISliceContextual = {
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
     | 'confirm-remove-folder'
+    | 'confirm-sleep-twin'
     | 'add-repo'
     | 'quick-open'
     | 'worktree-palette'
@@ -51,6 +52,7 @@ export type UISliceContextual = {
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
+    | 'diagram-viewer'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -124,4 +126,6 @@ export type UISliceContextual = {
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean
   markCodexSharedSettingsNoticeSeen: () => void
+  claudeDiffPanelNoticeSeen: boolean
+  markClaudeDiffPanelNoticeSeen: () => void
 }

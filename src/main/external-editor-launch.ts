@@ -98,20 +98,25 @@ function buildExecutableArgs(
   pathValue: string,
   platform: NodeJS.Platform
 ): string[] {
-  const launcherBaseName = getLauncherBaseName(editorCommand)
-  if (launcherBaseName === 'cursor') {
-    // Why: Cursor can route bare folder launches through the last active
-    // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
-    return ['--new-window', pathValue]
+  const isCursor = getLauncherBaseName(editorCommand) === 'cursor'
+  const targetArgs = buildWslRemoteTargetArgs(editorCommand, pathValue, platform, isCursor)
+  // Why: Cursor can route bare folder launches through the last active
+  // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
+  return isCursor ? ['--new-window', ...targetArgs] : targetArgs
+}
+
+function buildWslRemoteTargetArgs(
+  editorCommand: string,
+  pathValue: string,
+  platform: NodeJS.Platform,
+  isCursor: boolean
+): string[] {
+  if (platform !== 'win32' || !(isCursor || isVsCodeLauncherExecutable(editorCommand))) {
+    return [pathValue]
   }
-  if (platform === 'win32' && isVsCodeLauncherExecutable(editorCommand)) {
-    const wslPath = parseWslUncPath(pathValue)
-    if (wslPath) {
-      // Why: VS Code otherwise treats a WSL UNC path as a local Windows folder.
-      return ['--remote', `wsl+${wslPath.distro}`, wslPath.linuxPath]
-    }
-  }
-  return [pathValue]
+  const wslPath = parseWslUncPath(pathValue)
+  // Why: both editors otherwise treat a WSL UNC path as a local Windows folder.
+  return wslPath ? ['--remote', `wsl+${wslPath.distro}`, wslPath.linuxPath] : [pathValue]
 }
 
 function isCompoundShellCommand(command: string): boolean {

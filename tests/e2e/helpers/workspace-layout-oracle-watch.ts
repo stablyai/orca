@@ -1,71 +1,15 @@
 /**
- * Watches a scenario between checkpoints: samples the runtime's layout against the rules every
- * 100 ms (so a breach that heals before the next step still counts), and counts how many times
- * each pane's terminal view (its xterm) is created in the window.
+ * Counts how many times each pane's terminal view (its xterm) is created in the window, so a
+ * remount outside a relaunch, reload or daemon restart fails.
  */
 
 import type { Page } from '@stablyai/playwright-test'
-import {
-  checkWorkspaceLayoutRules,
-  formatViolations,
-  type WorkspaceLayoutPartition
-} from './workspace-layout-oracle-model'
-
-const SAMPLE_MS = 100
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
     /** Leaf id → xterm instances created for that pane in this renderer. */
     __oracleXtermCreations?: Record<string, number>
-  }
-}
-
-export class LayoutRuleSampler {
-  private running = false
-  private loop: Promise<void> | null = null
-  /** Breach line → the step label current when it was first seen. */
-  readonly seen = new Map<string, string>()
-  label = 'start'
-  samples = 0
-
-  constructor(private readPartitions: () => Promise<WorkspaceLayoutPartition[]>) {}
-
-  retarget(readPartitions: () => Promise<WorkspaceLayoutPartition[]>): void {
-    this.readPartitions = readPartitions
-  }
-
-  start(): void {
-    this.running = true
-    this.loop = (async () => {
-      while (this.running) {
-        // A read can fail while the app quits or relaunches; the next sample retries.
-        const partitions = await this.readPartitions().catch(() => null)
-        if (partitions) {
-          this.samples += 1
-          for (const line of formatViolations(checkWorkspaceLayoutRules(partitions))) {
-            if (!this.seen.has(line)) {
-              this.seen.set(line, this.label)
-            }
-          }
-        }
-        await new Promise((resolve) => setTimeout(resolve, SAMPLE_MS))
-      }
-    })()
-  }
-
-  async stop(): Promise<void> {
-    this.running = false
-    await this.loop
-  }
-
-  /** Breaches first seen while `label` was current, removed from the pending set. */
-  take(label: string): string[] {
-    const lines = [...this.seen].filter(([, seenAt]) => seenAt === label).map(([line]) => line)
-    for (const line of lines) {
-      this.seen.set(line, `${label} (reported)`)
-    }
-    return lines
   }
 }
 

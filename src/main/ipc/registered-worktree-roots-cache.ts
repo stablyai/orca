@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
-import type { Store } from '../persistence'
+import type { RegisteredWorktreeRootStore as Store } from './registered-worktree-root-store'
 import {
   listWorktreeRootsWithConcurrency,
   pruneCreatedWorktreeRoots
@@ -17,6 +17,8 @@ import {
   type RegisteredOwner
 } from './registered-worktree-root-owner'
 
+type RepoSource = Pick<Store, 'getRepos'>
+
 const registeredWorktreeRoots = new Set<string>()
 const registeredOwners = new Map<string, RegisteredOwner>()
 const registeredWorktreeRootsRevisionByRepo = new Map<string, number>()
@@ -24,7 +26,7 @@ const CREATED_WORKTREE_ROOTS_MAX = 64
 let revisionSequence = 0
 let baseRevision = 0
 let invalidationGeneration = 0
-let registryStore: Store | null = null
+let registryStore: RepoSource | null = null
 let currentOwners = new Map<string, Repo>()
 let registeredWorktreeRootsDirty = true
 let registeredWorktreeRootsRefresh: Promise<void> | null = null
@@ -35,7 +37,7 @@ function advanceOwner(owner: RegisteredOwner): void {
   registeredWorktreeRootsRevisionByRepo.set(owner.repoId, owner.revision)
 }
 
-function resolveOwnerForRepo(store: Store, repo: Repo | string): RegisteredOwner | undefined {
+function resolveOwnerForRepo(store: RepoSource, repo: Repo | string): RegisteredOwner | undefined {
   const repos = synchronizeOwners(store)
   const key = resolveWorktreeRootOwner(repos, repo, currentOwners)
   return key === undefined ? undefined : registeredOwners.get(key)
@@ -51,7 +53,7 @@ function relistOwners(owners: Iterable<RegisteredOwner>): void {
   registeredWorktreeRootsDirty = true
 }
 
-function synchronizeOwners(store: Store): Repo[] {
+function synchronizeOwners(store: RepoSource): Repo[] {
   const repos = store.getRepos()
   const owners = getLocalWorktreeRootOwners(repos)
   if (registryStore !== store) {
@@ -147,7 +149,7 @@ export async function rebuildAuthorizedRootsCache(store: Store, onlyDirty = fals
  * the global side-effect-token fence, and bumping it would retire in-flight tokens for
  * untouched repos. `advanceOwner` still records this repo's new revision.
  */
-export function markAuthorizedRootsOwnerDirty(store: Store, repo: Repo | string): boolean {
+export function markAuthorizedRootsOwnerDirty(store: RepoSource, repo: Repo | string): boolean {
   const owner = resolveOwnerForRepo(store, repo)
   if (!owner) {
     return false

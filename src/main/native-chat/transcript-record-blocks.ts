@@ -94,9 +94,11 @@ function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | 
 }
 
 function toolResultBlock(record: Record<string, unknown>): NativeChatToolResultBlock {
+  const callId = extractString(record.tool_use_id)
   return {
     type: 'tool-result',
     output: toolResultOutput(record.content),
+    ...(callId ? { callId } : {}),
     ...(record.is_error === true ? { isError: true } : {})
   }
 }

@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * A launch's record across a host restart, against the real durable ledger.
  *

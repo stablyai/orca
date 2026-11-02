@@ -1,3 +1,4 @@
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import type {
   DirectSshWorktreeFetchOptions,
   WorktreeFetchOptions,
@@ -24,7 +25,6 @@ import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
-import { settingsForRepoOwner } from './worktree-owner-settings'
 
 export function createFetchWorktrees(
   set: WorktreeSliceSet,
@@ -70,16 +70,6 @@ export function createFetchWorktrees(
         hostId,
         settings: ownerState.settings
       })
-      const ownerSettings = settingsForRepoOwner(
-        ownerState,
-        repoId,
-        hostId,
-        ownerWasMissingAtStart && (useLocalOwner || options?.executionHostId !== undefined)
-      )
-      const settings =
-        useLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
-          ? { ...ownerSettings, activeRuntimeEnvironmentId: null }
-          : ownerSettings
       const parsedHost = parseExecutionHostId(hostId)
       const directSshAuthority =
         parsedHost?.kind === 'ssh'
@@ -93,7 +83,7 @@ export function createFetchWorktrees(
         }
         return false
       }
-      const refresh = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
+      const refresh = await listDetectedWorktreesForRepoCoalesced(repoId, {
         executionHostId: hostId,
         requireAuthoritative: options?.requireAuthoritative,
         directSshAuthority,
@@ -140,7 +130,7 @@ export function createFetchWorktrees(
       // Direct SSH lineage requires its own qualified authority result.
       // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
       if (!directSshAuthority && !options?.suppressRemoteLineageRefresh) {
-        await refreshRemoteWorktreeLineageBestEffort(settings, set, get)
+        await refreshRemoteWorktreeLineageBestEffort(ipcOrRuntimeTargetForHostId(hostId), set, get)
       }
       return directCallerAuthority ? refresh.providerResult! : refresh.result.authoritative
     } catch (err) {

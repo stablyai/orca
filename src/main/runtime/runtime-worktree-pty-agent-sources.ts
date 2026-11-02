@@ -5,7 +5,12 @@ import {
 } from '../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
-import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../shared/wsl-hook-relay-contract'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 export type ConnectedPtyEvidence = {
@@ -17,9 +22,28 @@ export type ConnectedPtyEvidence = {
   ptyIdByTerminalHandle: ReadonlyMap<string, string>
 }
 
+/** Join only the host-owned summary of this exact chat, never a remote pane with a similar id. */
+function publishedStructuredChildren(
+  entry: AgentStatusIpcPayload,
+  read: ((sessionId: string) => AgentSessionStatusSummary | undefined) | undefined
+) {
+  const prefix = structuredAgentSessionTabId('')
+  const tabId = entry.tabId
+  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId?.startsWith(prefix)) {
+    return undefined
+  }
+  const sessionId = tabId.slice(prefix.length)
+  if (entry.paneKey !== structuredAgentSessionPaneKey(tabId, sessionId)) {
+    return undefined
+  }
+  const summary = read(sessionId)
+  return summary?.workspaceId === entry.worktreeId ? (summary?.children ?? []) : undefined
+}
+
 /** Admit hook-server rows using their execution-host evidence. */
 export function collectRuntimeWorktreePtyAgentSources(args: {
   hookSnapshots: readonly AgentStatusIpcPayload[]
+  readStructuredSummary?: (sessionId: string) => AgentSessionStatusSummary | undefined
   mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
   connectedPtyEvidence: ConnectedPtyEvidence
 }): RuntimeWorktreeAgentSource[] {
@@ -32,6 +56,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       continue
     }
     const hookPayload = pickParsedAgentStatusPayload(entry)
+    const children = publishedStructuredChildren(entry, args.readStructuredSummary)
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
       ptyId: entry.terminalHandle
@@ -53,6 +78,8 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
+      ...(children !== undefined ? { children } : {}),
+      ...(entry.subagents !== undefined ? { subagents: entry.subagents } : {}),
       ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
     })
   }
@@ -69,7 +96,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       source.structuredHost === undefined &&
       tabId !== undefined &&
       mirroredWorktreeId === undefined &&
-      (source.connectionId === null || isWslHookRelayConnectionId(source.connectionId)) &&
+      isLocalHookConnectionId(source.connectionId) &&
       !args.connectedPtyEvidence.tabIds.has(tabId) &&
       !args.connectedPtyEvidence.paneKeys.has(source.paneKey) &&
       // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.

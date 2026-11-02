@@ -1,7 +1,7 @@
 import { defineMethod } from '../../core'
 import { normalizeColorQueryReplyColors } from '../../../../../shared/pty-owner-color-query-colors'
 import { setPairedViewerColors } from '../../../terminal-view-attribute-store'
-import { TerminalSetViewerColors } from './unary-schemas'
+import { TerminalSetViewerColors } from '../../../../../shared/rpc-contract/terminal-unary-params'
 
 export const TERMINAL_VIEWER_COLORS_METHODS = [
   defineMethod({

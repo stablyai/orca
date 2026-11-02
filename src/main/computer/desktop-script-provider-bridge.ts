@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { reportComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { RuntimeClientError } from './runtime-client-error'
 import type { DesktopScriptPlatform } from './desktop-script-provider-paths'

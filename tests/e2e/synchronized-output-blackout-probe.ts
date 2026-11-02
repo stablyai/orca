@@ -6,7 +6,7 @@
  * xterm-buffer observation reports a keystroke as "echoed" while the screen is
  * still showing the previous frame. What the user sees is the RENDER.
  *
- * xterm (6.1.0-beta.303) suppresses all row rendering while
+ * xterm suppresses all row rendering while
  * `decPrivateModes.synchronizedOutput` is set — `RenderService.refreshRows`
  * returns early into `SyncOutputHandler.bufferRows` — and the only escapes are
  * the closing `\x1b[?2026l` or a 1000 ms timeout armed once per buffering

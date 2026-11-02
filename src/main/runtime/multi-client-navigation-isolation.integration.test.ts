@@ -1,7 +1,7 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { parsePairingCode } from '../../shared/pairing'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
@@ -87,9 +87,12 @@ describe('paired runtime navigation isolation', () => {
       seedSessionTabs(runtime)
     }
 
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-navigation-isolation-'))
+    onTestFinished(() => rmSync(userDataPath, { recursive: true, force: true }))
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
-      userDataPath: mkdtempSync(join(tmpdir(), 'orca-navigation-isolation-')),
+      userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })

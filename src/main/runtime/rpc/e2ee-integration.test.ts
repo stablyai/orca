@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from './e2ee-crypto'
+import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from '../../../shared/e2ee-crypto'
 
 // Why: this test simulates the full mobile → desktop E2EE flow without a real
 // WebSocket. The "mobile" side generates an ephemeral keypair, sends e2ee_hello,
@@ -46,7 +46,14 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
       serverSecretKey: serverKeys.secretKey,
       resolveAuthenticatedDevice: (token) =>
         token === 'device-abc'
-          ? { deviceId: 'device-abc', deviceToken: token, scope: 'mobile' }
+          ? {
+              deviceId: 'device-abc',
+              deviceToken: token,
+              scope: 'mobile',
+              clientId: token,
+              callerFingerprint: 'test-fingerprint',
+              credentialRevision: 0
+            }
           : null,
       onReady,
       onError
@@ -123,7 +130,14 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
       serverSecretKey: serverKeys.secretKey,
       resolveAuthenticatedDevice: (token) =>
         token === 'device-abc'
-          ? { deviceId: 'device-abc', deviceToken: token, scope: 'mobile' }
+          ? {
+              deviceId: 'device-abc',
+              deviceToken: token,
+              scope: 'mobile',
+              clientId: token,
+              callerFingerprint: 'test-fingerprint',
+              credentialRevision: 0
+            }
           : null,
       onReady,
       onError

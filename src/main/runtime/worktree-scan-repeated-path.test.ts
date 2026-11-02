@@ -25,12 +25,6 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
   readRepoWorktreeAdminFingerprint: vi.fn(async () => null)
 }))
 
-const getSshGitProviderMock = vi.hoisted(() => vi.fn())
-vi.mock('../providers/ssh-git-dispatch', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  getSshGitProvider: getSshGitProviderMock
-}))
-
 import { OrcaRuntimeService } from './orca-runtime'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 
@@ -101,7 +95,6 @@ async function listedRows(runtime: OrcaRuntimeService): Promise<string[]> {
 describe('worktree scan with a repeated path', () => {
   beforeEach(() => {
     localScanMock.mockReset()
-    getSshGitProviderMock.mockReset()
   })
 
   describe('rows that agree, as reported', () => {
@@ -148,16 +141,5 @@ describe('worktree scan with a repeated path', () => {
 
     await expect(listedRows(runtime)).resolves.toEqual([`${MAIN_WORKTREE_ID} refs/heads/dev_ops`])
     await expect(runtime.showManagedWorktree('branch:stale')).rejects.toThrow('selector_not_found')
-  })
-
-  it('lists an SSH repo the remote host repeats once', async () => {
-    getSshGitProviderMock.mockReturnValue({
-      listWorktrees: vi.fn(async () => [MAIN_ROW, { ...MAIN_ROW, isMainWorktree: false }])
-    })
-
-    await expect(listedRows(makeRuntime({ connectionId: 'builder' }))).resolves.toEqual([
-      `${MAIN_WORKTREE_ID} refs/heads/dev_ops`
-    ])
-    expect(localScanMock).not.toHaveBeenCalled()
   })
 })

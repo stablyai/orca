@@ -1,7 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QuickLaunchAgentMenuItems, shouldShowLaunchWatchdogTimeout } from './QuickLaunchButton'
+import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 
 const {
   shortcutLabelMock,
@@ -23,7 +23,9 @@ const {
   },
   openSettingsPageMock: vi.fn(),
   openSettingsTargetMock: vi.fn(),
-  useDetectedAgentsMock: vi.fn(() => ({ detectedIds: ['claude', 'codex', 'gemini'] }))
+  useDetectedAgentsMock: vi.fn((): { detectedIds: string[] | null; detectionFailed?: boolean } => ({
+    detectedIds: ['claude', 'codex', 'gemini']
+  }))
 }))
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -159,7 +161,8 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     expect(useDetectedAgentsMock).toHaveBeenLastCalledWith({
       kind: 'runtime',
-      environmentId: 'env-1'
+      environmentId: 'env-1',
+      worktreeId: 'worktree-1'
     })
   })
 
@@ -179,7 +182,8 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     expect(useDetectedAgentsMock).toHaveBeenLastCalledWith({
       kind: 'runtime',
-      environmentId: 'env-1'
+      environmentId: 'env-1',
+      worktreeId: 'worktree-1'
     })
   })
 
@@ -197,6 +201,16 @@ describe('QuickLaunchAgentMenuItems', () => {
     })
   })
 
+  // Why (#25523): a host that never answered is not a host with nothing installed.
+  it('says the host is unreachable instead of reporting no agents', () => {
+    useDetectedAgentsMock.mockReturnValueOnce({ detectedIds: null, detectionFailed: true })
+
+    const html = renderAgentMenuItems()
+
+    expect(html).toContain('reach this workspace')
+    expect(html).not.toContain('No agents detected')
+  })
+
   it('does not label an auto-picked or blank default as configured', () => {
     shortcutLabelMock.mockReturnValue('⌘⌥T')
 
@@ -205,23 +219,5 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     storeState.settings.defaultTuiAgent = 'blank'
     expect(renderAgentMenuItems()).not.toContain('data-dropdown-shortcut="true"')
-  })
-})
-
-describe('shouldShowLaunchWatchdogTimeout', () => {
-  it('does not report slow agent readiness once a PTY exists', () => {
-    expect(
-      shouldShowLaunchWatchdogTimeout({
-        hasPty: true
-      })
-    ).toBe(false)
-  })
-
-  it('reports launches where no PTY appeared', () => {
-    expect(
-      shouldShowLaunchWatchdogTimeout({
-        hasPty: false
-      })
-    ).toBe(true)
   })
 })

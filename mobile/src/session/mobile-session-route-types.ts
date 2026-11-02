@@ -1,5 +1,5 @@
 import type { MobileFileMedia } from '../files/mobile-file-media'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
@@ -37,7 +37,7 @@ export type MobileSessionTab =
       id: string
       title: string
       sessionId: string
-      agent: AgentSessionHandleProvider
+      agent: StructuredAgentId
       isActive: boolean
     }
   | {
@@ -91,6 +91,8 @@ export type MarkdownDocState =
       stale?: boolean
       saving?: boolean
       saveError?: string
+      /** Changes only on phone edits and saves, not host metadata updates. */
+      localRevision?: number
       readOnlyReason?: string
       truncated?: true
       byteLength?: number
@@ -144,7 +146,8 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
+/** `other-runtime`: another Orca server owns the workspace, so the paired host cannot list its agents. */
+export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error' | 'other-runtime'
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 

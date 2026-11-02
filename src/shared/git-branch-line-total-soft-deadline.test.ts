@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS } from './git-branch-line-total'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCache,
@@ -33,30 +34,41 @@ async function runPass(diffDelayMs: number): Promise<{ elapsed: number; total: u
 }
 
 describe('branch line total never blocks the status response', () => {
-  it('returns fast when the ranged diff is slow, then publishes it on the next pass', async () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
     clearGitStatusLineStatsCache()
-    const slow = await runPass(3000)
-    expect(slow.total).toBeUndefined()
-    expect(slow.elapsed).toBeLessThan(1200)
+  })
 
-    // Why: poll the cache rather than run another pass — a second recompute
-    // stores, which retires the first pass's still-pending late-arrival token.
-    await vi.waitFor(
-      () => {
-        expect(
-          readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })
-        ).toEqual({ added: 5, removed: 5, mergeBase: MERGE_BASE })
-      },
-      { timeout: 15000, interval: 50 }
-    )
-    const next = await runPass(3000)
+  afterEach(() => {
+    clearGitStatusLineStatsCache()
+    vi.useRealTimers()
+  })
+
+  it('returns fast when the ranged diff is slow, then publishes it on the next pass', async () => {
+    const slowPass = runPass(3000)
+    await vi.advanceTimersByTimeAsync(GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS)
+    const slow = await slowPass
+    expect(slow.total).toBeUndefined()
+    expect(slow.elapsed).toBe(GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS)
+
+    // Let the first diff backfill before a second pass retires its write token.
+    await vi.advanceTimersByTimeAsync(3000 - GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS)
+    expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toEqual({
+      added: 5,
+      removed: 5,
+      mergeBase: MERGE_BASE
+    })
+    const nextPass = runPass(3000)
+    await vi.advanceTimersByTimeAsync(GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS)
+    const next = await nextPass
     expect(next.total).toEqual({ added: 5, removed: 5, mergeBase: MERGE_BASE })
-  }, 20000)
+  })
 
   it('still returns the total inline when the diff is fast', async () => {
-    clearGitStatusLineStatsCache()
-    const fast = await runPass(10)
+    const fastPass = runPass(10)
+    await vi.advanceTimersByTimeAsync(10)
+    const fast = await fastPass
     expect(fast.total).toEqual({ added: 5, removed: 5, mergeBase: MERGE_BASE })
-    expect(fast.elapsed).toBeLessThan(400)
+    expect(fast.elapsed).toBe(10)
   })
 })

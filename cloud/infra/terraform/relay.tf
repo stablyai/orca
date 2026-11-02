@@ -147,16 +147,25 @@ resource "google_cloud_run_v2_service" "relay" {
       max_instance_count = var.relay_max_instances
     }
 
-    volumes {
-      name = "cloudsql"
+    # Built-in socket only without the sidecar: its connect() blocks the event loop (variables.tf).
+    dynamic "volumes" {
+      for_each = var.relay_director_cloud_sql_proxy_sidecar ? [] : ["cloudsql"]
 
-      cloud_sql_instance {
-        instances = [local.relay_database_connection_name]
+      content {
+        name = volumes.value
+
+        cloud_sql_instance {
+          instances = [local.relay_database_connection_name]
+        }
       }
     }
 
+    # Stays first: deploys and readers address the relay as containers[0], and gcloud flags without
+    # --container land on the ingress container.
     containers {
-      image = var.relay_cloud_run_image
+      name       = var.relay_director_cloud_sql_proxy_sidecar ? "relay" : null
+      image      = var.relay_cloud_run_image
+      depends_on = var.relay_director_cloud_sql_proxy_sidecar ? ["cloud-sql-proxy"] : null
 
       env {
         name = "ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED"
@@ -174,13 +183,33 @@ resource "google_cloud_run_v2_service" "relay" {
         value = data.external.relay_serving_regional_placement_version.result.cohort_percent
       }
 
+      # The director deploy owns these (shadow cells are set by hand): an apply keeps whatever the
+      # serving revision has, and adds nothing when it has none.
+      dynamic "env" {
+        for_each = {
+          for name, value in {
+            ORCA_RELAY_RESERVE_PLACEMENT      = data.external.relay_serving_regional_placement_version.result.reserve_placement
+            ORCA_RELAY_SHADOW_SEAT_FEED_CELLS = data.external.relay_serving_regional_placement_version.result.shadow_seat_feed_cells
+          } : name => value if value != ""
+        }
+
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       ports {
         container_port = 8080
       }
 
-      volume_mounts {
-        name       = "cloudsql"
-        mount_path = "/cloudsql"
+      dynamic "volume_mounts" {
+        for_each = var.relay_director_cloud_sql_proxy_sidecar ? [] : ["cloudsql"]
+
+        content {
+          name       = volume_mounts.value
+          mount_path = "/cloudsql"
+        }
       }
 
       env {
@@ -188,7 +217,9 @@ resource "google_cloud_run_v2_service" "relay" {
 
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.relay_database_url.secret_id
+            secret = (var.relay_director_cloud_sql_proxy_sidecar
+              ? google_secret_manager_secret.relay_director_database_url[0].secret_id
+            : google_secret_manager_secret.relay_database_url.secret_id)
             version = "latest"
           }
         }
@@ -364,6 +395,75 @@ resource "google_cloud_run_v2_service" "relay" {
         cpu_idle = false
       }
     }
+
+    # Accepts a loopback TCP connection at once and dials Cloud SQL in the background, so the pool's
+    # 2 s connect timeout holds through a start-up or failover. Authenticates as the director's
+    # runtime account. The GCE cells run the same proxy, over a Unix socket on a full Linux kernel.
+    dynamic "containers" {
+      for_each = var.relay_director_cloud_sql_proxy_sidecar ? ["cloud-sql-proxy"] : []
+
+      content {
+        name  = containers.value
+        image = var.relay_gce_cloud_sql_proxy_image
+        args = [
+          "--address=127.0.0.1",
+          "--port=5432",
+          "--health-check",
+          # Cloud Run's probe is not documented to reach loopback; only the ingress port is routed.
+          "--http-address=0.0.0.0",
+          "--http-port=9090",
+          "--structured-logs",
+          "--exit-zero-on-sigterm",
+          # Lets in-flight statements finish while the relay drains after SIGTERM.
+          "--max-sigterm-delay=10s",
+          local.relay_database_connection_name
+        ]
+
+        # Go sizes its scheduler to the host's cores, not the 0.25 vCPU quota; one keeps it from
+        # being throttled in bursts.
+        env {
+          name  = "GOMAXPROCS"
+          value = "1"
+        }
+
+        # Ready once it listens; it does not wait for the database, so the relay boots through
+        # an outage exactly as it does today.
+        startup_probe {
+          period_seconds    = 1
+          timeout_seconds   = 1
+          failure_threshold = 60
+
+          http_get {
+            path = "/startup"
+            port = 9090
+          }
+        }
+
+        # /liveness answers without the database; failing it means the proxy itself is wedged.
+        liveness_probe {
+          period_seconds    = 10
+          timeout_seconds   = 1
+          failure_threshold = 3
+
+          http_get {
+            path = "/liveness"
+            port = 9090
+          }
+        }
+
+        # A quarter vCPU carries the pool's few connections. Cloud Run rejects only a total under
+        # 1 vCPU with concurrency above 1 (validated against the API with the relay's 1 vCPU and
+        # concurrency 1000), so the sidecar adds 25% to director compute, not 100%.
+        resources {
+          limits = {
+            cpu    = "0.25"
+            memory = "256Mi"
+          }
+
+          cpu_idle = false
+        }
+      }
+    }
   }
 
   # Deploys update immutable images; Terraform owns service shape and IAM.
@@ -391,7 +491,9 @@ resource "google_cloud_run_v2_service" "relay" {
     google_secret_manager_secret_iam_member.relay_database_url_director_accessor,
     google_secret_manager_secret_version.relay_assignment_signing_key,
     google_secret_manager_secret_version.relay_regional_placement_enabled,
-    google_secret_manager_secret_version.relay_database_url
+    google_secret_manager_secret_version.relay_database_url,
+    google_secret_manager_secret_iam_member.relay_director_database_url_accessor,
+    google_secret_manager_secret_version.relay_director_database_url
   ]
 }
 

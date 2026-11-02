@@ -7,7 +7,7 @@ import {
   symlinkSync,
   unlinkSync
 } from 'node:fs'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { getOrcaManagedCodexHomePath, getOrcaUserDataPath } from '../codex/codex-home-paths'
 import type { CodexMirroredHomeStatus } from './runtime-home-service-types'
@@ -65,7 +65,7 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
   }
 
   protected getRuntimeMetadataDir(): string {
-    const metadataDir = join(app.getPath('userData'), 'codex-runtime-home')
+    const metadataDir = join(getAppEnvironment().getPath('userData'), 'codex-runtime-home')
     mkdirSync(metadataDir, { recursive: true })
     return metadataDir
   }
@@ -83,7 +83,7 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
   }
 
   protected getManagedAccountsRoot(): string {
-    return join(app.getPath('userData'), 'codex-accounts')
+    return join(getAppEnvironment().getPath('userData'), 'codex-accounts')
   }
 
   protected repointLegacyActiveHomePointer(activeHomePath: string, runtimeHomePath: string): void {

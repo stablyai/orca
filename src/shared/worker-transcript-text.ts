@@ -11,6 +11,7 @@ import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText
 } from './native-chat-subagent-summary'
+import { subagentFallbackText } from './native-chat-subagent-items'
 import type { NativeChatMessage } from './native-chat-types'
 
 export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
@@ -43,6 +44,12 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
     }
     if (block.type === 'subagent-group') {
       return standIns.get(index) ?? null
+    }
+    if (block.type === 'subagent') {
+      // A subagent's own row is its block and its twin, nothing else.
+      return message.blocks.some((other) => other.type === 'text')
+        ? null
+        : `[subagents] ${subagentFallbackText(block)}`
     }
     // The journal deliberately admits block types this build does not know, and
     // a newer remote host can send one over the wire. Degrade to a marker rather

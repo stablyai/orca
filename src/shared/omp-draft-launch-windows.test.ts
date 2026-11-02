@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
 
 it.skipIf(process.platform !== 'win32').each(['cmd', 'powershell'] as const)(

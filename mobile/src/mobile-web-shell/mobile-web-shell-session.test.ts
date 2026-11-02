@@ -16,6 +16,8 @@ import {
 } from './mobile-web-shell-session-test-fixtures'
 import { shellPageFrame } from './shell-page-frame'
 
+const NO_BUNDLE_WALL = { kind: 'wall', verdict: { kind: 'blocked', reason: 'bundle-unavailable' } }
+
 describe('the gates decide whether a step is taken at all', () => {
   it('waits while a connection is still being made', () => {
     const step = started({ reachability: 'connecting' })
@@ -46,11 +48,9 @@ describe('the gates decide whether a step is taken at all', () => {
     expect(step.effects).toEqual([{ kind: 'open-cache' }])
   })
 
-  it('leaves the route native for a readable host that serves no bundle', () => {
-    // Not a wall: a wall says the workspace cannot be opened, and a desktop with no bundle declares
-    // no page route, so there is nothing to open and the native screen is where this already was.
+  it('walls a readable host that serves no bundle rather than falling back to a native screen', () => {
     const step = started({ hostCapabilities: [] })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
+    expect(step.session.state).toEqual(NO_BUNDLE_WALL)
     expect(step.effects).toEqual([])
   })
 
@@ -64,13 +64,13 @@ describe('the gates decide whether a step is taken at all', () => {
 })
 
 describe('the offline rule', () => {
-  it('leaves an unreachable host native when its cached bundle lists no such route', () => {
+  it("shows offline, not a wall, when an unreachable host's cached bundle lists no such route", () => {
     const offline = started({ reachability: 'unreachable' })
     const step = run(offline.session, {
       type: 'cache-read',
       generation: { ...CACHED, routes: [] }
     })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
+    expect(step.session.state).toEqual({ kind: 'offline' })
     expect(step.effects).toEqual([])
   })
 
@@ -136,20 +136,21 @@ describe('the connected flow', () => {
     expect(step.effects).toEqual([])
   })
 
-  it('opens the cached generation without paging when the build ids match', () => {
-    const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
+  it('opens a same-build hit without paging, under the fresh grants', () => {
+    // Stored routes this shell cannot serve: only the fresh manifest's grants make it a page.
+    const stale = { ...CACHED, routes: [{ pathname: '/h/[hostId]', grants: ['teleport'] }] }
+    const step = run(afterCacheRead(stale).session, { type: 'manifest-read', manifest: MANIFEST })
     expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
-    // And it writes the manifest it just matched: the routes are the only thing a same-build read
-    // can have changed, and nothing else on this path touches the disk.
+    // Only the open: a write beside the generation would race the native view reading it.
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
         directory: CACHED.directory,
         buildId: CACHED.buildId,
         totalBytes: CACHED.totalBytes
-      },
-      { kind: 'persist-manifest', manifest: MANIFEST.wire }
+      }
     ])
+    expect(step.session.routeGrants).toEqual(['navigate'])
   })
 
   it('downloads when the cached build id is a different one', () => {
@@ -168,45 +169,6 @@ describe('the connected flow', () => {
   it('downloads when there is no cache at all', () => {
     const step = run(afterCacheRead(null).session, { type: 'manifest-read', manifest: MANIFEST })
     expect(step.effects).toEqual([{ kind: 'download' }])
-  })
-
-  it('downloads nothing for a route the bundle does not list', () => {
-    const step = run(afterCacheRead(null).session, {
-      type: 'manifest-read',
-      manifest: { ...MANIFEST, routes: [{ pathname: '/h/[hostId]/tasks', grants: [] }] }
-    })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
-    expect(step.effects).toEqual([])
-  })
-
-  it('downloads nothing for a route listed with a grant this shell does not implement', () => {
-    const step = run(afterCacheRead(null).session, {
-      type: 'manifest-read',
-      manifest: {
-        ...MANIFEST,
-        routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'teleport'] }]
-      }
-    })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
-    expect(step.effects).toEqual([])
-  })
-
-  it('leaves the route native for a desktop older than the field itself', () => {
-    const step = run(afterCacheRead(null).session, {
-      type: 'manifest-read',
-      manifest: { ...MANIFEST, routes: undefined }
-    })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
-  })
-
-  it('answers the route before it answers the wall, since a native route has none to show', () => {
-    // A bundle this shell cannot open is not a reason to refuse a screen it was never going to
-    // open: the wall belongs to the page, and this route is the native screen's.
-    const step = run(afterCacheRead(null).session, {
-      type: 'manifest-read',
-      manifest: { ...MANIFEST, schemaVersion: 99, routes: [] }
-    })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
   })
 
   it('still walls a listed route whose bundle this shell cannot read', () => {
@@ -407,13 +369,13 @@ describe('recovery follows the shell view contract', () => {
     expect(rearmed.effects).toEqual([{ kind: 'open-cache' }])
   })
 
-  it('hands a recovery back to the native screen when the host serves no bundle', () => {
+  it('walls a recovery when the host no longer serves a bundle', () => {
     const stale = run(readySession().session, {
       type: 'gates-changed',
       gates: gates({ hostCapabilities: [] })
     })
     const step = run(stale.session, { type: 'shell-failed', reason: 'document-load-failed' })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
+    expect(step.session.state).toEqual(NO_BUNDLE_WALL)
     // The cache still goes: the bytes that failed are suspect whatever screen follows them.
     expect(step.effects).toEqual([{ kind: 'delete-cache' }])
   })
@@ -519,10 +481,10 @@ describe('try again', () => {
     expect(again.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
   })
 
-  it('stays native rather than looping when the host still serves no bundle', () => {
-    const native = started({ hostCapabilities: [] })
-    const retried = run(native.session, { type: 'retry-pressed' })
-    expect(retried.session.state).toEqual({ kind: 'native-route' })
+  it('stays walled rather than looping when the host still serves no bundle', () => {
+    const walled = started({ hostCapabilities: [] })
+    const retried = run(walled.session, { type: 'retry-pressed' })
+    expect(retried.session.state).toEqual(NO_BUNDLE_WALL)
     expect(retried.effects).toEqual([])
   })
 
@@ -683,13 +645,13 @@ describe('a gates change that says nothing new starts nothing', () => {
     expect(settled.effects).toEqual([{ kind: 'open-cache' }])
   })
 
-  it('drops a check in flight to the native screen when the host stops serving a bundle', () => {
+  it('walls a check in flight when the host stops serving a bundle', () => {
     const checking = started()
     const step = run(checking.session, {
       type: 'gates-changed',
       gates: gates({ hostCapabilities: [] })
     })
-    expect(step.session.state).toEqual({ kind: 'native-route' })
+    expect(step.session.state).toEqual(NO_BUNDLE_WALL)
   })
 })
 
@@ -786,6 +748,52 @@ describe('the page has to speak for the document that loaded', () => {
       elapsedMs: 9
     })
     expect(reactivated.session.pageReady).toBe(false)
+  })
+})
+
+/** A load the view refuses or never commits reports nothing, so only a clock ends the wait (#28626). */
+describe('the view has to finish the document it was given', () => {
+  it('arms the wait when a generation is put on screen', () => {
+    expect(readySession().effects).toContainEqual({ kind: 'await-document-load' })
+  })
+
+  it('arms it again for a new document and for a remount', () => {
+    const ready = readySession()
+    expect(run(ready.session, { type: 'document-started' }).effects).toEqual([
+      { kind: 'await-document-load' }
+    ])
+    expect(run(ready.session, { type: 'remounted', sessionId: 'session-two' }).effects).toEqual([
+      { kind: 'await-document-load' }
+    ])
+  })
+
+  it('deletes the cache and runs the flow again when no document ever finished', () => {
+    const started = run(readySession().session, { type: 'document-started' })
+    const step = run(started.session, { type: 'document-load-deadline' })
+    expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
+    expect(step.session.state.kind).toBe('checking')
+  })
+
+  it('does nothing once the document finished or the page spoke', () => {
+    const loaded = run(readySession().session, { type: 'document-loaded' })
+    expect(run(loaded.session, { type: 'document-load-deadline' }).effects).toEqual([])
+    const spoke = run(readySession().session, { type: 'page-ready' })
+    expect(run(spoke.session, { type: 'document-load-deadline' }).session.state.kind).toBe('ready')
+  })
+
+  it('drops the wait a replaced document left behind', () => {
+    const ready = readySession()
+    const armed = ready.session.flow
+    const started = run(ready.session, { type: 'document-started' })
+    const step = run(started.session, { type: 'document-load-deadline', flow: armed })
+    expect(step.effects).toEqual([])
+    expect(step.session.state.kind).toBe('ready')
+  })
+
+  it('makes the next document finish on its own', () => {
+    const loaded = run(readySession().session, { type: 'document-loaded' })
+    const started = run(loaded.session, { type: 'document-started' })
+    expect(started.session.documentLoaded).toBe(false)
   })
 })
 

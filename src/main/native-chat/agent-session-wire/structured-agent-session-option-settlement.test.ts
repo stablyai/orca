@@ -10,7 +10,6 @@ import type {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { AgentSessionOptionRejectedError } from './structured-agent-session-option-error'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -27,7 +26,6 @@ import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-
 
 const CALLER = { callerKey: 'client-1' }
 const DEFAULT_MODEL = 'gpt-default'
-const PICKED_MODEL = 'gpt-picked'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -56,10 +54,21 @@ function envelope(method: string, fields: Record<string, unknown>): AgentSession
 }
 
 function adapter(): StructuredAgentSessionAdapter {
-  acquire = vi.fn(async ({ fence, spawnToken, options }) => {
+  acquire = vi.fn(async ({ fence, spawnToken, options, identity }) => {
     activeModel = options?.model ?? DEFAULT_MODEL
     activeEffort = options?.effort ?? null
+    const acquisitionGeneration = `generation-${acquire.mock.calls.length}`
+    // The handshake answers at once, reporting the options the child runs with.
+    void host.handleAdapterEvent({
+      type: 'started',
+      sessionId: identity.sessionId,
+      fence,
+      acquisitionGeneration,
+      reportedOptions: { model: activeModel, ...(activeEffort ? { effort: activeEffort } : {}) }
+    })
     return {
+      providerChildPhase: 'starting' as const,
+      acquisitionGeneration,
       process: {
         hostId: 'local',
         pid: 4200 + acquire.mock.calls.length,
@@ -149,7 +158,7 @@ afterEach(async () => {
 })
 
 describe('structured session options and close', () => {
-  it('publishes an acknowledged model without waiting for journal traffic', async () => {
+  it('keeps provider readback out of the saved next-message choice', async () => {
     const body = {
       kind: 'message' as const,
       role: 'user' as const,
@@ -169,47 +178,11 @@ describe('structured session options and close', () => {
     expect(events).toEqual([
       {
         type: 'snapshot',
-        sessions: [expect.objectContaining({ status: 'idle', model: DEFAULT_MODEL })]
+        sessions: [expect.objectContaining({ status: 'idle' })]
       }
     ])
-    const fields = { key: 'model', value: PICKED_MODEL }
-
-    await host.setOption(CALLER, {
-      envelope: envelope('agentSession.setOption', fields),
-      ...fields
-    })
-
-    expect(events.slice(1)).toEqual([
-      {
-        type: 'status',
-        session: expect.objectContaining({ sessionId: SESSION, model: PICKED_MODEL })
-      }
-    ])
-  })
-
-  it('settles a pre-mutation rejection so a fresh retry can succeed', async () => {
-    optionFailure = new AgentSessionOptionRejectedError('model list unavailable')
-    const fields = { key: 'model', value: PICKED_MODEL }
-    const rejected = {
-      envelope: envelope('agentSession.setOption', fields),
-      ...fields
-    }
-
-    expect(await host.setOption(CALLER, rejected)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid', message: 'model list unavailable' }
-    })
-    expect(await host.setOption(CALLER, rejected)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
-    })
-    expect(
-      await host.setOption(CALLER, {
-        envelope: envelope('agentSession.setOption', fields),
-        ...fields
-      })
-    ).toMatchObject({ ok: true, value: { options: { model: PICKED_MODEL } } })
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: PICKED_MODEL })
+    expect(events[0]).not.toHaveProperty('sessions.0.model')
+    expect(store.getRecord(SESSION)?.options).toBeUndefined()
   })
 
   // Closing a chat used to leave its provider child resident for the whole app session: the host's
@@ -238,4 +211,30 @@ describe('structured session options and close', () => {
     await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
     expect(closeNativeSession).not.toHaveBeenCalled()
   })
+})
+
+it('applies running Codex model and effort picks to the next message', async () => {
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
+  for (const [key, value] of [
+    ['model', 'gpt-picked'],
+    ['effort', 'high']
+  ]) {
+    expect(
+      await host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', { key, value }),
+        key,
+        value
+      })
+    ).toMatchObject({ ok: true })
+  }
+  const body = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text: 'with the new choices' }]
+  }
+  expect(
+    await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  ).toMatchObject({ ok: true })
+  await vi.waitFor(() => expect(dispatchedModels).toEqual(['gpt-picked']))
+  expect(activeEffort).toBe('high')
 })

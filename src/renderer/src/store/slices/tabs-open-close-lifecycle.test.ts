@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultUIState } from '../../../../shared/constants'
-import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph'
+import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph/mobile-session-snapshots'
 import { closeMobileSessionTabInStore } from '../../runtime/mobile-session-tab-close'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import {

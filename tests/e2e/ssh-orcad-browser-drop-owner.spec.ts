@@ -1,16 +1,16 @@
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { createRestartSession } from './helpers/orca-restart'
-import { startOrcadConvertHost } from './helpers/orcad-convert-host'
-import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
-import { convertAndRetain, serverCall } from './helpers/orcad-convert-flow'
-import { waitForSessionReady } from './helpers/store'
+import { serverCall } from './helpers/orcad-convert-flow'
 import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
 import { openFileExplorer } from './helpers/file-explorer'
-import { shellQuote } from './helpers/docker-ssh-relay-target'
 import { startBrowserSplitPageServer } from './helpers/browser-split-page-server'
+import {
+  launchConvertedProfile,
+  skipUnlessManagedDockerHost,
+  withManagedHost
+} from './helpers/orcad-managed-workspace'
 import {
   navigateGuest,
   waitForGuestUrl,
@@ -18,9 +18,9 @@ import {
 } from './helpers/browser-split-guest-probes'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { getWorktreeHostIdentity } from '../../src/shared/worktree/host-qualified-identity'
+import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
 
-const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
-test.skip(!TEMPLATE || process.env.ORCA_E2E_SSH_DOCKER !== '1', 'Needs owned Docker host')
+skipUnlessManagedDockerHost()
 test.skip(process.platform === 'win32', 'Owned POSIX host collision fixture')
 
 async function dropExplorerFile(page: Page, name: string, tabId: string) {
@@ -78,47 +78,31 @@ test('managed Files drag cannot load a desktop same-path HTML file', async ({
   const fileName = 'DROP_OWNER.html'
   const filePath = path.join(testRepoPath, fileName)
   writeFileSync(filePath, '<html><body>DESKTOP_BROWSER_DROP_OWNER</body></html>')
-  const host = startOrcadConvertHost('docker', testInfo)
   const server = await startBrowserSplitPageServer()
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
-  let app: ElectronApplication | null = null
-  try {
+  await withManagedHost(testInfo, async (fixture) => {
+    const { host } = fixture
     if (!host.exec) {
       throw new Error('Missing owned host control')
     }
     host.exec(
-      `mkdir -p ${shellQuote(path.dirname(testRepoPath))} && git clone --quiet ${shellQuote(host.remoteRepoPath)} ${shellQuote(testRepoPath)} && printf '%s' '<html><body>REMOTE_BROWSER_DROP_OWNER</body></html>' > ${shellQuote(filePath)}`
+      `mkdir -p ${quotePosixShell(path.dirname(testRepoPath))} && git clone --quiet ${quotePosixShell(host.remoteRepoPath)} ${quotePosixShell(testRepoPath)} && printf '%s' '<html><body>REMOTE_BROWSER_DROP_OWNER</body></html>' > ${quotePosixShell(filePath)}`
     )
     host.exec(
-      `printf '%s' REMOTE_DROP_READY > ${shellQuote(path.join(testRepoPath, 'REMOTE_DROP_READY.txt'))}`
+      `printf '%s' REMOTE_DROP_READY > ${quotePosixShell(path.join(testRepoPath, 'REMOTE_DROP_READY.txt'))}`
     )
-    const first = await session.launch()
-    app = first.app
-    await waitForSessionReady(first.page)
-    const nativeId = await first.page.evaluate(async (repoPath) => {
-      const result = await window.api.repos.add({ path: repoPath })
-      if ('error' in result) {
-        throw new Error(result.error)
-      }
-      return `${result.repo.id}::${repoPath}`
-    }, testRepoPath)
-    await session.close(app)
-    app = null
-    const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
+    let nativeId = ''
+    const { page, seeded, environmentId } = await launchConvertedProfile(fixture, {
       repoPath: testRepoPath,
-      folderPath: host.remoteFolderPath
+      beforeSeed: async (page) => {
+        nativeId = await page.evaluate(async (repoPath) => {
+          const result = await window.api.repos.add({ path: repoPath })
+          if ('error' in result) {
+            throw new Error(result.error)
+          }
+          return `${result.repo.id}::${repoPath}`
+        }, testRepoPath)
+      }
     })
-    const launched = await session.launch()
-    app = launched.app
-    const page = launched.page
-    await waitForSessionReady(page)
-    await convertAndRetain(page, session.userDataDir, seeded)
-    const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-      (entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId
-    )
-    if (!environment) {
-      throw new Error('Missing actual managed environment')
-    }
     await dismissTransientAnnouncement(page)
     const nativeIdentity = getWorktreeHostIdentity({ id: nativeId, hostId: 'local' })
     await page.locator(`[data-worktree-host-identity="${nativeIdentity}"]:visible`).click()
@@ -156,7 +140,7 @@ test('managed Files drag cannot load a desktop same-path HTML file', async ({
     await waitForGuestIdle(page, floatingId)
     const remoteIdentity = getWorktreeHostIdentity({
       id: seeded.worktreeId,
-      hostId: toRuntimeExecutionHostId(environment.id)
+      hostId: toRuntimeExecutionHostId(environmentId)
     })
     await page.locator(`[data-worktree-host-identity="${remoteIdentity}"]:visible`).click()
     await openFileExplorer(page)
@@ -166,10 +150,10 @@ test('managed Files drag cannot load a desktop same-path HTML file', async ({
     ).toBeVisible()
     expect(
       await page.evaluate(() => window.__store?.getState().activeWorkspaceExecutionHostId)
-    ).toBe(toRuntimeExecutionHostId(environment.id))
+    ).toBe(toRuntimeExecutionHostId(environmentId))
     console.log(
       '[independent-managed-source]',
-      await serverCall(page, environment.id, 'files.read', {
+      await serverCall(page, environmentId, 'files.read', {
         worktree: `id:${seeded.worktreeId}`,
         relativePath: fileName
       })
@@ -179,7 +163,7 @@ test('managed Files drag cannot load a desktop same-path HTML file', async ({
     expect(
       JSON.parse(remotePayload['application/x-orca-workspace-file-source'] ?? '{}')
     ).toMatchObject({
-      executionHostId: toRuntimeExecutionHostId(environment.id),
+      executionHostId: toRuntimeExecutionHostId(environmentId),
       workspaceId: seeded.worktreeId
     })
     await waitForGuestIdle(page, floatingId)
@@ -190,15 +174,5 @@ test('managed Files drag cannot load a desktop same-path HTML file', async ({
       page.getByText('Open in Orca Browser is only available for local files.', { exact: true })
     ).toBeVisible()
     expect((await guestText(page, floatingId)).url).toBe(server.pageUrl('float', 2))
-  } finally {
-    try {
-      if (app) {
-        await session.close(app)
-      }
-      await session.dispose()
-      await server.close()
-    } finally {
-      host.cleanup()
-    }
-  }
+  }).finally(() => server.close())
 })

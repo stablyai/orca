@@ -6,6 +6,7 @@ import {
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
 import { CANCEL_RELEASE_TIMEOUT_MS, SkillUpdateRunner } from './skill-update-run'
+import { SKILLS_CLI_VERSION } from '../../shared/agent-feature-install-commands'
 
 class FakeChild extends EventEmitter {
   stdout = new EventEmitter()
@@ -26,6 +27,8 @@ function makeRunner(
   const spawnCalls: { command: string; args: string[]; options: Record<string, unknown> }[] = []
   const states: SkillUpdateRun[] = []
   const runner = new SkillUpdateRunner({
+    sourceCommit: '0123456789abcdef0123456789abcdef01234567',
+    detectAgentKeys: () => ['claude-code', 'universal'],
     now: () => 1000,
     resolveCommand: overrides.resolveCommand ?? (() => '/usr/local/bin/npx'),
     rescanOutdatedNames: overrides.rescanOutdatedNames,
@@ -46,7 +49,7 @@ async function flush(): Promise<void> {
 }
 
 describe('SkillUpdateRunner', () => {
-  it('passes both non-interactive flags and the sorted skill names', () => {
+  it('reinstalls the sorted names pinned to this release, for the detected agents', () => {
     const { runner, spawnCalls } = makeRunner()
 
     expect(runner.start(['orchestration', 'orca-cli'])).toEqual({ started: true })
@@ -55,11 +58,18 @@ describe('SkillUpdateRunner', () => {
     // non-interactive branch. Dropping either can wedge the run.
     expect(spawnCalls[0].args).toEqual([
       '--yes',
-      'skills',
-      'update',
+      `skills@${SKILLS_CLI_VERSION}`,
+      'add',
+      'https://github.com/stablyai/orca/tree/0123456789abcdef0123456789abcdef01234567',
+      '--skill',
       'orca-cli',
+      '--skill',
       'orchestration',
       '--global',
+      '--agent',
+      'claude-code',
+      '--agent',
+      'universal',
       '-y'
     ])
   })
@@ -69,6 +79,18 @@ describe('SkillUpdateRunner', () => {
     runner.start(['orca-cli'])
 
     expect(spawnCalls[0].options.stdio).toEqual(['ignore', 'pipe', 'pipe'])
+  })
+
+  it('forces git messages to English so the skills CLI can fall back to fetching the commit', () => {
+    vi.stubEnv('LC_ALL', 'ko_KR.UTF-8')
+    try {
+      const { runner, spawnCalls } = makeRunner()
+      runner.start(['orca-cli'])
+
+      expect(spawnCalls[0].options.env).toMatchObject({ LC_ALL: 'C' })
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('rejects names that could carry shell syntax', () => {
@@ -207,6 +229,8 @@ describe('SkillUpdateRunner', () => {
     const children: FakeChild[] = []
     const states: SkillUpdateRun[] = []
     const runner = new SkillUpdateRunner({
+      sourceCommit: '0123456789abcdef0123456789abcdef01234567',
+      detectAgentKeys: () => ['universal'],
       now: () => 1000,
       resolveCommand: () => '/usr/local/bin/npx',
       rescanOutdatedNames: async () => [],

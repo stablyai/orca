@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,8 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
+import { FILE_METHODS } from './rpc/methods/files'
 import { E2EEChannel } from './rpc/e2ee-channel'
-import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
+import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../shared/remote-runtime-memory-limits'
 import type { DirEntry } from '../../shared/filesystem-entry-types'
 import { RUNTIME_RPC_REPLY_TOO_LARGE_CODE } from './runtime-rpc/runtime-rpc-reply-size-limit'
@@ -24,7 +26,12 @@ function hugeListing(): DirEntry[] {
 function createServer() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-reply-size-'))
   const runtime = new OrcaRuntimeService()
-  const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+  const server = new OrcaRuntimeRpcServer({
+    runtime,
+    methods: FILE_METHODS,
+    userDataPath,
+    enableWebSocket: false
+  })
   server['deviceRegistry'] = new DeviceRegistry(userDataPath)
   const device = server['deviceRegistry'].addDevice('paired-desktop', 'runtime')
   return { runtime, server, device }
@@ -48,7 +55,10 @@ function connectEncryptedChannel() {
     resolveAuthenticatedDevice: (token) => ({
       deviceId: 'd',
       deviceToken: token,
-      scope: 'runtime'
+      scope: 'runtime',
+      clientId: token,
+      callerFingerprint: 'test-fingerprint',
+      credentialRevision: 0
     }),
     onReady: vi.fn(),
     onError

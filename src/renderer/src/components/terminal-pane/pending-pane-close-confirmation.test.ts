@@ -44,7 +44,6 @@ it.each([false, true])('requires confirmation for pending live work, paired=%s',
   const p = await prepare(remote)
   p.actions.handleRequestClosePane(1)
   expect(p.probePtyRunningWork).toHaveBeenCalledWith(
-    expect.any(Object),
     [remote ? 'remote:env-1@@term_original' : 'pty-restored'],
     expect.any(Object)
   )
@@ -103,7 +102,7 @@ it('uses the direct SSH identity in the running-work probe', async () => {
   p.actions.handleRequestClosePane(1)
   p.verdict('live')
   await flushPtySideEffects()
-  expect(p.probePtyRunningWork).toHaveBeenCalledWith(expect.any(Object), [id], expect.any(Object))
+  expect(p.probePtyRunningWork).toHaveBeenCalledWith([id], expect.any(Object))
   expect(p.closed()).toBe(false)
   p.actions.handleConfirmClose(false)
   await p.settle()

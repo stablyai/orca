@@ -17,7 +17,7 @@ let serverStore: AgentSessionAttachmentStore
 let failMethod: string | null = null
 
 // The paired server, played by a real store: every call answers as the RPC handler would.
-vi.mock('./runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: async (
     _userDataPath: string,
     _environmentId: string,
@@ -108,7 +108,7 @@ describe('uploadExternalPathsToAgentSessionAttachments', () => {
     for (const { path } of result.uploaded) {
       expect(path.startsWith(serverStore.rootDir)).toBe(true)
     }
-    expect(await readFile(result.uploaded[0].path)).toEqual(big)
+    expect((await readFile(result.uploaded[0].path)).equals(big)).toBe(true)
     expect(await readFile(result.uploaded[1].path, 'utf8')).toBe('# hi')
   })
 
@@ -157,7 +157,7 @@ describe('uploadBufferToAgentSessionAttachments', () => {
     const png = Buffer.alloc(900 * 1024, 3)
     const stored = await uploadBufferToAgentSessionAttachments(context(), 'orca-paste-1.png', png)
     expect(stored.name).toBe('orca-paste-1.png')
-    expect(await readFile(stored.path)).toEqual(png)
+    expect((await readFile(stored.path)).equals(png)).toBe(true)
     // 900 KiB in 384 KiB slices.
     expect(
       calls.filter((call) => call.method === 'agentSessionAttachment.uploadAppend')

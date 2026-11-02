@@ -1,3 +1,4 @@
+import { getDetachedWorkspaceReviewRequest } from '@/components/sidebar/workspace-detached-review-request'
 import type { AppState } from '../types'
 import {
   getHostedReviewCacheKey,
@@ -87,18 +88,21 @@ export function getVisibleHostedReviewRefreshTargets(
     options
   )) {
     const id = worktree.id
-    if (!candidate.branch || candidate.branch === 'HEAD') {
+    const exactRequest = getDetachedWorkspaceReviewRequest(worktree, repo)
+    if ((!candidate.branch || candidate.branch === 'HEAD') && !exactRequest) {
       continue
     }
-    const key = getHostedReviewCacheKey(
-      candidate.repoPath,
-      candidate.branch,
-      state.settings,
-      candidate.repoId,
-      candidate.connectionId,
-      candidate.executionHostId,
-      true
-    )
+    const key =
+      exactRequest?.key ??
+      getHostedReviewCacheKey(
+        candidate.repoPath,
+        candidate.branch,
+        state.settings,
+        candidate.repoId,
+        candidate.connectionId,
+        candidate.executionHostId,
+        true
+      )
     const hostedEntry = state.hostedReviewCache[key]
     const prEntry = state.prCache[candidate.cacheKey]
     const hints = {
@@ -116,12 +120,14 @@ export function getVisibleHostedReviewRefreshTargets(
       (hostedEntry?.data != null && hostedEntry.data.provider !== 'github')
     // The legacy GitHub action still resolves bare IDs; never pass it another owner's candidate.
     if (
-      getGitHubRepoLookupIndex(state.repos).findById(repo.id) !== repo ||
-      findWorktreeById(state, worktree.id) !== worktree
+      !exactRequest &&
+      (getGitHubRepoLookupIndex(state.repos).findById(repo.id) !== repo ||
+        findWorktreeById(state, worktree.id) !== worktree)
     ) {
       continue
     }
-    const knownGitHub = shouldCoordinateVisibleGitHubReview(state, worktree, candidate)
+    const knownGitHub =
+      !exactRequest && shouldCoordinateVisibleGitHubReview(state, worktree, candidate)
     const runtime = knownGitHub ? getPRRefreshRuntimeRepoTarget(state, candidate) : null
     if (knownGitHub && !runtime) {
       continue
@@ -166,11 +172,12 @@ export function getVisibleHostedReviewRefreshTargets(
             })
           : before.fetchHostedReviewForBranch(candidate.repoPath, candidate.branch, {
               ...hints,
+              ...(exactRequest ? { exactReviewKey: key } : {}),
               force,
               repoId: candidate.repoId,
               repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
               fallbackGitHubPR: nonGitHub ? null : candidate.fallbackPRNumber,
-              currentHeadOid: candidate.currentHeadOid,
+              currentHeadOid: exactRequest ? null : candidate.currentHeadOid,
               active: selected,
               admissionTier: selected ? 'interactive' : 'background'
             }))

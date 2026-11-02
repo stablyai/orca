@@ -91,6 +91,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
   }
+  if ((command === 'linear comment edit' || command === 'linear comment delete') && flag === 'id') {
+    return '--id <commentId>      Linear comment id (a UUID)'
+  }
   if (command === 'linear issue' && flag === 'workspace') {
     return '--workspace <id>      Connected Linear workspace id'
   }

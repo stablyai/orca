@@ -67,10 +67,11 @@ export type UsageRateLimitMetadata = {
   failureKind?: UsageRateLimitFailureKind
   credentialSource?: string
   authProvenance?: string
-  deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
   /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
   retryAtMs?: number
+  /** Renderer-only: the remote host that owns this usage cannot vouch for it. Hosts never set it. */
+  unverifiableOwner?: boolean
 }
 
 export type ProviderRateLimits = {

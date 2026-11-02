@@ -1,15 +1,15 @@
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { plainClassName } from '../oxlint-plugins/renderer-scrollbar-style.mjs'
-import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.mjs'
+import { runOxlintPluginOnSources } from './oxlint-plugin-test-runner.mjs'
 
 const pluginPath = path.resolve('config/oxlint-plugins/renderer-scrollbar-style.mjs')
 
-function lintSource(source) {
-  return runOxlintPluginOnSource({
+function lintSources(sources) {
+  return runOxlintPluginOnSources({
     pluginName: 'renderer-scrollbar-style',
     pluginPath,
-    source,
+    sources,
     rules: {
       'renderer-scrollbar-style/require-styled-vertical-scrollbar': 'warn'
     }
@@ -94,13 +94,21 @@ const accepted = [
   ]
 ]
 
+const diagnosticsBySource = new Map()
+beforeAll(() => {
+  const sources = [...violations, ...accepted].map(([, source]) => source)
+  lintSources(sources).forEach((diagnostics, index) => {
+    diagnosticsBySource.set(sources[index], diagnostics)
+  })
+})
+
 describe('renderer scrollbar style Oxlint plugin', () => {
   it.each(violations)('reports %s', (_name, source) => {
-    expect(lintSource(source)).toHaveLength(1)
+    expect(diagnosticsBySource.get(source)).toHaveLength(1)
   })
 
   it.each(accepted)('accepts %s', (_name, source) => {
-    expect(lintSource(source)).toEqual([])
+    expect(diagnosticsBySource.get(source)).toEqual([])
   })
 
   it.each([

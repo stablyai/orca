@@ -22,10 +22,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('./worktree-runtime-owner', () => ({
-  getSettingsForWorktreeRuntimeOwner: () => ({}),
-  getRuntimeEnvironmentIdForWorktree: () => null
-}))
+vi.mock('./worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
 
 vi.mock('./agent-draft-readiness', () => ({
   waitForAgentDraftInputReady: async () => true
@@ -86,7 +83,6 @@ async function paneRouteKinds(): Promise<TerminalInputKind[]> {
 async function helperRouteKinds(): Promise<TerminalInputKind[]> {
   const { kinds } = stubPtyApi()
   const pasted = pasteDraftToAgentPtyWhenReady({
-    tabId: 'tab-1',
     ptyId: 'pty-1',
     content: DRAFT,
     agent: 'aider'

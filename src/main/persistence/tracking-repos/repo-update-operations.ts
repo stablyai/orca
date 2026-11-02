@@ -8,9 +8,11 @@ import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/wo
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
+import { isFolderRepo } from '../../../shared/repo-kind'
+import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
 
 export type RepoUpdateMutationOperations = {
-  state: Pick<PersistedState, 'repos' | 'projectGroups'>
+  state: Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'>
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
@@ -50,10 +52,31 @@ export function findRepoRowForHostScopedWrite(
   return undefined
 }
 
+/**
+ * Every writer of `kind` lands here, so this is where a type change that would hide workspaces is
+ * refused. A Git project lists only `git worktree list`, and a listing that stops showing an id
+ * purges that workspace's saved tabs.
+ */
+function assertKindChangeKeepsFolderWorkspaces(
+  repo: Repo,
+  nextKind: Repo['kind'] | undefined,
+  worktreeMeta: PersistedState['worktreeMeta']
+): void {
+  if (nextKind !== 'git' || !isFolderRepo(repo)) {
+    return
+  }
+  const count = findExtraFolderWorkspaceIds(repo, worktreeMeta).length
+  if (count > 0) {
+    throw new Error(
+      `This folder project has ${count} other workspace${count === 1 ? '' : 's'} that a Git project can't show, so its type was not changed. Delete ${count === 1 ? 'that workspace' : 'those workspaces'} first, or keep it as a folder project.`
+    )
+  }
+}
+
 export class RepoUpdatePersistenceOperations {
   constructor(private readonly operations: RepoUpdateMutationOperations) {}
 
-  private get state(): Pick<PersistedState, 'repos' | 'projectGroups'> {
+  private get state(): Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'> {
     return this.operations.state
   }
 
@@ -91,6 +114,7 @@ export class RepoUpdatePersistenceOperations {
         | 'executionHostId'
         | 'symlinkPaths'
         | 'issueSourcePreference'
+        | 'defaultJiraProject'
         | 'forkSyncMode'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
@@ -114,6 +138,7 @@ export class RepoUpdatePersistenceOperations {
     if (!repo) {
       return null
     }
+    assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
     const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
     if (

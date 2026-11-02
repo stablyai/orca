@@ -1,8 +1,9 @@
 import { once } from 'node:events'
 import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { buildSync } from 'esbuild'
-import { spawnProcess } from '../../../shared/child-process/run-process'
+import { buildSync, type Metafile } from 'esbuild'
+import { spawnProcess } from '@orca/process-host'
+import { createWorkspaceSourceResolver } from '../../../../config/scripts/workspace-source-exports.mjs'
 
 export type RecoveryCrashOptions = {
   root: string
@@ -16,9 +17,12 @@ export type RecoveryCrashOptions = {
 }
 
 /** Build only the recovery graph into an isolated test directory, never shared out/. */
-export function buildRecoveryCrashProcess(directory: string): string {
+export function buildRecoveryCrashProcess(directory: string): {
+  bundle: string
+  metafile: Metafile
+} {
   const bundle = join(directory, 'recovery-crash-api.cjs')
-  buildSync({
+  const built = buildSync({
     stdin: {
       contents: `
         export { acquireProfileStateMaintenance } from './src/main/persistence/profile-state/profile-state-access'
@@ -35,9 +39,11 @@ export function buildRecoveryCrashProcess(directory: string): string {
     bundle: true,
     platform: 'node',
     format: 'cjs',
-    packages: 'external'
+    packages: 'external',
+    alias: createWorkspaceSourceResolver().esbuildAliases,
+    metafile: true
   })
-  return bundle
+  return { bundle, metafile: built.metafile }
 }
 
 const CHILD_SOURCE = `

@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEnvironmentFromPairingOffer } from '../../shared/runtime-environments'
 import { RUNTIME_PROTOCOL_VERSION } from '../../shared/protocol-version'
@@ -15,6 +16,10 @@ const pairing = {
   publicKeyB64: Buffer.alloc(32, 1).toString('base64'),
   pairedDeviceId: 'existing-paired-client'
 }
+const tunneledConnection = pairedRuntimeConnectionFromOffer({
+  ...pairing,
+  endpoint: 'ws://127.0.0.1:41000'
+})
 function environment() {
   return createEnvironmentFromPairingOffer({
     id: 'environment',
@@ -53,7 +58,7 @@ describe('existing paired host verification over SSH', () => {
     const signal = new AbortController().signal
     const result = await verifyRuntimeEnvironmentSshTunnel(original, 41000, signal)
     expect(send).toHaveBeenCalledExactlyOnceWith(
-      { ...pairing, endpoint: 'ws://127.0.0.1:41000' },
+      tunneledConnection,
       'status.get',
       undefined,
       15_000,
@@ -62,7 +67,7 @@ describe('existing paired host verification over SSH', () => {
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(result.verifiedRuntimeId).toBe('host-runtime')
-    expect(result.verifiedPairing).toEqual({ ...pairing, endpoint: 'ws://127.0.0.1:41000' })
+    expect(result.verifiedConnection).toEqual(tunneledConnection)
     expect(original).toEqual(environment())
   })
 

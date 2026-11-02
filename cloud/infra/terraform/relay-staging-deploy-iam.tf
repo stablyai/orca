@@ -1,13 +1,14 @@
 # The staging Relay deploy identity.
 #
 # In production the shared `github_deploy` account is relay-owned; in staging it belongs to
-# infra/terraform-apps and four app workflows can also mint it. These resources give the five
+# infra/terraform-apps and four app workflows can also mint it. These resources give the six
 # staging Relay workflows their own account, provider, and bindings so the relay root owns every
 # credential its own workflows use.
 #
 # Bindings that already name local.relay_github_deploy_service_account_member follow that local
 # (relay-shared.tf) and are NOT repeated here: the staging power custom role, serviceAccountUser
-# on relay_runtime and relay_director_runtime, and the three regional-placement secret bindings.
+# on relay_runtime and relay_director_runtime, the three regional-placement secret bindings, and
+# the cell-flags workflow's relay_control_workflow_writer.
 # Everything below replaces a grant the apps root still makes to `github_deploy`.
 
 locals {
@@ -19,6 +20,7 @@ locals {
     "deploy-relay-staging-gce-candidate.yml",
     "deploy-relay-staging.yml",
     "operate-relay-asia-admission.yml",
+    "operate-relay-staging-cell-flags.yml",
     "power-relay-staging.yml"
   ]
   github_staging_relay_deploy_workflow_clauses = [
@@ -78,7 +80,7 @@ resource "google_service_account_iam_member" "github_staging_relay_deploy_worklo
   member             = "principalSet://iam.googleapis.com/${local.relay_workload_identity_pool_name}/attribute.relay_ops_identity/staging-deploy"
 }
 
-# Every one of the five runs `terraform init` (or `infra.mjs init --env staging`) first, and the
+# Every one but the cell-flags workflow runs `terraform init` (or `infra.mjs init --env staging`) first, and the
 # GCS backend lists the bucket before it can open the state. Bucket metadata only, no object
 # access; this mirrors relay_fence_broker_bucket_reader.
 resource "google_storage_bucket_iam_member" "github_staging_relay_deploy_state_list" {
@@ -90,7 +92,7 @@ resource "google_storage_bucket_iam_member" "github_staging_relay_deploy_state_l
 }
 
 # Reads reviewed topology: `terraform output -json relay_gce_cell_deployments` and the
-# `terraform console` binds in Deploy Relay Staging. No step in the five applies, so this is
+# `terraform console` binds in Deploy Relay Staging. No step in the six applies, so this is
 # objectViewer, not the capacity identity's objectAdmin, over the same two objects.
 resource "google_storage_bucket_iam_member" "github_staging_relay_deploy_state" {
   count = local.create_staging_relay_deploy_identity ? 1 : 0
@@ -110,7 +112,7 @@ resource "google_storage_bucket_iam_member" "github_staging_relay_deploy_state" 
 }
 
 # Deploy Relay Staging step "Require the mirrored immutable image" runs
-# `gcloud artifacts docker images describe`; nothing in the five writes to the repository.
+# `gcloud artifacts docker images describe`; nothing in the six writes to the repository.
 resource "google_artifact_registry_repository_iam_member" "github_staging_relay_deploy_artifact_reader" {
   count = local.create_staging_relay_deploy_identity ? 1 : 0
 

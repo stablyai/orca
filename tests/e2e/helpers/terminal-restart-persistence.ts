@@ -69,7 +69,8 @@ export async function bootstrapFirstLaunch(
  */
 export async function bootstrapRestoredLaunch(
   page: Page,
-  expectedWorktreeId: string
+  expectedWorktreeId: string,
+  paneCount = 1
 ): Promise<void> {
   await waitForSessionReady(page)
   await expect
@@ -80,7 +81,7 @@ export async function bootstrapRestoredLaunch(
   // restored terminal surface is what we're about to assert against, so make
   // sure it exists before any content/layout assertion races.
   await waitForActiveTerminalManager(page, 30_000)
-  await waitForPaneCount(page, 1, 30_000)
+  await waitForPaneCount(page, paneCount, 30_000)
 }
 
 export async function setPaneTitleFromTerminalMenu(page: Page, title: string): Promise<void> {

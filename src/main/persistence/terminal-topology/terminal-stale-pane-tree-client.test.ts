@@ -6,7 +6,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
-import { OrcaRuntimeWithPersistHeadlessSessionTabProps } from '../../runtime/orca-runtime-persist-headless-session-tab-props'
+import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from '../../runtime/session-tabs/headless-terminal-tab-close'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../loading-store/store'
 import { closeLeafOrTab } from './terminal-topology-commit'
 import {
@@ -15,10 +16,10 @@ import {
   openTopologyStore
 } from './terminal-topology-profile-fixture'
 import { leafIds, WindowSession } from './terminal-topology-window-session-fixture'
-import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
+import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -32,21 +33,35 @@ const NEW_LEAF = '55555555-5555-4555-8555-555555555555'
 const directories: string[] = []
 
 type PaneLayoutHandler = Pick<
-  OrcaRuntimeWithPersistHeadlessSessionTabProps,
+  OrcaRuntimeWithCloseHeadlessMobileTerminalTab,
   'updateMobileSessionPaneLayout'
 >
 
-/** Main's real `updateMobileSessionPaneLayout`, on a headless host whose session is `store`'s. */
+class PaneLayoutRuntime extends OrcaRuntimeService {
+  protected override getValidatedExplicitWorktreeIdSelector(): string {
+    return WT
+  }
+
+  protected override getAvailableAuthoritativeWindow(): null {
+    return null
+  }
+
+  public override getWorkspaceSessionForWorktree(): WorkspaceSessionState {
+    // SAFETY: paneLayoutHandler receives the real Store opened by this fixture.
+    return this.requireStore().getWorkspaceSession!()
+  }
+
+  public override setWorkspaceSessionForWorktree(
+    _worktreeId: string,
+    session: WorkspaceSessionState
+  ): void {
+    // SAFETY: paneLayoutHandler receives the real Store opened by this fixture.
+    this.requireStore().setWorkspaceSession!(session)
+  }
+}
+
 function paneLayoutHandler(store: Store): PaneLayoutHandler {
-  return Object.assign(Object.create(OrcaRuntimeWithPersistHeadlessSessionTabProps.prototype), {
-    store,
-    mobileSessionTabsByWorktree: new Map(),
-    getValidatedExplicitWorktreeIdSelector: () => WT,
-    getAvailableAuthoritativeWindow: () => null,
-    getWorkspaceSessionForWorktree: () => store.getWorkspaceSession(),
-    setWorkspaceSessionForWorktree: (_worktreeId: string, session: WorkspaceSessionState) =>
-      store.setWorkspaceSession(session)
-  })
+  return new PaneLayoutRuntime(store)
 }
 
 function split(first: string, second: string): TerminalPaneLayoutNode {
@@ -100,14 +115,24 @@ describe('an old client pane tree that predates a split or close', () => {
 
   it('keeps a pane another client split since the tree was built', async () => {
     const store = await openWithPanes([TEST_LEAF_1])
-    // `terminal.split` from the CLI: a host-created pane bound against its source pane.
+    // `terminal.split` from the CLI: the runtime writes the pane, then binds it against its source.
+    await expect(
+      store.admitTerminalPane({
+        type: 'splitPane',
+        workspace: WT,
+        tabId: 'tab-a',
+        leafId: TEST_LEAF_1,
+        direction: 'vertical',
+        newLeafId: NEW_LEAF
+      })
+    ).resolves.toBe('admitted')
     await expect(
       store.persistPtyBinding({
         worktreeId: WT,
         tabId: 'tab-a',
         leafId: NEW_LEAF,
         ptyId: 'pty-new',
-        hostAdmittedMembership: true,
+        mayCreate: false,
         expectedSourceBinding: { tabId: 'tab-a', leafId: TEST_LEAF_1, ptyId: 'pty-1' }
       })
     ).resolves.toBe(true)
@@ -139,7 +164,7 @@ describe('an old client pane tree that predates a split or close', () => {
           options: { allowMissing: true },
           requestedSession: store.getWorkspaceSession(),
           ownerMatches: () => true,
-          hostId: () => LOCAL_EXECUTION_HOST_ID,
+          hostIds: () => [LOCAL_EXECUTION_HOST_ID],
           getSession: (hostId) => store.getWorkspaceSession(hostId),
           setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
           onClosed: () => {}

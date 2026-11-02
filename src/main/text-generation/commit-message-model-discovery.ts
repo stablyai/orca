@@ -1,19 +1,15 @@
 import { isMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { getAgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
-import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
-import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../win32-utils'
 import {
   finalizeModelDiscoveryOutput,
   planModelDiscovery,
   staticModelDiscoveryResult
 } from './commit-message-model-discovery-policy'
-import { userFacingUnsafeWindowsBatchArgs } from './source-control-agent-failure'
 import {
   MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES,
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
@@ -23,7 +19,6 @@ import { killSourceControlAgentProcess } from './source-control-local-process'
 import type {
   DiscoverCommitMessageModelsResult,
   LocalProcessExecution,
-  RemoteCommitMessageExecResult,
   SpawnedSourceControlAgentProcess,
   SpawnSourceControlAgent
 } from './source-control-text-generation-types'
@@ -208,65 +203,4 @@ export async function discoverModelsLocal(input: {
         startDiscovery
       )
     : startDiscovery().result
-}
-
-export async function discoverModelsRemote(input: {
-  agentId: TuiAgent
-  cwd: string
-  execute: (
-    plan: CommitMessagePlan,
-    cwd: string,
-    timeoutMs: number
-  ) => Promise<RemoteCommitMessageExecResult>
-  agentCommandOverride?: string
-}): Promise<DiscoverCommitMessageModelsResult> {
-  const spec = getAgentModelProbeSpec(input.agentId)
-  if (!spec) {
-    return { success: false, error: `Agent "${input.agentId}" does not support model discovery.` }
-  }
-  if (spec.modelSource === 'static' || !spec.modelDiscovery) {
-    return staticModelDiscoveryResult(spec)
-  }
-  const planned = planModelDiscovery(spec, input.agentCommandOverride)
-  if (!planned.ok) {
-    return { success: false, error: planned.error }
-  }
-  let result: RemoteCommitMessageExecResult
-  try {
-    result = await input.execute(planned.plan, input.cwd, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
-  } catch (error) {
-    console.error('[commit-message] Remote model discovery request failed:', error)
-    return {
-      success: false,
-      error: isSshRequestOutcomeUnverifiable(error)
-        ? `${spec.label} model discovery took longer than ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s and may still be running on the remote host.`
-        : `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
-    }
-  }
-  if (result.spawnError) {
-    if (result.spawnError === WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR) {
-      return { success: false, error: userFacingUnsafeWindowsBatchArgs(spec.label) }
-    }
-    if (/ENOENT/i.test(result.spawnError)) {
-      return {
-        success: false,
-        error: `${planned.plan.binary} not found on the remote PATH. Install ${spec.label} there.`
-      }
-    }
-    console.error('[commit-message] Remote model discovery spawn failed:', result.spawnError)
-    return {
-      success: false,
-      error: `${spec.label} model discovery could not be started on the remote PATH. Check the agent command there and try again.`
-    }
-  }
-  if (result.canceled) {
-    return { success: false, error: 'Model discovery canceled.' }
-  }
-  if (result.timedOut) {
-    return {
-      success: false,
-      error: `${spec.label} model discovery timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
-    }
-  }
-  return finalizeModelDiscoveryOutput(spec, result.stdout, result.stderr, result.exitCode)
 }

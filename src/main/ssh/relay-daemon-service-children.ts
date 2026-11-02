@@ -15,7 +15,7 @@
  * `pgrep` all count against the relay and keep it unreapable. Losing sight of a child is
  * never evidence that it holds nothing.
  */
-import { RELAY_DAEMON_SERVICE_ENTRY_FILENAMES } from '../../shared/relay-artifacts'
+import { RELAY_DAEMON_SERVICE_ENTRY_FILENAMES } from './relay-install-artifacts'
 import { shellEscape } from './ssh-connection-utils'
 
 /** Shell variable set to the daemon's direct-child count, or `unknown`. */

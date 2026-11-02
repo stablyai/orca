@@ -18,8 +18,6 @@ import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cac
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
-import { addRemoteRepoFromPath } from './remote-repo-registration'
-import { createRemoteRepo } from './remote-repo-creation'
 
 const GIT_AVAILABILITY_TIMEOUT_MS = 1500
 
@@ -80,47 +78,6 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
       return { repo: result.repo }
-    }
-  )
-
-  ipcMain.handle(
-    'repos:addRemote',
-    async (
-      _event,
-      args: {
-        connectionId: string
-        remotePath: string
-        displayName?: string
-        kind?: 'git' | 'folder'
-      }
-    ): Promise<{ repo: Repo } | { error: string }> => {
-      const result = await addRemoteRepoFromPath(store, args)
-      if ('error' in result) {
-        return result
-      }
-      notifyReposChanged(mainWindow)
-      emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
-      return { repo: result.repo }
-    }
-  )
-
-  ipcMain.handle(
-    'repos:createRemote',
-    async (
-      _event,
-      args: {
-        connectionId: string
-        parentPath: string
-        name: string
-        kind: 'git' | 'folder'
-      }
-    ): Promise<{ repo: Repo } | { error: string }> => {
-      const result = await createRemoteRepo(store, args)
-      if ('error' in result) {
-        return result
-      }
-      notifyReposChanged(mainWindow)
-      return result
     }
   )
 

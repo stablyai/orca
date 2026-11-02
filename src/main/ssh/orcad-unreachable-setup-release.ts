@@ -9,18 +9,19 @@ import { listEnvironments } from '../../shared/runtime-environment-store'
 import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { findOrcadMigrationSourceCutoverForTarget } from './orcad-migration-cutover-journal'
 import { releaseUndeployedMigrationFence } from './orcad-migration-source-fence'
-import { closeOrcadManagedTunnel } from './orcad-managed-tunnel'
+import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
-import { withOrcadActivationLock } from './orcad-activation-lock'
-import { withDeactivatedVersionCommitted } from './orcad-activation-record'
+import { withOrcadActivationLock } from '../managed-server/activation/orcad-activation-lock'
+import { withDeactivatedVersionCommitted } from '../managed-server/activation/orcad-activation-record'
 import {
   readOrcadActivationRecord,
   writeOrcadActivationRecord
-} from './orcad-activation-record-store'
-import { managedOrcadSlot } from './orcad-managed-runtime-context'
-import { resolveOrcadRemoteContext } from './orcad-remote-context'
-import { orcadStopFreedTheHost } from './orcad-remote-process-control'
+} from '../managed-server/activation/orcad-activation-record-store'
+import { managedOrcadSlot } from '../managed-server/lifecycle/orcad-managed-runtime-context'
+import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
+import { orcadStopFreedTheHost } from '../managed-server/install/orcad-remote-process-control'
 import { orcadSlotDir, stopOrcadSlot } from './orcad-recovery-slot'
+import { sshOrcadHostTransport } from './orcad-ssh-host-transport'
 import { getSshConnectionManager, getSshTargetRegistryStore } from './ssh-target-registry'
 import { errorMessage } from '../../shared/error-message'
 
@@ -64,7 +65,7 @@ async function stopStrandedOrcad(targetId: string, signal?: AbortSignal): Promis
   }
   const context = await resolveOrcadRemoteContext(
     target,
-    await connectionManager.connect(target),
+    sshOrcadHostTransport(await connectionManager.connect(target)),
     signal
   )
   if (!context.activationRecord.active) {

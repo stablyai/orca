@@ -247,6 +247,20 @@ describe('terminal close CLI', () => {
     expect(help).toContain('durable persistence')
   })
 
+  it.each(['send', 'read', 'wait', 'create'])(
+    'describes the server-selection flags in terminal %s help',
+    (verb) => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      printHelp(COMMAND_SPECS, ['terminal', verb])
+
+      const help = String(log.mock.calls[0]?.[0])
+      expect(help).toMatch(/--environment <selector> .*paired Orca server/)
+      expect(help).toMatch(/--pairing-code <code> .*orca:\/\/pair/)
+      log.mockRestore()
+    }
+  )
+
   it('hides legacy stop from terminal command discovery', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { formatServeRuntimeSelection } from '../../shared/orcad-local-serve-selection'
-import type { runProcess } from '../../shared/child-process/run-process'
-import { orcadServeArgs, resolveLocalServeRuntime, serveOptionArgs } from './serve-orcad-launch'
+import type { runProcess } from '@orca/process-host'
+import { resolveLocalServeRuntime } from './serve-orcad-launch'
+import { orcadServeArgs, serveOptionArgs } from '../../shared/orcad-serve-argv'
 
 type RunProcess = typeof runProcess
 
@@ -99,6 +100,20 @@ describe('orca serve asking the app which host to run', () => {
       '/work/app'
     ])
     expect(orcadServeArgs({})).toEqual(['--bind', '0.0.0.0'])
+  })
+
+  // #30100: the slot carries no browser client, so without this orcad served no web page.
+  it("hands orcad the app's browser client directory when the app has one", () => {
+    expect(
+      orcadServeArgs({ port: '6768' }, '/opt/Orca/resources/app.asar.unpacked/out/web')
+    ).toEqual([
+      '--bind',
+      '0.0.0.0',
+      '--port',
+      '6768',
+      '--web-client-root',
+      '/opt/Orca/resources/app.asar.unpacked/out/web'
+    ])
   })
 
   it('spells the same flags with the --serve- prefix for the Electron host', () => {

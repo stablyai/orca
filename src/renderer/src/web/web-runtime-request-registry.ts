@@ -15,6 +15,25 @@ export class WebRuntimeRequestRegistry {
 
   constructor(private readonly options: WebRuntimeRequestRegistryOptions) {}
 
+  /** Sends now, without waiting for 'connected': the device-key migration socket. */
+  callNow(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+    return new Promise((resolve, reject) => {
+      const id = this.options.nextId()
+      const timeout = window.setTimeout(() => {
+        this.pending.delete(id)
+        reject(new Error(`Request timed out: ${method}`))
+      }, REQUEST_TIMEOUT_MS)
+      this.pending.set(id, { method, resolve, reject, timeout })
+      if (
+        !this.options.sendEncrypted({ id, deviceToken: this.options.deviceToken, method, params })
+      ) {
+        this.pending.delete(id)
+        window.clearTimeout(timeout)
+        reject(new Error('Remote Orca runtime is not connected.'))
+      }
+    })
+  }
+
   async call(
     method: string,
     params?: unknown,

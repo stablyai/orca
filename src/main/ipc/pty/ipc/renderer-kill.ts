@@ -1,19 +1,24 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { TerminalIntentionalStopKind } from '../../../runtime/terminal-intentional-stops'
-import type { IPtyProvider } from '../../../providers/types'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
-import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import { getProviderForPty, sshProviders, tryGetProviderForPty } from '../provider/registry'
+import { ptyIncarnationById } from '../provider/ownership-state'
+import {
+  getProviderForPty,
+  getPtySshConnectionId,
+  resolvePtyExecutionHost,
+  tryGetProviderForPty,
+  type ResolvedPtyHost
+} from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
-import { recordUndeliveredSshPtyKill } from '../runtime/undelivered-ssh-kill'
 
 export type PtyKillIpcDeps = {
   store?: Store
   runtime?: OrcaRuntimeService
-  getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  getLocalPtyProviderStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
   shutdownProviderAndDetectExit: (
     provider: IPtyProvider,
     id: string,
@@ -24,8 +29,7 @@ export type PtyKillIpcDeps = {
 }
 
 /** `pty:kill` — the route the renderer takes when the user closes a terminal tab, and a separate
- *  implementation from `killPtyFromRuntimeController`. Both have to record an undelivered SSH stop,
- *  and this is the one ordinary tab close actually reaches. */
+ *  implementation from `killPtyFromRuntimeController`. */
 export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
   getPtyIpc().handle('pty:kill', (_event, args: { id: string; keepHistory?: boolean }) =>
     stopRendererOwnedPty(deps, args)
@@ -52,7 +56,7 @@ async function stopRendererOwnedPtyAs(
   args: { id: string; keepHistory?: boolean },
   intentionalStop: TerminalIntentionalStopKind | null
 ): Promise<void> {
-  if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+  if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
     // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
     throw new Error('Invalid PTY provider id')
   }
@@ -85,32 +89,18 @@ async function stopRendererOwnedPtyProcess(
     sendPtyExitToRenderer
   } = deps
   runtime?.markPtyStopRequested?.(args.id)
-  const ownedConnectionId = ptyOwnership.get(args.id)
-  const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
-  const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+  const connectionId = getPtySshConnectionId(args.id)
   // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
-  const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+  const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(args.id))
   if (startupPromise) {
     await startupPromise
   }
-  // Why stated rather than inferred: this IPC serves both the ordinary tab close and pane
-  // hibernation, and only hibernation passes keepHistory. Recording a replayable kill for a
-  // hibernating pane would destroy it on the next handshake.
-  const reversible = args.keepHistory === true
-  const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
+  const provider = tryGetProviderForPty(args.id)
   if (!provider && connectionId) {
     // Why: detached SSH PTYs intentionally keep ownership after their
     // provider is unregistered; hydrated app-scoped ids can also arrive
     // before ownership is rebuilt. Tombstone instead of falling back local.
     const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-    // The relay was never asked, so the remote shell is still running. Keep the order.
-    recordUndeliveredSshPtyKill({
-      store,
-      ptyId: args.id,
-      connectionId,
-      reversible,
-      incarnationId
-    })
     runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
     runtime?.onPtyExit(args.id, -1, incarnationId)
     rememberSyntheticKillExit(args.id, incarnationId)
@@ -130,10 +120,7 @@ async function stopRendererOwnedPtyProcess(
     })
   } catch (err) {
     if (!isPtyAlreadyGoneError(err)) {
-      // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
-      // The renderer has already discarded the tab, so nothing here retries — the durable order
-      // is what lets the next handshake to this host finish the close.
-      recordUndeliveredSshPtyKill({ store, ptyId: args.id, connectionId, reversible })
+      // Why: a failed shutdown can leave the local daemon's process alive; keep ownership so a retry can reach it.
       throw err
     }
     /* session already dead — cleanup below handles the rest */

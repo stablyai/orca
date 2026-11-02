@@ -1,12 +1,8 @@
-import { randomUUID } from 'node:crypto'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import { spawnProcess } from '../../shared/child-process/run-process'
-import {
-  markClaudeStructuredChildExited,
-  markClaudeStructuredChildSpawned
-} from '../claude-accounts/live-pty-gate'
+import { spawnProcess } from '@orca/process-host'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import {
@@ -58,6 +54,15 @@ export type ClaudeStreamJsonLaunch = {
   options: ClaudeStructuredSdkOptions
   cwd: string
   env?: Record<string, string>
+  /** Removed after the child's env is built over Orca's own, as every provider child's are. */
+  envToDelete?: readonly string[]
+}
+
+function withoutKeys(env: Record<string, string>, keys: readonly string[]): Record<string, string> {
+  for (const key of keys) {
+    delete env[key]
+  }
+  return env
 }
 
 export type ClaudeStreamJsonConnectionHandlers = {
@@ -130,7 +135,7 @@ function exitError(stderrTail: string, status: ExitStatus | null, cause?: Error)
 export async function openClaudeStreamJsonConnection(
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers = {},
-  spawnImpl: typeof spawnProcess = spawnProcess,
+  spawnImpl: PipedProcessSpawner = spawnProcess,
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
@@ -145,10 +150,13 @@ export async function openClaudeStreamJsonConnection(
       // exactly the ambient ANTHROPIC_* auth leak this lane already shipped once.
       // Orca's own CLAUDE_CONFIG_DIR is dropped for the same reason the launch drops the
       // shell's: the record's pin in `launch.env` must be the only home the child sees.
-      env: buildClaudeChildProcessEnv(launch.env, {
-        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
-        scrubConfiguredChildSessionStamps: true
-      }),
+      env: withoutKeys(
+        buildClaudeChildProcessEnv(launch.env, {
+          inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
+          scrubConfiguredChildSessionStamps: true
+        }),
+        launch.envToDelete ?? []
+      ),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
@@ -160,12 +168,6 @@ export async function openClaudeStreamJsonConnection(
   if (!child || !managed) {
     throw new Error('the claude agent SDK returned without spawning a child')
   }
-  // This child owns the account's credentials for as long as it runs, exactly as a
-  // Claude PTY does — hold the OAuth-refresh gate so a managed refresh cannot rotate
-  // the single-use token out from under it mid-turn. Entered below, once a release
-  // path exists.
-  const authGateKey = randomUUID()
-  const releaseAuthGate = (): void => markClaudeStructuredChildExited(authGateKey)
   let exitStatus: ExitStatus | null = null
   let closing = false
   let terminalError: Error | null = null
@@ -264,7 +266,6 @@ export async function openClaudeStreamJsonConnection(
 
   managed.onExit((exit) => {
     exitStatus = exit
-    releaseAuthGate()
     handleUnexpectedEnd()
   })
   child.on('error', (error) => {
@@ -274,7 +275,6 @@ export async function openClaudeStreamJsonConnection(
     handleUnexpectedEnd(error)
   })
   child.on('close', () => {
-    releaseAuthGate()
     handleUnexpectedEnd()
   })
   child.stdin.on('error', (error) => {
@@ -283,13 +283,6 @@ export async function openClaudeStreamJsonConnection(
       handleUnexpectedEnd(error)
     }
   })
-  // Why here and not at spawn: a structured gate entry is deliberately unpersisted, so
-  // confirmSeededClaudeLivePtys can never reconcile a stray one and a leak defers the
-  // managed OAuth refresh for the life of the process. Entering only after 'exit' and
-  // 'close' are attached makes that unreachable — any later throw still leaves a
-  // listener that releases. Nothing between spawn and here can yield, so the child
-  // cannot end before the gate is entered.
-  markClaudeStructuredChildSpawned(authGateKey)
 
   const send: ClaudeStreamJsonConnection['send'] = (message, beforeDispatch) => {
     if (

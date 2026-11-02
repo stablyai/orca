@@ -9,7 +9,10 @@ import { claudeProviderHandle } from '../../../shared/agent-session-provider-han
 import { CLAUDE_STRUCTURED_AGENT } from '../../claude/claude-structured-agent-definition'
 import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionLiveOptions
+} from './structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
@@ -60,23 +63,26 @@ function fakeAdapter(): StructuredAgentSessionAdapter {
 function pick(agents: StructuredAgentRegistry, record: AgentSessionRecord | null, key: string) {
   const persistOptions = vi.fn(async () => {})
   const result = recordStructuredAgentSessionOptionIntent(
-    { store: { getRecord: () => record }, agents },
-    { sessionId: RECORD.sessionId, persistOptions, publish: vi.fn() },
+    { store: { getRecord: () => record, replaceSessionOptions: vi.fn() }, agents },
+    { sessionId: RECORD.sessionId, fence: 1, persistOptions, publish: vi.fn(), now: () => 0 },
     { key, value: 'enabled' }
   )
   return { result, persistOptions }
 }
 
-function readAtRest(agents: StructuredAgentRegistry) {
+/** At rest, or from a running child that answers `live`. */
+function readAtRest(agents: StructuredAgentRegistry, live?: StructuredAgentSessionLiveOptions) {
   const resting = {
-    child: null,
+    child: live ? { fence: 1 } : null,
     params: { provider: RECORD.provider },
     journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read touches only these members.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read touches only these members.
   const context = {
     deps: {
-      adapter: new StructuredAgentSessionAdapterRouter(agents, async () => {}),
+      adapter: live
+        ? { readOptions: async () => live }
+        : new StructuredAgentSessionAdapterRouter(agents, async () => {}),
       agents,
       store: { getRecord: () => RECORD }
     },
@@ -84,7 +90,7 @@ function readAtRest(agents: StructuredAgentRegistry) {
     openConversation: async () => resting,
     conversation: async () => resting
   } as unknown as StructuredAgentSessionMutationContext
-  return readStructuredAgentSessionOptions(context, RECORD.sessionId)
+  return readStructuredAgentSessionOptions(context, RECORD.sessionId, { readsWithoutModel: true })
 }
 
 describe('a registered definition', () => {
@@ -120,7 +126,11 @@ describe('a registered definition', () => {
     const options = await readAtRest(agents)
     expect(options.models.map((model) => model.id)).toEqual(['pilot-model'])
     // No pick for effort: the registered rules read the model's default.
-    expect(options.current).toEqual({ model: 'pilot-model', effort: 'low' })
+    expect(options.current).toEqual({
+      model: 'pilot-model',
+      effort: 'low',
+      permissionMode: 'ask'
+    })
     expect(options.threadGoal).toEqual({ current: null })
   })
 
@@ -144,6 +154,35 @@ describe('a registered definition', () => {
     expect(options.models).toEqual([])
     expect(options.current).toEqual({ model: 'pilot-model' })
     expect(options.conversationCommands).toEqual(['clear'])
+    expect(options.acceptsImages).toBe(false)
+  })
+
+  it('says whether the session takes images: the definition, narrowed by a running child', async () => {
+    const registry = (imagePrompts: boolean) =>
+      new StructuredAgentRegistry([
+        {
+          definition: {
+            ...NON_DEFAULT,
+            capabilities: { ...NON_DEFAULT.capabilities, imagePrompts }
+          },
+          adapter: fakeAdapter()
+        }
+      ])
+    const live = (acceptsImages?: boolean): StructuredAgentSessionLiveOptions => ({
+      models: [],
+      current: {},
+      ...(acceptsImages === undefined ? {} : { acceptsImages })
+    })
+    await expect(readAtRest(registry(true))).resolves.toMatchObject({ acceptsImages: true })
+    await expect(readAtRest(registry(false))).resolves.toMatchObject({ acceptsImages: false })
+    await expect(readAtRest(registry(true), live())).resolves.toMatchObject({ acceptsImages: true })
+    await expect(readAtRest(registry(true), live(false))).resolves.toMatchObject({
+      acceptsImages: false
+    })
+    // A child's yes never widens a definition's no.
+    await expect(readAtRest(registry(false), live(true))).resolves.toMatchObject({
+      acceptsImages: false
+    })
   })
 
   it('refuses a pick for a session with no record, as before', async () => {

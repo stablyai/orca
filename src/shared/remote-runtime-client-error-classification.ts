@@ -7,6 +7,8 @@ export const RUNTIME_RPC_QUEUE_OVERLOAD_MESSAGE_FRAGMENT = 'remote runtime call 
 // code and its message disagree; see remote-runtime-transport-error-agreement.test.ts.
 export const RECOVERABLE_CODES: ReadonlySet<string> = new Set([
   'remote_runtime_unavailable',
+  // A client-side admission cap that frees as pending work settles; fatal would dead-end panes.
+  'remote_runtime_busy',
   RUNTIME_RPC_QUEUE_OVERLOAD_CODE,
   'runtime_timeout',
   'runtime_unavailable',
@@ -21,6 +23,11 @@ export const RECOVERABLE_MESSAGE_FRAGMENTS: readonly string[] = [
   'remote orca runtime is not connected',
   RUNTIME_RPC_QUEUE_OVERLOAD_MESSAGE_FRAGMENT,
   'remote runtime connection closed',
+  // remote_runtime_busy wording, for when IPC strips the code.
+  'remote runtime connection wait limit reached',
+  'remote runtime request limit reached',
+  'remote runtime subscription limit reached',
+  'remote runtime subscription memory limit reached',
   'remote runtime subscription closed before it started',
   'remote terminal stream is not connected',
   'timed out waiting for the remote orca runtime'

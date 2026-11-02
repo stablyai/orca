@@ -198,8 +198,8 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.messages).toHaveLength(100)
     expect(state?.messages[0]?.id).toBe('paged-0')
 
-    // A replay carrying one message that arrived while away merges it in; the
-    // grown window stays bounded, so only the single oldest row trims.
+    // A replay carrying one message that arrived while away merges it in, and
+    // nothing the phone already shows is dropped to make room.
     await act(async () =>
       emit({
         type: 'snapshot',
@@ -208,13 +208,12 @@ describe('useMobileNativeChatSession', () => {
         beforeOffset: 100
       })
     )
-    expect(state?.messages).toHaveLength(100)
-    expect(state?.messages[0]?.id).toBe('paged-1')
+    expect(state?.messages).toHaveLength(101)
+    expect(state?.messages[0]?.id).toBe('paged-0')
     expect(state?.messages.at(-1)?.id).toBe('live-1')
   })
 
-  it('enables paging when a replay trims a window that previously had no earlier rows', async () => {
-    // Never settles: this asserts the request the replay's cursor produces.
+  it('keeps the rows it shows when a replay window has moved past them', async () => {
     const sendRequest = vi.fn(() => new Promise<never>(() => {}))
     const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
@@ -224,6 +223,7 @@ describe('useMobileNativeChatSession', () => {
     })
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
 
+    // The host's newest window now starts one row later; its `hasMore` is about that window.
     await act(async () =>
       emit({
         type: 'snapshot',
@@ -233,14 +233,11 @@ describe('useMobileNativeChatSession', () => {
       })
     )
 
-    expect(state?.messages[0]?.id).toBe('win-1')
-    expect(state?.hasMore).toBe(true)
-    act(() => state?.loadEarlier())
-    expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
-      agent: 'claude',
-      sessionId: 'session',
-      limit: 100
-    })
+    expect(state?.messages.map((entry) => entry.id)).toEqual([
+      ...window.map((entry) => entry.id),
+      'live-1'
+    ])
+    expect(state?.hasMore).toBe(false)
   })
 
   it('drops paged rows that an authoritative replay says were removed', async () => {
@@ -381,48 +378,65 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.messages.map((entry) => entry.id)).toEqual(['early-b', 'base-c'])
   })
 
-  it('rejects a cursor page invalidated by live trim and retries with a growing tail', async () => {
-    let resolveCursorPage: (response: unknown) => void = () => {}
+  it('keeps every row it shows while live output outgrows the first window', async () => {
+    let resolvePage: (response: unknown) => void = () => {}
     const sendRequest = vi
       .fn()
-      .mockImplementationOnce(() => new Promise((resolve) => (resolveCursorPage = resolve)))
-      .mockResolvedValueOnce({
+      .mockImplementationOnce(() => new Promise((resolve) => (resolvePage = resolve)))
+      .mockImplementation(() => new Promise<never>(() => {}))
+    const window = Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`))
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
+      return () => {}
+    })
+    await mount({ sendRequest, subscribe } as unknown as RpcClient)
+    const shown = window.map((entry) => entry.id)
+
+    // A reader scrolled up is looking at these rows; a busy turn must not push them out.
+    act(() => state?.loadEarlier())
+    await act(async () => emit({ type: 'appended', messages: [message('live-1')] }))
+    expect(state?.messages.map((entry) => entry.id)).toEqual([...shown, 'live-1'])
+
+    // The page asked for before that output still lands ahead of the rows it was read behind.
+    await act(async () => {
+      resolvePage({
         ok: true,
-        result: { messages: [message('fresh-growing-tail')], hasMore: false }
+        result: { messages: [message('older-page')], hasMore: true, beforeOffset: 50 }
       })
+      await Promise.resolve()
+    })
+    expect(state?.messages.map((entry) => entry.id)).toEqual(['older-page', ...shown, 'live-1'])
+  })
+
+  it('pages a growing tail from what the phone holds, not from the first window', async () => {
+    // Never settles: this asserts the request an older runtime, which has no cursor, is sent.
+    const sendRequest = vi.fn(() => new Promise<never>(() => {}))
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({
         type: 'snapshot',
         messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
-        hasMore: true,
-        beforeOffset: 100
+        hasMore: true
       })
       return () => {}
     })
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
-    act(() => state?.loadEarlier())
-    await act(async () => emit({ type: 'appended', messages: [message('live-trim')] }))
-    await act(async () => {
-      resolveCursorPage({
-        ok: true,
-        result: { messages: [message('stale-cursor-page')], hasMore: true, beforeOffset: 50 }
+    await act(async () =>
+      emit({
+        type: 'appended',
+        messages: Array.from({ length: 30 }, (_unused, index) => message(`live-${index}`))
       })
-      await Promise.resolve()
-    })
-    expect(state?.messages.map((entry) => entry.id)).not.toContain('stale-cursor-page')
+    )
 
-    await act(async () => {
-      state?.loadEarlier()
-      await Promise.resolve()
-    })
+    act(() => state?.loadEarlier())
 
+    // 70 rows held plus one page: a read of 100 would come back shorter than the list it replaces.
     expect(sendRequest).toHaveBeenLastCalledWith('nativeChat.readSession', {
       agent: 'claude',
       sessionId: 'session',
-      limit: 100
+      limit: 130
     })
-    expect(state?.messages.map((entry) => entry.id)).toEqual(['fresh-growing-tail'])
   })
 })
 

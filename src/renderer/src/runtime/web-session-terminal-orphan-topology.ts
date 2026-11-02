@@ -5,7 +5,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/terminal-tab-types'
-import { toHostSessionTabId } from './web-terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 
 export type WebTerminalOrphanTopologyState = {
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>

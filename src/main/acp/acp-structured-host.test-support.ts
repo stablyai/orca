@@ -36,6 +36,7 @@ import {
   ACP_HANDLE_TRANSPORT,
   acpStructuredAgentDefinition
 } from './acp-structured-agent-definitions'
+import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -56,9 +57,9 @@ export const attachParams = (fence: number | null = null) =>
   })
 
 /** A launch that resumes the provider session once the chat has one. */
-export function launch(resume: () => boolean): () => Promise<AcpStructuredLaunch> {
+export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStructuredLaunch> {
   return async () => ({
-    spec: GROK,
+    spec,
     command: '/fake/grok',
     args: [],
     cwd: '/workspace',
@@ -70,7 +71,7 @@ export function launch(resume: () => boolean): () => Promise<AcpStructuredLaunch
           sessionId: PROVIDER_SESSION,
           key: agentSessionProviderHandleKey({
             transport: ACP_HANDLE_TRANSPORT,
-            agent: 'grok',
+            agent: spec.agent,
             nativeId: PROVIDER_SESSION
           }),
           mayBeUnsaved: () => false,
@@ -82,6 +83,7 @@ export function launch(resume: () => boolean): () => Promise<AcpStructuredLaunch
 
 export async function openHostRig(
   options: {
+    spec?: AcpLaunchSpec
     script?: (agent: AcpScriptedAgent) => void
     initialize?: Record<string, unknown>
     deps?: Partial<AcpStructuredSessionAdapterDeps>
@@ -110,7 +112,7 @@ export async function openHostRig(
   })
   const host = new StructuredAgentSessionHost({
     agents: new StructuredAgentRegistry([
-      { definition: acpStructuredAgentDefinition(GROK), adapter: rig.adapter }
+      { definition: acpStructuredAgentDefinition(options.spec ?? GROK), adapter: rig.adapter }
     ]),
     logger: state.log.logger,
     store,

@@ -607,10 +607,7 @@ describe('web session terminal orphan adoption regressions', () => {
         verdict === 'pending-without-proof'
           ? {
               ...projected,
-              tabs: [
-                projected.tabs[0],
-                { ...snapshot.tabs[1], status: 'ready', terminal: 'term-hold' }
-              ]
+              tabs: [projected.tabs[0], snapshot.tabs[1]]
             }
           : projected
       )

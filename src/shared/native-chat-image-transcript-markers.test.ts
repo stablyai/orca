@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from './native-chat-types'
+import { imageReferenceToken } from './native-chat-image-reference'
 import {
+  imageReferencesToPromptMarkers,
+  promptMarkersToImageReferences,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText,
-  stripImagePromptMarker
+  stripImagePromptMarker,
+  stripSentImagePromptMarkers
 } from './native-chat-image-transcript-markers'
+import { formatNativeChatFileReference } from './agent-image-paste'
 
 function userText(id: string, text: string): NativeChatMessage {
   return {
@@ -279,5 +284,57 @@ describe('normalizeNativeChatUserText control bytes', () => {
 
   it('leaves tabs, newlines and carriage returns to the whitespace collapse', () => {
     expect(normalizeNativeChatUserText('run\tthe\r\ntests')).toBe('run the tests')
+  })
+})
+
+describe('composer image chips at send and back', () => {
+  const chip = imageReferenceToken
+
+  it('numbers each chip by its image’s place among the images sent', () => {
+    expect(
+      imageReferencesToPromptMarkers(`after ${chip('b')} before ${chip('a')} again ${chip('b')}`, [
+        'a',
+        'b'
+      ])
+    ).toBe('after [Image #2] before [Image #1] again [Image #2]')
+  })
+
+  it('drops a chip whose image is not sent, and counts an image with no chip', () => {
+    expect(imageReferencesToPromptMarkers(`${chip('gone')}see ${chip('c')}`, ['a', 'c'])).toBe(
+      'see [Image #2]'
+    )
+  })
+
+  it('leaves typed text alone, even a typed marker or a path holding one', () => {
+    const text = 'compare [Image #2] with @/tmp/[Image #2].md and [Image](orca-image:bad id)'
+    expect(imageReferencesToPromptMarkers(text, ['a', 'b'])).toBe(text)
+  })
+
+  it('turns a returned message’s markers back into chips for its own images', () => {
+    expect(
+      promptMarkersToImageReferences('[Image #2] then [Image #1], not [Image #3]', ['r-1', 'r-3'])
+    ).toBe(`${chip('r-3')} then ${chip('r-1')}, not [Image #3]`)
+  })
+
+  it('leaves a quoted file path that reads like a marker as typed, back or stripped', () => {
+    const files = [
+      formatNativeChatFileReference('/repo/[Image #1].md'),
+      formatNativeChatFileReference('/repo/"q" [Image #1].md'),
+      formatNativeChatFileReference('/repo/"q" \'s\' [Image #1].md')
+    ]
+    for (const file of files) {
+      expect(promptMarkersToImageReferences(`[Image #1] in ${file}`, ['r-1'])).toBe(
+        `${chip('r-1')} in ${file}`
+      )
+      expect(stripSentImagePromptMarkers(`[Image #1] in ${file} [Image #1]`)).toBe(`in ${file}`)
+    }
+  })
+
+  it('sends a returned message with the numbers it had', () => {
+    const sent = 'compare [Image #1] with [Image #2]'
+    const ids = ['returned-m-1', 'returned-m-2']
+    expect(imageReferencesToPromptMarkers(promptMarkersToImageReferences(sent, ids), ids)).toBe(
+      sent
+    )
   })
 })

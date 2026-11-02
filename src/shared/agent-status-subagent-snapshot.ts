@@ -29,11 +29,14 @@ export type AgentSubagentSnapshot = {
 export const AGENT_STATUS_MAX_SUBAGENTS = 32
 const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
 
-function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null {
+function normalizeSubagentSnapshot(
+  value: unknown,
+  allowFutureState: boolean
+): AgentSubagentSnapshot | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
-  const obj = value as Record<string, unknown>
+  const obj = Object.fromEntries(Object.entries(value))
   if (typeof obj.id !== 'string') {
     return null
   }
@@ -41,18 +44,14 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
   if (id.length === 0 || id.length > AGENT_SUBAGENT_ID_MAX_LENGTH) {
     return null
   }
-  if (
-    obj.state !== 'working' &&
-    obj.state !== 'blocked' &&
-    obj.state !== 'waiting' &&
-    obj.state !== 'idle' &&
-    obj.state !== 'unverifiable'
-  ) {
+  const state = ['working', 'blocked', 'waiting', 'idle', 'unverifiable'] as const
+  const knownState = state.find((candidate) => candidate === obj.state)
+  if (!knownState && (!allowFutureState || typeof obj.state !== 'string')) {
     return null
   }
   return {
     id,
-    state: obj.state,
+    state: knownState ?? 'unverifiable',
     startedAt:
       typeof obj.startedAt === 'number' && Number.isFinite(obj.startedAt) ? obj.startedAt : 0,
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
@@ -62,12 +61,24 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
 }
 
 export function normalizeAgentSubagentsField(value: unknown): AgentSubagentSnapshot[] | undefined {
+  return readAgentSubagents(value, false)
+}
+
+/** Published snapshots tolerate future state words; producer admission remains strict. */
+export function decodeAgentSubagentsField(value: unknown): AgentSubagentSnapshot[] | undefined {
+  return readAgentSubagents(value, true)
+}
+
+function readAgentSubagents(
+  value: unknown,
+  allowFutureState: boolean
+): AgentSubagentSnapshot[] | undefined {
   if (!Array.isArray(value) || value.length === 0) {
     return undefined
   }
   const normalized: AgentSubagentSnapshot[] = []
   for (const item of value) {
-    const snapshot = normalizeSubagentSnapshot(item)
+    const snapshot = normalizeSubagentSnapshot(item, allowFutureState)
     if (snapshot) {
       normalized.push(snapshot)
       if (normalized.length >= AGENT_STATUS_MAX_SUBAGENTS) {

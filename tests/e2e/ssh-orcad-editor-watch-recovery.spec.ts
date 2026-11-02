@@ -1,15 +1,15 @@
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { createRestartSession } from './helpers/orca-restart'
-import { startOrcadConvertHost } from './helpers/orcad-convert-host'
-import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
-import { convertAndRetain, serverCall } from './helpers/orcad-convert-flow'
-import { waitForSessionReady, waitForStartupWorktreeRefresh } from './helpers/store'
-import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
-import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
+import { serverCall } from './helpers/orcad-convert-flow'
+import {
+  activateManagedWorkspace,
+  launchConvertedProfile,
+  relaunchManagedApp,
+  skipUnlessManagedDockerHost,
+  withManagedHost
+} from './helpers/orcad-managed-workspace'
 
-const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
-test.skip(!TEMPLATE || process.env.ORCA_E2E_SSH_DOCKER !== '1', 'Needs Docker and server template')
+skipUnlessManagedDockerHost()
 
 function captureRendererMessages(page: Page): void {
   page.on('console', (message) => {
@@ -27,57 +27,23 @@ for (const recovery of ['conversion', 'server restart'] as const) {
   test(`remote editors receive host file changes after ${recovery}`, async (// oxlint-disable-next-line no-empty-pattern -- This exercise owns its app launch.
   {}, testInfo) => {
     test.setTimeout(4 * 60_000)
-    const host = startOrcadConvertHost('docker', testInfo)
-    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
-    let app: ElectronApplication | null = null
-    try {
+    await withManagedHost(testInfo, async (fixture) => {
+      const { host } = fixture
       if (!host.exec) {
         throw new Error('Docker controls are unavailable')
       }
       const execute = host.exec
-      const first = await session.launch()
-      app = first.app
-      await waitForSessionReady(first.page)
-      await session.close(app)
-      app = null
       const marker = `REMOTE_MARKDOWN_${Date.now()}`
       execute(
         `printf '# ${marker}\n\nHost-owned Markdown.\n\n[[LATE]]\n' > '${host.remoteRepoPath}/README.md'`
       )
-      const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
-        repoPath: host.remoteRepoPath,
-        folderPath: host.remoteFolderPath
-      })
-      const launched = await session.launch()
-      app = launched.app
-      let page = launched.page
-      captureRendererMessages(page)
-      await waitForSessionReady(page)
-      await convertAndRetain(page, session.userDataDir, seeded)
-      const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-        (e) => e.orcadDeployment?.sshTargetId === seeded.targetId
-      )
-      if (!environment) {
-        throw new Error('Missing managed environment')
-      }
-      if (recovery === 'server restart') {
-        await session.close(app)
-        app = null
-        const restarted = await session.launch()
-        app = restarted.app
-        page = restarted.page
-        captureRendererMessages(page)
-        await waitForSessionReady(page)
-        await waitForStartupWorktreeRefresh(page)
-      }
-      await page.evaluate(
-        ({ id, hostId }) => window.__store?.getState().setActiveWorktree(id, hostId),
-        {
-          id: seeded.worktreeId,
-          hostId: toRuntimeExecutionHostId(environment.id)
-        }
-      )
-      await dismissTransientAnnouncement(page)
+      const converted = await launchConvertedProfile(fixture, { onLaunch: captureRendererMessages })
+      const { seeded, environmentId } = converted
+      const page =
+        recovery === 'server restart'
+          ? await relaunchManagedApp(fixture, captureRendererMessages)
+          : converted.page
+      await activateManagedWorkspace(page, seeded.worktreeId, environmentId)
       await expect(page.locator('.rich-markdown-editor')).toContainText(marker, { timeout: 30_000 })
       await page.evaluate(() => {
         window.addEventListener('orca:worktree-file-change', (event) => {
@@ -122,7 +88,7 @@ for (const recovery of ['conversion', 'server restart'] as const) {
                   })
                   return response.ok ? JSON.stringify(response.result) : ''
                 },
-                { id: environment.id, worktreeId: seeded.worktreeId }
+                { id: environmentId, worktreeId: seeded.worktreeId }
               ),
             { timeout: 180_000 }
           )
@@ -132,7 +98,7 @@ for (const recovery of ['conversion', 'server restart'] as const) {
           execute('cat /root/.orca-remote/orcad-*/.orcad-pid').trim()
         )
       }
-      const content = await serverCall(page, environment.id, 'files.read', {
+      const content = await serverCall(page, environmentId, 'files.read', {
         worktree: `id:${seeded.worktreeId}`,
         relativePath: 'README.md'
       })
@@ -151,7 +117,7 @@ for (const recovery of ['conversion', 'server restart'] as const) {
           timeout: 15_000
         })
         execute(`printf 'watcher recovered\\n' > '${host.remoteRepoPath}/WATCH_RECOVERED.txt'`)
-        const created = await serverCall(page, environment.id, 'files.read', {
+        const created = await serverCall(page, environmentId, 'files.read', {
           worktree: `id:${seeded.worktreeId}`,
           relativePath: 'WATCH_RECOVERED.txt'
         })
@@ -159,12 +125,6 @@ for (const recovery of ['conversion', 'server restart'] as const) {
         expect(created).toContain('watcher recovered')
         await resumed
       }
-    } finally {
-      if (app) {
-        await session.close(app)
-      }
-      await session.dispose()
-      host.cleanup()
-    }
+    })
   })
 }

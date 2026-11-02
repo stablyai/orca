@@ -9,7 +9,7 @@ import {
   type SignCallback,
   type SigningRequestOptions
 } from 'ssh2'
-import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
 
 type AgentPublicKey = ParsedKey | Buffer | string | PublicKeyEntry
 

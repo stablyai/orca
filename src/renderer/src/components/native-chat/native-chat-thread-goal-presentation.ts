@@ -1,13 +1,17 @@
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalThreadGoalStatus } from '../../../../shared/agent-session-journal-types'
 
-/** The banner's lead label, or null for a status the banner does not show. */
+/** The banner's lead label, or null for a status the banner does not show. An active goal reads
+ *  as pursued only while a turn runs; between turns (after a Stop) it is just set. */
 export function nativeChatThreadGoalStatusLabel(
-  status: AgentJournalThreadGoalStatus
+  status: AgentJournalThreadGoalStatus,
+  working: boolean
 ): string | null {
   switch (status) {
     case 'active':
-      return translate('components.native-chat.goal.pursuing', 'Pursuing goal')
+      return working
+        ? translate('components.native-chat.goal.pursuing', 'Pursuing goal')
+        : translate('components.native-chat.goal.set', 'Goal set')
     case 'paused':
       return translate('components.native-chat.goal.paused', 'Paused goal')
     case 'blocked':

@@ -46,6 +46,30 @@ describe('prependOrcaCliDirToChildPath', () => {
       expect(shim.ensureLinuxTerminalOrcaCliShimDir).not.toHaveBeenCalled()
     }
   )
+  it('puts a Windows execution host CLI first on Path without a POSIX restore dir', () => {
+    const binDir = join(USER_DATA, 'cli', 'bin')
+    const launcher = join(binDir, 'orca.exe')
+    installFakeAppEnvironment({ getCliLauncherPath: () => launcher })
+    const env: Record<string, string> = {
+      Path: `C:\\Windows;${binDir};;C:\\Tools`,
+      ORCA_USER_DATA_PATH: 'C:\\parent\\profile',
+      ORCA_CLI_COMMAND: 'C:\\parent\\orca.exe',
+      ORCA_CLI_BIN_DIR: '/parent/bin'
+    }
+    expect(
+      prependOrcaCliDirToChildPath(env, {
+        isPackaged: true,
+        userDataPath: USER_DATA,
+        resourcesPath: null,
+        platform: 'win32'
+      })
+    ).toBe(launcher)
+    expect(env).toEqual({
+      Path: `${binDir};C:\\Windows;C:\\Tools`,
+      ORCA_USER_DATA_PATH: USER_DATA,
+      ORCA_CLI_COMMAND: launcher
+    })
+  })
   it('leads packaged Linux PATH with the bare-orca shim dir', () => {
     // Why this matters at all: the Linux CLI installs as `orca-ide` so it never claims GNOME
     // Orca's /usr/bin/orca screen reader, so bare `orca` only works through this shim.

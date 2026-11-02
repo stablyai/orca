@@ -25,7 +25,6 @@ import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wai
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
 import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
-import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -39,11 +38,17 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 // The turns a send or Stop is waiting on to open, so a test knows the wait began.
 const openWaits = vi.hoisted(() => {
-  const turnIds: string[] = []
-  return { turnIds }
+  const state: {
+    turnIds: string[]
+    ended: string[]
+    began: (() => void) | null
+    releaseAll: (() => void) | null
+  } = { turnIds: [], ended: [], began: null, releaseAll: null }
+  return state
 })
 vi.mock('../codex/codex-structured-turn-open-wait', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexTurnOpenWait>()
@@ -51,11 +56,16 @@ vi.mock('../codex/codex-structured-turn-open-wait', async (importOriginal) => {
     ...actual,
     createCodexTurnOpenWaits: () => {
       const waits = actual.createCodexTurnOpenWaits()
+      openWaits.releaseAll = waits.releaseAll
       return {
         ...waits,
         wait: (turnId: string, withinMs: number) => {
           openWaits.turnIds.push(turnId)
-          return waits.wait(turnId, withinMs)
+          const pending = waits.wait(turnId, withinMs)
+          openWaits.began?.()
+          return pending.then(() => {
+            openWaits.ended.push(turnId)
+          })
         }
       }
     }
@@ -136,14 +146,11 @@ async function compact() {
 
 async function settled(): Promise<{
   submissions: readonly AgentJournalSubmission[]
-  owesWork: boolean
 }> {
   await host.flushStreamedEvents(SESSION)
   const snapshot = await host.journalSnapshot(SESSION)
   return {
-    submissions: snapshot.submissions,
-    // The shared rule every surface reads "working" from.
-    owesWork: owesStructuredAgentSessionWork(snapshot.items, snapshot.submissions, fence)
+    submissions: snapshot.submissions
   }
 }
 
@@ -157,6 +164,9 @@ function verdictOf(submissions: readonly AgentJournalSubmission[], clientMessage
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-codex-opening-send-'))
   openWaits.turnIds.length = 0
+  openWaits.ended.length = 0
+  openWaits.began = null
+  openWaits.releaseAll = null
   answers = 0
   steers = 0
   interrupts = 0
@@ -233,12 +243,11 @@ beforeEach(async () => {
     hostId: 'local',
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => root,
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveCodexCommand: () => 'codex',
     resolveLaunchArgs: () => [],
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-    openCodexConnection: openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000
+    ...scriptedCodexTransport(openConnection)
   })
   const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
   attachParams.envelope.clientOperationId = operationId()
@@ -250,6 +259,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  openWaits.began = null
+  openWaits.releaseAll?.()
+  vi.useRealTimers()
   await stopStructuredAgentSessionRuntime()
   await rm(root, { recursive: true, force: true })
 })
@@ -259,7 +271,7 @@ async function drawn(): Promise<{ text: string; turn: string | undefined }[]> {
   await host.flushStreamedEvents(SESSION)
   const { items, submissions } = await host.journalSnapshot(SESSION)
   const rows = projectNativeChatTranscriptMessages(
-    projectStructuredAgentSessionMessages(items, [], submissions, { rejectedInPlace: true })
+    projectStructuredAgentSessionMessages(items, [], submissions)
   )
   const { drawOrder, turnKeys } = nativeChatTurnMembership(rows, { items, submissions })
   const keyed = rows.map((row, index) => ({
@@ -274,7 +286,7 @@ async function liveTurn(): Promise<string | undefined> {
   await host.flushStreamedEvents(SESSION)
   const { items, submissions } = await host.journalSnapshot(SESSION)
   const rows = projectNativeChatTranscriptMessages(
-    projectStructuredAgentSessionMessages(items, [], submissions, { rejectedInPlace: true })
+    projectStructuredAgentSessionMessages(items, [], submissions)
   )
   return nativeChatTurnMembership(rows, { items, submissions }).liveTurnKey
 }
@@ -411,7 +423,27 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     await deliveryAtRest()
     expect((await submission(b))?.handedOverAt).toBeUndefined()
 
-    await stop()
+    const began = Promise.withResolvers<void>()
+    openWaits.began = began.resolve
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    let stopSettled = false
+    const stopping = stop().finally(() => {
+      stopSettled = true
+    })
+    try {
+      await began.promise
+      expect(openWaits.turnIds).toEqual(['turn-2'])
+      await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 1)
+      expect(openWaits.ended).toEqual([])
+      expect(stopSettled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(openWaits.ended).toEqual(['turn-2'])
+    } finally {
+      openWaits.began = null
+      openWaits.releaseAll?.()
+      vi.useRealTimers()
+      await stopping
+    }
 
     await vi.waitFor(async () =>
       expect(verdictOf((await settled()).submissions, b)).toBe('withdrawn')

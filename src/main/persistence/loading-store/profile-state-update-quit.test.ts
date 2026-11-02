@@ -7,36 +7,27 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
 
 describe('SQLite profile state during an update quit', () => {
   it.each(['best-effort', 'strict'] as const)(
-    'persists final SSH and getter mutations without publishing JSON (%s)',
+    'persists final getter mutations without publishing JSON (%s)',
     async (kind) => {
       const { store, dataFile, readState } = await createWorkerMaintenanceFixture()
-      store.upsertSshRemotePtyLease({
-        targetId: 'remote-host',
-        ptyId: 'remote-pty',
-        state: 'attached'
-      })
       await store.writeLatestProfileStateJsonExportAsync()
       const retainedPaths = profileStateJsonExportPaths(dataFile)
       const retainedBytes = retainedPaths.map((path) => readFileSync(path, 'utf8'))
       store.updateSettings({ theme: 'dark' })
       store.getWorkspaceSession().activeTabId = 'last-tab'
-      store.markSshRemotePtyLeasesForShutdown('remote-host', 'detached')
 
       await (kind === 'strict' ? store.flushFinalOrThrowAsync() : store.flushAsync())
 
       expect(readState()).toMatchObject({
         settings: { theme: 'dark' },
-        workspaceSession: { activeTabId: 'last-tab' },
-        sshRemotePtyLeases: expect.arrayContaining([
-          expect.objectContaining({ targetId: 'remote-host', state: 'detached' })
-        ])
+        workspaceSession: { activeTabId: 'last-tab' }
       })
       expect(existsSync(dataFile)).toBe(false)
       expect(profileStateJsonExportPaths(dataFile)).toEqual(retainedPaths)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { appendRetiredTerminalSurfaceProofs } from '../../shared/terminal-retirement-proof-ledger'
 import {
-  appendRetiredTerminalSurfaceProofs,
   attachRetirementProofsToSnapshot,
   preserveTerminalRetirementProofs
 } from './mobile-session-terminal-retirement-proof'

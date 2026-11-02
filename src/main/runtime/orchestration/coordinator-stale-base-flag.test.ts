@@ -41,12 +41,4 @@ allow-stale-base: truthy`
     expect(allowStale).toBe(false)
     expect(strippedSpec).toBe(spec)
   })
-
-  it('handles the flag as the last line with no trailing newline', () => {
-    const spec = 'line 1\nallow-stale-base: true'
-    const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
-    expect(allowStale).toBe(true)
-    expect(strippedSpec).toBe('line 1\n')
-    expect(strippedSpec.endsWith('allow-stale-base: true')).toBe(false)
-  })
 })

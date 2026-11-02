@@ -39,6 +39,8 @@ export type KeyboardInteractiveSession = {
   requestCredential: SshConnectionCallbacks['onCredentialRequest']
   getCachedPassword: () => string | null
   setCachedPassword: (value: string) => void
+  /** The server asked again after the cached password was sent, so it was refused. */
+  markCachedPasswordRejected: () => void
   markCancelled: () => void
   isCancelled: () => boolean
   // Why: one cached-password auto-answer per connection attempt — a second
@@ -95,6 +97,9 @@ async function answerPasswordPrompt(
   if (cached != null && !session.state.passwordAutoAnswered) {
     session.state.passwordAutoAnswered = true
     return cached
+  }
+  if (cached != null) {
+    session.markCachedPasswordRejected()
   }
   const value = await session.requestCredential?.(session.targetId, 'password', session.hostDetail)
   if (session.isCancelled()) {

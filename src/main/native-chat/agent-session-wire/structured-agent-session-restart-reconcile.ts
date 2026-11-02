@@ -21,27 +21,27 @@ export function createRestartReconciler(deps: {
     records: readonly AgentSessionRecord[]
   ) => Promise<Map<string, AgentSessionOwnerProbe>>
   now: () => number
-}): (sessionId: string) => Promise<AgentSessionWireRefusal | null> {
-  let pending: Promise<void> | null = null
+}): (sessionId?: string) => Promise<AgentSessionWireRefusal | null> {
+  const pending = new Map<string | undefined, Promise<void>>()
   return async (sessionId) => {
-    if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
+    if (!hasUnreconciledLease(deps.store, sessionId)) {
       return null
     }
-    if (!pending) {
-      const run = reconcileCurrentLeases(deps)
-      pending = run.finally(() => {
-        pending = null
-      })
+    if (!pending.has(sessionId)) {
+      const run = reconcileCurrentLease(deps, sessionId)
+      pending.set(
+        sessionId,
+        run.finally(() => {
+          pending.delete(sessionId)
+        })
+      )
     }
     try {
-      await pending
+      await pending.get(sessionId)
       return null
     } catch (error) {
-      return classifyStoreFailure(
-        error,
-        deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null,
-        deps.store.getRecord(sessionId)
-      )
+      const record = sessionId === undefined ? undefined : deps.store.getRecord(sessionId)
+      return classifyStoreFailure(error, record?.lease.runtimeFence ?? null, record)
     }
   }
 }
@@ -79,15 +79,15 @@ export function reportEachFailureOnce(
 
 /** The reconcile a reader runs, at startup and before each restored read: it never throws, since
  *  an unreconciled lease grants no writer and the next send reconciles again before it acts.
- *  Answers whether every lease is settled. */
-export function createReaderReconcile(
-  reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>,
+ *  Answers whether the leases it checked are settled. */
+export function createReaderReconcile<Args extends unknown[]>(
+  reconcile: (...args: Args) => Promise<AgentSessionWireRefusal | null>,
   failures: ReaderBookkeepingFailures
-): (sessionId: string) => Promise<boolean> {
-  return async (sessionId) => {
+): (...args: Args) => Promise<boolean> {
+  return async (...args) => {
     let failure: unknown
     try {
-      const refusal = await reconcile(sessionId)
+      const refusal = await reconcile(...args)
       if (!refusal) {
         failures.clear()
         return true
@@ -113,24 +113,34 @@ function failureKey(failure: unknown): string {
   return String(failure)
 }
 
-async function reconcileCurrentLeases(deps: {
-  store: AgentSessionRecordStore
-  probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
-  probeMany?: (
-    records: readonly AgentSessionRecord[]
-  ) => Promise<Map<string, AgentSessionOwnerProbe>>
-  now: () => number
-}): Promise<void> {
+async function reconcileCurrentLease(
+  deps: {
+    store: AgentSessionRecordStore
+    probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+    probeMany?: (
+      records: readonly AgentSessionRecord[]
+    ) => Promise<Map<string, AgentSessionOwnerProbe>>
+    now: () => number
+  },
+  sessionId?: string
+): Promise<void> {
   for (let pass = 0; pass < MAX_RECONCILIATION_PASSES; pass += 1) {
     await deps.store.reconcileOnRestart({
+      ...(sessionId === undefined ? {} : { sessionId }),
       probe: deps.probe,
       ...(deps.probeMany ? { probeMany: deps.probeMany } : {}),
       now: deps.now()
     })
-    if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
+    if (!hasUnreconciledLease(deps.store, sessionId)) {
       return
     }
   }
   // An outgoing runtime can still be writing during restart; preserve the record and retry later.
   throw new Error('execution_owner_reconciling')
+}
+
+function hasUnreconciledLease(store: AgentSessionRecordStore, sessionId?: string): boolean {
+  return sessionId === undefined
+    ? store.listRecords().some((record) => record.lease.unreconciled)
+    : store.getRecord(sessionId)?.lease.unreconciled === true
 }

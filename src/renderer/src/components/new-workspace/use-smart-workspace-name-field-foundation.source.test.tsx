@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../../shared/repo-types'
+import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
@@ -41,6 +43,9 @@ vi.mock('./use-jira-source-connection', () => ({
   useJiraSourceConnection: () => ({ status: null, loaded: false })
 }))
 vi.mock('./use-jira-url-source', () => ({ useJiraUrlSource: mocks.readJiraSource }))
+vi.mock('../use-jira-project-inventory', () => ({
+  useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
+}))
 
 const source: TaskSourceContext = {
   kind: 'task-source',
@@ -69,6 +74,8 @@ function props(context?: TaskSourceContext): NormalizedWorkItemSourceSearchProps
 }
 
 describe('smart workspace explicit source connection', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.linearStatus = {
@@ -76,6 +83,37 @@ describe('smart workspace explicit source connection', () => {
       viewer: null,
       selectedWorkspaceId: 'focused-workspace'
     }
+  })
+
+  it('uses the resolved runtime repository default when a local repository has the same ID', () => {
+    const localRepo: Repo = {
+      id: 'same-id',
+      path: '/local',
+      displayName: 'Local',
+      badgeColor: '',
+      addedAt: 0,
+      defaultJiraProject: { id: '10', key: 'LOC', name: 'Local', siteId: 'site-a' }
+    }
+    const selectedRepo: Repo = {
+      ...localRepo,
+      path: '/runtime',
+      executionHostId: 'runtime:remote',
+      defaultJiraProject: { id: '20', key: 'REM', name: 'Remote', siteId: 'site-b' }
+    }
+    const fieldProps = {
+      ...props(),
+      repos: [localRepo, selectedRepo],
+      repoId: 'same-id',
+      selectedRepo,
+      jiraSourceContext: normalizeTaskSourceContext({
+        provider: 'jira',
+        projectId: 'repo:same-id',
+        hostId: 'runtime:remote'
+      })
+    }
+    const { result } = renderHook(() => useWorkItemSourceFoundation(fieldProps))
+    expect(result.current.selectedRepo).toBe(selectedRepo)
+    expect(result.current.jiraProject).toEqual(selectedRepo.defaultJiraProject)
   })
 
   it('exposes Linear on a connected saved host while the focused runtime is disconnected', async () => {

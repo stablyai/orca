@@ -31,17 +31,22 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'config/scripts/windows-pe-machine.cjs',
   'config/scripts/pinned-node-downloads.mjs',
   'config/scripts/update-node-runtime-pin.mjs',
-  'config/scripts/script-child-process.mjs',
-  'src/shared/child-process/run-process.ts',
-  'src/shared/child-process/spawn-resolution.ts',
-  'src/shared/child-process/process-tree-termination.ts',
-  'src/shared/child-process/process-tree-kill-gate.ts',
-  'src/shared/child-process/spawn-observer.ts',
-  'src/shared/child-process/bounded-output-sink.ts',
-  'src/shared/child-process/child-termination-reporter.ts',
-  'src/shared/child-process/process-spec.ts',
-  'src/shared/child-process/windows-command-line.ts',
-  'src/shared/child-process/windows-cmd-shim-resolution.ts'
+  'src/packages/process-host/.gitignore',
+  'src/packages/process-host/package.json',
+  'src/packages/process-host/scripts/build-dist.mjs',
+  'src/packages/process-host/tsconfig.json',
+  'src/packages/process-host/src/run-process.ts',
+  'src/packages/process-host/src/spawn-resolution.ts',
+  'src/packages/process-host/src/process-tree-termination.ts',
+  'src/packages/process-host/src/process-tree-kill-gate.ts',
+  'src/packages/process-host/src/spawn-observer.ts',
+  'src/packages/process-host/src/bounded-output-sink.ts',
+  'src/packages/process-host/src/growing-byte-buffer.ts',
+  'src/packages/process-host/src/child-termination-reporter.ts',
+  'src/packages/process-host/src/process-spec.ts',
+  'src/packages/process-host/src/windows-command-line.ts',
+  'src/packages/process-host/src/windows-cmd-shim-resolution.ts',
+  'src/packages/process-host/src/windows-system-binary.ts'
 ]
 
 function windowsSlot(platform, arch) {

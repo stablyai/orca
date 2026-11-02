@@ -1,6 +1,6 @@
 # Timing-based CI shards
 
-The eight unit shards and fourteen general E2E shards use longest-processing-time
+Unit shards and general E2E shards use longest-processing-time
 assignment of whole files to the currently lightest shard. Ties use file path and
 then shard index, independent of filesystem enumeration and locale. Unknown,
 zero, or invalid durations use the baseline's positive median (1 second when no
@@ -46,7 +46,32 @@ age as specs change. Full CI runs on the existing runner classes are required to
 measure elapsed-time and occupancy improvements, including discovery overhead.
 No retries, assertions, coverage exclusions, runner classes or shard counts changed.
 
-## Current unit refresh: September 27, 2026
+## Current unit refresh: October 14, 2026
+
+The baseline imports all five successful ARM unit shards from
+[run 38646706136, attempt 1](https://github.com/stablyai/orca/actions/runs/38646706136/attempts/1).
+The tested merge was `8d7f46198b99432efd104ac7803174173b367c66`, using Node
+24.21.0, Bun 1.4.3, `ubuntu-24.04-arm`, and four workers per shard. All 12,314
+files appear exactly once: 12,163 passed and 151 skipped, with zero unhandled
+errors. Artifact digests, all 20 report hashes, source/runtime provenance, full
+discovery, and each saved assignment were checked before importing. The E2E
+weights remain unchanged.
+
+| Shard | Job ID | Measured worker-seconds | Job seconds |
+| --- | --- | ---: | ---: |
+| 1 | 116137259336 | 1,966.470 | 568 |
+| 2 | 116137259460 | 2,080.624 | 604 |
+| 3 | 116137259318 | 2,121.495 | 611 |
+| 4 | 116137259783 | 2,094.487 | 614 |
+| 5 | 116137259540 | 2,190.636 | 641 |
+
+Retrospectively assigning those measurements projects 2,090.726–2,090.747
+worker-seconds per shard, instead of 1,966.470–2,190.636. That is a scheduling
+projection, not a hosted speedup: module times overlap across workers, and total
+runner occupancy was 50.63 minutes. Runner capacity, selection, workers, and the
+assignment algorithm are unchanged. Later source changes need fresh validation.
+
+## Historical unit refresh: September 27, 2026
 
 The baseline imports every successful Node 24 shard from
 [run 36294142683, attempt 1](https://github.com/stablyai/orca/actions/runs/36294142683/attempts/1).

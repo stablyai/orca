@@ -48,7 +48,8 @@ export async function discoverOpenCodeSessions(args: {
       limit: args.limitPerAgent,
       agent: 'opencode',
       issues: args.issues,
-      extensions: ['.json']
+      extensions: ['.json'],
+      signal: args.signal
     }),
     // Why (#8864): the SQLite list leg runs on a worker thread; only this leg
     // moves off the main thread, the filesystem scan stays inline.

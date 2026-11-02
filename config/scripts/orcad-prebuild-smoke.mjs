@@ -10,7 +10,7 @@ import {
   readManifest
 } from './orcad-prebuild-slot-contents.mjs'
 import { ensurePinnedNodeExecutable } from './pinned-node-downloads.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const require = createRequire(import.meta.url)
 

@@ -168,12 +168,22 @@ describe('resolveMobileNativeChat', () => {
     })
   })
 
-  it('rejects structured agent-session tabs whose provider the reducer cannot replay', () => {
+  it.each(['grok', 'opencode', 'omp', 'pi'])(
+    'resolves %s structured agent-session tabs on the same journal path',
+    (agent) => {
+      expect(
+        resolveMobileNativeChat({ type: 'agent-session', sessionId: 'structured-1', agent })
+      ).toEqual({ agent, sessionId: 'structured-1', transcriptPath: null })
+    }
+  )
+
+  it('rejects structured agent-session tabs with no session or an unreadable agent id', () => {
+    expect(resolveMobileNativeChat({ type: 'agent-session', agent: 'grok' })).toBeNull()
     expect(
       resolveMobileNativeChat({
         type: 'agent-session',
         sessionId: 'structured-1',
-        agent: 'grok'
+        agent: 'Not An Id'
       })
     ).toBeNull()
   })

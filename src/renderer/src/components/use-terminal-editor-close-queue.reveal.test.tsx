@@ -15,7 +15,13 @@ const revealFloatingWorkspacePanel = vi.hoisted(() => vi.fn())
 vi.mock('../store', () => ({
   useAppStore: {
     // "Don't Save" closes through the store, beside the controller's own projection.
-    getState: () => ({ ...store, markFileDirty: vi.fn(), clearEditorDraft: vi.fn(), closeFile }),
+    getState: () => ({
+      ...store,
+      setActiveWorktree,
+      markFileDirty: vi.fn(),
+      clearEditorDraft: vi.fn(),
+      closeFile
+    }),
     subscribe: () => () => {}
   }
 }))

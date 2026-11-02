@@ -1,18 +1,4 @@
-import { createHash } from 'node:crypto'
-import {
-  closeSync,
-  existsSync,
-  fsyncSync,
-  linkSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeSync
-} from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
 import {
@@ -28,8 +14,18 @@ import {
   getTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
 } from '../../terminal-scrollback-snapshots'
-
-const STAGING_DIRECTORY = '.orcad-migration-staging'
+import {
+  appendOrcadMigrationStagedChunk,
+  ensureOrcadMigrationDirectory,
+  inspectOrcadMigrationFinalFile,
+  linkOrcadMigrationStagedFile,
+  orcadMigrationFileMatches,
+  orcadMigrationStagedFileSize,
+  orcadMigrationStagingDirectory,
+  pruneOrcadMigrationStagingDirectories,
+  removeOrcadMigrationStagingDirectory,
+  requireStagedOrcadMigrationManifest
+} from './orcad-migration-staged-file'
 
 /**
  * Destination side: append one verified chunk to the staging file for a snapshot the staged
@@ -41,36 +37,26 @@ export function stageOrcadMigrationSnapshotChunk(args: {
   storage: TerminalScrollbackSnapshotStorage
   request: OrcadMigrationSnapshotChunkRequest
 }): OrcadMigrationSnapshotChunkResult {
-  const manifest = requireStagedManifest(args.stagedManifest, args.request)
+  const manifest = requireStagedOrcadMigrationManifest(
+    args.stagedManifest,
+    args.request,
+    'orcad_migration_snapshot_catalog_not_staged'
+  )
   const descriptor = requireDescriptor(manifest, args.request.ref)
   const bytes = decodeOrcadMigrationSnapshotChunk(args.request.bytesBase64)
-  const path = stagedSnapshotPath(args.storage, manifest, descriptor)
-  mkdirSync(stagingDirectory(args.storage, manifest), { recursive: true, mode: 0o700 })
-  const descriptorFd = openStagedFile(path)
-  try {
-    const size = statSync(path).size
-    if (args.request.offset > size || args.request.offset + bytes.length > descriptor.byteLength) {
-      throw new Error('orcad_migration_snapshot_offset_invalid')
-    }
-    if (args.request.offset < size) {
-      if (args.request.offset + bytes.length > size) {
-        throw new Error('orcad_migration_snapshot_offset_invalid')
-      }
-      const existing = Buffer.alloc(bytes.length)
-      const read = readSync(descriptorFd, existing, 0, existing.length, args.request.offset)
-      if (read !== bytes.length || !existing.equals(bytes)) {
-        throw new Error('orcad_migration_snapshot_retry_mismatch')
-      }
-      return chunkResult(args.request, size)
-    }
-    const written = writeSync(descriptorFd, bytes, 0, bytes.length, args.request.offset)
-    if (written !== bytes.length) {
-      throw new Error('orcad_migration_snapshot_write_incomplete')
-    }
-    fsyncSync(descriptorFd)
-    return chunkResult(args.request, size + bytes.length)
-  } finally {
-    closeSync(descriptorFd)
+  ensureOrcadMigrationDirectory(stagingDirectory(args.storage, manifest))
+  const acknowledgedOffset = appendOrcadMigrationStagedChunk({
+    channel: 'snapshot',
+    path: stagedSnapshotPath(args.storage, manifest, descriptor),
+    offset: args.request.offset,
+    bytes,
+    byteLength: descriptor.byteLength
+  })
+  return {
+    migrationId: args.request.migrationId,
+    manifestSha256: args.request.manifestSha256,
+    ref: args.request.ref,
+    acknowledgedOffset
   }
 }
 
@@ -84,9 +70,13 @@ export function inspectOrcadMigrationSnapshotUploads(
   }
   return snapshots.map((descriptor) => ({
     ...descriptor,
-    receivedBytes: matchingFinalSnapshot(storage, descriptor)
-      ? descriptor.byteLength
-      : stagedSnapshotSize(storage, manifest, descriptor)
+    receivedBytes:
+      inspectFinalSnapshot(storage, descriptor) === 'matching'
+        ? descriptor.byteLength
+        : orcadMigrationStagedFileSize(
+            stagedSnapshotPath(storage, manifest, descriptor),
+            descriptor.byteLength
+          )
   }))
 }
 
@@ -106,7 +96,7 @@ export function assertOrcadMigrationSnapshotsReady(
       finalStatus === 'matching'
         ? getTerminalScrollbackSnapshotPath(upload.ref, storage)
         : stagedSnapshotPath(storage, manifest, upload)
-    if (!path || !fileMatches(path, upload)) {
+    if (!path || !orcadMigrationFileMatches(path, upload)) {
       throw new Error(`orcad_migration_snapshot_digest_mismatch:${upload.ref}`)
     }
   }
@@ -121,37 +111,26 @@ export function commitOrcadMigrationSnapshots(
   const root = getTerminalScrollbackSnapshotRoot(storage)
   mkdirSync(root, { recursive: true, mode: 0o700 })
   for (const descriptor of snapshots) {
-    if (matchingFinalSnapshot(storage, descriptor)) {
-      rmSync(stagedSnapshotPath(storage, manifest, descriptor), { force: true })
-      continue
-    }
-    const stagedPath = stagedSnapshotPath(storage, manifest, descriptor)
     const finalPath = getTerminalScrollbackSnapshotPath(descriptor.ref, storage)
     if (!finalPath) {
       throw new Error('orcad_migration_snapshot_ref_invalid')
     }
-    try {
-      linkSync(stagedPath, finalPath)
-    } catch (error) {
-      const finalStatus = inspectFinalSnapshot(storage, descriptor)
-      if (finalStatus === 'conflict') {
-        throw new Error(`orcad_migration_snapshot_destination_conflict:${descriptor.ref}`)
-      }
-      if (finalStatus !== 'matching') {
-        throw error
-      }
-    }
-    rmSync(stagedPath, { force: true })
+    linkOrcadMigrationStagedFile({
+      stagedPath: stagedSnapshotPath(storage, manifest, descriptor),
+      finalPath,
+      expected: descriptor,
+      conflictError: `orcad_migration_snapshot_destination_conflict:${descriptor.ref}`
+    })
   }
   syncDirectoryDurablySync(root)
-  removeStagingDirectory(storage, manifest)
+  removeOrcadMigrationStagingDirectory(root, manifest)
 }
 
 export function abortOrcadMigrationSnapshots(
   manifest: OrcadMigrationManifest,
   storage: TerminalScrollbackSnapshotStorage
 ): void {
-  removeStagingDirectory(storage, manifest)
+  removeOrcadMigrationStagingDirectory(getTerminalScrollbackSnapshotRoot(storage), manifest)
 }
 
 /** Removes staging for every migration the importer no longer holds staged. */
@@ -159,33 +138,7 @@ export function pruneOrcadMigrationSnapshotStaging(
   stagedManifests: readonly OrcadMigrationManifest[],
   storage: TerminalScrollbackSnapshotStorage
 ): void {
-  const root = join(getTerminalScrollbackSnapshotRoot(storage), STAGING_DIRECTORY)
-  const retained = new Set(stagedManifests.map(stagingKey))
-  let entries: string[]
-  try {
-    entries = readdirSync(root)
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    if (/^[a-f0-9]{32}$/.test(entry) && !retained.has(entry)) {
-      rmSync(join(root, entry), { recursive: true, force: true })
-    }
-  }
-}
-
-function requireStagedManifest(
-  staged: OrcadMigrationManifest | null,
-  request: Pick<OrcadMigrationSnapshotChunkRequest, 'migrationId' | 'manifestSha256'>
-): OrcadMigrationManifest {
-  if (
-    !staged ||
-    staged.migrationId !== request.migrationId ||
-    staged.manifestSha256 !== request.manifestSha256
-  ) {
-    throw new Error('orcad_migration_snapshot_catalog_not_staged')
-  }
-  return staged
+  pruneOrcadMigrationStagingDirectories(getTerminalScrollbackSnapshotRoot(storage), stagedManifests)
 }
 
 function requireDescriptor(
@@ -201,68 +154,21 @@ function requireDescriptor(
   return descriptor
 }
 
-function stagedSnapshotSize(
-  storage: TerminalScrollbackSnapshotStorage,
-  manifest: OrcadMigrationManifest,
-  descriptor: OrcadMigrationTerminalScrollbackSnapshot
-): number {
-  try {
-    return Math.min(
-      statSync(stagedSnapshotPath(storage, manifest, descriptor)).size,
-      descriptor.byteLength
-    )
-  } catch {
-    return 0
-  }
-}
-
-function matchingFinalSnapshot(
-  storage: TerminalScrollbackSnapshotStorage,
-  descriptor: OrcadMigrationTerminalScrollbackSnapshot
-): boolean {
-  return inspectFinalSnapshot(storage, descriptor) === 'matching'
-}
-
 function inspectFinalSnapshot(
   storage: TerminalScrollbackSnapshotStorage,
   descriptor: OrcadMigrationTerminalScrollbackSnapshot
 ): 'absent' | 'matching' | 'conflict' {
-  const path = getTerminalScrollbackSnapshotPath(descriptor.ref, storage)
-  if (!path || !existsSync(path)) {
-    return 'absent'
-  }
-  return fileMatches(path, descriptor) ? 'matching' : 'conflict'
-}
-
-function fileMatches(path: string, descriptor: OrcadMigrationTerminalScrollbackSnapshot): boolean {
-  try {
-    const bytes = readFileSync(path)
-    return (
-      bytes.length === descriptor.byteLength &&
-      createHash('sha256').update(bytes).digest('hex') === descriptor.sha256
-    )
-  } catch {
-    return false
-  }
-}
-
-function openStagedFile(path: string): number {
-  try {
-    return openSync(path, 'r+')
-  } catch {
-    try {
-      return openSync(path, 'wx+', 0o600)
-    } catch {
-      return openSync(path, 'r+')
-    }
-  }
+  return inspectOrcadMigrationFinalFile(
+    getTerminalScrollbackSnapshotPath(descriptor.ref, storage),
+    descriptor
+  )
 }
 
 function stagingDirectory(
   storage: TerminalScrollbackSnapshotStorage,
   manifest: OrcadMigrationManifest
 ): string {
-  return join(getTerminalScrollbackSnapshotRoot(storage), STAGING_DIRECTORY, stagingKey(manifest))
+  return orcadMigrationStagingDirectory(getTerminalScrollbackSnapshotRoot(storage), manifest)
 }
 
 function stagedSnapshotPath(
@@ -271,32 +177,4 @@ function stagedSnapshotPath(
   descriptor: OrcadMigrationTerminalScrollbackSnapshot
 ): string {
   return join(stagingDirectory(storage, manifest), `${descriptor.ref}.${descriptor.sha256}.part`)
-}
-
-function removeStagingDirectory(
-  storage: TerminalScrollbackSnapshotStorage,
-  manifest: OrcadMigrationManifest
-): void {
-  const stagingRoot = join(getTerminalScrollbackSnapshotRoot(storage), STAGING_DIRECTORY)
-  rmSync(stagingDirectory(storage, manifest), { recursive: true, force: true })
-  syncDirectoryDurablySync(stagingRoot)
-}
-
-function stagingKey(manifest: OrcadMigrationManifest): string {
-  return createHash('sha256')
-    .update(`${manifest.migrationId}\0${manifest.manifestSha256}`)
-    .digest('hex')
-    .slice(0, 32)
-}
-
-function chunkResult(
-  request: OrcadMigrationSnapshotChunkRequest,
-  acknowledgedOffset: number
-): OrcadMigrationSnapshotChunkResult {
-  return {
-    migrationId: request.migrationId,
-    manifestSha256: request.manifestSha256,
-    ref: request.ref,
-    acknowledgedOffset
-  }
 }

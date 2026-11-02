@@ -1,7 +1,9 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { downloadRuntimeFile, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { downloadRuntimeFile } from '@/runtime/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { TreeNode } from './file-explorer-types'
 import { shouldShowCopyFileAction } from './file-explorer-row-action-visibility'
 
@@ -55,7 +57,7 @@ export async function downloadRemoteFile(
         action: {
           label: translate('auto.components.right.sidebar.FileExplorerRow.1a3df04ae1', 'Open'),
           onClick: () => {
-            void window.api.shell.openPath(result.destinationPath)
+            void window.api.shell.openPath(result.destinationPath, LOCAL_EXECUTION_HOST_ID)
           }
         }
       }

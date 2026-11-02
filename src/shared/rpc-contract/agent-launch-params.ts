@@ -23,6 +23,7 @@ import { LaunchSourceParam } from './launch-source-param'
 import { TerminalTabIdParam } from './agent-session-params'
 import { SessionId } from './structured-agent-session-params'
 import { isStructuredAgentSessionIdFor } from '../structured-agent-session-create'
+import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
 const LaunchAgent = z
   .unknown()
@@ -141,7 +142,20 @@ export const AgentLaunchFields = z.object({
     .transform((value): 'focused' | 'background' | undefined =>
       value === 'focused' || value === 'background' ? value : undefined
     )
-    .optional()
+    .optional(),
+  /**
+   * The Claude/Codex home a desktop prepared for a host with no account services (WSL orcad).
+   * Terminal-only: a structured launch keeps its host-derived home and warns. Optional forever; an
+   * older host strips it and runs its default account. Outside the replay fingerprint.
+   */
+  accountEnv: AgentLaunchAccountEnv.optional(),
+  /**
+   * The launching user's "new agent tabs open as chats" default, sent by a client that owns the
+   * user's settings when the host's own setting is not theirs (a desktop relaying its phone to a
+   * server). Replaces only the host setting; feasibility still decides. Older hosts strip it and
+   * read their own setting. Outside the replay fingerprint.
+   */
+  nativeChatDefault: z.boolean().optional()
 })
 
 /** A caller-minted session id must be shaped like every id the host mints, so an id still names

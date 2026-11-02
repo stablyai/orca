@@ -56,5 +56,10 @@ export function truncateAiVaultListResult(
       }
     }
   }
-  return { ...result, sessions: result.sessions.filter((session) => selectedIds.has(session.id)) }
+  const sessions = result.sessions.filter((session) => selectedIds.has(session.id))
+  return {
+    ...result,
+    sessions,
+    ...(sessions.length !== result.sessions.length ? { fingerprint: undefined } : {})
+  }
 }

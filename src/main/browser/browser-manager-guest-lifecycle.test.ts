@@ -297,8 +297,8 @@ describe('browserManager', () => {
     expect(browserManager.getGuestWebContentsId('browser-1')).toBeNull()
     expect(browserManager.getGuestWebContentsId('browser-2')).toBeNull()
     expect(guestOffMock).toHaveBeenCalled()
-    expect(unregisteredGuestOff).toHaveBeenCalledWith('dom-ready', expect.any(Function))
-    expect(unregisteredGuestOff).toHaveBeenCalledWith('frame-created', expect.any(Function))
+    expect(unregisteredGuestOff).toHaveBeenCalledWith('did-create-window', expect.any(Function))
+    expect(unregisteredGuestOff).toHaveBeenCalledWith('input-event', expect.any(Function))
   })
 
   it('rejects non-webview guest types to prevent privilege escalation', () => {

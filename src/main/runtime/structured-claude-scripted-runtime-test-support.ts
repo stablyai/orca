@@ -55,6 +55,7 @@ export type ScriptedClaudeChild = {
   sessionId: string
   launch: ClaudeStreamJsonLaunch
   calls: string[]
+  initializing: boolean
   handlers: ClaudeStreamJsonConnectionHandlers
   connection: Omit<ClaudeStreamJsonConnection, 'closed' | 'exitVerdict'> & {
     closed: boolean
@@ -116,6 +117,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
       sessionId,
       launch,
       calls: [],
+      initializing: false,
       handlers,
       exit: (error) => {
         child.connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
@@ -128,6 +130,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         closed: false,
         exitVerdict: { root: 'live', tree: 'unverifiable' },
         initializationResult: () => {
+          child.initializing = true
           const initialized = { models: [{ value: 'sonnet', displayName: 'Sonnet' }] }
           const announce = (): void => {
             if (behavior.sendsNoStartFrame) {
@@ -230,7 +233,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
     children: (sessionId: string): ScriptedClaudeChild[] =>
       children.filter((entry) => entry.sessionId === sessionId),
     install: async (): Promise<StructuredAgentSessionHost> => {
-      root = await mkdtemp(join(tmpdir(), 'orca-scripted-claude-runtime-'))
+      root ??= await mkdtemp(join(tmpdir(), 'orca-scripted-claude-runtime-'))
       await mkdir(join(root, 'claude-home'), { recursive: true })
       const directory = root
       host = await ensureStructuredAgentSessionHost({
@@ -241,7 +244,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         resolveWorkspacePath: async () => directory,
         resolveClaudeCommand: () => '/usr/local/bin/claude',
         resolveLaunchArgs: () => [],
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
+        resolveClaudeAuthPolicy: () => ({ account: 'system' }),
         openClaudeConnection: openConnection,
         readProcessStartTime
       })

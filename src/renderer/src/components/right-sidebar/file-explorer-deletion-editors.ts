@@ -3,6 +3,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import type { FileExplorerOperationRoute } from './file-explorer-operation-owner'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 export type FileExplorerDeletionEditor = Pick<
   OpenFile,
@@ -29,8 +30,7 @@ export function getFileExplorerDeletionEditors(
       const owner = getEditorFileOperationContext(state, file, null)
       // Identical paths on different hosts must not trigger another editor's save or close.
       return (
-        (owner.settings?.activeRuntimeEnvironmentId?.trim() || null) ===
-          (route.settings.activeRuntimeEnvironmentId?.trim() || null) &&
+        runtimeTargetEnvironmentId(owner.target) === runtimeTargetEnvironmentId(route.target) &&
         owner.expectedExecutionHostId === route.expectedExecutionHostId &&
         owner.connectionId === route.connectionId
       )

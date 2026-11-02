@@ -44,6 +44,10 @@ import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 import { refuseQueuedCommand } from './structured-agent-session-queued-command-refusal'
+import {
+  contextStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWork
+} from './structured-agent-session-current-work'
 
 export { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 
@@ -90,11 +94,12 @@ export function structuredAgentSessionAwaitedCommand(
     : undefined
 }
 
-/** Whether the journal's running turn is a command's, which takes no input while it runs. */
+/** Whether the live generation's running turn is a command's, which takes no input while it runs
+ *  (`structuredAgentSessionCurrentWork`). */
 export function structuredAgentSessionCommandRunning(
-  journal: Pick<AgentSessionJournal, 'activeTurnId'>
+  work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId'>
 ): boolean {
-  const turnId = journal.activeTurnId()
+  const turnId = work.activeTurnId()
   return turnId !== null && isStructuredAgentSessionCommandTurnId(turnId)
 }
 
@@ -141,8 +146,12 @@ export type StructuredAgentSessionCommandHandoverContext = {
   /** Who a failure the handover meets names, as the start's own row does. */
   failureTextContext?: AgentSessionFailureWordsContext
   record: () => AgentSessionRecord | null
-  /** The session's child records, the same read the strip and conversation-command admission use. */
+  /** Read the execution host's ownership again at admission and handover. */
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  /** The session's child records, the same read the strip uses; they word a refusal. */
   childWork: () => readonly AgentChildWorkView[] | undefined
+  /** Child work the provider reported running and not over: what refuses the command. */
+  childWorkOpen: () => boolean
   now: () => number
 }
 
@@ -220,7 +229,8 @@ async function openCommandTurn(
     clientMessageId,
     state: 'pending',
     fence: ctx.fence,
-    turnScope: ctx.journal.liveTurnScope()
+    // The child it goes to is live at `fence`: an ended generation's turn is not joined.
+    turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   })
   const startedAt = ctx.now()
   const running = agentJournalTurnBody({
@@ -322,7 +332,12 @@ function commandBlocked(
   if (!ctx.agents.capabilities(record.provider)?.compact) {
     return agentSessionFailureFact('commandRefused')
   }
-  const refusal = conversationCommandBlocked(ctx, record, ctx.childWork(), 'handover')
+  const refusal = conversationCommandBlocked(
+    ctx,
+    record,
+    { views: ctx.childWork(), open: ctx.childWorkOpen() },
+    'handover'
+  )
   return refusal
     ? agentSessionFailureFact('commandRefused', { refusal: agentSessionRefusalReference(refusal) })
     : null

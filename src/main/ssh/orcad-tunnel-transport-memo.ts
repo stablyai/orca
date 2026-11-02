@@ -14,7 +14,3 @@ export function rememberOrcadTunnelTransport(
 export function knownOrcadTunnelTransport(targetId: string): OrcadTunnelTransport | null {
   return transports.get(targetId) ?? null
 }
-
-export function resetOrcadTunnelTransportMemoForTests(): void {
-  transports.clear()
-}

@@ -22,7 +22,7 @@ export function stageNodeAddonApi(sourceDir, stagedDir) {
 export async function nodeGypRebuild({ stagedDir, workDir, nodeDir, staticCxxRuntime }) {
   const compileGypi = join(workDir, 'prebuild-compile.gypi')
   writeFileSync(compileGypi, prebuildCompileGypi({ staticCxxRuntime }))
-  const { runProcessSync } = await import('./script-child-process.mjs')
+  const { runProcessSync } = await import('@orca/process-host')
   const result = runProcessSync({
     program: process.execPath,
     args: [

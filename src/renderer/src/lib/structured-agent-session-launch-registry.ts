@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
 import type {
@@ -22,7 +22,9 @@ import {
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,
   retireStructuredAgentLaunchCancellation
-} from './structured-agent-session-launch-cancellation'
+} from './launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { cancelStructuredAgentLaunchOnLocalHost } from './structured-agent-session-local-launch-cancel'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -227,17 +229,32 @@ function markStructuredAgentSessionLaunchCancelledInternal(
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (matchesLaunchWorktree(state, worktreeId) && state) {
     // The launch's own owner outranks the caller's: it is the host the create was sent to.
-    markStructuredAgentLaunchCancellation(
-      sessionId,
-      state.intent.executionHostId,
-      alreadyCancelled,
-      state.promise
-    )
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && state.intent.executionHostId === LOCAL_EXECUTION_HOST_ID) {
+      cancelStructuredAgentLaunchOnLocalHost(
+        worktreeId,
+        sessionId,
+        notifyStructuredLaunchListeners,
+        state.promise
+      )
+    } else {
+      markStructuredAgentLaunchCancellation(
+        sessionId,
+        state.intent.executionHostId,
+        alreadyCancelled,
+        state.promise
+      )
+    }
     state.cancelled = true
     state.callers.outcome = 'cancelled'
     // The tombstone is the durable authority; drop the in-memory launch so bulk closes cannot
     // retain a dead promise for the lifetime of the renderer.
     deleteStructuredLaunchStateIfCurrent(state)
+  } else if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    !alreadyCancelled &&
+    executionHostId === LOCAL_EXECUTION_HOST_ID
+  ) {
+    cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId, notifyStructuredLaunchListeners)
   } else if (!alreadyCancelled) {
     markStructuredAgentLaunchCancellation(sessionId, executionHostId, alreadyCancelled)
   }

@@ -44,18 +44,3 @@ export function isSafeUnicodeWindowsBatchHookPath(scriptPath: string): boolean {
     !WINDOWS_CMD_SAFE_PATH.test(scriptPath) && /^[\p{L}\p{N}\p{M}_.:\\~-]+\.cmd$/iu.test(scriptPath)
   )
 }
-
-export function wrapWindowsCmdHookCommand(scriptPath: string): string {
-  // Direct-spawn consumers need one executable token; a cmd `if exist` fragment is not one (#8430).
-  if (WINDOWS_CMD_SAFE_PATH.test(scriptPath)) {
-    return scriptPath
-  }
-  // Unicode batch hooks keep the missing-file guard without loading the policy cmdlet.
-  return wrapWindowsHookCommand(
-    scriptPath,
-    {},
-    {
-      useProcessPolicyEnvironment: isSafeUnicodeWindowsBatchHookPath(scriptPath)
-    }
-  )
-}

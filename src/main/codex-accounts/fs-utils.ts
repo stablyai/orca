@@ -13,7 +13,7 @@ export { copyFileWithWindowsRetry, renameFileWithWindowsRetry, renameFileWithWin
 
 export function writeFileAtomically(
   targetPath: string,
-  contents: string,
+  contents: string | Uint8Array,
   options?: { mode?: number }
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
@@ -40,7 +40,7 @@ export function writeFileAtomically(
           rmSync(retryTmpPath, { force: true })
         }
       } catch {
-        // icacls failure is not actionable; re-throw the original EPERM
+        // a failed grant is not actionable; re-throw the original EPERM
       }
     }
     throw error

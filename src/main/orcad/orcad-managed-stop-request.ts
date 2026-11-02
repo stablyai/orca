@@ -11,7 +11,7 @@ import {
   type OrcadManagedStopInstance,
   type OrcadManagedStopRequest
 } from '../../shared/orcad-stop-request'
-import { readOrcadInstanceLockRecord } from './orcad-instance-lock'
+import { readOrcadInstanceLockRecord, type OrcadLockRecord } from './orcad-instance-lock'
 
 /** Keyed by the lock nonce, so a request for a previous instance is never this one's. */
 export function orcadManagedStopRequestPath(instance: OrcadManagedStopInstance): string {
@@ -38,11 +38,18 @@ export function sameOrcadManagedStopInstance(
 
 /** Whether the instance lock still names exactly this instance. */
 export function orcadInstanceLockNames(instance: OrcadManagedStopInstance): boolean {
+  return readOrcadInstanceLockNaming(instance) !== null
+}
+
+/** The lock record, only while it still names exactly this instance. */
+export function readOrcadInstanceLockNaming(
+  instance: OrcadManagedStopInstance
+): OrcadLockRecord | null {
   if (!lstatSync(instance.lockPath).isFile()) {
-    return false
+    return null
   }
   const record = readOrcadInstanceLockRecord(instance.lockPath)
-  return record !== null && sameOrcadManagedStopInstance(instance, record)
+  return record !== null && sameOrcadManagedStopInstance(instance, record) ? record : null
 }
 
 /** Throws unless the request names this running instance and its lock is still ours. */

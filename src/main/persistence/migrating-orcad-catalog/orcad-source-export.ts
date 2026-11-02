@@ -27,6 +27,7 @@ import {
   type OrcadMigrationDeltaView
 } from './orcad-source-delta-view'
 import { syncOrcadMigrationScrollbackRetention } from './orcad-source-scrollback-retention'
+import { createOrcadMigrationLeaveBehindView } from './orcad-source-leave-behind-view'
 
 type OrcadSourceExportRuntime = Pick<
   StoreRuntimeState,
@@ -60,6 +61,11 @@ export class OrcadSourceExportPersistence {
   /** A copy of the source with `moved` subtracted from it, for a delta move. */
   createOrcadMigrationDeltaView(moved: OrcadMigrationManifest): OrcadMigrationDeltaView {
     return createOrcadMigrationDeltaView(this[orcadSourceExportContext], moved)
+  }
+
+  /** The source as a confirmed "Move anyway" would export it, consent unrecorded. */
+  createOrcadMigrationLeaveBehindView(targetId: string): OrcadMigrationDeltaView {
+    return createOrcadMigrationLeaveBehindView(this[orcadSourceExportContext], targetId)
   }
 
   /** What still references the target that this manifest cannot carry. */
@@ -106,13 +112,4 @@ export class OrcadSourceExportPersistence {
       storage: runtime.terminalScrollbackSnapshotStorage
     })
   }
-}
-
-export function installOrcadSourceExportPersistenceContext(
-  target: OrcadSourceExportPersistence,
-  source: OrcadSourceExportPersistence
-): void {
-  Object.defineProperty(target, orcadSourceExportContext, {
-    value: source[orcadSourceExportContext]
-  })
 }

@@ -72,6 +72,6 @@ export function clearInstallDirAclPoisonMarker(userDataPath: string): void {
   try {
     rmSync(markerPath(userDataPath), { force: true })
   } catch {
-    // Best effort; a stale marker only costs one redundant icacls pass.
+    // Best effort; a stale marker only costs one redundant grant pass.
   }
 }

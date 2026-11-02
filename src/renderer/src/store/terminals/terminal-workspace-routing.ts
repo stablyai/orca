@@ -6,7 +6,6 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '../worktree-repo-index'
 
 export function isWindowsRendererRuntime(): boolean {
@@ -100,11 +99,4 @@ export function getRemoteConnectionIdForWorktree(
   const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
   const repo = worktree ? repoMap.get(worktree.repoId) : null
   return repo?.connectionId?.trim() || null
-}
-
-export function resolveTerminalStopRuntimeEnvironmentId(
-  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo'>,
-  worktreeId: string
-): string | null {
-  return getRuntimeEnvironmentIdForWorktree(state, worktreeId)
 }

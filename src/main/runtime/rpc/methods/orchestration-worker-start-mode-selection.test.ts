@@ -104,11 +104,12 @@ describe('worker-start honours the settings default', () => {
     settings: Record<string, unknown> | null,
     overrides: Record<string, unknown> = {}
   ) {
-    vi.spyOn(runtime, 'getClientSettings').mockImplementation(() => {
+    vi.spyOn(runtime, 'requireStore').mockImplementation(() => {
       if (!settings) {
         throw new Error('runtime_unavailable')
       }
-      return settings as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this worker fixture reaches only the private store getSettings reader.
+      return { getSettings: () => settings } as never
     })
     const task = db.createTask({ spec: 'settings-driven task', runId })
     const method = ORCHESTRATION_METHODS.find(

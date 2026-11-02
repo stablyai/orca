@@ -25,7 +25,7 @@ function PreservedBranchBatchToastBody({
 }): React.JSX.Element {
   const actionableCount = branches.filter((branch) => branch.expectedHead).length
   return (
-    <div className="flex w-[300px] max-w-[calc(100vw-96px)] flex-col gap-3">
+    <div className="flex w-full flex-col gap-3">
       <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
         {translate(
           'auto.components.sidebar.preserved.branch.batch.toast.a3cdd9d9e6',
@@ -161,7 +161,7 @@ export async function forceDeletePreservedBranchBatch(
     {
       id: progressToastId,
       description: (
-        <div className="flex w-[300px] max-w-[calc(100vw-96px)] flex-col gap-3">
+        <div className="flex w-full flex-col gap-3">
           <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
             {description}
           </p>

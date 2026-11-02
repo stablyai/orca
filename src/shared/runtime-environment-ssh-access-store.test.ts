@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from './paired-runtime-connection'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -62,7 +63,7 @@ describe('independent paired runtime SSH access persistence', () => {
       expectedEnvironment: prepare(expectedEnvironment),
       requestId: 'link-request',
       verifiedRuntimeId: 'host-runtime',
-      verifiedPairing,
+      verifiedConnection: pairedRuntimeConnectionFromOffer(verifiedPairing),
       tunnel,
       now: 90
     })
@@ -153,7 +154,7 @@ describe('independent paired runtime SSH access persistence', () => {
         expectedEnvironment: prepared,
         requestId: 'link-request',
         verifiedRuntimeId: 'host-runtime',
-        verifiedPairing: wrongPairing,
+        verifiedConnection: pairedRuntimeConnectionFromOffer(wrongPairing),
         tunnel
       })
     ).toThrow('did not verify')
@@ -219,12 +220,12 @@ describe('independent paired runtime SSH access persistence', () => {
     expect(prepare(original)).toEqual(prepared)
     expect(prepare(prepared)).toEqual(prepared)
     expect(() => prepare(prepared, 'other-request')).toThrow('Another SSH access')
-    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Unlink')
+    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Retry or cancel it')
     expect(() =>
       updateEnvironmentFromPairingCode(userDataPath, prepared.id, {
         pairingCode: encodePairingOffer(pairing)
       })
-    ).toThrow('Unlink')
+    ).toThrow('Retry or cancel it')
     expect(() =>
       markEnvironmentUsed(userDataPath, prepared.id, { runtimeId: 'different-runtime' })
     ).toThrow('cannot change')
@@ -236,7 +237,7 @@ describe('independent paired runtime SSH access persistence', () => {
       expectedEnvironment: prepared,
       requestId: 'link-request',
       verifiedRuntimeId: 'host-runtime',
-      verifiedPairing,
+      verifiedConnection: pairedRuntimeConnectionFromOffer(verifiedPairing),
       tunnel
     }
     expect(() =>
@@ -287,7 +288,7 @@ describe('independent paired runtime SSH access persistence', () => {
         requestId: 'stale-request'
       })
     ).toThrow('pending unlink intent')
-    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Unlink')
+    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Retry or cancel it')
     const finished = completeRuntimeEnvironmentSshAccessUnlink(userDataPath, {
       expectedEnvironment: prepared,
       requestId: 'release-request'

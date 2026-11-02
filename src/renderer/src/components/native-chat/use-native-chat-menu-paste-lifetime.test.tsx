@@ -9,6 +9,7 @@ import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 import {
   clearNativeChatComposerDraftsForTests,
+  deleteNativeChatComposerDraftsOwnedBy,
   hydrateNativeChatComposerDrafts,
   nativeChatComposerDraftWritesSettled,
   readNativeChatComposerDraft,
@@ -43,32 +44,15 @@ afterEach(async () => {
   window.api = previousApi
 })
 
-async function fixture(
-  kind: 'local' | 'ssh',
-  acceptsImages = true,
-  source: 'menu' | 'event' = 'menu'
-) {
+async function fixture(acceptsImages = true, source: 'menu' | 'event' = 'menu') {
   const save = Promise.withResolvers<string | null>()
   const thumbnail = Promise.withResolvers<{
     dataUrl: string
     width: number
     height: number
   } | null>()
-  const owner: NativeChatAttachmentOwner =
-    kind === 'ssh'
-      ? {
-          kind: 'ssh',
-          connectionId: 'ssh-1',
-          worktreePath: '/remote/folder',
-          expectedExecutionHostId: 'ssh:ssh-1',
-          expectedSshTargetId: 'ssh-1',
-          expectedSshConnectionGeneration: 1
-        }
-      : { kind: 'local' }
-  const path =
-    kind === 'ssh'
-      ? '/tmp/orca-paste-1-image.png'
-      : '/local/native-chat-pastes/orca-paste-1-image.png'
+  const owner: NativeChatAttachmentOwner = { kind: 'local' }
+  const path = '/local/native-chat-pastes/orca-paste-1-image.png'
   const saveCall = vi.fn(() => save.promise)
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -88,6 +72,7 @@ async function fixture(
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: scope('menu'),
       allowWithoutTarget: true,
+      imageReferences: true,
       acceptsImages,
       caret: 0,
       disabled: false,
@@ -112,6 +97,8 @@ async function fixture(
       disabled: false,
       caret: 0,
       resolveAttachmentOwner: () => owner,
+      attachCopiedFiles: () => {},
+      captureCopiedFiles: () => async () => {},
       ...attachments,
       insertTypedText: () => true,
       setCaret: () => {},
@@ -129,42 +116,41 @@ async function fixture(
     }
   })
   await vi.waitFor(() =>
-    expect(saveCall).toHaveBeenCalledExactlyOnceWith(
-      kind === 'ssh' ? { connectionId: 'ssh-1' } : { forNativeChatDraft: true }
-    )
+    expect(saveCall).toHaveBeenCalledExactlyOnceWith({ forNativeChatDraft: true })
   )
   return { view, save, thumbnail, path }
 }
 
-const referencePastes = [
-  { kind: 'local', source: 'menu' },
-  { kind: 'ssh', source: 'menu' },
-  { kind: 'local', source: 'event' },
-  { kind: 'ssh', source: 'event' }
-] as const
+const referencePastes = [{ source: 'menu' }, { source: 'event' }] as const
 
 it.each(
   referencePastes.flatMap((paste) =>
     [true, false].map((acceptsImages) => ({ ...paste, acceptsImages }))
   )
 )(
-  'can abandon stalled $kind $source operations after reopen with acceptsImages=$acceptsImages',
-  async ({ kind, source, acceptsImages }) => {
+  'can abandon stalled $source operations after reopen with acceptsImages=$acceptsImages',
+  async ({ source, acceptsImages }) => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-    const { view, save, thumbnail, path } = await fixture(kind, acceptsImages, source)
+    const { view, save, thumbnail, path } = await fixture(acceptsImages, source)
     view.unmount()
     const reopened = renderHook(() =>
       useNativeChatComposerAttachments({
         attachmentScopeKey: scope('menu'),
         acceptsImages,
         allowWithoutTarget: true,
+        imageReferences: true,
         caret: 0,
         disabled: false,
         isComposing: () => false,
         resolveTarget: () => null,
         textareaRef: createRef<NativeChatComposerInput>(),
         setCaret: () => {},
-        setDraft: () => {},
+        setDraft: (update) =>
+          updateNativeChatComposerDraft(
+            scope('menu'),
+            { text: update(readNativeChatComposerDraft(scope('menu')).text) },
+            'immediate'
+          ),
         setNotice: () => {}
       })
     )
@@ -183,81 +169,71 @@ it.each(
     expect(readNativeChatComposerDraft(scope('menu')).text).toBe('')
   }
 )
+it.each(referencePastes)('keeps a $source paste as a reference after close', async ({ source }) => {
+  const { view, save, thumbnail, path } = await fixture(false, source)
+  await act(async () =>
+    thumbnail.resolve({ dataUrl: 'data:image/png;base64,AA', width: 1, height: 1 })
+  )
+  expect(view.result.current.attachments.imageAttachments).toHaveLength(1)
+  view.unmount()
+  await act(async () => save.resolve(path))
+  expect(nativeChatPendingAttachmentSnapshot(scope('menu'))).toEqual([])
+  expect(readNativeChatComposerDraft(scope('menu')).text).toContain(path)
+  expect(readNativeChatComposerDraft(scope('menu')).images).toEqual([])
+})
 it.each(referencePastes)(
-  'keeps a $kind $source paste as a reference after close',
-  async ({ kind, source }) => {
-    const { view, save, thumbnail, path } = await fixture(kind, false, source)
-    await act(async () =>
-      thumbnail.resolve({ dataUrl: 'data:image/png;base64,AA', width: 1, height: 1 })
-    )
-    expect(view.result.current.attachments.imageAttachments).toHaveLength(1)
+  'keeps mounted $source paste references without image chips',
+  async ({ source }) => {
+    const { save, thumbnail, path } = await fixture(false, source)
+    await act(async () => thumbnail.resolve(null))
+    await act(async () => save.resolve(path))
+    expect(readNativeChatComposerDraft(scope('menu')).text).toContain(path)
+    expect(readNativeChatComposerDraft(scope('menu')).images).toEqual([])
+  }
+)
+
+it('preserves menu uploads closed before a delayed or absent thumbnail', async () => {
+  let completed = 0
+  for (const preview of ['delayed', 'missing', 'present'] as const) {
+    const { view, save, thumbnail, path } = await fixture()
+    if (preview !== 'delayed') {
+      await act(async () =>
+        thumbnail.resolve(
+          preview === 'present'
+            ? { dataUrl: 'data:image/png;base64,AA', width: 1, height: 1 }
+            : null
+        )
+      )
+    }
     view.unmount()
     await act(async () => save.resolve(path))
     expect(nativeChatPendingAttachmentSnapshot(scope('menu'))).toEqual([])
-    expect(readNativeChatComposerDraft(scope('menu')).text).toContain(path)
-    expect(readNativeChatComposerDraft(scope('menu')).images).toEqual([])
-  }
-)
-it.each(referencePastes)(
-  'keeps mounted $kind $source paste references without image chips',
-  async ({ kind, source }) => {
-    const { save, thumbnail, path } = await fixture(kind, false, source)
-    await act(async () => thumbnail.resolve(null))
-    await act(async () => save.resolve(path))
-    expect(readNativeChatComposerDraft(scope('menu')).text).toContain(path)
-    expect(readNativeChatComposerDraft(scope('menu')).images).toEqual([])
-  }
-)
-
-it.each(['local', 'ssh'] as const)(
-  'preserves menu %s uploads closed before a delayed or absent thumbnail',
-  async (kind) => {
-    let completed = 0
-    for (const preview of ['delayed', 'missing', 'present'] as const) {
-      const { view, save, thumbnail, path } = await fixture(kind)
-      if (preview !== 'delayed') {
-        await act(async () =>
-          thumbnail.resolve(
-            preview === 'present'
-              ? { dataUrl: 'data:image/png;base64,AA', width: 1, height: 1 }
-              : null
-          )
-        )
-      }
-      view.unmount()
-      await act(async () => save.resolve(path))
-      expect(nativeChatPendingAttachmentSnapshot(scope('menu'))).toEqual([])
-      expect(readNativeChatComposerDraft(scope('menu')).images).toHaveLength(++completed)
-      expect(readNativeChatComposerDraft(scope('menu')).images.at(-1)).toMatchObject({
-        path,
-        ...(kind === 'ssh' ? { connectionId: 'ssh-1' } : {})
-      })
-      // The save also settles when a thumbnail has not answered at all.
-      if (preview === 'delayed') {
-        await act(async () => thumbnail.resolve(null))
-      }
+    expect(readNativeChatComposerDraft(scope('menu')).images).toHaveLength(++completed)
+    expect(readNativeChatComposerDraft(scope('menu')).images.at(-1)).toMatchObject({ path })
+    // The save also settles when a thumbnail has not answered at all.
+    if (preview === 'delayed') {
+      await act(async () => thumbnail.resolve(null))
     }
   }
-)
+})
 
-it.each(['local', 'ssh'] as const)(
-  'settles menu %s images without a thumbnail while mounted',
-  async (kind) => {
-    const { save, thumbnail, path } = await fixture(kind)
-    await act(async () => thumbnail.resolve(null))
-    await act(async () => save.resolve(path))
-    expect(readNativeChatComposerDraft(scope('menu')).images[0]).toMatchObject({ path })
-  }
-)
+it('settles menu images without a thumbnail while mounted', async () => {
+  const { save, thumbnail, path } = await fixture()
+  await act(async () => thumbnail.resolve(null))
+  await act(async () => save.resolve(path))
+  expect(readNativeChatComposerDraft(scope('menu')).images[0]).toMatchObject({ path })
+})
 
 it.each([true, false])(
   'ends pending operations for acceptsImages=%s on removal, deletion or failure',
   async (acceptsImages) => {
     for (const end of ['remove', 'workspace', 'failure'] as const) {
-      const { view, save, thumbnail, path } = await fixture('local', acceptsImages)
+      const { view, save, thumbnail, path } = await fixture(acceptsImages)
       if (end === 'remove') {
-        await act(async () => view.result.current.attachments.clearImageAttachments())
+        const { attachments } = view.result.current
+        await act(async () => attachments.removeImageAttachment(attachments.imageAttachments[0].id))
       } else if (end === 'workspace') {
+        deleteNativeChatComposerDraftsOwnedBy(draftOwner)
         dropNativeChatPendingAttachmentsOwnedBy(draftOwner)
       }
       view.unmount()

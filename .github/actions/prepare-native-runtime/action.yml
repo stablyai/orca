@@ -54,7 +54,7 @@ runs:
       env:
         NATIVE_RUNTIME: ${{ inputs.native-runtime }}
         NODE_VERSION: ${{ inputs.node-version }}
-        NATIVE_SOURCE_HASH: ${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', '.pnpmfile.cjs', '.github/actions/prepare-native-runtime/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/scripts/node-pty-job-ownership.cjs', 'config/scripts/windows-pe-machine.cjs', 'config/scripts/windows-process-tree-gyp-rebuild.mjs', 'config/scripts/windows-process-tree-creation-time.cjs', 'config/scripts/install-electron-package-binary.mjs', 'config/scripts/electron-platform-path.mjs', 'config/scripts/zip-extractor-command.mjs', 'src/shared/zip-extractor-command.ts', 'config/scripts/shared-electron-dist-cache.mjs', 'config/scripts/space-sharing-copy.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json', 'native/windows-registry/index.js') }}
+        NATIVE_SOURCE_HASH: ${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', '.pnpmfile.cjs', '.github/actions/prepare-native-runtime/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/initialize-windows-native-toolchain.mjs', 'config/scripts/capture-windows-native-environment.cmd', 'config/scripts/rebuild-native-deps.mjs', 'config/scripts/node-pty-job-ownership.cjs', 'config/scripts/windows-pe-machine.cjs', 'config/scripts/windows-process-tree-gyp-rebuild.mjs', 'config/scripts/windows-process-tree-creation-time.cjs', 'config/scripts/install-electron-package-binary.mjs', 'config/scripts/electron-platform-path.mjs', 'config/scripts/zip-extractor-command.mjs', 'src/shared/zip-extractor-command.ts', 'config/scripts/shared-electron-dist-cache.mjs', 'config/scripts/space-sharing-copy.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json', 'native/windows-registry/index.js', 'native/windows-security/src/addon.cc', 'native/windows-security/binding.gyp', 'native/windows-security/package.json', 'native/windows-security/index.js') }}
       run: |
         scope="${ImageOS:-$RUNNER_OS}"
         if [ -r /etc/os-release ]; then
@@ -69,6 +69,7 @@ runs:
         path<<ORCA_NATIVE_BUILD_DIRECTORIES
         node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
         native/windows-registry/build
+        native/windows-security/build
         node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
         ORCA_NATIVE_BUILD_DIRECTORIES
         ORCA_NATIVE_CACHE_PATHS
@@ -82,6 +83,7 @@ runs:
         path: |
           node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
           native/windows-registry/build
+          native/windows-security/build
           node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
         key: ${{ steps.native-cache-scope.outputs.key }}
 
@@ -93,6 +95,7 @@ runs:
         path: |
           node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
           native/windows-registry/build
+          native/windows-security/build
           node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
         key: ${{ steps.native-cache-scope.outputs.key }}
 
@@ -117,4 +120,9 @@ runs:
       shell: bash
       env:
         NATIVE_RUNTIME: ${{ inputs.native-runtime }}
-      run: node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"
+      run: |
+        if [ "$RUNNER_OS" = Windows ] && [ "$NATIVE_RUNTIME" = node ]; then
+          node config/scripts/initialize-windows-native-toolchain.mjs
+        else
+          node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"
+        fi

@@ -10,7 +10,7 @@ import {
   backgroundTaskStateWord
 } from '@/components/native-chat/background-task-roster'
 import { translate } from '@/i18n/i18n'
-import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
+import { agentNoUpdateLabel } from '../../../shared/agent-row-decay-state'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
 
 export type AgentChildRowText = {

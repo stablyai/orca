@@ -1,7 +1,6 @@
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeFileCommandHost } from './runtime-file-command-host'
-import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import type { RuntimeFileCommandHost } from './files/file-command-host'
 
 const mocks = vi.hoisted(() => ({
   resolvePath: vi.fn(),
@@ -14,16 +13,13 @@ const mocks = vi.hoisted(() => ({
   writeBuffer: vi.fn()
 }))
 
-vi.mock('./runtime-file-commands-read-file-explorer-preview', () => ({
-  RuntimeFileCommandsWithReadFileExplorerPreview: class {
-    resolveFileExplorerPath = mocks.resolvePath
-    host = { requireStore: mocks.requireStore }
-  }
-}))
-vi.mock('./runtime-file-commands-mobile-file-list-limit', () => ({
+vi.mock('./files/file-mutation-expectation', () => ({
   assertRuntimeFileMutationExpectation: mocks.expectation
 }))
-vi.mock('./runtime-file-command-target', () => ({ requireRuntimeFileProvider: mocks.provider }))
+vi.mock('./files/file-target', () => ({
+  resolveFileExplorerPath: mocks.resolvePath,
+  requireRuntimeFileProvider: mocks.provider
+}))
 vi.mock('../ipc/filesystem-auth', () => ({ resolveAuthorizedPath: mocks.authorize }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -31,42 +27,32 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   writeFile: mocks.writeFile
 }))
 
-import { RuntimeFileCommandsWithWriteFileExplorerFile } from './runtime-file-commands-write-file-explorer-file'
-import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
+import { RuntimeFileMutations } from './files/file-mutations'
+import { createLocalFilesystemProvider } from '../providers/local-filesystem-provider'
 
 function unexpectedHostCall(): never {
   throw new Error('Unexpected access beyond the isolated file command')
 }
 
-const host: RuntimeFileCommandHost = {
-  getRuntimeId: unexpectedHostCall,
-  requireStore: unexpectedHostCall,
-  resolveWorktreeSelector: unexpectedHostCall,
-  resolveRuntimeFileTarget: unexpectedHostCall,
-  resolveRuntimeGitTarget: unexpectedHostCall,
-  openFile: unexpectedHostCall,
-  openDiff: unexpectedHostCall
+const host: Pick<RuntimeFileCommandHost, 'requireStore' | 'resolveRuntimeFileTarget'> = {
+  requireStore: mocks.requireStore,
+  resolveRuntimeFileTarget: unexpectedHostCall
 }
-const commands = new RuntimeFileCommandsWithWriteFileExplorerFile(host)
+const commands = new RuntimeFileMutations(host)
 const destination = join('workspace', 'uploads', 'binary.dat')
 const target = { executionHostId: 'local', path: destination }
 let remote = false
-
-function sshProvider(): SshFilesystemProvider {
-  remote = true
-  mocks.resolvePath.mockResolvedValue({ ...target, executionHostId: 'ssh:target' })
-  const mux = { onNotification: vi.fn(() => () => {}), request: unexpectedHostCall }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: construction only subscribes; writes use the injected raw transfer and any mux request fails.
-  return new SshFilesystemProvider('target', mux as unknown as SshChannelMultiplexer, undefined, {
-    writeBuffer: mocks.writeBuffer
-  })
-}
 
 beforeEach(() => {
   vi.resetAllMocks()
   remote = false
   mocks.resolvePath.mockResolvedValue(target)
-  mocks.provider.mockReturnValue(null)
+  mocks.provider.mockImplementation((_target, host) =>
+    createLocalFilesystemProvider({
+      requireStore: () => host.requireStore(),
+      resolveAuthorizedPath: mocks.authorize
+    })
+  )
   mocks.authorize.mockResolvedValue(destination)
   mocks.requireStore.mockReturnValue({})
   mocks.mkdir.mockResolvedValue(undefined)
@@ -127,7 +113,7 @@ describe.each(['whole', 'first', 'append'] as const)('runtime %s base64 write', 
         decode.mock.calls.filter((args) => args.at(0) === base64 && args.at(1) === 'base64')
       ).toHaveLength(1)
       expect(mocks.expectation).toHaveBeenCalledWith('local', 'local', undefined, undefined)
-      expect(mocks.provider).toHaveBeenCalledWith(target)
+      expect(mocks.provider).toHaveBeenCalledWith(target, expect.anything())
       expect(mocks.authorize).toHaveBeenCalledWith(
         destination,
         mocks.requireStore.mock.results[0].value
@@ -145,41 +131,6 @@ describe.each(['whole', 'first', 'append'] as const)('runtime %s base64 write', 
       )
     }
   )
-
-  it.each(['', 'AAH+/w==', 'AA', '%%%'])(
-    'decodes once through the SSH provider for %j',
-    async (base64) => {
-      const expected = Buffer.from(base64, 'base64')
-      const provider = sshProvider()
-      mocks.provider.mockReturnValue(provider)
-      const decode = vi.spyOn(Buffer, 'from')
-      await expect(write(base64)).resolves.toEqual({ ok: true })
-      expect(
-        decode.mock.calls.filter((args) => args.at(0) === base64 && args.at(1) === 'base64')
-      ).toHaveLength(1)
-      expect(mocks.expectation).toHaveBeenCalledWith('ssh:target', 'ssh:target', 'target', 7)
-      expect(mocks.writeBuffer).toHaveBeenCalledWith(destination, expected, {
-        append: mode === 'append',
-        exclusive: mode !== 'append'
-      })
-      expect(mocks.authorize).not.toHaveBeenCalled()
-      expect(mocks.mkdir).not.toHaveBeenCalled()
-      expect(mocks.writeFile).not.toHaveBeenCalled()
-      provider.dispose()
-    }
-  )
-
-  it('avoids a second decoded slice for a full upload chunk', async () => {
-    mocks.provider.mockReturnValue(sshProvider())
-    const bytes = Buffer.alloc(384 * 1024, 0xb7)
-    const base64 = bytes.toString('base64')
-    const decode = vi.spyOn(Buffer, 'from')
-    await write(base64)
-    expect(
-      decode.mock.calls.filter((args) => args.at(0) === base64 && args.at(1) === 'base64')
-    ).toHaveLength(1)
-    expect(mocks.writeBuffer.mock.calls[0][1]).toEqual(bytes)
-  })
 
   it.each(['resolve', 'expectation', 'provider'] as const)(
     'preserves %s failure before decoding or writes',
@@ -223,14 +174,4 @@ describe.each(['whole', 'first', 'append'] as const)('runtime %s base64 write', 
       }
     }
   )
-
-  it('propagates SSH sink errors without a local fallback', async () => {
-    mocks.provider.mockReturnValue(sshProvider())
-    const failure = new Error('SSH sink failed')
-    mocks.writeBuffer.mockRejectedValue(failure)
-    await expect(write('AA==')).rejects.toBe(failure)
-    expect(mocks.authorize).not.toHaveBeenCalled()
-    expect(mocks.mkdir).not.toHaveBeenCalled()
-    expect(mocks.writeFile).not.toHaveBeenCalled()
-  })
 })

@@ -2,6 +2,26 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -9,6 +29,10 @@ import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
 
 const confirm = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
+  loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
+    .loadNodeOniguruma
+}))
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
@@ -57,7 +81,7 @@ describe('MessageRow control visibility', () => {
       />
     )
 
-    expect(screen.getByText('ts')).toBeInTheDocument()
+    expect(screen.getByText('TypeScript')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
 
     await waitFor(() => {
@@ -157,6 +181,36 @@ describe('MessageRow control visibility', () => {
       expect(screen.queryAllByRole('button')).toHaveLength(role === 'reasoning' ? 1 : 0)
     }
   )
+
+  it('holds the agent controls back until the turn stops working', () => {
+    const row = (activeTurnIsWorking: boolean) => (
+      <TooltipProvider>
+        <MessageRow
+          message={{
+            id: 'message',
+            role: 'assistant',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Message text' }]
+          }}
+          expandSignal={false}
+          activeTurnIsWorking={activeTurnIsWorking}
+          trailingRun
+          onScrollMessageToTop={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    const { rerender } = render(row(true))
+    expect(screen.getByText('Message text')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Scroll this message to top' })).toBeNull()
+    expect(screen.queryByRole('time')).toBeNull()
+
+    rerender(row(false))
+    expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scroll this message to top' })).toBeInTheDocument()
+    expect(screen.getByRole('time')).toBeInTheDocument()
+  })
 })
 
 describe('which messages can be quoted', () => {

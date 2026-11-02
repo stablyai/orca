@@ -64,6 +64,11 @@ export type ConnectionDiagnosticCode =
   | 'direct-connected'
   | 'relay-credential-unavailable'
   | 'host-open-failed'
+  // OTA web shell lifecycle; diagnostics only, never read as connection failures.
+  | 'web-shell-flow'
+  | 'web-shell-page'
+  | 'web-shell-stalled'
+  | 'web-shell-bridge'
 
 export type ConnectionLogEntry = {
   id: string

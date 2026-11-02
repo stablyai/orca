@@ -1,5 +1,7 @@
 import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
 import { vi } from 'vitest'
+import { WorkspaceCreationRegistry } from '../runtime/sidebar-inputs/workspace-creation-registry'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 export type WorktreeRuntimeStub = {
   resolveRemoteTrackingBase: ReturnType<typeof vi.fn>
@@ -20,6 +22,7 @@ export type WorktreeRuntimeStub = {
   acquireFileWatcherRemoval: ReturnType<typeof vi.fn>
   hydrateInferredWorktreeLineage: ReturnType<typeof vi.fn>
   publishWorktreeRemovalChange: ReturnType<typeof vi.fn>
+  workspaceCreations: WorkspaceCreationRegistry | null
 }
 
 /** Why: create-flow tests need a minimal runtime; full fetchRemoteWithCache behavior lives in fetch-remote-cache.test.ts. */
@@ -29,6 +32,8 @@ export function createWorktreeRuntimeStub(mainWindow?: {
   // Why here: every harness setup builds a stub, so no removal from an earlier test leaks in.
   _resetPendingWorktreeRemovalsForTests()
   const runtimeStub: WorktreeRuntimeStub = {
+    // Mirrors the runtime field: listed only when the sidebar-inputs switch is on.
+    workspaceCreations: ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceCreationRegistry() : null,
     resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
     hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
     getOrStartRemoteTrackingBaseRefresh: vi.fn().mockResolvedValue({ ok: true }),

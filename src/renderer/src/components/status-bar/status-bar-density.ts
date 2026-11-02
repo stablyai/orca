@@ -132,7 +132,8 @@ export function useStatusBarDensity(): {
           usage.chips,
           required - available - WIDTH_TOLERANCE_PX,
           usage.moreChipWidth,
-          usage.chipGap
+          usage.chipGap,
+          usage.unitLabelWidth
         )
       : NO_COLLAPSED_USAGE
     if (nextCollapsed.join() !== collapsedUsageRef.current.join()) {

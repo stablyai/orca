@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { fakeCodex, THREAD_ID } from '../codex/codex-structured-session-adapter-fixture'
 import {
@@ -14,6 +15,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -33,8 +35,9 @@ describe('foreground commands in the background-task channel', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  async function rig() {
+  async function rig(routes: Parameters<typeof fakeCodex>[0] = {}) {
     const codex = fakeCodex({
+      ...routes,
       'model/list': () => ({
         data: [
           {
@@ -56,17 +59,17 @@ describe('foreground commands in the background-task channel', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: codex.openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000,
+      ...scriptedCodexTransport(codex.openConnection),
       statusSink: {
         publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
         forget: (subject) => server.dropStructuredStatus(subject),
         publishChildWork: (subject, evidence, provider) =>
           server.ingestStructuredChildWork(subject, evidence, provider),
-        readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
+        readChildWork: (subject) => server.getStructuredChildWorkViews(subject),
+        readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
       }
     })
     const params = hostTestAttachParams(null, { providerHandle: undefined })
@@ -94,19 +97,55 @@ describe('foreground commands in the background-task channel', () => {
     }
     const turn = (method: string, id: string) =>
       notify(method, { threadId: THREAD_ID, turn: { id, status: 'completed' } })
-    const command = (method: string, id: string, turnId = 'turn-1') =>
+    const command = (method: string, id: string, turnId = 'turn-1', processId?: string) =>
       notify(method, {
         threadId: THREAD_ID,
         turnId,
         item: {
           type: 'commandExecution',
           id,
+          ...(processId ? { processId } : {}),
           command: id === 'pwd' ? 'pwd' : 'git status --short --branch',
           source: 'unifiedExecStartup',
           status: method === 'item/completed' ? 'completed' : 'inProgress'
         }
       })
-    return { host, rosters, turn, command }
+    return {
+      host,
+      rosters,
+      notify,
+      turn,
+      command,
+      fence: attached.ok ? attached.value.fence : null
+    }
+  }
+
+  type StripHost = Awaited<ReturnType<typeof rig>>['host']
+
+  /** The strip's Stop on a row (the `server` command by default), as a client sends it. */
+  function stopFromStrip(
+    host: StripHost,
+    fence: number | null,
+    operation: string,
+    taskId = 'codex-command:primary:server'
+  ) {
+    const fields = { turnId: 'background-tasks', scope: 'background-tasks' as const, taskId }
+    return host.cancel(
+      { callerKey: 'strip-test' },
+      {
+        envelope: {
+          sessionId: SESSION,
+          clientOperationId: `${Date.now()}-${operation.padStart(32, '0')}`,
+          expectedRuntimeFence: fence,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.cancel',
+            sessionId: SESSION,
+            fields
+          })
+        },
+        ...fields
+      }
+    )
   }
 
   it('never publishes a strip between a quick command starting and completing', async () => {
@@ -142,6 +181,193 @@ describe('foreground commands in the background-task channel', () => {
     expect(rosters.at(-1)?.tasks?.map((task) => task.id)).toEqual(['codex-command:primary:server'])
     await command('item/completed', 'pwd', 'turn-2')
     await command('item/completed', 'server')
+    expect(rosters.at(-1)).toBeNull()
+  })
+
+  it('stops a surviving command from the strip through Codex background terminals', async () => {
+    let running = ['4242']
+    const { host, rosters, turn, command, fence } = await rig({
+      'thread/backgroundTerminals/list': () => ({
+        data: running.map((processId) => ({ processId })),
+        nextCursor: null
+      }),
+      'thread/backgroundTerminals/terminate': (params) => {
+        running = running.filter((processId) => processId !== params?.processId)
+        return { terminated: true }
+      }
+    })
+    await turn('turn/started', 'turn-1')
+    await command('item/started', 'server', 'turn-1', '4242')
+    await turn('turn/completed', 'turn-1')
+    expect(rosters.at(-1)).toMatchObject({
+      supportsTaskStop: true,
+      children: [{ providerId: 'codex-command:primary:server', stoppable: true }]
+    })
+
+    const stopped = await stopFromStrip(host, fence, '2')
+    expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
+    expect(running).toEqual([])
+    // The killed process's own end is what takes its row off the strip.
+    await command('item/completed', 'server', 'turn-1', '4242')
+    expect(rosters.at(-1)).toBeNull()
+  })
+
+  /** The words of every note a Stop wrote, oldest first. */
+  async function stopNotes(host: StripHost): Promise<string[]> {
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    return page.page.items.flatMap((item) =>
+      item.body.kind === 'status' && item.body.failure ? [item.body.text] : []
+    )
+  }
+
+  it('notes a Stop whose command still runs, and keeps the row stoppable', async () => {
+    const { host, rosters, turn, command, fence } = await rig({
+      'thread/backgroundTerminals/list': () => ({
+        data: [{ processId: '4242' }],
+        nextCursor: null
+      }),
+      'thread/backgroundTerminals/terminate': () => ({ terminated: false })
+    })
+    await turn('turn/started', 'turn-1')
+    await command('item/started', 'server', 'turn-1', '4242')
+    await turn('turn/completed', 'turn-1')
+
+    await expect(stopFromStrip(host, fence, '3')).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: false }
+    })
+    expect(await stopNotes(host)).toEqual(["The background task wasn't stopped."])
+    expect(rosters.at(-1)).toMatchObject({
+      children: [{ providerId: 'codex-command:primary:server', stoppable: true }]
+    })
+  })
+
+  it('notes a Stop that lost contact with Codex as unconfirmed, and keeps the row stoppable', async () => {
+    const { host, rosters, turn, command, fence } = await rig({
+      'thread/backgroundTerminals/list': () => ({
+        data: [{ processId: '4242' }],
+        nextCursor: null
+      }),
+      'thread/backgroundTerminals/terminate': () => {
+        throw new Error('codex app-server connection closed')
+      }
+    })
+    await turn('turn/started', 'turn-1')
+    await command('item/started', 'server', 'turn-1', '4242')
+    await turn('turn/completed', 'turn-1')
+
+    await expect(stopFromStrip(host, fence, '4')).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: false }
+    })
+    expect(await stopNotes(host)).toEqual(['Cancellation was not confirmed.'])
+    expect(rosters.at(-1)).toMatchObject({
+      children: [{ providerId: 'codex-command:primary:server', stoppable: true }]
+    })
+  })
+
+  it('stops a sub-agent from the strip by interrupting its own turn', async () => {
+    const helper = 'thread-helper'
+    const interrupts: unknown[] = []
+    const { host, rosters, notify, turn, fence } = await rig({
+      'turn/interrupt': (params) => {
+        interrupts.push(params)
+        return {}
+      }
+    })
+    await turn('turn/started', 'turn-1')
+    await notify('item/started', {
+      threadId: THREAD_ID,
+      turnId: 'turn-1',
+      item: {
+        type: 'subAgentActivity',
+        id: 'spawn-helper',
+        kind: 'started',
+        agentThreadId: helper,
+        agentPath: '/root/helper'
+      }
+    })
+    await notify('turn/started', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'inProgress' }
+    })
+    await turn('turn/completed', 'turn-1')
+    expect(rosters.at(-1)).toMatchObject({
+      supportsTaskStop: true,
+      children: [{ providerId: helper, kind: 'agent', stoppable: true }],
+      // An older client's row names `codex-agent:<thread>`, which no record carries.
+      tasks: [{ id: `codex-agent:${helper}`, stoppable: false }]
+    })
+
+    await expect(stopFromStrip(host, fence, '5', helper)).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: true }
+    })
+    expect(interrupts).toEqual([{ threadId: helper, turnId: 'helper-turn' }])
+    // The child's own interrupted turn is what takes its row off the strip.
+    await notify('turn/completed', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'interrupted' }
+    })
+    expect(rosters.at(-1)).toBeNull()
+  })
+
+  it("stops a sub-agent's running command with it, and the row leaves", async () => {
+    const helper = 'thread-helper'
+    let running = ['5151']
+    const { host, rosters, notify, turn, fence } = await rig({
+      'turn/interrupt': () => ({}),
+      'thread/backgroundTerminals/list': () => ({
+        data: running.map((processId) => ({ processId })),
+        nextCursor: null
+      }),
+      'thread/backgroundTerminals/terminate': (params) => {
+        running = running.filter((processId) => processId !== params?.processId)
+        return { terminated: true }
+      }
+    })
+    const helperCommand = (status: 'inProgress' | 'completed') =>
+      notify(status === 'completed' ? 'item/completed' : 'item/started', {
+        threadId: helper,
+        turnId: 'helper-turn',
+        item: {
+          type: 'commandExecution',
+          id: 'helper-exec',
+          processId: '5151',
+          command: 'sleep 90',
+          source: 'unifiedExecStartup',
+          status
+        }
+      })
+    await turn('turn/started', 'turn-1')
+    await notify('item/started', {
+      threadId: THREAD_ID,
+      turnId: 'turn-1',
+      item: {
+        type: 'subAgentActivity',
+        id: 'spawn-helper',
+        kind: 'started',
+        agentThreadId: helper,
+        agentPath: '/root/helper'
+      }
+    })
+    await notify('turn/started', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'inProgress' }
+    })
+    await helperCommand('inProgress')
+    await turn('turn/completed', 'turn-1')
+
+    await expect(stopFromStrip(host, fence, '6', helper)).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: true }
+    })
+    expect(running).toEqual([])
+    await notify('turn/completed', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'interrupted' }
+    })
+    await helperCommand('completed')
     expect(rosters.at(-1)).toBeNull()
   })
 })

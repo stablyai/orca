@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseKnownHosts } from './ssh-known-hosts'
+import { parseKnownHosts } from './config/ssh-known-hosts'
 import {
   createHostKeyVerifier,
   DEFAULT_SERVER_HOST_KEY_ALGORITHMS,

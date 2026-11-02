@@ -1,6 +1,6 @@
 import { resolve, dirname, basename } from 'node:path'
-import { realpath } from 'node:fs/promises'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import { lstat, realpath } from 'node:fs/promises'
 import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../shared/local-file-access'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import { isDescendantOrEqual, isENOENT, normalizeExistingPath } from './filesystem-path-containment'
@@ -21,7 +21,7 @@ export const PATH_ACCESS_DENIED_MESSAGE = `${PATH_OUTSIDE_ALLOWED_DIRECTORIES}. 
 type AllowedRootsSnapshot = { get: () => readonly string[] }
 
 function createAllowedRootsSnapshot(
-  store: Store,
+  store: RuntimeStore,
   extraRoots: readonly string[] = []
 ): AllowedRootsSnapshot {
   let roots: readonly string[] | undefined
@@ -30,7 +30,7 @@ function createAllowedRootsSnapshot(
 
 export function isPathAllowed(
   targetPath: string,
-  store: Store,
+  store: RuntimeStore,
   allowedRoots?: AllowedRootsSnapshot
 ): boolean {
   const resolvedTarget = resolve(targetPath)
@@ -44,13 +44,13 @@ export type ResolveAuthorizedPathOptions = {
    * Canonicalize the parent but preserve the leaf so delete/rename target the symlink itself, not its destination (which may live outside allowed roots).
    */
   preserveSymlink?: boolean
-  /** Roots only the desktop window may use (never runtime RPC), checked like any other root. */
+  /** Roots one caller owns outside the store (desktop: floating workspace; runtime: chat scratch). */
   extraRoots?: readonly string[]
 }
 
 export async function resolveAuthorizedPath(
   targetPath: string,
-  store: Store,
+  store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
   const resolvedTarget = resolve(targetPath)
@@ -106,7 +106,7 @@ export async function resolveAuthorizedPath(
 
 async function resolveAuthorizedMissingPath(
   resolvedTarget: string,
-  store: Store,
+  store: RuntimeStore,
   allowedRoots: AllowedRootsSnapshot
 ): Promise<string> {
   let existingAncestor = resolvedTarget
@@ -129,6 +129,10 @@ async function resolveAuthorizedMissingPath(
       if (!isENOENT(error)) {
         throw error
       }
+      if (await isSymlink(existingAncestor)) {
+        // Why: realpath can't say where a dangling link leads, but a write follows it and creates its target.
+        throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+      }
       const parent = dirname(existingAncestor)
       if (parent === existingAncestor) {
         throw error
@@ -140,9 +144,20 @@ async function resolveAuthorizedMissingPath(
   }
 }
 
+async function isSymlink(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isSymbolicLink()
+  } catch (error) {
+    if (isENOENT(error)) {
+      return false
+    }
+    throw error
+  }
+}
+
 async function isPathAllowedIncludingRegisteredWorktrees(
   targetPath: string,
-  store: Store,
+  store: RuntimeStore,
   options: { canonicalSourcePath?: string; allowedRoots?: AllowedRootsSnapshot } = {}
 ): Promise<boolean> {
   if (isPathAllowed(targetPath, store, options.allowedRoots)) {
@@ -182,7 +197,7 @@ async function isPathAllowedIncludingRegisteredWorktrees(
 async function isPathAllowedByCanonicalAllowedRoot(
   targetPath: string,
   sourcePath: string | undefined,
-  store: Store,
+  store: RuntimeStore,
   allowedRoots?: AllowedRootsSnapshot
 ): Promise<boolean> {
   if (!sourcePath) {

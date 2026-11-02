@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getWorktreeVisitKey,
   getWorktreeVisitTimestamp,
+  rekeyWorktreeVisitHost,
   removeWorktreeVisitEntries
 } from './worktree-visit-recency'
 
@@ -40,5 +41,36 @@ describe('worktree visit recency identities', () => {
       [id]: 50,
       [getWorktreeVisitKey(id, 'ssh:builder')]: 200
     })
+  })
+})
+
+describe('rekeyWorktreeVisitHost', () => {
+  const id = 'repo::/srv/app'
+
+  it('moves one host’s visits to the host that now runs its workspaces, newer visit winning', () => {
+    const moved = rekeyWorktreeVisitHost(
+      {
+        [getWorktreeVisitKey(id, 'ssh:box')]: 300,
+        [getWorktreeVisitKey(id, 'runtime:env')]: 100,
+        [getWorktreeVisitKey('repo::/srv/other', 'ssh:box')]: 50,
+        [getWorktreeVisitKey(id, 'ssh:box-2')]: 70,
+        [getWorktreeVisitKey(id, 'local')]: 20,
+        [id]: 10
+      },
+      'ssh:box',
+      'runtime:env'
+    )
+    expect(moved).toEqual({
+      [getWorktreeVisitKey(id, 'runtime:env')]: 300,
+      [getWorktreeVisitKey('repo::/srv/other', 'runtime:env')]: 50,
+      [getWorktreeVisitKey(id, 'ssh:box-2')]: 70,
+      [getWorktreeVisitKey(id, 'local')]: 20,
+      [id]: 10
+    })
+  })
+
+  it('returns the same map when the host has no visits', () => {
+    const timestamps = { [getWorktreeVisitKey(id, 'local')]: 1 }
+    expect(rekeyWorktreeVisitHost(timestamps, 'ssh:box', 'runtime:env')).toBe(timestamps)
   })
 })

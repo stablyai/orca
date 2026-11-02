@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
+import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
 import type * as EditorAutosave from '@/components/editor/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeFileClient>()
+vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeFileMutationClient>()
   return { ...actual, renameRuntimePath: mocks.renameRuntimePath }
 })
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
@@ -19,7 +19,7 @@ import { getDiskBaselineSignature } from '@/components/editor/diff-content-signa
 import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
 
 const CONTEXT = {
-  settings: null,
+  target: { kind: 'local' as const },
   worktreeId: 'wt-1',
   worktreePath: '/repo',
   connectionId: undefined

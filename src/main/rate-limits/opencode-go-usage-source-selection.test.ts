@@ -170,6 +170,19 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(result.error).toBe('OpenCode Go usage request failed (503)')
   })
 
+  it('carries a network failure kind from the key request', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
+    fetchWithApiKeyMock.mockResolvedValue({
+      kind: 'failed',
+      message: 'OpenCode Go usage request failed (TypeError)',
+      failureKind: 'network'
+    })
+
+    const result = await fetchOpenCodeGoUsage({ cookie: '' })
+
+    expect(result.usageMetadata?.failureKind).toBe('network')
+  })
+
   it('falls back to the cookie path when no key exists anywhere', async () => {
     resolveApiKeyMock.mockResolvedValue({ status: 'missing' })
     fetchWithCookieMock.mockResolvedValue(cookieResult('ok'))

@@ -29,7 +29,12 @@ export type FloatingPanelStoreState = {
     worktreeId: string,
     groupId?: string,
     shellOverride?: string,
-    options?: { activate?: boolean; pendingActivationSpawn?: boolean; initialPtyId?: string }
+    options?: {
+      activate?: boolean
+      pendingActivationSpawn?: boolean
+      initialPtyId?: string
+      id?: string
+    }
   ) => TerminalTab
   createBrowserTab: (
     worktreeId: string,

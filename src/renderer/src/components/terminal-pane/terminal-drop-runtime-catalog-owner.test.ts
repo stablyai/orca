@@ -44,7 +44,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
@@ -167,7 +167,7 @@ describe.each(['native', 'internal'])('%s runtime terminal catalog ownership', (
       if (lane === 'native') {
         expect(mocks.importPaths).toHaveBeenCalledExactlyOnceWith(
           {
-            settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+            target: { kind: 'environment', environmentId: 'owner-runtime' },
             worktreeId: workspaceId,
             worktreePath: '/owner/workspace',
             expectedExecutionHostId: executionHostId,

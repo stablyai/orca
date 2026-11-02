@@ -4,7 +4,7 @@ import {
   type RetiredNameRegistry
 } from '../shared/worktree/retired-name-registry'
 import type { Repo } from '../shared/repo-types'
-import { worktreePathComparisonKey } from './ipc/worktree-path-comparison'
+import { worktreePathComparisonKey } from './worktree-path-comparison-key'
 import { sshEndpointKey, type SshIdentityFields } from './ssh/ssh-target-identity'
 
 /**

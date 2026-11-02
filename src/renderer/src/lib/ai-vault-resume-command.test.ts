@@ -453,6 +453,32 @@ describe('ai vault resume command runtime', () => {
     ).toBe("omp --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'")
   })
 
+  // #24408: Pi resumes by transcript path, and the shell it runs in is inside WSL.
+  it.each(['pi', 'prime-agent'] as const)(
+    'gives %s the Linux transcript path when resuming into WSL',
+    (agent) => {
+      const state = makeState({
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+      })
+      const linuxPath = '/home/alice/.pi/agent/sessions/--home-alice-repo--/2026_sess.jsonl'
+      const startup = buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent,
+          sessionId: 'sess',
+          filePath: `\\\\wsl.localhost\\Ubuntu${linuxPath.replaceAll('/', '\\')}`,
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+
+      expect(startup.command).toContain(linuxPath)
+      expect(startup.command).not.toContain('wsl.localhost')
+      expect(startup.providerSession).toMatchObject({ transcriptPath: linuxPath })
+    }
+  )
+
   it('deletes inherited Codex homes when resuming a real-home session', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
 

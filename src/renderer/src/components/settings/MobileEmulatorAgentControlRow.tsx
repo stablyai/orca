@@ -1,8 +1,7 @@
 import { Import } from 'lucide-react'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
+  ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useMobileEmulatorAgentSetupState } from '../emulator-pane/use-mobile-emulator-agent-setup-state'
@@ -24,7 +23,6 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   // Why: skill detection here scans the local host only, so keep building host
   // commands; routing them to a WSL runtime would install where we never look.
   const cliSkillInstallCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)
-  const cliSkillUpdateCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)
 
   return (
     <div className="rounded-2xl border border-border/60 bg-card/30 p-4">
@@ -58,7 +56,6 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               'Enables agents to use Orca CLI commands, including mobile emulator control.'
             )}
             command={cliSkillInstallCommand}
-            installedCommand={cliSkillUpdateCommand}
             terminalTitle="Orca CLI skill setup"
             terminalAriaLabel="Orca CLI skill install terminal"
             terminalWorktreeId="settings-mobile-emulator-orca-cli-skill-terminal"

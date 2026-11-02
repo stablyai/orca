@@ -128,6 +128,9 @@ export function buildComposerCardProps(state: ComposerModel) {
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
   const cardProps: ComposerCardSourceProps & ComposerCardActionProps = {
     eligibleRepos: isProjectGroupTarget ? folderSourceRepos : eligibleRepos,
+    selectedRepo: isProjectGroupTarget
+      ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
+      : (selectedRepo ?? null),
     repoId,
     projectOptions,
     selectedProjectId,

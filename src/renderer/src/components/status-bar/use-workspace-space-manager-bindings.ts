@@ -21,6 +21,7 @@ export function useWorkspaceSpaceManagerBindings() {
   const repoMap = useAppStore((state) => getRepoMapFromState(state))
   const repos = useAppStore((state) => state.repos)
   const worktreeMap = useAppStore((state) => getWorktreeMapFromState(state))
+  const worktreesByRepo = useAppStore((state) => state.worktreesByRepo)
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
   const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
@@ -75,6 +76,7 @@ export function useWorkspaceSpaceManagerBindings() {
     repoMap,
     repos,
     worktreeMap,
+    worktreesByRepo,
     tabsByWorktree,
     ptyIdsByTabId,
     agentStatusByPaneKey,

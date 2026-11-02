@@ -83,7 +83,7 @@ export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
   return parsed.success ? parsed.data : undefined
 }, sleepingAgentLaunchConfigBaseSchema.optional())
 
-const sleepingAgentSessionRecordSchema = z
+export const sleepingAgentSessionRecordSchema = z
   .object({
     paneKey: z.string().refine((value) => value.length > 0),
     tabId: terminalTabIdSchema.optional(),

@@ -12,10 +12,7 @@ export class StructuredAgentSessionCreateError extends Error {
   }
 }
 
-/**
- * The host proved it created nothing. The class itself is the verdict:
- * `launchStructuredAgentSession` is the only place that decides it against the shared allowlist.
- */
+/** A known create failure; the launch classifier keeps uncertain earlier attempts recoverable. */
 export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSessionCreateError {
   constructor(
     message: string,

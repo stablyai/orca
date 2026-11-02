@@ -26,13 +26,14 @@ export const AgentJournalSubmissionSchema = z.object({
   queuedMessageId: z.string().min(1).optional(),
   // The kind only; an object's other keys (a sender) are stripped, never published.
   source: z.object({ kind: z.string() }).optional(),
-  keptAsQueuedMessageId: z.string().min(1).optional()
+  keptAsQueuedMessageId: z.string().min(1).optional(),
+  options: z.record(z.string(), z.string()).optional()
 })
 
 export function isAdmissibleAgentJournalSubmission(
   value: unknown
 ): value is AgentJournalSubmission {
-  return AgentJournalSubmissionSchema.safeParse(value).success
+  return AgentJournalSubmissionSchema.validate(value)
 }
 
 /** Compile-time proof that every submission this build writes is admissible. */

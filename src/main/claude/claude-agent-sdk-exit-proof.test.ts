@@ -1,8 +1,9 @@
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { execFileSync } from 'node:child_process'
-import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
 import {
@@ -98,7 +99,7 @@ async function proveExitWithRetries(
   return proveClaudeChildExit(input)
 }
 
-function spawnScript(script: string): ReturnType<typeof spawnProcess> {
+function spawnScript(script: string): PipedChildProcess {
   const child = spawnProcess({
     program: process.execPath,
     args: ['-e', script],
@@ -108,25 +109,20 @@ function spawnScript(script: string): ReturnType<typeof spawnProcess> {
   return child
 }
 
-function firstStdoutLine(child: ReturnType<typeof spawnProcess>): Promise<string> {
+function firstStdoutLine(child: PipedChildProcess): Promise<string> {
   return new Promise((resolve) => {
     child.stdout.setEncoding('utf8').once('data', (chunk: string) => resolve(chunk.trim()))
   })
 }
 
 /** `null` models a spawn that failed before a pid existed. */
-function mockChild(
-  pid: number | null = 424242
-): EventEmitter &
-  Pick<SpawnedProcess, 'pid' | 'kill' | 'stdin' | 'stderr'> & { kill: ReturnType<typeof vi.fn> } {
-  const child = Object.assign(new EventEmitter(), {
+function mockChild(pid: number | null = 424242) {
+  return Object.assign(createFakePipedChild(), {
     pid: pid ?? undefined,
     stdin: new PassThrough(),
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The proof reads only pid, events, kill, stdin and stderr from this fixture.
-  return child as never
 }
 
 /** A tree whose verdict is scripted per reap, recording when it was armed. */

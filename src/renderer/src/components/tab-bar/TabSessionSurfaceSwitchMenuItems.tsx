@@ -1,3 +1,4 @@
+import { NativeChatCliForkMenuItems } from './NativeChatCliForkMenuItems'
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
@@ -11,6 +12,7 @@ import {
   lookupTabSessionHistoryRow,
   resolveTabSessionHistorySubject,
   resolveTabSessionSwitch,
+  type NativeChatTabSession,
   type TabSessionHistorySubject,
   type TabSessionSwitch
 } from './tab-session-history-switch'
@@ -30,13 +32,13 @@ function resolveMove(
 
 // Mounted only while the menu is open, so the history lookup runs per right-click, not per tab.
 function useTabSessionSwitch(
-  tab: Pick<TerminalTab, 'id' | 'worktreeId' | 'launchAgent'>,
-  structuredSessionId: string | undefined
+  tab: Pick<TerminalTab, 'id' | 'worktreeId'>,
+  nativeChat: NativeChatTabSession | undefined
 ): ResolvedTabSessionSwitch | null {
   const [subject] = useState(() =>
     resolveTabSessionHistorySubject(useAppStore.getState(), {
-      tab: { id: tab.id, worktreeId: tab.worktreeId, launchAgent: tab.launchAgent },
-      structuredSessionId
+      tab: { id: tab.id, worktreeId: tab.worktreeId },
+      nativeChat
     })
   )
   // Only a fresh reply carries current chat ownership, so nothing is offered before it lands.
@@ -68,16 +70,16 @@ function useTabSessionSwitch(
 
 /** The Session History row's "Resume in New Native Chat" / "Resume in New CLI", offered on the tab
  *  that shows that session and hidden wherever the row would not offer it. */
-export function TabSessionSurfaceSwitchMenuItems({
+function HistoryTabSessionSurfaceSwitchMenuItems({
   tab,
-  structuredSessionId,
+  nativeChat,
   leadingSeparator
 }: {
-  tab: Pick<TerminalTab, 'id' | 'worktreeId' | 'launchAgent'>
-  structuredSessionId?: string
+  tab: Pick<TerminalTab, 'id' | 'worktreeId'>
+  nativeChat?: NativeChatTabSession
   leadingSeparator: boolean
 }): React.JSX.Element | null {
-  const resolved = useTabSessionSwitch(tab, structuredSessionId)
+  const resolved = useTabSessionSwitch(tab, nativeChat)
   const targetState = useAppStore(
     useShallow((state) => ({
       projects: state.projects,
@@ -116,5 +118,18 @@ export function TabSessionSurfaceSwitchMenuItems({
         }
       />
     </>
+  )
+}
+
+export function TabSessionSurfaceSwitchMenuItems(props: {
+  onComplete?: () => void
+  tab: Pick<TerminalTab, 'id' | 'worktreeId'>
+  nativeChat?: NativeChatTabSession
+  leadingSeparator: boolean
+}): React.JSX.Element | null {
+  return props.nativeChat ? (
+    <NativeChatCliForkMenuItems {...props} nativeChat={props.nativeChat} />
+  ) : (
+    <HistoryTabSessionSurfaceSwitchMenuItems {...props} />
   )
 }

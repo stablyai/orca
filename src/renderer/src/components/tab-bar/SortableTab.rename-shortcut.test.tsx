@@ -92,6 +92,9 @@ vi.mock('lucide-react', () => ({
   ArrowUp: function ArrowUp(props: Record<string, unknown>) {
     return { type: 'ArrowUp', props }
   },
+  Copy: function Copy(props: Record<string, unknown>) {
+    return { type: 'Copy', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
@@ -261,6 +264,7 @@ async function renderSortableTab({
   const module = await import('./SortableTab')
   return module.default({
     tab: makeTerminalTab() as never,
+    agent: null,
     unifiedTabId: 'terminal-tab-1',
     groupId: 'group-1',
     tabCount: 1,

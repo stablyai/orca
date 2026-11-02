@@ -1,5 +1,5 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { PtyTransport } from './pty-transport-types'
-import { isRemoteRuntimePtyId } from './pty-connection/paired-parked-terminal-restore'
 
 /**
  * Releases a pane's transport for a restart and returns the PTY its replacement spawn must name.

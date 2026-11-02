@@ -108,3 +108,35 @@ export async function resolveProjectCreateTarget(
     setup
   }
 }
+
+// Why the worktree id, not the selector: a host-scoped `identity:` selector carries no repo id.
+function getRepoSelectorFromWorktreeId(worktreeId: string | undefined): string | undefined {
+  const separatorIndex = worktreeId?.indexOf('::') ?? -1
+  if (!worktreeId || separatorIndex <= 0) {
+    return undefined
+  }
+  return `id:${worktreeId.slice(0, separatorIndex)}`
+}
+
+export async function getCreateRepoSelector(
+  flags: Map<string, string | boolean>,
+  cwdParentWorktree: { worktreeId: string } | undefined,
+  client: RuntimeClient
+): Promise<string> {
+  const projectRepoSelector = await resolveProjectCreateRepoSelector(flags, client)
+  if (projectRepoSelector) {
+    return projectRepoSelector
+  }
+  const explicitRepo = getPresentStringFlag(flags, 'repo')
+  if (explicitRepo) {
+    return explicitRepo
+  }
+  const inferredRepo = getRepoSelectorFromWorktreeId(cwdParentWorktree?.worktreeId)
+  if (inferredRepo) {
+    return inferredRepo
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    'Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.'
+  )
+}

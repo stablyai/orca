@@ -231,7 +231,7 @@ export function DeveloperPermissionsPane({
   const refreshSequenceRef = useRef(0)
 
   const stateById = useMemo(
-    () => new Map(states.map((state) => [state.id, state.status] as const)),
+    () => new Map(states.map((state) => [state.id, state] as const)),
     [states]
   )
 
@@ -341,7 +341,8 @@ export function DeveloperPermissionsPane({
 
       <div className="divide-y divide-border/60 rounded-lg border border-border/60">
         {PERMISSIONS.map((permission) => {
-          const status = stateById.get(permission.id)
+          const state = stateById.get(permission.id)
+          const status = state?.status
           const pending = pendingId === permission.id
           const settingId = `developer-permissions-${permission.id}`
 
@@ -362,10 +363,33 @@ export function DeveloperPermissionsPane({
                           status
                         )}`}
                       >
+                        {permission.id === 'full-disk-access' &&
+                          translate(
+                            'auto.components.settings.DeveloperPermissionsPane.appStatus',
+                            'App: '
+                          )}
                         {developerPermissionStatusLabel(permission.id, status)}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">{permission.description}</p>
+                    {permission.id === 'full-disk-access' && state?.terminalHostStatus && (
+                      <p className="text-xs text-muted-foreground">
+                        {translate(
+                          'auto.components.settings.DeveloperPermissionsPane.terminalHostStatus',
+                          'Terminal hosts: '
+                        )}
+                        {developerPermissionStatusLabel(permission.id, state.terminalHostStatus)}
+                        {state.terminalHostStatus !== 'granted' && (
+                          <>
+                            {' '}
+                            {translate(
+                              'auto.components.settings.DeveloperPermissionsPane.terminalHostRecovery',
+                              'If a terminal cannot read protected files, save its work and close it in Terminal → Manage Sessions. Restart the daemon if new terminals are also affected; restarting closes its current terminals.'
+                            )}
+                          </>
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <DeveloperPermissionActions

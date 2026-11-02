@@ -1,9 +1,10 @@
+import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
-import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent-test-state'
+import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
@@ -59,9 +60,9 @@ function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState>
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
     settings: {
-      agentCmdOverrides: {},
-      setupScriptLaunchMode: 'new-tab'
-    } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+      ...getDefaultSettings(''),
+      agentCmdOverrides: {}
+    },
     markWorktreeVisited: vi.fn(),
     recordWorktreeVisit: vi.fn(),
     refreshGitHubForWorktreeIfStale: vi.fn(),
@@ -265,7 +266,7 @@ describe('preserved-pane replacement contract on workspace activation', () => {
   // the replacement it used to append relaunched `codex resume` against a
   // session the host still held (-32600 "already has an active writer"),
   // stranding a bare shell while the live agent lost its tab.
-  it('parks the resume for a still-published web-mirror tab and replays it on the verdict', async () => {
+  it('does not replace a still-published web-mirror tab after hydration settles', async () => {
     const webTabId = 'web-terminal-host-tab'
     // The workspace is owned by a paired runtime — without that the deferral
     // takes its no-execution-host early return and pins nothing.
@@ -336,24 +337,20 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
 
-    // The mirror answers and still publishes no PTY for the pane, so the parked
-    // sweep replays with evidence and the replacement is finally justified.
+    // Hydration settles inventory delivery, not whether the host's process exited.
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
 
     const replayed = useAppStore.getState()
     const replacementIds = (replayed.tabsByWorktree[worktree.id] ?? [])
       .map((tab) => tab.id)
       .filter((id) => id !== webTabId)
-    expect(replacementIds).toHaveLength(1)
-    expect(replayed.automaticAgentResumeClaimsByTabId[replacementIds[0]!]).toMatchObject({
-      launchAgent: 'codex',
-      providerSession: { key: 'session_id', id: 'codex-session-E' }
-    })
+    expect(replacementIds).toHaveLength(0)
+    expect(replayed.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(replayed.automaticAgentResumeClaimsByTabId).toEqual({})
+    expect(replayed.pendingStartupByTabId).toEqual({})
   })
 
-  // Why: retraction is the mirror's verdict that the host pane is gone, which
-  // is what re-arms the one-replacement-per-session contract above.
-  it('appends the replacement once the mirror has retracted the web-mirror tab', async () => {
+  it('keeps recovery evidence without replacing a retracted web-mirror tab', async () => {
     const webTabId = 'web-terminal-host-tab'
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
     const state = baseState(worktree)
@@ -392,15 +389,9 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     const after = useAppStore.getState()
     const tabs = after.tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(1)
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
-    const replacement = tabs[0]!
-    expect(after.automaticAgentResumeClaimsByTabId[replacement.id]?.providerSession).toEqual({
-      key: 'session_id',
-      id: 'codex-session-F'
-    })
-    expect(after.consumeTabStartupCommand(replacement.id)?.resumeProviderSession).toEqual({
-      key: 'session_id',
-      id: 'codex-session-F'
-    })
+    // Activation may seed its ordinary shell; it must not queue an agent resume.
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(after.automaticAgentResumeClaimsByTabId).toEqual({})
+    expect(after.consumeTabStartupCommand(tabs[0]!.id)?.resumeProviderSession).toBeUndefined()
   })
 })

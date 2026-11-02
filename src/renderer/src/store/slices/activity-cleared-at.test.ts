@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../shared/agent-status-freshness'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status'
 import { createTestStore } from './store-test-helpers'
@@ -165,5 +166,15 @@ describe('sanitizeActivityClearedAtByPaneKey hydration TTL', () => {
 
     const fifteenDaysAgo = Date.now() - 15 * 24 * 60 * 60 * 1000
     expect(sanitizeActivityClearedAtByPaneKey({ 'tab-a:1': fifteenDaysAgo })).toEqual({})
+  })
+
+  it('tracks the window main hydrates status entries for, not a copy of it', () => {
+    const justInside = Date.now() - AGENT_STATUS_HYDRATE_MAX_AGE_MS + 60_000
+    const justOutside = Date.now() - AGENT_STATUS_HYDRATE_MAX_AGE_MS - 60_000
+    expect(sanitizeAcknowledgedAgentsByPaneKey({ a: justInside, b: justOutside })).toEqual({
+      a: justInside
+    })
+    const doubled = Date.now() - 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS + 60_000
+    expect(sanitizeActivityClearedAtByPaneKey({ a: doubled })).toEqual({ a: doubled })
   })
 })

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sqlite-process-client'
 
 const mocked = vi.hoisted(() => ({ spawn: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: mocked.spawn }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: mocked.spawn }))
 
 function child() {
   const process = Object.assign(new EventEmitter(), {

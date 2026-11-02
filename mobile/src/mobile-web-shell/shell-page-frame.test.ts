@@ -21,7 +21,7 @@ describe('how long the shell keeps its own frame up', () => {
       { kind: 'checking' },
       { kind: 'activating', source: 'download' },
       { kind: 'offline' },
-      { kind: 'native-route' }
+      { kind: 'route-unavailable' }
     ] as const satisfies readonly MobileWebShellSessionState[]) {
       expect(frame({ state }), state.kind).toBe('pending')
     }

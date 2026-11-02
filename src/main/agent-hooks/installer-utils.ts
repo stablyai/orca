@@ -15,6 +15,11 @@ import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
+import { renameOverLockedTarget } from './locked-executable-rename'
+import {
+  getWindowsNativeHookAgent,
+  WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
+} from './windows-native-hook-executable'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -76,6 +81,8 @@ export function createManagedCommandMatcher(
     `agent-hooks/${scriptStem}.ps1`,
     `agent-hooks/${scriptStem}.sh`
   ]
+  // The shared native hook names its agent in the first argument: `orca-agent-hook.exe claude`.
+  const nativeHook = `agent-hooks/${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME} ${getWindowsNativeHookAgent(scriptFileName)} `
   return (command) => {
     if (!command) {
       return false
@@ -83,7 +90,10 @@ export function createManagedCommandMatcher(
     const decodedCommand = decodePowerShellEncodedCommand(command)
     const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
     const normalizedCommand = searchText.replaceAll('\\', '/')
-    return needles.some((needle) => normalizedCommand.includes(needle))
+    return (
+      needles.some((needle) => normalizedCommand.includes(needle)) ||
+      normalizedCommand.split('\n').some((line) => `${line} `.includes(nativeHook))
+    )
   }
 }
 
@@ -115,7 +125,6 @@ export {
   buildWindowsHookPowerShellCommand,
   isSafeUnicodeWindowsBatchHookPath,
   WINDOWS_CMD_SAFE_PATH,
-  wrapWindowsCmdHookCommand,
   wrapWindowsHookCommand
 } from './windows-hook-command'
 
@@ -226,13 +235,17 @@ export function hookDefinitionHasManagedCommand(
 }
 
 // Why: temp+rename so concurrent writers can't leave a torn script for an in-flight /bin/sh to source.
-export function writeManagedScript(scriptPath: string, content: string): void {
+export function writeManagedScript(
+  scriptPath: string,
+  content: string | Buffer,
+  options: { moveLockedTargetAside?: boolean } = {}
+): void {
   const dir = dirname(scriptPath)
   mkdirSync(dir, { recursive: true })
 
   if (existsSync(scriptPath)) {
     try {
-      if (readFileSync(scriptPath, 'utf-8') === content) {
+      if (readFileSync(scriptPath).equals(Buffer.from(content))) {
         if (process.platform !== 'win32') {
           chmodSync(scriptPath, 0o755)
         }
@@ -250,7 +263,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
     if (process.platform !== 'win32') {
       chmodSync(tmpPath, 0o755)
     }
-    renameSync(tmpPath, scriptPath)
+    renameOverLockedTarget(tmpPath, scriptPath, options.moveLockedTargetAside === true)
   } finally {
     if (existsSync(tmpPath)) {
       try {
@@ -263,7 +276,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
 }
 
 // Why: a restrictive directory DACL makes writes fail with EPERM on Windows; grant an ACL and retry once.
-function writeScriptWithAclRetry(scriptPath: string, content: string): void {
+function writeScriptWithAclRetry(scriptPath: string, content: string | Buffer): void {
   try {
     writeFileSync(scriptPath, content, 'utf-8')
   } catch (error) {
@@ -273,7 +286,7 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
         writeFileSync(scriptPath, content, 'utf-8')
         return
       } catch {
-        // icacls failure is not actionable; re-throw the original EPERM
+        // a failed grant is not actionable; re-throw the original EPERM
       }
     }
     throw error

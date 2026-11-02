@@ -17,6 +17,7 @@ import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
+import type { RemoteLayoutSnapshot } from './remote-layout-snapshot'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { SparsePreset } from './worktree/create-types'
@@ -99,6 +100,10 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
+  /** Display-only snapshot of each paired server's last layout, keyed by environment id. Written
+   *  only by the remote layout snapshot recorder; a separate domain because older builds write
+   *  the `runtime:<env>` partitions. */
+  remoteLayoutSnapshots?: Record<string, RemoteLayoutSnapshot>
   sshTargets: SshTarget[]
   /** Highest SSH target registration generation issued; prevents identity reuse after rollback. */
   sshTargetGenerationCounter?: number
@@ -109,8 +114,6 @@ export type PersistedState = {
   sshRemotePtyLeases: SshRemotePtyLease[]
   /** Main-owned authenticated relay recovery records; never expose through renderer settings APIs. */
   sshPtyConsumerRecoveries?: SshPtyConsumerRecovery[]
-  /** Live local Claude daemon session ids; seeds the live-PTY gate so early OAuth refresh can't rotate the single-use refresh token out from under a running daemon. */
-  claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]

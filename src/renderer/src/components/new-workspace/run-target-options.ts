@@ -1,8 +1,9 @@
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
-import type {
-  NeedsSetupProjectHostOption,
-  ProjectHostSetupOption,
-  ReadyProjectHostSetupOption
+import {
+  getProjectHostSetupSelectionKey,
+  type NeedsSetupProjectHostOption,
+  type ProjectHostSetupOption,
+  type ReadyProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import { translate } from '@/i18n/i18n'
 
@@ -93,9 +94,13 @@ export function buildRunTargetRows({
   )
 
   const rows: RunTargetRowModel[] = [
-    ...ready.map((option) => ({ key: `host:${option.id}`, kind: 'ready' as const, option })),
+    ...ready.map((option) => ({
+      key: `host:${getProjectHostSetupSelectionKey(option)}`,
+      kind: 'ready' as const,
+      option
+    })),
     ...needsSetup.map((option) => ({
-      key: `needs:${option.id}`,
+      key: `needs:${getProjectHostSetupSelectionKey(option)}`,
       kind: 'needs-setup' as const,
       option
     }))

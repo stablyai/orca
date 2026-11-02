@@ -1,16 +1,8 @@
-import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
 import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent-pty-owner'
 import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
-import { SessionNotFoundError } from '../../../daemon/daemon-errors'
 import type { Store } from '../../../persistence'
-import {
-  isSshPtyAbsentFromRelayError,
-  isSshPtyNotFoundError,
-  isSshPtyProvenExitedOnRelayError
-} from '../../../providers/ssh-pty-errors'
-import type { IPtyProvider } from '../../../providers/types'
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { getRelayPtyId } from './registry'
 import {
@@ -18,30 +10,6 @@ import {
   KEEP_HISTORY_STOP_SETTLE_MS
 } from '../delivery/visibility-state'
 import { clearProviderPtyState } from './state-cleanup'
-
-export function stripRemotePaneEnvWhenHooksDisabled(
-  connectionId: string | null | undefined,
-  env: Record<string, string> | undefined
-): Record<string, string> | undefined {
-  if (!connectionId || isRemoteAgentHooksEnabled()) {
-    return env
-  }
-  if (
-    !env ||
-    (!('ORCA_PANE_KEY' in env) &&
-      !('ORCA_TAB_ID' in env) &&
-      !('ORCA_WORKTREE_ID' in env) &&
-      !('ORCA_AGENT_LAUNCH_TOKEN' in env))
-  ) {
-    return env
-  }
-  const stripped = { ...env }
-  delete stripped.ORCA_PANE_KEY
-  delete stripped.ORCA_TAB_ID
-  delete stripped.ORCA_WORKTREE_ID
-  delete stripped.ORCA_AGENT_LAUNCH_TOKEN
-  return stripped
-}
 
 export function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)
@@ -59,40 +27,7 @@ export function normalizeNodePtySpawnError(err: unknown): Error {
 
 export function isPtyAlreadyGoneError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
-  return (
-    isSshPtyNotFoundError(err) ||
-    // Why: the reattach path rewrites the relay's wording to SSH_SESSION_EXPIRED and only this
-    // class preserves that the relay itself answered "absent" rather than the link dropping.
-    isSshPtyAbsentFromRelayError(err) ||
-    /Session not found/i.test(message)
-  )
-}
-
-/**
- * Narrower than {@link isPtyAlreadyGoneError}, for the one caller that retires a durable pane
- * binding rather than just releasing in-memory state: only a typed answer from the host that owns
- * the process may authorise that. The bare `PTY ".+" not found` text is the relay's raw wire
- * wording, which the SSH reattach path always types before it reaches a pane; matching the text
- * instead would let any untyped string carrying that phrase unbind a live pane
- * (docs/reference/ssh-execution-boundary.md).
- */
-export function isHostReportedPtyAbsenceError(err: unknown): boolean {
-  return isSshPtyAbsentFromRelayError(err) || err instanceof SessionNotFoundError
-}
-
-/**
- * The half of {@link isHostReportedPtyAbsenceError} that actually observed the process, and so the
- * only half that may certify an exit.
- *
- * The relay's plain absence answer is excluded because `pty.attach` gives it for an id its session
- * map never had as readily as for a pid it probed — after a relay restart, every id the previous
- * one minted. `SessionNotFoundError` is included because the process answering is the one that owns
- * the PTY: the in-process registry itself, or a daemon whose endpoint is live (a gone endpoint
- * raises `isDaemonEndpointGoneError` instead), so its absence is an observation rather than a lost
- * route (docs/reference/ssh-execution-boundary.md).
- */
-export function isObservedPtyExitEvidence(err: unknown): boolean {
-  return isSshPtyProvenExitedOnRelayError(err) || err instanceof SessionNotFoundError
+  return /Session not found/i.test(message)
 }
 
 export function delay(ms: number): Promise<void> {
@@ -172,13 +107,9 @@ export function finishPtyShutdown(
   const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
   if (connectionId) {
-    // Deliberately does NOT retire a recorded undelivered stop. Some callers reach here having
-    // asked the host and some having never asked it, so retiring from this one place would be a
-    // contract every call site has to know about — and the one that forgot would silently drop a
-    // kill order. Retirement is left to the replay, which only acts on host evidence.
+    // Keeps any relay-era undelivered stop on the lease: only host evidence may retire it.
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
   ptyOwnership.delete(id)
-  markClaudePtyExited(id)
   return incarnationId
 }

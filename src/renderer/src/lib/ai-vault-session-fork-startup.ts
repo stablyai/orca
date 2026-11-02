@@ -1,64 +1,52 @@
-import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 import {
-  buildAiVaultResumeShellCommand,
-  realHomeCodexResumeEnvDeletion
-} from '../../../shared/ai-vault-resume-command'
+  assertAiVaultCopiedSessionStoreAllowed,
+  buildAiVaultForkStartup,
+  resolveAiVaultCopiedSessionAgentArgs
+} from '../../../shared/ai-vault-resume-startup'
 import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import {
-  getAiVaultAgentProviderSession,
+  buildAiVaultResumeStartupForWorktree,
   resolveAiVaultResumeHost,
   type AiVaultResumeStartup,
   type AiVaultResumeWorktreeArgs
 } from '@/lib/ai-vault-resume-command'
 
-/**
- * A terminal session that starts from a copy of a conversation a native chat owns.
- *
- * Null when the agent cannot fork: a plain resume in its place would make the terminal a second
- * writer on the chat's conversation. No `providerSession` either: the copy gets its own id, and a
- * cold restore of this tab must never re-enter the chat's conversation.
- */
+function sharedStartupArgs(args: AiVaultResumeWorktreeArgs) {
+  return {
+    session: args.session,
+    host: resolveAiVaultResumeHost(args),
+    settings: args.state.settings,
+    commandOverride: args.commandOverride
+  }
+}
+
+/** The desktop's fork startup; the shared builder explains why a non-forking agent gets null. */
 export function buildAiVaultForkStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup | null {
-  const { session, state } = args
-  const providerSession = getAiVaultAgentProviderSession(session)
-  if (!providerSession || !isResumableTuiAgent(session.agent)) {
-    return null
-  }
-  const { platform, codexHome, liveShell } = resolveAiVaultResumeHost(args)
-  const plan = buildAgentResumeStartupPlan({
-    agent: session.agent,
-    providerSession,
-    cmdOverrides: {
-      ...state.settings?.agentCmdOverrides,
-      ...(args.commandOverride?.trim() ? { [session.agent]: args.commandOverride } : {})
-    },
-    platform,
-    shell: liveShell,
-    agentArgs: resolveTuiAgentLaunchArgs(session.agent, state.settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(session.agent, state.settings?.agentDefaultEnv),
-    resumeInLaunchCwd: true,
-    fork: true
+  return buildAiVaultForkStartup(sharedStartupArgs(args))
+}
+
+/** Keeps the history row's launch mode while the copied conversation opens with its actual CLI. */
+export function buildAiVaultCopiedSessionStartupForWorktree(
+  args: AiVaultResumeWorktreeArgs,
+  sourceAgent: AiVaultAgent
+): AiVaultResumeStartup {
+  const agentArgs = resolveAiVaultCopiedSessionAgentArgs({
+    ...sharedStartupArgs(args),
+    sourceAgent
   })
-  if (!plan) {
-    return null
-  }
   return {
-    command: buildAiVaultResumeShellCommand({
-      resumeCommand: plan.launchCommand,
-      cwd: null,
-      platform,
-      codexHome,
-      shell: liveShell
-    }),
-    ...(plan.env ? { env: plan.env } : {}),
-    ...realHomeCodexResumeEnvDeletion(session),
-    ...(session.cwd ? { cwd: session.cwd } : {}),
-    launchConfig: plan.launchConfig
+    ...buildAiVaultResumeStartupForWorktree({ ...args, agentArgs }),
+    agent: args.session.agent
   }
+}
+
+/** Runtime hosts validate their own launch settings when making the copy. */
+export function assertAiVaultCopiedSessionLaunchAllowed(args: AiVaultResumeWorktreeArgs): void {
+  if (parseExecutionHostId(args.session.executionHostId)?.kind === 'runtime') {
+    return
+  }
+  assertAiVaultCopiedSessionStoreAllowed(sharedStartupArgs(args))
 }

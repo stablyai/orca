@@ -5,7 +5,6 @@ import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../../../shar
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
-  getActiveRuntimeTarget,
   runtimeEnvironmentSupportsCapability
 } from '../../../../runtime/runtime-rpc-client'
 import {
@@ -15,7 +14,7 @@ import {
 } from '../../../../../../shared/protocol-version'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
-import type { AppState } from '../../../types'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-mutation'
@@ -53,14 +52,14 @@ export function isDisplayNamePersistencePending(
 }
 
 export function persistWorktreeMeta(
-  settings: AppState['settings'],
+  target: RuntimeClientTarget,
   worktreeId: string,
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   executionHostId?: ExecutionHostId,
   identityKey?: string
 ): Promise<void> {
   const operation = persistWorktreeMetaUntracked(
-    settings,
+    target,
     worktreeId,
     updates,
     executionHostId,
@@ -82,13 +81,12 @@ export function persistWorktreeMeta(
 }
 
 async function persistWorktreeMetaUntracked(
-  settings: AppState['settings'],
+  target: RuntimeClientTarget,
   worktreeId: string,
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   executionHostId?: ExecutionHostId,
   identityKey?: string
 ): Promise<void> {
-  const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'local') {
     await window.api.worktrees.updateMeta({
       worktreeId,

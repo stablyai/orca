@@ -17,6 +17,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import { plannedBatchThrough } from './structured-agent-session-settlement-double.test-fixture'
 import {
   runningTurnLifecycleRevisions,
   turnVerdictFromDeathEvidence,
@@ -311,9 +312,11 @@ describe('stale session state on a cold acquire', () => {
     const journal = {
       snapshot: () => ({ items }),
       itemFence: () => 1,
+      lastProviderActivityAt: () => undefined,
       stopMarks: { latest: () => null },
       cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
-      appendLifecycleBatch
+      submissions: () => [],
+      appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
     } as unknown as AgentSessionJournal
     return { journal, appendLifecycleBatch }
   }
@@ -338,6 +341,7 @@ describe('stale session state on a cold acquire', () => {
       settlementId: 'stale-session:session-1:14:generation-2',
       fence: 14,
       recovered: true,
+      dispatches: [],
       mutations: [
         {
           kind: 'item',
@@ -368,6 +372,7 @@ describe('stale session state on a cold acquire', () => {
       settlementId: 'stale-session:session-1:14:generation-2',
       fence: 14,
       recovered: true,
+      dispatches: [],
       mutations: [
         {
           kind: 'item',
@@ -441,7 +446,7 @@ describe('stale session state on a cold acquire', () => {
     }
   })
 
-  it('ends a probe-proven turn at its last proof of life, not at a row written after it', async () => {
+  it('uses provider output after a renewal, excluding a later client message', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
     const journals = createTrackedJournalOpener()
     let now = 100
@@ -467,11 +472,17 @@ describe('stale session state on a cold acquire', () => {
       )
       now = 200
       await journal.appendItem(command, { ...shell, state: 'running' }, { fence: 1, turnScope })
-      // Rows can outlast the last renewal; only the renewal is proof of life.
+      // Streaming revisions prove the provider worked after its last lease renewal.
       now = 700
       await journal.appendItem(
         command,
         { ...shell, input: { command: 'pnpm test', streamed: 'ok' }, state: 'running' },
+        { fence: 1, turnScope }
+      )
+      now = 800
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: 'late-send' },
+        { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'next task' }] },
         { fence: 1, turnScope }
       )
       now = 9_000
@@ -493,7 +504,7 @@ describe('stale session state on a cold acquire', () => {
       const items = journal.snapshot().items
       expect(items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)).toMatchObject({
         state: 'interrupted',
-        completedAt: 650
+        completedAt: 700
       })
       // The probe's detail is Orca's, so the row carries none.
       expect(

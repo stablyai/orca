@@ -199,12 +199,38 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       const revealMatchesEditor = reveal?.fileId
         ? reveal.fileId === fileId
         : reveal?.filePath === filePath
-      if (reveal && revealMatchesEditor) {
-        queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
-          useAppStore.getState().setPendingEditorReveal(null)
-        })
+      if (
+        reveal &&
+        revealMatchesEditor &&
+        (!reveal.viewStateId || reveal.viewStateId === viewStateId)
+      ) {
+        if (reveal.canApply?.() === false) {
+          restoreMonacoViewState(editorInstance, viewStateKey, () => false)
+          return
+        }
+        queueReveal(
+          editorInstance,
+          reveal.line,
+          reveal.column,
+          reveal.matchLength,
+          () => {
+            reveal.onApplied?.()
+            if (useAppStore.getState().pendingEditorReveal === reveal) {
+              useAppStore.getState().setPendingEditorReveal(null)
+            }
+          },
+          reveal.canApply
+            ? () =>
+                useAppStore.getState().pendingEditorReveal === reveal &&
+                reveal.canApply?.() !== false
+            : undefined
+        )
       } else {
-        restoreMonacoViewState(editorInstance, viewStateKey)
+        restoreMonacoViewState(
+          editorInstance,
+          viewStateKey,
+          reveal?.viewStateId && revealMatchesEditor ? () => false : undefined
+        )
       }
 
       // Why: every mount path above focuses, so an explicit open handoff is already satisfied here.

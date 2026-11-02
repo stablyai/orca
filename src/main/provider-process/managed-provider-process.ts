@@ -1,5 +1,6 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
-import { RetryableProcessExitProof } from '../../shared/child-process/retryable-process-exit-proof'
+import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
+import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
 import type { ProviderProcessLaunch } from './provider-process-launch'
 import {
   PROVIDER_SUPERVISOR_MAX_STOP_MS,
@@ -34,7 +35,7 @@ type ManagedProviderProcessOptions = {
   site: string
   /** Defaults to the root-only policy; only a provider with its own reaper overrides it. */
   policy?: (supervised: boolean) => ProviderProcessClosePolicy
-  spawnImpl?: typeof spawnProcess
+  spawnImpl?: PipedProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Defaults to "the root is gone". */
@@ -43,10 +44,14 @@ type ManagedProviderProcessOptions = {
   lifetime?: ProviderSupervisorLifetime
   /** Any stdout or stderr chunk: the child is doing something. */
   onOutput?: () => void
+  /** Each stderr line, `cut` past `stderrLineMaxChars`; true withholds it from the tail. */
+  onStderrLine?: (line: string, cut: boolean) => boolean
+  /** How much of one stderr line is kept to classify; the retained tail stays at its own size. */
+  stderrLineMaxChars?: number
 }
 
 export type ManagedProviderProcess = {
-  child: ReturnType<typeof spawnProcess>
+  child: PipedChildProcess
   supervised: boolean
   /** The spawn failed before a process existed: absence is proven, but no exit was observed. */
   readonly processless: boolean
@@ -100,11 +105,31 @@ export function spawnManagedProviderProcess(
   let lastCloseResult: ProviderProcessCloseResult | null = null
   const exitProof = new RetryableProcessExitProof(options.acceptClose ?? acceptProviderRootExit)
   let stderrTail = ''
+  let stderrLine = ''
+  let lineCut = false
+  const lineMaxChars = options.stderrLineMaxChars ?? STDERR_TAIL_MAX_CHARS
+  // A line cut at the cap was classified on its prefix only, so an unrecognised one is dropped,
+  // not kept: whatever follows the prefix (a sign-in URL) must never reach the tail.
+  const retainLine = (line: string, cut: boolean): void => {
+    if (line && !options.onStderrLine?.(line, cut) && !cut) {
+      stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_MAX_CHARS)
+    }
+  }
   // An undrained stderr pipe blocks the child once it fills.
   child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
-    stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS)
+    if (options.onStderrLine) {
+      const lines = (stderrLine + chunk).split('\n')
+      const pending = lines.pop() ?? ''
+      // Keep the prompt prefix until the complete line can be classified.
+      lines.forEach((line, index) => retainLine(line, index === 0 && lineCut))
+      lineCut = (lines.length === 0 && lineCut) || pending.length > lineMaxChars
+      stderrLine = pending.slice(0, lineMaxChars)
+    } else {
+      stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS)
+    }
     options.onOutput?.()
   })
+  child.stderr.once('end', () => retainLine(stderrLine, lineCut))
   if (options.onOutput) {
     observeReaderOutput(child.stdout, options.onOutput)
   }

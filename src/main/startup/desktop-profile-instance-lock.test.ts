@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcadInstanceLockError, type OrcadInstanceLock } from '../orcad/orcad-instance-lock'
+import type { OrcadInstanceLock } from '../orcad/orcad-instance-lock'
+import { OrcadInstanceLockError } from '../orcad/orcad-data-root-privacy'
 import { acquireDesktopProfileInstanceLock } from './desktop-profile-instance-lock'
 
 describe('the desktop share of the profile instance lock', () => {

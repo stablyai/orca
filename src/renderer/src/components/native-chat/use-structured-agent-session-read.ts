@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { notifyStructuredAttentionView } from '@/attention/agent-subject-read-actions'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   getStructuredAgentSessionReadOwner,
   type StructuredAgentSessionReadSnapshot
@@ -58,6 +58,7 @@ export function useStructuredAgentSessionRead(args: {
 
   return {
     state: snapshot.state,
+    readCurrent: snapshot.current,
     loadingOlder: snapshot.loadingOlder,
     olderHistoryGeneration: snapshot.olderHistoryGeneration,
     loadOlder: owner.loadOlder,

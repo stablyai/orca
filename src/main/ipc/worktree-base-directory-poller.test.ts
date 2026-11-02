@@ -6,10 +6,10 @@ import { join } from 'node:path'
 import {
   createWorktreePollerWindowVisibility,
   startWorktreeBaseDirectoryPoller,
-  WORKTREE_BASE_BACKSTOP_TICKS,
   type WorktreeBasePollEvent,
   type WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
+import { WORKTREE_BASE_BACKSTOP_TICKS } from './worktree-base-directory-marker-poller'
 import { startGitCommonPrimaryPolling } from './worktree-git-common-primary-polling'
 import type {
   WorktreeBaseRepoWatchConfig,

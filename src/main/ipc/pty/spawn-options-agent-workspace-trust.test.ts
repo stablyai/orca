@@ -41,7 +41,7 @@ function makeDeps(): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
     getLocalPtyStartupPromise: notReachedByOptionBuilding,
     getLocalPtyProviderStartupPromise: notReachedByOptionBuilding,
     adoptStablePane: notReachedByOptionBuilding,
-    assertFolderWorkspacePtyPathUsable: notReachedByOptionBuilding,
+    assertWorkspaceAcceptsNewPty: notReachedByOptionBuilding,
     resolvePtySpawnStartupCwd: notReachedByOptionBuilding,
     localStartupCwdDirectoryExists: notReachedByOptionBuilding,
     prepareCodexResumeHome: notReachedByOptionBuilding,

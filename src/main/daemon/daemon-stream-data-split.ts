@@ -4,7 +4,17 @@
  * clamp shared by the batcher's bulk write slicing and keep-tail dropping.
  */
 import { resolveSynchronizedOutputSafeSplit } from '../../shared/terminal-synchronized-output-scan'
+import {
+  BINARY_STREAM_FRAMING,
+  binaryStreamDataFrameOverheadBytes,
+  encodeBinaryStreamDataFrame,
+  encodeBinaryStreamEventFrame,
+  type DaemonStreamFraming,
+  type StreamDataPayloadMeta
+} from './daemon-stream-binary-framing'
 import { encodeNdjson } from './ndjson'
+
+export type StreamWriteChunk = string | Buffer
 
 export function encodeStreamDataEvent(
   sessionId: string,
@@ -127,6 +137,84 @@ function splitOversizedStreamDataForNdjson(
   return chunks
 }
 
+function dataPayloadMeta(
+  rawLength: number | undefined,
+  seq: number | undefined,
+  transformed: boolean
+): StreamDataPayloadMeta {
+  return {
+    ...(seq === undefined ? {} : { seq }),
+    ...(rawLength === undefined ? {} : { rawLength, sequenceChars: rawLength }),
+    ...(transformed ? { transformed: true } : {})
+  }
+}
+
+// Mirrors the NDJSON writer's per-chunk seq/rawLength rules; only the size budget differs, and raw
+// bytes need no binary search because one UTF-16 unit never encodes to more than 3 UTF-8 bytes.
+function writeBinaryStreamDataEvents(
+  streamSocket: { write(data: StreamWriteChunk): void },
+  sessionId: string,
+  data: string,
+  maxFrameBytes: number,
+  rawLength: number,
+  seq: number | undefined,
+  transformed: boolean
+): void {
+  const explicitRawLength = rawLength === data.length ? undefined : rawLength
+  if (transformed) {
+    streamSocket.write(
+      encodeBinaryStreamDataFrame(sessionId, data, dataPayloadMeta(rawLength, seq, true))
+    )
+    return
+  }
+  const carriesMetadata = explicitRawLength !== undefined || seq !== undefined
+  const whole = encodeBinaryStreamDataFrame(
+    sessionId,
+    data,
+    dataPayloadMeta(
+      explicitRawLength === 0 ? 0 : carriesMetadata ? data.length : undefined,
+      seq,
+      false
+    ),
+    maxFrameBytes
+  )
+  if (whole !== null) {
+    streamSocket.write(whole)
+    return
+  }
+  const worstCaseOverhead = binaryStreamDataFrameOverheadBytes(
+    sessionId,
+    carriesMetadata ? dataPayloadMeta(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, false) : {}
+  )
+  const dataBudgetBytes = Math.max(3, maxFrameBytes - worstCaseOverhead)
+  // JSON fallback must budget escaped bytes with the existing splitter.
+  const jsonChunks = data.isWellFormed()
+    ? undefined
+    : splitStreamDataForNdjson(sessionId, data, Math.max(1, maxFrameBytes - 96), explicitRawLength)
+  const chunkChars = Math.max(1, Math.floor(dataBudgetBytes / 3))
+  let chunkIndex = 0
+  let start = 0
+  do {
+    const end = jsonChunks
+      ? start + jsonChunks[chunkIndex++].length
+      : Math.max(
+          nextSafeSplitIndex(data, start),
+          clampToSafeSplitIndex(data, start, Math.min(data.length, start + chunkChars))
+        )
+    const chunk = data.slice(start, end)
+    start = end
+    const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - start)
+    const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
+    streamSocket.write(
+      encodeBinaryStreamDataFrame(
+        sessionId,
+        chunk,
+        dataPayloadMeta(chunkRawLength, chunkEndSeq, false)
+      )
+    )
+  } while (start < data.length)
+}
+
 export function writeStreamDataEvents(
   streamSocket: { write(data: string): void },
   sessionId: string,
@@ -165,4 +253,45 @@ export function writeStreamDataEvents(
     const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
     streamSocket.write(encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq))
   }
+}
+
+/** How a stream socket's events become bytes; chosen per socket by its hello. */
+export type StreamFrames = {
+  control(event: unknown): StreamWriteChunk
+  /** An empty data event: a real frame, so its write completes only after those queued before it. */
+  noop(sessionId: string): StreamWriteChunk
+  data(
+    streamSocket: { write(data: StreamWriteChunk): void },
+    sessionId: string,
+    data: string,
+    maxLineBytes: number,
+    rawLength?: number,
+    seq?: number,
+    transformed?: boolean
+  ): void
+}
+
+const NDJSON_STREAM_FRAMES: StreamFrames = {
+  control: (event) => encodeNdjson(event),
+  noop: (sessionId) => encodeStreamDataEvent(sessionId, ''),
+  data: writeStreamDataEvents
+}
+
+const BINARY_STREAM_FRAMES: StreamFrames = {
+  control: (event) => encodeBinaryStreamEventFrame(event),
+  noop: (sessionId) => encodeBinaryStreamDataFrame(sessionId, ''),
+  data: (streamSocket, sessionId, data, maxLineBytes, rawLength = data.length, seq, transformed) =>
+    writeBinaryStreamDataEvents(
+      streamSocket,
+      sessionId,
+      data,
+      maxLineBytes,
+      rawLength,
+      seq,
+      transformed === true
+    )
+}
+
+export function streamFramesFor(framing: DaemonStreamFraming = 'ndjson'): StreamFrames {
+  return framing === BINARY_STREAM_FRAMING ? BINARY_STREAM_FRAMES : NDJSON_STREAM_FRAMES
 }

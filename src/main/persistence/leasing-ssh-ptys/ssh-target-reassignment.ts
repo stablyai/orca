@@ -75,7 +75,7 @@ export function reassignSshTargetId(
     if (matchesConnection) {
       repo.connectionId = newTargetId
     }
-    // Why: don't stamp executionHostId where it was unset — addRemoteRepoFromPath repos derive the host from connectionId.
+    // Why: don't stamp executionHostId where it was unset — legacy SSH repo rows derive the host from connectionId.
     if (matchesHost) {
       repo.executionHostId = newHostId
     }

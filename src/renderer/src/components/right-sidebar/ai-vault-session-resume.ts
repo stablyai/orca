@@ -15,6 +15,7 @@ import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
+  aiVaultResumeInSessionWorkspaceLabel,
   canJumpToAiVaultSessionWorktree,
   resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
@@ -248,13 +249,11 @@ export function aiVaultSessionRowResumeGating(
 }
 
 export function aiVaultSessionResumeLabel(
-  state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'>
+  state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'> &
+    Partial<Pick<AiVaultSessionResumeState, 'worktreeId'>>
 ): string {
   if (state.usesSessionWorktree) {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-      'Resume in Worktree'
-    )
+    return aiVaultResumeInSessionWorkspaceLabel(state.worktreeId)
   }
   return translate(
     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',

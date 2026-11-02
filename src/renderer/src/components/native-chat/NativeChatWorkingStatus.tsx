@@ -73,7 +73,10 @@ export function NativeChatWorkingStatus({
   const caret =
     workedSeconds != null && onToggleExpanded ? (
       <ChevronRight
-        className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
+        className={cn(
+          'size-3.5 transition-transform motion-reduce:transition-none',
+          expanded && 'rotate-90'
+        )}
         aria-hidden="true"
       />
     ) : null
@@ -84,7 +87,7 @@ export function NativeChatWorkingStatus({
         data-native-chat-turn-status="settled"
         className={cn(
           className,
-          'w-full text-left hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70'
+          'w-full text-left hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
         )}
         aria-label={translate(
           'components.native-chat.status.toggleDetails',

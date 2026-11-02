@@ -128,11 +128,7 @@ describe('source client-state migration', () => {
       'environment-1',
       scoped
     )
-    expect(result.blockedCounts).toEqual({
-      'mobile-tab-selection': 0,
-      'ui-routing': 0,
-      'saved-port-forward': 0
-    })
+    expect(result.blockedCounts).toEqual({ 'saved-port-forward': 0 })
     expect(result.payload?.mobileClientTabSelectionsByDeviceId).toMatchObject({
       phone: { 'repo-1::/srv/worktree': { activeTabId: 'tab-1' } }
     })
@@ -144,7 +140,7 @@ describe('source client-state migration', () => {
     })
   })
 
-  it('blocks a mobile selection that points at a group outside the migrated owner', () => {
+  it('leaves behind a mobile selection that points at a group outside the migrated owner', () => {
     const current = state()
     const sourceOwner = 'ssh:target-1|repo-1::/srv/worktree'
     const unrelatedOwner = 'ssh:target-1|repo-2::/srv/other'
@@ -180,10 +176,10 @@ describe('source client-state migration', () => {
     )
 
     expect(result.payload?.mobileClientTabSelectionsByDeviceId).toBeUndefined()
-    expect(result.blockedCounts['mobile-tab-selection']).toBe(1)
+    expect(result.blockedCount).toBe(0)
   })
 
-  it('blocks a per-group tab selection whose group is outside the migrated owner', () => {
+  it('leaves behind a per-group tab selection whose group is outside the migrated owner', () => {
     const current = state()
     const sourceOwner = 'ssh:target-1|repo-1::/srv/worktree'
     const unrelatedOwner = 'ssh:target-1|repo-2::/srv/other'
@@ -221,7 +217,7 @@ describe('source client-state migration', () => {
     )
 
     expect(result.payload?.mobileClientTabSelectionsByDeviceId).toBeUndefined()
-    expect(result.blockedCounts['mobile-tab-selection']).toBe(1)
+    expect(result.blockedCount).toBe(0)
   })
 
   it('captures saved forwards and reports duplicate local ports', () => {
@@ -269,7 +265,8 @@ describe('source client-state migration', () => {
       current.workspaceSession
     )
 
-    expect(result.blockedCount).toBe(1)
+    // The unrelated close stays with this client; it does not block.
+    expect(result.blockedCount).toBe(0)
     expect(result.payload?.clientHostedBrowserCloseIntents).toEqual([
       {
         sourceEnvironmentId: 'old-environment',
@@ -280,7 +277,7 @@ describe('source client-state migration', () => {
     ])
   })
 
-  it("ignores another host's agent acknowledgements and blocks only the source's own", () => {
+  it('leaves behind agent acknowledgements for panes that did not move', () => {
     const current = state()
     current.workspaceSession = session({
       tabsByWorktree: { '/local/repo::/local/repo': [terminalTab('local-tab', '/local/repo')] }
@@ -303,6 +300,7 @@ describe('source client-state migration', () => {
       'environment-1',
       undefined
     )
-    expect(result.blockedCounts['ui-routing']).toBe(1)
+    expect(result.payload?.uiRouting?.acknowledgedAgentsByPaneKey).toBeUndefined()
+    expect(result.blockedCounts).toEqual({ 'saved-port-forward': 0 })
   })
 })

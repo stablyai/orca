@@ -129,3 +129,73 @@ export function mergeMobileSessionTabGroups(
     })
     .filter((group) => group.tabOrder.length > 0)
 }
+
+/**
+ * A tab list rebuilt from persisted state, plus the chat tabs only `prior` holds. Chat tabs exist
+ * only in the runtime's snapshot, so no persisted terminal or layout state can recreate them.
+ */
+export function keepSnapshotChatTabs(
+  rebuilt: readonly RuntimeMobileSessionSnapshotTab[],
+  prior:
+    | { tabs: readonly RuntimeMobileSessionSnapshotTab[]; activeTabId: string | null }
+    | undefined
+): RuntimeMobileSessionSnapshotTab[] {
+  const chatTabs = prior?.tabs.filter((tab) => tab.type === 'agent-session') ?? []
+  if (chatTabs.length === 0) {
+    return [...rebuilt]
+  }
+  // One active tab: a rebuilt terminal's own flag must not outrank the chat the snapshot showed.
+  const activeChatId = chatTabs.find((tab) => tab.id === prior?.activeTabId)?.id ?? null
+  return [
+    ...rebuilt.map((tab) => (activeChatId && tab.isActive ? { ...tab, isActive: false } : tab)),
+    ...chatTabs.map((tab) => ({ ...tab, isActive: tab.id === activeChatId }))
+  ]
+}
+
+/**
+ * Puts chat tabs back into the group order a terminal-only merge rebuilt without them: each in the
+ * group that listed it before (else the first), after the tab it followed there.
+ */
+export function appendChatTabOrder(
+  groups: readonly RuntimeMobileSessionTabGroup[],
+  priorGroups: readonly RuntimeMobileSessionTabGroup[] | undefined,
+  tabs: readonly RuntimeMobileSessionSnapshotTab[],
+  activeTabId: string | null = tabs.find((tab) => tab.isActive)?.id ?? null
+): RuntimeMobileSessionTabGroup[] {
+  const chatTabIds = tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.id)
+  if (chatTabIds.length === 0) {
+    return [...groups]
+  }
+  const next = groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
+  for (const tabId of chatTabIds) {
+    const priorGroup = priorGroups?.find((group) => group.tabOrder.includes(tabId))
+    const target =
+      next.find((group) => group.tabOrder.includes(tabId)) ??
+      next.find((group) => group.id === priorGroup?.id) ??
+      next[0]
+    if (!target) {
+      continue
+    }
+    if (!target.tabOrder.includes(tabId)) {
+      const at = chatInsertIndex(target.tabOrder, priorGroup?.tabOrder ?? [], tabId)
+      target.tabOrder.splice(at, 0, tabId)
+    }
+    if (tabId === activeTabId) {
+      target.activeTabId = tabId
+    }
+  }
+  return next
+}
+
+function chatInsertIndex(
+  order: readonly string[],
+  priorOrder: readonly string[],
+  tabId: string
+): number {
+  const priorIndex = priorOrder.indexOf(tabId)
+  if (priorIndex === -1) {
+    return order.length
+  }
+  const previous = priorOrder.slice(0, priorIndex).findLast((id) => order.includes(id))
+  return previous === undefined ? 0 : order.indexOf(previous) + 1
+}

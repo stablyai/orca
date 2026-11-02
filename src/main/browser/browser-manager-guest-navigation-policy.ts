@@ -4,6 +4,7 @@ import {
 } from '../../shared/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-manager-types'
 import { BrowserManagerGuestPopupPolicy } from './browser-manager-guest-popup-policy'
+import { allowPageUnload } from './browser-guest-unload-policy'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
@@ -131,6 +132,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
     guest.on('did-fail-load', didFailLoadHandler)
+    guest.on('will-prevent-unload', allowPageUnload)
     const handleDestroyed = (): void => {
       const browserTabId = this.tabIdByWebContentsId.get(guest.id)
       // A destroyed primary guest also owns per-page callbacks that capture its WebContents.
@@ -154,6 +156,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
         guest.off('did-fail-load', didFailLoadHandler)
+        guest.off('will-prevent-unload', allowPageUnload)
       }
     }
   }

@@ -6,47 +6,14 @@ import {
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'
 import { FOREGROUND_COMMAND_READS } from '../../../../shared/foreground-command-settle'
+import type {
+  ForegroundReadReason,
+  PaneForegroundAgentTrackerDeps
+} from './pane-foreground-agent-tracker-contract'
 
 const VISIBLE_PTY_SETTLE_MS = 350
-type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished'
-
-type PaneForegroundAgentTrackerDeps = {
-  getPtyId: () => string | null
-  /** Local panes only — remote/SSH foreground reads are expensive RPCs and
-   *  their replayed OSC streams must not produce process evidence. */
-  isTrackablePtyId: (ptyId: string) => boolean
-  readForegroundProcess: (
-    ptyId: string,
-    options?: { expectedIncarnationId?: string }
-  ) => Promise<string | null | RuntimeTerminalProcessInspection>
-  /** Fresh, provider-owned evidence used only when input routing may change. */
-  confirmForegroundProcess?: (
-    ptyId: string,
-    options?: { expectedIncarnationId?: string }
-  ) => Promise<string | null | RuntimeTerminalProcessInspection>
-  /** Remote authorities must provide fenced evidence; local panes retain the string path. */
-  isRemotePtyId?: (ptyId: string) => boolean
-  getExpectedIncarnationId?: () => string | null
-  publish: (entry: PaneForegroundAgentEntry) => void
-  /** The entry currently published for this pane, whoever wrote it. */
-  getPublishedEntry?: () => PaneForegroundAgentEntry | undefined
-  /** A local read recognized an agent; lets the pane's process monitor watch for its exit. */
-  onAgentProcessRead?: (process: RecognizedAgentProcess) => void
-  /** True when the pane is otherwise known to run an agent (launchAgent, live
-   *  hook status). Lets a restored agent pane confirm — rather than trust — a
-   *  133;D before any command-start read has recorded its own evidence. */
-  hasKnownAgentIdentity?: () => boolean
-  /** Fired when a confirming read proves the foreground genuinely returned to a
-   *  shell (agent exited). Lets callers clear a stale agent-named tab title that
-   *  the shell never repaints. */
-  onConfirmedShellForeground?: (reason: 'visible-pty' | 'command-finished' | 'process-exit') => void
-  onCommandFinishedUnavailable?: () => void
-  onVisibleForegroundSettled?: (outcome: 'agent' | 'shell' | 'inconclusive') => void
-}
 
 /**
  * Publishes process-table identity for a pane at OSC 133 command boundaries:
@@ -61,6 +28,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   hasReadInFlight: () => boolean
   onVisiblePtyBound: (expectsAgent?: boolean) => boolean
   onCommandStarted: (expectedAgent?: TerminalAgent | null) => void
+  onAgentStartupObserved: () => void
   /** True when pane identity must remain visible until an async shell confirmation. */
   onCommandFinished: () => boolean
   /** The process monitor confirmed this agent exited (no agent, no children, settled). */
@@ -80,6 +48,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   // cannot remove the identity that authorizes the bounded retry ladder.
   let hasKnownAgentEvidence = false
   let hasAgentExpectation = false
+  let startupSampled = false
   const readProcess = createPaneForegroundProcessReader(deps)
   const clearAgentEvidence = (): void => {
     hasForegroundAgentEvidence = false
@@ -300,6 +269,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       return true
     },
     onCommandStarted(expectedAgent = null) {
+      startupSampled = false
       const hadReadBeforeCommandStart = hasPendingRead()
       cancelPendingRead()
       const ptyId = trackablePtyId()
@@ -321,7 +291,24 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       }
       scheduleRead(FOREGROUND_COMMAND_READS.settleMs, 0, 'command')
     },
+    onAgentStartupObserved() {
+      if (
+        disposed ||
+        startupSampled ||
+        hasForegroundAgentEvidence ||
+        hasPendingRead() ||
+        !trackablePtyId()
+      ) {
+        return
+      }
+      // A late startup title requests one bounded confirmation; it never supplies identity.
+      startupSampled = true
+      cancelPendingRead()
+      hasAgentExpectation = true
+      scheduleRead(FOREGROUND_COMMAND_READS.settleMs, 0, 'command')
+    },
     onCommandFinished() {
+      startupSampled = false
       if (deps.hasKnownAgentIdentity?.() === true) {
         hasKnownAgentEvidence = true
       }
@@ -370,6 +357,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       const hadVisibleRead = hasPendingRead()
       cancelPendingRead()
       clearAgentEvidence()
+      startupSampled = false
       // Why not shellForeground: a pane without command marks gets no command start to lift that
       // latch, so it would block the Enter sample that identifies the next agent typed there.
       deps.publish({ agent: null, shellForeground: false })

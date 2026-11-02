@@ -14,7 +14,7 @@ import {
   getSettingsFocusedExecutionHostId
 } from '../../../../shared/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
-import { getPinnedWorktreeDisplayPolicy } from './worktree-list/grouping/row-types'
+import { getPinnedWorktreeDisplayPolicy } from '../../../../shared/sidebar-list/row-types'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list/listing/review-cache-inputs'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { SidebarWorktreeListDialogs } from './worktree-list/rows/ProjectGroupDialogs'
@@ -24,7 +24,6 @@ import { markSidebarWorktreeActiveImmediately } from './worktree-list/rows/optio
 import { EMPTY_PROJECT_GROUPS } from './worktree-list/viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from './worktree-list/drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './worktree-list/listing/use-agent-send-target'
-import { useEffectiveCollapsedGroups } from './worktree-list/listing/use-collapsed-groups'
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'
 import { useSidebarExternalWorktreeCards } from './worktree-list/listing/use-external-worktree-cards'
 import { useSidebarHostVisibleScope } from './worktree-list/listing/use-host-visible-scope'
@@ -33,6 +32,7 @@ import { useSidebarSectionRows } from './worktree-list/listing/use-section-rows'
 import { useSidebarWorktreeFilters } from './worktree-list/listing/use-filters'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
 import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-order'
+import { useOrderHeldWhileEngaged } from './worktree-list/listing/use-order-hold'
 import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
@@ -108,7 +108,10 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
     useSidebarWorktreeFilters()
-  const sortedIds = useSidebarWorktreeSortOrder({ repoMap, sortBy })
+  const sortedIds = useOrderHeldWhileEngaged(
+    useSidebarWorktreeSortOrder({ repoMap, sortBy }),
+    sortBy
+  )
   const manualOrderCatalog = useMemo(
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
@@ -121,26 +124,6 @@ const WorktreeList = React.memo(function WorktreeList({
     worktreeLineageById,
     defaultHostId,
     agentSendTargetWorktreeId
-  })
-  const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
-    hostScopedGroups:
-      filterState.workspaceHostScope !== 'all' || filterState.visibleWorkspaceHostIds !== null,
-    collapsedGroups,
-    agentSendTargetWorktreeId,
-    groupBy,
-    pinnedDisplayPolicy,
-    worktrees: allWorktrees,
-    visibleWorktrees,
-    repoMap,
-    worktreeMap,
-    worktreeLineageById,
-    prCache,
-    workspaceStatuses,
-    settings,
-    projectGroups,
-    projectGrouping,
-    folderWorkspaces,
-    defaultHostId
   })
   const visibleScope = useSidebarHostVisibleScope({
     filterState,
@@ -169,7 +152,8 @@ const WorktreeList = React.memo(function WorktreeList({
     prCache,
     settings,
     workspaceStatuses,
-    effectiveCollapsedGroups,
+    effectiveCollapsedGroups: collapsedGroups,
+    agentSendTargetWorktreeId,
     projectGrouping,
     visibleReposForRows: visibleScope.visibleReposForRows,
     visibleProjectGroupsForRows: visibleScope.visibleProjectGroupsForRows,
@@ -180,6 +164,7 @@ const WorktreeList = React.memo(function WorktreeList({
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
     workspaceHostScope: filterState.workspaceHostScope
   })
+  const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
@@ -289,6 +274,7 @@ const WorktreeList = React.memo(function WorktreeList({
         // Why: status headers move during wake (inactive -> active); key only on grouping mode so row identity survives.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}
+        occurrencePlan={rowModel.occurrencePlan}
         // Why: full-page nav views aren't scoped to a worktree, so no sidebar card should look selected.
         activeWorktreeId={
           activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
@@ -345,6 +331,7 @@ const WorktreeList = React.memo(function WorktreeList({
         workspaceStatuses={workspaceStatuses}
         projectGrouping={projectGrouping}
         projectGroups={projectGroups}
+        visibleProjectGroups={visibleScope.visibleProjectGroupsForRows}
         onMoveWorktreeToStatus={statusMutations.moveWorktreeToStatus}
         onMoveWorktreesToStatus={statusMutations.moveWorktreesToStatus}
         onMoveWorktreesToStatusAtIndex={statusMutations.moveWorktreesToStatusAtIndex}

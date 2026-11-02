@@ -1,17 +1,17 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
+import { getLogicalRepoOrderRankById } from '../../../../shared/project-section-order'
 
 import {
   applyAllRepoInsertAt,
   computeProjectHeaderDropPreview,
-  getLogicalRepoOrderRankById,
   getProjectGroupOrderForSidebarDrop,
   getProjectHeaderDragBucketKey,
   getSidebarOrderedRepoHeaderIdsByBucket,
   mapSidebarProjectHeaderDropIndexToSiblingInsertIndex,
   mapSidebarRepoDropIndexToAllRepoInsertAt
 } from './project-header-drop'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 describe('getProjectHeaderDragBucketKey', () => {
@@ -32,7 +32,6 @@ describe('getSidebarOrderedRepoHeaderIdsByBucket', () => {
         key: 'repo:a',
         label: 'A',
         count: 1,
-        tone: 'tone',
         repo: { id: 'a', projectGroupId: 'group-a' }
       },
       {
@@ -40,7 +39,6 @@ describe('getSidebarOrderedRepoHeaderIdsByBucket', () => {
         key: 'repo:b',
         label: 'B',
         count: 1,
-        tone: 'tone',
         repo: { id: 'b' }
       }
     ] as Row[]

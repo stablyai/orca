@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import { prChecksCacheSuffix, prCommentsCacheSuffix } from '../github/cache-identity'
 import {
   createTestStore,
@@ -227,6 +228,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     mockApi.gh.prChecks.mockResolvedValue([
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
+    persistGitHubCacheChanges(store)
 
     await store
       .getState()
@@ -266,6 +268,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       }
     })
 
+    persistGitHubCacheChanges(store)
     await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
     await vi.advanceTimersByTimeAsync(1000)
 

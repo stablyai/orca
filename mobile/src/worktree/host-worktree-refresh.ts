@@ -11,12 +11,15 @@ type HostWorktreeRefreshArgs = {
   client: RpcClient
   fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
+  /** Re-reads the Workspace options the phone shares with the desktop. */
+  syncViewSettings: () => Promise<void>
 }
 
 export function startHostWorktreeRefresh({
   client,
   fetchWorktrees,
-  fetchRepoMetadata
+  fetchRepoMetadata,
+  syncViewSettings
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   let eventStreamReady = false
@@ -61,6 +64,7 @@ export function startHostWorktreeRefresh({
           // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
           void fetchWorktrees()
           void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+          void syncViewSettings()
         }
         return
       }
@@ -72,8 +76,13 @@ export function startHostWorktreeRefresh({
         // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
         void fetchWorktrees()
         void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+      } else if (event.type === 'workspaceViewChanged') {
+        void syncViewSettings()
       } else if (event.type === 'worktreesChanged') {
         void fetchWorktrees()
+      } else if (event.type === 'sshStateChanged') {
+        // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
+        void fetchRepoMetadata({ force: true, queueIfInFlight: true })
       }
     }
   )

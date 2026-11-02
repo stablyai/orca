@@ -44,12 +44,19 @@ export function RetainedPaneHost({
   // Why: a hidden host renders display:none, so it has no use for group geometry until shown.
   const measuresFallbackRect =
     groupId !== undefined && !shouldUseCssAnchorPositioning() && (isVisible || measureWhileHidden)
+  // Why: a child pane creates and fits xterm in its own layout effect, which runs before this
+  // host's; mounting it before the first read would fit at the placeholder box, then refit.
+  const [awaitsFirstFallbackRect, setAwaitsFirstFallbackRect] = useState(measuresFallbackRect)
   useLayoutEffect(() => {
     const container = overlayRef.current?.parentElement
     if (!measuresFallbackRect || groupId === undefined || !container) {
+      setAwaitsFirstFallbackRect(false)
       return
     }
-    return subscribeTabGroupBodyRect(groupId, container, setMeasuredFallbackRect)
+    return subscribeTabGroupBodyRect(groupId, container, (rect) => {
+      setMeasuredFallbackRect(rect)
+      setAwaitsFirstFallbackRect(false)
+    })
   }, [groupId, measuresFallbackRect])
 
   useLayoutEffect(() => {
@@ -145,7 +152,7 @@ export function RetainedPaneHost({
       onPointerDown={focusGroup}
       onFocusCapture={focusGroup}
     >
-      {children}
+      {awaitsFirstFallbackRect ? null : children}
     </div>
   )
 }

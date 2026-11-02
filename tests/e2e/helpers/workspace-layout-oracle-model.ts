@@ -1,22 +1,30 @@
 /**
  * The workspace tab layout reduced to what every view must agree on: groups and their tab order,
- * terminal tabs, their panes in tree order, which terminal each pane shows, and custom titles.
- * Per-viewer state (selection, focus, sizes, scroll) is left out on purpose.
+ * every tab of every kind, terminal tabs' panes in tree order, which terminal each pane shows, and
+ * custom titles. Per-viewer state (selection, focus, sizes, scroll) is left out on purpose.
  */
 
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { TerminalPaneLayoutNode } from '../../../src/shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../src/shared/workspace-session-state-types'
 import {
   checkWorkspaceLayoutRules,
   type WorkspaceLayoutPartition,
   type WorkspaceLayoutViolation
-} from '../../../src/main/persistence/terminal-topology/workspace-layout-rules'
+} from '../../../src/shared/workspace-layout/workspace-layout-rules'
+import { checkWorkspaceLayoutModelRules } from '../../../src/shared/workspace-layout/workspace-layout-model-rules'
+import type { LiveWorkspace } from './workspace-layout-oracle-feed'
 
 export type OraclePane = { leafId: string; ptyId: string | null }
+export type OracleTab = { id: string; kind: string; entityId: string; customTitle: string | null }
 export type OracleTerminalTab = { id: string; customTitle: string | null; panes: OraclePane[] }
 export type OracleGroup = { id: string; tabOrder: string[] }
-export type OracleWorktreeLayout = { groups: OracleGroup[]; terminalTabs: OracleTerminalTab[] }
+export type OracleWorktreeLayout = {
+  groups: OracleGroup[]
+  /** Every tab, all kinds, in the one tab order. */
+  tabs: OracleTab[]
+  /** In the one tab order. */
+  terminalTabs: OracleTerminalTab[]
+}
 /** Keyed by `${hostId}|${worktreeId}`. */
 export type OracleLayout = Record<string, OracleWorktreeLayout>
 
@@ -33,39 +41,39 @@ export function leafIdsInOrder(node: TerminalPaneLayoutNode | null | undefined):
     : [...leafIdsInOrder(node.first), ...leafIdsInOrder(node.second)]
 }
 
-function worktreeLayout(session: WorkspaceSessionState, worktreeId: string): OracleWorktreeLayout {
+function worktreeLayout({ layout }: LiveWorkspace): OracleWorktreeLayout {
   return {
-    groups: (session.tabGroups?.[worktreeId] ?? []).map((group) => ({
-      id: group.id,
-      tabOrder: [...group.tabOrder]
+    groups: layout.groups.map((group) => ({ id: group.id, tabOrder: [...group.tabIds] })),
+    tabs: layout.tabs.map((tab) => ({
+      id: tab.id,
+      kind: tab.kind,
+      entityId: tab.entityId,
+      customTitle: tab.customTitle
     })),
-    terminalTabs: (session.tabsByWorktree[worktreeId] ?? []).map((tab) => {
-      const layout = session.terminalLayoutsByTabId[tab.id]
-      return {
-        id: tab.id,
-        customTitle: tab.customTitle ?? null,
-        panes: leafIdsInOrder(layout?.root).map((leafId) => ({
-          leafId,
-          ptyId: layout?.ptyIdsByLeafId?.[leafId] ?? null
-        }))
-      }
-    })
+    terminalTabs: layout.tabs.flatMap((tab) =>
+      tab.terminal
+        ? [
+            {
+              id: tab.id,
+              customTitle: tab.customTitle,
+              panes: tab.terminal.panes.map((pane) => ({
+                leafId: pane.leafId,
+                ptyId: pane.ptyId ?? null
+              }))
+            }
+          ]
+        : []
+    )
   }
 }
 
-/** Every worktree with any tab or group, across the runtime's partitions. */
-export function toOracleLayout(partitions: readonly WorkspaceLayoutPartition[]): OracleLayout {
+/** Every workspace with any tab or group in the runtime's live layout. */
+export function toOracleLayout(entries: readonly LiveWorkspace[]): OracleLayout {
   const layout: OracleLayout = {}
-  for (const { hostId, session } of partitions) {
-    const worktreeIds = new Set([
-      ...Object.keys(session.tabsByWorktree ?? {}),
-      ...Object.keys(session.tabGroups ?? {})
-    ])
-    for (const worktreeId of worktreeIds) {
-      const entry = worktreeLayout(session, worktreeId)
-      if (entry.terminalTabs.length > 0 || entry.groups.some((group) => group.tabOrder.length)) {
-        layout[oracleWorktreeKey(hostId, worktreeId)] = entry
-      }
+  for (const entry of entries) {
+    const worktree = worktreeLayout(entry)
+    if (worktree.tabs.length > 0 || worktree.groups.some((group) => group.tabOrder.length)) {
+      layout[oracleWorktreeKey(entry.hostId, entry.layout.worktreeId)] = worktree
     }
   }
   return layout
@@ -75,7 +83,12 @@ export function formatViolations(violations: readonly WorkspaceLayoutViolation[]
   return violations.map((violation) => `${violation.rule}: ${violation.detail}`)
 }
 
-export { checkWorkspaceLayoutRules, type WorkspaceLayoutPartition, type WorkspaceLayoutViolation }
+export {
+  checkWorkspaceLayoutModelRules,
+  checkWorkspaceLayoutRules,
+  type WorkspaceLayoutPartition,
+  type WorkspaceLayoutViolation
+}
 
 /** One line per difference between two layouts; `maskPtyIds` compares bound/unbound only. */
 export function diffOracleLayouts(
@@ -96,10 +109,20 @@ export function diffOracleLayouts(
     }
     const groups = (layout: OracleWorktreeLayout): string =>
       JSON.stringify(layout.groups.map((group) => [group.id, group.tabOrder]))
+    // Tab order is compared through the groups; the tab lists below are sorted.
     if (groups(want) !== groups(got)) {
       differences.push(`${key}: groups ${groups(want)} vs ${label} ${groups(got)}`)
     }
-    // Row order is not drawn anywhere; the rules check owns it (one tab order).
+    const contents = (layout: OracleWorktreeLayout): string =>
+      JSON.stringify(
+        layout.tabs
+          .filter((tab) => tab.kind !== 'terminal')
+          .toSorted((a, b) => a.id.localeCompare(b.id))
+          .map((tab) => [tab.id, tab.kind, tab.entityId, tab.customTitle])
+      )
+    if (contents(want) !== contents(got)) {
+      differences.push(`${key}: other tabs ${contents(want)} vs ${label} ${contents(got)}`)
+    }
     const tabs = (layout: OracleWorktreeLayout): string =>
       JSON.stringify(
         layout.terminalTabs

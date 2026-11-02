@@ -1,5 +1,6 @@
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
 import type {
@@ -72,6 +73,12 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
       )
     }
   }
+  if (
+    clientKind !== undefined &&
+    !clientCapabilities?.includes(AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY)
+  ) {
+    projected = projectRestoredAgentStatusAsLegacyDone(projected)
+  }
   // Why: only paired runtimes have legacy `done` completion side effects; mobile must keep its row without changing the exact v2 auth shape.
   if (
     clientKind !== 'runtime' ||
@@ -90,6 +97,23 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
     return legacyTab
   })
   return changed ? ({ ...projected, tabs } as TPayload) : projected
+}
+
+/** What hosts published for a restored turn before clients could read it as unverifiable. */
+function projectRestoredAgentStatusAsLegacyDone<TPayload extends SessionTabsPayload>(
+  payload: TPayload
+): TPayload {
+  let changed = false
+  const tabs = payload.tabs.map((tab) => {
+    if (tab.type !== 'terminal' || tab.agentStatus?.restoredUnconfirmed !== true) {
+      return tab
+    }
+    changed = true
+    const { restoredUnconfirmed: _restored, ...legacyStatus } = tab.agentStatus
+    return { ...tab, agentStatus: { ...legacyStatus, state: 'done' as const, prompt: '' } }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only terminal tabs' agentStatus changed; every other TPayload field is spread through unchanged.
+  return changed ? ({ ...payload, tabs } as TPayload) : payload
 }
 
 function projectUnsupportedAgentSessionTabTitles<TPayload extends SessionTabsPayload>(

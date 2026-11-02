@@ -1,6 +1,11 @@
 import { basename } from 'node:path'
-import { stat } from 'node:fs/promises'
+import { readJsonlFileSnapshot, type JsonlFileSnapshot } from '../usage/jsonl-file-snapshot'
 import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
+import {
+  openJsonlFileReader,
+  validateJsonlFileReader,
+  jsonlPhysicalFileId
+} from '../usage/jsonl-file-checkpoint'
 import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
 import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import { parseCodexUsageRecord, type CodexUsageParseContext } from './codex-usage-record-parser'
@@ -10,7 +15,6 @@ import {
   resolveCodexRolloutResume
 } from './codex-rollout-resume-state'
 import type {
-  CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
   CodexUsageParseResumeState,
   CodexUsagePersistedFile,
@@ -24,17 +28,24 @@ const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregat
 export type CodexRolloutParseOptions = {
   /** Suffix-only parse for a diverged legacy copied-session bridge. */
   legacySourceSkipBytes?: number
-  claimEventKey?: (eventKey: string) => boolean
+  canClaimEventKey?: (eventKey: string) => boolean
+  commitEventKey?: (eventKey: string) => void
   /** Resume point verified by the caller, with the cached projection to extend. */
   resume?: { state: CodexUsageParseResumeState; previous: CodexUsagePersistedFile }
 }
 
 export async function getProcessedFileInfo(filePath: string): Promise<CodexUsageProcessedFile> {
-  const fileStat = await stat(filePath)
+  const fileStat = await readJsonlFileSnapshot(filePath)
+  return processedFileInfo(filePath, fileStat)
+}
+
+function processedFileInfo(filePath: string, fileStat: JsonlFileSnapshot): CodexUsageProcessedFile {
   return {
     path: filePath,
     mtimeMs: fileStat.mtimeMs,
-    size: fileStat.size
+    size: fileStat.size,
+    ctimeMs: fileStat.ctimeMs,
+    physicalFileId: jsonlPhysicalFileId(fileStat)
   }
 }
 
@@ -86,106 +97,104 @@ export async function parseCodexUsageFile(
   resolveWorktree: UsageWorktreeResolver,
   options: CodexRolloutParseOptions = {}
 ): Promise<CodexUsagePersistedFile> {
-  // Why: the caller verified this resume point while walking the directory, and
-  // every file discovered or parsed since then has run in between. Re-verify
-  // here, against the file about to be read, or a rollout replaced in that gap
-  // gets the cached session id, cwd, model and running totals stitched onto an
-  // unrelated file's records — and `processedFile` below re-stats to the new
-  // size, so the reuse path then freezes the corrupted projection.
-  if (
-    options.resume &&
-    (await resolveCodexRolloutResume(filePath, options.resume.previous)) === null
-  ) {
-    return parseCodexUsageFile(filePath, resolveWorktree, { ...options, resume: undefined })
-  }
+  let parseOptions = options
+  for (;;) {
+    const reader = await openJsonlFileReader(filePath)
+    try {
+      // Verification, parsing and checkpointing must all read the same opened file.
+      if (
+        parseOptions.resume &&
+        (await resolveCodexRolloutResume(filePath, parseOptions.resume.previous, reader)) === null
+      ) {
+        parseOptions = { ...parseOptions, resume: undefined }
+        continue
+      }
 
-  const processedFile = await getProcessedFileInfo(filePath)
-  const legacySourceSkipBytes = options.legacySourceSkipBytes ?? 0
-  const startOffset = options.resume?.state.parsedBytes ?? legacySourceSkipBytes
-  const context = createParseContext(filePath, options)
+      const legacySourceSkipBytes = parseOptions.legacySourceSkipBytes ?? 0
+      const startOffset = parseOptions.resume?.state.parsedBytes ?? legacySourceSkipBytes
+      const context = createParseContext(filePath, parseOptions)
+      const accumulator = codexUsageAggregation.createAccumulator()
+      const ownedEventKeys = new Set<string>()
+      let hasDeferredClaims = false
+      let parsedBytes = startOffset
+      let resumeContext = context
+      let partialTailProducedEvent = false
 
-  const events: CodexUsageAttributedEvent[] = []
-  const ownedEventKeys = new Set<string>()
-  let hasDeferredClaims = false
-  let parsedBytes = startOffset
-  // Points at the context as of `parsedBytes`, which excludes a partial tail.
-  let resumeContext = context
-  let partialTailProducedEvent = false
-
-  for await (const { line, endOffset, terminated } of readJsonlLinesFromOffset(
-    filePath,
-    startOffset
-  )) {
-    if (!terminated) {
-      // Only the final fragment can be unterminated, and the next scan re-reads
-      // it, so its context edits must not leak into the persisted resume point.
-      resumeContext = { ...context }
-    }
-    const parsed = parseCodexUsageRecord(line, context)
-    if (terminated) {
-      parsedBytes = endOffset
-    } else if (parsed) {
-      partialTailProducedEvent = true
-    }
-    if (!parsed) {
-      continue
-    }
-    // Why: fork/resume rollouts start with a copied prefix of the parent file.
-    // Events another file already owns are dropped here, but the record still
-    // advanced context.previousTotals above, so later deltas stay correct.
-    if (options.claimEventKey && !options.claimEventKey(parsed.eventKey)) {
-      hasDeferredClaims = true
-      continue
-    }
-    ownedEventKeys.add(parsed.eventKey)
-    const attributed = await attributeCodexUsageEvent(parsed, resolveWorktree)
-    if (attributed) {
-      events.push(attributed)
-    }
-  }
-
-  // A counted-but-unterminated tail would be counted again on resume, and a
-  // legacy suffix offset is recomputed per scan, so neither may be resumed. A
-  // prefix under the resumable floor is turned away by the builder itself.
-  const resumeStateSuppressed = partialTailProducedEvent || legacySourceSkipBytes > 0
-  const parseResumeState = resumeStateSuppressed
-    ? null
-    : await buildCodexRolloutResumeState(
+      for await (const { line, endOffset, terminated } of readJsonlLinesFromOffset(
         filePath,
-        parsedBytes,
-        resumeContext,
-        // Already verified against the file at the top of this scan.
-        options.resume?.state.headDigest ?? null
-      )
+        startOffset,
+        reader
+      )) {
+        if (!terminated) {
+          // The next scan rereads this tail, including its context changes.
+          resumeContext = { ...context }
+        }
+        const parsed = parseCodexUsageRecord(line, context)
+        if (terminated) {
+          parsedBytes = endOffset
+        } else if (parsed) {
+          partialTailProducedEvent = true
+        }
+        if (!parsed) {
+          continue
+        }
+        // Deferred records still advance cumulative totals without retaining their copies.
+        if (parseOptions.canClaimEventKey && !parseOptions.canClaimEventKey(parsed.eventKey)) {
+          hasDeferredClaims = true
+          continue
+        }
+        ownedEventKeys.add(parsed.eventKey)
+        const attributed = await attributeCodexUsageEvent(parsed, resolveWorktree)
+        if (attributed) {
+          accumulator.add(attributed)
+        }
+      }
 
-  // Why: a resume point only exists past the resumable floor and `parsedBytes`
-  // only grows, so the builder's other null — a prefix too short to be worth
-  // resuming — is unreachable here and this null means a short read: the file
-  // shrank past the prefix this parse merged history for, after the
-  // re-verification above and during the read. `processedFile` already re-stat'd
-  // to the smaller size, so persisting that pair would let the next scan reuse a
-  // pre-truncation total forever. An unterminated tail proves the file still
-  // runs past the resume offset, so it cannot be this case.
-  if (options.resume && !resumeStateSuppressed && parseResumeState === null) {
-    return parseCodexUsageFile(filePath, resolveWorktree, { ...options, resume: undefined })
-  }
+      // A counted unterminated row would be counted again from the committed offset.
+      const resumeStateSuppressed = partialTailProducedEvent || legacySourceSkipBytes > 0
+      const parseResumeState = resumeStateSuppressed
+        ? null
+        : await buildCodexRolloutResumeState(
+            filePath,
+            parsedBytes,
+            resumeContext,
+            parseOptions.resume?.state.headDigest ?? null,
+            reader
+          )
 
-  const appended = codexUsageAggregation.aggregate(events)
-  const previous = options.resume?.previous
-  if (!previous) {
-    return {
-      ...processedFile,
-      ...appended,
-      ownedEventKeys: [...ownedEventKeys],
-      hasDeferredClaims,
-      parseResumeState
+      if (
+        !(await validateJsonlFileReader(reader, parseOptions.resume?.state)) ||
+        (parseOptions.resume && !resumeStateSuppressed && parseResumeState === null)
+      ) {
+        parseOptions = { ...parseOptions, resume: undefined }
+        continue
+      }
+
+      await reader.handle.close()
+
+      // Discarded reads cannot claim keys that would hide records in another file.
+      for (const eventKey of ownedEventKeys) {
+        parseOptions.commitEventKey?.(eventKey)
+      }
+
+      const processedFile = processedFileInfo(filePath, reader.stats)
+      const appended = accumulator.finalize()
+      const previous = parseOptions.resume?.previous
+      const committedKeys = previous ? new Set(previous.ownedEventKeys) : ownedEventKeys
+      if (previous) {
+        for (const key of ownedEventKeys) {
+          committedKeys.add(key)
+        }
+      }
+      return {
+        ...processedFile,
+        ...(previous ? mergeRolloutProjections(previous, appended) : appended),
+        ownedEventKeys: [...committedKeys],
+        hasDeferredClaims: previous?.hasDeferredClaims || hasDeferredClaims,
+        parseResumeState
+      }
+    } finally {
+      await reader.handle.close()
     }
-  }
-  return {
-    ...processedFile,
-    ...mergeRolloutProjections(previous, appended),
-    ownedEventKeys: [...new Set([...previous.ownedEventKeys, ...ownedEventKeys])],
-    hasDeferredClaims: previous.hasDeferredClaims || hasDeferredClaims,
-    parseResumeState
   }
 }

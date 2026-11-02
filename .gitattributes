@@ -19,7 +19,6 @@
 # .version, which names the immutable remote install dir. A CRLF checkout makes a
 # Windows-built client disagree with a mac/Linux-built one on the same release,
 # so one host ends up with two relay trees (#17886 review).
-/config/relay-assets/** text eol=lf
 # Pin the bytes so a patch reads and diffs identically on every host. It is NOT
 # what makes the hash right: pnpm hashes a patch LF-normalized, so a CRLF checkout
 # cannot change it. Believing otherwise put a hand-computed raw digest in the
@@ -47,6 +46,7 @@
 # normalisation on a Windows checkout would rewrite the evidence the fixture exists to be.
 /src/main/runtime/__fixtures__/*.txt -text
 /src/main/daemon/__fixtures__/pty-transcripts/*.txt -text
+/src/renderer/src/components/terminal-pane/terminal-link-transcripts/*.txt -text whitespace=cr-at-eol
 # Generated runtime English subset: compared byte-for-byte by
 # verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf

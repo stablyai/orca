@@ -33,7 +33,6 @@ function models(...ids: string[]): AgentSessionModelOption[] {
 function success(...ids: string[]): AgentModelCatalogSuccess {
   return {
     models: models(...ids),
-    fastModeTierByModel: new Map([[ids[0]!, 'fast-tier']]),
     origin: 'live-session'
   }
 }
@@ -65,7 +64,6 @@ describe('agent model catalog store', () => {
         'codex',
         {
           models: [],
-          fastModeTierByModel: new Map(),
           origin: 'live-session'
         },
         'discovery'
@@ -360,7 +358,6 @@ describe('agent model catalog store', () => {
           ...(defaultEffort ? { defaultEffort } : {})
         }
       ],
-      fastModeTierByModel: new Map(),
       origin: 'live-session'
     })
     store.recordSuccess('fp', 'claude', listing('medium'), 'live')
@@ -442,10 +439,31 @@ describe('agent model catalog store', () => {
     await restarted.attachPersistence(createAgentModelCatalogFilePersistence(directory))
     const entry = restarted.get('fp-1')!
     expect(entry.models.map((model) => model.id)).toEqual(['gpt-a'])
-    expect(entry.fastModeTierByModel).toEqual({ 'gpt-a': 'fast-tier' })
     // The failure died with the process: doubt is never a durable fact.
     expect(restarted.hasActiveFailure('fp-2')).toBe(false)
     expect(restarted.get('fp-2')).toBeNull()
+  })
+
+  it('keeps a model’s service tiers across a restart', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
+    const store = new AgentModelCatalogStore()
+    await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+    const serviceTiers = [
+      { value: 'priority', label: 'Fast', description: '2x speed' },
+      { value: 'ultrafast', label: 'Ultrafast' }
+    ]
+    store.recordSuccess(
+      'fp-tiers',
+      'codex',
+      {
+        models: [{ id: 'gpt-a', label: 'A', isDefault: true, efforts: [], serviceTiers }],
+        origin: 'probe'
+      },
+      'discovery'
+    )
+    await store.flushPersistence()
+    const [saved] = await createAgentModelCatalogFilePersistence(directory).load()
+    expect(saved?.models[0]?.serviceTiers).toEqual(serviceTiers)
   })
 
   it('writes a coalesced save at once when flushed', async () => {

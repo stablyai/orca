@@ -228,6 +228,19 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
   })
 
+  it('names the conversation it resumes so the host can show it before the first turn', () => {
+    const codex = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'darwin'
+    })
+    expect(codex.resumeProviderSession).toEqual({ key: 'session_id', id: 'codex-1' })
+    const omp = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'omp', sessionId: 'omp-1', filePath: '/custom/omp/s.jsonl' }),
+      hostPlatform: 'linux'
+    })
+    expect(omp.resumeProviderSession).toEqual({ key: 'session_id', id: 'omp-1' })
+  })
+
   it('keeps managed-home Codex resumes free of env deletion', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({
@@ -368,6 +381,32 @@ describe('resumeAiVaultSessionInTerminal', () => {
         text: 'claude --resume abc',
         enter: true
       },
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+  })
+
+  it('tells the host which conversation the created pane resumes', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
+      })
+      .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      hostPlatform: 'darwin'
+    })
+
+    await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch)
+
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      1,
+      'session.tabs.createTerminal',
+      expect.objectContaining({
+        launchAgent: 'codex',
+        resumeProviderSession: { key: 'session_id', id: 'codex-1' }
+      }),
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
     )
   })

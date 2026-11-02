@@ -17,7 +17,9 @@ export type OrphanedDaemonCleanupResult = {
 
 export async function cleanupDaemonForProtocol(
   runtimeDir: string,
-  protocolVersion: number
+  protocolVersion: number,
+  /** When set, stop only if the authenticated endpoint owner is this pid; never fall back to a pid kill. */
+  expectedOwnerPid?: number
 ): Promise<OrphanedDaemonCleanupResult> {
   const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
   const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
@@ -43,6 +45,11 @@ export async function cleanupDaemonForProtocol(
   let didKillStaleDaemon = false
   try {
     await client.ensureConnected()
+    if (expectedOwnerPid !== undefined && client.getDaemonIdentity()?.pid !== expectedOwnerPid) {
+      throw new DaemonEndpointOwnershipError(
+        'Daemon cleanup aborted: the endpoint is owned by a different daemon than expected'
+      )
+    }
     const sessions = await client
       .request<ListSessionsResult>('listSessions', undefined)
       .catch(() => ({ sessions: [] }))
@@ -53,7 +60,15 @@ export async function cleanupDaemonForProtocol(
       // Daemon exits immediately after the RPC, so the socket may close before the reply arrives; treat as success.
     })
     didRequestShutdown = true
-  } catch {
+  } catch (error) {
+    if (expectedOwnerPid !== undefined) {
+      // A targeted stop never kills by pid: the owner it would find may be a replacement.
+      throw error instanceof DaemonEndpointOwnershipError
+        ? error
+        : new DaemonEndpointOwnershipError(
+            'Daemon cleanup aborted: the expected daemon could not be verified'
+          )
+    }
     // Previous-protocol daemons may be wedged or too old for the RPC path; fall back to PID cleanup (only unlinks a live socket after proving the process is killed).
     const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
     didKillStaleDaemon = killOutcome.killed

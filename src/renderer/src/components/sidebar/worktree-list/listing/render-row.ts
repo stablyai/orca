@@ -1,4 +1,4 @@
-import type { HostSectionRow } from '../../host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
 
 type WorktreeItemRow = Extract<HostSectionRow, { type: 'item' }>

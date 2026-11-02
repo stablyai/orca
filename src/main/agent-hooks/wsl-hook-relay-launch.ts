@@ -17,7 +17,6 @@ import {
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
-import { listRunningWslDistrosAsync } from '../wsl'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
   WSL_HOOK_RELAY_DIR,
@@ -127,20 +126,6 @@ export function spawnWslRelayProcess(
     // worktree the user can delete, which kills every later relay launch.
     cwd: resolveWslInteropSpawnCwd()
   })
-}
-
-/** True when the distro shows in `wsl --list --running`. Listing does NOT
- *  boot anything — unlike `wsl -d`, which starts a stopped distro. The
- *  restart timer must check this so relay recovery never resurrects a VM the
- *  user shut down with `wsl --shutdown`. Fails CLOSED (false) on probe
- *  errors: booting a VM the user shut down is worse than a skipped restart
- *  (the next WSL PTY spawn re-ensures), and a wsl.exe too wedged to list
- *  distros would not have launched the relay anyway. */
-export function isWslDistroRunning(distro: string): Promise<boolean> {
-  const wanted = distro.trim().toLowerCase()
-  return listRunningWslDistrosAsync().then((running) =>
-    running.some((candidate) => candidate.toLowerCase() === wanted)
-  )
 }
 
 export async function runWslInstallProcess(

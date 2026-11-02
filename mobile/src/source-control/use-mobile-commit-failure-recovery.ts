@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import { useHostProtocolGates } from '../components/HostProtocolGate'
+import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { launchAgentWithPrompt, promptedLaunchNotice } from '../session/pr-ai-triage-launch'
 import { resolveMobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
 import {

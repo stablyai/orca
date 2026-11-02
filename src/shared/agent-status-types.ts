@@ -261,6 +261,7 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 // Re-exported here because every consumer reaches for the entry type and its freshness gate
 // together; the clock rules themselves live in agent-status-freshness.ts.
 export {
+  AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt,
   agentStatusEvidenceObservedAt,

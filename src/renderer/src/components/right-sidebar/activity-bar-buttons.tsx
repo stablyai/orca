@@ -23,7 +23,7 @@ export type ActivityBarItem = {
   gitOnly?: boolean
   /** When true, shown only for folder workspaces. */
   folderOnly?: boolean
-  /** When true, shown only for worktrees that belong to an SSH repo. */
+  /** When true, shown only for workspaces on an SSH host. */
   sshOnly?: boolean
   /** Host-owned health indicator; plugin content cannot style this chrome. */
   statusIndicator?: CheckStatus

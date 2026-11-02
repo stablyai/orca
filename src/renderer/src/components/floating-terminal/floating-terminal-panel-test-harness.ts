@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import type { Mock } from 'vitest'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { clearFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
@@ -198,7 +199,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
 
 // Why: the panel's per-test environment (hook runtime, store, stubbed globals and module
 // singletons) is identical across every FloatingTerminalPanel behavior area.
-export async function setupFloatingTerminalPanelTest(): Promise<void> {
+export function setupFloatingTerminalPanelTest(): void {
   vi.clearAllMocks()
   hookRuntime.effects = []
   hookRuntime.layoutEffects = []
@@ -213,10 +214,8 @@ export async function setupFloatingTerminalPanelTest(): Promise<void> {
   // Why: the reclaim intent is also a module singleton; clear it so one test's
   // armed-but-unconsumed intent cannot trigger a reclaim in the next.
   clearFloatingPanelReclaimIntent()
-  // Why: the focus-report dedupe cache is module state keyed on the setFloatingFocus
-  // mock identity; reset it so a prior test's last-reported value can't suppress an IPC.
-  const { clearReportedFloatingFocusCache } = await import('./FloatingTerminalPanel')
-  clearReportedFloatingFocusCache()
+  mocks.setFloatingFocus = vi.fn()
+  vi.mocked(createUntitledMarkdownFileWithTemplateSelection).mockReset()
   mocks.createTab.mockReturnValue(makeTab({ id: 'created-tab' }))
   mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(false)
   mocks.createWebRuntimeSessionTerminal.mockResolvedValue(false)

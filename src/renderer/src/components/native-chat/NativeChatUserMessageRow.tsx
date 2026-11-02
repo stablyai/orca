@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from './NativeChatRewindAction'
@@ -86,9 +86,13 @@ export function NativeChatUserMessageRow({
   // Another agent's message is the agent's turn input too, but is not the person's: it reads
   // left-aligned under its sender rather than as their bubble.
   const from = message.from
+  const sending = deliveryNotice?.sending === true
   return (
     <div
       ref={rowRef}
+      // Read by the context menu: only rows showing the hover copy or rewind offer them there.
+      data-native-chat-message-id={markdown ? message.id : undefined}
+      data-native-chat-rewind-item={rewind && !sending ? message.id : undefined}
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
     >
       {from ? (
@@ -100,7 +104,7 @@ export function NativeChatUserMessageRow({
       {/* A distinct surface separates the user's prompt from the assistant's prose. */}
       <div
         className={cn(
-          'max-w-[80%] text-sm native-chat-message-text',
+          'max-w-[80%] text-sm',
           from
             ? 'select-text border-l-2 border-border/60 pl-3 text-chat-foreground'
             : 'rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-chat-foreground-strong'
@@ -119,9 +123,10 @@ export function NativeChatUserMessageRow({
               onRefolded={onRefolded}
             >
               <NativeChatMarkdown
+                rowKey={message.id}
                 content={markdown}
                 variant="document"
-                className="text-sm native-chat-message-text"
+                className="text-sm"
                 renderCodeBlock={NativeChatCodeBlock}
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
@@ -137,7 +142,7 @@ export function NativeChatUserMessageRow({
         )}
       </div>
       {message.sentAs === 'goal' ? (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1 text-xs text-chat-foreground-faint">
           <Goal className="size-3" aria-hidden />
           <span>{translate('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
         </div>
@@ -145,11 +150,11 @@ export function NativeChatUserMessageRow({
       <UserMessageMeta
         markdown={markdown}
         timestamp={message.timestamp}
-        sending={deliveryNotice?.sending === true}
+        sending={sending}
         {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}
       />
       {deliveryNotice?.text !== undefined ? (
-        <div className="flex max-w-[85%] items-center gap-2 text-[11px] text-destructive/80">
+        <div className="flex max-w-[85%] items-center gap-2 text-2xs text-destructive/80">
           <span className="min-w-0 break-words">{deliveryNotice.text}</span>
           {deliveryNotice.onDismiss ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>

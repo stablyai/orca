@@ -1,5 +1,5 @@
 import type { CrashReportDetailValue } from '../../shared/crash-reporting'
-import type { ProcessTreeKillScope } from '../../shared/child-process/process-tree-kill-gate'
+import type { ProcessTreeKillScope } from '@orca/process-host/process-tree-kill-gate'
 import { recordCoalescedDurableCrashBreadcrumb } from './durable-crash-breadcrumb'
 
 /**

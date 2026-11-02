@@ -12,6 +12,7 @@ import type {
 } from '../../../../shared/runtime-host-status'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { useAppStore } from '@/store'
 import { RuntimeServerRow } from './runtime-server-row'
 
@@ -62,13 +63,13 @@ function setEntry(entry: RuntimeEnvironmentStatus): void {
   useAppStore.setState({ runtimeStatusByEnvironmentId: new Map([[ENVIRONMENT_ID, entry]]) })
 }
 
-function renderRow(): void {
+function renderRow(remoteUpdate?: RemoteServerUpdateEntry): void {
   render(
     <RuntimeServerRow
       environment={environment}
       details={undefined}
       isActive={false}
-      remoteUpdate={undefined}
+      remoteUpdate={remoteUpdate}
       remoteServerUpdatesRunning={false}
       connecting={false}
       switching={false}
@@ -146,4 +147,40 @@ it('keeps the machine under the label once the host is unreachable', () => {
   })
   renderRow()
   expect(screen.queryByText('macOS · Studio')).not.toBeNull()
+})
+
+// A host that refused our token answered us, so the row must not also claim it is offline.
+it('tells one revoked story instead of a disconnected one', () => {
+  const status = { ...answeredStatus(), appVersion: '1.4.229' }
+  setEntry({
+    status: null,
+    checkedAt: 2,
+    snapshot: snapshot({
+      status,
+      verification: 'blocked',
+      blockedReason: 'access-revoked',
+      transport: 'disconnected'
+    })
+  })
+  renderRow({
+    environmentId: ENVIRONMENT_ID,
+    name: environment.name,
+    phase: 'offline',
+    currentVersion: null,
+    targetVersion: null,
+    progress: null,
+    runtimeId: null,
+    liveTabCount: 0,
+    liveLeafCount: 0,
+    support: null,
+    error: 'unauthorized'
+  })
+
+  expect(screen.queryByText('Access revoked')).not.toBeNull()
+  expect(screen.queryByText('Disconnected')).toBeNull()
+  expect(screen.queryByText('Status unavailable')).toBeNull()
+  expect(screen.queryByText('Offline')).toBeNull()
+  expect(screen.queryByText('Orca v1.4.229 (last seen)')).not.toBeNull()
+  expect(screen.queryByRole('button', { name: /re-pair/i })).not.toBeNull()
+  expect(screen.queryByRole('button', { name: /^connect$/i })).toBeNull()
 })

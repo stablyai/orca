@@ -40,3 +40,7 @@ export const sessionCreatedTerminalTabSchema = z
     })
   })
   .transform((reply) => reply.tab)
+
+export function createdTerminalDesktopWarning(raw: unknown): boolean {
+  return z.looseObject({ warning: z.literal('desktop-tab-not-shown') }).safeParse(raw).success
+}

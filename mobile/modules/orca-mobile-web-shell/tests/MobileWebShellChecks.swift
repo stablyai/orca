@@ -211,7 +211,7 @@ import Foundation
     precondition(directives.contains("style-src 'self' 'unsafe-inline'"))
     // A file preview is a `data:` URI; `https:` is the favicon, project icon and avatar the
     // page already renders, and the sealed preview frame. See MobileWebShellCsp.
-    precondition(directives.contains("img-src 'self' data: https:"))
+    precondition(directives.contains("img-src 'self' data: blob: https:"))
     precondition(directives.contains("connect-src 'self'"))
     precondition(directives.contains("worker-src 'none'"))
     precondition(directives.contains("frame-src 'none'"))
@@ -224,11 +224,11 @@ import Foundation
     precondition(!header.contains("unsafe-eval"))
     // Narrowed rather than absent: `data:` is a fetch source for images and for nothing else, so a
     // directive that grew one would fail here instead of passing a blanket absence check.
-    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data: https:"])
-    precondition(!header.contains("blob:"))
+    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data: blob: https:"])
+    precondition(directives.filter { $0.contains("blob:") } == ["img-src 'self' data: blob: https:", "media-src blob:"])
     // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
     // this still refuses a cleartext source anywhere in the header.
-    precondition(directives.filter { $0.contains("https:") } == ["img-src 'self' data: https:"])
+    precondition(directives.filter { $0.contains("https:") } == ["img-src 'self' data: blob: https:"])
     precondition(!header.contains("http:"))
     precondition(!header.contains("\r") && !header.contains("\n"))
   }
@@ -545,7 +545,6 @@ import Foundation
     func verdict(
       _ url: String? = "https://example.com/artifact-link",
       isMainFrame: Bool = true,
-      isFromSubframe: Bool = false,
       isDocumentUrl: Bool = false,
       isShellLoad: Bool = false,
       hasGesture: Bool = true,
@@ -554,7 +553,6 @@ import Foundation
       MobileWebShellNavigationPolicy.verdict(
         url: url,
         isMainFrame: isMainFrame,
-        isFromSubframe: isFromSubframe,
         isDocumentUrl: isDocumentUrl,
         isShellLoad: isShellLoad,
         hasGesture: hasGesture,
@@ -571,18 +569,14 @@ import Foundation
     // navigating the top frame to the document URL arrives with no gesture at all.
     precondition(verdict(document, isDocumentUrl: true, hasGesture: false) == .cancel)
     precondition(verdict(document, isDocumentUrl: true, hasGesture: true) == .cancel)
-    precondition(
-      verdict(document, isFromSubframe: true, isDocumentUrl: true, isShellLoad: true, hasGesture: false)
-        == .cancel
-    )
-    // The second discriminator, on its own: a load the shell did not start is refused even when the
-    // initiating frame is the main one, which is the page rewriting its own document away.
+    // A load the shell did not start is refused whichever frame initiated it: the page rewriting
+    // its own document away, or the sealed preview navigating the top frame.
     precondition(verdict(document, isDocumentUrl: true, isShellLoad: false, hasGesture: false) == .cancel)
     // A top-page meta refresh or a redirect to somewhere else: refused, and never opened.
     precondition(verdict(hasGesture: false) == .cancel)
     // A tap inside the sealed preview is exactly a subframe-initiated foreign navigation, and that
     // is the one thing the artifact is allowed to ask for.
-    precondition(verdict(isFromSubframe: true) == .cancelAndOffer(foreign))
+    precondition(verdict() == .cancelAndOffer(foreign))
     // A download is not a document load, so it is refused there rather than allowed; started by a
     // tap it reaches the opener, which is what makes `<a download>` behave as it does natively.
     precondition(
@@ -591,11 +585,8 @@ import Foundation
     )
     precondition(verdict(isDownload: true) == .cancelAndOffer(foreign))
     // `<a href="/" download>`: a download that still names the shell's own document, which is the
-    // one thing never handed to the opener. Refused from either frame, gesture or not.
+    // one thing never handed to the opener. Refused, gesture or not.
     precondition(verdict(document, isDocumentUrl: true, isDownload: true) == .cancel)
-    precondition(
-      verdict(document, isFromSubframe: true, isDocumentUrl: true, isDownload: true) == .cancel
-    )
     // A subframe is the sealed preview loading itself, which is not the user leaving the app.
     precondition(verdict(isMainFrame: false) == .cancel)
     precondition(verdict(isMainFrame: false, hasGesture: false) == .cancel)
@@ -624,7 +615,6 @@ import Foundation
       MobileWebShellNavigationPolicy.verdict(
         url: document,
         isMainFrame: true,
-        isFromSubframe: false,
         isDocumentUrl: true,
         isShellLoad: machine.isShellLoad,
         hasGesture: false,

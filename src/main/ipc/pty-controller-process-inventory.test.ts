@@ -1,5 +1,5 @@
 import { openCodeHookServiceModuleMock } from './pty-ipc-mock-registry'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -53,13 +53,9 @@ vi.mock('../pi/titlebar-extension-service', () => ({
   piTitlebarExtensionService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
 }))
 
-import {
-  registerPtyHandlers,
-  registerSshPtyProvider,
-  setLocalPtyProvider,
-  unregisterSshPtyProvider
-} from './pty'
-import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { setLocalPtyProvider } from './pty/provider/registry'
+import type { IPtyProvider, PtyProcessInfo } from '../providers/pty-provider-contract'
 
 // The runtime's worktree.ps liveness refresh calls the aggregate inventory (no connectionId)
 // under a 3s budget, and only a returned inventory can retire an exited PTY. STA-517: one
@@ -89,20 +85,13 @@ function createProvider(
   return { provider, calls }
 }
 
-function session(id: string): PtyProcessInfo {
-  return { id, cwd: '/tmp', title: id } as unknown as PtyProcessInfo
-}
-
 const mainWindow = {
   isDestroyed: () => false,
   webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
 }
 
 function captureController(): {
-  listProcesses: (
-    connectionId?: string | null,
-    opts?: { deadlineMs?: number }
-  ) => Promise<PtyProcessInfo[]>
+  listProcesses: (hostId?: string, opts?: { deadlineMs?: number }) => Promise<PtyProcessInfo[]>
 } {
   handleMock.mockReset()
   onMock.mockReset()
@@ -125,63 +114,6 @@ function captureController(): {
 }
 
 describe('aggregate PTY process inventory', () => {
-  const registered: string[] = []
-
-  function register(connectionId: string, provider: IPtyProvider): void {
-    registerSshPtyProvider(connectionId, provider)
-    registered.push(connectionId)
-  }
-
-  afterEach(() => {
-    for (const connectionId of registered.splice(0)) {
-      unregisterSshPtyProvider(connectionId)
-    }
-  })
-
-  it('still reports local and healthy relays when one SSH relay rejects', async () => {
-    const local = createProvider([session('local-pty')])
-    const healthy = createProvider([session('ssh:conn-ok@@pty')])
-    const broken = createProvider([], 'reject')
-    setLocalPtyProvider(local.provider)
-    register('conn-ok', healthy.provider)
-    register('conn-broken', broken.provider)
-    const controller = captureController()
-
-    const sessions = await controller.listProcesses()
-
-    // Pre-fix this rejected: Promise.all surfaced the broken relay's error, the runtime
-    // read it as "no inventory", and no PTY anywhere was retired.
-    expect(sessions.map((entry) => entry.id).sort()).toEqual(['local-pty', 'ssh:conn-ok@@pty'])
-  })
-
-  it('bounds every relay list by the caller deadline instead of the mux default', async () => {
-    const local = createProvider([session('local-pty')])
-    const remote = createProvider([session('ssh:conn-a@@pty')])
-    setLocalPtyProvider(local.provider)
-    register('conn-a', remote.provider)
-    const controller = captureController()
-    const deadlineMs = Date.now() + 2500
-
-    await controller.listProcesses(undefined, { deadlineMs })
-
-    // Without a forwarded deadline an unanswered relay list runs to the SSH mux's own
-    // 30s default, far past the runtime's 3s budget for the whole refresh.
-    expect(remote.calls).toEqual([{ opts: { deadlineMs } }])
-  })
-
-  it('forwards the caller deadline on a targeted single-connection list', async () => {
-    const local = createProvider([session('local-pty')])
-    const remote = createProvider([session('ssh:conn-a@@pty')])
-    setLocalPtyProvider(local.provider)
-    register('conn-a', remote.provider)
-    const controller = captureController()
-    const deadlineMs = Date.now() + 1200
-
-    await controller.listProcesses('conn-a', { deadlineMs })
-
-    expect(remote.calls).toEqual([{ opts: { deadlineMs } }])
-  })
-
   it('fails the aggregate when the local provider cannot list', async () => {
     const local = createProvider([], 'reject')
     setLocalPtyProvider(local.provider)

@@ -1,3 +1,5 @@
+import { isMacPlatform } from './native-chat-shortcut'
+
 /** Minimal shape shared by React's synthetic ClipboardEvent and the native DOM
  *  ClipboardEvent — the pane-level listener delivers the native one. */
 export type ClipboardEventLike = {
@@ -62,14 +64,51 @@ export function clipboardEventPromptText(
   return textOnlyLabelsCopiedFiles(text, names) ? '' : text
 }
 
-/** The clipboard's text for a paste with no event, and whether it only labels copied files. */
+/** The files a paste event copied, resolved the way a drop resolves its files; empty unless
+ *  every file has a local path and the event's text only labels them. */
+export function clipboardEventCopiedFilePaths(event: ClipboardEventLike): string[] {
+  const files = Array.from(event.clipboardData?.files ?? [])
+  const fs = window.api?.fs
+  // The web fallback proxy fabricates methods absent from the concrete namespace.
+  const getPathForFile = fs && 'getPathForFile' in fs ? fs.getPathForFile : undefined
+  if (files.length === 0 || !getPathForFile) {
+    return []
+  }
+  const paths: string[] = []
+  for (const file of files) {
+    let path = ''
+    try {
+      path = getPathForFile(file)
+    } catch {
+      // A pasted bitmap has no file behind it.
+    }
+    if (!path) {
+      return []
+    }
+    paths.push(path)
+  }
+  return copiesOnlyFiles(event.clipboardData?.getData('text/plain') ?? '', paths) ? paths : []
+}
+
+function copiesOnlyFiles(text: string, filePaths: readonly string[]): boolean {
+  return filePaths.length > 0 && (text === '' || textOnlyLabelsCopiedFiles(text, filePaths))
+}
+
+/** The clipboard's text, and the files a file manager copied when the text only labels them.
+ *  `eventFilePaths`: the files a paste event already carried, instead of reading them again. */
 export async function readClipboardPasteText(
-  maxBytes: number
-): Promise<{ text: string; labelsFiles: boolean }> {
+  maxBytes: number,
+  eventFilePaths?: string[]
+): Promise<{ text: string; copiedFilePaths: string[] }> {
   const [text, filePaths] = await Promise.all([
     window.api.ui.readClipboardText({ maxBytes }),
-    // Bookkeeping only: without the file list the text is typed as-is.
-    window.api.ui.readClipboardFilePaths().catch(() => [])
+    // Without the file list the text is typed as-is.
+    eventFilePaths ?? window.api.ui.readClipboardFilePaths().catch(() => [])
   ])
-  return { text, labelsFiles: text !== '' && textOnlyLabelsCopiedFiles(text, filePaths) }
+  if (!copiesOnlyFiles(text, filePaths)) {
+    return { text, copiedFilePaths: [] }
+  }
+  // macOS lists a screenshot tool's saved file beside its picture; only Finder also names files.
+  const picture = text === '' && isMacPlatform() && (await window.api.ui.clipboardHasImage())
+  return { text, copiedFilePaths: picture ? [] : filePaths }
 }

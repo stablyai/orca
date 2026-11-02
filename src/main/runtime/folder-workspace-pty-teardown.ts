@@ -1,10 +1,8 @@
-import { killAllProcessesForWorktree } from './worktree-teardown'
-import type { IPtyProvider } from '../providers/types'
-import type { OrcaRuntimeService } from './orca-runtime'
+import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 
 export type FolderWorkspacePtyTeardownDeps = {
-  runtime: OrcaRuntimeService
-  getSshProvider: ((connectionId: string) => IPtyProvider | undefined) | null
+  runtime: WorktreeTeardownRuntime
   getLocalProvider: () => IPtyProvider | null
   onPtyStopped: ((ptyId: string) => void) | null
 }
@@ -18,8 +16,7 @@ export async function teardownFolderWorkspacePtys(
   worktreeId: string,
   connectionId: string | null
 ): Promise<void> {
-  const sshPtyProvider = connectionId ? deps.getSshProvider?.(connectionId) : undefined
-  const ptyProvider = sshPtyProvider ?? deps.getLocalProvider()
+  const ptyProvider = deps.getLocalProvider()
   if (!ptyProvider) {
     return
   }
@@ -32,9 +29,7 @@ export async function teardownFolderWorkspacePtys(
     // A structured session is on no PTY surface, so the sweeps above leave it attached to a
     // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
     closeStructuredSessions: true,
-    ...(connectionId
-      ? { includeProviderInventory: Boolean(sshPtyProvider), includeLocalRegistry: false }
-      : {})
+    ...(connectionId ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
   }).catch((error) => {
     console.warn(`[worktree-teardown] failed for ${worktreeId}:`, error)
   })

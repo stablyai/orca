@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { LEGACY_MIXED_PARTITIONS } from './journal-lifecycle-batch-partition.test-fixture'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   journalRowSchemaVersion
@@ -16,7 +17,6 @@ import {
 } from './journal-row-builders'
 import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
-  MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS,
   parseJournalRow,
   serializeJournalRow,
   type JournalLifecycleBatchRow
@@ -57,44 +57,12 @@ function previousProbe(settlementId: string, mutations: readonly JournalLifecycl
           ? { ...mutation, body: { ...mutation.body, outcome: 'cancellation' } }
           : mutation,
         journalLifecycleMutationItemId(mutation),
+        Number.MAX_SAFE_INTEGER,
         Number.MAX_SAFE_INTEGER
       )
     )
   }
   return Buffer.byteLength(JSON.stringify(row), 'utf8') + 1
-}
-
-function previousPartition(
-  settlementId: string,
-  mutations: readonly JournalLifecycleMutationInput[]
-) {
-  const chunks: JournalLifecycleMutationInput[][] = []
-  const probeId = `${settlementId}:${mutations.length}/${mutations.length}`
-  let pending: JournalLifecycleMutationInput[] = []
-  for (const mutation of mutations) {
-    const candidate = [...pending, mutation]
-    if (
-      pending.length > 0 &&
-      previousProbe(probeId, candidate) > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
-    ) {
-      chunks.push(pending)
-      pending = [mutation]
-    } else {
-      pending = candidate
-    }
-    if (pending.length === MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
-      chunks.push(pending)
-      pending = []
-    }
-  }
-  if (pending.length > 0) {
-    chunks.push(pending)
-  }
-  return chunks.map((mutations, index) => ({
-    settlementId:
-      chunks.length === 1 ? settlementId : `${settlementId}:${index + 1}/${chunks.length}`,
-    mutations
-  }))
 }
 
 afterEach(() => vi.restoreAllMocks())
@@ -117,9 +85,10 @@ describe('journal lifecycle batch partitioning', () => {
       partitionJournalLifecycleMutations('count', small).map((chunk) => chunk.mutations.length)
     ).toEqual([200, 200, 1])
     const oversized = [item(0, 'x'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)), item(1, 'small')]
-    expect(partitionJournalLifecycleMutations('large', oversized)).toEqual(
-      previousPartition('large', oversized)
-    )
+    expect(partitionJournalLifecycleMutations('large', oversized)).toEqual([
+      { settlementId: 'large:1/2', mutations: [oversized[0]] },
+      { settlementId: 'large:2/2', mutations: [oversized[1]] }
+    ])
   })
 
   it('keeps exact UTF-8 byte-boundary admission through the production row builder', () => {
@@ -191,7 +160,18 @@ describe('journal lifecycle batch partitioning', () => {
       )
       const settlementId = `settle:"\\\n😀:${'q'.repeat(random(2_000))}`
       const actual = partitionJournalLifecycleMutations(settlementId, mutations)
-      expect(actual).toEqual(previousPartition(settlementId, mutations))
+      let offset = 0
+      const expected = LEGACY_MIXED_PARTITIONS[fixture]!.map(
+        ([suffix, mutationCount]: readonly [string, number]) => {
+          const chunk = {
+            settlementId: `${settlementId}${suffix}`,
+            mutations: mutations.slice(offset, offset + mutationCount)
+          }
+          offset += mutationCount
+          return chunk
+        }
+      )
+      expect(actual).toEqual(expected)
       const flattened = actual.flatMap((chunk) => chunk.mutations)
       expect(flattened).toHaveLength(mutations.length)
       for (let index = 0; index < flattened.length; index++) {

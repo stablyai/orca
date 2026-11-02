@@ -194,6 +194,56 @@ describe('terminal tab retirement planning', () => {
     ])
   })
 
+  describe('legacy runtime ids in a local twin of a server', () => {
+    const TWIN = 'twin-repo::/w'
+    const legacy = 'remote:terminal-1'
+    const twinRows = {
+      repos: [
+        { id: 'twin-repo', executionHostId: 'local' as const },
+        { id: 'twin-repo', executionHostId: 'runtime:env-b' as const },
+        { id: 'repo', executionHostId: 'local' as const }
+      ],
+      worktreesByRepo: {
+        'twin-repo': [
+          { id: TWIN, repoId: 'twin-repo', hostId: 'local' as const },
+          {
+            id: TWIN,
+            repoId: 'twin-repo',
+            hostId: 'runtime:env-b' as const,
+            runtimeOwnerEnvironmentId: 'env-b'
+          }
+        ],
+        repo: [{ id: 'wt-1', repoId: 'repo', hostId: 'local' as const }]
+      }
+    }
+
+    it("does not merge a twin's legacy id with the same id on another host", () => {
+      const state = makeState({
+        ...twinRows,
+        tabsByWorktree: {
+          [TWIN]: [makeTab('tab-twin', TWIN, legacy)],
+          'wt-1': [makeTab('tab-local', 'wt-1', legacy)]
+        },
+        ptyIdsByTabId: { 'tab-twin': [legacy], 'tab-local': [legacy] }
+      })
+
+      expect(buildTerminalTabRetirementPlan(state, 'tab-local').sharedPtyIds).toEqual([])
+      expect(buildTerminalTabRetirementPlan(state, 'tab-twin').sharedPtyIds).toEqual([])
+    })
+
+    it("still protects a twin's legacy id held by a second tab of the same twin", () => {
+      const state = makeState({
+        ...twinRows,
+        tabsByWorktree: {
+          [TWIN]: [makeTab('tab-a', TWIN, legacy), makeTab('tab-b', TWIN, legacy)]
+        },
+        ptyIdsByTabId: { 'tab-a': [legacy], 'tab-b': [legacy] }
+      })
+
+      expect(buildTerminalTabRetirementPlan(state, 'tab-a').sharedPtyIds).toEqual([legacy])
+    })
+  })
+
   it('ignores stale ownership maps and never routes malformed remote ids locally', () => {
     const malformedRemote = 'remote:'
     const state = makeState({

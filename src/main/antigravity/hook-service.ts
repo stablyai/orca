@@ -6,7 +6,6 @@ import {
   getSharedManagedScriptPath,
   readHooksJson,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -16,6 +15,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT } from './windows-hook-json-post'
 import {
   restoreManagedScript,
@@ -69,7 +69,7 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
 
 function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {
   if (process.platform === 'win32') {
-    return wrapWindowsCmdHookCommand(getWindowsWrapperScriptPath(event))
+    return wrapWindowsBatchHookCommand(getWindowsWrapperScriptPath(event))
   }
   return getPosixManagedCommand(scriptPath, event)
 }

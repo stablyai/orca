@@ -38,7 +38,8 @@ export type MonacoEditorMountParams = {
     line: number,
     column: number,
     matchLength: number,
-    onApplied?: () => void
+    onApplied?: () => void,
+    canApply?: () => boolean
   ) => void
   contentSync: {
     contentRef: MutableRefObject<string>

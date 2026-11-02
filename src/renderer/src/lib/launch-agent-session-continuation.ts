@@ -1,9 +1,8 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { getConnectionIdFromState } from '@/lib/connection-context'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -22,14 +21,7 @@ type LaunchAgentSessionContinuationArgs = {
 export async function detectAgentSessionContinuationAgents(
   worktreeId: string
 ): Promise<TuiAgent[]> {
-  const state = useAppStore.getState()
-  const connectionId = getConnectionIdFromState(state, worktreeId)
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  return connectionId
-    ? state.ensureRemoteDetectedAgents(connectionId)
-    : runtimeEnvironmentId
-      ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId)
-      : state.ensureDetectedAgents(worktreeId)
+  return ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
 }
 
 async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promise<boolean> {

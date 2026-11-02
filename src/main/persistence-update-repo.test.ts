@@ -8,10 +8,16 @@ import {
   makeProjectHostSetup
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
+import { rmSync, mkdtempSync, mkdirSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultPersistedState } from '../shared/constants'
+import {
+  commitProvenRepoKindChange,
+  proveRepoKindChange,
+  updateProjectHostSetupWithProvenKind
+} from './folder-repo-git-conversion'
 
 import {
   getLocalWorktreeScanGeneration,
@@ -24,7 +30,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -334,6 +340,76 @@ describe('Store', () => {
         updates: { path: '/other' }
       })
     ).toThrow('Repo-backed project host setup paths must be changed by re-importing the project.')
+  })
+
+  // STA-10638: a Git project can't list folder workspaces, so the next refresh purged their tabs.
+  it('refuses a folder-to-Git type change while the project has other folder workspaces', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/repo', kind: 'folder', displayName: 'Repo' }))
+    const workspaceId = 'r1::/repo::workspace:11111111-1111-4111-8111-111111111111'
+    store.setWorktreeMeta(workspaceId, { displayName: 'Second workspace' })
+
+    expect(() =>
+      store.updateProjectHostSetup({
+        setupId: 'r1',
+        updates: { kind: 'git', displayName: 'Renamed' }
+      })
+    ).toThrow("This folder project has 1 other workspace that a Git project can't show")
+    expect(store.getRepo('r1')).toMatchObject({ kind: 'folder', displayName: 'Repo' })
+
+    store.removeWorktreeMeta(workspaceId)
+    expect(
+      store.updateProjectHostSetup({ setupId: 'r1', updates: { kind: 'git' } })?.repo
+    ).toMatchObject({ kind: 'git' })
+  })
+
+  // Git accepts any path inside a work tree, so only the top folder may become a Git project.
+  it('proves a manual folder-to-Git change against the Git root before writing it', async () => {
+    const store = await createStore()
+    const root = join(testState.dir, 'project')
+    mkdirSync(join(root, 'sub'), { recursive: true })
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    store.addRepo(makeRepo({ id: 'inner', path: join(root, 'sub'), kind: 'folder' }))
+    store.addRepo(makeRepo({ id: 'outer', path: root, kind: 'folder' }))
+    const changeToGit = (setupId: string) =>
+      updateProjectHostSetupWithProvenKind(store, (args) => store.updateProjectHostSetup(args), {
+        setupId,
+        updates: { kind: 'git' }
+      })
+
+    await expect(changeToGit('inner')).rejects.toThrow("isn't the top folder of a Git repository")
+    expect(store.getRepo('inner')?.kind).toBe('folder')
+    const converted = await changeToGit('outer')
+    expect(converted?.repo).toMatchObject({
+      kind: 'git',
+      folderUpgradeGitRootPath: expect.any(String)
+    })
+  })
+
+  it('keeps an SSH-owned folder with only executionHostId on the unchecked path', async () => {
+    const repo = makeRepo({
+      id: 'remote-folder',
+      path: '/remote-only/folder',
+      kind: 'folder',
+      executionHostId: 'ssh:build-host'
+    })
+    expect(await proveRepoKindChange(repo, 'git')).toEqual({})
+  })
+
+  it('refuses a proven conversion if the selected folder path changed before commit', async () => {
+    const root = join(testState.dir, 'moved-project')
+    mkdirSync(root, { recursive: true })
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    const repo = makeRepo({ id: 'moving-folder', path: root, kind: 'folder' })
+    const write = vi.fn()
+    await expect(
+      commitProvenRepoKindChange(
+        { getRepos: () => [{ ...repo, path: join(root, 'new-path') }] },
+        repo,
+        write
+      )
+    ).rejects.toThrow('The project changed while Orca was checking it')
+    expect(write).not.toHaveBeenCalled()
   })
 
   it('deletes independent project host setup records without deleting the project', async () => {

@@ -23,7 +23,7 @@ export type PreviewImeBridgeOptions = {
  *
  * Why: xterm's kitty encoder can encode+cancel a printable keydown before
  * Chromium commits IME/native text, silently dropping the glyph. Mirrors
- * TerminalPane's forwarder, macOS-only like the pane's install.
+ * TerminalPane's forwarder, on macOS and desktop Linux like the pane's install.
  *
  * Bit policy stays in terminal-ime-kitty-commit-encoding.ts: the getter is
  * forwarded unchanged, never masked or reduced to a boolean.
@@ -32,7 +32,9 @@ export function installPreviewImeBridge(
   terminal: Terminal,
   options: PreviewImeBridgeOptions
 ): PreviewImeBridge | null {
-  if (getShortcutPlatform() !== 'darwin') {
+  const platform = getShortcutPlatform()
+  const isDesktopLinux = platform === 'linux' && !/Android|CrOS/.test(navigator.userAgent)
+  if (platform !== 'darwin' && !isDesktopLinux) {
     return null
   }
   const compositionTracker = installTerminalImeCompositionTracker(terminal.element)

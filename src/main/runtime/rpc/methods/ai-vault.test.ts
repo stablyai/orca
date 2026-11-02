@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { RuntimeAiVaultCommands } from '../../runtime-ai-vault-commands'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultServiceScanOptions } from '../../../ai-vault/session-scanner-service-protocol'
 import {
@@ -31,6 +32,8 @@ import {
 } from './ai-vault'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { recordStructuredAgentSessionHostInstallRefusal } from '../../structured-agent-session-host-refusal'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { installCopyingChat } from '../../../ai-vault/structured-session-ownership.test-support'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions,
@@ -75,12 +78,12 @@ function makeSession(): AiVaultSession {
 function makeDispatcher(): RpcDispatcher {
   // Why: the handler only needs getRuntimeId (envelope) + listAiVaultSessions,
   // which delegates to the shared cache module the IPC handler also uses.
+  const vault = new RuntimeAiVaultCommands(() => null)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only these three runtime members.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
-    listAiVaultSessions: (args?: Parameters<typeof listAiVaultSessions>[0]) =>
-      listAiVaultSessions(args),
+    listAiVaultSessions: vault.list.bind(vault),
     resolveAiVaultSessionTitles: (requests: unknown[], signal?: AbortSignal) =>
       resolveAiVaultSessionTitlesInService(requests, signal)
   } as unknown as OrcaRuntimeService
@@ -252,6 +255,51 @@ describe('aiVault.prepareSessionResume', () => {
   })
 })
 
+describe('aiVault.prepareSessionResume for a chat whose host makes the copy', () => {
+  afterEach(() => setStructuredAgentSessionHost(null))
+
+  it("has the server's chat copy an OMP conversation and answers the copy", async () => {
+    const providerSessionId = '019fd611-2b3c-7d4e-9f50-6b7c8d9e0f1a'
+    const copy = vi.fn(async () => ({
+      sessionId: 'copy-1',
+      filePath: '/sessions/copy-1.jsonl'
+    }))
+    installCopyingChat({ transport: 'acp', agent: 'omp', nativeId: providerSessionId }, copy)
+    const prepareAiVaultSessionResume = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime members.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
+      prepareAiVaultSessionResume
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('aiVault.prepareSessionResume', {
+        agent: 'omp',
+        sessionId: providerSessionId,
+        filePath: `/home/me/.omp/agent/sessions/--repo--/x_${providerSessionId}.jsonl`,
+        codexHome: null,
+        fork: true
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        useRealCodexHome: false,
+        forkedSession: {
+          sessionId: 'copy-1',
+          filePath: '/sessions/copy-1.jsonl',
+          agent: 'omp'
+        }
+      }
+    })
+    expect(copy).toHaveBeenCalledWith(expect.objectContaining({ providerSessionId }))
+    expect(prepareAiVaultSessionResume).not.toHaveBeenCalled()
+  })
+})
+
 // Session history and terminal resume are not chats: a process whose chats are refused still
 // serves them, while any other host failure still fails the request.
 describe('aiVault methods without a structured host', () => {
@@ -278,8 +326,10 @@ describe('aiVault methods without a structured host', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       ensureStructuredAgentSessionHost: vi.fn().mockRejectedValue(installError),
-      listAiVaultSessions: (args?: Parameters<typeof listAiVaultSessions>[0]) =>
-        listAiVaultSessions(args),
+      listAiVaultSessions: (
+        args?: Parameters<typeof listAiVaultSessions>[0],
+        signal?: AbortSignal
+      ) => listAiVaultSessions(args, { signal }),
       prepareAiVaultSessionResume: vi.fn().mockResolvedValue({ useRealCodexHome: true })
     } as unknown as OrcaRuntimeService
     return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
@@ -324,6 +374,27 @@ describe('aiVault.listSessions handler + shared cache', () => {
     resetAiVaultSessionListCacheForTests()
   })
 
+  it('aborts the host scan when its last RPC caller disconnects', async () => {
+    scanAiVaultSessionsInService.mockImplementation(
+      (_options, signal) =>
+        new Promise<AiVaultListResult>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('scan aborted')), { once: true })
+        })
+    )
+    const dispatcher = makeDispatcher()
+    const caller = new AbortController()
+    const response = dispatcher.dispatch(makeRequest('aiVault.listSessions', {}), {
+      signal: caller.signal
+    })
+    await vi.waitFor(() => expect(scanAiVaultSessionsInService).toHaveBeenCalledOnce())
+    const scanSignal = scanAiVaultSessionsInService.mock.calls[0]?.[1]
+
+    caller.abort()
+
+    expect(scanSignal?.aborted).toBe(true)
+    await expect(response).resolves.toMatchObject({ ok: false })
+  })
+
   it('isolates IDE opt-in scans from legacy clients sharing the host cache', async () => {
     const dispatcher = makeDispatcher()
     await dispatcher.dispatch(
@@ -338,6 +409,98 @@ describe('aiVault.listSessions handler + shared cache', () => {
     expect(scanAiVaultSessionsInService.mock.calls[1]?.[0]?.includeAntigravityIdeSessions).not.toBe(
       true
     )
+  })
+
+  it('omits unchanged session bodies only for clients with the matching fingerprint', async () => {
+    const dispatcher = makeDispatcher()
+    const first = await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', { afterFingerprint: null })
+    )
+    if (
+      !first.ok ||
+      typeof first.result !== 'object' ||
+      first.result === null ||
+      !('fingerprint' in first.result) ||
+      typeof first.result.fingerprint !== 'string'
+    ) {
+      throw new Error('Opt-in response did not include a fingerprint')
+    }
+    const afterFingerprint = first.result.fingerprint
+    expect(afterFingerprint).toMatch(/^[0-9a-f]{64}$/)
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.listSessions', { afterFingerprint }))
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { unchanged: true, fingerprint: afterFingerprint }
+    })
+    const legacy = await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
+    expect(legacy).toMatchObject({ ok: true, result: makeResult() })
+    if (legacy.ok) {
+      expect(legacy.result).not.toHaveProperty('fingerprint')
+    }
+  })
+
+  it('keeps unlimited history un-hashed and full even with an opt-in request', async () => {
+    const dispatcher = makeDispatcher()
+    const response = await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', {
+        unlimited: true,
+        afterFingerprint: null
+      })
+    )
+    expect(response).toMatchObject({ ok: true, result: makeResult() })
+    if (response.ok) {
+      expect(response.result).not.toHaveProperty('fingerprint')
+      expect(response.result).not.toHaveProperty('unchanged')
+    }
+    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({ unlimited: true })
+  })
+
+  it('fingerprints live projected content even when the cached scan stamp does not change', async () => {
+    const source = { ...makeResult(), sessions: [makeSession()] }
+    scanAiVaultSessionsInService.mockResolvedValue(source)
+    const dispatcher = makeDispatcher()
+    const first = await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', { afterFingerprint: null })
+    )
+    if (
+      !first.ok ||
+      typeof first.result !== 'object' ||
+      first.result === null ||
+      !('fingerprint' in first.result) ||
+      typeof first.result.fingerprint !== 'string'
+    ) {
+      throw new Error('Expected fingerprint')
+    }
+    source.sessions[0].title = 'Changed without a new scan stamp'
+    const changed = await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', {
+        afterFingerprint: first.result.fingerprint
+      })
+    )
+    expect(changed).toMatchObject({
+      ok: true,
+      result: {
+        sessions: [{ title: 'Changed without a new scan stamp' }],
+        scannedAt: SCANNED_AT
+      }
+    })
+    if (changed.ok) {
+      expect(changed.result).not.toHaveProperty('unchanged')
+      expect(changed.result).not.toMatchObject({ fingerprint: first.result.fingerprint })
+    }
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
+    const forced = await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', {
+        afterFingerprint: first.result.fingerprint,
+        force: true
+      })
+    )
+    expect(forced.ok).toBe(true)
+    if (forced.ok) {
+      expect(forced.result).not.toHaveProperty('unchanged')
+    }
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
   })
 
   it('returns the AiVaultListResult unchanged', async () => {
@@ -435,7 +598,8 @@ describe('aiVault.listSessions handler + shared cache', () => {
     expect(response).toMatchObject({ ok: true })
     expect(scanAiVaultSessionsInService).toHaveBeenCalledWith(
       expect.objectContaining({ limit: undefined, unlimited: true }),
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.objectContaining({ work: expect.any(Function) })
     )
   })
 

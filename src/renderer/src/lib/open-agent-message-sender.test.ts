@@ -22,12 +22,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  callRuntimeRpc: mocks.callRuntimeRpc,
-  getActiveRuntimeTarget: ({
-    activeRuntimeEnvironmentId
-  }: {
-    activeRuntimeEnvironmentId: string
-  }) => ({ kind: 'environment', environmentId: activeRuntimeEnvironmentId })
+  callRuntimeRpc: mocks.callRuntimeRpc
 }))
 vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
   focusRendererTerminalHandle: mocks.focusRenderer,

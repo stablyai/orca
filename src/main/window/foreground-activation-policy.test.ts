@@ -6,6 +6,7 @@ vi.mock('electron', () => ({ app: { dock: { hide: vi.fn() }, setActivationPolicy
 const {
   applyBackgroundActivationPolicy,
   isBackgroundLaunch,
+  isOrcadSidecarLaunch,
   isWindowlessLaunch,
   showWindowWithoutStealingFocus
 } = await import('./foreground-activation-policy')
@@ -34,6 +35,13 @@ describe('isBackgroundLaunch', () => {
 
   it('keeps an explicit background request despite inherited foreground flags', () => {
     expect(isBackgroundLaunch({ ORCA_BACKGROUND_LAUNCH: '1', ORCA_E2E_FOREGROUND: '1' })).toBe(true)
+  })
+
+  it('treats the orcad browser sidecar as an explicit background launch', () => {
+    expect(isOrcadSidecarLaunch({ ORCA_ORCAD_SIDECAR: '1' })).toBe(true)
+    expect(isOrcadSidecarLaunch({})).toBe(false)
+    expect(isBackgroundLaunch({ ORCA_ORCAD_SIDECAR: '1', ORCA_E2E_FOREGROUND: '1' })).toBe(true)
+    expect(isWindowlessLaunch({ ORCA_ORCAD_SIDECAR: '1', ORCA_E2E_HEADFUL: '1' })).toBe(true)
   })
 
   it('lets native-focus specs opt back into the foreground', () => {
@@ -101,7 +109,7 @@ describe('applyBackgroundActivationPolicy', () => {
     }
   }
 
-  it.each(['ORCA_E2E_HEADLESS', 'ORCA_BACKGROUND_LAUNCH'])(
+  it.each(['ORCA_E2E_HEADLESS', 'ORCA_BACKGROUND_LAUNCH', 'ORCA_ORCAD_SIDECAR'])(
     'drops the macOS Dock tile and menu bar for %s',
     (flag) => {
       const app = makeApp()

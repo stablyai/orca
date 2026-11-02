@@ -7,7 +7,8 @@ const fixture = vi.hoisted(() => {
     app: { isPackaged: true, on: vi.fn() },
     settings,
     pathReady: Promise.resolve(),
-    startCodexHooks: vi.fn()
+    startCodexHooks: vi.fn(),
+    installFirstWorkRename: vi.fn()
   }
 })
 
@@ -32,26 +33,52 @@ vi.mock('./main-process-runtime-service', () => ({
   }),
   configureRuntimeServices: vi.fn()
 }))
-vi.mock('../star-nag/service')
-vi.mock('../browser/agent-browser-bridge')
-vi.mock('../emulator/emulator-bridge')
-vi.mock('../runtime/rpc/dispatcher')
+vi.mock('../star-nag/service', () => ({
+  StarNagService: class {
+    start = vi.fn()
+    registerIpcHandlers = vi.fn()
+  }
+}))
+vi.mock('../browser/agent-browser-bridge', () => ({
+  AgentBrowserBridge: class {
+    sweepOrphanedSessions = vi.fn()
+  }
+}))
+vi.mock('../emulator/emulator-bridge', () => ({ EmulatorBridge: class {} }))
+vi.mock('../runtime/rpc/dispatcher', () => ({ RpcDispatcher: class {} }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
-vi.mock('../browser/browser-client-page-automation-runtime')
-vi.mock('../crash-reporting/process-gone-diagnostics')
-vi.mock('./main-window-lifecycle-flags')
-vi.mock('./gpu-lifecycle')
+vi.mock('../browser/browser-client-page-automation-runtime', () => ({
+  configureBrowserClientPageAutomationRuntime: vi.fn()
+}))
+vi.mock('../crash-reporting/process-gone-diagnostics', () => ({
+  startPreGoneCrashSampling: vi.fn()
+}))
+vi.mock('./main-window-lifecycle-flags', () => ({ recordProcessGoneCrash: vi.fn() }))
+vi.mock('./gpu-lifecycle', () => ({ handleGpuChildCrash: vi.fn() }))
 vi.mock('./configure-process', () => ({ shouldInstallManagedHooks: () => false }))
-vi.mock('../agent-hooks/install-telemetry')
-vi.mock('./main-process-observers')
-vi.mock('./main-process-account-services')
-vi.mock('./main-process-automations')
-vi.mock('./main-process-plugins')
-vi.mock('../worktree-trash')
-vi.mock('./worktree-removal-records-load')
-vi.mock('./first-window-deferral')
-vi.mock('./startup-diagnostics')
-vi.mock('../opencode/opencode-status-plugin-startup-refresh')
+vi.mock('../agent-hooks/install-telemetry', () => ({ recordManagedHookInstallFailure: vi.fn() }))
+vi.mock('./main-process-observers', () => ({ initializeMainProcessObservers: vi.fn() }))
+vi.mock('./branch-rename-hook', () => ({
+  installFirstWorkRenameHookSubscription: fixture.installFirstWorkRename
+}))
+vi.mock('./main-process-account-services', () => ({
+  initializeMainProcessAccountServices: vi.fn()
+}))
+vi.mock('./main-process-automations', () => ({ initializeMainProcessAutomations: vi.fn() }))
+vi.mock('./main-process-plugins', () => ({ initializeMainProcessPlugins: vi.fn() }))
+vi.mock('../worktree-trash', () => ({
+  collectWorktreeTrashSweepRoots: vi.fn(),
+  sweepStaleWorktreeTrash: vi.fn()
+}))
+vi.mock('./worktree-removal-records-load', () => ({ loadWorktreeRemovalRecordsForStore: vi.fn() }))
+vi.mock('./first-window-deferral', () => ({ runAfterFirstWindowShown: vi.fn() }))
+vi.mock('./startup-diagnostics', () => ({ logStartupMilestone: vi.fn() }))
+vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({
+  refreshInstalledOpenCodeStatusPlugins: vi.fn()
+}))
+vi.mock('../orcad/orcad-artifact-cache-retention', () => ({
+  pruneDesktopOrcadArtifactCache: vi.fn()
+}))
 
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
 
@@ -93,5 +120,17 @@ describe('Codex hook startup', () => {
     expect(isEnabled()).toBe(true)
     fixture.settings.disabledTuiAgents = ['codex']
     expect(isEnabled()).toBe(false)
+  })
+})
+
+// Why here: headless serve runs app readiness but never opens a window, so first-work rename
+// must be armed by readiness itself, not by the window's hook listener (STA-5871).
+describe('First-work rename startup', () => {
+  it('arms the hook subscription during app readiness, without a window', async () => {
+    fixture.installFirstWorkRename.mockClear()
+
+    await initializeReadyRuntimeServices()
+
+    expect(fixture.installFirstWorkRename).toHaveBeenCalledTimes(1)
   })
 })

@@ -4,10 +4,8 @@ import { mkdir, rename, rm, stat, symlink } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import {
-  subscribeViaWatcherProcess,
-  type WatcherProcessCallback
-} from '../ipc/parcel-watcher-process'
+import { subscribeViaWatcherProcess } from '../ipc/parcel-watcher-process'
+import type { WatcherProcessCallback } from '../ipc/parcel-watcher-process-subscription'
 import {
   createAliasedWatcherRoot,
   removeAliasedWatcherRoot,

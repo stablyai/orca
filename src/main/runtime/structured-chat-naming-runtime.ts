@@ -1,4 +1,3 @@
-import type { Store } from '../persistence'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { StructuredChatNamingDeps } from '../native-chat/structured-chat-naming'
@@ -17,12 +16,15 @@ type StructuredChatNamingRuntime = {
     workspaceId: string
   ) => Promise<{ path: string; executionHostId: ExecutionHostId }>
   getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
-  hasOpenDispatch: StructuredChatNamingDeps['hasOpenDispatch']
+  workerTaskTitle: StructuredChatNamingDeps['workerTaskTitle']
   retitleOpenTab: StructuredChatNamingDeps['onNamed']
 }
 
 export function structuredChatNamingDeps(
-  getStore: () => Pick<Store, 'getSettings'>,
+  getStore: () => {
+    getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
+      ReturnType<StructuredChatNamingDeps['getSettings']>
+  },
   runtime: StructuredChatNamingRuntime,
   logger: StructuredAgentSessionLogger
 ): StructuredChatNamingDeps {
@@ -35,7 +37,7 @@ export function structuredChatNamingDeps(
         ? firstStructuredChatNamingPrompt(await host.journalSnapshot(sessionId), hostStartedAt)
         : ''
     },
-    hasOpenDispatch: runtime.hasOpenDispatch,
+    workerTaskTitle: runtime.workerTaskTitle,
     generate: async (record, firstPrompt) => {
       const settings = resolveTextGenerationParams(
         getStore().getSettings(),
@@ -55,12 +57,7 @@ export function structuredChatNamingDeps(
       ) {
         throw new Error('Chat name generation target is not this native execution host')
       }
-      const target = await resolveGenerationTarget(
-        workspace.path,
-        settings.params.agentId,
-        null,
-        runtime
-      )
+      const target = await resolveGenerationTarget(workspace.path, settings.params.agentId, runtime)
       if (!target) {
         return null
       }

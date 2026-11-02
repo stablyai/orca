@@ -21,8 +21,6 @@ vi.mock('../registered-worktree-roots-cache', () => ({
 vi.mock('./repo-added-telemetry', () => ({ emitRepoAdded: vi.fn() }))
 vi.mock('./repos-changed-notification', () => ({ notifyReposChanged: vi.fn() }))
 vi.mock('./local-repo-registration', () => ({ addLocalRepoFromPath: vi.fn() }))
-vi.mock('./remote-repo-registration', () => ({ addRemoteRepoFromPath: vi.fn() }))
-vi.mock('./remote-repo-creation', () => ({ createRemoteRepo: vi.fn() }))
 
 import { probeLocalGitAvailability } from './repo-creation-handlers'
 

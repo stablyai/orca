@@ -1,13 +1,10 @@
 import {
-  getCommandTokenPathBasename,
-  getFirstCommandToken
-} from '../../../../shared/command-token-scanner'
-import {
   PRIMARY_AGENT_DIR_ENV_BY_KIND,
   SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
 } from '../../../../shared/pi-agent-kind'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup-env'
+import { getAgentLaunchExecutableName } from '../../../../shared/agent-command-line-intent'
 import {
   AGENT_HOOK_RUNTIME_ENV_KEYS,
   CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS,
@@ -154,13 +151,8 @@ export function getInheritedAgentSessionStampEnvKeysToDelete(
   ]
 }
 
-export { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
-
 export function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
-  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCommand ?? ''))
-    .toLowerCase()
-    .replace(/\.(?:cmd|exe|sh)$/, '')
-  return binary === 'mimo'
+  return getAgentLaunchExecutableName(launchCommand) === 'mimo'
 }
 
 export function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {

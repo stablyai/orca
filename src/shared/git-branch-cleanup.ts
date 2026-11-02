@@ -1,9 +1,15 @@
 import type { GitCapabilityCache } from './git-capability-cache'
 import { isUnsupportedMergeTreeWriteTreeError } from './git-merge-tree-capability'
 
+export type GitBranchCleanupExecOptions = {
+  stdin?: string
+  /** The command's object writes are throwaway; run it against a scratch object store. */
+  discardWrittenObjects?: boolean
+}
+
 export type GitBranchCleanupExec = (
   argv: string[],
-  options?: { stdin?: string }
+  options?: GitBranchCleanupExecOptions
 ) => Promise<{ stdout: string }>
 
 const SQUASH_PATCH_SCAN_LIMIT = 200
@@ -106,6 +112,15 @@ async function hasBranchOnlyMergeCommits(
   return Number(stdout ?? 0) > 0
 }
 
+/** `merge-tree --write-tree` exits 1 on a conflict after printing the merged tree's ID first. */
+function printedMergedTreeId(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('stdout' in error)) {
+    return false
+  }
+  const firstLine = typeof error.stdout === 'string' ? error.stdout.split('\n', 1)[0].trim() : ''
+  return /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(firstLine)
+}
+
 async function branchMergesWithoutTreeChanges(
   runGit: GitBranchCleanupExec,
   targetOid: string,
@@ -117,7 +132,19 @@ async function branchMergesWithoutTreeChanges(
     try {
       return await capabilities.runWithFallback(
         'merge-tree-write-tree',
-        async () => (await runGit(args)).stdout.trim() || null,
+        async () => {
+          // Why only once supported: an old Git still gets the folder, and Git < 2.35 can't prune a leftover.
+          const discardWrittenObjects = capabilities.isKnownSupported('merge-tree-write-tree')
+          try {
+            return (await runGit(args, { discardWrittenObjects })).stdout.trim() || null
+          } catch (error) {
+            // Why: a conflict still proves --write-tree ran; returning lets the cache record it.
+            if (printedMergedTreeId(error)) {
+              return null
+            }
+            throw error
+          }
+        },
         async () => null,
         isUnsupportedMergeTreeWriteTreeError
       )

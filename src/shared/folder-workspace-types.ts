@@ -2,6 +2,7 @@ import type { ExecutionHostId } from './execution-host'
 import type { TaskSourceContext } from './task-source-context'
 import type { TuiAgent } from './tui-agent'
 import type { DiffComment } from './diff-comment-types'
+import type { SmartTier } from './sidebar-list/sort-stamps'
 import type {
   WorkspaceCreatorProvenance,
   WorkspaceLinkedItem,
@@ -41,6 +42,8 @@ export type FolderWorkspace = {
   pendingFirstAgentMessageRename?: boolean
   firstAgentMessageRenameError?: string | null
   lastActivityAt: number
+  smartTier?: SmartTier
+  smartAt?: number
   createdAt: number
   updatedAt: number
   diffComments?: DiffComment[]

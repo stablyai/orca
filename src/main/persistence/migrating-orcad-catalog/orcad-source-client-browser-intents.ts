@@ -48,11 +48,11 @@ export function collectCloseIntents(
         }
         const worktreeId = unqualifyOrcadMigrationOwnerKey(intent.worktreeId)
         const key = `${sourceEnvironmentId}\0${intent.browserPageId}\0${worktreeId}`
+        // A close for a page the move does not carry stays with this client, which still owes it.
         if (
           !eligiblePages.has(`${worktreeId}\0${intent.browserPageId}`) ||
           !destinationEnvironmentId
         ) {
-          onBlocked()
           continue
         }
         if (seen.has(key)) {

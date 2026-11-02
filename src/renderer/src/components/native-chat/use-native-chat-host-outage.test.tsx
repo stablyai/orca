@@ -9,7 +9,7 @@ import type {
   RuntimeHostStatusSnapshot
 } from '../../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS,
   useNativeChatHostOutage

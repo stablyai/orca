@@ -3,7 +3,7 @@ import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent
 } from '../../shared/browser-client-host-protocol'
-import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import {
   adoptRuntimeBrowserClientPagesFromInventory,

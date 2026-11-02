@@ -2,42 +2,21 @@ import { vi } from 'vitest'
 import { createSystemCommandChannel, createSystemSshProcess } from './ssh-connection-test-fixtures'
 import type { SshConnection } from './ssh-connection'
 import type { MockSystemCommandChannel, MockSystemSshProcess } from './ssh-connection-test-fixtures'
-import type { SshResolvedConfig } from './ssh-config-parser'
-import type { SystemSshBuildArgsOptions } from './system-ssh-args'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
+import type { SystemSshBuildArgsOptions } from './system-transport/system-ssh-args'
 import type { SshTarget } from '../../shared/ssh-types'
+import type * as SystemSshArgs from './system-transport/system-ssh-args'
+import type * as SystemSshCommand from './system-transport/system-ssh-command'
+import type * as SystemSshFileBinaryTransfer from './system-transport/system-ssh-file-binary-transfer'
+import type * as SystemSshFileTransfer from './system-transport/system-ssh-file-transfer'
+import type * as SshGConfigResolution from './config/ssh-g-config-resolution'
 import { resetSsh2ClientState, ssh2Mock } from './__tests__/ssh-connection-test-client'
-export {
-  clientInstances,
-  connectAttempts,
-  createSsh2Module,
-  emitSshEvent,
-  eventHandlers,
-  pendingExecCallback,
-  pendingSftpCallback,
-  resetSsh2ClientState,
-  ssh2Mock,
-  VALID_ED25519_HOST_KEY
-} from './__tests__/ssh-connection-test-client'
-export type { MockSshClient, Ssh2ModuleMock } from './__tests__/ssh-connection-test-client'
 
 export type SystemSshBinaryModuleMock = { findSystemSsh: typeof findSystemSshMock }
-
-export type SystemFallbackModuleMock = {
-  getOrcaControlSocketPath: typeof getOrcaControlSocketPathMock
-  spawnSystemSsh: typeof spawnSystemSshMock
-  spawnSystemSshCommand: typeof spawnSystemSshCommandMock
-  downloadFileViaSystemSsh: typeof downloadFileViaSystemSshMock
-  uploadDirectoryViaSystemSsh: typeof uploadDirectoryViaSystemSshMock
-  uploadFileViaSystemSsh: typeof uploadFileViaSystemSshMock
-  writeBufferViaSystemSsh: typeof writeBufferViaSystemSshMock
-  writeFileViaSystemSsh: typeof writeFileViaSystemSshMock
-}
 
 export type ControlSocketModuleMock = {
   removeControlSocketPath: typeof removeControlSocketPathMock
 }
-
-export type SshConfigParserModuleMock = { resolveWithSshG: typeof resolveWithSshGMock }
 
 export const findSystemSshMock = vi.fn<() => string | null>()
 export const getOrcaControlSocketPathMock =
@@ -83,15 +62,32 @@ export function createSystemSshBinaryModule(): SystemSshBinaryModuleMock {
   return { findSystemSsh: findSystemSshMock }
 }
 
-export function createSystemFallbackModule(): SystemFallbackModuleMock {
+// The system-ssh seams SshConnection reaches, each layered over its module's real exports.
+export function withSystemSshArgsMocks(actual: typeof SystemSshArgs) {
+  return { ...actual, getOrcaControlSocketPath: getOrcaControlSocketPathMock }
+}
+
+export function withSystemSshCommandMocks(actual: typeof SystemSshCommand) {
   return {
-    getOrcaControlSocketPath: getOrcaControlSocketPathMock,
+    ...actual,
     spawnSystemSsh: spawnSystemSshMock,
-    spawnSystemSshCommand: spawnSystemSshCommandMock,
+    spawnSystemSshCommand: spawnSystemSshCommandMock
+  }
+}
+
+export function withSystemSshFileBinaryTransferMocks(actual: typeof SystemSshFileBinaryTransfer) {
+  return {
+    ...actual,
     downloadFileViaSystemSsh: downloadFileViaSystemSshMock,
-    uploadDirectoryViaSystemSsh: uploadDirectoryViaSystemSshMock,
     uploadFileViaSystemSsh: uploadFileViaSystemSshMock,
-    writeBufferViaSystemSsh: writeBufferViaSystemSshMock,
+    writeBufferViaSystemSsh: writeBufferViaSystemSshMock
+  }
+}
+
+export function withSystemSshFileTransferMocks(actual: typeof SystemSshFileTransfer) {
+  return {
+    ...actual,
+    uploadDirectoryViaSystemSsh: uploadDirectoryViaSystemSshMock,
     writeFileViaSystemSsh: writeFileViaSystemSshMock
   }
 }
@@ -100,8 +96,13 @@ export function createControlSocketModule(): ControlSocketModuleMock {
   return { removeControlSocketPath: removeControlSocketPathMock }
 }
 
-export function createSshConfigParserModule(): SshConfigParserModuleMock {
-  return { resolveWithSshG: resolveWithSshGMock }
+// Why: an unreadable config keeps the developer's own ~/.ssh/config out of alias-claim verdicts.
+export function createSshConfigParserModule(): Record<string, never> {
+  return {}
+}
+
+export function withSshGConfigResolutionMocks(actual: typeof SshGConfigResolution) {
+  return { ...actual, resolveWithSshG: resolveWithSshGMock }
 }
 
 export function resetSshConnectionMocks(): void {

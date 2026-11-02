@@ -5,6 +5,7 @@ import { createAgentInterruptInference } from '../agent-interrupt-inference'
 import { createAgentQuestionAnsweredInference } from '../agent-question-answered-inference'
 import type { AgentInterruptInputIntent } from '../../../../../shared/agent-interrupt-intent'
 import { markTerminalBracketedPasteInterrupted } from '../terminal-bracketed-paste'
+import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 
 import { REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS } from './foreground-output-scan'
 
@@ -119,6 +120,9 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
       session.clearPendingTerminalInputIntent()
     }, 0)
   }
+  // Why: a focus or hover report landing between a keydown and its byte must not consume the intent.
+  session.pendingTerminalInputIntentFor = (data: string): AgentInterruptInputIntent | null =>
+    isPassiveTerminalInputReport(data) ? null : session.pendingTerminalInputIntent
   session.inputMatchesIntent = (intent: AgentInterruptInputIntent, data: string): boolean => {
     return (
       (intent === 'plain-escape' && data === '\x1b') || (intent === 'ctrl-c' && data === '\x03')

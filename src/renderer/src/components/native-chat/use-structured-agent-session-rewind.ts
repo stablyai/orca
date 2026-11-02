@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { AgentSessionRewindResult } from '../../../../shared/agent-session-rewind'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useStructuredAgentSessionHostRecoversRewindOnSend } from '@/runtime/structured-agent-session-host-capability'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
 import {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { MAX_ORCAD_MIGRATION_STAGED_CATALOGS } from '../shared/orcad-migration-manifest'
+import { MAX_ORCAD_MIGRATION_STAGED_CATALOGS } from '../shared/orcad-migration-staged-catalog-validation'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { MAX_RETIREMENT_NAMESPACES } from './worktree-retirement-namespace'
@@ -520,6 +520,23 @@ describe('orcad migration catalog persistence', () => {
     expect(store.getRepos().map((repo) => repo.id)).toEqual(['existing'])
     expect(store.getProjectGroups()).toEqual([])
     expect(store.getFolderWorkspaces()).toEqual([])
+  })
+
+  it.each([
+    ['a connection id', { connectionId: 'nested-target' }],
+    ['an SSH execution host', { executionHostId: 'ssh:nested-target' as const }],
+    ['a runtime execution host', { executionHostId: 'runtime:other-env' as const }]
+  ])('imports beside a same-path project on another machine (%s)', (_case, host) => {
+    const store = createStore()
+    store.addRepo(makeRepo({ id: 'nested', path: REPOSITORY.path, ...host }))
+
+    commitCatalog(store, manifest())
+    expect(
+      store
+        .getRepos()
+        .map((repo) => repo.id)
+        .sort()
+    ).toEqual(['nested', REPOSITORY.id].sort())
   })
 
   it('validates all id conflicts before adding any manifest row', () => {

@@ -7,7 +7,7 @@ import {
   getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../shared/workspace-cleanup-host-identity'
-import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeDeleteStateKey } from '@/store/slices/worktrees/teardown/worktree-delete-state'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
 import {
   startWorkspaceCleanupBackgroundRemoval,
@@ -16,6 +16,11 @@ import {
 import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-removal-candidates'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
+import { withWorkspaceCleanupFocusAfterDelete } from './workspace-cleanup-focus-after-delete'
+import {
+  useWorkspaceCleanupAgentStopGate,
+  type WorkspaceCleanupAgentStopRequest
+} from './use-workspace-cleanup-agent-stop-gate'
 
 export type WorkspaceCleanupRemovalController = {
   confirming: boolean
@@ -34,6 +39,10 @@ export type WorkspaceCleanupRemovalController = {
   confirmUnverifiedRemoval: (candidate: WorkspaceCleanupCandidate) => void
   cancelConfirmRemove: () => void
   backToList: () => void
+  /** Set while the "agents will be stopped" step is shown; it takes over the dialog body. */
+  agentStopRequest: WorkspaceCleanupAgentStopRequest | null
+  confirmStopAgents: () => void
+  cancelStopAgents: () => void
 }
 
 /**
@@ -71,21 +80,23 @@ export function useWorkspaceCleanupRemoval({
 
   const resetRowFailures = useCallback(() => setRowFailures({}), [])
 
+  const agentStopGate = useWorkspaceCleanupAgentStopGate()
+  const clearAgentStopRequest = agentStopGate.clear
+
   const resetForReopen = useCallback(() => {
+    clearAgentStopRequest()
     if (removalInFlightRef.current) {
       return
     }
     setConfirming(false)
     setRowFailures({})
-  }, [])
+  }, [clearAgentStopRequest])
 
   const clearQueuedDeleteState = useCallback(
     (worktreeId: string, executionHostId?: WorkspaceCleanupFailure['executionHostId']) => {
-      const deleteStateByWorktreeId = useAppStore.getState().deleteStateByWorktreeId
-      const key = executionHostId
-        ? composeWorktreeHostIdentity(executionHostId, worktreeId)
-        : worktreeId
-      const deleteState = deleteStateByWorktreeId[key]
+      const state = useAppStore.getState()
+      const deleteState =
+        state.deleteStateByWorktreeId[getWorktreeDeleteStateKey(state, worktreeId, executionHostId)]
       // Why: candidates that fail before removal starts would otherwise stay
       // marked "Queued for deletion" in the sidebar; rows already in the
       // 'deleting' phase or failed with an error keep their own state.
@@ -96,7 +107,7 @@ export function useWorkspaceCleanupRemoval({
     [clearWorktreeDeleteState]
   )
 
-  const confirmUnverifiedRemoval = useWorkspaceCleanupUnverifiedRemoval({
+  const startUnverifiedRemoval = useWorkspaceCleanupUnverifiedRemoval({
     setRowFailures,
     setDeletionPhaseByIdentity,
     clearQueuedDeleteState,
@@ -115,23 +126,36 @@ export function useWorkspaceCleanupRemoval({
     setConfirming(true)
   }, [])
 
+  const approveAgentStops = agentStopGate.approve
+  const confirmUnverifiedRemoval = useCallback(
+    (candidate: WorkspaceCleanupCandidate) => {
+      const [approvedCandidate] = approveAgentStops([candidate], candidate) ?? []
+      if (approvedCandidate) {
+        startUnverifiedRemoval(approvedCandidate)
+      }
+    },
+    [approveAgentStops, startUnverifiedRemoval]
+  )
+
   const cancelConfirmRemove = useCallback(() => {
+    clearAgentStopRequest()
     if (removalProgress) {
       closeModal()
       return
     }
     setConfirming(false)
     setConfirmCandidates([])
-  }, [closeModal, removalProgress])
+  }, [clearAgentStopRequest, closeModal, removalProgress])
 
   // Why: the header X reads as "leave this screen", not "abandon the dialog". The
   // batch keeps running either way and the list shows each row's progress.
   // Diverges from cancelConfirmRemove, which closes the dialog mid-batch: here
   // removalProgress stays set until the batch settles, so re-entry stays blocked.
   const backToList = useCallback(() => {
+    clearAgentStopRequest()
     setConfirming(false)
     setConfirmCandidates([])
-  }, [])
+  }, [clearAgentStopRequest])
 
   const settle = useCallback(() => {
     setRemovalProgress(null)
@@ -145,13 +169,18 @@ export function useWorkspaceCleanupRemoval({
     if (confirmCandidates.length === 0 || removalInFlightRef.current) {
       return
     }
-    const removableCandidates = filterWorkspaceCleanupRemovalCandidates(
+    const filteredCandidates = filterWorkspaceCleanupRemovalCandidates(
       confirmCandidates,
       useAppStore.getState().deleteStateByWorktreeId
     )
-    if (removableCandidates.length === 0) {
+    if (filteredCandidates.length === 0) {
+      clearAgentStopRequest()
       setConfirming(false)
       setConfirmCandidates([])
+      return
+    }
+    const removableCandidates = approveAgentStops(filteredCandidates, null)
+    if (!removableCandidates) {
       return
     }
     removalInFlightRef.current = true
@@ -187,7 +216,10 @@ export function useWorkspaceCleanupRemoval({
       const snapshotPruneBatch = createWorkspaceCleanupSnapshotPruneBatch()
       startWorkspaceCleanupBackgroundRemoval({
         candidates: removableCandidates,
-        removeCandidates,
+        removeCandidates: withWorkspaceCleanupFocusAfterDelete(
+          removeCandidates,
+          removableCandidates
+        ),
         snapshotPruneBatch,
         onProgress: (progress) => {
           if (mountedRef.current) {
@@ -250,6 +282,8 @@ export function useWorkspaceCleanupRemoval({
       handleRemovalError()
     }
   }, [
+    approveAgentStops,
+    clearAgentStopRequest,
     clearQueuedDeleteState,
     clearWorktreeDeleteState,
     confirmCandidates,
@@ -259,6 +293,15 @@ export function useWorkspaceCleanupRemoval({
     removeCandidates,
     settle
   ])
+
+  const agentStopRequest = agentStopGate.request
+  const confirmStopAgents = useCallback(() => {
+    if (agentStopRequest?.unverifiedCandidate) {
+      confirmUnverifiedRemoval(agentStopRequest.unverifiedCandidate)
+    } else {
+      confirmRemove()
+    }
+  }, [agentStopRequest, confirmRemove, confirmUnverifiedRemoval])
 
   return {
     confirming,
@@ -274,7 +317,10 @@ export function useWorkspaceCleanupRemoval({
     confirmRemove,
     confirmUnverifiedRemoval,
     cancelConfirmRemove,
-    backToList
+    backToList,
+    agentStopRequest,
+    confirmStopAgents,
+    cancelStopAgents: clearAgentStopRequest
   }
 }
 

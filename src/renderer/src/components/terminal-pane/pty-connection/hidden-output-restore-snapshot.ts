@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
@@ -24,7 +25,6 @@ import {
 
 import { HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 
@@ -50,6 +50,25 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
       foreground: true,
       beforeWrite: session.beforeTerminalOutputWrite
     })
+    const ptyId = session.transport.getPtyId()
+    const episode = session.hiddenOutputRestoreLatestDropEpisode
+    if (ptyId !== null && episode !== null) {
+      // Repeat markers for the drop episode this banner disclosed are ignored.
+      session.hiddenOutputRestoreDisclosedGap = { ptyId, episode }
+    }
+  }
+
+  // Why an ack instead of retiring on the serve: the pane can dispose across the serialize +
+  // IPC round trip, and a snapshot nobody painted heals nothing. Only PTYs whose bytes transit
+  // local main have a drop latch, so remote-runtime streams send nothing.
+  session.ackHiddenOutputRestoreApplied = function (
+    ptyId: string,
+    hiddenDropEpisode: number | null
+  ): void {
+    if (!session.canUseMainBufferSnapshot(ptyId)) {
+      return
+    }
+    window.api.pty.ackHiddenOutputRestoreApplied?.(ptyId, hiddenDropEpisode ?? undefined)
   }
 
   session.applyMainBufferSnapshot = async function (snapshot: {

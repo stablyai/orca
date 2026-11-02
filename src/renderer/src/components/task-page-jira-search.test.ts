@@ -180,3 +180,18 @@ describe('searchTaskPageJiraIssues', () => {
     expect(search).toHaveBeenCalledTimes(1)
   })
 })
+
+it('executes saved filter text as exact JQL even when it resembles a search term', async () => {
+  const search = vi.fn().mockResolvedValue([ISSUE])
+  await expect(searchTaskPageJiraIssues('saved-query', search, 'jql')).resolves.toEqual({
+    issues: [ISSUE],
+    jqlRejection: null
+  })
+  expect(search).toHaveBeenCalledExactlyOnceWith('saved-query')
+})
+it('surfaces invalid saved JQL without retrying it as a text search', async () => {
+  const error = new Error(SYNTAX_ERROR)
+  const search = vi.fn().mockRejectedValue(error)
+  await expect(searchTaskPageJiraIssues('bad syntax', search, 'jql')).rejects.toBe(error)
+  expect(search).toHaveBeenCalledTimes(1)
+})

@@ -2,7 +2,7 @@ import type { Store } from '../persistence'
 import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
-import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
+import { loadUserSshConfig, sshConfigHostsToTargets } from './config/ssh-config-parser'
 import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
 import {
   buildRemovedSshTargetTombstone,

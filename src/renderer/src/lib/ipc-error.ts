@@ -27,12 +27,15 @@ export function readIpcErrorMessage(error: unknown): string | undefined {
 
 // Preserve the legacy contract: wrapped errors are compact, while plain errors retain detail.
 export function extractIpcErrorMessage(err: unknown, fallback: string): string {
-  const detail = readIpcErrorDetail(err)
+  return (err instanceof Error ? displayIpcErrorMessage(err.message) : undefined) ?? fallback
+}
+
+/** String form of extractIpcErrorMessage, for messages already stored as text. */
+export function displayIpcErrorMessage(message: string): string | undefined {
+  const detail = unwrapIpcErrorMessage(message)
   if (!detail) {
-    return fallback
+    return undefined
   }
-  const wrapped =
-    err instanceof Error &&
-    (IPC_INVOKE_PREFIX.test(err.message) || IPC_HANDLER_PREFIX.test(err.message))
-  return wrapped ? detail.split('\n')[0]?.trim() || fallback : detail
+  const wrapped = IPC_INVOKE_PREFIX.test(message) || IPC_HANDLER_PREFIX.test(message)
+  return wrapped ? detail.split('\n')[0]?.trim() || undefined : detail
 }

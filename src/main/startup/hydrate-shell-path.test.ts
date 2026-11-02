@@ -115,6 +115,35 @@ describe('hydrateShellPath', () => {
     expect(successfulSpawner).toHaveBeenCalledWith('/bin/bash')
   })
 
+  it('re-probes after a rejected hydration instead of serving the cached rejection', async () => {
+    const spawner = vi.fn<HydrationSpawner>()
+    spawner
+      .mockRejectedValueOnce(new Error('profile failed'))
+      .mockResolvedValueOnce({ segments: ['/retried'], ok: true, failureReason: 'none' })
+
+    await expect(hydrateShellPath({ shellOverride: '/bin/zsh', spawner })).rejects.toThrow(
+      'profile failed'
+    )
+    await expect(hydrateShellPath({ shellOverride: '/bin/zsh', spawner })).resolves.toEqual({
+      segments: ['/retried'],
+      ok: true,
+      failureReason: 'none'
+    })
+    expect(spawner).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports spawn_error instead of rejecting when spawn throws synchronously', async () => {
+    spawnMock.mockImplementation(() => {
+      throw Object.assign(new Error('spawn EACCES'), { code: 'EACCES' })
+    })
+
+    await expect(hydrateShellPath({ shellOverride: '/bin/zsh', force: true })).resolves.toEqual({
+      segments: [],
+      ok: false,
+      failureReason: 'spawn_error'
+    })
+  })
+
   it('returns failureReason:no_shell when no shell is available (Windows path)', async () => {
     const result = await hydrateShellPath({
       shellOverride: null,

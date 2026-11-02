@@ -5,7 +5,6 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
-import { classifyProviderFrame } from '../native-chat/agent-session-wire/provider-frame-disposition'
 import {
   type UnhandledProviderFrameJournalItemOptions,
   readableProviderFrameText,
@@ -43,14 +42,9 @@ const PROGRESS_FRAME_KINDS: ReadonlySet<string> = new Set([
   'message:stream_event:ping'
 ])
 
-/** A frame that writes no row, so nothing streamed has to be journaled ahead of it. A failure it
- *  reports still surfaces as a row, so it is not one. */
+/** A frame that writes no row, so nothing streamed has to be journaled ahead of it. */
 export function isClaudeProgressFrame(message: Record<string, unknown>): boolean {
-  const kind = claudeProviderFrameKind(message)
-  return (
-    PROGRESS_FRAME_KINDS.has(kind) &&
-    classifyProviderFrame('claude', kind, message) !== 'error-surface'
-  )
+  return PROGRESS_FRAME_KINDS.has(claudeProviderFrameKind(message))
 }
 
 const SETTLED_RESULT_KINDS: ReadonlySet<string> = new Set(

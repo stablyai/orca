@@ -4,6 +4,7 @@ import {
   clearNativeChatPendingAttachmentsForTests,
   dropNativeChatPendingAttachmentsForTab,
   dropNativeChatPendingAttachmentsOwnedBy,
+  nativeChatImageRow,
   nativeChatPendingAttachmentSnapshot,
   settleNativeChatPendingAttachment,
   settleNativeChatPendingAttachmentReferences,
@@ -70,6 +71,32 @@ describe('the pane pending attachment cache', () => {
     expect(readNativeChatComposerDraft(conversation).images).toHaveLength(1)
     deleteNativeChatComposerDraftsOwnedBy(OWNER)
     expect(readNativeChatComposerDraft(conversation).images).toEqual([])
+  })
+
+  it('settles images into the draft in the order they were attached, whichever finished first', () => {
+    addPending('tab-1:leaf', 'first')
+    addPending('tab-1:leaf', 'second')
+    addPending('tab-1:leaf', 'third')
+
+    settleNativeChatPendingAttachment('tab-1:leaf', 'second', '/store/b.png')
+    // Saved at once, so a reload keeps it; the row still shows it behind the one before it.
+    expect(readNativeChatComposerDraft('tab-1:leaf').images).toEqual([
+      { id: 'second', path: '/store/b.png' }
+    ])
+    expect(
+      nativeChatImageRow(
+        readNativeChatComposerDraft('tab-1:leaf').images,
+        nativeChatPendingAttachmentSnapshot('tab-1:leaf')
+      ).map(({ id }) => id)
+    ).toEqual(['first', 'second', 'third'])
+    settleNativeChatPendingAttachment('tab-1:leaf', 'first', '/store/a.png')
+    takeNativeChatPendingAttachment('tab-1:leaf', 'third')
+
+    expect(readNativeChatComposerDraft('tab-1:leaf').images.map(({ path }) => path)).toEqual([
+      '/store/a.png',
+      '/store/b.png'
+    ])
+    expect(nativeChatPendingAttachmentSnapshot('tab-1:leaf')).toEqual([])
   })
 
   it('keeps reference settlement owned by the workspace after its chat closes', () => {

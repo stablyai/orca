@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -170,7 +170,7 @@ describe('pty spawn placement threading', () => {
       leafId: LEAF,
       ptyId: expect.any(String),
       incarnationId: expect.any(String),
-      hostAdmittedMembership: true,
+      mayCreate: false,
       placement: SPLIT,
       origin: 'spawn'
     })

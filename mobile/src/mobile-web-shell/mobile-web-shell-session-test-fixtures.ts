@@ -33,9 +33,7 @@ export function gates(overrides: Partial<MobileWebShellGates> = {}): MobileWebSh
 export const ROUTE = '/h/host-1'
 export const PAGE_ROUTES = [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
 
-/** The manifest as the host sends it. Every facts object below is projected from one of these, so a
- *  test that edits the routes cannot leave the projection and the manifest it came from disagreeing
- *  — which is exactly what a same-build persist would then write. */
+/** The manifest as the host sends it; facts below are projected from it. */
 export const MANIFEST_WIRE: MobileWebBundleManifestRead = {
   schemaVersion: 1,
   buildId: 'b'.repeat(64),
@@ -90,8 +88,7 @@ export function manifestFacts(wire: MobileWebBundleManifestRead): MobileWebShell
     pageVersion: wire.pageVersion,
     totalBytes: wire.totalBytes,
     totalAssets: wire.assets.length,
-    routes: wire.routes,
-    wire
+    routes: wire.routes
   }
 }
 
@@ -134,6 +131,7 @@ export function stamp(flow: number, event: PendingEvent): MobileWebShellSessionE
     case 'page-ready':
     case 'page-painted':
     case 'page-back-claim':
+    case 'layout-changed':
       return event
     case 'cache-read':
     case 'manifest-read':
@@ -143,6 +141,7 @@ export function stamp(flow: number, event: PendingEvent): MobileWebShellSessionE
     case 'remounted':
     case 'download-failed':
     case 'page-ready-deadline':
+    case 'document-load-deadline':
       return { ...event, flow: event.flow ?? flow }
   }
 }

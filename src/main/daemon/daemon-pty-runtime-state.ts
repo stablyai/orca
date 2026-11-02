@@ -28,7 +28,7 @@ import {
   type HistoryRecoveryFreeze
 } from './history-manager'
 import { HistoryReader } from './history-reader'
-import type { PtyBackgroundStreamEvent } from '../providers/types'
+import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 
 export type PendingDaemonSpawnOperation = {
@@ -247,9 +247,7 @@ export abstract class DaemonPtyRuntimeState {
   }
 
   // Why the id is read rather than ignored: the contract promises a fact about THIS pty, and
-  // getProviderForPty falls back to the local provider for any id it cannot place. A
-  // remote-runtime id therefore reaches this adapter, and answering from the protocol flag
-  // alone returned `true` for a session this daemon has never owned.
+  // answering from the protocol flag alone returned `true` for a session this daemon never owned.
   canProvideAuthoritativeBufferSnapshot(id: string): boolean {
     return this.supportsAuthoritativeBufferSnapshots && this.activeSessionIds.has(id)
   }

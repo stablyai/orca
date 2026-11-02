@@ -2,6 +2,7 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -16,7 +17,11 @@ import {
 } from './claude-structured-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-export { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
+export {
+  claudeStartupSettled,
+  claudeOpened
+} from './claude-structured-startup-settled-test-support'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 
@@ -82,10 +87,8 @@ export function fakeClaude(
   const connections: FakeConnection[] = []
   const routes = options.routes ?? {}
   let replayIndex = 0
-  const routed = (subtype: string, params?: Record<string, unknown>): unknown => {
-    const route = routes[subtype]
-    return route ? route(params) : undefined
-  }
+  const routed = (subtype: string, params?: Record<string, unknown>): unknown =>
+    routes[subtype]?.(params)
   const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
     let cycleInitEmitted = false
     // Keys mirror the real system/init frame, which carries `model` but no
@@ -223,10 +226,7 @@ export function fakeClaude(
           const replayUuid =
             configuredReplayUuid === undefined ? `user-uuid-${replayIndex}` : configuredReplayUuid
           if (replayUuid !== null) {
-            handlers.onMessage?.({
-              ...message,
-              uuid: replayUuid
-            })
+            handlers.onMessage?.({ ...message, uuid: replayUuid })
           }
         }
       },
@@ -243,8 +243,7 @@ export function fakeClaude(
   return { connections, openConnection, routes }
 }
 
-/** Acquisition resolves only once startup has landed, as suites written before
- *  publish-first expect; `adapterAtPublishFor` observes the published window itself. */
+/** Direct adapter fixtures await the host-owned open after process publication. */
 export function adapterFor(
   ...args: Parameters<typeof adapterAtPublishFor>
 ): ClaudeStructuredSessionAdapter {
@@ -252,7 +251,7 @@ export function adapterFor(
   const acquire = adapter.acquire
   adapter.acquire = async (input) => {
     const acquisition = await acquire(input)
-    await adapter['sessions'].get(input.identity.sessionId)?.startup.settled
+    await claudeStartupSettled(adapter, input.identity.sessionId)
     return acquisition
   }
   return adapter
@@ -269,7 +268,7 @@ export function adapterAtPublishFor(
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
-    resolveLaunch: async () => ({
+    resolveLaunch: async ({ spawnToken }) => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},
       cwd: '/work/repo',
@@ -278,7 +277,9 @@ export function adapterAtPublishFor(
       resumeLeafUuid: null,
       resumesTranscript: false,
       continuesChain: false,
-      ...launch
+      ...launch,
+      // As the composed launch seals it: the reservation's token is the child's, whatever came before.
+      env: { ...launch.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: spawnToken }
     }),
     onEvent: (event) => events.push(event),
     openConnection: claude.openConnection,
@@ -326,9 +327,7 @@ export function recordingJournalSink(): StructuredAgentSessionEventSink {
   return { appendItem: () => {}, appendTombstone: () => {}, publish: () => {} }
 }
 
-export function tick(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve))
-}
+export const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
 /** Delivers one frame from Claude on `connection`, under the provider session it runs. */
 export function claudeFrame(connection: FakeConnection, message: Record<string, unknown>): void {

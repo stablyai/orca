@@ -4,7 +4,7 @@ import {
   AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS,
   buildRuntimeMobileAgentStatusProjectionForTests,
   resetRuntimeMobileAgentStatusProjectionCacheForTests
-} from './sync-runtime-graph'
+} from './sync-runtime-graph/agent-status-projection'
 
 // Reference: the pre-change whole-array serialization, kept verbatim apart from the sort, which
 // is now a code-unit compare — the projection is only ever `===`-compared, never displayed, so it

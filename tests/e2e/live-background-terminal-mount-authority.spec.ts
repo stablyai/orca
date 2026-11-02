@@ -544,7 +544,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
       orcaPage.evaluate(
         async ({ repoId, command, windowsShell }) => {
           const state = window.__store?.getState()
-          await state?.fetchRepos()
+          await state?.fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
           const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
           if (!repo) {
             return false
@@ -556,7 +556,6 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
             agentCmdOverrides: { codex: command },
             terminalWindowsShell: windowsShell,
             disabledTuiAgents: [],
-            setupScriptLaunchMode: 'new-tab',
             terminalHiddenViewParking: false
           })
           return true

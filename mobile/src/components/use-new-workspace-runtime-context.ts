@@ -9,7 +9,13 @@ import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
-} from '../tasks/mobile-task-providers'
+} from '../../../src/shared/task-providers'
+import {
+  readJiraConnectionProbeReply,
+  type MobileJiraConnection
+} from '../tasks/jira-mobile-connection'
+import { jiraConnectionStatusProbe } from '../tasks/mobile-jira-operations'
+import { useMobileJiraConnectionState } from '../tasks/use-mobile-jira-connection-state'
 import type { NewWorktreeRuntimeSettings } from './new-worktree-agent-selection'
 import { newWorkspaceUiStateRead } from './new-workspace-operations'
 
@@ -40,10 +46,16 @@ export function useNewWorkspaceRuntimeContext(
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
   availableProviders: TaskProvider[]
+  jiraConnection: MobileJiraConnection
 } {
   const [runtimeSettings, setRuntimeSettings] = useState<NewWorktreeRuntimeSettings | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
+  // Tasks can offer Jira setup; the composer requires a connected site.
+  const [jiraConnection, setJiraConnection] = useMobileJiraConnectionState(
+    client,
+    visible ? `visible:${hostId ?? ''}` : 'hidden'
+  )
 
   useEffect(() => {
     if (!visible || !client) {
@@ -55,6 +67,7 @@ export function useNewWorkspaceRuntimeContext(
         taskPreflightRead.request(client),
         taskLinearStatusRead.request(client)
       ])
+      const jiraProbe = Promise.allSettled([jiraConnectionStatusProbe.request(client)])
       const [settingsRes, uiRes] = await Promise.allSettled([
         optionalSettingsRead.request(client),
         newWorkspaceUiStateRead.request(client)
@@ -100,6 +113,12 @@ export function useNewWorkspaceRuntimeContext(
           linearConnected
         }).filter((provider) => visibleProviders.includes(provider))
       )
+      const [jiraRes] = await jiraProbe
+      if (!stale) {
+        setJiraConnection(
+          readJiraConnectionProbeReply(jiraRes.status === 'fulfilled' ? jiraRes.value : null)
+        )
+      }
     })()
     return () => {
       stale = true
@@ -111,6 +130,7 @@ export function useNewWorkspaceRuntimeContext(
     setRuntimeSettings,
     trustedOrcaHooks,
     setTrustedOrcaHooks,
-    availableProviders
+    availableProviders,
+    jiraConnection
   }
 }

@@ -47,36 +47,25 @@ function lineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage {
 
 describe('sharesWorktreeLineageBoundary', () => {
   const boundary = (overrides: Partial<WorktreeLineageBoundary> = {}): WorktreeLineageBoundary => ({
-    repoId: 'repo',
     hostId: 'local',
-    projectId: 'github:stablyai/orca',
     ...overrides
   })
 
-  it('accepts an identical repo, host, and project', () => {
+  it('accepts the same host', () => {
     expect(sharesWorktreeLineageBoundary(boundary(), boundary())).toBe(true)
-  })
-
-  it('rejects a differing repo even when host and project agree', () => {
-    expect(sharesWorktreeLineageBoundary(boundary(), boundary({ repoId: 'other-repo' }))).toBe(
-      false
-    )
   })
 
   it.each([
     ['child host', boundary({ hostId: undefined }), boundary()],
-    ['parent host', boundary(), boundary({ hostId: undefined })],
-    ['child project', boundary({ projectId: undefined }), boundary()],
-    ['parent project', boundary(), boundary({ projectId: undefined })]
+    ['parent host', boundary(), boundary({ hostId: undefined })]
   ])('treats an undefined %s as compatible', (_label, child, parent) => {
     expect(sharesWorktreeLineageBoundary(child, parent)).toBe(true)
   })
 
-  it.each([
-    ['host', boundary({ hostId: 'ssh:remote' })],
-    ['project', boundary({ projectId: 'github:other/project' })]
-  ])('rejects a defined %s mismatch', (_label, parent) => {
-    expect(sharesWorktreeLineageBoundary(boundary(), parent)).toBe(false)
+  it('rejects a different known host', () => {
+    expect(sharesWorktreeLineageBoundary(boundary(), boundary({ hostId: 'ssh:remote' }))).toBe(
+      false
+    )
   })
 })
 
@@ -84,8 +73,17 @@ describe('projectResolvedWorktreeLineage', () => {
   const parent = worktree('parent', 'parent-instance')
   const child = worktree('child', 'child-instance')
 
-  it('projects exact instance-aware parent and child metadata', () => {
-    const projected = projectResolvedWorktreeLineage([child, parent], { child: lineage() })
+  it('projects exact instance-aware metadata across projects on one host', () => {
+    const foreignParent = {
+      ...parent,
+      repoId: 'other',
+      projectId: 'parent',
+      hostId: 'local' as const
+    }
+    const ownedChild = { ...child, projectId: 'child', hostId: 'local' as const }
+    const projected = projectResolvedWorktreeLineage([ownedChild, foreignParent], {
+      child: lineage()
+    })
 
     expect(projected).toMatchObject([
       { id: 'child', parentWorktreeId: 'parent', childWorktreeIds: [], lineage: lineage() },
@@ -106,11 +104,9 @@ describe('projectResolvedWorktreeLineage', () => {
     ])
   })
 
-  it.each([
-    ['repo', { repoId: 'other-repo' }, {}],
-    ['known host', { hostId: 'local' as const }, { hostId: 'ssh:remote' as const }],
-    ['known project', { projectId: 'github:stablyai/orca' }, { projectId: 'github:other/project' }]
-  ])('rejects a %s boundary mismatch', (_label, childOverrides, parentOverrides) => {
+  it('rejects a known host mismatch', () => {
+    const childOverrides = { hostId: 'local' as const }
+    const parentOverrides = { hostId: 'ssh:remote' as const }
     const boundedChild = worktree('child', 'child-instance', childOverrides)
     const boundedParent = worktree('parent', 'parent-instance', parentOverrides)
 
@@ -121,6 +117,21 @@ describe('projectResolvedWorktreeLineage', () => {
     expect(projected).toMatchObject([
       { id: 'child', parentWorktreeId: null, lineage: null },
       { id: 'parent', childWorktreeIds: [] }
+    ])
+  })
+
+  it('keeps colliding ids on different hosts separate', () => {
+    const localParent = worktree('parent', 'parent-instance', { hostId: 'local' })
+    const remoteParent = worktree('parent', 'parent-instance', { hostId: 'ssh:remote' })
+    const localChild = worktree('child', 'child-instance', { hostId: 'local' })
+    expect(
+      projectResolvedWorktreeLineage([localChild, remoteParent, localParent], {
+        child: lineage()
+      })
+    ).toMatchObject([
+      { parentWorktreeId: 'parent' },
+      { childWorktreeIds: [] },
+      { childWorktreeIds: ['child'] }
     ])
   })
 

@@ -17,6 +17,7 @@ import {
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 
 let rig: QueuedMessageTestRig
+const { setTimeout: realSetTimeout, clearTimeout: realClearTimeout } = globalThis
 
 afterEach(() => rig.dispose())
 
@@ -43,9 +44,10 @@ function stopEvents(): JournalStopEvent[] {
 }
 
 /** The Stop events as the provider's close finds them, or null when no close ran. */
-function stopEventsAtClose(): { events: JournalStopEvent[] | null } {
+function stopEventsAtClose(onClose?: () => void): { events: JournalStopEvent[] | null } {
   const seen: { events: JournalStopEvent[] | null } = { events: null }
   rig.closeSession.mockImplementationOnce(async () => {
+    onClose?.()
     // The event is issued before the kill, never awaited by it: the journal writes it ahead of
     // anything the kill makes the child write.
     await new Promise((resolve) => setImmediate(resolve))
@@ -53,6 +55,62 @@ function stopEventsAtClose(): { events: JournalStopEvent[] | null } {
     return true
   })
   return seen
+}
+
+async function awaitCloseStep<T>(pending: Promise<T>, phase: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  // A missing host callback must fail without advancing the observation clock.
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = realSetTimeout(() => reject(new Error(`Timed out awaiting ${phase}`)), 2_000)
+  })
+  try {
+    return await Promise.race([pending, deadline])
+  } finally {
+    realClearTimeout(timeout)
+  }
+}
+
+async function closePastSlowDrain(
+  cause: 'user-close' | 'evict',
+  prepare: () => void | Promise<void>
+) {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  const began = Date.now()
+  const entered = Promise.withResolvers<void>()
+  const closingProvider = Promise.withResolvers<void>()
+  const runtime = rig.host.collaboratorsForTests().runtimeState
+  const flush = runtime.flushEventSink.bind(runtime)
+  let closing: ReturnType<QueuedMessageTestRig['host']['close']> | undefined
+  const flushing = vi.spyOn(runtime, 'flushEventSink')
+  try {
+    await awaitCloseStep(Promise.resolve().then(prepare), 'slow sink preparation')
+    flushing.mockImplementationOnce((sessionId) => {
+      const pending = flush(sessionId)
+      entered.resolve()
+      return pending
+    })
+    const atClose = stopEventsAtClose(closingProvider.resolve)
+    const callsBefore = rig.closeSession.mock.calls.length
+    closing = rig.host.close(HOST_TEST_SESSION, cause)
+    await awaitCloseStep(entered.promise, 'close entering the sink drain')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    await vi.advanceTimersByTimeAsync(999)
+    expect(rig.closeSession).toHaveBeenCalledTimes(callsBefore)
+    await vi.advanceTimersByTimeAsync(1)
+    await awaitCloseStep(closingProvider.promise, 'provider close at 1,000ms')
+    expect(Date.now() - began).toBe(1_000)
+    return atClose
+  } finally {
+    try {
+      // Finish the original 1,500ms sink delay before teardown drains it.
+      await vi.advanceTimersByTimeAsync(Math.max(0, 1_500 - (Date.now() - began)))
+    } finally {
+      flushing.mockRestore()
+      vi.useRealTimers()
+    }
+    await awaitCloseStep(Promise.resolve(closing), 'host close cleanup')
+    await awaitCloseStep(rig.host.flushStreamedEvents(HOST_TEST_SESSION), 'event sink cleanup')
+  }
 }
 
 async function runningTurn(turnId = 'turn-1'): Promise<string> {
@@ -161,29 +219,37 @@ describe('every Stop entry writes its event, with its reason, before it ends the
     const open = journal()
     const append = open.appendItem.bind(open)
     let held = false
-    vi.spyOn(open, 'appendItem').mockImplementation(async (...args: Parameters<typeof append>) => {
-      if (!held && args[1].kind === 'turn' && args[1].state === 'running') {
-        held = true
-        await new Promise((resolve) => setTimeout(resolve, 1_500))
-      }
-      return append(...args)
+    const heldSink = Promise.withResolvers<void>()
+    const atClose = await closePastSlowDrain('user-close', async () => {
+      vi.spyOn(open, 'appendItem').mockImplementation(
+        async (...args: Parameters<typeof append>) => {
+          if (!held && args[1].kind === 'turn' && args[1].state === 'running') {
+            held = true
+            const delay = new Promise((resolve) => setTimeout(resolve, 1_500))
+            heldSink.resolve()
+            await delay
+          }
+          return append(...args)
+        }
+      )
+      rig.host
+        .collaboratorsForTests()
+        .runtimeState.eventSinkFor(HOST_TEST_SESSION)
+        .sink.appendItem(
+          { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 999 },
+          {
+            kind: 'turn',
+            turnId: 'turn-1',
+            state: 'running',
+            startedAt: Date.now(),
+            userItemId: agentJournalSubmissionKey(sent)
+          },
+          { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+        )
+      await heldSink.promise
+      // The echo's acceptance lands straight in the journal, ahead of the turn row.
+      await rig.settleAccepted(sent, 'turn-1')
     })
-    rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION).sink.appendItem(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 999 },
-      {
-        kind: 'turn',
-        turnId: 'turn-1',
-        state: 'running',
-        startedAt: Date.now(),
-        userItemId: agentJournalSubmissionKey(sent)
-      },
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    // The echo's acceptance lands straight in the journal, ahead of the turn row.
-    await rig.settleAccepted(sent, 'turn-1')
-    const atClose = stopEventsAtClose()
-
-    await rig.host.close(HOST_TEST_SESSION, 'user-close')
 
     expect(atClose.events?.map((event) => event.reason)).toEqual(['user-close'])
   }, 20_000)
@@ -241,14 +307,13 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
       const sink = rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION)
       const drained = sink.drained.bind(sink)
-      vi.spyOn(sink, 'drained')
-        .mockImplementationOnce(
-          () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 1_500))
-        )
-        .mockImplementation(drained)
-      const atClose = stopEventsAtClose()
-
-      await rig.host.close(HOST_TEST_SESSION, 'evict')
+      const atClose = await closePastSlowDrain('evict', () => {
+        vi.spyOn(sink, 'drained')
+          .mockImplementationOnce(
+            () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 1_500))
+          )
+          .mockImplementation(drained)
+      })
 
       expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop'])
       // The close hides the row, as every close of a chat does; the Stop still pauses.
@@ -269,7 +334,7 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       { kind: 'turn', turnId: 'turn-1', state: 'interrupted', completedAt: Date.now() },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
     const sink = rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION)
     const drained = sink.drained.bind(sink)
     vi.spyOn(sink, 'drained')

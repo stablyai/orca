@@ -3,13 +3,14 @@ import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
+import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../shared/terminal-output-side-effects'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
-import type { PtyProviderBufferSnapshot } from '../providers/types'
+import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
 import type { TerminalCommandPaint } from './terminal-command-paint'
@@ -133,6 +134,7 @@ export type RuntimeHeadlessTerminal = {
 
 export type RuntimeVisibleTerminalState = {
   lines: string[]
+  tailRows?: RuntimeTerminalRowMetadata[]
   draft?: string
   isAlternateScreen: boolean
   sequence: number

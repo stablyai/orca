@@ -23,7 +23,7 @@ export const uiClipboardAndWindowControlsApi = {
       filePath: string
       relativePath: string
       staged: boolean
-      runtimeEnvironmentId?: string
+      runtimeEnvironmentId?: string | null
       navigation?: RuntimeNavigationTarget
     }) => void
   ): (() => void) => {
@@ -34,7 +34,7 @@ export const uiClipboardAndWindowControlsApi = {
         filePath: string
         relativePath: string
         staged: boolean
-        runtimeEnvironmentId?: string
+        runtimeEnvironmentId?: string | null
         navigation?: RuntimeNavigationTarget
       }
     ) => callback(data)
@@ -72,6 +72,15 @@ export const uiClipboardAndWindowControlsApi = {
       callback(data)
     ipcRenderer.on('ui:sleepWorktree', listener)
     return () => ipcRenderer.removeListener('ui:sleepWorktree', listener)
+  },
+  onWorktreeSleepRequest: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:worktreeSleepRequest', listener)
+    return () => ipcRenderer.removeListener('ui:worktreeSleepRequest', listener)
+  },
+  respondWorktreeSleep: (response) => {
+    ipcRenderer.send('ui:worktreeSleepResponse', response)
   },
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>

@@ -3,7 +3,9 @@ import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
@@ -11,6 +13,8 @@ import type {
 import type { ProviderRateLimits, RateLimitState } from '../../../../shared/rate-limit-types'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
+import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
+import { useAppStore } from '../../store'
 
 export function AntigravityAccountsSection({
   owner,
@@ -40,6 +44,10 @@ export function AntigravityAccountsSection({
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   const runtime = target.runtime
   const wslDistro = target.wslDistro ?? null
+  // Chats run on the host itself, never in a WSL distro.
+  const nativeChat = useAppStore((s) => s.settings?.experimentalNativeChat === true)
+  const chats = nativeChat && runtime !== 'wsl'
+  const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
 
   useEffect(() => {
     mounted.current = true
@@ -279,6 +287,27 @@ export function AntigravityAccountsSection({
           'Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.'
         )}
       </p>
+      {chats && chatRuntime.kind === 'active' ? (
+        <ManagedRuntimeInstallRow
+          observation={chatRuntime}
+          agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
+        >
+          {(line, button) => (
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'settings.chat.providers.antigravityDescription',
+                    'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
+                  )}
+                </p>
+                {line}
+              </div>
+              {button}
+            </div>
+          )}
+        </ManagedRuntimeInstallRow>
+      ) : null}
     </section>
   )
 }

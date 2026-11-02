@@ -1,3 +1,4 @@
+import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
@@ -14,7 +15,7 @@ import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
-import { agentLaunchPaneSpawnHold } from '@/lib/agent-launch-pane-spawn-hold'
+import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
@@ -48,12 +49,6 @@ export async function connectIpcPty(
     return
   }
   if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
-    if (options.admitPtyId && !options.admitPtyId(options.sessionId)) {
-      return context.isDestroyed() ? undefined : { id: options.sessionId }
-    }
-    if (context.isDestroyed()) {
-      return
-    }
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
     if (context.isDestroyed()) {
@@ -82,14 +77,6 @@ export async function connectIpcPty(
         return
       }
     }
-    // A launch pane this window made spawns only once the host has taken it.
-    const launchPaneHold = agentLaunchPaneSpawnHold(transportOptions.tabId, transportOptions.leafId)
-    if (launchPaneHold) {
-      await launchPaneHold
-      if (context.isDestroyed()) {
-        return
-      }
-    }
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
@@ -98,7 +85,8 @@ export async function connectIpcPty(
     // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
-    const retireFreshSpawn = async (path: 'disposed' | 'refused'): Promise<void> => {
+    settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
+    const retireDisposedFreshSpawn = async (): Promise<void> => {
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
         return
       }
@@ -106,29 +94,20 @@ export async function connectIpcPty(
       if (spawnResult.isReattach || spawnResult.coldRestore || context.ownsPtyId(spawnResult.id)) {
         return
       }
-      // Only disposed transports can have a successor; live refusal must still retire the PTY (#11003).
-      const retained = path === 'disposed' && retainDisposedSpawn?.() === true
-      if (!retained) {
+      // A disposed transport can have a successor that still owns this PTY (#11003).
+      if (retainDisposedSpawn?.() !== true) {
         await window.api.pty.kill(spawnResult.id)
       }
     }
 
     if (context.isDestroyed()) {
-      await retireFreshSpawn('disposed')
-      return
-    }
-    if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
-      await retireFreshSpawn('refused')
-      return context.isDestroyed() ? undefined : spawnResult
-    }
-    if (context.isDestroyed()) {
-      await retireFreshSpawn('disposed')
+      await retireDisposedFreshSpawn()
       return
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
       if (context.isDestroyed()) {
-        await retireFreshSpawn('disposed')
+        await retireDisposedFreshSpawn()
         return
       }
     }
@@ -177,6 +156,7 @@ export async function connectIpcPty(
     }
     return projectIpcPtyConnectResult(spawnResult)
   } catch (error) {
+    settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, null)
     if (context.isDestroyed()) {
       return
     }
@@ -197,6 +177,11 @@ function handleConnectError(
     return { id: options.sessionId, sessionExpired: true }
   }
   if (message.includes('was explicitly killed')) {
+    return undefined
+  }
+  const deferral = readTerminalSpawnDeferral(message)
+  if (deferral) {
+    context.getCallbacks().onSpawnDeferred?.(deferral)
     return undefined
   }
   if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {

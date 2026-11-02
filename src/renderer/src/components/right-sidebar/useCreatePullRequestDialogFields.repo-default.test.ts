@@ -13,6 +13,7 @@ vi.mock('@/runtime/runtime-repo-client', () => ({
 }))
 
 const { useCreatePullRequestDialogFields } = await import('./useCreatePullRequestDialogFields')
+const { useAppStore } = await import('@/store')
 
 type DialogFields = ReturnType<typeof useCreatePullRequestDialogFields>
 
@@ -52,6 +53,7 @@ function renderFields(initialRepoId: string): {
       branch: 'feature/child',
       eligibility,
       settings: null,
+      target: { kind: 'local' },
       submitting: false
     })
     return null
@@ -86,6 +88,14 @@ function renderFields(initialRepoId: string): {
 
 beforeEach(() => {
   getRuntimeRepoBaseRefDefault.mockReset()
+  // Why: refs are read on the repo row's own host.
+  const repo = { path: '/repo', displayName: 'Repo', badgeColor: '#000', addedAt: 0 }
+  useAppStore.setState({
+    repos: [
+      { ...repo, id: 'repo-1' },
+      { ...repo, id: 'repo-2' }
+    ]
+  })
 })
 
 describe('useCreatePullRequestDialogFields repo default base ref', () => {

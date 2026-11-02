@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react'
+import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/editor-autosave'
+import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { useAppStore } from '@/store'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   isRetryableNativeChatVisualFailure,
   peekCachedNativeChatVisual,
@@ -34,10 +38,11 @@ async function loadWithRetries(
   signal: AbortSignal,
   setState: (
     update: (shown: NativeChatVisualDocumentState) => NativeChatVisualDocumentState
-  ) => void
+  ) => void,
+  fresh: boolean
 ): Promise<void> {
   for (let retry = 0; ; retry += 1) {
-    const outcome = await readNativeChatVisual(identity)
+    const outcome = await readNativeChatVisual(identity, { fresh })
     if (signal.aborted) {
       return
     }
@@ -65,9 +70,40 @@ async function loadWithRetries(
   }
 }
 
+/** How many times the editor has saved the visual's file on the chat's own host. */
+function useEditorSavesOf(target: RuntimeClientTarget, path: string | null): number {
+  const [saves, setSaves] = useState(0)
+  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  useEffect(() => {
+    if (!path) {
+      return
+    }
+    const onSaved = (event: Event): void => {
+      const detail: unknown = event instanceof CustomEvent ? event.detail : null
+      if (!detail || typeof detail !== 'object' || !('fileId' in detail)) {
+        return
+      }
+      const state = useAppStore.getState()
+      const file = state.openFiles.find((open) => open.id === detail.fileId)
+      // Same path on another host is another file.
+      const owner =
+        file?.filePath === path
+          ? getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
+          : null
+      if (owner && (owner.kind === 'environment' ? owner.environmentId : null) === environmentId) {
+        setSaves((count) => count + 1)
+      }
+    }
+    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
+    return () => window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
+  }, [environmentId, path])
+  return saves
+}
+
 /**
  * The visual's current document. Starts from the cached revision when there is one, then asks the
- * host (revalidating it) once `enabled`. A later failure keeps a document already shown.
+ * host (revalidating it) once `enabled`, and freshly again after each editor save of its file. A
+ * later failure keeps a document already shown.
  */
 export function useNativeChatVisualDocument(
   identity: NativeChatVisualIdentity,
@@ -80,6 +116,10 @@ export function useNativeChatVisualDocument(
     const cached = peekCachedNativeChatVisual(identity)
     return cached ? { status: 'ready', document: cached } : { status: 'loading' }
   })
+  const saves = useEditorSavesOf(
+    identity.target,
+    state.status === 'ready' ? state.document.path : null
+  )
 
   useEffect(() => {
     if (!enabled) {
@@ -91,9 +131,9 @@ export function useNativeChatVisualDocument(
       file
     }
     const abort = new AbortController()
-    void loadWithRetries(identityNow, abort.signal, setState)
+    void loadWithRetries(identityNow, abort.signal, setState, saves > 0)
     return () => abort.abort()
-  }, [enabled, environmentId, file, sessionId])
+  }, [enabled, environmentId, file, sessionId, saves])
 
   return state
 }

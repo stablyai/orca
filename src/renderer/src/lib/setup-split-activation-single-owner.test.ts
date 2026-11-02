@@ -8,10 +8,10 @@ import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { gateWorktreeAgentActivation } from './worktree-agent-activation-gate'
-import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent-test-state'
+import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent.test-fixture'
 
 /**
- * STA-9417, converted from the natural repro: a host-created worktree whose setup script runs in a
+ * Conditional old-host reconstruction, not proof of STA-9417: a host-created worktree with a
  * split of the (unmounted) primary tab, then the first activation of that worktree. When main's
  * split reveal does not reach the window, the activation sweep mints a second tab for the setup
  * PTY, so two saved panes own one terminal and one of them freezes.
@@ -62,8 +62,7 @@ function baseState(): Partial<AppState> {
     settings: {
       ...getDefaultSettings(path.join(path.sep, 'home')),
       agentCmdOverrides: {},
-      defaultTuiAgent: 'codex',
-      setupScriptLaunchMode: 'split-vertical'
+      defaultTuiAgent: 'codex'
     },
     markWorktreeVisited: vi.fn(),
     recordWorktreeVisit: vi.fn(),
@@ -225,7 +224,7 @@ afterEach(() => {
   useAppStore.setState(initialState, true)
 })
 
-describe('STA-9417: setup split of an unmounted tab, then first activation', () => {
+describe('old-host split of an unmounted tab, then first activation', () => {
   async function runScenario(revealSplit: boolean): Promise<void> {
     const worktree = makeWorktree()
     const primaryPtyId = `${worktree.id}@@primary`
@@ -242,6 +241,7 @@ describe('STA-9417: setup split of an unmounted tab, then first activation', () 
 
     const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
     expect(tabs.map((tab) => tab.id)).toEqual([TAB_B])
+    expect(useAppStore.getState().pendingStartupByTabId).toEqual({})
     expect(Object.fromEntries(ownersByPty(worktree.id))).toEqual({
       [primaryPtyId]: [`${TAB_B}:${PRIMARY_LEAF}`],
       [setupPtyId]: [`${TAB_B}:${SETUP_LEAF}`]
@@ -252,12 +252,12 @@ describe('STA-9417: setup split of an unmounted tab, then first activation', () 
     await runScenario(true)
   })
 
-  // STA-9417: fails until the mirror refactor (B2-4) pushes main's split before the sweep runs.
+  // Main now always offers the split. If that offer is lost, this is the window alone.
   it.fails('ends with one tab and one owner per terminal when the split reveal never arrives', async () => {
     await runScenario(false)
   })
 
-  // STA-9417: fails until the mirror refactor (B2-4); the odd runs mint the duplicate.
+  // The window alone, as above; the odd runs mint the duplicate.
   it.fails('stays duplicate-free across 8 create-then-activate cycles, with or without the reveal', async () => {
     let duplicates = 0
     for (let run = 0; run < 8; run++) {
@@ -280,5 +280,24 @@ describe('STA-9417: setup split of an unmounted tab, then first activation', () 
       duplicates += (useAppStore.getState().tabsByWorktree[worktree.id] ?? []).length - 1
     }
     expect(duplicates).toBe(0)
+  })
+
+  it('rejects a split into a tab it lacks without switching to that workspace', () => {
+    const worktree = makeWorktree()
+    useAppStore.setState({ ...baseState(), activeWorktreeId: null })
+    const host = stubHost(`${worktree.id}@@primary`, `${worktree.id}@@setup`)
+    registerTerminalPresentationIpcBridge([])
+
+    host.reveal()({
+      ...setupSplitReveal('split-into-unknown-tab', worktree.id, `${worktree.id}@@setup`),
+      activate: true,
+      surfaceOwner: undefined
+    })
+
+    expect(useAppStore.getState().activeWorktreeId).toBeNull()
+    expect(window.api.ui.replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'split-into-unknown-tab',
+      error: `Terminal tab ${TAB_B} not found`
+    })
   })
 })

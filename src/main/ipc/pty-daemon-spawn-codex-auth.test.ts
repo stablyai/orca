@@ -14,7 +14,8 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { join } from 'node:path'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
-import { registerPtyHandlers, resolveCodexHomeAfterManagedAuthReadiness } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { resolveCodexHomeAfterManagedAuthReadiness } from './pty/host-env/codex-home'
 
 const consumerConfigHome = join(TEST_MANAGED_ROOT, 'opencode-consumer-config')
 

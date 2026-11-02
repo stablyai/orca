@@ -80,6 +80,18 @@ describe('managed orcad SSH target claims', () => {
     expect(current().orcadProvisioning).toBeUndefined()
   })
 
+  it("claims a recipe VM's target: its runtime owns the host's lifecycle, not its server", () => {
+    const { claims } = setup({
+      target: { owner: { type: 'on-demand-runtime', runtimeId: 'vm-1' } }
+    })
+    expect(claims.preflight('ssh-1')).toMatchObject({ claimable: true, blockers: [] })
+    expect(
+      getManagedOrcadFenceEnvironmentId(
+        claims.claim('ssh-1', 'environment-1', { deployName: 'VM', ownerRecorded: false })
+      )
+    ).toBe('environment-1')
+  })
+
   it('claims for SSH access without recording a provisioning intent', () => {
     const { claims } = setup({ target: { generation: 1 } })
     expect(

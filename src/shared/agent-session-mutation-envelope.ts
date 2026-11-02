@@ -132,7 +132,9 @@ export function agentSessionLedgerRefusal(
 
 /** Why the single admission oracle said no, mapped to what the client can do
  *  about it. The predicate itself is never re-implemented here. */
-function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireRefusal | null {
+export function refuseUnlessWriterAdmitted(
+  lease: AgentSessionLease
+): AgentSessionWireRefusal | null {
   if (agentSessionLeaseAdmitsWriter(lease)) {
     return null
   }

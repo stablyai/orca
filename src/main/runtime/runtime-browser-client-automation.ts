@@ -1,5 +1,5 @@
 import { BrowserClientAutomationMethod } from '../../shared/browser-client-automation-protocol'
-import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 export type ClientHostedBrowserRpcRoute = { handled: false } | { handled: true; result: unknown }

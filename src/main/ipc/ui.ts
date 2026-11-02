@@ -1,3 +1,10 @@
+import { normalizeJiraQuickFilterState } from '../../shared/jira-quick-filters'
+import { JiraQuickFilterStateParam } from '../../shared/rpc-contract/jira-quick-filter-params'
+import {
+  normalizeJiraSavedFilterState,
+  mutateJiraSavedFilterState
+} from '../../shared/jira-saved-filters'
+import { JiraSavedFilterMutationParam } from '../../shared/rpc-contract/jira-saved-filter-params'
 import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
@@ -59,6 +66,23 @@ export function registerUIHandlers(
     }
   })
 
+  ipcMain.handle('ui:getJiraQuickFilters', () =>
+    normalizeJiraQuickFilterState(store.getUI().jiraQuickFilterState)
+  )
+  ipcMain.handle('ui:setJiraQuickFilters', (_event, input: unknown) => {
+    const state = normalizeJiraQuickFilterState(JiraQuickFilterStateParam.parse(input))
+    store.updateUI({ jiraQuickFilterState: state })
+    return state
+  })
+  ipcMain.handle('ui:getJiraSavedFilters', () =>
+    normalizeJiraSavedFilterState(store.getUI().jiraSavedFilterState)
+  )
+  ipcMain.handle('ui:mutateJiraSavedFilters', (_event, input: unknown) => {
+    const mutation = JiraSavedFilterMutationParam.parse(input)
+    const state = mutateJiraSavedFilterState(store.getUI().jiraSavedFilterState, mutation)
+    store.updateUI({ jiraSavedFilterState: state })
+    return state
+  })
   ipcMain.handle('ui:get', () => {
     return store.getUI()
   })

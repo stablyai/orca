@@ -12,11 +12,11 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 import {
-  assertOutsideDefaultClaudeHomes,
   describeClaudeProfile,
   prepareClaudeProfileDirectory,
   readClaudeProfileObject,
-  readUserClaudeConfigDir
+  readUserClaudeConfigDir,
+  readUserClaudeConfigDirAsSet
 } from './claude-profile-paths'
 
 // Case-only aliases exist only on a case-insensitive filesystem (default APFS, NTFS).
@@ -57,10 +57,16 @@ describe('Claude profile namespace', () => {
         target,
         home: join(dir, 'claude-profiles/account-a/home')
       })
-      prepareClaudeProfileDirectory(dir, profile, userHome)
-      expect(
-        JSON.parse(readFileSync(join(dir, 'claude-profiles/account-a/profile.json'), 'utf8'))
-      ).toEqual({ version: 1, accountId: 'account-a', runtime: 'wsl', distro: 'Ubuntu' })
+      const markSetUp = prepareClaudeProfileDirectory(dir, profile, userHome)
+      const marker = join(dir, 'claude-profiles/account-a/profile.json')
+      expect(existsSync(marker)).toBe(false)
+      markSetUp()
+      expect(JSON.parse(readFileSync(marker, 'utf8'))).toEqual({
+        version: 1,
+        accountId: 'account-a',
+        runtime: 'wsl',
+        distro: 'Ubuntu'
+      })
       // The host id is the caller's view of the host, so another caller's spelling is the same profile.
       prepareClaudeProfileDirectory(
         dir,
@@ -121,11 +127,9 @@ describe('Claude profile namespace', () => {
   it.runIf(caseInsensitive)('refuses a case-only alias of the default home', () => {
     const userHome = root()
     mkdirSync(join(userHome, '.claude'))
-    expect(() => assertOutsideDefaultClaudeHomes(join(userHome, '.CLAUDE'), userHome)).toThrow(
-      'separate directories'
-    )
+    const dataRoot = join(userHome, '.CLAUDE', 'orca')
     expect(() =>
-      assertOutsideDefaultClaudeHomes(join(userHome, '.CLAUDE', 'nested'), userHome)
+      prepareClaudeProfileDirectory(dataRoot, describeClaudeProfile(dataRoot, 'a', local), userHome)
     ).toThrow('separate directories')
   })
   it("reads the user's own CLAUDE_CONFIG_DIR but never Orca's injected one", () => {
@@ -146,6 +150,17 @@ describe('Claude profile namespace', () => {
         ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
       })
     ).toBe(resolve('/cfg/claude'))
+  })
+  it("keeps the user's own CLAUDE_CONFIG_DIR spelled as set, through an outer Orca too", () => {
+    expect(readUserClaudeConfigDirAsSet({ CLAUDE_CONFIG_DIR: '/cfg/claude/' })).toBe('/cfg/claude/')
+    const outer = {
+      CLAUDE_CONFIG_DIR: '/data/claude-profiles/a/home',
+      ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
+    }
+    expect(readUserClaudeConfigDirAsSet(outer)).toBeUndefined()
+    expect(
+      readUserClaudeConfigDirAsSet({ ...outer, ORCA_CLAUDE_USER_CONFIG_DIR: 'C:/Claude Config/' })
+    ).toBe('C:/Claude Config/')
   })
   it("refuses a profile at or around the user's own CLAUDE_CONFIG_DIR", () => {
     const userHome = root()

@@ -5,10 +5,6 @@ export function chipLabel(chip: SkillLocationChip): string {
   switch (chip) {
     case 'current':
       return translate('auto.components.skills.SkillFreshnessRow.chipCurrent', 'Current')
-    case 'newer':
-      return translate('auto.components.skills.SkillFreshnessRow.chipNewer', 'Newer')
-    case 'unrecognized':
-      return translate('auto.components.skills.SkillFreshnessRow.chipUnrecognized', 'Unrecognized')
     case 'inaccessible':
       return translate('auto.components.skills.SkillFreshnessRow.chipInaccessible', 'Inaccessible')
     case 'duplicate':
@@ -34,16 +30,6 @@ export function chipTooltip(chip: SkillLocationChip): string {
       return translate(
         'auto.components.skills.SkillFreshnessRow.tipCurrent',
         'This copy matches the current official version.'
-      )
-    case 'newer':
-      return translate(
-        'auto.components.skills.SkillFreshnessRow.tipNewer',
-        'This copy is a later version than the one this build of Orca ships.'
-      )
-    case 'unrecognized':
-      return translate(
-        'auto.components.skills.SkillFreshnessRow.tipUnrecognized',
-        'This copy doesn’t match any official version — it may be modified, or a different skill with the same name.'
       )
     case 'inaccessible':
       return translate(

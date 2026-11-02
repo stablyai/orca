@@ -14,10 +14,11 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { getDaemonPidPath } from '../../src/main/daemon/daemon-spawner'
 import { readDaemonPidRecord } from '../../src/main/daemon/daemon-endpoint-incarnation'
 import { resolveBundledOrcadRuntime } from '../../src/main/orcad/orcad-bundled-runtime'
+import { ORCAD_EXIT_CONFIGURATION } from '../../src/main/orcad/orcad-configuration-exit'
 import {
   buildDaemonSessionClient,
   type DaemonSessionClientResult
@@ -40,7 +41,6 @@ const RUN = process.env.ORCA_E2E_ORCAD_SERVE === '1'
 const slotDir = path.resolve('out/orcad')
 const orcadRuntime = RUN && existsSync(slotDir) ? resolveBundledOrcadRuntime(slotDir) : null
 const SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE = 3
-const ORCAD_EXIT_CONFIGURATION = 78
 
 test.describe.configure({ mode: 'serial' })
 

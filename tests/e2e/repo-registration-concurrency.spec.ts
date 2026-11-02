@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 test.use({ seedTestRepo: false })
 
@@ -56,7 +56,9 @@ test('concurrent registration keeps one identity, including nested and linked pa
       if (results.some((result) => 'error' in result)) {
         throw new Error(JSON.stringify(results))
       }
-      await window.__store!.getState().fetchRepos()
+      await window
+        .__store!.getState()
+        .fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
       await window.__store!.getState().awaitLocalRepoCatalogSettlement()
       return {
         ids: results.map((result) => ('repo' in result ? result.repo.id : null)),

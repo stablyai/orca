@@ -44,7 +44,9 @@ function renderUserMessage(source?: AgentMessageSource, worktreeId: string | nul
       expandSignal={false}
       onScrollMessageToTop={vi.fn()}
       runtimeContext={
-        worktreeId ? { settings: null, worktreeId, worktreePath: '/repo' } : undefined
+        worktreeId
+          ? { target: { kind: 'local' as const }, worktreeId, worktreePath: '/repo' }
+          : undefined
       }
     />
   )

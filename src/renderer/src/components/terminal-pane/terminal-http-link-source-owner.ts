@@ -44,3 +44,11 @@ export function resolveTerminalHttpLinkSourceOwner(
   }
   return { kind: 'local' }
 }
+
+/** The pane's terminal handle on its paired server; null for a pane no server runs. */
+export function resolveTerminalRuntimeHandle(
+  transport: Pick<PtyTransport, 'getPtyId'> | null | undefined
+): string | null {
+  const ptyId = transport?.getPtyId() ?? null
+  return (ptyId ? parseRemoteRuntimePtyId(ptyId)?.handle : null) || null
+}

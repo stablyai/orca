@@ -8,6 +8,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { judgeTerminalForeground, readTerminalProcessRows } from './terminal-foreground-group'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 /**
  * What holds a launched agent's terminal: the agent (anything but the pane's shell), the shell
@@ -61,7 +62,7 @@ export async function readLaunchedAgentForeground(
       return (await controller.confirmShellForeground?.(ptyId)) ? 'shell' : 'unknown'
     }
     if (!host.remote) {
-      const rootPid = (await controller.listProcesses?.(null))?.find(
+      const rootPid = (await controller.listProcesses?.(LOCAL_EXECUTION_HOST_ID))?.find(
         (pane) => pane.id === ptyId
       )?.rootProcessId
       const rows = rootPid ? await readTerminalProcessRows(rootPid) : null

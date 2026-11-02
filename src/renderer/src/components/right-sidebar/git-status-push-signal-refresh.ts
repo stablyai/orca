@@ -4,12 +4,17 @@ import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
+import type { GitStatusMetadataChangedEvent } from '../../../../shared/worktree/types'
+import { isGitStatusSignalForWorktree } from './git-status-signal-attribution'
 
 type UseGitStatusPushSignalRefreshParams = {
   activeRepoId: string | null
   activeWorktreeId: string | null
+  activeWorktreePath: string | null
   enabled: boolean
   fetchStatus: () => void
+  /** Keep stable: it re-subscribes the push signals when it changes. */
+  getRepoWorktreePaths: (repoId: string) => readonly string[]
 }
 
 // Why: these push signals close the latency gap left by the slow terminal-only
@@ -20,8 +25,10 @@ type UseGitStatusPushSignalRefreshParams = {
 export function useGitStatusPushSignalRefresh({
   activeRepoId,
   activeWorktreeId,
+  activeWorktreePath,
   enabled,
-  fetchStatus
+  fetchStatus,
+  getRepoWorktreePaths
 }: UseGitStatusPushSignalRefreshParams): void {
   const fetchStatusRef = useRef(fetchStatus)
   fetchStatusRef.current = fetchStatus
@@ -43,18 +50,25 @@ export function useGitStatusPushSignalRefresh({
       }
       fetchStatusRef.current()
     }
+    // Why: sibling-worktree index churn must not re-run this checkout's status.
+    const handleGitStatusSignal = (signal: GitStatusMetadataChangedEvent): void => {
+      const paths = getRepoWorktreePaths(signal.repoId)
+      if (isGitStatusSignalForWorktree(signal, activeWorktreePath, paths)) {
+        handleRepoSignal(signal)
+      }
+    }
     // Repo metadata changed on disk. Hidden windows skip the nudge; the
     // visibility interval refreshes immediately on reveal.
     const unsubs = [
       subscribeToWorktreesChanged?.(handleRepoSignal),
-      subscribeToGitStatusMetadataChanged?.(handleRepoSignal)
+      subscribeToGitStatusMetadataChanged?.(handleGitStatusSignal)
     ].filter((unsubscribe): unsubscribe is () => void => typeof unsubscribe === 'function')
     return () => {
       for (const unsubscribe of unsubs) {
         unsubscribe()
       }
     }
-  }, [enabled, activeRepoId])
+  }, [enabled, activeRepoId, activeWorktreePath, getRepoWorktreePaths])
 
   useEffect(() => {
     if (!enabled || !activeWorktreeId) {

@@ -79,6 +79,7 @@ export function planProviderTimelineWrites(
     plan.settlement({
       settlementId: providerTimelineSettlementId(context, serial(), settle.what),
       reservedBytes: SETTLEMENT_RESERVED_BYTES,
+      recovered: settle.recovered,
       resolve: settle.resolve
     })
   }

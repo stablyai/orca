@@ -15,8 +15,8 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { afterEach, describe, expect, it } from 'vitest'
-import { forceTerminateProcessTree } from '../../../src/shared/child-process/process-tree-termination'
-import { spawnProcess } from '../../../src/shared/child-process/run-process'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { spawnProcess } from '@orca/process-host'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -300,7 +300,7 @@ describe('release checkout materialization', () => {
     expect(relative(cacheRoot, checkout.root)).not.toMatch(/^\.\./)
   }, 180_000)
 
-  // v1.4.221 still needs the pinned test-only parser for its dense match path.
+  // Keep @streamparser/json in root devDependencies: v1.4.221's dense parser imports it.
   // Default cache root: package resolution must walk up into the repo's node_modules.
   it('runs the released dense parser with its retained test dependency', async () => {
     const checkout = await materializeReleaseCheckout('v1.4.221')

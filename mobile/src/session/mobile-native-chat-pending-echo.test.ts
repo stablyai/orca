@@ -26,7 +26,8 @@ function sendOrigin(
     // Use production's counter so the test cannot mirror its normalization drift.
     baselineOccurrences: countUserTextOccurrences(messages, normalizedText),
     baselineTailMessageId: messages.at(-1)?.id ?? null,
-    baselineResolved: true
+    baselineResolved: true,
+    sentAt: Date.now()
   }
 }
 

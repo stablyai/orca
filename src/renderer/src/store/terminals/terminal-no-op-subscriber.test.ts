@@ -18,7 +18,7 @@ describe('terminal no-op subscriber budget', () => {
       const s = store.getState()
       s.replaceTerminalLayoutPanePtyId('missing', 'leaf', 'pty')
       expect(s.consumeSuppressedPtyExit('missing')).toBe(false)
-      expect(s.consumePendingCodexPaneRestart('missing')).toBe(false)
+      expect(s.consumePendingPaneAccountRestart('missing')).toBeNull()
       s.clearCodexRestartNotice('missing')
       s.dismissCodexRestartNotices(['missing'])
       s.reopenCodexRestartPrompt('missing')
@@ -84,16 +84,16 @@ describe('terminal no-op subscriber budget', () => {
   it('consumes real restart entries and leaves repeated consumes silent', () => {
     const store = createTestStore()
     store.getState().suppressPtyExit('pty')
-    store.getState().queueCodexPaneRestarts(['pty'])
+    store.getState().queuePaneAccountRestarts(['pty'], 'codex')
     const listener = vi.fn()
     store.subscribe(listener)
 
     expect(store.getState().consumeSuppressedPtyExit('pty')).toBe(true)
-    expect(store.getState().consumePendingCodexPaneRestart('pty')).toBe(true)
+    expect(store.getState().consumePendingPaneAccountRestart('pty')).toBe('codex')
     expect(listener).toHaveBeenCalledTimes(2)
     const before = store.getState()
     expect(store.getState().consumeSuppressedPtyExit('pty')).toBe(false)
-    expect(store.getState().consumePendingCodexPaneRestart('pty')).toBe(false)
+    expect(store.getState().consumePendingPaneAccountRestart('pty')).toBeNull()
     expect(listener).toHaveBeenCalledTimes(2)
     expect(store.getState()).toBe(before)
   })
@@ -130,7 +130,7 @@ describe('terminal no-op subscriber budget', () => {
     ]
     for (const [index, action] of actions.entries()) {
       if (index === 1) {
-        store.getState().queueCodexPaneRestarts(['pty'])
+        store.getState().queuePaneAccountRestarts(['pty'], 'codex')
       }
       listener.mockClear()
       action()
@@ -141,6 +141,6 @@ describe('terminal no-op subscriber budget', () => {
       expect(store.getState()).toBe(before)
     }
     expect(store.getState().codexRestartNoticeByPtyId.pty).toBeUndefined()
-    expect(store.getState().pendingCodexPaneRestartIds.pty).toBeUndefined()
+    expect(store.getState().pendingPaneAccountRestarts.pty).toBeUndefined()
   })
 })

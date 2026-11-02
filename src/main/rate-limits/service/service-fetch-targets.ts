@@ -44,11 +44,11 @@ function codexResetUsageVisible(
 }
 
 export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
-  protected resolveCodexHome(target?: CodexAccountSelectionTarget): {
+  protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
     skip: boolean
     homePath: string | null
-  } {
-    const resolution = this.codexHomePathResolver?.(target)
+  }> {
+    const resolution = await this.codexHomePathResolver?.(target)
     if (!resolution) {
       return { skip: false, homePath: null }
     }
@@ -130,6 +130,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       try {
         fresh = await fetchCodexRateLimits({
           codexHomePath,
+          networkProxySettings: this.networkProxySettingsResolver?.(),
           signal: controller.signal
         })
       } catch (error) {
@@ -150,7 +151,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
 
     const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
-    const currentCodexHome = this.resolveCodexHome(target)
+    const currentCodexHome = await this.resolveCodexHome(target)
     // Why: a skip has no provenance to compare, so treat it as no longer active
     // rather than publishing this result against the system-default lane.
     const stillActive =

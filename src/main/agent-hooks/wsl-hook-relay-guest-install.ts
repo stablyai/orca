@@ -9,7 +9,7 @@ import { installWslGuestHooks } from './wsl-hook-fs-adapter'
 import { REINSTALL_MIN_INTERVAL_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { openCodePluginSettingsKey } from './opencode-plugin-settings'
-import type { PluginSources } from '../../relay/plugin-overlay'
+import type { PluginSources } from '../../wsl-guest/plugin-overlay'
 
 /** Structural slice of WslHookRelayManagerDeps — only what an install pass uses. */
 type GuestInstallDeps = {

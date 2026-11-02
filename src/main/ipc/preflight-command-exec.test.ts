@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as LocalCommandResolver from './command-path-resolver'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 
@@ -16,7 +16,7 @@ const {
   runProcessMock: vi.fn()
 }))
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 vi.mock('./preflight-local-env', () => ({ buildLocalPreflightEnv: () => undefined }))
 
@@ -344,6 +344,8 @@ describe('findRunnableLocalCommand', () => {
   })
 
   it('gives an explicit binary the full timeout without trying another copy', async () => {
+    // A frozen clock: the budget is deadline - Date.now(), so a ticking clock reads 4999.
+    vi.spyOn(Date, 'now').mockReturnValue(1000)
     execFileAsyncMock.mockRejectedValue(
       Object.assign(new Error('Timed out'), { code: 'ETIMEDOUT' })
     )

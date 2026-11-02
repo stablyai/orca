@@ -95,4 +95,17 @@ describe('background creation host capture', () => {
       runtimeOwnerEnvironmentId: 'env-1'
     })
   })
+
+  // #18097: the unresolved-owner sentinel must not ride the direct-SSH fallback onto this machine.
+  it('refuses a create whose captured owner is the unresolved-owner sentinel', async () => {
+    const store = createTestStore()
+    store.setState({ repos: [], worktreesByRepo: { repo1: [] } })
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'feature']
+    args[25] = { executionHostId: 'runtime:unresolved-owner' }
+
+    await expect(createWorktree(...args)).rejects.toThrow('The workspace host is unresolved')
+    expect(mockApi.worktrees.create).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
 })

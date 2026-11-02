@@ -52,7 +52,8 @@ export type AgentSessionHandleProvider = (typeof AGENT_SESSION_PROVIDER_HANDLE_P
  *  Checked as a slug by `isStructuredAgentId`; whether a host runs it is its registry's answer. */
 export type StructuredAgentId = string
 
-/** Runtime guard for persisted/remote provider metadata. Unknown values must not impersonate Codex. */
+/** Whether an agent is one of the two built-ins, for features only they have. It does NOT answer
+ *  whether an agent has a structured chat: that is `isStructuredAgentId` plus the host's registry. */
 export function isAgentSessionHandleProvider(value: unknown): value is AgentSessionHandleProvider {
   return value === 'claude' || value === 'codex'
 }

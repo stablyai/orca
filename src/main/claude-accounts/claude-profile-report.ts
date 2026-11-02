@@ -1,19 +1,5 @@
-import type { CLAUDE_PROFILE_HISTORY_DIRS } from './claude-profile-history'
-import type {
-  CLAUDE_PROFILE_RESOURCE_DIRS,
-  CLAUDE_PROFILE_RESOURCE_FILES
-} from './claude-profile-provisioning'
-
-export type ClaudeProfileSurface =
-  | 'profile'
-  | (typeof CLAUDE_PROFILE_HISTORY_DIRS)[number]
-  | 'history.jsonl'
-  | (typeof CLAUDE_PROFILE_RESOURCE_DIRS)[number]
-  | (typeof CLAUDE_PROFILE_RESOURCE_FILES)[number]
-  | 'settings.json'
-  | '.claude.json'
-  | 'ledger'
-  | 'hooks'
+/** A setup step: 'profile', 'hooks', or the name of what it shares (`skills`, `settings.json`). */
+export type ClaudeProfileSurface = string
 
 export type ClaudeProfileSurfaceOutcome =
   | 'linked'

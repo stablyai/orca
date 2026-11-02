@@ -54,7 +54,6 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: () => false,
   sendRuntimePtyInput: vi.fn()
 }))
-vi.mock('@/lib/agent-paste-draft', () => ({ getSettingsForAgentTabRuntimeOwner: () => ({}) }))
 vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
@@ -305,25 +304,10 @@ it('keeps a local image paste after the real composer closes and reopens', async
   await waitFor(() => expect(mocks.state.fieldProps?.imageAttachments?.[0]?.pending).toBeFalsy())
 })
 
-it.each([
-  { kind: 'local', acceptsImages: false },
-  { kind: 'ssh', acceptsImages: false },
-  { kind: 'local', acceptsImages: true },
-  { kind: 'ssh', acceptsImages: true }
-] as const)(
-  'can remove a stalled $kind paste after reopen with acceptsImages=$acceptsImages',
-  async ({ kind, acceptsImages }) => {
-    mocks.state.owner =
-      kind === 'local'
-        ? { kind: 'local' }
-        : {
-            kind: 'ssh',
-            connectionId: 'ssh-1',
-            worktreePath: '/remote/folder',
-            expectedExecutionHostId: 'ssh:ssh-1',
-            expectedSshTargetId: 'ssh-1',
-            expectedSshConnectionGeneration: 1
-          }
+it.each([false, true])(
+  'can remove a stalled paste after reopen with acceptsImages=%s',
+  async (acceptsImages) => {
+    mocks.state.owner = { kind: 'local' }
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     const finishUpload = holdUpload()
     writeNativeChatDraftCache(PANE, 'look at this')
@@ -334,18 +318,12 @@ it.each([
     render(composer(acceptsImages))
     await act(async () => vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000))
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'Saving pasted image…' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Image #1: Saving pasted image…' })).toBeTruthy()
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: 'Remove attachment' }))
     )
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
-    await act(async () =>
-      finishUpload(
-        kind === 'local'
-          ? '/local/native-chat-pastes/orca-paste-1-image.png'
-          : '/tmp/orca-paste-1-image.png'
-      )
-    )
+    await act(async () => finishUpload('/local/native-chat-pastes/orca-paste-1-image.png'))
     expect(readNativeChatAttachmentCache(PANE)).toEqual([])
     expect(readNativeChatDraftCache(PANE)).toBe('look at this')
     expect(mocks.state.fieldProps?.imageAttachments).toEqual([])
@@ -370,7 +348,7 @@ it.each([true, false])(
     render(composer(acceptsImages, handle))
     await act(async () => handle.current?.pasteFromClipboard())
     expect(screen.getByRole('textbox').textContent).toContain('ordinary text')
-    expect(screen.queryByRole('button', { name: 'Saving pasted image…' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Image #1: Saving pasted image…' })).toBeNull()
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
     expect(mocks.save).not.toHaveBeenCalled()
   }

@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BundledRipgrepPath from '../ripgrep/bundled-ripgrep-path'

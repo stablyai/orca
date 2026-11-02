@@ -1,6 +1,6 @@
-// A conversation command is refused for background work only when the chat strip lists that work:
-// both read the host's child records through the one sink read. The provider tracker's own roster
-// is present and claims live work throughout; nothing here may be decided by it.
+// A conversation command is refused for background work the provider reported running and not
+// over, and the strip's child records word the refusal. The provider tracker's own roster is
+// present and claims live work throughout; nothing here may be decided by it.
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -16,11 +16,18 @@ import {
   serveHostTestChildWork
 } from './structured-agent-session-host-test-harness'
 import { HOST_TEST_NOW, HOST_TEST_SESSION } from './structured-agent-session-host-test-data'
+import { reportedChildWork } from './structured-agent-session-reported-child-work.test-support'
 
 let state: ReturnType<typeof hostTestState>
 let compact: Mock<NonNullable<StructuredAgentSessionAdapter['compact']>>
 /** What the store holds for the session; the sink serves it to every reader. */
 let records: AgentChildWorkView[] = []
+
+/** The provider reports `next`, which the store then holds. */
+function report(next: AgentChildWorkView[]): void {
+  records = next
+  state.host.publishChildWorkEvidence(HOST_TEST_SESSION, reportedChildWork(next, HOST_TEST_NOW))
+}
 
 function compactParams() {
   return {
@@ -88,8 +95,8 @@ beforeEach(() => {
   serveHostTestChildWork(() => records)
 })
 
-describe('conversation command admission reads the strip’s child records', () => {
-  it('refuses only while the strip lists live work, and names the stop the strip offers', async () => {
+describe('conversation command admission reads the work the provider reported', () => {
+  it('refuses only while reported work runs, and names the stop the strip offers', async () => {
     await attach()
     const strip: (AgentSessionBackgroundTaskState | null)[] = []
     await state.host.subscribe({
@@ -119,8 +126,7 @@ describe('conversation command admission reads the strip’s child records', () 
       expect(await commandTurnState(first.envelope.clientOperationId)).toBe('completed')
     )
 
-    records = [devServer()]
-    state.host.publishChildWorkEvidence(HOST_TEST_SESSION, [])
+    report([devServer()])
     expect(stripRows()).toEqual([
       { description: 'npm run dev', membership: 'live', stoppable: true, providerId: 'task-dev' }
     ])
@@ -129,8 +135,7 @@ describe('conversation command admission reads the strip’s child records', () 
       refusal: { message: 'Stop background tasks before using this command.' }
     })
 
-    records = [devServer({ state: 'done', membership: 'settled', outcome: 'succeeded' })]
-    state.host.publishChildWorkEvidence(HOST_TEST_SESSION, [])
+    report([devServer({ state: 'done', membership: 'settled', outcome: 'succeeded' })])
     // Finished: the strip hides (it lists running children only), and the record blocks nothing.
     expect(strip.at(-1)).toBeNull()
     expect(stripRows()).toEqual([])
@@ -140,7 +145,7 @@ describe('conversation command admission reads the strip’s child records', () 
     await vi.waitFor(() => expect(compact).toHaveBeenCalledTimes(2))
   })
 
-  it('refuses a queued command at handover once the strip lists live work', async () => {
+  it('refuses a queued command at handover once reported work runs', async () => {
     const acquireChild = state.acquire.getMockImplementation()!
     // Each child names its generation, so the exit below ends exactly the one it names.
     state.acquire.mockImplementation(async (input) => ({
@@ -162,7 +167,7 @@ describe('conversation command admission reads the strip’s child records', () 
     // The records gain live work while that start runs, after the command was accepted.
     const start = state.acquire.getMockImplementation()!
     state.acquire.mockImplementationOnce(async (input) => {
-      records = [devServer()]
+      report([devServer()])
       return start(input)
     })
     const params = compactParams()

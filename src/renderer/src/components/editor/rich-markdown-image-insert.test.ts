@@ -6,12 +6,10 @@ import { toast } from 'sonner'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 
-vi.mock('@/runtime/runtime-file-client', () => ({
-  importExternalPathsToRuntime: vi.fn()
-}))
+vi.mock('@/runtime/runtime-file-import-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null),
@@ -22,12 +20,6 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: vi.fn()
   }
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: vi.fn((settings, runtimeEnvironmentId) =>
-    runtimeEnvironmentId ? { activeRuntimeEnvironmentId: runtimeEnvironmentId } : settings
-  )
 }))
 
 vi.mock('sonner', () => ({

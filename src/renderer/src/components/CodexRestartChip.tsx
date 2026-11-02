@@ -34,7 +34,7 @@ export default function CodexRestartChip({
   }
 
   const handleRestart = (): void => {
-    useAppStore.getState().queueCodexPaneRestarts([ptyId])
+    useAppStore.getState().queuePaneAccountRestarts([ptyId], 'codex')
     onReturnFocus()
   }
 

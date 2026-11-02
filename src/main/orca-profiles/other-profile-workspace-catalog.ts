@@ -1,5 +1,4 @@
 import { lstatSync, readFileSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import {
   getOrcaProfileDataFile,
@@ -9,10 +8,6 @@ import {
 import { getOrcaProfileIndexPath, readProfileIndex } from './profile-index-store'
 import { readProfileStateDomains } from '../persistence/profile-state/profile-state-domain-reader'
 import { assertNoRetainedProfileStateExports } from '../persistence/profile-state/profile-state-recovery-required'
-import {
-  PROFILE_STATE_LEGACY_BACKUP_COUNT,
-  profileStateLegacyBackupPath
-} from '../persistence/profile-state/legacy-json/profile-state-legacy-backup-path'
 
 /**
  * Worktree ids owned by Orca profiles OTHER than the running one.
@@ -45,20 +40,10 @@ type ProfileWorkspaceIds = {
   repoIds: Set<string>
 }
 
-export type OtherProfileCatalogOptions = {
-  /** The profile this process runs, whose catalog the caller reads live. Defaults to the index's
-   *  active profile, which a profile switch rewrites before the running one exits. */
-  runningProfileId?: string
-  /** A profile with no state database, sidecar or data file at all has never been written and
-   *  holds nothing; by default it counts as unreadable like a missing file anywhere else. */
-  neverWrittenIsEmpty?: boolean
-}
-
 /** The workspaces and projects every profile other than the running one holds. Any profile whose
  *  state can't be read is counted, never skipped silently: its ids are unknown. */
 export function readOtherProfileWorkspaceCatalog(
-  userDataPath = getProfileUserDataPath(),
-  options: OtherProfileCatalogOptions = {}
+  userDataPath = getProfileUserDataPath()
 ): ProfileWorkspaceIds & { unreadableProfiles: number } {
   const ids = new Set<string>()
   const repoIds = new Set<string>()
@@ -67,12 +52,11 @@ export function readOtherProfileWorkspaceCatalog(
     return { ids, repoIds, unreadableProfiles: 0 }
   }
   let unreadableProfiles = 0
-  const running = options.runningProfileId ?? index.activeProfileId
   for (const profile of index.profiles) {
-    if (profile.id === running) {
+    if (profile.id === index.activeProfileId) {
       continue
     }
-    const collected = readProfileWorktreeIds(profile.id, userDataPath, options)
+    const collected = readProfileWorktreeIds(profile.id, userDataPath)
     if (!collected) {
       unreadableProfiles += 1
       continue
@@ -85,8 +69,7 @@ export function readOtherProfileWorkspaceCatalog(
 
 function readProfileWorktreeIds(
   profileId: string,
-  userDataPath: string,
-  options: OtherProfileCatalogOptions = {}
+  userDataPath: string
 ): ProfileWorkspaceIds | null {
   const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
   // A present database is authoritative. In particular, do not fall back to a
@@ -105,29 +88,7 @@ function readProfileWorktreeIds(
   } catch {
     return null
   }
-  if (options.neverWrittenIsEmpty && neverWritten(dataFile)) {
-    return { ids: new Set(), repoIds: new Set() }
-  }
   return readProfileWorktreeIdsFromJson(dataFile)
-}
-
-/** No data file and none of Orca's own backups of it: a lost primary file is not a fresh profile. */
-function neverWritten(dataFile: string): boolean {
-  for (let index = 0; index < PROFILE_STATE_LEGACY_BACKUP_COUNT; index += 1) {
-    if (!definitivelyAbsent(profileStateLegacyBackupPath(dataFile, index))) {
-      return false
-    }
-  }
-  return definitivelyAbsent(dataFile)
-}
-
-function definitivelyAbsent(path: string): boolean {
-  try {
-    lstatSync(path)
-    return false
-  } catch (error) {
-    return isDefinitiveAbsence(error)
-  }
 }
 
 function profileStateDatabasePresence(path: string): 'absent' | 'present' | 'unreadable' {

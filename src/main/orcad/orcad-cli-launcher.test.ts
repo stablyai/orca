@@ -1,10 +1,17 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
-import { ORCAD_CLI_ENTRY_FILENAME } from '../../shared/orcad-artifacts'
-import { getOrcadCliLauncherPath, prepareOrcadCliLauncher } from './orcad-cli-launcher'
+import { runProcess } from '@orca/process-host'
+import {
+  ORCAD_CLI_ENTRY_FILENAME,
+  ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
+} from '../../shared/orcad-artifacts'
+import {
+  ORCAD_WINDOWS_CLI_LAUNCHER_CONFIG_FILENAME,
+  getOrcadCliLauncherPath,
+  prepareOrcadCliLauncher
+} from './orcad-cli-launcher'
 
 const roots = vi.hoisted(() => ({ install: '', profile: '' }))
 vi.mock('./orcad-app-paths', () => ({
@@ -64,6 +71,35 @@ describe('orcad profile CLI launcher', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    "passes a person's own Orca settings through, adding only the profile",
+    async () => {
+      const path = join(roots.install, ...ORCAD_CLI_ENTRY_FILENAME.split('/'))
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(
+        path,
+        "console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('ORCA_')))))"
+      )
+      await prepareOrcadCliLauncher()
+      const result = await runProcess({
+        program: getOrcadCliLauncherPath()!,
+        args: ['status'],
+        env: {
+          PATH: process.env.PATH,
+          ORCA_ENVIRONMENT: 'other-server',
+          ORCA_PAIRING_CODE: 'other-pairing'
+        },
+        timeoutMs: 5000
+      })
+      expect(result.code).toBe(0)
+      expect(JSON.parse(result.stdout)).toEqual({
+        ORCA_USER_DATA_PATH: roots.profile,
+        ORCA_ENVIRONMENT: 'other-server',
+        ORCA_PAIRING_CODE: 'other-pairing'
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'refreshes the launcher when the host switches server slots',
     async () => {
       await writeCli()
@@ -87,10 +123,58 @@ describe('orcad profile CLI launcher', () => {
     expect(getOrcadCliLauncherPath()).toBeNull()
   })
 
-  it('does not create a cmd.exe message proxy on Windows', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    await writeCli()
-    await prepareOrcadCliLauncher()
-    expect(getOrcadCliLauncherPath()).toBeNull()
+  describe('on a Windows host', () => {
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    })
+
+    async function writeLauncher(contents: string): Promise<void> {
+      const path = join(roots.install, ...ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME.split('/'))
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, contents)
+    }
+
+    const binDir = (): string => join(roots.profile, 'cli', 'bin')
+    const readConfig = (): Promise<string> =>
+      readFile(join(binDir(), ORCAD_WINDOWS_CLI_LAUNCHER_CONFIG_FILENAME), 'utf8')
+
+    it('installs the native launcher and points it at this slot, runtime and profile', async () => {
+      await writeCli()
+      await writeLauncher('native launcher v1')
+      await prepareOrcadCliLauncher()
+      const launcher = getOrcadCliLauncherPath()
+      expect(launcher).toBe(join(binDir(), 'orca.exe'))
+      expect(await readFile(launcher!, 'utf8')).toBe('native launcher v1')
+      expect(await readConfig()).toBe(
+        [
+          `node=${process.execPath}`,
+          `cli=${join(roots.install, ...ORCAD_CLI_ENTRY_FILENAME.split('/'))}`,
+          `user-data=${roots.profile}`,
+          ''
+        ].join('\n')
+      )
+      // cmd.exe reparses `%*`, so no batch or PowerShell proxy may shadow the exe.
+      expect((await readdir(binDir())).sort()).toEqual(
+        [ORCAD_WINDOWS_CLI_LAUNCHER_CONFIG_FILENAME, 'orca.exe'].sort()
+      )
+    })
+
+    it('refreshes the launcher and its target when the host switches server slots', async () => {
+      await writeCli()
+      await writeLauncher('native launcher v1')
+      await prepareOrcadCliLauncher()
+      roots.install = join(directory, 'updated server')
+      await writeCli()
+      await writeLauncher('native launcher v2')
+      await prepareOrcadCliLauncher()
+      expect(await readFile(join(binDir(), 'orca.exe'), 'utf8')).toBe('native launcher v2')
+      expect(await readConfig()).toContain(`cli=${join(roots.install, 'out', 'cli', 'index.js')}`)
+    })
+
+    it('leaves a slot without the native launcher with no orca command', async () => {
+      await writeCli()
+      await prepareOrcadCliLauncher()
+      expect(getOrcadCliLauncherPath()).toBeNull()
+    })
   })
 })

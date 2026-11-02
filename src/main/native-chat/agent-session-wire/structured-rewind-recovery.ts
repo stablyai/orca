@@ -1,3 +1,5 @@
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import {
   mergeRetainedHostLifecycleRows,
   retainedRowReplacement
@@ -5,6 +7,7 @@ import {
 import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
+  agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRewindRecord } from '../../../shared/agent-session-rewind'
@@ -78,8 +81,10 @@ export async function recoverStructuredRewind(
     rewind: AgentSessionRewindRecord,
     fence: number,
     cursor: AgentJournalCursor
-  ) => JournalOperationReceipt
+  ) => JournalOperationReceipt,
+  signal?: AbortSignal
 ): Promise<void> {
+  signal?.throwIfAborted()
   const { store } = deps
   let rewind = store.getRecord(sessionId)?.rewind
   if (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared') {
@@ -91,11 +96,16 @@ export async function recoverStructuredRewind(
     return
   }
   if (target?.provider === 'codex' && !rewind.hydrationVerified) {
-    const recovered = await adapter?.recoverRewind?.({
+    const read = adapter?.recoverRewind?.({
       sessionId,
       fence,
-      beforeTurnId: target.turnId
+      beforeTurnId: target.turnId,
+      ...(signal ? { signal } : {})
     })
+    const recovered = signal
+      ? await waitForPromiseWithSignal(Promise.resolve(read), signal)
+      : await read
+    signal?.throwIfAborted()
     if (!recovered?.ok) {
       // The target is still in the provider's history, and the journal is replaced only once the
       // revert is proven, so both still hold it even when the provider acknowledged the revert.
@@ -176,13 +186,22 @@ export async function recoverStructuredRewind(
   }
   // A crash after the journal transaction must settle its existing epoch, not replace it twice.
   const alreadyReplaced = journal.cursor().epoch !== rewind.expectedEpoch
+  const queued = new Set(
+    journal
+      .submissions()
+      .filter(isQueuedAgentJournalSubmission)
+      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  )
   if (
     alreadyReplaced &&
     !isDeepStrictEqual(
-      journal.snapshot().items.map(({ itemId }) => ({
-        itemId,
-        body: journal.itemBody(itemId)
-      })),
+      journal
+        .snapshot()
+        .items.filter(({ itemId }) => !queued.has(itemId))
+        .map(({ itemId }) => ({
+          itemId,
+          body: journal.itemBody(itemId)
+        })),
       replacement.map(({ identity, body }) => ({ itemId: agentJournalItemKey(identity), body }))
     )
   ) {

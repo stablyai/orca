@@ -59,6 +59,11 @@ export type PaneExternalDropHandler = (
   target: PaneExternalDropTarget
 ) => boolean
 
+export type PaneDropTaker = (
+  drop: { sourcePaneId: number; targetPaneId: number; zone: DropZone },
+  move: () => void
+) => boolean
+
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
@@ -70,6 +75,10 @@ export type PaneManagerOptions = {
   onPaneDragActiveChange?: (active: boolean) => void
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  /** A user's divider drag or reset ended; runs after `onLayoutChanged`. */
+  onDividerRatiosCommitted?: () => void
+  /** Takes an in-tab pane drop instead of moving it now: true means `move` runs later or never. */
+  takePaneDrop?: PaneDropTaker
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalLigaturesEnabled?: () => boolean
   /** Whether inline terminal images (SIXEL / iTerm2 IIP / Kitty graphics) are

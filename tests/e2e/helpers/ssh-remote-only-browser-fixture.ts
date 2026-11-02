@@ -1,10 +1,10 @@
 import {
-  execDockerSshRelayTargetCommand,
-  execDockerSshRelayTargetControlCommand,
-  shellQuote,
-  writeDockerSshRelayTargetFile,
-  type DockerSshRelayTarget
-} from './docker-ssh-relay-target'
+  execDockerSshHostTargetCommand,
+  execDockerSshHostTargetControlCommand,
+  writeDockerSshHostTargetFile,
+  type DockerSshHostTarget
+} from './docker-ssh-host-target'
+import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
 
 /**
  * An HTTP fixture that exists only inside the SSH container, on a hostname only the
@@ -59,17 +59,17 @@ const SERVER_SOURCE = [
 ].join('\n')
 
 /** Publishes the remote-only origin inside the container and waits for it to accept sockets. */
-export function startSshRemoteOnlyBrowserFixture(target: DockerSshRelayTarget): void {
-  execDockerSshRelayTargetCommand(
+export function startSshRemoteOnlyBrowserFixture(target: DockerSshHostTarget): void {
+  execDockerSshHostTargetCommand(
     target,
-    `grep -q ${shellQuote(SSH_REMOTE_ONLY_HOST)} /etc/hosts || printf '127.0.0.1 %s\\n' ${shellQuote(
+    `grep -q ${quotePosixShell(SSH_REMOTE_ONLY_HOST)} /etc/hosts || printf '127.0.0.1 %s\\n' ${quotePosixShell(
       SSH_REMOTE_ONLY_HOST
     )} >> /etc/hosts`
   )
-  writeDockerSshRelayTargetFile(target, SERVER_PATH, SERVER_SOURCE)
-  execDockerSshRelayTargetCommand(
+  writeDockerSshHostTargetFile(target, SERVER_PATH, SERVER_SOURCE)
+  execDockerSshHostTargetCommand(
     target,
-    `rm -f ${shellQuote(REQUEST_LOG_PATH)}; nohup node ${shellQuote(
+    `rm -f ${quotePosixShell(REQUEST_LOG_PATH)}; nohup node ${quotePosixShell(
       SERVER_PATH
     )} >/tmp/sta-4150-ssh-browser-fixture.log 2>&1 </dev/null &`
   )
@@ -87,33 +87,18 @@ export function startSshRemoteOnlyBrowserFixture(target: DockerSshRelayTarget): 
     '}',
     'probe()'
   ].join('\n')
-  writeDockerSshRelayTargetFile(target, '/tmp/sta-4150-ssh-browser-wait.js', waitForServer)
-  execDockerSshRelayTargetCommand(target, 'node /tmp/sta-4150-ssh-browser-wait.js')
+  writeDockerSshHostTargetFile(target, '/tmp/sta-4150-ssh-browser-wait.js', waitForServer)
+  execDockerSshHostTargetCommand(target, 'node /tmp/sta-4150-ssh-browser-wait.js')
 }
 
 /** Every request the remote-only origin served, in order, with the `Cookie` header it saw. */
-export function readSshRemoteOnlyRequests(target: DockerSshRelayTarget): SshRemoteOnlyRequest[] {
-  const contents = execDockerSshRelayTargetControlCommand(
+export function readSshRemoteOnlyRequests(target: DockerSshHostTarget): SshRemoteOnlyRequest[] {
+  const contents = execDockerSshHostTargetControlCommand(
     target,
-    `cat ${shellQuote(REQUEST_LOG_PATH)} 2>/dev/null || true`
+    `cat ${quotePosixShell(REQUEST_LOG_PATH)} 2>/dev/null || true`
   )
   return contents
     .split('\n')
     .filter((line) => line.trim().length > 0)
     .map((line) => JSON.parse(line) as SshRemoteOnlyRequest)
-}
-
-/**
- * Kills the container's established SSH sessions without touching the listener, so the
- * transport really dies and the same target can be reconnected.
- *
- * `pgrep -f '^sshd: '` matches only accepted-connection processes: the daemon's own command
- * line is `/usr/sbin/sshd -D -e`, and the shell running this command starts with `bash`.
- */
-export function killSshRelayTargetTransport(target: DockerSshRelayTarget): number {
-  const killed = execDockerSshRelayTargetControlCommand(
-    target,
-    "pids=$(pgrep -f '^sshd: ' || true); for pid in $pids; do kill -9 $pid || true; done; printf '%s' \"$(printf '%s\\n' $pids | grep -c . || true)\""
-  )
-  return Number(killed.trim() || '0')
 }

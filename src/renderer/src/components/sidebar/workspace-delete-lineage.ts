@@ -1,6 +1,6 @@
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
+import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 type WorkspaceDeleteLineage = {
   descendants: Worktree[]

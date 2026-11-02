@@ -177,12 +177,14 @@ describe.each(['v1', 'v2'] as const)('%s semantic pagination', (version) => {
   })
 
   it('reconstructs a full read beyond its 500-message window without losing a split row', async () => {
-    const { path, insert, prefix } = fixture(version)
+    const { db, path, insert, prefix } = fixture(version)
     const expected: string[] = []
+    db.exec('BEGIN')
     for (let index = 0; index < 260; index++) {
       insert(String(index), mixed())
       expected.push(`${prefix}${index}:reasoning`, `${prefix}${index}`)
     }
+    db.exec('COMMIT')
     const result = await readOpenCodeNativeChatTranscriptFull('session', {
       resolveDbPath: async () => path,
       readPage: async (args) => readOpenCodeTranscriptPage(args)

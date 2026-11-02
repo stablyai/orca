@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { isBackgroundTaskBlock, isSubagentGroupBlock } from '../../shared/native-chat-types'
-import {
-  closeProviderTimelineRigs,
-  providerItemId
-} from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
+import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpStructuredLane } from './acp-structured-lane'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { openAcpFixtureRig } from './acp-timeline-fixture.test-support'
@@ -67,16 +66,14 @@ function laterGroups(fixture: Fixture, settled: boolean) {
   }
 }
 
-async function roster(fixture: Fixture) {
-  return (await fixture.rig.rows()).flatMap((row) =>
-    row.body.kind === 'message'
-      ? row.body.blocks.filter(isSubagentGroupBlock).map((group) => ({ row, group }))
-      : []
-  )
+function record(fixture: Fixture, id: string) {
+  return fixture.subagents().filter((view) => view.providerId === id)
 }
 
-async function original(fixture: Fixture) {
-  return (await roster(fixture)).find(({ group }) => group.groupId === 'prompt:original')
+/** The scope of the rows the latest turn writes. */
+async function openTurnScope(fixture: Fixture) {
+  const turn = (await fixture.rig.rows()).findLast((row) => readAgentJournalTurn(row.body))
+  return turn ? { kind: 'turn', turnItemId: turn.itemId } : undefined
 }
 
 function toolResult(fixture: Fixture, kind: 'output' | 'kill', at: number) {
@@ -117,12 +114,13 @@ function toolResult(fixture: Fixture, kind: 'output' | 'kill', at: number) {
   )
 }
 
-describe('Grok roster ownership after more than 32 spawning groups', () => {
+describe('a Grok subagent reported on long after the turn that spawned it', () => {
   it.each([false, true])(
-    'finishes the original durable row with siblings and reply when later groups settled=%s',
+    'finishes the original child and files its reply under its spawn turn when 33 later turns settled=%s',
     async (settled) => {
       const fixture = await openAcpFixtureRig()
       openTurn(fixture, 'original', 1)
+      const spawnScope = await openTurnScope(fixture)
       spawn(fixture, 'old', 'original', 2)
       spawn(fixture, 'sibling', 'original', 3)
       notify(
@@ -131,8 +129,6 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
         4
       )
       fixture.apply(fixture.lane().promptResult('original', { stopReason: 'end_turn' }, 5))
-      const before = await original(fixture)
-      expect(before).toBeDefined()
       laterGroups(fixture, settled)
       openTurn(fixture, 'current', 300)
       notify(
@@ -146,27 +142,17 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
         },
         301
       )
-      const after = await original(fixture)
-      expect(after?.row.itemId).toBe(before?.row.itemId)
-      expect(after?.row.turnScope).toEqual(before?.row.turnScope)
-      expect(after?.group.agents).toEqual([
+      expect(record(fixture, 'old')).toMatchObject([
         {
-          id: 'old',
-          label: 'Original label',
-          startedAt: 2,
-          settledAt: 301,
-          state: 'completed',
-          tokens: 12
-        },
-        { id: 'sibling', label: 'Original label 2', startedAt: 3, settledAt: 4, state: 'completed' }
+          description: 'Original label',
+          membership: 'settled',
+          outcome: 'succeeded',
+          totalTokens: 12
+        }
       ])
-      expect(
-        (await roster(fixture)).flatMap(({ group }) =>
-          group.agents.filter((entry) => entry.id === 'old')
-        )
-      ).toHaveLength(1)
+      expect(record(fixture, 'sibling')).toMatchObject([{ outcome: 'succeeded' }])
       const reply = (await fixture.rig.rows()).find((row) => row.agentId === 'old')
-      expect(reply?.turnScope).toEqual(before?.row.turnScope)
+      expect(reply?.turnScope).toEqual(spawnScope)
       expect(reply?.body).toMatchObject({
         kind: 'message',
         role: 'assistant',
@@ -182,20 +168,11 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
       openTurn(fixture, 'original', 1)
       spawn(fixture, 'old', 'original', 2)
       fixture.apply(fixture.lane().promptResult('original', { stopReason: 'end_turn' }, 3))
-      const before = await original(fixture)
       laterGroups(fixture, false)
       openTurn(fixture, 'current', 300)
       toolResult(fixture, kind, 301)
-      const after = await original(fixture)
-      expect(after?.row.itemId).toBe(before?.row.itemId)
-      expect(after?.group.agents).toEqual([
-        {
-          id: 'old',
-          label: 'Original label',
-          startedAt: 2,
-          settledAt: 301,
-          state: kind === 'output' ? 'completed' : 'stopped'
-        }
+      expect(record(fixture, 'old')).toMatchObject([
+        { membership: 'settled', outcome: kind === 'output' ? 'succeeded' : 'cancelled' }
       ])
       const rows = await fixture.rig.rows()
       expect(
@@ -207,13 +184,12 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
     }
   )
 
-  it('drops late progress, repeated spawn and finish for a stopped child after its settled group is evicted', async () => {
+  it('keeps a stopped child stopped through late progress, a repeated spawn and a finish', async () => {
     const fixture = await openAcpFixtureRig()
     openTurn(fixture, 'original', 1)
     spawn(fixture, 'old', 'original', 2)
     toolResult(fixture, 'kill', 3)
     fixture.apply(fixture.lane().promptResult('original', { stopReason: 'end_turn' }, 4))
-    const before = await original(fixture)
     laterGroups(fixture, true)
     openTurn(fixture, 'current', 300)
     notify(fixture, { sessionUpdate: 'subagent_progress', subagent_id: 'old', tokens_used: 9 }, 301)
@@ -228,17 +204,13 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
       },
       303
     )
-    expect(await original(fixture)).toEqual(before)
-    expect(
-      (await roster(fixture)).flatMap(({ group }) =>
-        group.agents.filter((entry) => entry.id === 'old')
-      )
-    ).toHaveLength(1)
+    expect(record(fixture, 'old')).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
     expect((await fixture.rig.rows()).filter((row) => row.agentId === 'old')).toEqual([])
   })
 
-  it('lane disposal ends in-memory ownership while the journal settles a disconnected producer as unverifiable', async () => {
+  it('lane disposal ends observation: the host hears the session end, and nothing after it', async () => {
     const fixture = await openAcpFixtureRig()
+    const evidence: AgentChildWorkEvidence[] = []
     const lane = new AcpStructuredLane({
       sink: fixture.rig.sink,
       sessionId: 'session-timeline',
@@ -251,7 +223,8 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
       onInputAccepted: () => {},
       onFailed: (reason) => {
         throw new Error(reason)
-      }
+      },
+      onChildWorkEvidence: (batch) => evidence.push(...batch)
     })
     lane.apply(
       lane.translator.notification(
@@ -279,12 +252,9 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
       2
     )
     expect(events).toEqual([])
-    const row = await fixture.rig.row(
-      providerItemId('item', 'subagents:thread', { namespace: 'session-1', thread: 'session-1' })
-    )
-    expect(
-      row?.body.kind === 'message' &&
-        row.body.blocks.filter(isSubagentGroupBlock).flatMap((group) => group.agents)
-    ).toMatchObject([{ id: 'old', state: 'unverifiable' }])
+    await fixture.rig.rows()
+    // Disposal says the session ended once more; nothing reports the child live again.
+    expect(evidence.map((edge) => edge.type).slice(0, 2)).toEqual(['live', 'session-ended'])
+    expect(evidence.filter((edge) => edge.type === 'live')).toHaveLength(1)
   })
 })

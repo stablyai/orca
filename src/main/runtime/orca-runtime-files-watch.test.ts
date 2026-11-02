@@ -4,7 +4,6 @@ import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
-import type { IFilesystemProvider } from '../providers/types'
 import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 
@@ -13,15 +12,13 @@ const {
   statMock,
   watchMock,
   watchInWatcherProcessMock,
-  closeWatcherInWatcherProcessMock,
-  getSshFilesystemProviderMock
+  closeWatcherInWatcherProcessMock
 } = vi.hoisted(() => ({
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
   watchMock: vi.fn(),
   watchInWatcherProcessMock: vi.fn(),
-  closeWatcherInWatcherProcessMock: vi.fn(),
-  getSshFilesystemProviderMock: vi.fn()
+  closeWatcherInWatcherProcessMock: vi.fn()
 }))
 
 vi.mock('fs', async () => {
@@ -54,18 +51,13 @@ vi.mock('../ipc/filesystem-auth', async () => {
   }
 })
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock,
-  onSshFilesystemProviderRegistered: () => () => undefined
-}))
-
 import {
   _getRuntimeFileWatcherReleaseCountForTests,
   _resetRuntimeFileWatcherLeasesForTests,
-  awaitRuntimeFileWatcherUnsubscribes,
-  RuntimeFileCommands,
-  WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS
-} from './orca-runtime-files'
+  awaitRuntimeFileWatcherUnsubscribes
+} from './files/watch/file-watcher-leases'
+import { RuntimeFileCommands } from './orca-runtime-files'
+import { WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS } from './files/watch/windows-file-watch'
 
 function createWindowsWatcher(close: () => void) {
   const watcher = new EventEmitter() as EventEmitter & { close: ReturnType<typeof vi.fn> }
@@ -109,7 +101,6 @@ describe('RuntimeFileCommands file watching', () => {
     watchMock.mockReset()
     watchInWatcherProcessMock.mockReset()
     closeWatcherInWatcherProcessMock.mockReset()
-    getSshFilesystemProviderMock.mockReset()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -543,63 +534,4 @@ describe('RuntimeFileCommands file watching', () => {
     await drainPromise
     expect(drained).toBe(true)
   })
-
-  it.each(['abort', 'unsubscribe'] as const)(
-    'forwards the SSH watch signal and fences terminal errors after %s',
-    async (stop) => {
-      const dispose = vi.fn()
-      const watch = vi.fn<IFilesystemProvider['watch']>().mockResolvedValue(dispose)
-      getSshFilesystemProviderMock.mockReturnValue({ watch })
-      const store = { getRepo: vi.fn(() => ({ connectionId: 'ssh-1' })) }
-      const commands = new RuntimeFileCommands({
-        getRuntimeId: () => 'runtime-1',
-        requireStore: () => store,
-        resolveWorktreeSelector: vi.fn(async () => ({
-          id: 'wt-1',
-          repoId: 'repo-1',
-          path: '/remote/repo'
-        })),
-        resolveRuntimeFileTarget: vi.fn(async () => ({
-          worktree: {
-            id: 'wt-1',
-            repoId: 'repo-1',
-            path: '/remote/repo'
-          },
-          executionHostId: 'ssh:ssh-1'
-        })),
-        resolveRuntimeGitTarget: vi.fn(),
-        openFile: vi.fn()
-      } as never)
-      const controller = new AbortController()
-      const onTerminalError = vi.fn()
-
-      const unsubscribe = await commands.watchFileExplorer(
-        'id:wt-1',
-        vi.fn(),
-        onTerminalError,
-        controller.signal
-      )
-
-      expect(watch).toHaveBeenCalledWith('/remote/repo', expect.any(Function), {
-        signal: controller.signal,
-        onTerminalError: expect.any(Function)
-      })
-      const options = watch.mock.calls[0]?.[2]
-      expect(options?.signal).toBe(controller.signal)
-      const currentError = new Error('current remote watch failed')
-      options?.onTerminalError?.(currentError)
-      expect(onTerminalError).toHaveBeenCalledExactlyOnceWith(currentError)
-      if (stop === 'abort') {
-        controller.abort()
-      } else {
-        await unsubscribe()
-        expect(controller.signal.aborted).toBe(false)
-      }
-      options?.onTerminalError?.(new Error('late remote watch failure'))
-      expect(onTerminalError).toHaveBeenCalledExactlyOnceWith(currentError)
-      await unsubscribe()
-      expect(dispose).toHaveBeenCalledOnce()
-      expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
-    }
-  )
 })

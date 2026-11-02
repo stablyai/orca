@@ -1,11 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { hasControllingTty } from '../../shared/posix-controlling-terminal'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import {
-  runProcess,
-  runProcessSync,
-  type ProcessResult
-} from '../../shared/child-process/run-process'
+import { runProcess, runProcessSync } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const PROCESS_TABLE_TIMEOUT_MS = 1_000
 const PROCESS_TABLE_MAX_BYTES = 1024 * 1024
@@ -38,6 +36,31 @@ export type PosixPtyProcessGroupTerminationDeps = {
   currentPid?: number
   readProcessTable?: () => string
   signalProcessGroup?: (pgid: number) => void
+  /** Linux session id of a pid, or null when unreadable. */
+  readProcessSessionId?: (pid: number) => number | null
+}
+
+/** Field 6 (`session`) of `/proc/<pid>/stat`, read past the parenthesised comm. */
+export function parseLinuxProcStatSessionId(stat: string): number | null {
+  const closingParen = stat.lastIndexOf(')')
+  if (closingParen === -1) {
+    return null
+  }
+  const session = Number(
+    stat
+      .slice(closingParen + 1)
+      .trim()
+      .split(/\s+/)[3]
+  )
+  return Number.isSafeInteger(session) && session > 0 ? session : null
+}
+
+function readLinuxProcessSessionId(pid: number): number | null {
+  try {
+    return parseLinuxProcStatSessionId(readFileSync(`/proc/${pid}/stat`, 'utf8'))
+  } catch {
+    return null
+  }
 }
 
 function readProcessTableResult(result: ProcessResult): string {
@@ -165,24 +188,11 @@ export function isPosixPtyRootStopped(output: string, rootPid: number): boolean 
   )
 }
 
-/** The root was stopped by flow control; preserve independently stopped jobs. */
-export function getPosixPtyStoppedJobGroups(output: string, rootPid: number): Set<number> {
-  const rows = parseProcessRows(output)
-  const root = rows.find((row) => row.pid === rootPid)
-  return new Set(
-    rows
-      .filter(
-        (row) =>
-          root && row.tty === root.tty && row.pgid !== root.pgid && /^[Tt]/.test(row.state ?? '')
-      )
-      .map((row) => row.pgid)
-  )
-}
-
 export function getPosixPtyProcessGroups(
   output: string,
   rootPid: number,
-  currentPid = process.pid
+  currentPid = process.pid,
+  readSessionId?: (pid: number) => number | null
 ): number[] | null {
   const rows = parseProcessRows(output)
   const root = rows.find((row) => row.pid === rootPid)
@@ -194,7 +204,17 @@ export function getPosixPtyProcessGroups(
   if (rows.some((row) => row.pid === currentPid && row.tty === root.tty)) {
     return null
   }
-  const groups = new Set(rows.filter((row) => row.tty === root.tty).map((row) => row.pgid))
+  let members = rows.filter((row) => row.tty === root.tty)
+  if (readSessionId) {
+    // Why: every devpts instance (e.g. each container) numbers ptys from 0, so a tty
+    // match alone can name another namespace's session. The node-pty shell leads its own
+    // session; setsid'd descendants dropped this tty and were never candidates (#16714).
+    if (readSessionId(rootPid) !== rootPid) {
+      return null
+    }
+    members = members.filter((row) => readSessionId(row.pid) === rootPid)
+  }
+  const groups = new Set(members.map((row) => row.pgid))
   if (!groups.has(root.pgid)) {
     return null
   }
@@ -229,7 +249,8 @@ export function signalPosixPtyProcessGroups(
   fallback: () => void,
   deps: PosixPtyProcessGroupTerminationDeps = {}
 ): void {
-  if ((deps.platform ?? process.platform) === 'win32') {
+  const platform = deps.platform ?? process.platform
+  if (platform === 'win32') {
     fallback()
     return
   }
@@ -238,7 +259,8 @@ export function signalPosixPtyProcessGroups(
     groups = getPosixPtyProcessGroups(
       (deps.readProcessTable ?? (() => readPtyProcessTable(rootPid)))(),
       rootPid,
-      deps.currentPid ?? process.pid
+      deps.currentPid ?? process.pid,
+      deps.readProcessSessionId ?? (platform === 'linux' ? readLinuxProcessSessionId : undefined)
     )
   } catch {
     groups = null

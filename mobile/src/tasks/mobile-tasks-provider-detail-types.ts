@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type {
   ProviderCheckSummary,
   GitHubOwnerRepo,
@@ -13,6 +14,8 @@ export type RepoSummary = {
   badgeColor?: string
   kind?: 'git' | 'folder'
   connectionId?: string | null
+  /** Set on a server's repos, whose calls run on that server. */
+  executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
   /** Fork parent resolved by the host; drives upstream Project row matching. */
   upstream?: { owner: string; repo: string; host?: string } | null
@@ -274,3 +277,19 @@ export type DetailPayload =
       project?: LinearProject
       children: LinearIssueChild[]
     }
+  | {
+      provider: 'jira'
+      description: string
+      comments: DetailComment[]
+      labels: string[]
+      assignee?: string
+      projectName: string
+      issueTypeName: string
+      priorityName?: string
+    }
+
+export function detailPayloadBody(payload: DetailPayload): string {
+  return payload.provider === 'linear' || payload.provider === 'jira'
+    ? payload.description
+    : payload.body
+}

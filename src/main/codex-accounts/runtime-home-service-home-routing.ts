@@ -2,6 +2,7 @@ import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { isWslDistroRunning } from '../wsl-background-distro-gate'
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
@@ -27,7 +28,8 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
 
 export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
   getHostCodexHomePathsForSessionDiscovery(): string[] {
-    const homes = [this.getRuntimeHomePath()]
+    // Why the path-only resolver: transcript lookups poll this on a miss; launch creates the mirror.
+    const homes = [resolveOrcaManagedCodexHomePath()]
     if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
       // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
       // Per-account lanes no longer bridge real-home history into the shared
@@ -191,7 +193,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
           ? account.wslDistro?.trim() || null
           : selectedDistroKey.trim() || null
       if (distro) {
-        drains.push(this.startLegacyWslAuthDrain({ runtime: 'wsl', wslDistro: distro }))
+        // Why: a stopped distro has no live legacy pane to drain, and the next launch prep drains anyway.
+        drains.push(
+          isWslDistroRunning(distro).then((running) =>
+            running
+              ? this.startLegacyWslAuthDrain({ runtime: 'wsl', wslDistro: distro })
+              : undefined
+          )
+        )
       }
     }
     await Promise.all(drains)

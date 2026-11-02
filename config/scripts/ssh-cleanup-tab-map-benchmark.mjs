@@ -66,16 +66,11 @@ function emptyState() {
     codexRestartNoticeByPtyId: {},
     deferredSshSessionIdsByTabId: {},
     pendingReconnectPtyIdByTabId: {},
-    directSshPaneRetryByTabId: {},
-    directSshLivePtyBindingByTabId: {},
-    directSshPaneRetryHistoryByTabId: {},
     deferredSshReconnectTargets: [],
     transientClearedAgentStatusConnectionIds: {},
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),
     sshTargetGenerations: new Map(),
-    remoteWorkspaceHydratedTargetIds: new Set(),
-    remoteWorkspaceSyncStatusByTargetId: {},
     portForwardsByConnection: {},
     detectedPortsByConnection: {},
     sshCredentialQueue: []
@@ -171,16 +166,10 @@ for (let iteration = 0; iteration < 3000; iteration++) {
       state.sshTargetGenerations.set(targetId, random(10))
     }
     if (random(2)) {
-      state.remoteWorkspaceHydratedTargetIds.add(targetId)
-    }
-    if (random(2)) {
       state.deferredSshReconnectTargets.push(targetId)
     }
     if (random(2)) {
       state.transientClearedAgentStatusConnectionIds[targetId] = true
-    }
-    if (random(2)) {
-      state.remoteWorkspaceSyncStatusByTargetId[targetId] = { phase: 'synced' }
     }
     if (random(2)) {
       state.portForwardsByConnection[targetId] = [{ localPort: 8000 }]
@@ -217,20 +206,6 @@ for (let iteration = 0; iteration < 3000; iteration++) {
           previousAccountLabel: 'old',
           nextAccountLabel: 'new'
         }
-      }
-      const authority = {
-        targetId: targets[random(3)],
-        providerEpoch: 'epoch',
-        connectionGeneration: 1
-      }
-      if (random(2)) {
-        state.directSshPaneRetryByTabId[id] = { authority, attemptId: id, tabGeneration: 1 }
-      }
-      if (random(2)) {
-        state.directSshLivePtyBindingByTabId[id] = { authority, ptyId, tabGeneration: 1 }
-      }
-      if (random(2)) {
-        state.directSshPaneRetryHistoryByTabId[id] = { authority, attemptedAt: [10] }
       }
       return tab(id, key, ptyId)
     })

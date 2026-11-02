@@ -12,7 +12,7 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
     ),
     description: translate(
       'auto.components.settings.runtime.environments.search.4575341c77',
-      'Add a saved remote Orca server, generate a pairing URL, or adjust the advanced default runtime.'
+      'Add a saved remote Orca server, generate a pairing URL, or choose the default host for new projects.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -58,6 +58,19 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.c6e5a03aa0',
         'dev box'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.defaultHostKeyword',
+        'default host'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.newProjectsKeyword',
+        'new projects'
+      ),
+      // Why: the setting's former name, so existing users can still find it.
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.activeServerKeyword',
+        'active server'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.managedServers.search.title',

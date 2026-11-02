@@ -2,14 +2,30 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
+import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 
 const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
 
+const mocks = vi.hoisted(() => ({
+  layoutOwnerIsMain: false,
+  sendLayoutCommandToOwner: vi.fn<typeof sendLayoutCommandToOwner>()
+}))
+
+vi.mock('../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return mocks.layoutOwnerIsMain
+  }
+}))
+vi.mock('@/runtime/layout-owner-command', () => ({
+  sendLayoutCommandToOwner: mocks.sendLayoutCommandToOwner
+}))
 vi.mock('../../store', () => ({
   useAppStore: { getState: () => ({ terminalLayoutsByTabId: {} }) }
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({ clearWebRuntimeTerminalBuffer: () => true }))
+vi.mock('@/runtime/web-runtime-terminal-buffer-actions', () => ({
+  clearWebRuntimeTerminalBuffer: () => true
+}))
 vi.mock('@/lib/pane-manager/terminal-scrollback-clear', () => ({
   clearTerminalScrollbackAndFollowOutput: vi.fn()
 }))
@@ -67,7 +83,11 @@ function renderPersistence() {
   return { hook, push, setTabLayout, pushedIntents, panes }
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  mocks.layoutOwnerIsMain = false
+  mocks.sendLayoutCommandToOwner.mockReset()
+})
 
 describe('terminal layout gesture persist', () => {
   it('saves the same layout for a gesture and an automatic persist and marks only the push', () => {
@@ -105,6 +125,37 @@ describe('terminal layout gesture persist', () => {
     hook.result.current.handleClearPaneTitleShortcut(1)
     hook.result.current.removePaneTitle(2)
 
+    expect(pushedIntents()).toEqual(['gesture', 'gesture'])
+  })
+
+  it('a window-owned build saves a renamed pane at once, without asking main', () => {
+    const { hook, pushedIntents, push } = renderPersistence()
+    push.mockClear()
+
+    hook.result.current.changePaneTitle(2, 'server')
+
+    expect(mocks.sendLayoutCommandToOwner).not.toHaveBeenCalled()
+    expect(pushedIntents()).toEqual(['gesture'])
+  })
+
+  it('a layout-owner build shows a title change only once main has saved it', () => {
+    mocks.layoutOwnerIsMain = true
+    mocks.sendLayoutCommandToOwner.mockReturnValue(true)
+    const { hook, pushedIntents, push } = renderPersistence()
+    push.mockClear()
+
+    hook.result.current.changePaneTitle(2, 'server')
+    hook.result.current.removePaneTitle(1)
+
+    expect(mocks.sendLayoutCommandToOwner.mock.calls.map(([, command]) => command)).toEqual([
+      { type: 'renamePane', tabId: 'tab', leafId: RIGHT, title: 'server' },
+      { type: 'renamePane', tabId: 'tab', leafId: LEFT, title: null }
+    ])
+    expect(pushedIntents()).toEqual([])
+
+    for (const [, , handlers] of mocks.sendLayoutCommandToOwner.mock.calls) {
+      handlers.apply({})
+    }
     expect(pushedIntents()).toEqual(['gesture', 'gesture'])
   })
 })

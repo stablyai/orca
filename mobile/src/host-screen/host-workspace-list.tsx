@@ -1,4 +1,5 @@
-import { Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
+import { useMemo } from 'react'
+import { Platform, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
@@ -12,7 +13,9 @@ import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import { HostWorkspaceListStates } from '../worktree/host-workspace-list-states'
 import { getWorktreeStatus } from '../worktree/workspace-list-sections'
 import { repoColor } from '../worktree/repo-color'
+import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
+import { buildRepoLookById } from './host-repo-looks'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
@@ -40,7 +43,13 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     settings,
     state
   } = controller
-  const { rawSections, sections, uniqueRepoColors } = sectionsResult
+  const { rawSections, sections, repoById } = sectionsResult
+  const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
+  const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
+  const cardDetails = useMemo(
+    () => getWorktreeCardDetails(worktreeCardProperties, { compactWorktreeCards, newCardStyle }),
+    [worktreeCardProperties, compactWorktreeCards, newCardStyle]
+  )
 
   return (
     <>
@@ -72,6 +81,12 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           onDismiss={() => setDismissedNotice(noticeParam ?? null)}
         />
       )}
+      {state.serverNotice ? (
+        <HostRouteNoticeBanner
+          message={state.serverNotice}
+          onDismiss={() => state.setServerNotice(null)}
+        />
+      ) : null}
 
       {/* An action that did not happen. Above the list and dismissible, because the list, the
           header and the confirm it re-opens all have to stay on screen. */}
@@ -89,11 +104,11 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           <MobileSearchField
             value={state.search}
             onChangeText={state.setSearch}
-            placeholder="Search worktrees…"
+            placeholder="Search workspaces…"
             autoFocus
             // Why: new key per open remounts the focus effect across rapid toggles so the keyboard reappears.
             focusKey={state.showSearch}
-            accessibilityLabel="Search worktrees"
+            accessibilityLabel="Search workspaces"
           />
         </View>
       )}
@@ -105,7 +120,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         sectionCount={sections.length}
         catalogError={state.catalogError}
         search={state.search}
-        activeFilterCount={settings.activeFilterCount}
+        activeFilterCount={controller.activeFilterCount}
       />
 
       {sections.length > 0 && (
@@ -114,9 +129,10 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           sections={sections}
           keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
           stickySectionHeadersEnabled={false}
-          // Why: keep the search IME up while tapping clear / scrolling results.
+          // Why: keep the search IME up while tapping clear.
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          // Why: react-native-web dismisses on-drag on any scroll, and a narrowing search fires one.
+          keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
           onScrollToIndexFailed={activeWorktreeScroll.onScrollToIndexFailed}
           // Why: edge-to-edge under the system nav bar; insets.bottom keeps the last row above it.
           contentContainerStyle={[
@@ -130,13 +146,16 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             if (!section.title) {
               return null
             }
-            const isCollapsed = state.collapsedGroups.has(section.key)
+            const isCollapsed = controller.collapsedGroups.has(section.key)
             const rawSection = rawSections.find((s) => s.key === section.key)
             const count = rawSection?.data.length ?? 0
-            const repoSectionColor =
-              state.groupMode === 'repo' ? uniqueRepoColors.get(section.title) : null
-            const repoSectionIcon =
-              state.groupMode === 'repo' ? state.repoIconsByName.get(section.title) : null
+            // Why: the desktop's header draws its anchor repo's colour and icon.
+            const repoSectionLook =
+              state.view.groupBy === 'repo' && section.repo
+                ? repoLookById.get(section.repo.id)
+                : null
+            const repoSectionColor = repoSectionLook?.color ?? null
+            const repoSectionIcon = repoSectionLook?.icon ?? null
             return (
               <Pressable
                 style={styles.sectionHeader}
@@ -150,7 +169,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                 {section.icon === 'pin' && (
                   <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
                 )}
-                {state.groupMode === 'repo' ? (
+                {state.view.groupBy === 'repo' ? (
                   <View style={styles.sectionRepoIcon}>
                     <MobileRepoIcon
                       repoIcon={repoSectionIcon}
@@ -180,10 +199,14 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               isReadOnly={isReadOnly}
               now={now}
               status={getWorktreeStatus(item)}
-              repoColor={uniqueRepoColors.get(item.repo) ?? repoColor(item.repo)}
-              repoIcon={state.repoIconsByName.get(item.repo) ?? null}
-              hideRepo={state.groupMode === 'repo'}
+              repoColor={repoLookById.get(item.repoId)?.color ?? repoColor(item.repo)}
+              repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
+              hideRepo={state.view.groupBy === 'repo' && !item.showProjectName}
+              cardDetails={cardDetails}
+              agentActivityDisplayMode={state.view.agentActivityDisplayMode}
               onPress={actions.openWorktreeSession}
+              onAgentPress={actions.openWorktreeSession}
+              statusLive={connState === 'connected' && !item.hostContextHealthLabel}
               onLongPress={
                 item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
               }

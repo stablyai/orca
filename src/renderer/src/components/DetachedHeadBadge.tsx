@@ -3,7 +3,7 @@ import { GitCommitHorizontal } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../shared/worktree/git-identity-display'
 
 type DetachedHeadDisplay = Extract<WorktreeGitIdentityDisplay, { kind: 'detached' }>
 

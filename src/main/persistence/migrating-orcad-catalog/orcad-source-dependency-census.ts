@@ -9,7 +9,10 @@ import {
   inspectOrcadMigrationSourceSessions,
   type OrcadMigrationSourceSessionInspection
 } from './orcad-source-session-dependencies'
-import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
+import {
+  collectOrcadMigrationSourceDormantState,
+  orcadMigrationLeavesBehind
+} from './orcad-source-dormant-state'
 import {
   createOrcadMigrationSourceScope,
   orcadMigrationOwnerMatchesScope,
@@ -21,6 +24,8 @@ import { paneBelongsToTabs } from '../../../shared/workspace-session-pane-owners
 export type OrcadMigrationSourceDependencyCensus = {
   totalCount: number
   counts: Record<OrcadMigrationDependencyKind, number>
+  /** For the kinds it can name: what blocks and how to clear it. */
+  names?: Partial<Record<OrcadMigrationDependencyKind, string[]>>
 }
 
 /** What still references the target that this manifest cannot carry. */
@@ -54,11 +59,18 @@ export function collectOrcadMigrationUntransferredDependencyCensus(
     'terminal-lease': state.sshRemotePtyLeases.filter(
       (lease) => lease.targetId === scope.targetId && lease.state !== 'terminated'
     ).length,
-    'terminal-recovery': countTerminalRecoveryState(state, scope, sessions)
+    // Left behind, recovery records stay with this desktop; the terminal gate still proves exit.
+    'terminal-recovery': orcadMigrationLeavesBehind(state, scope.targetId)
+      ? 0
+      : countTerminalRecoveryState(state, scope, sessions)
   }
   return {
     counts,
-    totalCount: ORCAD_MIGRATION_DEPENDENCY_KINDS.reduce((total, kind) => total + counts[kind], 0)
+    totalCount: ORCAD_MIGRATION_DEPENDENCY_KINDS.reduce((total, kind) => total + counts[kind], 0),
+    names:
+      dormant.blockedSessionItems.length > 0
+        ? { 'workspace-session': dormant.blockedSessionItems }
+        : {}
   }
 }
 

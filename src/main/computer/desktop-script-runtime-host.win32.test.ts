@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
-import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
+import { spawnProcess } from '@orca/process-host'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { DesktopScriptRuntimeHost } from './desktop-script-runtime-host'
 import { startServeChannel } from './desktop-script-serve-channel'
 import {

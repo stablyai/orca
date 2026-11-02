@@ -1,6 +1,7 @@
+import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import type { AppState } from '../types'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
-import { resolveAgentStatusLiveEntryStateHistory } from './agent-status-live-entry-state-history'
+import { resolveAgentStatusLiveEntryStateHistory } from '../../../../shared/agent-status-live-entry-state-history'
 import type {
   MigrationUnsupportedPtyEntry,
   AgentStatusEntry
@@ -81,14 +82,19 @@ export function buildAgentStatusLiveEntry(
   const { history, lastCompletedAssistantMessage, stateObservedAt } =
     resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
   const identity = resolveAgentStatusIdentity({
-    existing: existing
-      ? {
-          agentType: existing.agentType,
-          state: existing.state,
-          updatedAt: existing.updatedAt,
-          restoredUnconfirmed: existing.restoredUnconfirmed
+    existing:
+      existing &&
+      sameAgentStatusTerminalOwner(
+        { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
+        {
+          connectionId:
+            (routing?.connectionId === undefined ? existing.connectionId : routing.connectionId) ??
+            null,
+          worktreeId: routing?.worktreeId ?? existing.worktreeId
         }
-      : undefined,
+      )
+        ? existing
+        : undefined,
     incoming: payload.agentType,
     now: updatedAt
   })
@@ -121,8 +127,7 @@ export function buildAgentStatusLiveEntry(
   if (
     existing &&
     shouldSuppressInheritedTerminalStatus({
-      inheritedFromActivePane: identity.inheritedFromActivePane,
-      incomingState: payload.state
+      inheritedFromActivePane: identity.inheritedFromActivePane
     })
   ) {
     return { entry: null, reason: 'suppressed-inherited-terminal' }

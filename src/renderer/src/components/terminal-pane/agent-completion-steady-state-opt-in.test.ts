@@ -12,14 +12,13 @@ import {
 describe('agent completion steadyState opt-in', () => {
   useAgentCompletionCoordinatorLifecycle()
 
-  const optionsOf = (call: unknown[]): unknown => call[2]
+  const optionsOf = (call: unknown[]): unknown => call[1]
 
   it('marks cadence polls on a local pane as steadyState', async () => {
     const inspectProcess = vi.fn(async () => processResult('codex'))
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess,
       dispatchCompletion: vi.fn(),
       isLive: () => true,
@@ -41,7 +40,6 @@ describe('agent completion steadyState opt-in', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess,
       dispatchCompletion: vi.fn(),
       isLive: () => true,
@@ -64,7 +62,6 @@ describe('agent completion steadyState opt-in', () => {
       getPtyId: () => 'remote:pty-1',
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-1',
-      getSettings: () => null,
       inspectProcess,
       dispatchCompletion: vi.fn(),
       isLive: () => true,

@@ -2,9 +2,12 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
+  aiVaultSessionOwnerWorkspaces,
   resolveAiVaultSessionWorktreeDisplay,
   useAiVaultSessionWorktreeMap,
   withAiVaultCurrentWorktreeStatus
@@ -289,4 +292,78 @@ describe('lazy OMP child resume targets', () => {
       ).toEqual({ blocked: true, worktreeId: null, usesSessionWorktree: false })
     }
   )
+})
+
+describe('folder workspace resume targets', () => {
+  const folder: FolderWorkspace = {
+    id: 'folder-1',
+    projectGroupId: 'group-1',
+    name: 'Notes',
+    folderPath: '/work/notes',
+    executionHostId: 'local',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1,
+    createdAt: 1,
+    updatedAt: 1
+  }
+  const folderKey = folderWorkspaceKey(folder.id)
+  const targetState = {
+    folderWorkspaces: [folder],
+    projectGroups: [],
+    repos,
+    worktreesByRepo: { 'repo-1': worktrees }
+  }
+  const owners = aiVaultSessionOwnerWorkspaces(worktrees, [folder])
+
+  it.each([folderKey, worktreeA.id, null])(
+    'resumes a folder conversation and its subagent in the folder with active %s',
+    (activeWorktreeId) => {
+      const parent = makeSession({ agent: 'claude', id: 'claude:parent', cwd: '/work/notes' })
+      const child = makeSession({
+        agent: 'claude',
+        id: 'claude:child',
+        cwd: '/work/notes',
+        subagent: { parentSessionId: parent.sessionId, agentType: null, status: null }
+      })
+      const { result } = renderHook(() =>
+        useAiVaultSessionWorktreeMap({ sessions: [parent], repos, worktrees: owners })
+      )
+      for (const session of [parent, child]) {
+        expect(
+          resolveAiVaultHistorySessionResumeState({
+            session,
+            worktreeInfo: withAiVaultCurrentWorktreeStatus(
+              result.current.get(session.id) ?? null,
+              activeWorktreeId
+            ),
+            activeWorktreeId,
+            worktrees: owners,
+            repos,
+            targetState
+          })
+        ).toEqual({ blocked: false, worktreeId: folderKey, usesSessionWorktree: true })
+      }
+    }
+  )
+
+  it('leaves git worktree conversations on their worktree when folders exist', () => {
+    const { result } = renderHook(() =>
+      useAiVaultSessionWorktreeMap({ sessions: [sessionInA], repos, worktrees: owners })
+    )
+    expect(
+      resolveAiVaultHistorySessionResumeState({
+        session: sessionInA,
+        worktreeInfo: result.current.get(sessionInA.id) ?? null,
+        activeWorktreeId: folderKey,
+        worktrees: owners,
+        repos,
+        targetState
+      })
+    ).toEqual({ blocked: false, worktreeId: worktreeA.id, usesSessionWorktree: true })
+  })
 })

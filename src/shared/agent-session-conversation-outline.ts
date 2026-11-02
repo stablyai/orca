@@ -178,8 +178,10 @@ export function projectAgentSessionConversationOutline(
   )
   const entries: AgentSessionConversationOutlineEntry[] = []
   const transcript = projectNativeChatTranscriptMessages(
-    // Unchanged on the wire: a desktop's rejected rows tick once their page is loaded.
-    projectStructuredAgentSessionMessages(items, [], submissions, { rejectedInPlace: false })
+    // Unchanged on the wire: a not-sent row ticks only once a desktop loads its page.
+    projectStructuredAgentSessionMessages(items, [], submissions).filter(
+      (message) => !message.unsent
+    )
   )
   const { turnKeys } = nativeChatTurnMembership(transcript, { items, submissions })
   const replies = nativeChatTurnReplyPreviews(transcript, turnKeys)

@@ -1,14 +1,17 @@
-import { spawn } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
   sanitizeCrashReportString,
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { getIcaclsExePath } from '../win32-utils'
+import { loadWindowsSecurity, type WindowsDacl } from '../../shared/windows-security-addon'
+import {
+  ACCESS_ALLOWED_ACE_TYPE,
+  ACCESS_DENIED_ACE_TYPE,
+  INHERIT_ONLY_ACE
+} from '../../shared/windows-secure-dacl'
+import { RESTRICTED_APP_PACKAGES_SID } from './windows-install-dir-package-acl-grant'
 
 /**
  * Read-only DACL probe for the win32 install directory.
@@ -36,25 +39,18 @@ export const WINDOWS_INSTALL_DIR_ACL_BREADCRUMB = 'windows_install_dir_acl'
 // one shipped module answers it, and existsSync costs nothing.
 const MODULE_SHORTLIST = ['ffmpeg.dll', 'libGLESv2.dll', 'libEGL.dll', 'icudtl.dat']
 
-const PROBE_BUDGET_MS = 5_000
-
-// Why SDDL (`icacls /save`) rather than icacls's display: the display localizes
-// the well-known package names — and on zh/ja/ko even keeps "NT AUTHORITY" English
-// while doing so — so a repaired tree read as poisoned. SDDL prints SIDs on every locale.
+// Why raw SIDs rather than a display listing: displays localize the well-known package
+// names — and on zh/ja/ko even keep "NT AUTHORITY" English while doing so — so a
+// repaired tree read as poisoned. A SID reads the same on every locale.
 const PACKAGE_SID = /^S-1-15-2-[0-9-]+$/i
-/** ALL RESTRICTED APPLICATION PACKAGES: the grant the reproduced remedy added. */
-const RESTRICTED_PACKAGES_SID = 'S-1-15-2-2'
-/** `AC` is SDDL's alias for ALL APPLICATION PACKAGES (S-1-15-2-1). */
-const WELL_KNOWN_PACKAGE_SIDS = new Set(['AC', 'S-1-15-2-1', RESTRICTED_PACKAGES_SID])
-/** (type;flags;rights;object;inheritedObject;sid[;condition]) */
-const SDDL_ACE = /\(([A-Z]+);([A-Z]*);[^;()]*;[^;()]*;[^;()]*;([^;()]+)[;)]/gi
+/** ALL APPLICATION PACKAGES and ALL RESTRICTED APPLICATION PACKAGES. */
+const WELL_KNOWN_PACKAGE_SIDS = new Set(['S-1-15-2-1', RESTRICTED_APP_PACKAGES_SID])
 
 export type WindowsInstallDirAclProbeOptions = {
   platform?: NodeJS.Platform
   isServeMode?: boolean
   installDir?: string
   /** Test seams. */
-  spawnFn?: typeof spawn
   fileExists?: (path: string) => boolean
   recordBreadcrumb?: typeof recordDurableCrashBreadcrumb
   onDone?: (data: CrashReportBreadcrumbData) => void
@@ -66,74 +62,49 @@ type AclFacts = {
   hasRestrictedPackageGrant: boolean
 }
 
-function readSavedDacl(spawnFn: typeof spawn, target: string, deadlineMs: number): Promise<string> {
-  const saveFile = join(tmpdir(), `orca-install-acl-${randomUUID()}.txt`)
-  return new Promise<string>((resolve) => {
-    // /save only reads the target (it writes the temp file). Never /T — a recursive
-    // walk on a real profile measured 62s and timed out (see windows-user-data-acl.ts).
-    const child = spawnFn(getIcaclsExePath(), [target, '/save', saveFile], {
-      stdio: ['ignore', 'ignore', 'ignore'],
-      windowsHide: true
-    })
-    let settled = false
-    const settle = (read: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      let out = ''
-      try {
-        // An empty read parses as a clean DACL, so a failed /save must stay ''.
-        out = read ? readFileSync(saveFile, 'utf16le') : ''
-      } catch {
-        out = ''
-      }
-      try {
-        // A killed icacls may still hold the file; a leftover temp file is harmless.
-        rmSync(saveFile, { force: true })
-      } catch {
-        // Nothing to do.
-      }
-      resolve(out)
-    }
-    const timer = setTimeout(() => {
-      child.kill()
-      settle(false)
-    }, deadlineMs)
-    timer.unref?.()
-    child.on('error', () => settle(false))
-    child.on('close', (code) => settle(code === 0))
-  })
+/** The target's DACL, or null when it cannot be read (an unreadable target stays unreadable). */
+function readDacl(target: string): WindowsDacl | null {
+  const security = loadWindowsSecurity()
+  if ('error' in security) {
+    throw new Error(`windows-security addon unavailable: ${security.error}`)
+  }
+  try {
+    return security.addon.getDaclAces(target)
+  } catch {
+    return null
+  }
 }
 
-function collectAclFacts(savedDacl: string): AclFacts | null {
+function collectAclFacts(dacl: WindowsDacl | null): AclFacts | null {
+  // Fails closed: an unreadable target, a NULL DACL, or any ACE that is not a plain allow/deny
+  // gives no facts, since a skipped ACE could be the grant that satisfies an orphan.
+  if (
+    !dacl ||
+    dacl.aces.some(
+      (ace) => ace.type !== ACCESS_ALLOWED_ACE_TYPE && ace.type !== ACCESS_DENIED_ACE_TYPE
+    )
+  ) {
+    return null
+  }
   const orphanPackageSids: string[] = []
   let hasWellKnownPackageGrant = false
   let hasRestrictedPackageGrant = false
-  // A partial DACL can hide a later grant; unsupported ACEs must stay unreadable.
-  const dacl = /^D:[A-Z]*((?:\([^()]*\))*)(?:S:.*)?$/im.exec(savedDacl)
-  if (!dacl) {
-    return null
-  }
-  for (const [, type, flags, rawSid] of dacl[1].matchAll(SDDL_ACE)) {
-    const sid = rawSid.toUpperCase()
+  for (const ace of dacl.aces) {
+    const sid = ace.sid ?? ''
     if (!WELL_KNOWN_PACKAGE_SIDS.has(sid)) {
       if (PACKAGE_SID.test(sid)) {
-        orphanPackageSids.push(rawSid)
+        orphanPackageSids.push(sid)
       }
       continue
     }
     // Why: an ACE that denies, or only propagates to children (IO), grants nothing
     // on this object — so it cannot satisfy an orphan the way the reproduced fix did.
-    const flagTokens: string[] = flags.toUpperCase().match(/../g) ?? []
-    const inheritOnly = flagTokens.includes('IO')
-    if (type.toUpperCase() !== 'A' || inheritOnly) {
+    if (ace.type !== ACCESS_ALLOWED_ACE_TYPE || (ace.flags & INHERIT_ONLY_ACE) !== 0) {
       continue
     }
     hasWellKnownPackageGrant = true
     // Reported, never the verdict: narrows which grant is present for triage.
-    if (sid === RESTRICTED_PACKAGES_SID) {
+    if (sid === RESTRICTED_APP_PACKAGES_SID) {
       hasRestrictedPackageGrant = true
     }
   }
@@ -145,20 +116,13 @@ function resolveTargets(installDir: string, fileExists: (path: string) => boolea
   return moduleFile ? [installDir, moduleFile] : [installDir]
 }
 
-async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void> {
+function runProbe(options: WindowsInstallDirAclProbeOptions): void {
   const record = options.recordBreadcrumb ?? recordDurableCrashBreadcrumb
   let data: CrashReportBreadcrumbData
   try {
     const installDir = options.installDir ?? dirname(process.execPath)
     const targets = resolveTargets(installDir, options.fileExists ?? existsSync)
-    const spawnFn = options.spawnFn ?? spawn
-    const startedAt = Date.now()
-    const outputs: string[] = []
-    for (const target of targets) {
-      const remaining = PROBE_BUDGET_MS - (Date.now() - startedAt)
-      // Why one shared budget: two targets must never cost two full timeouts.
-      outputs.push(remaining > 0 ? await readSavedDacl(spawnFn, target, remaining) : '')
-    }
+    const outputs = targets.map(readDacl)
     const facts = outputs.map(collectAclFacts).filter((fact) => fact !== null)
     const orphans = [...new Set(facts.flatMap((f) => f.orphanPackageSids))]
     const hasWellKnownPackageGrant = facts.some((f) => f.hasWellKnownPackageGrant)
@@ -201,7 +165,7 @@ export function resetWindowsInstallDirAclProbeForTest(): void {
 }
 
 /**
- * Fire-and-forget; returns before any spawn. win32 only — no spawn and no fs I/O
+ * Fire-and-forget; returns before any read. win32 only — no ACL read and no fs I/O
  * anywhere else. Called from openMainWindow, which runs after initObservability,
  * so the durable record also emits a span into the diagnostics bundle.
  *
@@ -220,7 +184,11 @@ export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOpti
   // propagates into window creation. A diagnostic must never be able to do that.
   try {
     setImmediate(() => {
-      void runProbe(options).catch(() => undefined)
+      try {
+        runProbe(options)
+      } catch {
+        // A diagnostic, and a throwing recorder or onDone has nowhere left to report.
+      }
     })
   } catch {
     // Nothing left to report to that would not throw again.

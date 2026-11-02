@@ -15,7 +15,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 // Type-only, so it is erased before vi.mock's hoisted factory runs.
-import type * as SshConfigParser from './ssh-config-parser'
+import type * as SshGConfigResolution from './config/ssh-g-config-resolution'
 import type * as Ssh2 from 'ssh2'
 
 const VALID_ED25519_HOST_KEY = Buffer.from(
@@ -76,8 +76,8 @@ vi.mock('ssh2', async (importOriginal) => {
   }
 })
 
-vi.mock('./ssh-config-parser', async (importOriginal) => ({
-  ...(await importOriginal<typeof SshConfigParser>()),
+vi.mock('./config/ssh-g-config-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof SshGConfigResolution>()),
   resolveWithSshG: vi.fn(async () => null)
 }))
 

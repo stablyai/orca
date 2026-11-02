@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import type { SshTarget } from '../../shared/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
@@ -57,8 +57,7 @@ async function setup() {
     targetId: TARGET.id,
     destinationEnvironmentId: 'env-1',
     destinationName: 'Managed',
-    terminalProof: { verdict: 'exited', provenPtyIds: [] },
-    hasDirectSshAuthority: () => false
+    terminalProof: { verdict: 'exited', provenPtyIds: [] }
   })
   if (fenced.outcome !== 'fenced') {
     throw new Error('expected a fence')
@@ -149,7 +148,11 @@ describe('migration cutover coordinator', () => {
     [
       'a terminal started on the source',
       (store: Store) =>
-        store.upsertSshRemotePtyLease({ targetId: TARGET.id, ptyId: 'late', state: 'attached' }),
+        vi
+          .spyOn(store, 'getSshRemotePtyLeases')
+          .mockReturnValue([
+            { targetId: TARGET.id, ptyId: 'late', state: 'attached', createdAt: 1, updatedAt: 1 }
+          ]),
       'orcad_migration_source_terminals_live'
     ]
   ])('refuses to stage or commit after %s', async (_label, change, code) => {

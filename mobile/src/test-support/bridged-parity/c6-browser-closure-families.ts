@@ -26,7 +26,7 @@ import type { PageClosurePins } from './page-closure'
  *
  * Every verdict is what C2's rule predicts: a `matrix-` golden is `result-absent-settlement`, for
  * the reason the parity suite's own docstring gives, and every other replays byte-identically. All
- * fifteen were measured per family with vitest `-t` over the full 787-golden corpus, with C1's 103
+ * fifteen were measured per family with vitest `-t` over the full 789-golden corpus, with C1's 103
  * pins reproduced golden-for-golden as the control for the harness that measured them.
  */
 export const C6_BROWSER_CLOSURE_FAMILIES: PageClosurePins = {

@@ -7,8 +7,7 @@ import {
   buildPosixNodeInstallGuidance,
   type RemoteNodeResolutionOptions
 } from './ssh-remote-node-install-guidance'
-import { execCommand } from './ssh-relay-deploy-helpers'
-import { isSshCommandExitError } from './ssh-relay-exec-command'
+import { execCommand, isSshCommandExitError } from './remote-exec/remote-exec-command'
 import {
   buildPosixNodeToolchainProbe,
   buildWindowsNodeToolchainProbe,

@@ -1,9 +1,10 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
+import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import {
   createFloatingWorkspaceTerminalTab,
@@ -16,9 +17,6 @@ import {
 } from '@/lib/floating-workspace-guest-bridge'
 
 import { useAppStore } from '../../store'
-function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
-  return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
-}
 
 export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -32,8 +30,14 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
       if (!worktreeId) {
         return
       }
+      const owner = runtimeEnvironmentIdForWorkspaceOwner(store, { workspaceId: worktreeId })
+      if (owner.kind === 'ambiguous') {
+        // Why: a local tab here would start a shell on this computer for a workspace two hosts publish.
+        warnAmbiguousOwnerOnce(worktreeId, 'open a new terminal tab')
+        return
+      }
+      const environmentId = owner.environmentId
       void (async () => {
-        const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
         const outcome = await createWebRuntimeSessionTerminal({
           worktreeId,
           environmentId,
@@ -42,30 +46,11 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
         if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
           return
         }
-        const newTab = store.createTab(worktreeId)
+        const tabId = createBrowserUuid()
+        store.createTab(worktreeId, undefined, undefined, { id: tabId })
         store.setActiveTabType('terminal', worktreeId)
-        // Why: mirror Terminal.tsx handleNewTab so a new tab appends at the end, not index 0, when tabBarOrder is unset.
-        const freshStore = useAppStore.getState()
-        const currentTerminals = freshStore.tabsByWorktree[worktreeId] ?? []
-        const currentEditors = freshStore.openFiles.filter((f) => f.worktreeId === worktreeId)
-        const currentBrowsers = freshStore.browserTabsByWorktree[worktreeId] ?? []
-        const stored = freshStore.tabBarOrderByWorktree[worktreeId]
-        const termIds = currentTerminals.map((t) => t.id)
-        const editorIds = currentEditors.map((f) => f.id)
-        const browserIds = currentBrowsers.map((tab) => tab.id)
-        const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-        const base = (stored ?? []).filter((id) => validIds.has(id))
-        const inBase = new Set(base)
-        for (const id of [...termIds, ...editorIds, ...browserIds]) {
-          if (!inBase.has(id)) {
-            base.push(id)
-            inBase.add(id)
-          }
-        }
-        const order = base.filter((id) => id !== newTab.id)
-        order.push(newTab.id)
-        freshStore.setTabBarOrder(worktreeId, order)
-        focusTerminalTabSurface(newTab.id)
+        persistAgentLaunchTabOrder(worktreeId, tabId)
+        focusTerminalTabSurface(tabId)
       })()
     })
   )

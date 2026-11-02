@@ -35,8 +35,8 @@ export function deliverLaunchPromptToAgentTab(args: {
   onTimeout?: () => void
   /** The paste was written without ever observing the agent's composer. */
   onUnconfirmedDelivery?: () => void
-  /** Whether the paste may be written; the chat copy is seeded only once it opens. */
-  sendGate?: Promise<boolean>
+  /** The launch pane's PTY once its agent started; the chat copy is seeded only then. */
+  launchPty?: Promise<string | null>
 }): Promise<boolean> {
   const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
@@ -59,13 +59,13 @@ export function deliverLaunchPromptToAgentTab(args: {
     }
   }
   // Chained ahead of the paste's own wait on the gate, so the copy always precedes the send.
-  const sendGate = args.sendGate?.then((open) => {
-    if (open) {
+  const launchPty = args.launchPty?.then((ptyId) => {
+    if (ptyId) {
       seedChatCopy()
     }
-    return open
+    return ptyId
   })
-  if (!sendGate) {
+  if (!launchPty) {
     seedChatCopy()
   }
 
@@ -83,7 +83,7 @@ export function deliverLaunchPromptToAgentTab(args: {
     timeoutMs,
     onTimeout,
     onUnconfirmedDelivery,
-    ...(sendGate ? { sendGate } : {})
+    ...(launchPty ? { launchPty } : {})
   }).then(
     (delivered) => {
       if (seeded && !delivered && !deliversViaNativePrefill) {

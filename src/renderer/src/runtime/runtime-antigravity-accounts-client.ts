@@ -2,8 +2,8 @@ import type {
   AntigravityAccountState,
   AntigravityAccountTarget
 } from '../../../shared/antigravity-account-types'
-import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../../shared/account-runtime-capabilities'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
 
 export async function callAntigravityAccounts(

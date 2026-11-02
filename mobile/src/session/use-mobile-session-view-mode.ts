@@ -41,6 +41,7 @@ function mergeOverrides(
 export type MobileSessionViewModeController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
   isTabChatView: (tabId: string) => boolean
+  setTabView: (tabId: string, view: MobileSessionView) => void
   toggleTabChatView: (tabId: string) => void
 }
 
@@ -139,8 +140,8 @@ export function useMobileSessionViewMode(args: {
     [defaultView, hostId, viewOverridesState, worktreeId]
   )
 
-  const toggleTabChatView = useCallback(
-    (tabId: string) => {
+  const setTabView = useCallback(
+    (tabId: string, nextView: MobileSessionView) => {
       const current = viewOverridesStateRef.current
       const currentScope = isOverrideScope(current, hostId, worktreeId)
         ? current
@@ -151,11 +152,6 @@ export function useMobileSessionViewMode(args: {
             loaded: false
           }
       const overrides = new Map(currentScope.overrides)
-      // Flip from the tab's effective view (its override, else the default), so
-      // a tab following a chat default can still be pinned back to terminal.
-      const fallbackView = currentScope.loaded ? defaultViewRef.current : 'terminal'
-      const currentlyChat = (overrides.get(tabId) ?? fallbackView) === 'chat'
-      const nextView = currentlyChat ? 'terminal' : 'chat'
       overrides.set(tabId, nextView)
       const next = { ...currentScope, overrides }
       viewOverridesStateRef.current = next
@@ -204,5 +200,17 @@ export function useMobileSessionViewMode(args: {
     [ensureViewOverridesRuntime, hostId, worktreeId]
   )
 
-  return { isTabChatView, toggleTabChatView }
+  const toggleTabChatView = useCallback(
+    (tabId: string) => {
+      const current = viewOverridesStateRef.current
+      const fallbackView = current.loaded ? defaultViewRef.current : 'terminal'
+      const currentlyChat =
+        isOverrideScope(current, hostId, worktreeId) &&
+        (current.overrides.get(tabId) ?? fallbackView) === 'chat'
+      setTabView(tabId, currentlyChat ? 'terminal' : 'chat')
+    },
+    [hostId, setTabView, worktreeId]
+  )
+
+  return { isTabChatView, setTabView, toggleTabChatView }
 }

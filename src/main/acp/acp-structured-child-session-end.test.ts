@@ -1,16 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { isSubagentGroupBlock } from '../../shared/native-chat-types'
+import { isSubagentBlock } from '../../shared/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { GENERIC_ACP_DIALECT, type AcpDialect } from './acp-dialects/acp-dialect'
-import { acpChildWorkStatusSink } from './acp-structured-child-work.test-support'
+import {
+  acpChildWorkStatusSink,
+  acpSubagentRecords
+} from './acp-structured-child-work.test-support'
 import { PROVIDER_SESSION, replyChunk } from './acp-structured-adapter.test-support'
 import { openAttachedHostRig, promptIdOf, send, stop } from './acp-structured-host.test-support'
 import { readAcpFixture } from './acp-timeline-fixture.test-support'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
-import type { AcpTimelineEvent } from './acp-timeline-event'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => {
@@ -20,14 +22,6 @@ afterEach(async () => {
   }
   await closeProviderTimelineRigs()
 })
-
-function agents(events: AcpTimelineEvent[]) {
-  return events.flatMap((event) =>
-    event.type === 'item.update' && event.body.kind === 'message'
-      ? event.body.blocks.filter(isSubagentGroupBlock).flatMap((group) => group.agents)
-      : []
-  )
-}
 
 function translator(dialect: AcpDialect = GROK_ACP_DIALECT) {
   const lane = new AcpTimelineTranslator({ sessionId: PROVIDER_SESSION, dialect })
@@ -46,6 +40,9 @@ function translator(dialect: AcpDialect = GROK_ACP_DIALECT) {
     },
     102
   )
+  const records = acpSubagentRecords()
+  const host = () => records(lane.subagents.drainEvidence())
+  host()
   const end = (
     reason: string,
     sessionId = 'child',
@@ -67,7 +64,7 @@ function translator(dialect: AcpDialect = GROK_ACP_DIALECT) {
       },
       120
     )
-  return { lane, end, promptId }
+  return { lane, end, host, promptId }
 }
 
 describe('owned Grok child-session completion', () => {
@@ -78,19 +75,17 @@ describe('owned Grok child-session completion', () => {
     '_x.ai/session/update'
   ])('settles a known child through %s without ending or charging the parent turn', (method) => {
     const f = translator()
-    const events = f.end('end_turn', 'child', {}, method)
-    expect(agents(events)).toEqual([
-      { id: 'child', label: 'Original label', state: 'completed', startedAt: 102, settledAt: 120 }
-    ])
-    expect(events).toMatchObject([
+    expect(f.end('end_turn', 'child', {}, method)).toEqual([])
+    expect(f.host()).toMatchObject([
       {
-        type: 'item.update',
-        item: 'subagents:prompt:parent',
-        join: { turn: f.promptId },
-        subagentIdentities: ['child']
+        providerId: 'child',
+        description: 'Original label',
+        membership: 'settled',
+        outcome: 'succeeded'
       }
     ])
     expect(f.end('cancelled')).toEqual([])
+    expect(f.host()).toMatchObject([{ providerId: 'child', outcome: 'succeeded' }])
     const parent = f.lane.notification(
       'session/update',
       replyChunk(f.promptId, 'Parent continues'),
@@ -106,9 +101,8 @@ describe('owned Grok child-session completion', () => {
 
   it('latches cancellation against conflicting child ends, parent reports and later working progress', () => {
     const f = translator()
-    expect(agents(f.end('cancelled'))).toMatchObject([
-      { id: 'child', state: 'stopped', settledAt: 120 }
-    ])
+    expect(f.end('cancelled')).toEqual([])
+    expect(f.host()).toMatchObject([{ providerId: 'child', outcome: 'cancelled' }])
     expect(f.end('end_turn')).toEqual([])
     expect(
       f.lane.notification(
@@ -128,8 +122,9 @@ describe('owned Grok child-session completion', () => {
       },
       122
     )
-    expect(agents(progress)).toMatchObject([
-      { id: 'child', state: 'stopped', settledAt: 120, tokens: 7 }
+    expect(progress).toEqual([])
+    expect(f.host()).toMatchObject([
+      { providerId: 'child', membership: 'settled', outcome: 'cancelled' }
     ])
   })
 
@@ -138,6 +133,7 @@ describe('owned Grok child-session completion', () => {
     expect(f.end('future_stop_reason')).toEqual([])
     expect(f.end('cancelled', 'unowned-child')).toEqual([])
     expect(f.end('cancelled', 'child', {}, '_x.ai/other_notification')).toEqual([])
+    expect(f.host()).toMatchObject([{ providerId: 'child', membership: 'live' }])
     expect(f.lane.promptResult('parent', { stopReason: 'end_turn' }, 122)).toMatchObject([
       { type: 'turn.end', turn: f.promptId, outcome: 'success' }
     ])
@@ -154,7 +150,9 @@ describe('owned Grok child-session completion', () => {
         f.lane.notification('_x.ai/session_notification', { sessionId: 'child', update }, 120)
       ).toEqual([])
     }
-    expect(agents(f.end('end_turn'))).toMatchObject([{ id: 'child', state: 'completed' }])
+    expect(f.host()).toMatchObject([{ providerId: 'child', membership: 'live' }])
+    expect(f.end('end_turn')).toEqual([])
+    expect(f.host()).toMatchObject([{ providerId: 'child', outcome: 'succeeded' }])
   })
 
   it('ignores malformed completions and child-scoped roster reports without learning a new child', () => {
@@ -170,7 +168,9 @@ describe('owned Grok child-session completion', () => {
       ).toEqual([])
     }
     expect(f.end('cancelled', 'nested-child')).toEqual([])
-    expect(agents(f.end('end_turn'))).toMatchObject([{ id: 'child', state: 'completed' }])
+    expect(f.host()).toMatchObject([{ providerId: 'child', membership: 'live' }])
+    expect(f.end('end_turn')).toEqual([])
+    expect(f.host()).toMatchObject([{ providerId: 'child', outcome: 'succeeded' }])
   })
 
   it('ignores replay and loading even when a loading notice explicitly says it is live', () => {
@@ -181,7 +181,9 @@ describe('owned Grok child-session completion', () => {
     expect(f.end('cancelled')).toEqual([])
     expect(f.end('cancelled', 'child', { isReplay: false })).toEqual([])
     f.lane.finishLoad()
-    expect(agents(f.end('end_turn'))).toMatchObject([{ id: 'child', state: 'completed' }])
+    expect(f.host()).toMatchObject([{ providerId: 'child', membership: 'live' }])
+    expect(f.end('end_turn')).toEqual([])
+    expect(f.host()).toMatchObject([{ providerId: 'child', outcome: 'succeeded' }])
     f.lane.dispose()
     expect(f.end('cancelled')).toEqual([])
   })
@@ -192,6 +194,7 @@ describe('owned Grok child-session completion', () => {
       notification: GROK_ACP_DIALECT.notification
     })
     expect(f.end('cancelled')).toEqual([])
+    expect(f.host()).toMatchObject([{ providerId: 'child', membership: 'live' }])
   })
 })
 
@@ -241,14 +244,15 @@ describe('recorded child-session outcome during a full parent Stop', () => {
       await hosted.rows()
       vi.setSystemTime(1791496678726)
       agent.notify(selectedFinished.method, selectedFinished.params)
-      const rosters = async () =>
+      // One saved row per subagent, which the host writes from its records.
+      const subagents = async () =>
         (await hosted.rows()).flatMap((row) =>
           row.body.kind === 'message'
-            ? row.body.blocks.filter(isSubagentGroupBlock).map((group) => ({ row, group }))
+            ? row.body.blocks.filter(isSubagentBlock).map((block) => ({ row, block }))
             : []
         )
-      const [original] = await rosters()
-      expect(original.group.agents).toMatchObject([
+      const original = await subagents()
+      expect(original.map(({ block }) => block)).toMatchObject([
         { id: 'subagent-1', state: 'stopped' },
         { id: 'subagent-2', state: 'working' }
       ])
@@ -272,16 +276,18 @@ describe('recorded child-session outcome during a full parent Stop', () => {
       })
       expect(await stop(hosted.host)).toMatchObject({ ok: true, value: { cancelled: true } })
       await vi.advanceTimersByTimeAsync(17)
-      const [beforeParentResult] = await rosters()
-      expect.soft(beforeParentResult.row.itemId).toBe(original.row.itemId)
-      expect.soft(beforeParentResult.row.turnScope).toEqual(original.row.turnScope)
+      const beforeParentResult = await subagents()
       expect
-        .soft(beforeParentResult.group.agents)
-        .toEqual([
-          original.group.agents[0],
-          reason === 'cancelled'
-            ? { ...original.group.agents[1], state: 'stopped', settledAt: 1791496686302 }
-            : original.group.agents[1]
+        .soft(beforeParentResult.map(({ row }) => row.itemId))
+        .toEqual(original.map(({ row }) => row.itemId))
+      expect
+        .soft(beforeParentResult.map(({ row }) => row.turnScope))
+        .toEqual(original.map(({ row }) => row.turnScope))
+      expect
+        .soft(beforeParentResult.map(({ block }) => block))
+        .toMatchObject([
+          original[0].block,
+          reason === 'cancelled' ? { id: 'subagent-2', state: 'stopped' } : original[1].block
         ])
       expect.soft((await hosted.turns()).at(-1)).toMatchObject({ state: 'running' })
       expect.soft(child.closes).toBe(0)
@@ -297,8 +303,8 @@ describe('recorded child-session outcome during a full parent Stop', () => {
         state: 'interrupted',
         outcome: 'cancellation'
       })
-      const [settled] = await rosters()
-      expect(settled.group.agents).toMatchObject([
+      const settled = await subagents()
+      expect(settled.map(({ block }) => block)).toMatchObject([
         { id: 'subagent-1', state: 'stopped' },
         { id: 'subagent-2', state }
       ])

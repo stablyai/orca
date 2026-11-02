@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename } from 'node:path'

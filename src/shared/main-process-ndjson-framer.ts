@@ -28,6 +28,8 @@ export type IncrementalNdjsonFramer = {
   feed(chunk: string): void
   resume(): void
   reset(): void
+  /** Once input has ended: the unterminated last line, never parsed as a record. */
+  takeTail(): string
 }
 
 export type IncrementalNdjsonFramerOptions = {
@@ -261,6 +263,12 @@ export function createIncrementalNdjsonFramer(
           process(input)
         }
       }
+    },
+    takeTail(): string {
+      const tail = discardingOversizedLine ? '' : `${lineSegments.join('')}${pendingInput ?? ''}`
+      clearLine()
+      pendingInput = null
+      return tail
     },
     reset(): void {
       clearLine()

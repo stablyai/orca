@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
+  getWorkspaceFileRevealOwner,
   revealInFileManager
 } from './reveal-in-file-manager'
 
@@ -26,30 +26,30 @@ describe('getRevealInFileManagerLabel', () => {
   })
 })
 
-describe('isRevealInFileManagerBlocked', () => {
-  const local = { activeRuntimeEnvironmentId: null }
+describe('getWorkspaceFileRevealOwner', () => {
+  // A focused server must not decide where a file lives.
+  const state = {
+    settings: { activeRuntimeEnvironmentId: 'env-focused' },
+    worktreesByRepo: {
+      'repo-1': [{ id: 'repo-1::/repo', repoId: 'repo-1', hostId: 'local' as const }]
+    }
+  }
 
-  it('allows a file this client owns', () => {
-    expect(isRevealInFileManagerBlocked(local, {})).toBe(false)
-    expect(isRevealInFileManagerBlocked(null, { connectionId: null })).toBe(false)
-    expect(isRevealInFileManagerBlocked(local, { runtimeEnvironmentId: null })).toBe(false)
+  it('returns local for a local workspace file even while a server is focused', () => {
+    expect(getWorkspaceFileRevealOwner(state, 'repo-1::/repo', {})).toBe('local')
   })
 
-  it('blocks a file on an SSH host', () => {
-    expect(isRevealInFileManagerBlocked(local, { connectionId: 'ssh-1' })).toBe(true)
-  })
-
-  it('blocks a runtime-owned file even after the focused runtime switches to local', () => {
-    expect(isRevealInFileManagerBlocked(local, { runtimeEnvironmentId: 'env-1' })).toBe(true)
-  })
-
-  it('blocks every file while a remote runtime is focused, as the main process does', () => {
+  it('names the SSH host or server from the route', () => {
+    expect(getWorkspaceFileRevealOwner(state, 'repo-1::/repo', { connectionId: 'ssh-1' })).toBe(
+      'ssh:ssh-1'
+    )
     expect(
-      isRevealInFileManagerBlocked(
-        { activeRuntimeEnvironmentId: 'env-1' },
-        { runtimeEnvironmentId: null }
-      )
-    ).toBe(true)
+      getWorkspaceFileRevealOwner(state, 'repo-1::/repo', { runtimeEnvironmentId: 'env-1' })
+    ).toBe('runtime:env-1')
+  })
+
+  it('refuses a route that reads local when the catalog cannot place the workspace', () => {
+    expect(getWorkspaceFileRevealOwner(state, 'repo-missing::/elsewhere', {})).toBe('unresolved')
   })
 })
 
@@ -67,24 +67,36 @@ describe('revealInFileManager', () => {
   it('reveals the path without a toast when the OS accepts it', async () => {
     openInFileManager.mockResolvedValue({ ok: true })
 
-    await revealInFileManager('/repo/src/foo.ts')
+    await revealInFileManager('/repo/src/foo.ts', 'local')
 
-    expect(openInFileManager).toHaveBeenCalledWith('/repo/src/foo.ts')
+    expect(openInFileManager).toHaveBeenCalledWith('/repo/src/foo.ts', 'local')
     expect(toastError).not.toHaveBeenCalled()
   })
+
+  it.each(['ssh:ssh-1', 'runtime:env-1', 'unresolved'] as const)(
+    'refuses a path owned by %s without asking the OS',
+    async (owner) => {
+      await revealInFileManager('/repo/src/foo.ts', owner)
+
+      expect(openInFileManager).not.toHaveBeenCalled()
+      expect(toastError).toHaveBeenCalledWith(
+        'Opening remote paths in the local OS is not available.'
+      )
+    }
+  )
 
   it('says the file is gone when it no longer exists', async () => {
     openInFileManager.mockResolvedValue({ ok: false, reason: 'not-found' })
 
-    await revealInFileManager('/repo/src/deleted.ts')
+    await revealInFileManager('/repo/src/deleted.ts', 'local')
 
     expect(toastError).toHaveBeenCalledWith('File not found. It may have been moved or deleted.')
   })
 
-  it('says remote paths cannot be revealed when a remote runtime is focused', async () => {
+  it('says remote paths cannot be revealed when the main process refuses the owner', async () => {
     openInFileManager.mockResolvedValue({ ok: false, reason: 'remote-runtime-unsupported' })
 
-    await revealInFileManager('/repo/src/foo.ts')
+    await revealInFileManager('/repo/src/foo.ts', 'local')
 
     expect(toastError).toHaveBeenCalledWith(
       'Opening remote paths in the local OS is not available.'
@@ -94,7 +106,7 @@ describe('revealInFileManager', () => {
   it('reports a file manager that failed to launch', async () => {
     openInFileManager.mockResolvedValue({ ok: false, reason: 'launch-failed' })
 
-    await revealInFileManager('/repo/src/foo.ts')
+    await revealInFileManager('/repo/src/foo.ts', 'local')
 
     expect(toastError).toHaveBeenCalledWith('Could not reveal the file.')
   })

@@ -6,8 +6,13 @@ import {
   agentSessionWriteNotDoneParts
 } from './agent-session-refusal-notice'
 import type { AgentSessionWriteNoticePart } from './agent-session-write-notice-copy'
-import type { AgentSessionFailureFact } from './agent-session-failure'
+import {
+  readWholeAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from './agent-session-failure'
 import type { AgentSessionFailureWordsContext } from './agent-session-failure-words'
+import type { AgentJournalSubmission } from './agent-session-journal-types'
+import { agentSessionFailureStatedByRow } from './agent-session-visible-failures'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 
 /**
@@ -54,6 +59,24 @@ export function structuredAgentSessionRejectionParts(
   // A legacy marker is an internal cause with no user-facing meaning; any other reason is a
   // sentence written to be read — the provider's, or the host's own.
   return rejection.kind ? agentSessionWriteNotDoneParts(write) : [{ text: reason }]
+}
+
+/** The line under a message the host recorded and then rejected. `startFailures`: what the loaded
+ *  rows already state (`agentSessionVisibleFailureFacts`), so the reason is said once. */
+export function structuredAgentSessionRecordedRejectionParts(
+  submission: AgentJournalSubmission,
+  context: AgentSessionFailureWordsContext,
+  startFailures: readonly AgentSessionFailureFact[]
+): AgentSessionWriteNoticePart[] {
+  if (agentSessionFailureStatedByRow(submission.rejection, startFailures)) {
+    return agentSessionWriteNotDoneParts('send')
+  }
+  return structuredAgentSessionRejectionParts(
+    submission.reason,
+    'send',
+    readWholeAgentSessionFailureFact(submission.rejection),
+    context
+  )
 }
 
 function rejectionFactParts(

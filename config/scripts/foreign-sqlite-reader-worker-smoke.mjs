@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
 import { ORCAD_FOREIGN_SQLITE_READER_ENTRY } from '../../src/shared/orcad-artifacts.ts'
 
 // Why a child process: the read must run under the runtime orcad ships, which may not be

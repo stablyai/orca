@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { AgentRowState } from './agent-row-decay-state'
+import type { AgentRowState } from '../../../shared/agent-row-decay-state'
 
 /**
  * States whose cached tool fields describe live work: 'working' names the tool the agent is

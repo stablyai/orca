@@ -14,7 +14,7 @@ import {
 } from './mobile-web-app-render-harness.mjs'
 
 // The page lays out edge-to-edge under the shell's system bars and pads through its own
-// SafeAreaViews, by the insets `init` carries. Measured in a real browser because what is under
+// SafeAreaViews, and its root for the sides, by the insets `init` carries. Measured in a real browser because what is under
 // test is which providers and navigators expo-router actually mounts above a screen.
 const HOST_ROUTE = '/h/render-check-host'
 const HOST = {
@@ -106,7 +106,9 @@ function readEdges(page) {
     )
     return {
       titleTop: title === null ? null : range.getBoundingClientRect().top,
+      titleLeft: title === null ? null : range.getBoundingClientRect().left,
       fabBottom: fab?.getBoundingClientRect().bottom ?? null,
+      fabRight: fab?.getBoundingClientRect().right ?? null,
       envTop: (() => {
         const probe = document.createElement('div')
         probe.style.paddingTop = 'env(safe-area-inset-top)'
@@ -141,6 +143,19 @@ describeRender('the page pads for the system bars once, by the shell insets', ()
     // reading the web provider's own measurement would pad by ENV_INSETS.top instead.
     expect(padded.titleTop - zero.titleTop).toBe(INSETS.top)
   }, 90_000)
+
+  // Landscape puts the iPhone sensor housing on a side. Unequal sides, so a swapped edge fails.
+  it('keeps the screens clear of the side insets, padding them once', async () => {
+    const upright = await openHostRoute(INSETS)
+    const base = await readEdges(upright.page)
+    await upright.page.close()
+    const sideways = await openHostRoute({ ...INSETS, left: 59, right: 44 })
+    const inset = await readEdges(sideways.page)
+    await sideways.page.close()
+    expect([...upright.errors, ...sideways.errors]).toEqual([])
+    expect(inset.titleLeft - base.titleLeft).toBe(59)
+    expect(base.fabRight - inset.fabRight).toBe(44)
+  }, 60_000)
 
   it('follows a re-sent init, which is how the keyboard and rotation reach the page', async () => {
     const opened = await openHostRoute(INSETS)

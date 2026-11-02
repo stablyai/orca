@@ -11,7 +11,7 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
 import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'

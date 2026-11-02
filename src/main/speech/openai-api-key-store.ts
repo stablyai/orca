@@ -1,6 +1,9 @@
 import { getSecretStore } from '../../shared/secret-store'
 import { readCredentialFileProtection } from '../credential-file-protection'
-import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import {
+  classifyUnenvelopedCredential,
+  type SecretAtRestProtection
+} from '../../shared/secret-at-rest-protection'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -23,7 +26,7 @@ function ensureOrcaDir(): void {
   }
 }
 
-function getOpenAiKeyPath(): string {
+export function getOpenAiKeyPath(): string {
   return join(getOrcaDir(), OPENAI_SPEECH_TOKEN_FILE)
 }
 
@@ -94,11 +97,23 @@ export function readOpenAiSpeechApiKey(): string {
       return cachedOpenAiSpeechApiKey
     }
     cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
-      ? getSecretStore().decryptString(raw)
+      ? decryptOrLegacyPlaintext(raw)
       : raw.toString('utf8')
     return cachedOpenAiSpeechApiKey
   } catch {
     throw new Error('OpenAI API key could not be decrypted')
+  }
+}
+
+// Why: a key saved before sealing became available stays plaintext until it is migrated or re-saved.
+function decryptOrLegacyPlaintext(raw: Buffer): string {
+  try {
+    return getSecretStore().decryptString(raw)
+  } catch (error) {
+    if (classifyUnenvelopedCredential(raw) === 'plaintext') {
+      return raw.toString('utf8')
+    }
+    throw error
   }
 }
 

@@ -1,15 +1,10 @@
 import { useAppStore } from '@/store'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import { REMOTE_PTY_ID_PREFIX } from './pty-connect-limits'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
 } from '../../../../../shared/runtime-host-status'
-
-export function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
-  return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
-}
 
 export function canRestorePairedParkedTerminal(ptyId: string): boolean {
   const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)

@@ -399,6 +399,28 @@ describe('skill discovery', () => {
     expect(rootPaths).toContain('/workspace/current/.claude/skills')
   })
 
+  it('reports an SSH-backed repository as a remote-repo source instead of dropping it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const runtimeRepo = makeRepo('/runtime/repo')
+    runtimeRepo.executionHostId = 'runtime:environment-1'
+    const repos = [makeRepo('/remote/repo', 'ssh-1'), runtimeRepo]
+
+    const result = await discoverSkills({ homeDir: join(root, 'home'), repos, includeCwd: false })
+    const homeOnly = await discoverSkills({
+      homeDir: join(root, 'home'),
+      repos,
+      includeCwd: false,
+      sourceKinds: ['home']
+    })
+
+    const remoteSources = result.sources.filter((source) => source.skippedReason === 'remote-repo')
+    expect(remoteSources).toEqual([
+      expect.objectContaining({ path: '/remote/repo', sourceKind: 'repo', exists: false })
+    ])
+    expect(result.sources.some((source) => source.path.startsWith('/remote/repo/'))).toBe(false)
+    expect(homeOnly.sources.some((source) => source.skippedReason === 'remote-repo')).toBe(false)
+  })
+
   it('scans each provider home skill root', () => {
     const roots = buildSkillDiscoverySources({
       homeDir: '/home/test',

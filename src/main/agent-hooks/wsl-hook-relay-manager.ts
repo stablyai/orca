@@ -162,7 +162,7 @@ export class WslHookRelayManager {
     if (!bundle) {
       if (!this.warnedBundleMissing) {
         this.warnedBundleMissing = true
-        this.deps.warn('[agent-hooks] WSL hook relay bundle not found; run build:relay')
+        this.deps.warn('[agent-hooks] WSL hook relay bundle not found; run build:wsl-guest')
       }
       return
     }

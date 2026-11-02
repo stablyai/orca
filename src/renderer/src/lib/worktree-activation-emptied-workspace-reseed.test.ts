@@ -12,7 +12,7 @@ import { toSshExecutionHostId } from '../../../shared/execution-host'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent-test-state'
+} from '@/lib/worktree-activation-created-agent.test-fixture'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 
 const initialAppStoreState = useAppStore.getState()

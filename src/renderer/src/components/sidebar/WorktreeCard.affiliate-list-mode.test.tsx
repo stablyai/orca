@@ -20,38 +20,43 @@ const sleepMocks = vi.hoisted(() => ({
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'comment']
 let settings: Partial<GlobalSettings> | null = null
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      browserTabsByWorktree: {},
-      createBrowserTab: vi.fn(),
-      deleteFolderWorkspace: vi.fn(),
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch: vi.fn(),
-      fetchIssue: vi.fn(),
-      fetchLinearIssue: vi.fn(),
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache: {},
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      openTaskPage: vi.fn(),
-      projectGroups: [],
-      ptyIdsByTabId: {},
-      remoteBranchConflictByWorktreeId: {},
-      renamingWorktreeId: null,
-      setActiveWorktree: vi.fn(),
-      setRemoteBrowserPageHandle: vi.fn(),
-      setRenamingWorktreeId,
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      tabsByWorktree: {},
-      updateWorktreeMeta,
-      workspacePortScan: null,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    browserTabsByWorktree: {},
+    createBrowserTab: vi.fn(),
+    deleteFolderWorkspace: vi.fn(),
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch: vi.fn(),
+    fetchIssue: vi.fn(),
+    fetchLinearIssue: vi.fn(),
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    openModal,
+    openTaskPage: vi.fn(),
+    projectGroups: [],
+    ptyIdsByTabId: {},
+    remoteBranchConflictByWorktreeId: {},
+    renamingWorktreeId: null,
+    setActiveWorktree: vi.fn(),
+    setRemoteBrowserPageHandle: vi.fn(),
+    setRenamingWorktreeId,
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    updateWorktreeMeta,
+    workspacePortScan: null,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -67,10 +72,6 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: testDoubles.activateWorktreeFromSidebar
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' })
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({

@@ -16,26 +16,27 @@ const group: ProjectGroup = {
 }
 const selected = {
   selectedProjectGroup: null,
+  selectedRepo: { id: 'repo-1' },
   selectedRepoPath: '/repo',
   selectedRepoExecutionHostId: 'local' as const,
-  selectedRepoSettings: { activeRuntimeEnvironmentId: 'focused-runtime' },
   connectionId: null
 }
 describe('composer attachment destination', () => {
-  it('uses the selected local host even when a runtime is focused', () => {
+  it('uses the selected local host', () => {
     expect(resolveComposerAttachmentTarget(selected)).toEqual({
       hostId: 'local',
       path: '/repo',
+      worktreeId: 'repo-1::/repo',
       connectionId: null,
-      settings: { activeRuntimeEnvironmentId: null }
+      runtimeEnvironmentId: null
     })
   })
-  it('uses the selected runtime without borrowing the focused runtime', () => {
+  it('uses the selected runtime', () => {
     expect(
       resolveComposerAttachmentTarget({
         ...selected,
         selectedRepoExecutionHostId: 'runtime:selected'
-      }).settings.activeRuntimeEnvironmentId
+      }).runtimeEnvironmentId
     ).toBe('selected')
   })
   it('uses a folder project path and recorded SSH host', () => {
@@ -48,8 +49,9 @@ describe('composer attachment destination', () => {
     ).toEqual({
       hostId: 'ssh:ssh-a',
       path: '/folder',
+      worktreeId: null,
       connectionId: 'ssh-a',
-      settings: { activeRuntimeEnvironmentId: null }
+      runtimeEnvironmentId: null
     })
   })
   it('uses a folder project runtime owner', () => {
@@ -62,8 +64,9 @@ describe('composer attachment destination', () => {
     ).toEqual({
       hostId: 'runtime:folder-host',
       path: '/folder',
+      worktreeId: null,
       connectionId: null,
-      settings: { activeRuntimeEnvironmentId: 'folder-host' }
+      runtimeEnvironmentId: 'folder-host'
     })
   })
   it.each(['/folder/source-repo', '/outside/source-repo'])(

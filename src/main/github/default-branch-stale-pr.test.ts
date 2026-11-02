@@ -35,7 +35,6 @@ const {
   noteRepositoryRateLimitSpendMock,
   ghRepoExecOptionsMock,
   githubRepoContextMock,
-  getSshGitProviderMock,
   readLocalGitConfigSignatureMock,
   acquireMock,
   releaseMock
@@ -67,7 +66,6 @@ const {
     connectionId: connectionId ?? null,
     ...localGitOptions
   })),
-  getSshGitProviderMock: vi.fn(),
   readLocalGitConfigSignatureMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
@@ -105,10 +103,6 @@ vi.mock('./gh-utils', () => ({
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
 }))
 
 vi.mock('./local-git-config-signature', () => ({
@@ -221,7 +215,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     noteRateLimitSpendMock.mockReset()
     ghRepoExecOptionsMock.mockClear()
     githubRepoContextMock.mockClear()
-    getSshGitProviderMock.mockReset()
     readLocalGitConfigSignatureMock.mockReset()
     readLocalGitConfigSignatureMock.mockResolvedValue(undefined)
     acquireMock.mockReset()

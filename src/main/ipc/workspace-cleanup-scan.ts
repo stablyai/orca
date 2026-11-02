@@ -3,7 +3,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import { mergeWorktree } from './worktree-logic'
+import { mergeWorktree } from './worktree-metadata-merge'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanArgs,
@@ -162,7 +162,7 @@ async function scanRepoWorkspaces(
     })
   }
 
-  if (route.kind === 'ssh' && !route.provider) {
+  if (route.kind === 'ssh') {
     // Why: a disconnected host still owns real workspaces; the full list shows
     // them (blocked), while legacy scans keep omitting what they cannot inspect.
     const candidates =

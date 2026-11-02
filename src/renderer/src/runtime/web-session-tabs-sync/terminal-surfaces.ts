@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session-chat-label'
-import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
@@ -12,7 +12,7 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   WEB_TERMINAL_SURFACE_TAB_PREFIX,
   toWebTerminalSurfaceTabId
-} from '../web-runtime-session'
+} from '../../../../shared/terminal-surface-id'
 import type {
   ReadyBrowserSurface,
   ReadyEditorSurface,
@@ -230,7 +230,8 @@ export function shouldReplaceTerminalTab(
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
-  exactProvisionalHandoffs: ReadonlySet<string>
+  exactProvisionalHandoffs: ReadonlySet<string>,
+  persistedLeafPtyIds: Readonly<Record<string, string>> | undefined
 ): boolean {
   if (exactProvisionalHandoffs.has(tab.id)) {
     // Why: agent kind is not session identity; retire only the provisional tab
@@ -242,7 +243,13 @@ export function shouldReplaceTerminalTab(
     return true
   }
   if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
-    return true
+    // Why: a fresh placeholder has no identity, so the host's first terminal takes it over. A
+    // restored row names its own PTYs, and only those may retire it (#25339).
+    return (
+      !tab.restoredFromSession ||
+      nextMirroredTerminalIds.has(toWebTerminalSurfaceTabId(tab.id)) ||
+      Object.values(persistedLeafPtyIds ?? {}).some((ptyId) => nextRemotePtyIds.has(ptyId))
+    )
   }
   if (!isRuntimeTerminalTabForEnvironment(tab, environmentId)) {
     return false

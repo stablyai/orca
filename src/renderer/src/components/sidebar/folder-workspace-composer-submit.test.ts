@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { makeProjectGroup, makeFolderWorkspace } from './folder-workspace-composer-submit-fixtures'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type * as NewWorkspaceModule from '@/lib/new-workspace'
 
@@ -26,45 +25,51 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import {
-  getFolderWorkspaceAgentLaunchPlatform,
+  getFolderWorkspaceAgentLaunchFact,
   submitFolderWorkspaceCreate
 } from './folder-workspace-composer-submit'
 
-function makeProjectGroup(): ProjectGroup {
-  return {
-    id: 'group-1',
-    name: 'Platform',
-    parentPath: '/repo/platform',
-    parentGroupId: null,
-    createdFrom: 'folder-scan',
-    tabOrder: 0,
-    isCollapsed: false,
-    color: null,
-    createdAt: 1,
-    updatedAt: 1
-  }
-}
-
-function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
-  return {
-    id: 'folder-workspace-1',
-    projectGroupId: 'group-1',
-    name: 'hi',
-    folderPath: '/repo/platform/hi',
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1,
-    createdAt: 1,
-    updatedAt: 1,
-    ...overrides
-  }
+const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
+const linkedIssue = {
+  provider: 'github' as const,
+  type: 'issue' as const,
+  number: 42,
+  title: 'Restore linked quick-create',
+  url: ISSUE_URL,
+  repoId: 'repo-1'
 }
 
 describe('submitFolderWorkspaceCreate', () => {
+  it.each(['347', '002'])('keeps manual folder name %s with its linked source', async (name) => {
+    const linkedWorkItem = {
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number: Number(name),
+      title: 'Fix export',
+      url: `https://github.com/fixture/repo/issues/${Number(name)}`
+    }
+    const createFolderWorkspace = vi.fn(async () => null)
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name,
+      lastAutoName: 'Fix export',
+      linkedWorkItem,
+      note: '',
+      quickAgent: null,
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+
+    expect(createFolderWorkspace).toHaveBeenCalledWith({
+      projectGroupId: 'group-1',
+      name,
+      connectionId: null,
+      linkedTask: linkedWorkItem
+    })
+  })
+
   beforeEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
   })
@@ -333,6 +338,20 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: 'ssh-1',
       parentPath: '/home/alice/platform'
     }
+    useAppStore.setState({
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            remotePlatform: 'linux'
+          }
+        ]
+      ])
+    })
 
     await submitFolderWorkspaceCreate({
       projectGroup,
@@ -550,7 +569,9 @@ describe('submitFolderWorkspaceCreate', () => {
       parentPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
     }
 
-    expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('linux')
+    expect(getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)).toMatchObject({
+      platform: 'linux'
+    })
 
     await submitFolderWorkspaceCreate({
       projectGroup,
@@ -575,15 +596,31 @@ describe('submitFolderWorkspaceCreate', () => {
     )
   })
 
-  it('quotes quick-agent startup for Windows when the remote folder group uses a Windows path', async () => {
+  it('quotes quick-agent startup for the Windows OS the SSH relay reported', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
     const projectGroup = {
       ...makeProjectGroup(),
       connectionId: 'ssh-windows',
       parentPath: 'C:\\Users\\alice\\platform'
     }
+    useAppStore.setState({
+      sshConnectionStates: new Map([
+        [
+          'ssh-windows',
+          {
+            targetId: 'ssh-windows',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            remotePlatform: 'win32'
+          }
+        ]
+      ])
+    })
 
-    expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('win32')
+    expect(getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)).toMatchObject({
+      platform: 'win32'
+    })
 
     await submitFolderWorkspaceCreate({
       projectGroup,
@@ -670,16 +707,6 @@ describe('submitFolderWorkspaceCreate', () => {
 })
 
 describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
-  const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
-  const linkedIssue = {
-    provider: 'github' as const,
-    type: 'issue' as const,
-    number: 42,
-    title: 'Restore linked quick-create',
-    url: ISSUE_URL,
-    repoId: 'repo-1'
-  }
-
   function seededDraftFor(tabId: string): { text: string } | undefined {
     return useAppStore.getState().nativeChatLaunchDraftByTabId[tabId]
   }
@@ -778,16 +805,6 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
 })
 
 describe('folder-workspace draft: seeded set == chat-opening set', () => {
-  const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
-  const linkedIssue = {
-    provider: 'github' as const,
-    type: 'issue' as const,
-    number: 42,
-    title: 'Restore linked quick-create',
-    url: ISSUE_URL,
-    repoId: 'repo-1'
-  }
-
   beforeEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
     useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
@@ -822,9 +839,12 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
     })
 
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    const seeded = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1'] != null
+    const seededDraft = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1']
     // The draft always reaches the TUI, whichever way it is delivered.
     expect(`${startup?.command ?? ''}${startup?.draftPrompt ?? ''}`).toContain(ISSUE_URL)
-    expect(seeded).toBe(expectMirrored)
+    expect(seededDraft != null).toBe(expectMirrored)
+    if (expectMirrored) {
+      expect(seededDraft?.text).toBe(note ? `${note}\n\n${ISSUE_URL}` : ISSUE_URL)
+    }
   })
 })

@@ -23,7 +23,9 @@ vi.mock('react-native', () => ({ Platform: platform }))
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   clearMobileRelayPairingJournal,
+  claimMobileRelayPairingJournalPublication,
   loadMobileRelayPairingJournal,
+  releaseMobileRelayPairingJournal,
   resetMobileRelayPairingJournalStoreForTests,
   saveMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
@@ -310,33 +312,101 @@ describe('mobile relay pairing journal store', () => {
     const replacementSave = saveMobileRelayPairingJournal(replacement)
 
     await expect(authorizationUpdate).resolves.toBeUndefined()
-    await expect(replacementSave).rejects.toThrow(/recovery pending/)
+    await expect(replacementSave).rejects.toThrow(/pairing in progress/)
   })
 
   it.each([
     ['winner', { winner: 'direct' as const }],
     ['authorization mode', { authorizationMode: 'authenticated-direct' as const }]
-  ])('refuses replacement once the durable %s exists', async (_name, authorization) => {
+  ])(
+    'refuses replacement while the attempt with a durable %s runs',
+    async (_name, authorization) => {
+      const created = createMobileRelayPairingJournal({
+        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+        hostId: 'host-1',
+        hostName: 'Blue Whale',
+        randomBytes: (length) => new Uint8Array(length).fill(10)
+      })
+      const journal = {
+        ...created,
+        metadata: { ...created.metadata, ...authorization }
+      }
+
+      await saveMobileRelayPairingJournal(journal)
+      const replacement = createMobileRelayPairingJournal({
+        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+        hostId: 'host-2',
+        hostName: 'Red Panda',
+        randomBytes: (length) => new Uint8Array(length).fill(12)
+      })
+      await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(
+        /pairing in progress/
+      )
+      await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
+    }
+  )
+
+  // Why: a stranded authorized journal used to refuse every later scan with
+  // "recovery pending" until it expired (#12518); a new scan now supersedes it.
+  it.each([
+    ['an earlier launch', () => resetMobileRelayPairingJournalStoreForTests()],
+    ['an ended attempt', (journalId: string) => releaseMobileRelayPairingJournal(journalId)]
+  ])('lets a new scan supersede an authorized journal left by %s', async (_name, end) => {
     const created = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-1',
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(10)
     })
-    const journal = {
+    const stale = {
       ...created,
-      metadata: { ...created.metadata, ...authorization }
+      metadata: {
+        ...created.metadata,
+        winner: 'relay' as const,
+        authorizationMode: 'relay-basis' as const
+      }
     }
-
-    await saveMobileRelayPairingJournal(journal)
+    await saveMobileRelayPairingJournal(stale)
+    end(stale.metadata.journalId)
     const replacement = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-2',
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
-    await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(/recovery pending/)
-    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
+
+    await expect(saveMobileRelayPairingJournal(replacement)).resolves.toBeUndefined()
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+  })
+
+  it('makes a superseding scan wait for a publication in progress, and refuses a stale claim', async () => {
+    const created = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(10)
+    })
+    await saveMobileRelayPairingJournal(created)
+    releaseMobileRelayPairingJournal(created.metadata.journalId)
+    const release = await claimMobileRelayPairingJournalPublication(created.metadata.journalId)
+    const replacement = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-2',
+      hostName: 'Red Panda',
+      randomBytes: (length) => new Uint8Array(length).fill(12)
+    })
+    let saved = false
+    const save = saveMobileRelayPairingJournal(replacement).then(() => (saved = true))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(saved).toBe(false)
+
+    await clearMobileRelayPairingJournal(created.metadata.journalId)
+    release()
+    await save
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+    await expect(
+      claimMobileRelayPairingJournalPublication(created.metadata.journalId)
+    ).rejects.toThrow(/stale/)
   })
 
   it('self-heals an undecryptable Android secret so the next QR scan can pair', async () => {

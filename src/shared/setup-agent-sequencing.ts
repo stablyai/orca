@@ -5,7 +5,6 @@ import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
-  type SetupRunnerCommandShell,
   type SetupRunnerShell
 } from './setup-runner-command'
 import { createNonSecureContextUuid } from './non-secure-context-uuid'
@@ -304,11 +303,4 @@ function quotePosixArg(value: string): string {
     return value
   }
   return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-export function getSetupAgentSequenceShellForTests(
-  runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
-): SetupRunnerCommandShell {
-  return resolveSetupRunnerCommand(runnerScriptPath, platform).shell
 }

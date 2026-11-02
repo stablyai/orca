@@ -77,7 +77,13 @@ test('shows the SSH routing error cards and holds for review', async ({
   }, targetId)
 
   await orcaPage.evaluate(async () => {
-    await window.__store?.getState().openNewBrowserTabInActiveWorkspace()
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const groupId = worktreeId ? state?.activeGroupIdByWorktree[worktreeId] : null
+    if (!state || !groupId) {
+      throw new Error('No active browser group')
+    }
+    await state.openNewBrowserTabInActiveWorkspace(groupId)
   })
 
   await expect(orcaPage.getByText('SSH connection unavailable')).toBeVisible({

@@ -53,9 +53,8 @@ export type WorkspaceSessionState = {
    * (force-park, hibernate, sleep, shutdown) still write it. This field is **local-only**: the
    * ordinary cold park fires every time a workspace is hidden, and shipping that in a wholesale
    * `replace-session` costs tens of MiB on the common path for a copy no peer consumes.
-   * `exportRemoteWorkspaceSession` is an explicit allowlist of named top-level fields, so a
-   * top-level field is omitted from the upload for free — a field *inside* the layout would ride
-   * along, because layout entries are copied whole. Do not move it into the layout for tidiness.
+   * A field *inside* the layout would ride along wherever layout entries are copied whole, so do
+   * not move it into the layout for tidiness.
    *
    * Second property, by construction rather than by a fix: the mirrored-tab apply rewrites only
    * `ptyIdsByTabId` and `terminalLayoutsByTabId`, so a host inventory frame cannot wipe this.

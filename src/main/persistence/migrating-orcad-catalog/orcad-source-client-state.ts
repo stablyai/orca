@@ -25,13 +25,10 @@ import { paneBelongsToTabs } from '../../../shared/workspace-session-pane-owners
 
 export type OrcadMigrationSourceClientStateInspection = {
   payload: OrcadMigrationClientStatePayload | undefined
-  /** Invalid or unmatched closes are folded into the existing workspace-session blocker. */
+  /** Duplicate closes are folded into the existing workspace-session blocker. */
   blockedCount: number
-  blockedCounts: {
-    'mobile-tab-selection': number
-    'ui-routing': number
-    'saved-port-forward': number
-  }
+  /** Mobile selections and sidebar routing are presentation: what can't move stays behind. */
+  blockedCounts: { 'saved-port-forward': number }
 }
 
 export function collectOrcadMigrationSourceClientState(
@@ -42,20 +39,10 @@ export function collectOrcadMigrationSourceClientState(
   eligibleSession: WorkspaceSessionState | undefined
 ): OrcadMigrationSourceClientStateInspection {
   const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
-  const blockedCounts = {
-    'mobile-tab-selection': 0,
-    'ui-routing': 0,
-    'saved-port-forward': 0
-  }
+  const blockedCounts = { 'saved-port-forward': 0 }
   let blockedCount = 0
-  const mobile = collectMobileSelections(state, scope, eligibleSession, blockedCounts)
-  const uiRouting = collectUiRouting(
-    state,
-    scope,
-    destinationEnvironmentId,
-    eligibleSession,
-    blockedCounts
-  )
+  const mobile = collectMobileSelections(state, scope, eligibleSession)
+  const uiRouting = collectUiRouting(state, scope, destinationEnvironmentId, eligibleSession)
   const target = state.sshTargets.find((entry) => entry.id === scope.targetId)
   const savedPortForwards = target?.portForwards ? structuredClone(target.portForwards) : undefined
   if (savedPortForwards) {
@@ -96,8 +83,7 @@ export function collectOrcadMigrationSourceClientState(
 function collectMobileSelections(
   state: PersistedState,
   scope: ReturnType<typeof createOrcadMigrationSourceScope>,
-  session: WorkspaceSessionState | undefined,
-  blockedCounts: OrcadMigrationSourceClientStateInspection['blockedCounts']
+  session: WorkspaceSessionState | undefined
 ):
   | NonNullable<OrcadMigrationClientStatePayload['mobileClientTabSelectionsByDeviceId']>
   | undefined {
@@ -115,16 +101,13 @@ function collectMobileSelections(
         continue
       }
       const destinationKey = unqualifyOrcadMigrationOwnerKey(ownerKey)
-      if (destinationKeys.has(`${deviceId}\0${destinationKey}`)) {
-        blockedCounts['mobile-tab-selection'] += 1
-        continue
-      }
-      if (!mobileSelectionIsRepresentable(selection, eligible)) {
-        blockedCounts['mobile-tab-selection'] += 1
+      const representable = representableMobileSelection(selection, eligible)
+      // A selection naming a tab that did not move, or a second copy for one worktree, stays behind.
+      if (!representable || destinationKeys.has(`${deviceId}\0${destinationKey}`)) {
         continue
       }
       destinationKeys.add(`${deviceId}\0${destinationKey}`)
-      projected[destinationKey] = structuredClone(selection)
+      projected[destinationKey] = representable
     }
     if (Object.keys(projected).length > 0) {
       result[deviceId] = projected
@@ -137,8 +120,7 @@ function collectUiRouting(
   state: PersistedState,
   scope: ReturnType<typeof createOrcadMigrationSourceScope>,
   destinationEnvironmentId: string | undefined,
-  session: WorkspaceSessionState | undefined,
-  blockedCounts: OrcadMigrationSourceClientStateInspection['blockedCounts']
+  session: WorkspaceSessionState | undefined
 ): OrcadMigrationUiRoutingState | undefined {
   const ui = state.ui
   const result: OrcadMigrationUiRoutingState = {}
@@ -202,15 +184,12 @@ function collectUiRouting(
   const sourceTabIds = collectSourceOwnedTabIds(state, scope)
   const acknowledgements = Object.entries(ui.acknowledgedAgentsByPaneKey ?? {}).filter(
     ([paneKey]) => {
-      // Another host's acknowledgement is not this source's state to move or block on.
-      if (!paneBelongsToTabs(paneKey, sourceTabIds)) {
-        return false
-      }
-      const allowed = eligible ? paneBelongsToTabs(paneKey, eligible.tabIds) : false
-      if (!allowed) {
-        blockedCounts['ui-routing'] += 1
-      }
-      return allowed
+      // An acknowledgement for a pane that did not move stays behind with that pane.
+      return (
+        paneBelongsToTabs(paneKey, sourceTabIds) &&
+        eligible !== null &&
+        paneBelongsToTabs(paneKey, eligible.tabIds)
+      )
     }
   )
   if (acknowledgements.length > 0) {
@@ -249,6 +228,11 @@ function collectEligibleSessionIdentity(
     }
     tabs.forEach((tab) => tabIds.add(tab.id))
   }
+  for (const [ownerKey, tabs] of Object.entries(session.unifiedTabs ?? {})) {
+    if (orcadMigrationOwnerMatchesScope(ownerKey, scope)) {
+      tabs.forEach((tab) => tabIds.add(tab.id))
+    }
+  }
   for (const [ownerKey, groups] of Object.entries(session.tabGroups ?? {})) {
     if (!orcadMigrationOwnerMatchesScope(ownerKey, scope)) {
       continue
@@ -258,24 +242,37 @@ function collectEligibleSessionIdentity(
   return { tabIds, groupIds }
 }
 
-function mobileSelectionIsRepresentable(
+/** A phone names a terminal by its pane, `${tabId}::${leafId}`; the pane moves with its tab. */
+function movedMobileTab(id: string, tabIds: ReadonlySet<string>): boolean {
+  const separator = id.indexOf('::')
+  return tabIds.has(id) || (separator !== -1 && tabIds.has(id.slice(0, separator)))
+}
+
+/** The selection without references to tabs or groups that did not move; null when none is left. */
+function representableMobileSelection(
   selection: PersistedMobileClientTabSelection,
   eligible: EligibleSessionIdentity | null
-): boolean {
-  if (!eligible) {
-    return (
-      selection.activeTabId === null &&
-      selection.activeGroupId === null &&
-      Object.keys(selection.activeTabIdByGroupId).length === 0
+): PersistedMobileClientTabSelection | null {
+  const tabIds = eligible?.tabIds ?? new Set<string>()
+  const groupIds = eligible?.groupIds ?? new Set<string>()
+  const next: PersistedMobileClientTabSelection = {
+    activeTabId:
+      selection.activeTabId !== null && movedMobileTab(selection.activeTabId, tabIds)
+        ? selection.activeTabId
+        : null,
+    activeGroupId:
+      selection.activeGroupId !== null && groupIds.has(selection.activeGroupId)
+        ? selection.activeGroupId
+        : null,
+    activeTabIdByGroupId: Object.fromEntries(
+      Object.entries(selection.activeTabIdByGroupId).filter(
+        ([groupId, tabId]) => groupIds.has(groupId) && tabIds.has(tabId)
+      )
     )
   }
-  if (selection.activeTabId !== null && !eligible.tabIds.has(selection.activeTabId)) {
-    return false
-  }
-  if (selection.activeGroupId !== null && !eligible.groupIds.has(selection.activeGroupId)) {
-    return false
-  }
-  return Object.entries(selection.activeTabIdByGroupId).every(
-    ([groupId, tabId]) => eligible.groupIds.has(groupId) && eligible.tabIds.has(tabId)
-  )
+  return next.activeTabId === null &&
+    next.activeGroupId === null &&
+    Object.keys(next.activeTabIdByGroupId).length === 0
+    ? null
+    : next
 }

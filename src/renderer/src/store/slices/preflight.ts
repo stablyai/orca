@@ -1,7 +1,9 @@
 import type { StateCreator } from 'zustand'
 import type { PreflightRuntimeContext, PreflightStatus } from '../../../../preload/api-types'
 import type { AppState } from '../types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { defaultScopeHost } from '@/lib/default-creation-host'
+import { getActiveWorkspaceOwnerTarget } from '@/lib/resolved-worktree-execution-host'
 import {
   getLocalPreflightContext,
   localPreflightContextKey,
@@ -81,7 +83,8 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
 
     const requestId = ++latestPreflightRequestId
     const contextChanged = get().preflightStatusContextKey !== contextKey
-    const runtimeTarget = getActiveRuntimeTarget(get().settings)
+    // Why: the host the context key names: the focused workspace's owner, else the default scope host.
+    const runtimeTarget = getActiveWorkspaceOwnerTarget(get()) ?? defaultScopeHost(get().settings)
     const preflightArgs = buildPreflightArgs(force, context)
     set({
       preflightStatus: contextChanged ? null : get().preflightStatus,

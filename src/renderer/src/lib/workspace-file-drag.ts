@@ -5,7 +5,11 @@ import {
   validateNativeFileDropPaths
 } from '../../../shared/native-file-drop'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
-import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  isUnresolvedOwnerHostId,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 export const WORKSPACE_FILE_PATH_MIME = 'text/x-orca-file-path'
 export const WORKSPACE_FILE_PATHS_MIME = 'text/x-orca-file-paths'
@@ -22,7 +26,7 @@ export type WorkspaceFileDragSource = {
 export function isResolvedWorkspaceFileDragExecutionHost(
   executionHostId: ExecutionHostId
 ): boolean {
-  return executionHostId !== 'runtime:unresolved-owner'
+  return !isUnresolvedOwnerHostId(executionHostId)
 }
 
 export type WorkspaceFileDragRejectionReason = 'paths-too-large' | 'too-many-paths'

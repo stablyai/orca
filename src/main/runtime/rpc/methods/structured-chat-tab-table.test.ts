@@ -15,6 +15,7 @@ import WebSocket from 'ws'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
+import { devicePrincipalOf } from '../../device-principal'
 import {
   WORKTREE,
   SOURCE_TAB,
@@ -184,7 +185,8 @@ describe('other clients after a clear', () => {
       {
         ws: socket,
         connectionId: 'phone-connection',
-        device: { deviceId: phone.deviceId, deviceToken: phone.token, scope: 'mobile' },
+        transcriptHashB64: null,
+        device: { ...devicePrincipalOf(phone), deviceToken: phone.token },
         clientCapabilities: capabilities,
         transport: { transport: 'direct' }
       }

@@ -1,6 +1,6 @@
 /**
- * Readers for each place the workspace layout shows up: the runtime's own copy, what the window
- * draws (DOM), and what a paired client or the CLI is told (runtime RPC).
+ * Readers for each place the workspace layout shows up besides the live stream: the saved profile,
+ * what the window draws (DOM), and what a paired client or the CLI is told (runtime RPC).
  */
 
 import type { Page } from '@stablyai/playwright-test'
@@ -10,29 +10,19 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
+import { readPersistedProfileState } from './persisted-profile-state'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
 import type { RuntimeTerminalListResult } from '../../../src/shared/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../src/shared/workspace-session-state-types'
 import type { WorkspaceLayoutPartition } from './workspace-layout-oracle-model'
 
-/** Main's in-memory session for every partition, through the read-only session IPC. */
-export function readRuntimePartitions(page: Page): Promise<WorkspaceLayoutPartition[]> {
-  return page.evaluate(async () => {
-    const hostIds = await window.api.session.listHostIds()
-    const ids: ExecutionHostId[] = hostIds.includes('local') ? hostIds : ['local', ...hostIds]
-    const partitions: WorkspaceLayoutPartition[] = []
-    for (const hostId of ids) {
-      partitions.push({ hostId, session: await window.api.session.get(hostId) })
-    }
-    return partitions
-  })
-}
-
-/** The saved profile's partitions, for a runtime with no window (or a stopped one). */
-export function partitionsFromProfileRoot(root: {
+type ProfileRoot = {
   workspaceSession?: WorkspaceSessionState
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
-}): WorkspaceLayoutPartition[] {
+}
+
+/** The partitions of a saved profile document. */
+export function partitionsFromProfileRoot(root: ProfileRoot): WorkspaceLayoutPartition[] {
   const byHost: WorkspaceLayoutPartition[] = Object.entries(
     root.workspaceSessionsByHostId ?? {}
   ).flatMap(([id, session]) => {
@@ -43,6 +33,12 @@ export function partitionsFromProfileRoot(root: {
     ? [{ hostId: LOCAL_EXECUTION_HOST_ID, session: root.workspaceSession }]
     : []
   return [...local, ...byHost]
+}
+
+/** What the runtime last saved to its profile, running or stopped. */
+export function readSavedPartitions(userDataDir: string): WorkspaceLayoutPartition[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: committed profile documents are read verbatim; the oracle's rules judge their shape rather than a parser salvaging it.
+  return partitionsFromProfileRoot(readPersistedProfileState(userDataDir) as ProfileRoot)
 }
 
 export type DrawnPane = { leafId: string; ptyId: string | null }

@@ -222,11 +222,36 @@ export default function MonacoEditor({
     if (!revealLine || !editorRef.current) {
       return
     }
-    queueReveal(editorRef.current, revealLine, revealColumn ?? 1, revealMatchLength ?? 0, () => {
-      // Why: clear the pending payload only after the queued reveal runs, so navigation isn't lost if the editor unmounts first.
-      setPendingEditorReveal(null)
-    })
-  }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
+    const reveal = useAppStore.getState().pendingEditorReveal
+    if (reveal?.viewStateId && (reveal.fileId !== fileId || reveal.viewStateId !== viewStateId)) {
+      return
+    }
+    queueReveal(
+      editorRef.current,
+      revealLine,
+      revealColumn ?? 1,
+      revealMatchLength ?? 0,
+      () => {
+        reveal?.onApplied?.()
+        // Why: a newer request may arrive during the editor-owned reveal frames.
+        if (useAppStore.getState().pendingEditorReveal === reveal) {
+          setPendingEditorReveal(null)
+        }
+      },
+      reveal?.canApply
+        ? () =>
+            useAppStore.getState().pendingEditorReveal === reveal && reveal.canApply?.() !== false
+        : undefined
+    )
+  }, [
+    queueReveal,
+    revealLine,
+    revealColumn,
+    revealMatchLength,
+    setPendingEditorReveal,
+    fileId,
+    viewStateId
+  ])
 
   return (
     <div

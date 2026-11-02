@@ -1,12 +1,16 @@
-import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from '../../shared/paired-runtime-connection'
+import { parsePairingCode } from '../../shared/pairing'
 import { resolveEnvironmentPairingOffer } from './environments'
 import { RuntimeClientError } from './types'
 
-export function resolveRemotePairing(
+export function resolveRemoteConnection(
   userDataPath: string,
   pairingCode: string | null,
   environmentSelector: string | null
-): PairingOffer | null {
+): PairedRuntimeConnection | null {
   if (pairingCode && environmentSelector) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -14,7 +18,9 @@ export function resolveRemotePairing(
     )
   }
   if (environmentSelector) {
-    return resolveEnvironmentPairingOffer(userDataPath, environmentSelector)
+    return pairedRuntimeConnectionFromOffer(
+      resolveEnvironmentPairingOffer(userDataPath, environmentSelector)
+    )
   }
   if (!pairingCode) {
     return null
@@ -26,5 +32,5 @@ export function resolveRemotePairing(
       'Invalid remote pairing code. Expected an orca://pair?... URL or bare pairing payload.'
     )
   }
-  return pairing
+  return pairedRuntimeConnectionFromOffer(pairing)
 }

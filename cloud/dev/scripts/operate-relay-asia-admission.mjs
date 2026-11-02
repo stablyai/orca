@@ -12,16 +12,17 @@ const SHAPES = {
   staging: {
     directorOrigin: 'https://relay-staging.onorca.dev',
     domain: 'relay-staging.onorca.dev',
-    allCells: ['staging-gce-c4'],
-    registrationWaves: [['staging-gce-c4']],
-    promotionWaves: [['staging-gce-c4']]
+    allCells: ['staging-gce-c4', 'staging-gce-c5', 'staging-gce-c6', 'staging-gce-c7'],
+    registrationWaves: [['staging-gce-c4'], ['staging-gce-c5', 'staging-gce-c6', 'staging-gce-c7']],
+    promotionWaves: [['staging-gce-c4'], ['staging-gce-c5', 'staging-gce-c6', 'staging-gce-c7']]
   },
   production: {
     directorOrigin: 'https://relay.onorca.dev',
     domain: 'relay.onorca.dev',
     allCells: [
       'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
-      'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34'
+      'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34',
+      'production-gce-c35'
     ],
     // The launch set was registered together; each later cell registers alone beside it.
     registrationWaves: [
@@ -30,7 +31,8 @@ const SHAPES = {
       ['production-gce-c31'],
       ['production-gce-c32'],
       ['production-gce-c33'],
-      ['production-gce-c34']
+      ['production-gce-c34'],
+      ['production-gce-c35']
     ],
     promotionWaves: [
       ['production-gce-c27'],
@@ -39,18 +41,33 @@ const SHAPES = {
       ['production-gce-c31'],
       ['production-gce-c32'],
       ['production-gce-c33'],
-      ['production-gce-c34']
+      ['production-gce-c34'],
+      ['production-gce-c35']
     ]
   }
 }
 
 const PRODUCTION_CANARY_CELL = 'production-gce-c27'
+const STAGING_PROOF_CELL = 'staging-gce-c4'
 const ASIA_REGION = 'asia-east2'
-// The US cells at the Asia shape live in the root region; every other cell here is Asia.
-const CELL_REGIONS = { 'production-gce-c32': 'us-central1', 'production-gce-c33': 'us-central1' }
+const ASIA_CELL_SHAPE = { region: ASIA_REGION, capacityRequests: 6_000, connectionHardCap: 3_000 }
+// The US cells at the Asia shape live in the root region; every other cell here is Asia, except
+// the staging dead-cell guard cells, which keep c2's ordinary US shape (staging.tfvars).
+const STAGING_US_CELL_SHAPE = { region: 'us-central1', capacityRequests: 4_000, connectionHardCap: 600 }
+const CELL_SHAPES = {
+  'production-gce-c32': { ...ASIA_CELL_SHAPE, region: 'us-central1' },
+  'production-gce-c33': { ...ASIA_CELL_SHAPE, region: 'us-central1' },
+  'staging-gce-c5': STAGING_US_CELL_SHAPE,
+  'staging-gce-c6': STAGING_US_CELL_SHAPE,
+  'staging-gce-c7': STAGING_US_CELL_SHAPE
+}
+
+function cellShape(cellId) {
+  return CELL_SHAPES[cellId] ?? ASIA_CELL_SHAPE
+}
 
 function cellRegion(cellId) {
-  return CELL_REGIONS[cellId] ?? ASIA_REGION
+  return cellShape(cellId).region
 }
 
 export function parseRelayAsiaAdmissionArguments(argv) {
@@ -156,9 +173,9 @@ async function verifyRuntime(fetchImpl, post, shape, cellId, imageDigest, requir
     runtime.region !== cellRegion(cellId) ||
     runtime.imageDigest !== imageDigest ||
     runtime.draining !== false ||
-    runtime.connectionCapacity?.hardCap !== 3_000 ||
+    runtime.connectionCapacity?.hardCap !== cellShape(cellId).connectionHardCap ||
     runtime.connectionCapacity?.unobservedBound !== 60
-  ) throw new Error(`${cellId} runtime does not match the reviewed Asia shape`)
+  ) throw new Error(`${cellId} runtime does not match its reviewed shape`)
   if (requireDirector) {
     const result = await post(`${shape.directorOrigin}/v1/admin/cell-status`, { v: 1, cellId })
     if (
@@ -272,11 +289,15 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
   const shape = SHAPES[config.environment]
   const fetchImpl = dependencies.fetch ?? fetch
   const post = dependencies.post ?? defaultPost(fetchImpl, config.token)
+  // Only the C4 proof keeps the server-enforced C4-only route (the Asia proof identity can call
+  // nothing else); other staging cells go through the general route, as production does.
+  const stagingProof = config.environment === 'staging' &&
+    config.cells.length === 1 && config.cells[0] === STAGING_PROOF_CELL
   const selectorPost = (path, body) => {
-    if (config.environment !== 'staging' || path !== '/v1/admin/admission-selector/apply') {
+    if (!stagingProof || path !== '/v1/admin/admission-selector/apply') {
       return post(`${shape.directorOrigin}${path}`, body)
     }
-    const state = selectorCellState({ membership: body.membership }, 'staging-gce-c4')
+    const state = selectorCellState({ membership: body.membership }, STAGING_PROOF_CELL)
     if (!['general', 'migration-only'].includes(state)) {
       throw new Error('staging proof can only transition C4 between reviewed states')
     }
@@ -418,8 +439,8 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
           cellId,
           cellUrl: cellOrigin(shape, cellId),
           region: cellRegion(cellId),
-          capacityRequests: 6_000,
-          connectionHardCap: 3_000,
+          capacityRequests: cellShape(cellId).capacityRequests,
+          connectionHardCap: cellShape(cellId).connectionHardCap,
           connectionUnobservedBound: 60
         }))
       },

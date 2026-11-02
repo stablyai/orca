@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), notify: vi.fn(), getState: vi.fn() }))
 
-vi.mock('./ssh-ipc-context', () => ({
+vi.mock('./ssh/ssh-ipc-context', () => ({
   connectionManager: { getState: mocks.getState },
   currentRuntime: { notifySshStateChanged: mocks.notify },
   getCurrentMainWindow: () => ({ isDestroyed: () => false, webContents: { send: mocks.send } }),
@@ -14,9 +14,8 @@ vi.mock('../ssh/ssh-target-registry', async (importOriginal) => ({
   getSshTargetRegistryStore: () => null
 }))
 
-const { clearManagedServerNotes, publishHostServerStatus } =
-  await import('./runtime-environment-managed-tunnel')
-const { getPublicSshState, relayStateOverrides } = await import('./ssh-renderer-broadcast')
+const { clearLaunchSessionNote, clearManagedServerNotes, publishHostServerStatus } =
+  await import('./runtime-environments/runtime-environment-managed-tunnel')
 const { clearSshHostServerStatus, getSshHostServerStatus, setSshHostServerStatus } =
   await import('../ssh/ssh-host-server-status')
 
@@ -33,7 +32,6 @@ function connection(status: 'connected' | 'disconnected') {
 describe('publishing a verified managed host status', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    relayStateOverrides.clear()
     clearSshHostServerStatus('ssh-1')
     clearSshHostServerStatus('ssh-2')
   })
@@ -51,13 +49,6 @@ describe('publishing a verified managed host status', () => {
       'ssh:state-changed',
       expect.objectContaining({ state: expect.objectContaining({ managedServer: ready }) })
     )
-  })
-
-  it('refreshes a retained override so later reads also forget the deferral', () => {
-    relayStateOverrides.set('ssh-1', connection('connected'))
-    publishHostServerStatus('ssh-1', ready)
-    expect(relayStateOverrides.get('ssh-1')?.managedServer).toEqual(ready)
-    expect(getPublicSshState('ssh-1')?.managedServer).toEqual(ready)
   })
 
   it('preserves disconnected contact instead of inventing a connection', () => {
@@ -116,5 +107,14 @@ describe('publishing a verified managed host status', () => {
     clearManagedServerNotes('ssh-2', 'env-1')
     expect(getSshHostServerStatus('ssh-2')).toBeUndefined()
     expect(mocks.notify).not.toHaveBeenCalled()
+  })
+
+  it('keeps the launch-session warning through an update; only a verified restart clears it', () => {
+    mocks.getState.mockReturnValue(connection('connected'))
+    setSshHostServerStatus('ssh-1', { ...deferred, launchSessionEnded: true })
+    clearManagedServerNotes('ssh-1', 'env-1')
+    expect(getSshHostServerStatus('ssh-1')).toEqual({ ...ready, launchSessionEnded: true })
+    clearLaunchSessionNote('ssh-1', 'env-1')
+    expect(getSshHostServerStatus('ssh-1')).toEqual(ready)
   })
 })

@@ -5,7 +5,8 @@ import type {
   GitHubPRRefreshReason
 } from '../../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -15,12 +16,12 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 
+/** The server-side repo for a request already routed to `target`; `null` when it runs here. */
 export function getRuntimeRepoTarget(
   state: AppState,
   repoPath: string,
-  settings: AppState['settings'] = state.settings
+  target: RuntimeClientTarget
 ): { target: { kind: 'environment'; environmentId: string }; repo: Repo } | null {
-  const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
     return null
   }
@@ -52,9 +53,7 @@ export function getPRRefreshRuntimeRepoTarget(
   return getRuntimeRepoTarget(
     state,
     candidate.repoPath,
-    state.settings
-      ? { ...state.settings, activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId }
-      : ({ activeRuntimeEnvironmentId: ownerRuntimeEnvironmentId } as AppState['settings'])
+    runtimeTargetForOwnerEnvironment(ownerRuntimeEnvironmentId)
   )
 }
 

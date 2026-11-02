@@ -2,6 +2,11 @@ import type { ArtifactWriteRequest } from '../../../../../shared/artifacts'
 import { ARTIFACT_MAX_CONTENT_BYTES } from '../../../../../shared/artifacts'
 import { getRuntimePathBasename } from '../../../../../shared/cross-platform-path'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
+import {
+  canonicalArtifactFilePath,
+  fileArtifactSourceKey,
+  LOCAL_FILE_ARTIFACT_OWNER
+} from '@/lib/file-artifact-source-key'
 import { userNamedFileAccess } from '@/lib/local-file-access'
 
 export type ShareableBrowserArtifactFile = {
@@ -17,14 +22,10 @@ export function browserFileUrlToAbsolutePath(url: string): string | null {
     }
     const hostPrefix =
       parsed.hostname && parsed.hostname !== 'localhost' ? `//${parsed.hostname}` : ''
-    let absolutePath = `${hostPrefix}${decodeURIComponent(parsed.pathname)}`
-    if (/^\/[A-Za-z]:\//.test(absolutePath)) {
-      absolutePath = absolutePath.slice(1)
-    }
-    if (/^[A-Za-z]:\//.test(absolutePath) || absolutePath.startsWith('//')) {
-      absolutePath = absolutePath.replaceAll('/', '\\')
-    }
-    return absolutePath
+    const absolutePath = `${hostPrefix}${decodeURIComponent(parsed.pathname)}`
+    return canonicalArtifactFilePath(
+      /^\/[A-Za-z]:\//.test(absolutePath) ? absolutePath.slice(1) : absolutePath
+    )
   } catch {
     return null
   }
@@ -63,7 +64,7 @@ export async function readBrowserHtmlArtifactRequest(url: string): Promise<Artif
       throw new ArtifactPublishPreparationError('binary')
     }
     return {
-      sourceKey: file.filePath,
+      sourceKey: fileArtifactSourceKey(LOCAL_FILE_ARTIFACT_OWNER, file.filePath),
       content: result.content,
       contentType: 'text/html',
       fileName: file.fileName

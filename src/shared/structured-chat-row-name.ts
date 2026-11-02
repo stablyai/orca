@@ -7,3 +7,9 @@ export function structuredChatDisplayName(
 ): string {
   return customLabel?.trim() || conversationName || fallback.trim()
 }
+
+/** Whether a Session History row a native chat owns shows the chat's name. Only Claude and Codex
+ *  rows do; other agents' rows keep their CLI's own title, as their terminal conversations do. */
+export function historyRowShowsChatName(rowAgent: string): boolean {
+  return rowAgent === 'claude' || rowAgent === 'codex'
+}

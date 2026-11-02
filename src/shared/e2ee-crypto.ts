@@ -48,7 +48,7 @@ export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null
 export function encryptBytes(
   plaintext: Uint8Array<ArrayBufferLike>,
   sharedKey: Uint8Array
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
   const nonce = nacl.randomBytes(nacl.box.nonceLength)
   const ciphertext = nacl.box.after(plaintext, nonce, sharedKey)
 

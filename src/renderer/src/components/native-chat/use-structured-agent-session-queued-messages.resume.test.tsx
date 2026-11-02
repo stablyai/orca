@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 
 // Resume releases a held queue through its own RPC, over the same fenced write every card action
-// uses. The header row offers it whenever the host holds a card it would send, the composer only
-// while no turn runs too; one press at a time, a refusal or a failure is one toast, and Resume
-// stays the way to try again.
+// uses. The header row offers it whenever the host holds a card it would send; one press at a
+// time, a refusal or a failure is one toast, and Resume stays the way to try again.
 
 import { useCallback, useRef } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -30,6 +29,14 @@ import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
+import type { QueuedEditTransport } from './use-structured-agent-session-queued-edit'
+
+const NO_EDIT: QueuedEditTransport = {
+  target: { kind: 'local' },
+  sessionId: 'session',
+  capable: false,
+  write: async () => ({ kind: 'dropped' })
+}
 
 const RESUMED = {
   ok: true,
@@ -48,106 +55,38 @@ function card(
 }
 
 type ControllerInput = {
-  enabled?: boolean
   queuedMessages?: AgentSessionQueuedMessage[]
   queuePause?: AgentSessionQueuePause | null
-  isWorking?: boolean
-  hasPendingPrompt?: boolean
 }
 
 function renderController(initialProps: ControllerInput = {}) {
   const stateRef = { current: { fence: 1 } }
   return renderHook(
     (input: ControllerInput) => {
-      const { mutate } = useStructuredAgentSessionMutate({
+      const { mutate, write } = useStructuredAgentSessionMutate({
         sessionId: 'session-1',
         target: { kind: 'local' },
         stateRef
       })
       return useStructuredAgentSessionQueuedMessages({
-        enabled: input.enabled ?? true,
+        enabled: true,
         queuedMessages: input.queuedMessages ?? [card('held')],
         queuePause: input.queuePause === undefined ? { reason: 'stopped' } : input.queuePause,
         submissions: [],
-        hasPendingPrompt: input.hasPendingPrompt ?? false,
-        isWorking: input.isWorking ?? false,
+        hasPendingPrompt: false,
+        isWorking: false,
         composerScopeKey: undefined,
-        mutate
+        mutate,
+        editTransport: { ...NO_EDIT, write }
       })
     },
     { initialProps }
   )
 }
 
-/** A press of the composer's Resume, which the controller offers only over a held queue. */
-function resume(result: {
-  current: { queueResume: { resume: () => Promise<boolean> } | undefined }
-}) {
-  const offered = result.current.queueResume
-  if (!offered) {
-    throw new Error('expected Resume to be offered')
-  }
-  return offered.resume()
-}
-
 afterEach(() => {
   cleanup()
   vi.resetAllMocks()
-})
-
-describe('whether Resume is offered', () => {
-  it.each(['stopped', 'cleared', 'some-newer-reason'])(
-    "over a card the host holds ('%s') with no turn running",
-    (reason) => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a newer host may publish a reason this client's type does not list.
-      const queuePause = { reason } as AgentSessionQueuePause
-      const { result } = renderController({ queuePause })
-      expect(result.current.queueResume).toBeDefined()
-    }
-  )
-
-  it('not without the queue capability: an older host, or no fence yet while connecting', () => {
-    expect(renderController({ enabled: false }).result.current.queueResume).toBeUndefined()
-  })
-
-  it('not while a turn runs, nor when nothing is held', () => {
-    expect(renderController({ isWorking: true }).result.current.queueResume).toBeUndefined()
-    expect(renderController({ queuePause: null }).result.current.queueResume).toBeUndefined()
-    expect(renderController({ queuedMessages: [] }).result.current.queueResume).toBeUndefined()
-  })
-
-  it('not while a prompt waits, which holds the queue too: the composer shows beside one this build cannot answer', () => {
-    const { result } = renderController({ hasPendingPrompt: true })
-    expect(result.current.pause).toEqual({ reason: 'stopped' })
-    expect(result.current.queueResume).toBeUndefined()
-    expect(result.current.queueHold).toBeUndefined()
-  })
-
-  it('an idle chat with cards and no published pause (as after a restart): no row, Resume or "Send message?"', () => {
-    const { result } = renderController({ queuePause: null })
-    expect(result.current.cards.map((entry) => entry.hold)).toEqual(['turn'])
-    expect(result.current.pause).toBeNull()
-    expect(result.current.queueResume).toBeUndefined()
-    expect(result.current.queueHold).toBeUndefined()
-  })
-
-  it('not over cards Resume would not send: held on their own, returned, or behind one', () => {
-    const queuedMessages = [
-      card('failed', { paused: true, pausedReason: 'send_failed' }),
-      card('returned', { position: 2, state: 'returned' }),
-      card('behind', { position: 3 })
-    ]
-    expect(renderController({ queuedMessages }).result.current.queueResume).toBeUndefined()
-  })
-})
-
-describe('while a turn runs over held cards', () => {
-  it('the header row still names the pause and offers Resume; the composer does not', () => {
-    // `isWorking` counts the queue's coming send, which the host names.
-    const { result } = renderController({ isWorking: true })
-    expect(result.current.pause).toEqual({ reason: 'stopped' })
-    expect(result.current.queueResume).toBeUndefined()
-  })
 })
 
 describe("the header row's pause", () => {
@@ -169,28 +108,9 @@ describe("the header row's pause", () => {
     expect(renderController({ queuedMessages }).result.current.pause).toBeNull()
     expect(renderController({ queuePause: null }).result.current.pause).toBeNull()
   })
-
-  it("shares one Resume with the composer's: a press of either while one is in flight sends nothing", async () => {
-    const answer = Promise.withResolvers<unknown>()
-    mocks.call.mockReturnValueOnce(answer.promise)
-    const { result } = renderController()
-    let pending: Promise<boolean> = Promise.resolve(false)
-    act(() => {
-      pending = result.current.resume()
-    })
-    expect(result.current.resuming).toBe(true)
-    expect(result.current.queueResume?.resuming).toBe(true)
-    await act(() => resume(result))
-    expect(mocks.call).toHaveBeenCalledTimes(1)
-    await act(async () => {
-      answer.resolve(RESUMED)
-      await pending
-    })
-    expect(result.current.resuming).toBe(false)
-  })
 })
 
-describe('Clear queue before a new message', () => {
+describe('Clear all', () => {
   it('one failed press is one toast, however many cards it held', async () => {
     mocks.call.mockRejectedValue(new Error('socket closed'))
     const { result } = renderController({
@@ -198,7 +118,7 @@ describe('Clear queue before a new message', () => {
     })
     let cleared: boolean | undefined
     await act(async () => {
-      cleared = await result.current.queueHold?.clear()
+      cleared = await result.current.clear()
     })
     expect(cleared).toBe(false)
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
@@ -209,7 +129,7 @@ describe('Resume on a held queue', () => {
   it('calls queuedMessagesResume with only an envelope, and says nothing when it lands', async () => {
     mocks.call.mockResolvedValue(RESUMED)
     const { result } = renderController()
-    await act(() => resume(result))
+    await act(() => result.current.resume())
     expect(mocks.call).toHaveBeenCalledTimes(1)
     const [, method, params] = mocks.call.mock.calls[0] ?? []
     expect(method).toBe('agentSession.queuedMessagesResume')
@@ -223,16 +143,16 @@ describe('Resume on a held queue', () => {
     const { result } = renderController()
     let pending: Promise<boolean> = Promise.resolve(false)
     act(() => {
-      pending = resume(result)
+      pending = result.current.resume()
     })
-    expect(result.current.queueResume?.resuming).toBe(true)
-    await act(() => resume(result))
+    expect(result.current.queuePending).toBe('resume')
+    await act(() => result.current.resume())
     expect(mocks.call).toHaveBeenCalledTimes(1)
     await act(async () => {
       answer.resolve(RESUMED)
       await pending
     })
-    expect(result.current.queueResume?.resuming).toBe(false)
+    expect(result.current.queuePending).toBeNull()
   })
 
   it('a refused or failed Resume is one toast', async () => {
@@ -242,9 +162,9 @@ describe('Resume on a held queue', () => {
     })
     mocks.call.mockRejectedValueOnce(new Error('socket closed'))
     const { result } = renderController()
-    await act(() => resume(result))
+    await act(() => result.current.resume())
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
-    await act(() => resume(result))
+    await act(() => result.current.resume())
     expect(mocks.toastError).toHaveBeenCalledTimes(2)
   })
 
@@ -259,7 +179,7 @@ describe('Resume on a held queue', () => {
     mocks.call.mockResolvedValueOnce(RESUMED)
     const { result } = renderController()
     for (let press = 0; press < 3; press += 1) {
-      await act(() => resume(result))
+      await act(() => result.current.resume())
     }
     const ids = mocks.call.mock.calls.map(([, , params]) => params.envelope.clientOperationId)
     expect(ids).toHaveLength(3)
@@ -286,7 +206,8 @@ function useQueue(sessionId = 'session-1', fence: number | null = 1) {
     hasPendingPrompt: false,
     isWorking: false,
     composerScopeKey: undefined,
-    mutate
+    mutate,
+    editTransport: NO_EDIT
   })
 }
 
@@ -361,7 +282,7 @@ describe('Resume transcript navigation through the real mutation and queue contr
       const pending = startResume(hook)
       await act(async () => expect(await pending).toBe(false))
       expect(hook.result.current.scrollToEnd).not.toHaveBeenCalled()
-      expect(hook.result.current.submits.queuedMessages.resuming).toBe(false)
+      expect(hook.result.current.submits.queuedMessages.queuePending).toBeNull()
       expect(mocks.toastError).toHaveBeenCalledTimes(
         outcome === 'failed' || outcome === 'refused' ? 1 : 0
       )

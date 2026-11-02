@@ -171,3 +171,44 @@ describe('BrowserPageAnnotationTray edit mode', () => {
     expect(screen.queryByRole('textbox', { name: 'Annotation comment' })).not.toBeInTheDocument()
   })
 })
+
+describe('BrowserPageAnnotationTray collapse', () => {
+  it('hides the annotation rows but keeps the header actions, then restores the rows', () => {
+    renderTray()
+    const toggle = screen.getByRole('button', { name: '1 annotation' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByText('Fix this button')).not.toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Delete annotation 1' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Clear browser annotations' })).toBeVisible()
+
+    fireEvent.click(toggle)
+
+    expect(screen.getByText('Fix this button')).toBeVisible()
+  })
+
+  it('saves an edit that was in progress before a collapse', () => {
+    const { handleUpdateBrowserAnnotation } = renderTray()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit annotation 1' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Annotation comment' }), {
+      target: { value: 'Unsaved draft' }
+    })
+    fireEvent.click(screen.getByRole('radio', { name: 'Question' }))
+    const toggle = screen.getByRole('button', { name: '1 annotation' })
+
+    fireEvent.click(toggle)
+    fireEvent.click(toggle)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(handleUpdateBrowserAnnotation).toHaveBeenCalledWith(
+      'annotation-1',
+      'Unsaved draft',
+      'question'
+    )
+  })
+})

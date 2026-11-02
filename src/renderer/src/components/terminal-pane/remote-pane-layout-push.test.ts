@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 const updateWebRuntimePaneLayout = vi.fn()
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-terminal-actions', () => ({
   updateWebRuntimePaneLayout: (...args: unknown[]) => updateWebRuntimePaneLayout(...args)
 }))
 

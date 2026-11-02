@@ -3,17 +3,14 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../../../shared/runtime-types'
 import { markStructuredAgentSessionLaunchesPublished } from '../../lib/structured-agent-session-launch-publication'
-import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner-state'
 import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
+import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsStorePatch } from '../web-session-tabs-sync/store-patch'
+import type { WebSessionTabsSyncState } from '../web-session-tabs-sync/state'
 import {
-  applyWebSessionTabsSnapshot,
-  applyWebSessionTabsStorePatch
-} from '../web-session-tabs-sync'
-import type { WebSessionTabsSyncState } from '../web-session-tabs-sync'
-import {
-  hasRetiredValue,
+  admitRetiredValueUnderAuthority,
   noteRetiredValue,
-  reviveRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
 import { knownStructuredSessionWorktreeIds } from '../local-structured-session-tab-retirement'
@@ -32,10 +29,13 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
-} from '../../lib/structured-agent-session-launch-cancellation'
+} from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { suppressCancelledStructuredSessionTabs } from '../structured-agent-session-tab-retirement'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
+import { useAppStore } from '../../store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { recordSyncedAgentSessionTabsInLayoutOwner } from '../agent-session-tab-layout-owner'
 
 /** The host saying it no longer publishes this worktree at all, rather than publishing an empty one. */
 function isWorktreeRetraction(
@@ -52,6 +52,8 @@ export type StructuredSessionSnapshotApplyOptions = {
    * whereas a subscription frame can be, and stays fenced.
    */
   authoritative?: boolean
+  /** Re-applies a publication at the version already applied: the window removed a chat early. */
+  reacceptCurrentVersion?: boolean
   /** Sequence allocated when the inventory request began, before a close can race its reply. */
   authoritativeInventory?: number
   /** Called for each snapshot the retired-epoch fence rejects; the repair lane listens here. */
@@ -66,6 +68,7 @@ export function applyStructuredSessionTabSnapshots(
   options: StructuredSessionSnapshotApplyOptions = {}
 ): void {
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
+  const before = ORCA_LAYOUT_OWNER_IS_MAIN ? useAppStore.getState() : null
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
     (state) =>
       applyLocalStructuredSessionTabSnapshots(state, snapshots, owner, undefined, {
@@ -78,6 +81,14 @@ export function applyStructuredSessionTabSnapshots(
     { frames: [] }
   )
   settleStructuredSessionMirror()
+  // Switch point: main records the chat tabs this listing added to or removed from the tab bars.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && before) {
+    recordSyncedAgentSessionTabsInLayoutOwner(
+      before,
+      useAppStore.getState(),
+      snapshots.map((snapshot) => snapshot.worktree)
+    )
+  }
   markStructuredAgentSessionLaunchesPublished(LOCAL_EXECUTION_HOST_ID, acceptedAgentSessions)
   if (options.authoritative) {
     startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
@@ -130,14 +141,24 @@ export function applyLocalStructuredSessionTabSnapshots<
     // headless rebuild), and the structured publish inherits the worktree's existing epoch rather
     // than minting its own. So a retired epoch is not proof of a dead generation — only authority
     // can settle it, and the repair lane goes and asks.
-    if (hasRetiredValue(epochHistory, snapshot.publicationEpoch) && !sharesLineage) {
-      if (!options.authoritative) {
-        options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
-        continue
-      }
-      reviveRetiredValue(epochHistory, snapshot.publicationEpoch)
+    if (
+      !sharesLineage &&
+      !admitRetiredValueUnderAuthority(
+        epochHistory,
+        snapshot.publicationEpoch,
+        options.authoritative === true
+      )
+    ) {
+      options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
+      continue
     }
-    if (prior && sharesLineage && snapshot.snapshotVersion <= prior.snapshotVersion) {
+    if (
+      prior &&
+      sharesLineage &&
+      (options.reacceptCurrentVersion
+        ? snapshot.snapshotVersion < prior.snapshotVersion
+        : snapshot.snapshotVersion <= prior.snapshotVersion)
+    ) {
       continue
     }
     const effectiveSnapshot = suppressCancelledStructuredSessionTabs(snapshot, { kind: 'local' })

@@ -22,11 +22,6 @@ export const JCODE_HOOK_EVENTS = [
 ] as const
 export type JcodeHookEvent = (typeof JCODE_HOOK_EVENTS)[number]
 
-/** jcode waits for this one; the managed script must never block on it. */
-export function isJcodeGateHookEvent(event: JcodeHookEvent): boolean {
-  return event === 'pre_tool'
-}
-
 export function getJcodeConfigPath(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env.JCODE_HOME?.trim()
   return explicit ? join(explicit, 'config.toml') : join(homedir(), '.jcode', 'config.toml')

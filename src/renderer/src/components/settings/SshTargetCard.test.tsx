@@ -38,8 +38,6 @@ async function renderCard(
           testing={false}
           onConnect={vi.fn()}
           onDisconnect={vi.fn()}
-          onTerminateSessions={vi.fn()}
-          onResetRelay={vi.fn()}
           onTest={vi.fn()}
           onEdit={vi.fn()}
           onRemove={vi.fn()}
@@ -86,37 +84,16 @@ describe('the connection error on an SSH target card', () => {
   })
 })
 
-describe('the Host Node runtime on an SSH target card', () => {
-  const connected: SshConnectionState = {
-    targetId: 'target-1',
-    status: 'connected',
-    error: null,
-    reconnectAttempt: 0
-  }
+describe('an SSH host its managed server does not serve', () => {
+  it('leaves the reason to the translated status line instead of repeating main’s English', async () => {
+    const container = await renderCard({
+      targetId: 'target-1',
+      status: 'error',
+      error: 'This SSH host isn’t supported by this version of Orca.',
+      reconnectAttempt: 0,
+      managedServer: { kind: 'relay', reason: 'orcad_unavailable', detail: 'unsupported_host' }
+    })
 
-  it('marks a relay running on the opt-in Host Node runtime as unsupported', async () => {
-    const container = await renderCard(
-      { ...connected, hostNodeRuntime: true },
-      { ...target, remoteRuntime: 'legacy' }
-    )
-
-    const note = container.querySelector('[data-ssh-host-node-runtime]')
-    expect(note?.textContent).toContain('Unsupported configuration')
-    expect(note?.textContent).toContain('Set Runtime to Auto')
-  })
-
-  it('marks an Auto host that fell back to Host Node without advice it already follows', async () => {
-    const container = await renderCard({ ...connected, hostNodeRuntime: true })
-
-    const note = container.querySelector('[data-ssh-host-node-runtime]')
-    expect(note?.textContent).toContain('Unsupported configuration')
-    expect(note?.textContent).toContain('Orca-managed Node isn’t available')
-    expect(note?.textContent).not.toContain('Set Runtime to Auto')
-  })
-
-  it('says nothing about the runtime on a default connect', async () => {
-    const container = await renderCard(connected)
-
-    expect(container.querySelector('[data-ssh-host-node-runtime]')).toBeNull()
+    expect(container.textContent).not.toContain('This SSH host isn’t supported')
   })
 })

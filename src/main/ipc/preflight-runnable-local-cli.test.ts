@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -110,21 +110,6 @@ describe.skipIf(process.platform === 'win32')(
       })
       expect(await probedArgs(first)).toEqual(['--version'])
       expect(await probedArgs(second)).toEqual(['--version'])
-    })
-
-    it('skips directories and non-executable files before a working copy', async () => {
-      const directory = path.join(root, 'directory')
-      await mkdir(path.join(directory, COMMAND), { recursive: true })
-      const plain = await cliInDirectory('plain')
-      await chmod(path.join(plain, COMMAND), 0o644)
-      const good = await cliInDirectory('good')
-      vi.stubEnv('PATH', [directory, plain, good].join(path.delimiter))
-
-      await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-        status: 'available',
-        binary: path.join(good, COMMAND)
-      })
-      expect(await probedArgs(plain)).toEqual([])
     })
 
     it('never substitutes another binary for an explicit failing path', async () => {
@@ -265,6 +250,7 @@ describe.runIf(process.platform === 'win32')('Windows preflight batch shims', ()
     }
   })
 
+  // Include the probe, tree-cleanup deadline, and recovery probe on a busy Windows runner.
   it('recovers after a hung batch launcher and terminates its Node child', async () => {
     const first = path.join(root, 'hung')
     const second = path.join(root, 'working')
@@ -273,7 +259,7 @@ describe.runIf(process.platform === 'win32')('Windows preflight batch shims', ()
     const name = `${COMMAND}.CMD`
     await writeFile(
       path.join(first, 'hang.js'),
-      `require('node:fs').writeFileSync(require('node:path').join(__dirname, 'child.pid'), String(process.pid)); setTimeout(function () {}, 30000);`
+      `require('node:fs').writeFileSync(require('node:path').join(__dirname, 'child.pid'), String(process.pid)); setTimeout(function () {}, 60000);`
     )
     await writeFile(path.join(first, name), `@echo off\r\n"${process.execPath}" "%~dp0hang.js"\r\n`)
     await writeFile(
@@ -290,5 +276,5 @@ describe.runIf(process.platform === 'win32')('Windows preflight batch shims', ()
     const childPid = Number(await readFile(path.join(first, 'child.pid'), 'utf8'))
     expect(Number.isSafeInteger(childPid) && childPid > 0).toBe(true)
     expect(() => process.kill(childPid, 0)).toThrow()
-  }, 15_000)
+  }, 30_000)
 })

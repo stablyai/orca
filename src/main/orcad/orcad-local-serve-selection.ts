@@ -11,7 +11,7 @@
  */
 import { chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
 import {
   ORCAD_SERVER_ENTRY_FILENAME,
@@ -29,9 +29,14 @@ import {
 } from '../../shared/orcad-local-serve-selection'
 import { resolveBundledOrcadRuntime } from './orcad-bundled-runtime'
 import { detectNativeHostAbi, nativeSlotName } from './native-host-abi'
-import { materializeOrcadArtifact } from '../ssh/orcad-artifact-materializer'
-import { materializeCachedNodeRuntime } from '../ssh/pinned-runtime-materializer'
+import { materializeOrcadArtifact } from './orcad-artifact-materializer'
+import { materializeCachedNodeRuntime } from '../node-runtime/pinned-runtime-materializer'
+import {
+  copyVerifiedAppImageNodeRuntime,
+  type AppImageNodeRuntime
+} from '../node-runtime/appimage-bundled-node-runtime'
 import { serveProfileHasSshTargets } from './serve-profile-ssh-targets'
+import { errorMessage } from '../../shared/error-message'
 
 const NATIVE_PREFLIGHT_TIMEOUT_MS = 30_000
 
@@ -43,6 +48,8 @@ export type ServeRuntimeSelectionInput = {
   hostTarget?: () => string
   materializeSlot?: typeof materializeOrcadArtifact
   materializeRuntime?: typeof materializeCachedNodeRuntime
+  /** The pinned Node an AppImage carries; the slot uses it before trying a download. */
+  bundledNodeRuntime?: AppImageNodeRuntime | null
   nativePreflight?: (runtime: string, entry: string) => Promise<string>
   profileHasSshTargets?: (userDataPath: string) => boolean
 }
@@ -86,15 +93,15 @@ export async function selectServeRuntime(
       templateDir,
       cacheRoot
     })
-    await placeSlotRuntime(slotDir, target, cacheRoot, input.materializeRuntime)
+    await placeSlotRuntime(slotDir, target, cacheRoot, input)
   } catch (error) {
-    return electron(`the orcad slot for ${target} could not be prepared: ${errorText(error)}`)
+    return electron(`the orcad slot for ${target} could not be prepared: ${errorMessage(error)}`)
   }
   let runtime: string | null
   try {
     runtime = resolveBundledOrcadRuntime(slotDir)
   } catch (error) {
-    return electron(`the orcad slot is incomplete: ${errorText(error)}`)
+    return electron(`the orcad slot is incomplete: ${errorMessage(error)}`)
   }
   if (!runtime) {
     return electron('the orcad slot names no pinned runtime')
@@ -128,16 +135,19 @@ function profileSshReason(input: ServeRuntimeSelectionInput): string | null {
   } catch (error) {
     // Why: fail closed. The read-only probe rejects profiles the serve host would still migrate
     // (an older schema), and guessing "no SSH" there leaves saved targets unreachable.
-    return `could not tell whether this profile has SSH targets, which orcad cannot serve yet (${errorText(error)})`
+    return `could not tell whether this profile has SSH targets, which orcad cannot serve yet (${errorMessage(error)})`
   }
 }
 
-/** The slot references its runtime beside it; the cached pinned Node is linked into place. */
+/** The slot references its runtime beside it: the AppImage's own copy, else the cached download. */
 async function placeSlotRuntime(
   slotDir: string,
   target: ServerTarget,
   cacheRoot: string,
-  materializeRuntime: typeof materializeCachedNodeRuntime = materializeCachedNodeRuntime
+  {
+    materializeRuntime = materializeCachedNodeRuntime,
+    bundledNodeRuntime
+  }: Pick<ServeRuntimeSelectionInput, 'materializeRuntime' | 'bundledNodeRuntime'>
 ): Promise<void> {
   const destination = join(
     slotDir,
@@ -145,6 +155,14 @@ async function placeSlotRuntime(
   )
   if (existsSync(destination)) {
     return
+  }
+  if (bundledNodeRuntime?.target === target) {
+    try {
+      await copyVerifiedAppImageNodeRuntime(bundledNodeRuntime, destination)
+      return
+    } catch (error) {
+      console.error(`orca serve: not using the bundled Node (${errorMessage(error)})`)
+    }
   }
   const cached = await materializeRuntime(target, cacheRoot, { fetcher: fetch })
   mkdirSync(dirname(destination), { recursive: true })
@@ -163,8 +181,4 @@ async function runNativePreflight(runtime: string, entry: string): Promise<strin
     timeoutMs: NATIVE_PREFLIGHT_TIMEOUT_MS
   })
   return result.stdout
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

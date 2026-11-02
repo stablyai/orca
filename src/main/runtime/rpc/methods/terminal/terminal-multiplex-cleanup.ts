@@ -1,30 +1,14 @@
-import type {
-  TerminalMultiplexCleanupStage,
-  TerminalMultiplexConnection,
-  TerminalMultiplexFlowControlStage
-} from './terminal-multiplex-connection'
+import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 
-export function installMultiplexCleanup(
-  build: TerminalMultiplexFlowControlStage
-): asserts build is TerminalMultiplexCleanupStage {
-  const state = build as TerminalMultiplexConnection
+export function installMultiplexCleanup(state: TerminalMultiplexConnection): void {
   const { runtime, streams, pendingPtyWaitControllers, emit, signal } = state
   state.detachStream = (streamId: number, endVerdict, releaseRemoteDesktopDriver = true): void => {
     const stream = streams.get(streamId)
     if (!stream) {
       return
     }
-    const replacement = stream.sourceRangeReplacement
-    stream.sourceRangeReplacement = null
-    if (replacement) {
-      runtime.rollbackRemoteTerminalSourceRangeReplacement(
-        replacement,
-        'stream-detached-replacement-aborted'
-      )
-    }
     stream.outputBatcher.flush()
     stream.outputBatcher.dispose()
-    state.detachSourceRangeConsumer(stream, 'stream-detached')
     state.ackTotalInFlightBytes = Math.max(0, state.ackTotalInFlightBytes - stream.ackInFlightBytes)
     stream.ackInFlightBytes = 0
     stream.ackPendingOutput = []

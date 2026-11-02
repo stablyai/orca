@@ -79,7 +79,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     browserTabId: string,
     reason?: 'page-closed' | 'guest-destroyed'
   ): void
-  protected abstract cancelDownloadInternal(downloadId: string, reason: string): void
+  protected abstract cancelDownloadInternal(
+    downloadId: string,
+    reason: string,
+    status?: 'canceled' | 'failed'
+  ): void
   protected abstract bindDownloadToTab(downloadId: string, browserTabId: string): void
   protected abstract flushDownloadSnapshot(downloadId: string): void
   protected abstract sendDownloadStarted(downloadId: string): void

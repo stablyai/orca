@@ -26,9 +26,7 @@ export type RemoteBrowserStreamRestartAttemptDeps = {
   adoptSubscription: (subscription: RemoteBrowserStreamSubscription) => void
 }
 
-// One self-heal attempt for a dropped stream, as the scheduler wants it: resolves true to keep
-// retrying, false to stop. Split from the lifecycle because a single attempt needs none of the
-// lifecycle's own state — only the token it is retrying on behalf of.
+// One self-heal attempt for a dropped stream: resolves true to keep retrying, false to stop.
 export function createRemoteBrowserStreamRestartAttempt(
   token: RemoteBrowserStreamToken,
   deps: RemoteBrowserStreamRestartAttemptDeps
@@ -65,14 +63,10 @@ export function createRemoteBrowserStreamRestartAttempt(
       }
       const failure = resolveRemoteBrowserStreamFailure(error)
       if (failure.logRawError) {
-        // The raw text is transport-level and written for logs; keep it out of the UI but not out of
-        // reach, since nothing else records it.
+        // The raw transport text stays out of the UI, so this log is its only record.
         console.warn('[browser-pane] remote stream restart failed:', error)
       }
-      // Why giving up publishes 'stopped': abandoning automatic retries is not the same as taking
-      // away the user's last resort, and a classification we got wrong would otherwise strand the
-      // pane exactly as it did before this work. While attempts remain it stays 'retrying', which
-      // reports the failure without offering a control that competes with the next attempt.
+      // Why: giving up still publishes 'stopped' so a misclassified failure stays manually recoverable.
       lastNotice = failure.message
       deps.setStatus(
         failure.shouldRetry

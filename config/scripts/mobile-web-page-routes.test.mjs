@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { MobileWebBundleRouteSchema } from '../../src/shared/mobile-web-bundle/manifest-contract.ts'
+import {
+  MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS,
+  MobileWebBundleRouteSchema
+} from '../../src/shared/mobile-web-bundle/manifest-contract.ts'
 import { resolveMobileWebPageRoutes } from './build-mobile-web-app-bundle.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { routePathnameFromKey } from './mobile-web-app-route-manifest.mjs'
 
 /**
@@ -50,6 +54,35 @@ describe('the page routes the manifest declares', () => {
       { pathname: '/h/[hostId]', grants: ['navigate'], optionalGrants: ['externalNavigation'] },
       { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
     ])
+  })
+
+  it('carries the host-area declaration through, and writes no key where there is none', () => {
+    expect(
+      resolveMobileWebPageRoutes(
+        ['./h/[hostId]/index.tsx', './h/[hostId]/tasks.tsx'],
+        [
+          { pathname: '/h/[hostId]', grants: ['navigate'], canOwnHostArea: true },
+          { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
+        ]
+      )
+    ).toEqual([
+      { pathname: '/h/[hostId]', grants: ['navigate'], canOwnHostArea: true },
+      { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
+    ])
+  })
+
+  /**
+   * The wide iPad's host-area session is granted every served route's list, so its in-page hops
+   * stay in the page. Bounded by the per-route ceiling too, so that grant never outgrows one route's.
+   */
+  it('declares the host area on the host route alone, under one route-grant ceiling', () => {
+    expect(
+      MOBILE_WEB_PAGE_ROUTES.filter((route) => route.canOwnHostArea).map((route) => route.pathname)
+    ).toEqual(['/h/[hostId]'])
+    const union = new Set(
+      MOBILE_WEB_PAGE_ROUTES.flatMap((route) => [...route.grants, ...(route.optionalGrants ?? [])])
+    )
+    expect(union.size).toBeLessThanOrEqual(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
   })
 
   it('holds the optional lane to the manifest grammar and the ceiling over the union', () => {

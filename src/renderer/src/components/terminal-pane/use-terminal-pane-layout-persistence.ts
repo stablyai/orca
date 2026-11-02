@@ -4,15 +4,17 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
-import { clearWebRuntimeTerminalBuffer } from '@/runtime/web-runtime-session'
+import { clearWebRuntimeTerminalBuffer } from '@/runtime/web-runtime-terminal-buffer-actions'
 import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
-} from '@/lib/terminal-pane-title-sanitization'
+} from '../../../../shared/terminal-pane-title-sanitization'
 import type { TerminalPaneStartupController } from './use-terminal-pane-startup-actions'
 import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 
 export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
   const {
@@ -157,7 +159,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     [paneTransportsRef, persistLayoutSnapshot]
   )
 
-  const removePaneTitle = useCallback(
+  const removePaneTitleLocally = useCallback(
     (paneId: number) => {
       setPaneTitles((previous) => {
         if (!(paneId in previous)) {
@@ -181,6 +183,46 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [persistLayoutSnapshot]
+  )
+  const setPaneTitleLocally = useCallback(
+    (paneId: number, title: string) => {
+      setPaneTitles((previous) => ({ ...previous, [paneId]: title }))
+      paneTitlesRef.current = { ...paneTitlesRef.current, [paneId]: title }
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      if (leafId) {
+        removedTitleLeafIdsRef.current.delete(leafId)
+      }
+      persistLayoutSnapshot('gesture')
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refs are stable.
+    [persistLayoutSnapshot]
+  )
+  /** A user's title for a pane, trimmed and non-empty; null clears it. */
+  const changePaneTitle = useCallback(
+    (paneId: number, title: string | null) => {
+      const showTitle = (): void =>
+        title === null ? removePaneTitleLocally(paneId) : setPaneTitleLocally(paneId, title)
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      // Switch point: main renames the pane first; the window then shows the title.
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        leafId &&
+        sendLayoutCommandToOwner(
+          worktreeId,
+          { type: 'renamePane', tabId, leafId, title },
+          { apply: showTitle, asToday: showTitle }
+        )
+      ) {
+        return
+      }
+      showTitle()
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refs are stable.
+    [removePaneTitleLocally, setPaneTitleLocally, tabId, worktreeId]
+  )
+  const removePaneTitle = useCallback(
+    (paneId: number) => changePaneTitle(paneId, null),
+    [changePaneTitle]
   )
   const handleClearPaneTitleShortcut = useCallback(
     (paneId: number) => {
@@ -238,6 +280,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
   return {
     persistLayoutSnapshot,
     clearPaneScrollback,
+    changePaneTitle,
     removePaneTitle,
     handleClearPaneTitleShortcut
   }

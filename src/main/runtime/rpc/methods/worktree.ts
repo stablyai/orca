@@ -8,13 +8,17 @@ import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
+import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-warning'
 import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
-import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-schemas'
+import {
+  WorktreeCreate,
+  WorktreePrefetchCreateBase
+} from '../../../../shared/rpc-contract/worktree-create-params'
 import {
   WorktreeActivate,
   WorktreeForceDeleteBranch,
@@ -25,8 +29,9 @@ import {
   WorktreeSet,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
-} from './worktree-schemas'
+} from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
+import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
 import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
 
 export const WORKTREE_METHODS = [
@@ -115,7 +120,7 @@ export const WORKTREE_METHODS = [
                 }),
                 creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
               },
-              context.clientKind ? { clientKind: context.clientKind } : {}
+              context
             )
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
@@ -133,6 +138,7 @@ export const WORKTREE_METHODS = [
         }
       })
   }),
+  WORKTREE_PROVISIONED_ROOT_METHOD,
   defineMethod({
     name: 'worktree.prefetchCreateBase',
     permission: 'workspace',
@@ -149,8 +155,8 @@ export const WORKTREE_METHODS = [
     name: 'worktree.set',
     permission: 'workspace',
     params: WorktreeSet,
-    handler: async (params, { runtime }) => ({
-      worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
+    handler: async (params, { runtime }) => {
+      const worktree = await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
         ...(params.displayName !== undefined
           ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
@@ -199,7 +205,12 @@ export const WORKTREE_METHODS = [
               }
             : undefined
       })
-    })
+      const warning = getWorkspaceStatusWarning(
+        params.workspaceStatus,
+        () => runtime.getUIState().workspaceStatuses
+      )
+      return { worktree, ...(warning ? { warnings: [warning] } : {}) }
+    }
   }),
   defineMethod({
     name: 'worktree.persistSortOrder',

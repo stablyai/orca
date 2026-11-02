@@ -6,6 +6,7 @@ import { agentSessionReconciliationTargetMatches } from './agent-session-reconci
 import { applyAgentSessionRestartAdjudication } from './agent-session-restart-lease-transitions'
 
 export type AgentSessionRestartProbeArgs = {
+  sessionId?: string
   probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
   probeMany?: (
     records: readonly AgentSessionRecord[]
@@ -16,10 +17,19 @@ export type AgentSessionRestartProbeArgs = {
 type RestartProbe = { record: AgentSessionRecord; probe: AgentSessionOwnerProbe }
 
 export async function collectAgentSessionRestartProbes(
-  records: readonly AgentSessionRecord[],
+  store: {
+    listRecords: () => AgentSessionRecord[]
+    getRecord: (sessionId: string) => AgentSessionRecord | null
+  },
   args: AgentSessionRestartProbeArgs
 ): Promise<Map<string, RestartProbe>> {
   const probes = new Map<string, RestartProbe>()
+  const target = args.sessionId === undefined ? null : store.getRecord(args.sessionId)
+  const candidates = args.sessionId === undefined ? store.listRecords() : target ? [target] : []
+  const records = candidates.filter((record) => record.lease.unreconciled)
+  if (records.length === 0) {
+    return probes
+  }
   const batched = args.probeMany ? await args.probeMany(records) : null
   for (const record of records) {
     probes.set(record.sessionId, {

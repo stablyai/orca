@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 
@@ -77,7 +77,7 @@ describe('editor group OS file drops on remote workspaces', () => {
       worktreeId: 'wt-ssh',
       worktreePath: SSH_PATH,
       connectionId: 'ssh-1',
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' },
       expectedExecutionHostId: 'ssh:ssh-1',
       expectedSshTargetId: 'ssh-1',
       expectedSshConnectionGeneration: 3
@@ -99,7 +99,7 @@ describe('editor group OS file drops on remote workspaces', () => {
     await waitFor(() => expect(mocks.openFile).toHaveBeenCalledTimes(1))
     expect(mocks.importPaths.mock.calls[0][0]).toMatchObject({
       worktreeId: 'wt-runtime',
-      settings: { activeRuntimeEnvironmentId: 'owner-runtime' }
+      target: { kind: 'environment', environmentId: 'owner-runtime' }
     })
     expect(mocks.importPaths.mock.calls[0][2]).toBe(joinPath(RUNTIME_PATH, '.orca/drops'))
     expect(mocks.openFile).toHaveBeenCalledWith(

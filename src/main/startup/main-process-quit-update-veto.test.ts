@@ -5,8 +5,8 @@ const dependencyExports: [string, string[]][] = [
   ['../ipc/filesystem-watcher', ['closeAllWatchers']],
   ['../ipc/worktree-base-directory-watcher', ['disposeWorktreeBaseDirectoryWatchers']],
   ['../ipc/folder-repo-git-upgrade', ['stopFolderRepoGitUpgradeWatch']],
-  ['../ipc/pty', ['killAllPty']],
-  ['../daemon/daemon-init', ['disconnectDaemon', 'shutdownDaemon']],
+  ['../ipc/pty/kill-all', ['killAllPty']],
+  ['../daemon/daemon-provider-state', ['disconnectDaemon', 'shutdownDaemon']],
   ['../ipc/ssh-shutdown-drain', ['beginSshShutdown']],
   ['../agent-hooks/server', ['agentHookServer']],
   ['../agent-hooks/wsl-hook-relay-manager', ['wslHookRelayManager']],
@@ -16,7 +16,7 @@ const dependencyExports: [string, string[]][] = [
     '../runtime/structured-agent-session-runtime-teardown',
     ['setStructuredAgentSessionTeardownTrigger']
   ],
-  ['../runtime/orca-runtime-files', ['awaitRuntimeFileWatcherUnsubscribes']],
+  ['../runtime/files/watch/file-watcher-leases', ['awaitRuntimeFileWatcherUnsubscribes']],
   ['../runtime/runtime-metadata', ['clearRuntimeMetadataIfOwned']],
   [
     '../browser/paired-runtime-browser-client-host-runtime',

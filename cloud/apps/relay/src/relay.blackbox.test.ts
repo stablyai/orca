@@ -17,6 +17,7 @@ import nacl from 'tweetnacl'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
+import { assignmentLeaseKeyId } from './assignment-lease.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import {
   encodeMembership,
@@ -590,6 +591,9 @@ describe('served relay URL', () => {
       algorithms: ['HS256']
     })
     expect(verified.payload).toMatchObject({ relayHostId: 'abcdefghijklmnop' })
+    expect(verified.protectedHeader.kid).toBe(
+      assignmentLeaseKeyId(new TextEncoder().encode(assignmentKey))
+    )
   })
 
   it('requires canonical host key possession and supports same-generation rebind', async () => {

@@ -97,6 +97,21 @@ describe('plain Node entry guard', () => {
     )
   })
 
+  it('rejects a daemon-graph package the relocated Windows daemon-host does not mirror', () => {
+    const plugin = createPlainNodeEntryGuardPlugin()
+
+    expect(() =>
+      runWriteBundle(plugin, createOutputDir(), 'const nacl = require(`tweetnacl`)')
+    ).toThrow('does not mirror')
+    expect(() =>
+      runWriteBundle(
+        plugin,
+        createOutputDir(),
+        'require("node:fs"); require("path"); require("@orca/process-host/spawn-observer"); require("node-pty")'
+      )
+    ).not.toThrow()
+  })
+
   it('fails the smoke when the daemon exits zero on an empty argv', async () => {
     const dir = createOutputDir()
     const plugin = createPlainNodeEntryGuardPlugin()

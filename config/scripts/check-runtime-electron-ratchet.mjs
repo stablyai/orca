@@ -5,28 +5,26 @@
  * The runtime boots on plain Node, where Electron is unavailable. Keep desktop
  * dependencies out of its graph, including structured chat not yet wired into it.
  *
- * This bundles the runtime and the structured-chat lanes with esbuild, reads the metafile for every module that
- * imports `electron`, and compares that set to a checked-in baseline. A NEW module
- * fails the build; a removed one must be dropped from the baseline. The baseline
- * may only shrink, so the migration is measurable and cannot regress.
+ * This bundles the runtime and the structured-chat lanes with esbuild and reads the metafile for
+ * every module that imports `electron`. Any such module fails: the migration reached zero.
  *
  * This is a reachability check, not a lint rule: the point is precisely the edges
  * that no per-file rule can see.
  *
- * Usage: node config/scripts/check-runtime-electron-ratchet.mjs [--write]
+ * Usage: node config/scripts/check-runtime-electron-ratchet.mjs
  */
 import { build } from 'esbuild'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import process from 'node:process'
 import { isTestOnlyDirectoryName, isTestOnlySourcePath } from './test-only-source-path.mjs'
+import { createWorkspaceSourceResolver } from './workspace-source-exports.mjs'
 
 // Why absolute, not cwd-relative: `pnpm lint` runs from the repo root but CI steps and
 // editors do not always, and a cwd-relative miss surfaced as an unhandled ENOENT stack
 // instead of a usable message.
 const ROOT = path.join(import.meta.dirname, '..', '..')
-const BASELINE_PATH = path.join(ROOT, 'config', 'runtime-electron-baseline.txt')
 
 // The two module graphs a Node backend would have to boot: the runtime service
 // itself and the RPC server that fronts it.
@@ -47,7 +45,11 @@ export const STRUCTURED_CHAT_LANES = [
   { directory: ['src', 'main', 'claude'] },
   { directory: ['src', 'main', 'codex'] },
   { directory: ['src', 'shared'] },
-  { directory: ['src', 'main', 'runtime'], basename: /^(?:structured-|agent-session-)/ },
+  { directory: ['src', 'packages', 'process-host', 'src'] },
+  {
+    directory: ['src', 'main', 'runtime'],
+    basename: /^(?:structured-|agent-session-)/
+  },
   { directory: ['src', 'main', 'provider-process'] },
   { directory: ['src', 'main', 'acp'] },
   { directory: ['src', 'main', 'jsonl-rpc'] },
@@ -88,7 +90,7 @@ export function defaultEntryPoints(root = ROOT) {
 }
 
 // Native addons and electron cannot be bundled; externalising them is what the
-// relay build already does (config/scripts/build-relay.mjs).
+// relay build already does (config/scripts/build-wsl-guest.mjs).
 const EXTERNAL = [
   'electron',
   'node-pty',
@@ -108,12 +110,25 @@ const EXTERNAL = [
 const externalNativeAddons = {
   name: 'external-native-addons',
   setup(pluginBuild) {
-    pluginBuild.onResolve({ filter: /\.node$/ }, (args) => ({ path: args.path, external: true }))
+    pluginBuild.onResolve({ filter: /\.node$/ }, (args) => ({
+      path: args.path,
+      external: true
+    }))
   }
 }
 
 // Why `plugins`: lets a test add an Electron import to a real file in memory, never on disk.
 export async function collectElectronImporters(entryPoints, { plugins = [] } = {}) {
+  const workspace = createWorkspaceSourceResolver(ROOT)
+  const workspaceSources = {
+    name: 'runtime-workspace-sources',
+    setup(pluginBuild) {
+      pluginBuild.onResolve({ filter: /^@orca\// }, ({ path: specifier }) => {
+        const source = workspace.resolve(specifier)
+        return source ? { path: source.path } : undefined
+      })
+    }
+  }
   const result = await build({
     // Export every entry through one bundle so shared dependencies are emitted once.
     stdin: {
@@ -137,7 +152,7 @@ export async function collectElectronImporters(entryPoints, { plugins = [] } = {
     metafile: true,
     absWorkingDir: ROOT,
     logLevel: 'silent',
-    plugins: [externalNativeAddons, ...plugins]
+    plugins: [externalNativeAddons, workspaceSources, ...plugins]
   })
   const importers = new Set()
   for (const [file, info] of Object.entries(result.metafile.inputs)) {
@@ -151,53 +166,15 @@ export async function collectElectronImporters(entryPoints, { plugins = [] } = {
   return [...importers].sort()
 }
 
-export function readBaseline(text) {
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('#'))
-    .sort()
-}
-
-export function diffAgainstBaseline(current, baseline) {
-  const baselineSet = new Set(baseline)
-  const currentSet = new Set(current)
-  return {
-    added: current.filter((file) => !baselineSet.has(file)),
-    removed: baseline.filter((file) => !currentSet.has(file))
-  }
-}
-
-function renderBaseline(files) {
-  return [
-    '# Modules reachable from the Orca runtime or structured-chat code that import `electron`.',
-    '# Generated by config/scripts/check-runtime-electron-ratchet.mjs.',
-    '# This list is EMPTY and must stay that way: both run in orcad, the headless runtime,',
-    '# on plain Node (see `pnpm run build:orcad`). Any entry means that code got less portable;',
-    '# migrate the module behind a host port instead (src/main/host/).',
-    '',
-    ...files
-  ].join('\n')
-}
-
 // Exported so tests run the CLI path itself; `plugins` is the same in-memory hook as above.
-export async function main(argv = process.argv, { plugins = [] } = {}) {
-  const write = argv.includes('--write')
-  const current = await collectElectronImporters(defaultEntryPoints(), { plugins })
-
-  if (write) {
-    writeFileSync(BASELINE_PATH, `${renderBaseline(current)}\n`)
-    console.log(`[runtime-electron-ratchet] wrote ${current.length} entries to ${BASELINE_PATH}`)
-    return 0
-  }
-
-  const baseline = readBaseline(readFileSync(BASELINE_PATH, 'utf8'))
-  const { added, removed } = diffAgainstBaseline(current, baseline)
-
-  if (added.length > 0) {
+export async function main({ plugins = [] } = {}) {
+  const current = await collectElectronImporters(defaultEntryPoints(), {
+    plugins
+  })
+  if (current.length > 0) {
     console.error(
-      `[runtime-electron-ratchet] ${added.length} new module(s) reachable from the Orca runtime or structured-chat code now import electron:
-${added.map((file) => `  + ${file}`).join('\n')}
+      `[runtime-electron-ratchet] ${current.length} module(s) reachable from the Orca runtime or structured-chat code import electron:
+${current.map((file) => `  + ${file}`).join('\n')}
 
 The runtime and structured chat must run in orcad, the headless runtime, where Electron is
 unavailable. That holds for structured-chat code the runtime doesn't load yet, so renaming or
@@ -206,19 +183,7 @@ depend on the port, or drop the import that pulls Electron in.`
     )
     return 1
   }
-
-  if (removed.length > 0) {
-    console.error(
-      `[runtime-electron-ratchet] ${removed.length} module(s) no longer import electron — nice.
-Refresh the baseline so the gate keeps its new, tighter floor:
-${removed.map((file) => `  - ${file}`).join('\n')}
-
-  node config/scripts/check-runtime-electron-ratchet.mjs --write`
-    )
-    return 1
-  }
-
-  console.log(`[runtime-electron-ratchet] ok — ${current.length} entries, unchanged.`)
+  console.log('[runtime-electron-ratchet] ok — nothing reachable imports electron.')
   return 0
 }
 

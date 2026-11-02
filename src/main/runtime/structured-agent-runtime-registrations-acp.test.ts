@@ -10,7 +10,7 @@ describe('ACP agents in the runtime registrations', () => {
   it('registers Grok beside Claude and Codex with its declared capabilities', () => {
     expect(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(({ definition }) => definition.agent)
-    ).toEqual(['pi', 'codex', 'claude', 'grok', 'opencode', 'omp'])
+    ).toEqual(['pi', 'codex', 'claude', 'grok', 'opencode', 'omp', 'antigravity'])
     expect(structuredAgentRuntimeRegistration('grok')?.definition).toMatchObject({
       handleTransport: 'acp',
       accountHomeVariable: 'GROK_HOME',
@@ -39,9 +39,9 @@ describe('ACP agents in the runtime registrations', () => {
 
   it('leaves the `opencode2` agent on its terminal-backed chat, and asks `opencode` its version', () => {
     expect(structuredAgentRuntimeRegistration('opencode2')).toBeNull()
-    expect(structuredAgentRuntimeRegistration('opencode')?.supportsLaunch).toBeTypeOf('function')
+    expect(structuredAgentRuntimeRegistration('opencode')?.launchCheck).toBeDefined()
     // Grok runs whatever is installed: its create asks nothing of the binary.
-    expect(structuredAgentRuntimeRegistration('grok')?.supportsLaunch).toBeUndefined()
+    expect(structuredAgentRuntimeRegistration('grok')?.launchCheck).toBeUndefined()
   })
 
   it('registers OMP on the ACP lane pinning its agent directory, asking its version at create', () => {
@@ -52,7 +52,7 @@ describe('ACP agents in the runtime registrations', () => {
       accountHomeVariable: 'PI_CODING_AGENT_DIR',
       capabilities: { imagePrompts: false, steering: 'queue', approvalEnforcement: 'orca' }
     })
-    expect(registration?.supportsLaunch).toBeTypeOf('function')
+    expect(registration?.launchCheck).toBeDefined()
   })
 
   it('opens OMP as a structured chat with Chat UI on', () => {
@@ -82,7 +82,8 @@ describe('ACP agents in the runtime registrations', () => {
           getClaudeConfigDirectory: unused,
           prepareCodexLaunchHome: unused,
           readCodexLaunchHome: unused,
-          workspaceTrustSettings: unused
+          workspaceTrustSettings: unused,
+          stateDirectory: '/orca-data'
         }
       )
     await expect(resolve({ PI_CODING_AGENT_DIR: '/data/omp-agent' })).resolves.toEqual({
@@ -111,7 +112,8 @@ describe('ACP agents in the runtime registrations', () => {
       getClaudeConfigDirectory: unused,
       prepareCodexLaunchHome: unused,
       readCodexLaunchHome: unused,
-      workspaceTrustSettings: unused
+      workspaceTrustSettings: unused,
+      stateDirectory: '/orca-data'
     }
     const resolve = async (launchEnv: NodeJS.ProcessEnv) =>
       resolveAccountHome(

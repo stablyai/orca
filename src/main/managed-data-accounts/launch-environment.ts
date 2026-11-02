@@ -1,10 +1,7 @@
-import {
-  getCommandTokenPathBasename,
-  getFirstCommandToken
-} from '../../shared/command-token-scanner'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { getManagedDataAccountService } from './service'
 import { MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS } from '../../shared/managed-data-account-environment'
+import { getAgentLaunchExecutableName } from '../../shared/agent-command-line-intent'
 
 export function applyManagedDataAccountEnvironment(
   environment: Record<string, string>,
@@ -23,12 +20,7 @@ export function applyManagedDataAccountEnvironment(
   if (options.isWsl) {
     return
   }
-  const agent =
-    options.launchAgent ??
-    getCommandTokenPathBasename(getFirstCommandToken(options.launchCommand ?? '')).replace(
-      /\.(?:exe|cmd|sh)$/i,
-      ''
-    )
+  const agent = options.launchAgent ?? getAgentLaunchExecutableName(options.launchCommand)
   const provider =
     agent === 'opencode' || agent === 'opencode2' ? 'opencode' : agent === 'devin' ? 'devin' : null
   if (!provider) {

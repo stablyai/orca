@@ -6,7 +6,7 @@ import {
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   WorktreeSelector
-} from './git-params'
+} from '../../../../shared/rpc-contract/git-params'
 
 type CommitMessageGenerationOverride = {
   commitMessageAi?: GlobalSettings['commitMessageAi']

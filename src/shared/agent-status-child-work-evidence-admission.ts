@@ -23,7 +23,8 @@ import {
   type AgentChildWorkEvidenceScope
 } from './agent-status-child-work-evidence-resolution'
 
-/** Live children admitted per session, sized to the provider trackers' own retention. */
+/** Live children other than agents admitted per session. A subagent has no such bound: refusing
+ *  one would cost its saved row while it runs, so only the store's global limits bound them. */
 export const STRUCTURED_CHILD_WORK_MAX_LIVE = 256
 /** A child's first run, matching the provider roster's first attempt. */
 const FIRST_GENERATION = 1
@@ -134,8 +135,12 @@ export function applyAgentChildWorkLive(
   const request = { parent: ctx.parent, provider: ctx.provider }
   const aliases = agentChildWorkHandleAliases(handle)
   if (!existing) {
-    const live = ownedStructuredChildWork(ctx).filter((record) => record.membership === 'live')
-    if (live.length >= STRUCTURED_CHILD_WORK_MAX_LIVE) {
+    if (
+      child.kind !== 'agent' &&
+      ownedStructuredChildWork(ctx).filter(
+        (record) => record.membership === 'live' && record.kind !== 'agent'
+      ).length >= STRUCTURED_CHILD_WORK_MAX_LIVE
+    ) {
       ctx.outcome.rejected.push({ handleId: handle.id, reason: 'ingestion-limit' })
       return
     }

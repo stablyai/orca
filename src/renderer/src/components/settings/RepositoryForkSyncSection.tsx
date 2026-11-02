@@ -7,9 +7,10 @@ import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSegmentedControl } from './SettingsFormControls'
-import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
-import { useAppStore } from '../../store'
-import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
+import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-sync-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/actions/git-operation-target'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords } from './settings-search-keywords'
 
@@ -99,7 +100,6 @@ export function RepositoryForkSyncSection({
   updateRepo,
   forceVisible
 }: RepositoryForkSyncSectionProps): React.JSX.Element | null {
-  const settings = useAppStore((state) => state.settings)
   const upstream = repo.upstream
   const [syncing, setSyncing] = useState(false)
   const syncInFlightRef = useRef(false)
@@ -126,9 +126,13 @@ export function RepositoryForkSyncSection({
     syncInFlightRef.current = true
     setSyncing(true)
     try {
+      const target = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo))
+      if (!target) {
+        throw new Error(UNRESOLVED_GIT_HOST_ERROR)
+      }
       const result = await syncRuntimeGitForkDefaultBranch(
         {
-          settings: getRepoOwnerRoutedSettings(settings, repo),
+          target,
           worktreeId: getRepoMainWorktreeId(repo),
           worktreePath: repo.path,
           connectionId: repo.connectionId ?? undefined

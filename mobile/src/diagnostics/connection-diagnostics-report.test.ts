@@ -13,6 +13,7 @@ describe('buildConnectionDiagnosticsReport', () => {
       lastConnectedAt: NOW - 5 * 60_000,
       platform: 'ios 26.5.1',
       appVersion: '0.0.29',
+      bridgeProtocolVersion: 1,
       desktopAppVersion: '1.4.191',
       entries: [
         {
@@ -45,6 +46,7 @@ describe('buildConnectionDiagnosticsReport', () => {
       lastConnectedAt: null,
       platform: 'android 15',
       appVersion: '0.0.29',
+      bridgeProtocolVersion: 1,
       entries: [],
       nowMs: NOW
     })
@@ -56,6 +58,22 @@ describe('buildConnectionDiagnosticsReport', () => {
     expect(report).toContain('No connection events recorded.')
   })
 
+  it('names the bridge version under the app line', () => {
+    const lines = buildConnectionDiagnosticsReport({
+      hostName: 'Host 3',
+      endpoint: 'ws://192.168.1.50:6768',
+      state: 'connected',
+      reconnectAttempts: 0,
+      lastConnectedAt: null,
+      platform: 'ios 26',
+      appVersion: '0.0.60',
+      bridgeProtocolVersion: 1,
+      entries: [],
+      nowMs: NOW
+    }).split('\n')
+    expect(lines.slice(2, 4)).toEqual(['App: Orca Mobile 0.0.60 · ios 26', 'Bridge protocol: 1'])
+  })
+
   it('explains the most likely cause and redacts credentials before copying', () => {
     const report = buildConnectionDiagnosticsReport({
       hostName: 'Host 3',
@@ -65,6 +83,7 @@ describe('buildConnectionDiagnosticsReport', () => {
       lastConnectedAt: null,
       platform: 'android 36',
       appVersion: '0.0.46',
+      bridgeProtocolVersion: 1,
       activePath: 'tailscale',
       pendingPath: 'relay',
       entries: [
@@ -98,6 +117,7 @@ describe('buildConnectionDiagnosticsReport', () => {
       lastConnectedAt: null,
       platform: 'android 36',
       appVersion: '0.0.47',
+      bridgeProtocolVersion: 1,
       entries: [
         {
           id: 'json-secret',
@@ -125,6 +145,7 @@ describe('buildConnectionDiagnosticsReport', () => {
       lastConnectedAt: null,
       platform: 'android 36',
       appVersion: '0.0.47',
+      bridgeProtocolVersion: 1,
       entries: [
         {
           id: 'oversized',
@@ -155,6 +176,7 @@ describe('buildConnectionDiagnosticsReport', () => {
       lastConnectedAt: null,
       platform: 'ios',
       appVersion: 'fixture',
+      bridgeProtocolVersion: 1,
       entries: [{ id: 'boundary', ts: NOW, level: 'error', message }],
       nowMs: NOW
     })
@@ -185,6 +207,7 @@ describe('buildConnectionDiagnosticsReport', () => {
           lastConnectedAt: null,
           platform: 'android',
           appVersion: 'fixture',
+          bridgeProtocolVersion: 1,
           entries: Object.freeze([entry]),
           nowMs: NOW
         })

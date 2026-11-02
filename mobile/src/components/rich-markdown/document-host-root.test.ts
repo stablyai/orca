@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
@@ -26,12 +27,14 @@ function mountedIn(id: string) {
   host.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   document.body.appendChild(host)
   const posts: MobileRichMarkdownEditorMessage[] = []
-  const started = createRichMarkdownEditorDocument({
-    root: host,
-    postToHost: (message) => posts.push(message),
-    keyboardInsetSource: () => null,
-    promptForUrl: () => Promise.resolve(null)
-  })
+  const started = createRichMarkdownEditorDocument(
+    quietRichMarkdownEditorHost({
+      root: host,
+      postToHost: (message) => posts.push(message),
+      keyboardInsetSource: () => null,
+      promptForUrl: () => Promise.resolve(null)
+    })
+  )
   startedDocuments.push(started)
   return { host, posts, started }
 }
@@ -99,10 +102,12 @@ describe('two editor documents on one page', () => {
   it('reads the whole page when no root is named, which is what the WebView gets', () => {
     document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
     const posts: MobileRichMarkdownEditorMessage[] = []
-    const started = createRichMarkdownEditorDocument({
-      postToHost: (message) => posts.push(message),
-      keyboardInsetSource: () => null
-    })
+    const started = createRichMarkdownEditorDocument(
+      quietRichMarkdownEditorHost({
+        postToHost: (message) => posts.push(message),
+        keyboardInsetSource: () => null
+      })
+    )
     startedDocuments.push(started)
 
     started.send.setMarkdown('# native', 1)

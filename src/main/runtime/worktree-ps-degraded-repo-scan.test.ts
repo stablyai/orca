@@ -15,14 +15,6 @@ const electronMocks = vi.hoisted(() => {
 })
 vi.mock('electron', () => electronMocks)
 
-const getSshGitProviderMock = vi.hoisted(() => vi.fn())
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: vi.fn(() => 0),
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable',
-  requireSshGitProvider: (connectionId: string) => getSshGitProviderMock(connectionId)
-}))
-
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -137,16 +129,6 @@ function neverSettles() {
   return new Promise<never>(() => {})
 }
 
-/** A healthy remote scan, so the only difference between the co-hosted cases is how `metaById` is stamped. */
-function makeHealthySshScan() {
-  return {
-    listWorktrees: vi.fn(async () => [
-      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
-      { path: WORKTREE_PATH, head: 'def', branch: 'feature', isBare: false, isMainWorktree: false }
-    ])
-  }
-}
-
 async function advancePastRepoScanBudget<T>(pending: Promise<T>): Promise<T> {
   await vi.advanceTimersByTimeAsync(6_000)
   return pending
@@ -154,7 +136,6 @@ async function advancePastRepoScanBudget<T>(pending: Promise<T>): Promise<T> {
 
 describe('worktree.ps on a degraded repo scan', () => {
   beforeEach(() => {
-    getSshGitProviderMock.mockReset()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockResolvedValue([])
   })
@@ -162,7 +143,6 @@ describe('worktree.ps on a degraded repo scan', () => {
   it('keeps persisted worktrees when a remote scan stalls past the per-repo budget', async () => {
     vi.useFakeTimers()
     try {
-      getSshGitProviderMock.mockReturnValue({ listWorktrees: vi.fn(neverSettles) })
       const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
 
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
@@ -174,7 +154,6 @@ describe('worktree.ps on a degraded repo scan', () => {
   })
 
   it('keeps persisted worktrees when a remote repo is unreachable', async () => {
-    getSshGitProviderMock.mockReturnValue(undefined)
     const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
 
     const result = await runtime.getWorktreePs(10_000)
@@ -249,33 +228,10 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  // Why: remote disconnects should recover on the next poll; only local failures need backoff against spawn storms.
-  it('rescans a degraded remote repo on the next poll instead of caching the failure', async () => {
-    vi.useFakeTimers()
-    try {
-      const listWorktrees = vi.fn(async () => {
-        throw new Error('provider offline')
-      })
-      getSshGitProviderMock.mockReturnValue({ listWorktrees })
-      const runtime = new OrcaRuntimeService(
-        makeStore({ connectionId: SSH_CONNECTION_ID }) as never
-      )
-
-      await runtime.getWorktreePs(10_000)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await runtime.getWorktreePs(10_000)
-
-      expect(listWorktrees).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   // Why: one repo id can be registered on several execution hosts, so a stalled host must not republish another host's rows.
   it('does not overwrite another execution host’s healthy rows when this host’s scan stalls', async () => {
     vi.useFakeTimers()
     try {
-      getSshGitProviderMock.mockReturnValue(makeHealthySshScan())
       listWorktreesStrictMock.mockImplementation(neverSettles)
       const runtime = new OrcaRuntimeService(
         makeStore({
@@ -295,34 +251,7 @@ describe('worktree.ps on a degraded repo scan', () => {
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
       const remote = result.worktrees.find((worktree) => worktree.worktreeId === WORKTREE_ID)
-      expect(remote?.branch).toBe('feature')
       expect(remote?.hostId).toBe(SSH_HOST_ID)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not claim an unstamped persisted row when the repo id is registered on two hosts', async () => {
-    vi.useFakeTimers()
-    try {
-      getSshGitProviderMock.mockReturnValue(makeHealthySshScan())
-      listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
-        makeStore({
-          connectionId: SSH_CONNECTION_ID,
-          coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
-          metaById: {
-            [WORKTREE_ID]: makeMeta(),
-            [MAIN_WORKTREE_ID]: makeMeta({ displayName: 'main', instanceId: 'parent-instance' })
-          }
-        }) as never
-      )
-
-      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
-
-      const remote = result.worktrees.find((worktree) => worktree.worktreeId === WORKTREE_ID)
-      expect(remote?.hostId).toBe(SSH_HOST_ID)
-      expect(remote?.branch).toBe('feature')
     } finally {
       vi.useRealTimers()
     }

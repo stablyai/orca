@@ -3,9 +3,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import {
   getTaskPageGitHubDuplicateCandidates,
   getTaskPageGitHubDuplicateTargetErrorMessage,
@@ -64,18 +63,8 @@ function GHEditSectionItem({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
   // Why: from a Project view, keep projectViewCache in sync too — patchWorkItem only walks workItemsCache, so the table would render stale without this. See docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
@@ -91,8 +80,8 @@ function GHEditSectionItem({
 
   const issueRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const metadataOptions = useMemo(
-    () => ({ ...sourceSettings, ownerRepo: issueRepo }),
-    [sourceSettings, issueRepo]
+    () => ({ target: ownerTarget, ownerRepo: issueRepo }),
+    [ownerTarget, issueRepo]
   )
   // Project metadata comes from the row repository.
   const slugOwner = projectOrigin?.owner ?? null
@@ -105,7 +94,7 @@ function GHEditSectionItem({
   const repoLabelsBySlug = useRepoLabelsBySlug(
     slugOwner,
     slugRepo,
-    sourceSettings,
+    ownerTarget,
     projectOrigin?.host
   )
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
@@ -119,7 +108,7 @@ function GHEditSectionItem({
     slugOwner,
     slugRepo,
     assignees,
-    sourceSettings,
+    ownerTarget,
     projectOrigin?.host
   )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath

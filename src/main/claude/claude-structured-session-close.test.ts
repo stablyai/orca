@@ -144,8 +144,8 @@ describe('Claude published session close lifecycle', () => {
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
     expect(disposeTranslator).toHaveBeenCalledOnce()
-    // A close Orca asked for stops the child still running, then the host hears the session end.
-    expect(childWork).toEqual(['live', 'ended', 'session-ended'])
+    // A close Orca asked for claims no outcome for the child still running: only the session ends.
+    expect(childWork).toEqual(['live', 'session-ended'])
 
     // Nothing of the dead child stays indexed for a retry.
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)

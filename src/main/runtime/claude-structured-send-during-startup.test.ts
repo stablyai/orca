@@ -57,10 +57,10 @@ function fence(host: StructuredAgentSessionHost): number {
   return host.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 }
 
-/** Whether the CLI was written a message, once the delivery loop has settled what it does. */
+/** Whether the CLI was written a message while the host is waiting on its open. */
 async function written(host: StructuredAgentSessionHost): Promise<boolean> {
   await vi.waitFor(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
+    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(true)
   )
   return claude.child(SESSION).calls.includes('send')
 }

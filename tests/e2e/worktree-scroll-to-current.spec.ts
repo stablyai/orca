@@ -1,5 +1,5 @@
 import { mkdirSync } from 'node:fs'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -74,7 +74,9 @@ test.describe('Reveal active workspace button', () => {
     await expect
       .poll(() =>
         orcaPage.evaluate(async (id) => {
-          await window.__store!.getState().fetchRepos()
+          await window
+            .__store!.getState()
+            .fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
           return window.__store!.getState().repos.some((repo) => repo.id === id)
         }, filterRepoId)
       )

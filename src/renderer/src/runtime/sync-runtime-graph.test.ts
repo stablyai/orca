@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
-  buildRuntimeMobileAgentStatusProjectionForTests,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
-} from './sync-runtime-graph'
+} from './sync-runtime-graph/sync-key'
+import { buildRuntimeMobileAgentStatusProjectionForTests } from './sync-runtime-graph/agent-status-projection'
 import { makeAgentStatusEntry, makeState } from './sync-runtime-graph-test-harness'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'

@@ -6,7 +6,7 @@
 
 import type { AgentSessionAgentsResult } from '../../../../shared/agent-session-registered-agents'
 import { AGENT_SESSION_AGENTS_METHOD } from '../../../../shared/agent-session-registered-agents'
-import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../../structured-agent-runtime-registrations'
+import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../structured-agent-runtime-metadata'
 import { defineMethod } from '../core'
 import { requireStructuredCapability } from './structured-agent-session-gate'
 import { AgentsParams } from './structured-agent-session-schemas'
@@ -22,11 +22,12 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
     handler: async (_params, ctx): Promise<AgentSessionAgentsResult> => {
       requireStructuredCapability(ctx)
       return {
-        agents: STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.filter(({ definition }) =>
+        agents: STRUCTURED_AGENT_RUNTIME_METADATA.filter(({ definition }) =>
           clientReadsStructuredSessionAgent(ctx, definition.agent)
         ).map(({ definition }) => ({
           agent: definition.agent,
-          capabilities: { ...definition.capabilities }
+          capabilities: { ...definition.capabilities },
+          ...(definition.managedRuntime?.() ? { managedRuntime: true as const } : {})
         }))
       }
     }

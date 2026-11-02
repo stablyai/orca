@@ -21,6 +21,8 @@ import {
   type SeededSshConfigHost
 } from './helpers/ssh-config-host-picker'
 
+test.use({ seedTestRepo: false })
+
 // Why: afterEach deletes every target carrying this prefix; workers loading the
 // module in the same millisecond must not collide on a shared Date.now().
 const HOST_PREFIX = makeSshConfigHostPrefix()

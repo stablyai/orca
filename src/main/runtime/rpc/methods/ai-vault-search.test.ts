@@ -59,7 +59,7 @@ describe('session search runtime RPC', () => {
           limit: 20,
           filters: {
             agents: AI_VAULT_AGENTS.filter(
-              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'kiro'].includes(agent)
             )
           }
         },

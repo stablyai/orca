@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcess from '../../shared/child-process/run-process'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import type * as RunProcess from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { POSIX_PROVIDER_SUPERVISOR_SCRIPT } from '../provider-process/provider-process-supervisor'
 import { generateCommitMessageFromContext } from './commit-message-text-generation'
 import { withPlatform } from './commit-message-text-generation-test-harness'
@@ -12,7 +12,7 @@ import { spawnSourceControlAgent } from './source-control-agent-launch'
 
 const { spawnProcessMock } = vi.hoisted(() => ({ spawnProcessMock: vi.fn() }))
 
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => {
+vi.mock('@orca/process-host', async (importOriginal) => {
   const actual = await importOriginal<typeof RunProcess>()
   spawnProcessMock.mockImplementation(actual.spawnProcess)
   return { ...actual, spawnProcess: spawnProcessMock }
@@ -82,6 +82,28 @@ describe('spawnSourceControlAgent', () => {
     expect(child.supervised).toBeUndefined()
     expect(lastSpawnSpec()).toMatchObject({ program: 'C:/tools/agent.exe', args: ['--print'] })
     expect(lastSpawnSpec().env).not.toHaveProperty('ORCA_PROVIDER_SUPERVISOR_SPEC')
+  })
+
+  it('hands an npm .cmd shim to process-host unwrapped, multi-line prompt included', () => {
+    // Why: wrapping the shim in cmd.exe here refused every argv prompt, which always has
+    // line breaks, before process-host could run the shim as node + script (#28768).
+    const shim = join(folder, 'copilot.cmd')
+    writeFileSync(shim, '')
+    spawnProcessMock.mockReturnValueOnce(fakeChild())
+    withPlatform('win32', () =>
+      spawnSourceControlAgent({
+        binary: 'copilot',
+        args: ['--prompt', 'Summarize:\n- staged change'],
+        env: { PATH: folder },
+        stdinMode: 'pipe',
+        useCwdForNative: false
+      })
+    )
+
+    expect(lastSpawnSpec()).toMatchObject({
+      program: shim,
+      args: ['--prompt', 'Summarize:\n- staged change']
+    })
   })
 })
 

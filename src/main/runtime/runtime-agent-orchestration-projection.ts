@@ -8,11 +8,11 @@ import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { OrchestrationDb } from './orchestration/db'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import {
   buildWorkerAttentionContext,
   projectWorkerAttentionContext
 } from './orchestration/worker-attention-context'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
 
 type RuntimeAgentOrchestrationDependencies = {
   getDb(): OrchestrationDb | null
@@ -145,7 +145,7 @@ export class RuntimeAgentOrchestrationProjection {
       legacyActiveRun &&
       handleWorktreeId &&
       coordinatorWorktreeId &&
-      runtimeWorktreeIdsEqual(coordinatorWorktreeId, handleWorktreeId)
+      worktreeIdsEqual(coordinatorWorktreeId, handleWorktreeId)
         ? legacyActiveRun
         : undefined
     const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyRun?.coordinator_handle

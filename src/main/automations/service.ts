@@ -30,7 +30,8 @@ import {
   missedBeyondGrace,
   recordMissedRun,
   recordRefusedAutomationRun,
-  recordUnevaluableAutomation
+  recordUnevaluableAutomation,
+  WSL_MOVE_OWNED_BY_HOST
 } from './dispatch-refusal'
 import type {
   AutomationsChangedPayload,
@@ -283,6 +284,11 @@ export class AutomationService {
     const target = this.resolveTarget(automation)
     const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
     const refusal = describeScheduledRefusal({ target, canDispatch })
+    // The WSL host runs this one now; a skip per tick would only churn the retained local copy.
+    if (refusal === WSL_MOVE_OWNED_BY_HOST) {
+      await this.runs.advanceNextRun(automation.id, now)
+      return
+    }
     if (refusal && (await this.runs.repeatSkip(automation.id, refusal, scheduledFor))) {
       await this.runs.advanceNextRun(automation.id, now)
       return

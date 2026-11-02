@@ -112,6 +112,22 @@ describe('execution host registry', () => {
     expect(hosts.some((h) => h.id === 'ssh:repo-ssh')).toBe(true)
   })
 
+  it("does not add a client SSH host from a paired server's nested SSH target", () => {
+    const hosts = buildExecutionHostRegistry({
+      // The server's own target id; this client has no such SSH host.
+      repos: [{ connectionId: 'server-ssh', executionHostId: 'runtime:env-1' }],
+      settings: { activeRuntimeEnvironmentId: null },
+      sshConnectionStates: new Map([
+        [
+          'server-ssh',
+          { targetId: 'server-ssh', status: 'connected', error: null, reconnectAttempt: 0 }
+        ]
+      ])
+    })
+
+    expect(hosts.map((h) => h.id)).toEqual(['local', 'runtime:env-1'])
+  })
+
   it('adds saved runtime environments and preserves compatibility state per host', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [],

@@ -25,7 +25,8 @@ export const AI_VAULT_AGENTS = [
   'cline',
   'kimi',
   'muse',
-  'jcode'
+  'jcode',
+  'kiro'
 ] as const satisfies readonly TuiAgent[]
 
 // Why: the aiVault.listSessions RPC schema CLAMPS scopePaths to this bound
@@ -76,7 +77,8 @@ export const AI_VAULT_AGENT_LABELS = {
   cline: 'Cline',
   kimi: 'Kimi',
   muse: 'Muse',
-  jcode: 'Jcode'
+  jcode: 'Jcode',
+  kiro: 'Kiro'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -216,6 +218,8 @@ export type AiVaultScanIssue = {
 }
 
 export type AiVaultListArgs = {
+  /** Opts a selected runtime-host refresh into content-conditional replies. */
+  afterFingerprint?: string | null
   /** Opt-in promises this client starts IDE history in a new CLI conversation. */
   includeAntigravityIdeSessions?: boolean
   limit?: number
@@ -229,6 +233,11 @@ export type AiVaultListArgs = {
 }
 
 export type AiVaultListResult = {
+  /** Local scan entry that produced this result; absent for remote and merged results. */
+  scanId?: string
+  fingerprint?: string
+  /** Requires the caller to reuse the exact previously received body. */
+  unchanged?: true
   sessions: AiVaultSession[]
   issues: AiVaultScanIssue[]
   scannedAt: string

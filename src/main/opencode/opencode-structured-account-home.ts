@@ -55,7 +55,7 @@ export function environmentForStructuredOpenCodeAccountHome(
   binding: OpenCodeAgentSessionAccountHome,
   input: {
     managedAccounts: Pick<AccountReader, 'environmentForAccount' | 'restoreOriginalEnvironment'>
-    baseEnvironment: Record<string, string>
+    baseEnvironment: NodeJS.ProcessEnv
   }
 ): Record<string, string> {
   const environment = restoredEnvironment(input.baseEnvironment, input.managedAccounts)

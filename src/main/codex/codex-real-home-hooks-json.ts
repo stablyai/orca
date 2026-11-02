@@ -21,8 +21,9 @@ export function getRealHomeHooksJsonPath(): string {
  * runs on its default home, resolved when a pane's CODEX_HOME names it. They
  * differ when ~/.codex or HOME is a symlink, and Orca approves under both.
  */
-export function getRealHomeHookKeySourcePaths(): [string, ...string[]] {
-  const hooksJsonPath = getRealHomeHooksJsonPath()
+export function getRealHomeHookKeySourcePaths(
+  hooksJsonPath: string = getRealHomeHooksJsonPath()
+): [string, ...string[]] {
   const spelled = normalizeCodexHookSourcePath(hooksJsonPath)
   const resolved = getCodexExplicitHomeHookSourcePath(hooksJsonPath)
   return resolved === spelled ? [spelled] : [spelled, resolved]

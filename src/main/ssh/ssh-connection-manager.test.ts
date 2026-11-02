@@ -1,18 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 
-const mockState = vi.hoisted(() => ({
-  connectResults: [] as Promise<void>[],
-  instances: [] as {
-    connect: ReturnType<typeof vi.fn>
-    disconnect: ReturnType<typeof vi.fn>
-    status: 'connecting' | 'connected' | 'disconnected'
-  }[]
-}))
+type MockConnectionRecord = {
+  connect: ReturnType<typeof vi.fn>
+  disconnect: ReturnType<typeof vi.fn>
+  status: 'connecting' | 'connected' | 'disconnected'
+  awaitingCredential: boolean
+}
+
+const mockState = vi.hoisted(() => {
+  const connectResults: Promise<void>[] = []
+  const instances: MockConnectionRecord[] = []
+  return { connectResults, instances }
+})
 
 vi.mock('./ssh-connection', () => ({
   SshConnection: class MockSshConnection {
     status: 'connecting' | 'connected' | 'disconnected' = 'connecting'
+    awaitingCredential = false
     connect = vi.fn(async () => {
       await (mockState.connectResults.shift() ?? Promise.resolve())
       this.status = 'connected'
@@ -31,10 +36,26 @@ vi.mock('./ssh-connection', () => ({
     }
 
     setCallbacks(): void {}
+
+    getReusableCredentials(): null {
+      return null
+    }
+
+    isAwaitingCredential(): boolean {
+      return this.awaitingCredential
+    }
   }
 }))
 
 import { SshConnectionManager } from './ssh-connection-manager'
+import {
+  clearSshCredentialDeclined,
+  recordSshCredentialDeclined,
+  recordSshSignInAwaited,
+  resetSshCredentialDeclinesForTests
+} from './ssh-credential-decline'
+import { isAuthError } from './ssh-connection-utils'
+import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from './ssh-user-disconnect'
 
 const target = {
   id: 'target-1',
@@ -150,6 +171,46 @@ describe('SshConnectionManager', () => {
     expect(manager.getConnection(target.id)).toBe(replacement)
   })
 
+  it('keeps a Disconnect that lands while a background connect closes the old transport', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    await manager.connect(target)
+    const old = mockState.instances[0]
+    // The pooled transport dropped, so a background dial (tunnel, census) replaces it.
+    old.status = 'disconnected'
+    let finishOldClose!: () => void
+    old.disconnect.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishOldClose = resolve
+        })
+    )
+
+    const background = manager.connect(target)
+    const rejected = expect(background).rejects.toThrow('cancelled')
+    await manager.disconnect(target.id)
+    finishOldClose()
+    await rejected
+
+    expect(mockState.instances).toHaveLength(1)
+    expect(manager.getConnection(target.id)).toBeUndefined()
+  })
+
+  it('leaves a connection whose own reconnect is asking the user alone', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    const conn = await manager.connect(target)
+    const opened = mockState.instances.at(-1)!
+    const openedCount = mockState.instances.length
+    // Its reconnect after a drop has the credential dialog open.
+    opened.status = 'connecting'
+    opened.awaitingCredential = true
+
+    await expect(manager.connect(target)).rejects.toThrow('already in progress')
+
+    expect(opened.disconnect).not.toHaveBeenCalled()
+    expect(mockState.instances).toHaveLength(openedCount)
+    expect(manager.getConnection(target.id)).toBe(conn)
+  })
+
   it('clears the pool entry when the closed connection is still the registered one', async () => {
     const manager = new SshConnectionManager({ onStateChange: vi.fn() })
     const conn = await manager.connect(target)
@@ -158,5 +219,96 @@ describe('SshConnectionManager', () => {
 
     expect(mockState.instances[0].disconnect).toHaveBeenCalledOnce()
     expect(manager.getConnection(target.id)).toBeUndefined()
+  })
+})
+
+describe('SshConnectionManager after a cancelled sign-in', () => {
+  beforeEach(() => {
+    mockState.connectResults.length = 0
+    mockState.instances.length = 0
+    resetSshCredentialDeclinesForTests()
+  })
+
+  it('refuses an automatic dial as an auth failure without opening a connection', async () => {
+    // Every automatic path (managed tunnel, host status, census, deploy) dials through here.
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    recordSshCredentialDeclined(target.id)
+
+    const error = await manager.connect(target).catch((err: unknown) => err)
+
+    expect(error instanceof Error && isAuthError(error)).toBe(true)
+    expect(mockState.instances).toHaveLength(0)
+  })
+
+  it('still reuses a connection that is already up', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    const conn = await manager.connect(target)
+    recordSshCredentialDeclined(target.id)
+
+    await expect(manager.connect(target)).resolves.toBe(conn)
+  })
+
+  it('refuses a background dial to a host awaiting its first sign-in, saying so', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    recordSshSignInAwaited(target.id)
+
+    const error = await manager.connect(target).catch((err: unknown) => err)
+
+    expect(error instanceof Error && isAuthError(error)).toBe(true)
+    expect(error instanceof Error && error.message).toBe(
+      'Target 1 needs you to sign in. Reconnect to sign in.'
+    )
+    expect(mockState.instances).toHaveLength(0)
+  })
+
+  it('dials again once an explicit sign-in lifts the decline', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    recordSshCredentialDeclined(target.id)
+    await expect(manager.connect(target)).rejects.toThrow()
+
+    clearSshCredentialDeclined(target.id)
+
+    await expect(manager.connect(target)).resolves.toBeDefined()
+    expect(mockState.instances).toHaveLength(1)
+  })
+})
+
+describe('SshConnectionManager after a user Disconnect', () => {
+  beforeEach(() => {
+    mockState.connectResults.length = 0
+    mockState.instances.length = 0
+    resetSshUserDisconnectsForTests()
+  })
+
+  it('refuses the background dials that revived the host, without opening a connection', async () => {
+    // A managed server's tunnel, its status checks, a census and host-resume recovery dial here.
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    await manager.connect(target)
+    await manager.disconnect(target.id)
+    recordSshUserDisconnected(target.id)
+    mockState.instances.length = 0
+
+    const error = await manager.connect(target).catch((err: unknown) => err)
+
+    expect(error instanceof Error && error.message).toBe(
+      'Target 1 was disconnected. Connect to use it again.'
+    )
+    expect(error instanceof Error && isAuthError(error)).toBe(false)
+    expect(mockState.instances).toHaveLength(0)
+  })
+
+  it("does not lend a connection test's transport to a background dial", async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    recordSshUserDisconnected(target.id)
+    await manager.connect(target, { probe: true })
+
+    await expect(manager.connect(target)).rejects.toThrow('was disconnected')
+  })
+
+  it("dials a user's connection test", async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    recordSshUserDisconnected(target.id)
+
+    await expect(manager.connect(target, { probe: true })).resolves.toBeDefined()
   })
 })
