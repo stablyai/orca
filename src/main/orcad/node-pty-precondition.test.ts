@@ -191,6 +191,17 @@ describe('buildNodePtyLoadProbeScript', () => {
     // Raw dlopen must precede the wrapper that hides loader errors as module misses.
     expect(script.indexOf('process.dlopen')).toBeLessThan(script.indexOf('lib/index.js'))
   })
+
+  it('uses build 17763 only when the bundled ConPTY DLL is on', () => {
+    const dir = '/opt/app/node_modules/node-pty'
+    const withDll = buildNodePtyLoadProbeScript(dir, { useConptyDll: true })
+    const withoutDll = buildNodePtyLoadProbeScript(dir, { useConptyDll: false })
+    expect(withDll).toContain('>=17763?')
+    expect(withDll).not.toContain('18309')
+    expect(withoutDll).toContain('>=18309?')
+    expect(withoutDll).not.toContain('17763')
+    expect(buildNodePtyLoadProbeScript(dir)).toBe(withoutDll)
+  })
 })
 
 describe('checkNodePtyPrecondition', () => {

@@ -146,10 +146,10 @@ describe('isSourceBuildDir', () => {
 })
 
 describe('nodePtyNativeModuleName', () => {
-  it('follows node-pty: ConPTY from Windows build 18309', () => {
+  it('follows the patched agent: ConPTY from Windows build 17763', () => {
     expect(nodePtyNativeModuleName('darwin', '25.3.0')).toBe('pty')
     expect(nodePtyNativeModuleName('win32', '10.0.26100')).toBe('conpty')
-    expect(nodePtyNativeModuleName('win32', '10.0.17763')).toBe('pty')
+    expect(nodePtyNativeModuleName('win32', '10.0.17763')).toBe('conpty')
   })
 })
 
