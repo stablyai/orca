@@ -16,26 +16,15 @@ import {
   mergeInputPlaces,
   type InputPlaceQuery
 } from './journal-input-place-index'
-import {
-  type JournalInputLineageOwner,
-  type JournalInputCard,
-  queryInputContext
-} from './journal-input-lineage'
-import { JournalInputDomainIndex } from './journal-input-domain-index'
+import { type JournalInputLineageOwner, queryInputContext } from './journal-input-lineage'
+import { JournalInputRestamps, type JournalIndexedCard } from './journal-input-restamp'
 
 export class JournalInputCardIndex {
   private index: JournalInputPlaceIndex | undefined
   private currentCoordinates: JournalInputPlaceIndex | undefined
-  private domains: JournalInputDomainIndex | undefined
-  private readonly indexed = new Map<
-    string,
-    {
-      card: QueuedMessageRow
-      actionable: boolean
-      handoff: boolean
-      source?: JournalInputCard
-    }
-  >()
+  private readonly indexed = new Map<string, JournalIndexedCard>()
+  private readonly restamps = new JournalInputRestamps()
+  private rebuilding = false
   // Effective cards a queue pause can hold; a pause change re-flags only these.
   private readonly waiting = new Set<string>()
   // Derived current membership only; the prepared transition owns introduction values.
@@ -82,11 +71,22 @@ export class JournalInputCardIndex {
   command(): QueuedMessageRow | undefined {
     return this.currentCoordinates?.allPlaces().command
   }
-  releaseHistory(): void {
-    this.domains = undefined
+  releaseHistory(keep: (id: string) => boolean): void {
+    this.lineage.releaseHistory((id) => {
+      const kept = keep(id)
+      if (!kept) {
+        this.restamps.release(id)
+      }
+      return kept
+    })
+    this.restamps.releaseHistory()
+  }
+  release(id: string): void {
+    this.lineage.cards.delete(id)
+    this.restamps.release(id)
   }
   head(): QueuedMessageRow | undefined {
-    return this.index?.allPlaces().head
+    return this.index && this.restamps.head(this.index)
   }
   paused(card: QueuedMessageRow): boolean {
     return (
@@ -133,19 +133,9 @@ export class JournalInputCardIndex {
   }
 
   query(place: JournalInputPlace): InputPlaceQuery {
-    if (place.context.basis === 'observed') {
-      return this.index!.query('introduction', place.context.cut)
-    }
-    if (!this.domains) {
-      this.domains = new JournalInputDomainIndex()
-      for (const { card, source, actionable, handoff } of this.indexed.values()) {
-        const known = this.lineage.cards.get(card.messageId) ?? source
-        if (known) {
-          this.domains.set(card, known, actionable, handoff)
-        }
-      }
-    }
-    return this.domains.query(place.context, place.original)
+    return place.context.basis === 'observed'
+      ? this.restamps.observed(this.index!, place.context.cut)
+      : this.restamps.legacy(place, this.indexed, this.lineage.cards)
   }
 
   ensure(state: JournalReducerState, floor?: { epoch: string; sequence: number } | null): void {
@@ -184,31 +174,50 @@ export class JournalInputCardIndex {
         ...(failed ? [{ reason: 'failed' as const, since: since(failed) }] : []),
         ...(pauseInputs[1] ? [{ reason: 'restarted' as const, since: since(reopened) }] : [])
       ]
-      if (this.index) {
-        // Withdrawn, returned, dispatched and per-card-held cards keep their summaries.
-        const changed: [QueuedMessageRow, boolean][] = []
-        for (const id of this.waiting) {
-          const card = state.queue.cards.get(id) ?? this.overlays.get(id)
-          const actionable = card !== undefined && this.actionable(card)
-          if (card && this.indexed.get(id)?.actionable !== actionable) {
-            changed.push([card, actionable])
-          }
-        }
-        for (const [card, actionable] of changed) {
-          this.indexCard(state, card, actionable)
-        }
-        return
+      this.restamps.restart(this.lineage.at(state.lastSequence))
+      this.rebuilding = true
+      try {
+        this.rebuild(state)
+      } finally {
+        this.rebuilding = false
       }
-      this.index = new JournalInputPlaceIndex('introduction')
-      this.currentCoordinates = new JournalInputPlaceIndex(state.epoch)
-      for (const card of this.overlays.values()) {
-        if (!state.queue.cards.has(card.messageId)) {
-          this.indexCard(state, card)
+    }
+  }
+
+  private rebuild(state: JournalReducerState): void {
+    if (this.index) {
+      // Withdrawn, returned, dispatched and per-card-held cards keep their summaries.
+      const changed: [QueuedMessageRow, boolean][] = []
+      for (const id of this.waiting) {
+        const card = state.queue.cards.get(id) ?? this.overlays.get(id)
+        const actionable = card !== undefined && this.actionable(card)
+        if (card && this.indexed.get(id)?.actionable !== actionable) {
+          changed.push([card, actionable])
         }
       }
-      for (const card of state.queue.cards.values()) {
+      for (const [card, actionable] of changed) {
+        this.indexCard(state, card, actionable)
+      }
+      // Each card changed since the last rebuild takes the entry main's full rebuild gave it.
+      for (const id of this.restamps.take()) {
+        const card = state.queue.cards.get(id) ?? this.overlays.get(id)
+        if (card) {
+          this.indexCard(state, card, this.indexed.get(id)?.actionable ?? false)
+        } else {
+          this.restamps.unpath(id)
+        }
+      }
+      return
+    }
+    this.index = new JournalInputPlaceIndex('introduction')
+    this.currentCoordinates = new JournalInputPlaceIndex(state.epoch)
+    for (const card of this.overlays.values()) {
+      if (!state.queue.cards.has(card.messageId)) {
         this.indexCard(state, card)
       }
+    }
+    for (const card of state.queue.cards.values()) {
+      this.indexCard(state, card)
     }
   }
 
@@ -252,18 +261,16 @@ export class JournalInputCardIndex {
   ): void {
     const attempt = card.consumedAs ? state.submissions.get(card.consumedAs) : undefined
     const handoff = attempt !== undefined && isQueuedAgentJournalSubmission(attempt)
-    const lineage = this.lineage.cards.get(card.messageId) ?? {
+    const id = card.messageId
+    const owned = this.lineage.cards.get(id)
+    const lineage = owned ?? {
       introduced: this.lineage.at(state.lastSequence),
       baseline: { coordinate: card.queuedAt }
     }
     this.currentCoordinates!.set(card, actionable, handoff)
-    this.index!.set(card, actionable, handoff, {
-      epoch: 'introduction',
-      sequence: lineage.introduced
-    })
-    if (this.domains && lineage) {
-      this.domains.set(card, lineage, actionable, handoff)
-    }
+    const entry = { card, actionable, handoff, ...(!owned ? { source: lineage } : {}) }
+    const prior = this.indexed.get(id)
+    const floored = this.restamps.place(this.index!, entry, lineage, this.rebuilding, prior)
     if (card.state === 'waiting' && card.holdReason === null) {
       this.waiting.add(card.messageId)
     } else {
@@ -273,17 +280,13 @@ export class JournalInputCardIndex {
       this.indexed.delete(card.messageId)
       return
     }
-    this.indexed.set(card.messageId, {
-      card,
-      actionable,
-      handoff,
-      ...(!this.lineage.cards.has(card.messageId) ? { source: lineage } : {})
-    })
+    this.indexed.set(id, floored ? { ...entry, floored: true as const } : entry)
   }
 
   relation(card: QueuedMessageRow, place: JournalInputPlace): boolean {
     const lineage =
-      this.lineage.cards.get(card.messageId) ?? this.indexed.get(card.messageId)?.source
+      this.lineage.cards.get(card.messageId) ??
+      this.restamps.source(this.indexed.get(card.messageId))
     if (!lineage || lineage.introduced >= place.context.cut) {
       return false
     }

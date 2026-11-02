@@ -46,6 +46,26 @@ export class JournalInputDomainIndex {
     }
   }
 
+  delete(messageId: string, introduced: number): void {
+    let node: Node | undefined = this.root,
+      low = 0,
+      high = LIMIT
+    while (node) {
+      node.index.delete(messageId)
+      if (high - low <= 1) {
+        break
+      }
+      const mid = low + Math.floor((high - low) / 2)
+      if (introduced < mid) {
+        node = node.left
+        high = mid
+      } else {
+        node = node.right
+        low = mid
+      }
+    }
+  }
+
   query(context: JournalInputContext, original?: AgentJournalCursor): InputPlaceQuery {
     let result: InputPlaceQuery = { position: -Infinity }
     const append = (node: Node) => {

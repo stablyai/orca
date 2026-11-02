@@ -471,7 +471,8 @@ describe.each([100, 1_000])('queue pause changes beside %s retained cards', (siz
     vi.restoreAllMocks()
   })
 
-  // Each pause-key change visits at most the `live` waiting cards and never a retained one.
+  // Each pause-key change visits at most the `live` waiting cards, plus once each card whose
+  // lineage was released since the last change; never other retained history.
   it.each([1, 3])('re-flags only the %s waiting cards a pause can hold', (live) => {
     const state = createJournalReducerState('session', 'epoch')
     let seq = 0
@@ -519,6 +520,8 @@ describe.each([100, 1_000])('queue pause changes beside %s retained cards', (siz
         reason: null
       })
     }
+    // Accepted hand-offs released their lineage after the last pause change.
+    let released = history.filter((_, n) => n % 2 === 1)
     const waiting = Array.from({ length: live }, (_, n) => `waiting-${n}`)
     waiting.forEach((messageId, n) => queue(messageId, size + n))
     const read = (target = state) => {
@@ -558,9 +561,14 @@ describe.each([100, 1_000])('queue pause changes beside %s retained cards', (siz
       settle()
     }
     const settle = () => {
-      const ids = visits.mock.calls.map(([, card]) => card.messageId)
+      const all = visits.mock.calls.map(([, card]) => card.messageId)
+      const ids = all.filter((id) => waiting.includes(id))
+      const restamped = all.filter((id) => !waiting.includes(id))
       expect(ids.length).toBeLessThanOrEqual(live)
-      expect(ids.every((id) => waiting.includes(id))).toBe(true)
+      if (restamped.length > 0) {
+        expect(restamped.toSorted()).toEqual(released.toSorted())
+        released = []
+      }
       changes += ids.length > 0 ? 1 : 0
       visits.mockClear()
     }
@@ -603,5 +611,6 @@ describe.each([100, 1_000])('queue pause changes beside %s retained cards', (siz
     // Ten failures, nine running turns, the discarded and kept Resumes, the clear, its lift
     // and the Stop each re-flag the waiting cards; the failure beneath the clear re-flags none.
     expect(changes).toBe(24)
+    expect(released).toEqual([])
   })
 })
