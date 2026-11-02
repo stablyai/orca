@@ -2,6 +2,7 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers
 import type { PluginHostServices } from './plugin-host-methods'
 import type { PluginDesktopFrameServices } from './plugin-host-method-bindings'
 import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
+import type { PluginStatusBarState } from '../status-bar/plugin-status-bar-state'
 import {
   pluginSettingValueIssue,
   type PluginSettingContribution
@@ -53,12 +54,18 @@ export function bindPluginHostServices(input: {
   panels?: PluginPanelBridgeServices | null
   /** The calling plugin's `contributes.settings`: defaults and value checks. */
   declaredSettings?: readonly PluginSettingContribution[]
+  statusBar?: PluginStatusBarState | null
+  /** Ids of the calling plugin's `contributes.statusBarItems`. */
+  declaredStatusBarItemIds?: readonly string[]
 }): PluginHostServices {
   const declared = new Map((input.declaredSettings ?? []).map((setting) => [setting.key, setting]))
   const { delegate, pluginsDataDir } = input
   return {
     desktop: input.desktop ?? null,
     panels: input.panels ?? null,
+    statusBar: input.statusBar
+      ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds)
+      : null,
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
       if (!context) {
@@ -117,6 +124,22 @@ export function bindPluginHostServices(input: {
           ? { ok: false, error: `${itemKey} ${issue}` }
           : new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
       }
+    }
+  }
+}
+
+function statusBarServices(
+  state: PluginStatusBarState,
+  declaredIds: readonly string[] = []
+): NonNullable<PluginHostServices['statusBar']> {
+  const declared = new Set(declaredIds)
+  return {
+    update: (pluginKey, itemId, patch) => {
+      if (!declared.has(itemId)) {
+        return false
+      }
+      state.update(pluginKey, itemId, patch)
+      return true
     }
   }
 }
