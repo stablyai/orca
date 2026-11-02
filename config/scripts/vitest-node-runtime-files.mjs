@@ -171,7 +171,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/terminal-pane/terminal-pane-host-state-memo.test.ts',
   'src/renderer/src/components/automations/use-automation-runs-dashboard-payload.test.tsx',
   'src/renderer/src/components/right-sidebar/parent-pr-checks-projection-selector.test.ts',
-  'src/renderer/src/store/github/cache-persistence.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.test.ts',
