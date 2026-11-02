@@ -5,3 +5,6 @@ export const EPHEMERAL_VMS_SKILL_NAME = 'orca-per-workspace-env'
 export const ORCA_LINEAR_SKILL_NAME = 'orca-linear'
 export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
 export const LINEAR_AGENT_SKILL_NAMES = [ORCA_LINEAR_SKILL_NAME, LINEAR_TICKETS_SKILL_NAME] as const
+export const ORCA_PLANE_SKILL_NAME = 'orca-plane'
+export const PLANE_TICKETS_SKILL_NAME = 'plane-tickets'
+export const PLANE_AGENT_SKILL_NAMES = [ORCA_PLANE_SKILL_NAME, PLANE_TICKETS_SKILL_NAME] as const

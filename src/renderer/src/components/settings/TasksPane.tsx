@@ -16,6 +16,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
+import { TaskSourcePlaneSetup } from './TaskSourcePlaneSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
   getStalledVisibleTaskProviders,
@@ -237,16 +238,13 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
                   />
                 ) : provider === 'plane' ? (
-                  <CodeHostSetupSteps
-                    providerLabel={meta.label}
+                  <TaskSourcePlaneSetup
                     connected={readiness.connected}
                     checking={readiness.checking}
-                    unavailable={readiness.unavailable}
                     visible={visible}
                     canHide={canHide}
                     onToggleVisible={() => toggleProvider('plane')}
                     onOpenIntegrations={() => openIntegrations(PLANE_INTEGRATION_SECTION_ID)}
-                    onRetryConnection={() => void refreshPreflightStatus({ force: true })}
                   />
                 ) : (
                   <CodeHostSetupSteps

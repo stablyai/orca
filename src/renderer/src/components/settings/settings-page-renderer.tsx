@@ -11,6 +11,7 @@ import {
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
   renderLinearSettingsSection,
+  renderPlaneSettingsSection,
   renderOrchestrationSettingsSection
 } from './settings-capability-section-renderers'
 import {
@@ -137,6 +138,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                   {renderAccountsSettingsSection(context)}
                   {renderOrchestrationSettingsSection(context)}
                   {renderLinearSettingsSection(context)}
+                  {renderPlaneSettingsSection(context)}
                   {renderDesktopCapabilitySettingsSections(context)}
                   {renderOrcaAccountSettingsSection(context)}
                   {renderSetupGuideSettingsSection(context)}
