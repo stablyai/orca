@@ -103,12 +103,7 @@ const GHOSTTY_IMPORTER: TerminalConfigImporter<GhosttyConfig> = {
   map: async (config, { currentSettings, pickedConfigDir }): Promise<TerminalConfigMapping> => {
     const { theme: rawTheme, ...configKeys } = config
     const mapped = mapGhosttyToOrca(configKeys, platform() === 'darwin')
-    const theme = await themeReferencePatch(
-      rawTheme,
-      mapped.diff,
-      pickedConfigDir,
-      currentSettings
-    )
+    const theme = await themeReferencePatch(rawTheme, mapped.diff, pickedConfigDir, currentSettings)
     return {
       diff: { ...mapped.diff, ...theme.diff },
       unsupportedKeys: [...mapped.unsupportedKeys, ...theme.unsupportedKeys],
