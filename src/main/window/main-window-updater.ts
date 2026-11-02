@@ -2,8 +2,8 @@ import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/update-status-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
-import { isTrustedUIRenderer } from '../ipc/ui'
-import type { Store } from '../persistence'
+import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../ipc/ui'
+import type { Store } from '../persistence/loading-store/store'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
 import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
 import { updaterErrorMessage } from '../updater/updater-coded-error'
@@ -41,6 +41,7 @@ type UpdaterSetupHooks = {
 
 function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): UpdaterSetupOptions {
   return {
+    getMainWindow: getTrustedUIRendererWindow,
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
     onBeforeQuit: async () => {
       try {

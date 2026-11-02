@@ -5,7 +5,7 @@ import { installServeSupervisorDisconnectQuit } from './serve-update-handoff'
 
 const { quit } = vi.hoisted(() => ({ quit: vi.fn() }))
 vi.mock('./startup/process-quit-request', () => ({ quitProcess: quit }))
-vi.mock('./persistence', () => ({
+vi.mock('./persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => {
     throw new Error('No profile access for sidecar owner')
   }

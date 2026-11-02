@@ -1,9 +1,13 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { clearDisclosuresForTests } from '../worktree/agent-child-disclosure'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+
+// Disclosures persist in a module cache across list remounts; isolate each test.
+beforeEach(clearDisclosuresForTests)
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -17,6 +21,13 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('./AgentStateDot', () => ({ AgentStateDot: () => null }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+
+async function pressByLabel(renderer: ReactTestRenderer, label: string) {
+  const toggle = findAllByHostType(renderer.root, 'Pressable').find(
+    (node) => node.props.accessibilityLabel === label
+  )
+  await act(async () => toggle!.props.onPress({ stopPropagation: vi.fn() }))
+}
 
 function agent(paneKey: string, parentPaneKey: string | null = null): RuntimeWorktreeAgentRow {
   return {
@@ -92,6 +103,8 @@ describe('WorktreeAgentList', () => {
 
     expect(stopPropagation).toHaveBeenCalledTimes(1)
     expect(summary.props.accessibilityLabel).toBe('Collapse 3 agents')
+    expect(renderer!.root.findAll((node) => node.props.agent !== undefined)).toHaveLength(3)
+    await pressByLabel(renderer!, 'Show 1 child agent')
     const rows = renderer!.root.findAll((node) => node.props.agent !== undefined)
     expect(rows).toHaveLength(4)
     expect(rows[1].props.depth).toBe(1)
@@ -129,12 +142,57 @@ describe('WorktreeAgentList', () => {
         })
       )
     })
+    await pressByLabel(renderer!, 'Show 1 child agent')
     const rows = renderer!.root.findAll((node) => node.props.agent !== undefined)
     expect(rows).toHaveLength(4)
     expect(rows[1].props.childRow.id).toBe('child')
-    const childPress = findByHostType(renderer!.root, 'Pressable')
+    const childPress = findByHostType(rows[1], 'Pressable')
     await act(async () => childPress.props.onPress({ stopPropagation: vi.fn() }))
     expect(onAgentPress).toHaveBeenCalledWith('agent-1')
+  })
+
+  it('opens each top-level agent by its own pane', async () => {
+    // #34235: two Claude tabs in one workspace must not both open the workspace's active tab.
+    const onAgentPress = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [agent('tab-a:leaf'), agent('tab-b:leaf')],
+          now: 2_000,
+          unvisited: false,
+          fullList: true,
+          onAgentPress
+        })
+      )
+    })
+    const rows = renderer!.root.findAll((node) => node.props.agent !== undefined)
+    for (const row of rows) {
+      await act(async () =>
+        findByHostType(row, 'Pressable').props.onPress({ stopPropagation: vi.fn() })
+      )
+    }
+    expect(onAgentPress.mock.calls).toEqual([['tab-a:leaf'], ['tab-b:leaf']])
+  })
+
+  it("keeps the workspace's long-press menu on agent rows", async () => {
+    // A row that claims the touch must hand a hold to the card's menu, not open the tab on release.
+    const onAgentPress = vi.fn()
+    const onAgentLongPress = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [agent('tab-a:leaf')],
+          now: 2_000,
+          unvisited: false,
+          onAgentPress,
+          onAgentLongPress
+        })
+      )
+    })
+    const row = renderer!.root.find((node) => node.props.agent !== undefined)
+    await act(async () => findByHostType(row, 'Pressable').props.onLongPress())
+    expect(onAgentLongPress).toHaveBeenCalledOnce()
+    expect(onAgentPress).not.toHaveBeenCalled()
   })
 
   it('keeps a single agent visible without a redundant disclosure control', async () => {
@@ -166,5 +224,47 @@ describe('WorktreeAgentList', () => {
     expect(findByHostType(renderer!.root, 'Pressable').props.accessibilityLabel).toBe(
       'Expand 2 agents'
     )
+  })
+
+  it('folds two or more idle children behind one row once the parent is expanded', async () => {
+    const now = 24 * 60 * 60_000
+    const fresh = (paneKey: string, parent?: string) => ({
+      ...agent(paneKey, parent),
+      updatedAt: now
+    })
+    // Silent rows without a live PTY decay to idle.
+    const idle = (paneKey: string) => agent(paneKey, 'parent')
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [fresh('parent'), fresh('busy', 'parent'), idle('idle-1'), idle('idle-2')],
+          now,
+          unvisited: false
+        })
+      )
+    })
+    const paneKeys = () =>
+      renderer!.root
+        .findAll((node) => node.props.agent !== undefined && node.props.depth !== undefined)
+        .map((node) => node.props.agent.paneKey)
+
+    expect(paneKeys()).toEqual(['parent'])
+    await pressByLabel(renderer!, 'Show 3 child agents')
+    expect(paneKeys()).toEqual(['parent', 'busy'])
+    await pressByLabel(renderer!, 'Show 2 idle child agents')
+    expect(paneKeys()).toEqual(['parent', 'busy', 'idle-1', 'idle-2'])
+
+    // Scrolling the workspace list remounts cards; the user's disclosures must survive.
+    act(() => renderer?.unmount())
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [fresh('parent'), fresh('busy', 'parent'), idle('idle-1'), idle('idle-2')],
+          now,
+          unvisited: false
+        })
+      )
+    })
+    expect(paneKeys()).toEqual(['parent', 'busy', 'idle-1', 'idle-2'])
   })
 })

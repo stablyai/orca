@@ -9,7 +9,7 @@ import type {
   NotificationSoundResult,
   StructuredNotificationRead
 } from '../../shared/notification-settings-types'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { PreloadApi } from '../api-types'
 
 // Reuse sound data to avoid reading large files for every notification.

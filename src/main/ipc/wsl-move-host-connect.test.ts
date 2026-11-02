@@ -49,7 +49,7 @@ describe('the move driver reaching its WSL host', () => {
       recovering: false
     })
     // A poll finding the distro stopped parks the host.
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu was stopped')
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('Ubuntu is stopped')
     connector.connect.mockClear()
     return { connector, service }
   }
@@ -77,13 +77,13 @@ describe('the move driver reaching its WSL host', () => {
     const { connector, service } = await stoppedAndParkedHost()
     await expect(
       connectWslMoveHostService(service, userDataPath, 'Ubuntu', 'automatic')
-    ).rejects.toThrow('Ubuntu was stopped')
+    ).rejects.toThrow('Ubuntu is stopped')
     // Running again is not enough while parked, even with visible work.
     connector.distro.state = 'running'
     service.setVisibleWork(['wsl:ubuntu'])
     await expect(
       connectWslMoveHostService(service, userDataPath, 'Ubuntu', 'automatic')
-    ).rejects.toThrow('Ubuntu was stopped')
+    ).rejects.toThrow('Ubuntu is stopped')
     expect(connector.connect).not.toHaveBeenCalled()
   })
 

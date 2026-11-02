@@ -205,11 +205,11 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             continue
           }
           const exits = operation.exitsBySessionId.get(event.sessionId) ?? []
-          exits.push(
-            event.payload.incarnationId
-              ? { code: event.payload.code, incarnationId: event.payload.incarnationId }
-              : { code: event.payload.code }
-          )
+          exits.push({
+            code: event.payload.code,
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
+            ...(event.payload.cause ? { cause: event.payload.cause } : {})
+          })
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
         const wslDistro = this.wslDistrosBySessionId.get(event.sessionId)

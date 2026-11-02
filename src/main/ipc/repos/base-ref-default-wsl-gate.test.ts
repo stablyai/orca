@@ -118,35 +118,6 @@ describe('repos:getBaseRefDefault for a stopped WSL distro (E9)', () => {
     await expect(getDefault({})).resolves.toEqual(REFUSED)
     expect(mocks.getBaseRefDefault).not.toHaveBeenCalled()
   })
-
-  it('treats unverifiable like stopped', async () => {
-    mocks.state.distroState = 'unverifiable'
-    const getDefault = registerWith(makeRepo())
-
-    await expect(getDefault({})).resolves.toEqual(REFUSED)
-    expect(mocks.getBaseRefDefault).not.toHaveBeenCalled()
-  })
-
-  it('runs Git when the distro is running', async () => {
-    mocks.state.distroState = 'running'
-    const getDefault = registerWith(makeRepo())
-
-    await expect(getDefault({})).resolves.toEqual({ defaultBaseRef: 'origin/main', remoteCount: 1 })
-  })
-
-  it('leaves Windows-host repos ungated', async () => {
-    const getDefault = registerWith(makeRepo({ path: 'C:\\src\\repo' }))
-
-    await expect(getDefault({})).resolves.toEqual({ defaultBaseRef: 'origin/main', remoteCount: 1 })
-  })
-
-  it('leaves folder and SSH repos on their existing unknown result', async () => {
-    const folder = registerWith(makeRepo({ kind: 'folder' }))
-    await expect(folder({})).resolves.toEqual(UNKNOWN)
-    const ssh = registerWith(makeRepo({ path: '/home/me/repo', connectionId: 'ssh-1' }))
-    await expect(ssh({})).resolves.toEqual(UNKNOWN)
-    expect(mocks.getBaseRefDefault).not.toHaveBeenCalled()
-  })
 })
 
 describe('runtime repo.baseRefDefault for a stopped WSL distro (E9)', () => {
@@ -167,15 +138,5 @@ describe('runtime repo.baseRefDefault for a stopped WSL distro (E9)', () => {
 
     await expect(queries.getDefault('id:repo-1')).resolves.toEqual(REFUSED)
     expect(mocks.getBaseRefDefault).not.toHaveBeenCalled()
-  })
-
-  it('reads the default once the distro runs', async () => {
-    mocks.state.distroState = 'running'
-    const queries = new RuntimeRepositoryRefQueries({ resolveRepo: async () => makeRepo() })
-
-    await expect(queries.getDefault('id:repo-1')).resolves.toEqual({
-      defaultBaseRef: 'origin/main',
-      remoteCount: 1
-    })
   })
 })

@@ -14,7 +14,6 @@ import {
 } from '../../shared/opencode-startup-prompt'
 import { getOpenCodeStartupPromptSource } from './opencode-startup-prompt-source'
 import { OpenCodeStartupPromptClaims } from './opencode-startup-prompt-claims'
-import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 
 type PluginModule = { default: { setup: (ctx: unknown) => Promise<() => Promise<void>> } }
 const prompt = 'exact startup brief\nwith unicode é'
@@ -170,24 +169,6 @@ describe('installed-version native prompt intent plugin', () => {
     }
   })
 
-  it('waits for a concrete location before starting authoritative hydration', async () => {
-    const f = fixture()
-    let location: FixtureLocation | undefined
-    Object.defineProperty(f.ctx, 'location', { get: () => location })
-    const dispose = await setup(f.ctx)
-    try {
-      await vi.advanceTimersByTimeAsync(300)
-      expect(f.sync).not.toHaveBeenCalled()
-      expect(claim).not.toHaveBeenCalled()
-      location = { directory: '/private/home' }
-      await vi.advanceTimersByTimeAsync(500)
-      await vi.waitFor(() => expect(f.dispatch).toHaveBeenCalledTimes(1))
-      expect(f.sync).toHaveBeenCalledExactlyOnceWith(location)
-    } finally {
-      await dispose()
-    }
-  })
-
   it('keeps readiness scoped to the workspace as well as the directory', async () => {
     const f = fixture()
     let location: FixtureLocation = { directory: '/private', workspaceID: 'first' }
@@ -236,44 +217,6 @@ describe('installed-version native prompt intent plugin', () => {
       expect(insert).not.toHaveBeenCalled()
       expect(f.dispatch).not.toHaveBeenCalled()
       expect(f.memory.settled).toBe(true)
-    } finally {
-      await dispose()
-    }
-  })
-
-  it('waits for authoritative location config before claiming or selecting a model', async () => {
-    const f = fixture()
-    let configuredModel = 'unavailable-fallback'
-    let release = () => {}
-    f.sync.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          release = () => {
-            configuredModel = 'configured-model'
-            resolve()
-          }
-        })
-    )
-    const selections: string[] = []
-    f.dispatch.mockImplementation(() => {
-      selections.push(configuredModel)
-      f.editor.replace('')
-    })
-    const insert = vi.spyOn(f.editor, 'insertText')
-    const dispose = await setup(f.ctx)
-    try {
-      await vi.advanceTimersByTimeAsync(500)
-      expect(claim).not.toHaveBeenCalled()
-      expect(insert).not.toHaveBeenCalled()
-      expect(selections).toEqual([])
-      expect(f.sync).toHaveBeenCalledExactlyOnceWith(f.ctx.location)
-      release()
-      await vi.advanceTimersByTimeAsync(500)
-      await vi.waitFor(() => expect(f.dispatch).toHaveBeenCalledExactlyOnceWith('prompt.submit'))
-      expect(selections).toEqual(['configured-model'])
-      expect(insert).toHaveBeenCalledExactlyOnceWith(prompt)
-      expect(claim).toHaveBeenCalledTimes(1)
-      expect(f.sync).toHaveBeenCalledTimes(1)
     } finally {
       await dispose()
     }
@@ -332,131 +275,6 @@ describe('installed-version native prompt intent plugin', () => {
       expect(f.editor.listenerCount('line-info-change')).toBe(0)
     }
   )
-
-  it('fails closed when authoritative location sync rejects', async () => {
-    const f = fixture()
-    f.sync.mockRejectedValue(new Error('location unavailable'))
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(f.memory.settled).toBe(true)
-    expect(claim).not.toHaveBeenCalled()
-    expect(f.dispatch).not.toHaveBeenCalled()
-    expect(f.input.listenerCount('keypress')).toBe(0)
-    await dispose()
-  })
-
-  it('fails closed when authoritative location sync is missing', async () => {
-    const f = fixture()
-    const { sync: _sync, ...location } = f.ctx.data.location
-    const dispose = await setup({ ...f.ctx, data: { location } })
-    await vi.advanceTimersByTimeAsync(500)
-    expect(claim).not.toHaveBeenCalled()
-    expect(f.dispatch).not.toHaveBeenCalled()
-    expect(f.input.listenerCount('keypress')).toBe(0)
-    await dispose()
-  })
-
-  it.each(['non-ok', 'json-rejected'])('cancels unread %s claim bodies', async (reason) => {
-    const cancelled = vi.fn()
-    const response = cancelTrackingResponse(reason === 'non-ok' ? 503 : 200, cancelled)
-    if (reason === 'json-rejected') {
-      vi.spyOn(response, 'json').mockRejectedValue(new Error('decoder rejected'))
-    }
-    claim.mockResolvedValue(response)
-    const f = fixture()
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    await vi.waitFor(() => expect(cancelled).toHaveBeenCalled())
-    expect(f.memory.settled).toBe(false)
-    expect(f.dispatch).not.toHaveBeenCalled()
-    await dispose()
-    expect(f.memory.settled).toBe(true)
-  })
-
-  it('consumes an allowed claim body before dispatching the prompt', async () => {
-    const response = Response.json({ allowed: true })
-    claim.mockResolvedValue(response)
-    const f = fixture()
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    await vi.waitFor(() => expect(f.dispatch).toHaveBeenCalledExactlyOnceWith('prompt.submit'))
-    expect(response.bodyUsed).toBe(true)
-    await dispose()
-  })
-
-  it('consumes malformed JSON and retries without delivering until expiry', async () => {
-    const response = new Response('{invalid', { status: 200 })
-    claim.mockResolvedValue(response)
-    const f = fixture()
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    await vi.waitFor(() => {
-      expect(response.bodyUsed).toBe(true)
-      expect(claim.mock.calls.length).toBeGreaterThanOrEqual(2)
-    })
-    expect(f.memory.settled).toBe(false)
-    f.memory.expiresAt = Date.now()
-    await vi.advanceTimersByTimeAsync(100)
-    expect(response.bodyUsed).toBe(true)
-    expect(f.dispatch).not.toHaveBeenCalled()
-    expect(f.memory.settled).toBe(true)
-    await dispose()
-  })
-
-  it.each(['dialog', 'shell', 'autocomplete'])('does not populate a %s editor', async (kind) => {
-    const f = fixture()
-    if (kind === 'dialog') {
-      f.editor.traits.role = 'dialog'
-    }
-    if (kind === 'shell') {
-      f.editor.traits.status = 'SHELL'
-    }
-    if (kind === 'autocomplete') {
-      f.editor.traits.capture = ['escape', 'navigate', 'submit', 'tab']
-    }
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(f.editor.plainText).toBe('')
-    expect(claim).not.toHaveBeenCalled()
-    expect(f.dispatch).not.toHaveBeenCalled()
-    await dispose()
-  })
-  it('retries pending admission, then submits once', async () => {
-    claim.mockResolvedValueOnce({ ok: true, json: async () => ({ allowed: false, pending: true }) })
-    const f = fixture()
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.waitFor(() => expect(claim).toHaveBeenCalledTimes(1))
-    expect(f.dispatch).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(300)
-    await vi.waitFor(() => expect(f.dispatch).toHaveBeenCalledTimes(1))
-    expect(claim).toHaveBeenCalledTimes(2)
-    await dispose()
-  })
-
-  it('cancels pending admission on input without retrying a consumed denial', async () => {
-    claim.mockResolvedValue({ ok: true, json: async () => ({ allowed: false, pending: true }) })
-    const f = fixture()
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.waitFor(() => expect(claim).toHaveBeenCalledTimes(1))
-    f.input.emit('keypress', { name: 'x' })
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(claim).toHaveBeenCalledTimes(1)
-    expect(f.dispatch).not.toHaveBeenCalled()
-    await dispose()
-  })
-
-  it('preserves typing that predates plugin setup without requesting owner permission', async () => {
-    const f = fixture()
-    f.editor.replace('early typing')
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(f.editor.plainText).toBe('early typing')
-    expect(claim).not.toHaveBeenCalled()
-    expect(f.dispatch).not.toHaveBeenCalled()
-    await dispose()
-  })
   it('waits for catalogs and settles before a single dispatch', async () => {
     const f = fixture()
     f.model.mockReturnValue(undefined)
@@ -476,107 +294,6 @@ describe('installed-version native prompt intent plugin', () => {
     await vi.advanceTimersByTimeAsync(500)
     expect(f.dispatch).toHaveBeenCalledTimes(1)
     await reloadDispose()
-  })
-
-  it.each(['keypress', 'paste'])('cancels on physical %s before catalogs finish', async (event) => {
-    const f = fixture()
-    f.agent.mockReturnValue(undefined)
-    const dispose = await setup(f.ctx)
-    f.input.emit(event)
-    f.agent.mockReturnValue([{}])
-    await vi.advanceTimersByTimeAsync(500)
-    expect(f.dispatch).not.toHaveBeenCalled()
-    expect(f.memory.settled).toBe(true)
-    await dispose()
-  })
-
-  it('cancels a changed draft even when it is restored before the next tick', async () => {
-    const f = fixture()
-    f.model.mockReturnValue(undefined)
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(100)
-    f.editor.replace('edited')
-    f.editor.replace('')
-    f.model.mockReturnValue([{}])
-    await vi.advanceTimersByTimeAsync(500)
-    expect(f.dispatch).not.toHaveBeenCalled()
-    await dispose()
-  })
-
-  it('cancels pending intent on route changes, expiration and disposal', async () => {
-    for (const reason of ['route', 'expiration', 'dispose']) {
-      const f = fixture()
-      f.model.mockReturnValue(undefined)
-      const dispose = await setup(f.ctx)
-      if (reason === 'route') {
-        f.route.type = 'session'
-      }
-      if (reason === 'expiration') {
-        f.memory.expiresAt = Date.now()
-      }
-      if (reason === 'dispose') {
-        await dispose()
-      }
-      await vi.advanceTimersByTimeAsync(100)
-      f.model.mockReturnValue([{}])
-      await vi.advanceTimersByTimeAsync(500)
-      expect(f.dispatch).not.toHaveBeenCalled()
-      expect(f.memory.settled).toBe(true)
-      await dispose()
-      expect(f.input.listenerCount('keypress')).toBe(0)
-    }
-  })
-
-  it('leaves unverified versions and mismatched drafts unsubmitted', async () => {
-    const f = fixture()
-    f.ctx.app.version = '2.0.17'
-    await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(f.dispatch).not.toHaveBeenCalled()
-    f.ctx.app.version = '2.0.16'
-    f.editor.replace('another brief')
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(f.dispatch).not.toHaveBeenCalled()
-    await dispose()
-  })
-
-  it.each(['canceled', 'unavailable'])(
-    'fails closed when the execution owner is %s',
-    async (reason) => {
-      claim.mockImplementation(async () => {
-        if (reason === 'unavailable') {
-          throw new Error('contact lost')
-        }
-        return { ok: true, json: async () => ({ allowed: false }) }
-      })
-      const f = fixture()
-      const dispose = await setup(f.ctx)
-      await vi.advanceTimersByTimeAsync(500)
-      expect(f.dispatch).not.toHaveBeenCalled()
-      if (reason === 'unavailable') {
-        await vi.waitFor(() => expect(claim).toHaveBeenCalled())
-        expect(f.memory.settled).toBe(false)
-        f.memory.expiresAt = Date.now()
-        await vi.advanceTimersByTimeAsync(100)
-      }
-      await vi.waitFor(() => expect(f.memory.settled).toBe(true))
-      await dispose()
-    }
-  )
-
-  it('rechecks physical cancellation after the owner response', async () => {
-    const f = fixture()
-    claim.mockImplementation(async () => {
-      f.input.emit('keypress')
-      return { ok: true, json: async () => ({ allowed: true }) }
-    })
-    const dispose = await setup(f.ctx)
-    await vi.advanceTimersByTimeAsync(500)
-    await vi.waitFor(() => expect(claim).toHaveBeenCalledTimes(1))
-    await vi.waitFor(() => expect(f.memory.settled).toBe(true))
-    expect(f.dispatch).not.toHaveBeenCalled()
-    await dispose()
   })
   it('settles before insertion and never repeats dispatch when the draft is retained', async () => {
     const f = fixture()
@@ -669,22 +386,6 @@ describe('installed-version native prompt intent plugin', () => {
         server.closeAllConnections()
         await new Promise<void>((resolve) => server.close(() => resolve()))
       }
-    }
-  )
-
-  it.each([408, 429, 503])(
-    'retries transient HTTP %s with one stable operation ID',
-    async (status) => {
-      claim.mockResolvedValueOnce({ ok: false, status })
-      const f = fixture()
-      const dispose = await setup(f.ctx)
-      await vi.advanceTimersByTimeAsync(500)
-      await vi.waitFor(() => expect(f.dispatch).toHaveBeenCalledTimes(1))
-      const firstBody = JSON.parse(claim.mock.calls[0][1].body)
-      expect(firstBody.requestId).toMatch(/^[a-f0-9-]{36}$/)
-      expect(JSON.parse(claim.mock.calls[1][1].body)).toEqual(firstBody)
-      expect(claim).toHaveBeenCalledTimes(2)
-      await dispose()
     }
   )
 

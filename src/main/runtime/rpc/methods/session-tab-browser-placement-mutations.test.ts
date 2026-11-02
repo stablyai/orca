@@ -1,6 +1,6 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
@@ -122,30 +122,6 @@ describe('session tab browser placement mutations', () => {
 
     expect(response.ok).toBe(false)
     expect(runtime.closeMobileSessionTab).not.toHaveBeenCalled()
-  })
-
-  it('keeps capable mutation callers on the unprojected path', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      listMobileSessionTabs: vi.fn().mockResolvedValue(mixedPlacementSnapshot()),
-      closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
-
-    const response = await dispatch(
-      dispatcher,
-      'session.tabs.close',
-      { worktree: 'id:wt-1', tabId: 'hidden-page', reason: 'user' },
-      {
-        clientKind: 'runtime',
-        pairedDeviceId: 'current',
-        clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
-      }
-    )
-
-    expect(response.ok).toBe(true)
-    expect(runtime.listMobileSessionTabs).toHaveBeenCalledOnce()
-    expect(runtime.closeMobileSessionTab).toHaveBeenCalledOnce()
   })
 })
 

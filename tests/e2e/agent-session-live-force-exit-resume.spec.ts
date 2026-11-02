@@ -20,7 +20,7 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import type { AgentProviderSessionKey } from '../../src/shared/agent-session-resume'
+import type { AgentProviderSessionKey } from '../../src/shared/agent-session/lifecycle/agent-session-resume'
 
 const PROVIDER_SESSION_ID = 'e2e-live-force-exit-session'
 
@@ -72,7 +72,7 @@ function waitForExit(proc: ChildProcess, timeoutMs = 5000): Promise<void> {
     return Promise.resolve()
   }
   return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, timeoutMs)
+    const timeout = setTimeout<[]>(resolve, timeoutMs)
     timeout.unref?.()
     proc.once('exit', () => {
       clearTimeout(timeout)

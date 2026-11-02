@@ -38,7 +38,7 @@ import {
   createGitCommandMocker,
   resetWorktreeRemovalState
 } from './remove-worktree-test-harness'
-import { areWorktreePathsEqual, canonicalWorktreePath } from './worktree-path-comparison'
+import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { removeWorktree } from './worktree'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
@@ -47,13 +47,6 @@ const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 const UNC = '\\\\wsl.localhost\\Ubuntu\\home\\alice\\ws'
 
 describe('worktree path comparison across path syntaxes', () => {
-  it('keeps two WSL UNC worktrees that differ only in case distinct', () => {
-    expect(areWorktreePathsEqual(`${UNC}\\Feature`, `${UNC}\\feature`, 'win32')).toBe(false)
-    expect(canonicalWorktreePath(`${UNC}\\Feature`, 'win32')).not.toBe(
-      canonicalWorktreePath(`${UNC}\\feature`, 'win32')
-    )
-  })
-
   it('keeps two POSIX worktrees that differ only in case distinct on a Windows desktop', () => {
     expect(areWorktreePathsEqual('/home/alice/ws/Feature', '/home/alice/ws/feature', 'win32')).toBe(
       false

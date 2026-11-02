@@ -5,6 +5,10 @@ import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import {
+  chatUiLaunchTipVariant,
+  type ChatUiLaunchTipVariant
+} from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted,
   isSessionSearchFeatureTipCompleted
@@ -59,9 +63,9 @@ describe('feature tip startup gate', () => {
         cliInstalled: false,
         featureTipsSeenIds: [],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false,
@@ -77,9 +81,9 @@ describe('feature tip startup gate', () => {
         cliInstalled: false,
         featureTipsSeenIds: [],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: firstTimeOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false,
@@ -95,9 +99,9 @@ describe('feature tip startup gate', () => {
         cliInstalled: false,
         featureTipsSeenIds: [],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(),
         suppressedByOnboardingThisSession: true,
@@ -113,9 +117,9 @@ describe('feature tip startup gate', () => {
         cliInstalled: true,
         featureTipsSeenIds: ['orca-cli'],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false,
@@ -131,9 +135,9 @@ describe('feature tip startup gate', () => {
         cliInstalled: false,
         featureTipsSeenIds: ['voice-dictation', 'orca-cli', 'cmd-j-palette'],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false,
@@ -149,9 +153,9 @@ describe('feature tip startup gate', () => {
         cliInstalled: true,
         featureTipsSeenIds: ['voice-dictation', 'cmd-j-palette'],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(false),
         suppressedByOnboardingThisSession: false,
@@ -167,9 +171,9 @@ describe('feature tip startup gate', () => {
         cliInstalled: true,
         featureTipsSeenIds: ['voice-dictation', 'cmd-j-palette'],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false,
@@ -185,9 +189,9 @@ describe('feature tip startup gate', () => {
         cliInstalled: null,
         featureTipsSeenIds: [],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false,
@@ -202,12 +206,12 @@ describe('feature tip startup gate', () => {
         activeModal: 'none',
         cliInstalled: true,
         featureTipsSeenIds: ['cmd-j-palette'],
+        chatUiLaunchTipVariant: 'none',
         featureInteractions: {
           'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
         },
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
-        inNativeChatUpgradeTipAudience: false,
         promptedThisSession: false,
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false,
@@ -237,15 +241,17 @@ describe('feature tip startup gate', () => {
     sessionSearchEnabled: boolean
     webClient: boolean
     featureTipsSeenIds?: ('agent-session-search' | 'orca-cli')[]
+    chatUiLaunchTipVariant?: ChatUiLaunchTipVariant | null
   }): ReturnType<typeof getFeatureTipsAppOpenDecision> {
     return getFeatureTipsAppOpenDecision({
       activeModal: 'none',
       cliInstalled: false,
       featureTipsSeenIds: args.featureTipsSeenIds ?? [],
       featureInteractions: {},
+      chatUiLaunchTipVariant:
+        args.chatUiLaunchTipVariant === undefined ? 'none' : args.chatUiLaunchTipVariant,
       onboarding: existingUserOnboarding,
       persistedUIReady: true,
-      inNativeChatUpgradeTipAudience: false,
       promptedThisSession: false,
       settings: makeSettings(false, args.sessionSearchEnabled),
       suppressedByOnboardingThisSession: false,
@@ -281,55 +287,32 @@ describe('feature tip startup gate', () => {
     })
   })
 
-  it('treats a profile with no session search settings as search off', () => {
-    expect(isSessionSearchFeatureTipCompleted({}, false)).toBe(false)
+  it('opens the Chat UI tip first only for profiles main recorded in its audience', () => {
+    const decide = (variant: ChatUiLaunchTipVariant | null, webClient = false) =>
+      decideForExistingUser({
+        sessionSearchEnabled: true,
+        webClient,
+        chatUiLaunchTipVariant: variant
+      })
+    expect(decide('chat-ui-off')).toEqual({ kind: 'open', tipId: 'chat-ui-here' })
+    expect(decide('chat-ui-on')).toEqual({ kind: 'open', tipId: 'chat-ui-here' })
+    expect(decide('none')).toEqual({ kind: 'open', tipId: 'orca-cli' })
+    expect(decide('chat-ui-on', true)).toEqual({ kind: 'open', tipId: 'orca-cli' })
+    // Waits for main's answer rather than showing a later tip first.
+    expect(decide(null)).toEqual({ kind: 'skip' })
   })
 
-  describe('native chat upgrade tip', () => {
-    function decide(args: {
-      inNativeChatUpgradeTipAudience: boolean | null
-      featureTipsSeenIds?: ('native-chat-upgrade' | 'agent-session-search')[]
-    }): ReturnType<typeof getFeatureTipsAppOpenDecision> {
-      return getFeatureTipsAppOpenDecision({
-        activeModal: 'none',
-        cliInstalled: false,
-        featureTipsSeenIds: args.featureTipsSeenIds ?? [],
-        featureInteractions: {},
-        inNativeChatUpgradeTipAudience: args.inNativeChatUpgradeTipAudience,
-        onboarding: existingUserOnboarding,
-        persistedUIReady: true,
-        promptedThisSession: false,
-        settings: makeSettings(false, false),
-        suppressedByOnboardingThisSession: false,
-        webClient: false
-      })
-    }
+  it.each([
+    ['eligible', 'chat-ui-off', 'chat-ui-off'],
+    ['eligible', 'chat-ui-on', 'chat-ui-on'],
+    ['excluded', 'new-profile', 'none'],
+    ['excluded', 'unreadable-record', 'none'],
+    ['excluded', 'chat-ui-off', 'none']
+  ] as const)('maps a %s %s record to the %s variant', (membership, basis, variant) => {
+    expect(chatUiLaunchTipVariant({ version: 1, membership, basis })).toBe(variant)
+  })
 
-    it('opens first on app open for a profile in its audience', () => {
-      expect(decide({ inNativeChatUpgradeTipAudience: true })).toEqual({
-        kind: 'open',
-        tipId: 'native-chat-upgrade'
-      })
-    })
-
-    it('never opens for a profile outside its audience', () => {
-      expect(decide({ inNativeChatUpgradeTipAudience: false })).toEqual({
-        kind: 'open',
-        tipId: 'agent-session-search'
-      })
-    })
-
-    it('waits for main to answer before opening any tip', () => {
-      expect(decide({ inNativeChatUpgradeTipAudience: null })).toEqual({ kind: 'skip' })
-    })
-
-    it('does not open again once it was seen', () => {
-      expect(
-        decide({
-          inNativeChatUpgradeTipAudience: true,
-          featureTipsSeenIds: ['native-chat-upgrade']
-        })
-      ).toEqual({ kind: 'open', tipId: 'agent-session-search' })
-    })
+  it('treats a profile with no session search settings as search off', () => {
+    expect(isSessionSearchFeatureTipCompleted({}, false)).toBe(false)
   })
 })

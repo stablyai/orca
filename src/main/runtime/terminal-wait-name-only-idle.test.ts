@@ -2,16 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeTerminalIdlePolls } from './terminal/wait/terminal-idle-polls'
 import { RuntimeTerminalWait } from './terminal/wait/terminal-wait'
 import { RuntimeTerminalWaiterRegistry } from './terminal/wait/terminal-waiter-registry'
-import {
-  errorMessage,
-  makeTuiIdleLeaf,
-  makeTuiIdlePty,
-  makeTuiIdleRuntime
-} from './tui-idle-wait-test-harness'
+import { errorMessage, makeTuiIdlePty, makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { FirstPartyAgentStatus } from './tui-idle-evidence'
 import { registerBoundPty } from './bind-first-pane.test-fixture'
 
@@ -32,19 +27,15 @@ const MUSE_READY_TAIL = [
 ]
 
 function createWait(options: {
-  pty?: RuntimePtyWorktreeRecord
-  leaf?: RuntimeLeafRecord
+  pty: RuntimePtyWorktreeRecord
   adoptedIdleStatus?: AgentStatus | null
-  tabTitle?: string | null
   foreground?: string | null
   agent?: TuiAgent | null
   firstPartyStatus?: FirstPartyAgentStatus
-  liveLeaf?: () => RuntimeLeafRecord
 }) {
   const waiters = new RuntimeTerminalWaiterRegistry()
   const startVisibleReadProbe = vi.fn()
   const shared = {
-    getTabTitle: () => options.tabTitle ?? null,
     getAdoptedPtyIdleStatus: () => options.adoptedIdleStatus ?? null,
     getPaneAgent: () => options.agent ?? null,
     getFirstPartyAgentStatus: () => options.firstPartyStatus ?? null,
@@ -57,16 +48,14 @@ function createWait(options: {
     intervalMs: POLL_INTERVAL_MS,
     getForegroundProcess: () => Promise.resolve(options.foreground ?? null),
     hasCommandPainted: () => true,
-    getLiveLeaf: (leaf) => options.liveLeaf?.() ?? leaf,
     resolve: (waiter, result) => waiters.resolve(waiter, result)
   })
   const wait = new RuntimeTerminalWait(
     {
       ...shared,
       defaultTimeoutMs: 60_000,
-      getLivePty: () => (options.pty ? { pty: options.pty } : null),
+      getTerminalPty: () => ({ pty: options.pty }),
       exitUnsettled: () => false,
-      getLiveLeaf: () => ({ leaf: options.leaf ?? makeTuiIdleLeaf() }),
       startVisibleReadProbe
     },
     waiters,
@@ -104,42 +93,34 @@ describe('tui-idle evidence ranking', () => {
   })
 
   it.each([
-    ['pty', 'claude ~/p/repo', false],
-    ['leaf', 'Fix the codex launcher', false],
-    ['leaf', 'Fix the codex launcher', true]
+    ['claude ~/p/repo', false],
+    ['Fix the codex launcher', false],
+    ['Fix the codex launcher', true]
   ] as const)(
-    'keeps null-agent %s %s pending through streaming (clockless=%s)',
-    async (kind, title, clockless) => {
-      const record = {
-        lastAgentStatus: 'idle' as const,
+    'keeps a null-agent terminal titled %s pending through streaming (clockless=%s)',
+    async (title, clockless) => {
+      const pty = makeTuiIdlePty({
+        lastAgentStatus: 'idle',
         lastOscTitle: title,
         lastOutputAt: clockless ? null : Date.now()
-      }
-      const pty = kind === 'pty' ? makeTuiIdlePty(record) : undefined
-      const leaf = kind === 'leaf' ? makeTuiIdleLeaf(record) : undefined
-      const { wait, waiters, polls } = createWait({
-        pty,
-        leaf,
-        agent: null,
-        liveLeaf: leaf ? () => leaf : undefined
       })
+      const { wait, waiters, polls } = createWait({ pty, agent: null })
       const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
       await vi.advanceTimersByTimeAsync(0)
       expect(settled).not.toHaveBeenCalled()
-      expect(waiters.get(HANDLE)?.size).toBe(1)
+      expect(waiters.forPty(pty.ptyId)).toHaveLength(1)
       expect(polls.activeTimerCount).toBe(1)
       if (clockless) {
         await vi.advanceTimersByTimeAsync(QUIESCENCE_MS + POLL_INTERVAL_MS)
         expect(settled).not.toHaveBeenCalled()
       }
-      const live = pty ?? leaf!
-      await advanceWhileStreaming(live, 3)
+      await advanceWhileStreaming(pty, 3)
       expect(settled).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(QUIESCENCE_MS + POLL_INTERVAL_MS)
       expect(settled).toHaveBeenCalledExactlyOnceWith({
         ok: expect.objectContaining({ satisfied: true })
       })
-      expect(waiters.get(HANDLE)).toBeUndefined()
+      expect(waiters.forPty(pty.ptyId)).toHaveLength(0)
       expect(polls.activeTimerCount).toBe(0)
       expect(vi.getTimerCount()).toBe(0)
     }
@@ -168,19 +149,6 @@ describe('tui-idle evidence ranking', () => {
   it('settles an explicit idle title immediately, with no quiescence at all', async () => {
     const pty = makeTuiIdlePty({ lastAgentStatus: 'idle', lastOscTitle: EXPLICIT_IDLE_TITLE })
     const { wait } = createWait({ pty, agent: 'codex' })
-    await expect(
-      wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 })
-    ).resolves.toMatchObject({ satisfied: true })
-  })
-
-  // Without a renderer, record-owned Codex ready must settle immediately rather than wait for quiescence.
-  it('reads an explicit idle title off the record when no renderer published one', async () => {
-    const leaf = makeTuiIdleLeaf({
-      lastAgentStatus: 'idle',
-      lastOscTitle: EXPLICIT_IDLE_TITLE,
-      paneTitle: null
-    })
-    const { wait } = createWait({ leaf, agent: 'codex', tabTitle: null })
     await expect(
       wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 })
     ).resolves.toMatchObject({ satisfied: true })
@@ -216,19 +184,6 @@ describe('tui-idle evidence ranking', () => {
     const { wait } = createWait({ pty, agent: null })
     const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
     await advanceWhileStreaming(pty, 3)
-    expect(settled).not.toHaveBeenCalled()
-  })
-
-  // Graph sync replaces leaf records; a captured lastOutputAt can appear quiet while the current pane streams.
-  it('tracks the live leaf record across a graph sync instead of a frozen capture', async () => {
-    const registered = makeTuiIdleLeaf({ lastAgentStatus: 'idle', lastOscTitle: NAME_ONLY_TITLE })
-    let live = registered
-    const { wait } = createWait({ leaf: registered, agent: 'codex', liveLeaf: () => live })
-    const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
-
-    live = makeTuiIdleLeaf({ lastAgentStatus: 'idle', lastOscTitle: NAME_ONLY_TITLE })
-    registered.lastOutputAt = Date.now() - QUIESCENCE_MS * 10
-    await advanceWhileStreaming(live, 4)
     expect(settled).not.toHaveBeenCalled()
   })
 

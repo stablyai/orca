@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import { act } from 'react'
 import { fireEvent, getByRole, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -55,6 +56,7 @@ function show(value: AgentPickerEntry, others: AgentPickerEntry[] = []) {
   )
 }
 beforeEach(() => {
+  clearNativeChatComposerDraftsForTests()
   entry.ownerKey = `menu-test-${owner++}`
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   launch.mockClear()
@@ -433,6 +435,14 @@ it('opens setup with a clicked chevron without launching, then dispatches its se
     entry
   ])
 })
+it('opens the setup panel on the menu layer so it stacks above the new tab menu', () => {
+  act(() => getByRole(document.body, 'button', { name: 'Configure Codex' }).click())
+  // happy-dom computes no stacking, so compare the z-index utilities the layers come from.
+  const layer = (element: HTMLElement) => element.className.match(/\bz-\[\d+\]/)?.[0]
+  const panel = layer(getByRole(document.body, 'dialog', { name: 'Configure Codex' }))
+  expect(panel).toBe(layer(getByRole(document.body, 'menu')))
+  expect(panel).not.toBe('z-[60]')
+})
 it('keeps setup open while the pointer expands and collapses Arguments', async () => {
   const user = userEvent.setup()
   await user.click(
@@ -664,7 +674,7 @@ it('closes Configure with Escape without dispatch and returns focus to its trigg
   await waitFor(() => expect(document.activeElement).toBe(configure))
 })
 
-it('retains the setup draft on close/reopen and resets an open draft when its owner is replaced', () => {
+it('retains authored Arguments on close/reopen and rebinds their acquisition authority', () => {
   const own = {
     ...entry,
     ownerKey: 'pair7/runtime1',
@@ -694,12 +704,16 @@ it('retains the setup draft on close/reopen and resets an open draft when its ow
     target: { value: '--add-dir old-owner' }
   })
   show({ ...own, ownerKey: 'pair8/runtime2', arguments: '--add-dir new-owner' })
-  expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir new-owner')
+  expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir old-owner')
   fireEvent.click(
     [...document.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
   )
   expect(launch).toHaveBeenCalledExactlyOnceWith(
-    expect.objectContaining({ choices: {}, arguments: undefined })
+    expect.objectContaining({
+      choices: { permissionMode: 'ask' },
+      arguments: '-a on-request -s read-only -c approvals_reviewer=user --add-dir old-owner',
+      argumentsOwner: 'pair8/runtime2'
+    })
   )
 })
 
@@ -798,6 +812,5 @@ it('retains the whole row draft after outside dismissal, menu remount and launch
   await user.click(configure())
   assertDraft()
   showButton({ ...own, ownerKey: 'replacement-claude' })
-  expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir docs')
-  expect(getByRole(document.body, 'switch').getAttribute('aria-checked')).toBe('false')
+  assertDraft()
 })

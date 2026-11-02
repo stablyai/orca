@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   messageText,

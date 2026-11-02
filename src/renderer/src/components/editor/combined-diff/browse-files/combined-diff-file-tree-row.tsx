@@ -1,8 +1,8 @@
 import { createElement, memo } from 'react'
-import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
-import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import type { SourceControlTreeNode } from '../../../../../../shared/source-control-tree'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -79,11 +79,7 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
           <ChevronDown
             className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
           />
-          {isCollapsed ? (
-            <Folder className="size-3 shrink-0" />
-          ) : (
-            <FolderOpen className="size-3 shrink-0" />
-          )}
+          <FolderIcon folderPath={node.name} open={!isCollapsed} className="size-3 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
         </button>
         <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">

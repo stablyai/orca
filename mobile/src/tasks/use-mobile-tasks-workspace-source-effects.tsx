@@ -1,9 +1,7 @@
 import type { WorkspaceCreateProjectionModel } from './use-mobile-tasks-workspace-create-projection'
 import { type SparsePreset, useEffect } from './mobile-tasks-dependencies'
-import {
-  repoBaseRefSearchRead,
-  repoSparsePresetListRead
-} from './mobile-workspace-source-operations'
+import { repoSparsePresetListRead } from './mobile-workspace-source-operations'
+import { repoBaseRefSearchRead } from '../source-control/mobile-repo-base-ref-operations'
 
 export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProjectionModel) {
   const {

@@ -2,7 +2,7 @@ import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { getConnectionExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type { ExternalConversationLink } from '../../shared/external-conversation-link'

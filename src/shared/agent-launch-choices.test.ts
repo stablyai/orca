@@ -14,7 +14,6 @@ import * as startupShell from './tui-agent-startup-shell'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import { describe, expect, it, vi } from 'vitest'
 import * as choiceArgs from './agent-choice-args'
-import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
 import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
@@ -142,17 +141,6 @@ describe('dedicated agent choices', () => {
       joinSpy.mockRestore()
       sliceSpy.mockRestore()
     }
-  })
-
-  it('retains independent options and bounded opaque model ids without discovery', () => {
-    expect(normalizeAgentModelOptionChoices({ options: { effort: 'high' } })).toEqual({
-      options: { effort: 'high' }
-    })
-    expect(normalizeAgentModelOptionChoices({ model: 'retired-unlisted-id' })).toEqual({
-      model: 'retired-unlisted-id'
-    })
-    expect(normalizeAgentModelOptionChoices({ options: { model: 'other' } })).toBeUndefined()
-    expect(normalizeAgentModelOptionChoices({ model: 'x'.repeat(513) })).toBeUndefined()
   })
 
   it('lifts a complete tuple atomically and keeps surviving raw bytes', () => {
@@ -349,7 +337,11 @@ describe('dedicated agent choices', () => {
         { agentPermissionDefault: 'ask' },
         { target: 'structured', choices: { model: 'opus' }, userArgs: '' }
       )
-    ).toEqual({ args: '', choices: { model: 'opus', permissionMode: 'ask' } })
+    ).toEqual({
+      args: '',
+      choices: { model: 'opus', permissionMode: 'ask' },
+      launch: { args: ['--model', 'opus'], appliedValues: { model: 'opus' } }
+    })
     expect(agentLaunchNeedsPreparedCommand('codex', { model: 'unlisted', effort: 'high' })).toBe(
       false
     )
@@ -747,5 +739,35 @@ it('keeps settings equals, operand and terminator ownership at the shared analyz
     const result = choiceArgs.analyzeAgentChoiceArgs('claude', raw)
     expect(result.occurrences.filter((item) => item.key === 'fastMode')).toEqual([])
     expect(result.cut([])).toBe(raw)
+  }
+})
+
+it('retains unlisted Codex effort until the complete selection actually emits its replacement', () => {
+  for (const raw of [
+    '-c model_reasoning_effort=future_effort --search',
+    `-c 'model_reasoning_effort="future_effort"' --search`
+  ]) {
+    const unprepared = projectAgentLaunchProfile(
+      'codex',
+      { agentPermissionDefault: 'own' },
+      {
+        target: 'terminal',
+        userArgs: raw,
+        choices: { options: { effort: 'future_effort' } }
+      }
+    )
+    expect(unprepared.args).toBe(raw)
+    expect(unprepared.launch).toEqual({ args: [], appliedValues: {} })
+    const emitted = projectAgentLaunchProfile(
+      'codex',
+      { agentPermissionDefault: 'own' },
+      {
+        target: 'terminal',
+        userArgs: raw,
+        choices: { model: 'gpt-5.6-sol', options: { effort: 'future_effort' } }
+      }
+    )
+    expect(emitted.launch.appliedValues).toEqual({ model: 'gpt-5.6-sol', effort: 'future_effort' })
+    expect(emitted.args).toBe("-m gpt-5.6-sol -c model_reasoning_effort=future_effort '--search'")
   }
 })

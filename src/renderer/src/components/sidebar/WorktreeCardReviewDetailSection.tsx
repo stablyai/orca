@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { Link2 } from 'lucide-react'
+import { GitPullRequest } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { WorktreeCardDetailSection } from './WorktreeCardDetailSection'
 import { DetailHeader } from './WorktreeCardMetadataControls'
@@ -44,7 +44,7 @@ export function WorktreeCardReviewDetailSection({
   return (
     <WorktreeCardDetailSection>
       <DetailHeader
-        icon={<Link2 className="size-3" />}
+        icon={<GitPullRequest className="size-3" />}
         label={`${translate('workspace.links.reviews', 'Reviews')} · 1`}
         onAddReference={onManageLinks}
       />

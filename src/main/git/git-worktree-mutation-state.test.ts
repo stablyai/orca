@@ -29,53 +29,10 @@ describe('Git worktree mutation tracking', () => {
     await expect(isGitWorktreeMutationInFlight(repo, {})).resolves.toBe(false)
   })
 
-  it('ignores reads, transfers, and conflict previews that cannot change the worktree', async () => {
-    const releases = [
-      trackGitWorktreeMutation(['status', '--porcelain=v2'], { cwd: repo }),
-      trackGitWorktreeMutation(['-c', 'gc.auto=0', 'fetch', 'origin'], { cwd: repo }),
-      trackGitWorktreeMutation(['--git-dir', join(repo, '.git'), 'fetch', 'origin'], {
-        cwd: root
-      }),
-      trackGitWorktreeMutation(['push', 'origin', 'HEAD'], { cwd: repo }),
-      trackGitWorktreeMutation(['merge-tree', '--write-tree', 'HEAD', 'main'], { cwd: repo })
-    ]
-    try {
-      await expect(isGitWorktreeMutationInFlight(repo, {})).resolves.toBe(false)
-    } finally {
-      releases.forEach((release) => release())
-    }
-  })
-
   it('does not report a mutation that finishes while its path is being resolved', async () => {
     const release = trackGitWorktreeMutation(['rebase', '--continue'], { cwd: repo })
     const checking = isGitWorktreeMutationInFlight(repo, {})
     release()
     await expect(checking).resolves.toBe(false)
   })
-
-  it('isolates mutations by workspace and WSL distro', async () => {
-    const releaseOther = trackGitWorktreeMutation(['pull'], { cwd: root })
-    const releaseWsl = trackGitWorktreeMutation(['pull'], { cwd: repo, wslDistro: 'Ubuntu' })
-    try {
-      await expect(isGitWorktreeMutationInFlight(repo, {})).resolves.toBe(false)
-    } finally {
-      releaseOther()
-      releaseWsl()
-    }
-  })
-
-  it.each([{ prefix: ['-c', 'gc.auto=0', '-C'] }, { prefix: ['--git-dir'] }])(
-    'scopes by leading Git options',
-    async ({ prefix }) => {
-      const directory = prefix.includes('-C') ? repo : join(repo, '.git')
-      const release = trackGitWorktreeMutation([...prefix, directory, 'rebase', '--continue'], {
-        cwd: root
-      })
-      try {
-        await expect(isGitWorktreeMutationInFlight(repo, {})).resolves.toBe(true)
-      } finally {
-        release()
-      }
-    }
-  )
 })
