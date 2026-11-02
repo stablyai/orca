@@ -7,6 +7,7 @@ import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../../shared/opencode-agent-row-
 const testState = vi.hoisted(() => {
   const ptyIdsByTabId: Record<string, string[]> = { 'tab-1': ['pty-1'] }
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: types the empty observer list the stream mock fills.
     observers: [] as ((data: string) => void)[],
     process: 'bash',
     sendInput: vi.fn(),

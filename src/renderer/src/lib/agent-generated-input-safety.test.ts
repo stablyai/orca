@@ -9,6 +9,7 @@ const f = vi.hoisted(() => ({
   observe: (_data: string): void => {},
   write: vi.fn(async () => true),
   notice: vi.fn(),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the initial null to the hold a case may set.
   holdProcessRead: null as Promise<void> | null
 }))
 // These cases drive the legacy adapter: a paired host older than the generated-input transaction.

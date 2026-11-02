@@ -156,6 +156,7 @@ async function setUp(agent: TuiAgent, capable: boolean): Promise<string> {
   f.writes = writes
   vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 120, rows: 40 })
   // The host's facts follow the same stand-ins as the older host's.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected fact reads on OrcaRuntimeService to stand in the same facts.
   const host = runtime as unknown as {
     readGeneratedInputScreen: () => Promise<unknown>
     readGeneratedInputProcess: () => Promise<unknown>

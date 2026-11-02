@@ -110,6 +110,7 @@ function callLocalCancellable<T>(method: string, params: unknown, signal: AbortS
       .subscribe({ method, params }, (response) =>
         finish(() => {
           try {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher answers a unary method on this transport with one RuntimeRpcResponse envelope.
             resolve(unwrapRuntimeRpcResult(response as RuntimeRpcResponse<T>))
           } catch (error) {
             reject(error)

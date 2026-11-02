@@ -471,6 +471,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     deliverGeneratedPaste.mockImplementation(
       (paste: unknown) =>
         new Promise<string>((resolve) => {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked deliverGeneratedPaste receives a GeneratedPaste, which carries the takeover signal.
           cancelled = (paste as { signal: AbortSignal }).signal
           // A cancelled request whose answer was lost reads as unconfirmed.
           cancelled.addEventListener('abort', () => resolve('unconfirmed'))

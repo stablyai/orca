@@ -139,6 +139,7 @@ describe('one host transaction for generated input', () => {
   it('settles a submitted prompt on time when its retry read is still pending at the deadline', async () => {
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'dsh')
     runtime.onPtyData('pty-prompt', READY, 0)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected screen read on OrcaRuntimeService to stall it.
     const host = runtime as unknown as {
       readCurrentTerminalWaitScreen: (ptyId: string) => Promise<unknown>
     }
