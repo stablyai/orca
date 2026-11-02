@@ -22165,7 +22165,7 @@
   },
   "tabResizeHandle": {
     "label": "Resize tab",
-    "hint": "Drag to resize. Double-click to reset."
+    "hint": "Drag or use the arrow keys to resize. Double-click or press Enter to reset."
   },
   "tabHoverCard": {
     "browser": "Browser",

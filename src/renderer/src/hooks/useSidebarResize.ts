@@ -122,10 +122,13 @@ export function useSidebarResize<T extends HTMLElement>({
 
     resetDocumentStyles()
 
+    // Commit only widths the drag changed; a click without movement restores the stored width.
     const finalWidth = draftWidthRef.current
-    applyRenderedWidth(finalWidth)
-    onDraftWidthChange?.(finalWidth)
-    if (finalWidth !== width && finalWidth !== startWidthRef.current) {
+    const moved = finalWidth !== startWidthRef.current
+    const renderedWidth = moved ? finalWidth : width
+    applyRenderedWidth(renderedWidth)
+    onDraftWidthChange?.(renderedWidth)
+    if (moved) {
       setWidth(finalWidth)
     }
   }, [applyRenderedWidth, onDraftWidthChange, resetDocumentStyles, setWidth, width])
@@ -191,6 +194,8 @@ export function useSidebarResize<T extends HTMLElement>({
       startXRef.current = event.clientX
       startWidthRef.current = startWidth
       draftWidthRef.current = startWidth
+      // Pin the measured width before the caller drops flex sizing, or the element jumps on press.
+      applyRenderedWidth(startWidth)
       onDraftWidthChange?.(startWidth)
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
@@ -207,7 +212,7 @@ export function useSidebarResize<T extends HTMLElement>({
         overlayRef.current = overlay
       }
     },
-    [getStartWidth, maxWidth, minWidth, onDraftWidthChange, width]
+    [applyRenderedWidth, getStartWidth, maxWidth, minWidth, onDraftWidthChange, width]
   )
 
   return { containerRef, isResizing, onResizeStart }

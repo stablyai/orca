@@ -10,7 +10,6 @@ export type PersistedUIWriteBaseline = {
   rightSidebarWidth: number
   markdownTocPanelWidth: number
   combinedDiffFileTreeWidth: number
-  tabWidthsById: Record<string, number>
   groupBy: PersistedUIState['groupBy']
   sortBy: PersistedUIState['sortBy']
   projectOrderBy: PersistedUIState['projectOrderBy']
@@ -41,7 +40,6 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   rightSidebarWidth: true,
   markdownTocPanelWidth: true,
   combinedDiffFileTreeWidth: true,
-  tabWidthsById: true,
   groupBy: true,
   sortBy: true,
   projectOrderBy: true,
@@ -106,7 +104,6 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
   if (
     field === 'explorerDisplayRootByWorktree' ||
     field === 'showDotfilesByWorktree' ||
-    field === 'tabWidthsById' ||
     field === 'acknowledgedAgentsByPaneKey' ||
     field === 'activityClearedAtByPaneKey' ||
     field === 'manuallyUnreadTurnsByPaneKey'

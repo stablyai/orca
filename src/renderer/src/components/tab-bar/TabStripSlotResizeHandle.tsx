@@ -4,7 +4,13 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
-import { TAB_DEFAULT_WIDTH, TAB_MAX_WIDTH, TAB_MIN_WIDTH } from '../../../../shared/tab-strip-width'
+import {
+  TAB_DEFAULT_WIDTH,
+  TAB_MAX_WIDTH,
+  TAB_MIN_WIDTH,
+  TAB_RESIZE_KEYBOARD_STEP,
+  clampTabWidth
+} from '../../../../shared/tab-strip-width'
 
 /** Right-edge grip that resizes its parent tab-strip slot; must be the slot's direct child. */
 export function TabStripSlotResizeHandle({ tabId }: { tabId: string }): React.JSX.Element {
@@ -53,23 +59,49 @@ export function TabStripSlotResizeHandle({ tabId }: { tabId: string }): React.JS
     onResizeStart(event)
   }
 
+  // WAI-ARIA window splitter: arrows move the edge, Enter restores the default.
+  const handleKeyDown = (event: React.KeyboardEvent): void => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      setTabWidth(tabId, null)
+      return
+    }
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    const current = containerRef.current?.getBoundingClientRect().width ?? TAB_DEFAULT_WIDTH
+    const step = TAB_RESIZE_KEYBOARD_STEP * (event.shiftKey ? 4 : 1)
+    setTabWidth(tabId, clampTabWidth(current + (event.key === 'ArrowLeft' ? -step : step)))
+  }
+
   return (
     <div
       ref={attachToSlot}
       role="separator"
       aria-orientation="vertical"
+      aria-valuenow={storedWidth ?? TAB_DEFAULT_WIDTH}
+      aria-valuemin={TAB_MIN_WIDTH}
+      aria-valuemax={TAB_MAX_WIDTH}
+      tabIndex={0}
       aria-label={translate('tabResizeHandle.label', 'Resize tab')}
-      title={translate('tabResizeHandle.hint', 'Drag to resize. Double-click to reset.')}
+      title={translate(
+        'tabResizeHandle.hint',
+        'Drag or use the arrow keys to resize. Double-click or press Enter to reset.'
+      )}
       data-tab-resize-handle=""
-      className="group/tab-resize absolute -right-1 top-0 z-20 flex h-full w-2 cursor-col-resize justify-center"
+      className="group/tab-resize absolute -right-1 top-0 z-20 flex h-full w-2 cursor-col-resize justify-center outline-none"
       onMouseDown={handleMouseDown}
+      onKeyDown={handleKeyDown}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
       <div
         className={cn(
-          'h-full w-px bg-transparent transition-colors group-hover/tab-resize:bg-ring/50',
+          'h-full w-px bg-transparent transition-colors group-hover/tab-resize:bg-ring/50 group-focus-visible/tab-resize:bg-ring',
           isResizing && 'bg-ring'
         )}
       />

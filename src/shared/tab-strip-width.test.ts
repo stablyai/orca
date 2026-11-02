@@ -3,6 +3,7 @@ import {
   TAB_MAX_WIDTH,
   TAB_MIN_WIDTH,
   TAB_WIDTHS_MAX_ENTRIES,
+  applyTabWidthChanges,
   normalizeTabWidthsById,
   withTabWidth
 } from './tab-strip-width'
@@ -22,6 +23,24 @@ describe('normalizeTabWidthsById', () => {
     ).toEqual({ a: 200, tiny: TAB_MIN_WIDTH, huge: TAB_MAX_WIDTH })
     expect(normalizeTabWidthsById(['a'])).toEqual({})
     expect(normalizeTabWidthsById(null)).toEqual({})
+  })
+})
+
+describe('applyTabWidthChanges', () => {
+  it('keeps disjoint resizes from clients that never saw each other', () => {
+    const afterDesktop = applyTabWidthChanges({}, { desktop: 400 })
+    // The web client's patch was computed before it heard about the desktop resize.
+    const afterWeb = applyTabWidthChanges(afterDesktop, { web: 200 })
+
+    expect(afterWeb).toEqual({ desktop: 400, web: 200 })
+  })
+
+  it('resets only the tabs a patch names and ignores malformed values', () => {
+    expect(applyTabWidthChanges({ a: 200, b: 300 }, { a: null, c: 'wide', d: 250 })).toEqual({
+      b: 300,
+      d: 250
+    })
+    expect(applyTabWidthChanges({ a: 200 }, undefined)).toEqual({ a: 200 })
   })
 })
 

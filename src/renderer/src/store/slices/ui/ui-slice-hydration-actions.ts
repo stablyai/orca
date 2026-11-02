@@ -32,7 +32,8 @@ import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../sha
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
 import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
-import { normalizeTabWidthsById } from '../../../../../shared/tab-strip-width'
+import { applyTabWidthChanges } from '../../../../../shared/tab-strip-width'
+import { pendingTabWidthChanges } from './tab-width-persistence'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
@@ -121,7 +122,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             undefined,
             s.combinedDiffFileTreeWidth
           ),
-          tabWidthsById: normalizeTabWidthsById(ui.tabWidthsById),
+          // Widths persist as per-tab patches outside the snapshot writer; replay unacknowledged ones.
+          tabWidthsById: applyTabWidthChanges(ui.tabWidthsById, pendingTabWidthChanges()),
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
           ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
