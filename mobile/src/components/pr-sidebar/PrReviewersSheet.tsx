@@ -12,7 +12,12 @@ import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { SheetHeader } from '../nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../list/ListGroup'
 import { TextField } from '../composer-input/TextField'
-import { livePrDetails, readyPrData, type MobilePrTab } from './use-mobile-pr-tab'
+import {
+  livePrDetails,
+  readyPrData,
+  type MobilePrTab,
+  type PrTabSheetRequest
+} from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 
 function reviewerStateLabel(
@@ -52,7 +57,13 @@ type PeopleLoad =
   | { status: 'loaded'; users: GitHubAssignableUser[] }
 
 // Reviewers with remove, and a search that requests a new one; same add/remove as the old section.
-export function PrReviewersSheet({ tab }: { tab: MobilePrTab }) {
+export function PrReviewersSheet({
+  tab,
+  request
+}: {
+  tab: MobilePrTab
+  request: PrTabSheetRequest
+}) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { actions, client, worktreeId } = tab
@@ -78,6 +89,17 @@ export function PrReviewersSheet({ tab }: { tab: MobilePrTab }) {
   const isRequested = (login: string) =>
     actions.resolveReviewerRequested(login, authoritative.has(login.toLowerCase()))
   const visibleRows = rows.filter((row) => isRequested(row.login))
+  // A click from an outgoing or departed presentation sends nothing.
+  const requestReviewer = (login: string) => {
+    if (tab.ownsSheet(request)) {
+      actions.requestReviewer(login)
+    }
+  }
+  const removeReviewer = (login: string) => {
+    if (tab.ownsSheet(request)) {
+      actions.removeReviewer(login)
+    }
+  }
   const approvals = rows.filter((row) => row.approved).length
 
   // Load people once, on the first search; the loading state must not re-run and cancel this read.
@@ -151,9 +173,7 @@ export function PrReviewersSheet({ tab }: { tab: MobilePrTab }) {
                       selected={requested}
                       busy={actions.isBusy({ kind: 'reviewer', login: user.login })}
                       onPress={() =>
-                        requested
-                          ? actions.removeReviewer(user.login)
-                          : actions.requestReviewer(user.login)
+                        requested ? removeReviewer(user.login) : requestReviewer(user.login)
                       }
                     />
                   )
@@ -200,7 +220,7 @@ export function PrReviewersSheet({ tab }: { tab: MobilePrTab }) {
                 }
                 accessory={
                   <Pressable
-                    onPress={() => actions.removeReviewer(row.login)}
+                    onPress={() => removeReviewer(row.login)}
                     disabled={actions.isBusy({ kind: 'reviewer', login: row.login })}
                     hitSlop={8}
                     accessibilityRole="button"
