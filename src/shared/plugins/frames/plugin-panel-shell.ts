@@ -71,8 +71,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
   var listeners = new Map()
   var api = Object.freeze(C.api)
   var methods = C.methods.slice()
-  var latest = null
-  var waiting = []
+  var latest = null, waiting = []
   var locale = null
   var send = null
   if (C.transportGlobal) {
@@ -226,10 +225,23 @@ ${PLUGIN_FRAME_FACADES_SCRIPT}  if (C.user) {
       onDidChange: function (fn) {
         var subscription = on(E.editorDocument, fn)
         var current = latest
-        if (current) Promise.resolve().then(function () { if (latest === current) fn(current) })
-        return subscription
+        var live = true
+        if (current) Promise.resolve().then(function () { if (live && latest === current) fn(current) })
+        return Object.freeze({ dispose: function () { live = false; subscription.dispose() } })
       },
-      applyEdit: function (edit) { return call(C.editor.applyEdit, edit) }
+      applyEdit: function (edit) {
+        var base = edit && edit.baseVersion
+        var content = edit && edit.content ? Object.assign({}, edit.content) : null
+        // Copied: the caller may reuse its buffer, and get() must keep what Orca accepted.
+        if (content && content.bytes instanceof ArrayBuffer) content.bytes = content.bytes.slice(0)
+        return call(C.editor.applyEdit, edit).then(function (result) {
+          // Accepted edits keep their version, so get() takes the content without a new version.
+          if (latest && content && latest.version === base) {
+            latest = Object.freeze(Object.assign({}, latest, { content: Object.freeze(content) }))
+          }
+          return result
+        })
+      }
     })
     window.addEventListener('keydown', function (event) {
       if (event.repeat || !(event.metaKey || event.ctrlKey)) return
