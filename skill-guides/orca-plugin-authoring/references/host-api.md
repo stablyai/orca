@@ -87,12 +87,16 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 
 List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted-worker`) and handle it with `orca.hooks.on(event, (event, next) => ...)`. Return `next(event)` (or nothing) to go on, or the stop result. Plugins run in turn, 2 s each; a throw, timeout or crash passes unless the entry says `"onError": "deny"`. Decide first: an awaited call before you return (a notification, say) can fail or time out and turn your deny into a pass.
 
-- `terminal.send` (since 1.4.248): Text Orca, the CLI or a plugin is about to send to a terminal. A person typing (on the desktop, a phone or a paired client) is never hooked, and prompts Orca submits to an agent are not included (a separate agent prompt hook covers them). Writes to one terminal stay in order while a hook decides. Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send.
+- `terminal.send` (since 1.4.248): Text Orca, the CLI or a plugin is about to send to a terminal. A person typing (on the desktop, a phone or a paired client) is never hooked, and prompts Orca submits to an agent take `agent.prompt.before` instead. Writes to one terminal stay in order while a hook decides. Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send.
   event `{ terminalId: string; text: string; enter: boolean; inputKind: "driving" | "orchestration" | "launch" }`; `next` may change `text`, `enter`; stop with `{ deny: string }`
 - `workspace.create.before` (since 1.4.248): A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it.
   event `{ kind: "worktree" | "folder"; projectId: string; name: string; branch?: string; base?: string }`; `next` may change `name`, `branch`, `base`; stop with `{ deny: string }`
 - `workspace.create.after` (since 1.4.248): A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored.
   event `{ workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }`; `next` may change nothing; stop with nothing (observe only)
+- `agent.launch.before` (since 1.4.248): Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked.
+  event `{ agent: string; workspaceId: string | null; workspaceKind: "worktree" | "folder" | null; terminalId?: string; command: string; env: Record<string, string> }`; `next` may change `command`, `env`; stop with `{ deny: string }`
+- `agent.prompt.before` (since 1.4.248): Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.
+  event `{ agent: string | null; terminalId: string; prompt: string; inputKind: "driving" | "orchestration" | "launch" }`; `next` may change `prompt`; stop with `{ deny: string }`
 
 ## Capabilities
 

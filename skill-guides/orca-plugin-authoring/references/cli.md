@@ -23,6 +23,7 @@
 - `ORCA plugin dev reload [<dir>] [--approve <fingerprint>] [--json]`: Reload development plugins now, or one folder and re-check its approval
 - `ORCA plugin dev inspect <plugin-key> [--json]`: Open DevTools for a plugin's open panels and editors
 - `ORCA plugin dev emit <dir|plugin-key> <event> [--data <json>] [--json]`: Fire a test event at a development plugin's worker and open panels
+- `ORCA plugin dev hook <dir|plugin-key> <hook> --data <json> [--json]`: Run a hook through a development plugin's worker and print what the chain decided
 - `ORCA plugin dev request <dir|plugin-key> <name> [--data <json>] [--panel <id>] [--timeout-ms <ms>] [--json]`: Call a development plugin's worker handler the way a panel's plugin.request does
 - `ORCA plugin dev unload <dir|plugin-key> [--json]`: Remove a development folder from Orca
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>] [--json]`: Show a plugin's panel in Orca's right sidebar, or open a file in its editor
