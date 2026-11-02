@@ -12,7 +12,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanCodexUsageFilesViaWorker: vi.fn()
+  scanCodexUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 describe('CodexUsageStore', () => {
@@ -435,7 +436,6 @@ describe('CodexUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
 
     expect(summary.hasUnpricedModels).toBe(true)
-    // The unpriced row's ten million tokens are absent from the total it sits beside.
     expect(summary.estimatedCostUsd).toBeCloseTo(0.0033, 6)
   })
 

@@ -1,16 +1,16 @@
 import { readStreamedSessionDocument } from './session-document-stream'
-import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewContent,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import {
   arrayValue,
   asRecord,
@@ -27,18 +27,19 @@ type ParserSessionOptions = {
 export async function parseHermesSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseHermesSessionRecord(
+  return parseHermesSessionDocument(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    openTranscriptReadStream(file.path, {}, 'scan'),
     platform,
     {},
+    signal,
     messages
   )
 }
 
-/** Remote transcript content, streamed from a host that has no reader attached. */
 export async function parseHermesSessionContent(
   file: FileWithMtime,
   content: string,
@@ -89,7 +90,7 @@ export function consumeHermesSessionMessage(
     if (role === 'user') {
       accumulator.title ??= extractContentText(messageRecord?.content)
     }
-    addPreviewContent(accumulator, role, messageRecord?.content)
+    addSessionContent(accumulator, role, messageRecord?.content)
   }
 }
 
@@ -98,14 +99,22 @@ export async function parseHermesSessionDocument(
   bytes: AsyncIterable<Buffer>,
   platform: NodeJS.Platform,
   options: ParserSessionOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const parsed = await readStreamedSessionDocument({
     bytes,
     arrayKey: 'messages',
     fields: ['session_id', 'model', 'cwd', 'session_start', 'last_updated', 'message_count'],
-    create: () =>
-      createAccumulator({ agent: 'hermes', file, sessionId: sessionIdFromFileName(file.path) }),
+    create: () => {
+      messages?.reset?.()
+      return createAccumulator({
+        agent: 'hermes',
+        file,
+        sessionId: sessionIdFromFileName(file.path),
+        messages
+      })
+    },
     consume: consumeHermesSessionMessage,
     signal
   })

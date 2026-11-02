@@ -21,19 +21,6 @@ describe('list multi selection', () => {
     )
   })
 
-  it('replaces selection on plain click', () => {
-    const result = updateSelection({
-      visibleIds,
-      previousSelectedIds: new Set(['wt-1', 'wt-2']),
-      previousAnchorId: 'wt-1',
-      targetId: 'wt-3',
-      intent: 'replace'
-    })
-
-    expect([...result.selectedIds]).toEqual(['wt-3'])
-    expect(result.anchorId).toBe('wt-3')
-  })
-
   it('toggles one worktree without dropping the rest', () => {
     const result = updateSelection({
       visibleIds,

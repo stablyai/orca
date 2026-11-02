@@ -3,11 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import {
-  getBuiltinTheme,
-  resolvePaneStyleOptions,
-  resolveEffectiveTerminalAppearance
-} from '@/lib/terminal-theme'
+import { resolvePaneStyleOptions, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit'
@@ -22,17 +18,19 @@ import {
 } from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-cursor-blink-suspension'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
-import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { windowBackdropActive } from '@/lib/window-backdrop'
+import { contrastRatio, over, type Rgba } from '@/lib/plugin-theme-tokens'
 
-export function hexToRgba(hex: string, alpha: number): string {
+function hexToRgb(hex: string): Rgba {
   let clean = hex.replace('#', '')
   if (clean.length === 3) {
     clean = clean
@@ -43,6 +41,11 @@ export function hexToRgba(hex: string, alpha: number): string {
   const r = Number.parseInt(clean.slice(0, 2), 16)
   const g = Number.parseInt(clean.slice(2, 4), 16)
   const b = Number.parseInt(clean.slice(4, 6), 16)
+  return [r, g, b, 1]
+}
+
+export function hexToRgba(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
@@ -50,29 +53,50 @@ export function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)
 }
 
-// Why extracted: lets the settings preview compose the same theme without depending on PaneManager. Keep pure.
+const LEGACY_SLIDER_GREY: Rgba = [180, 180, 185, 1]
+
+// Why: muted foregrounds (Solarized Dark, One Dark) rise to the old fixed grey's contrast, capped at opaque.
+function sliderAlpha(foreground: Rgba, background: Rgba, alpha: number, greyAlpha: number): number {
+  const contrastAt = ([r, g, b]: Rgba, a: number): number =>
+    contrastRatio(over([r, g, b, a], background), background)
+  const floor = contrastAt(LEGACY_SLIDER_GREY, greyAlpha)
+  let next = alpha
+  while (next < 1 && contrastAt(foreground, next) < floor) {
+    next = Math.round(next * 100 + 1) / 100
+  }
+  return next
+}
+
+function foregroundSliderColors(foreground: string, background: string | undefined): ITheme {
+  const fg = hexToRgb(foreground)
+  const bg = background && isHexColor(background) ? hexToRgb(background) : null
+  const tint = (alpha: number, greyAlpha: number): string =>
+    hexToRgba(foreground, bg ? sliderAlpha(fg, bg, alpha, greyAlpha) : alpha)
+  return {
+    scrollbarSliderBackground: tint(0.35, 0.4),
+    scrollbarSliderHoverBackground: tint(0.55, 0.6),
+    scrollbarSliderActiveBackground: tint(0.7, 0.8)
+  }
+}
+
+// Keep pure so settings preview can compose the same theme without PaneManager. baseTheme is the resolved palette
+// (resolveEffectiveTerminalAppearance), which already carries the slot's color overrides.
 export function composeActiveTerminalTheme(
   baseTheme: ITheme | null,
-  settings: Pick<
-    GlobalSettings,
-    'terminalColorOverrides' | 'terminalBackgroundOpacity' | 'terminalCursorOpacity'
-  >
+  settings: Pick<GlobalSettings, 'terminalBackgroundOpacity' | 'terminalCursorOpacity'>
 ): ITheme | null {
   if (!baseTheme) {
     return null
   }
   // Why transparent ruler border: scrollbar.width enables xterm's overview ruler, whose border would paint a bright line.
-  // Why raised slider alpha: xterm's default (~0.2) is nearly invisible on dark bg. Before the spread so explicit theme wins.
+  // Why foreground-tinted thumb: a fixed grey vanished on light themes (#12635); xterm derives non-hex ones. Theme wins.
+  const foreground = baseTheme.foreground
   let theme: ITheme = {
     overviewRulerBorder: 'transparent',
-    scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
-    scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
-    scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
+    ...(foreground && isHexColor(foreground)
+      ? foregroundSliderColors(foreground, baseTheme.background)
+      : {}),
     ...baseTheme
-  }
-  // Why: merge Ghostty color overrides atop the base theme so individual colors can be tweaked without losing the rest.
-  if (settings.terminalColorOverrides) {
-    theme = { ...theme, ...settings.terminalColorOverrides }
   }
   // Why: convert the hex background to rgba so xterm honors the opacity when allowTransparency is set.
   if (settings.terminalBackgroundOpacity !== undefined && theme.background) {
@@ -91,8 +115,7 @@ export function composeActiveTerminalTheme(
   return theme
 }
 
-/** Publishes composed terminal appearance at app start so hidden-at-launch PTYs can query OSC 10/11
- *  before any pane mounts (terminal-query-authority.md §Phase 6). Returns whether a publish went out. */
+/** Publish at startup so hidden-at-launch PTYs can query OSC 10/11 before any pane mounts; returns whether sent (terminal-query-authority.md). */
 export function publishTerminalViewAttributesAtAppStart(
   settings: GlobalSettings | null | undefined,
   systemPrefersDark: boolean,
@@ -102,8 +125,7 @@ export function publishTerminalViewAttributesAtAppStart(
     return false
   }
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  const theme = composeActiveTerminalTheme(appearance.theme, settings)
   return send !== undefined
     ? publishTerminalViewAttributes(theme, appearance.mode, settings, send)
     : publishTerminalViewAttributes(theme, appearance.mode, settings)
@@ -146,11 +168,15 @@ export function applyTerminalAppearance(
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
-  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
-  // Publish composed appearance to main's hidden-PTY query responder — the only point it exists; deduped in the publisher.
+  const theme = composeActiveTerminalTheme(appearance.theme, settings)
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
+  // Why: over a window backdrop the split root is the one translucent paint; xterm's viewport,
+  // scrollable element and canvas each repainting it compounded 0.82 to ~0.99 (#36196).
+  const backdropActive = windowBackdropActive()
+  const xtermTheme = backdropActive
+    ? composeActiveTerminalTheme(appearance.theme, { ...settings, terminalBackgroundOpacity: 0 })
+    : theme
 
   const terminalFontWeights = resolveTerminalFontWeights(
     settings.terminalFontWeight,
@@ -163,12 +189,10 @@ export function applyTerminalAppearance(
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
-    if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
-      pane.terminal.options.theme = theme
+    if (xtermTheme && !composedTerminalThemesEqual(pane.terminal.options.theme, xtermTheme)) {
+      pane.terminal.options.theme = xtermTheme
     }
-    // Gate off the configured theme background; the live OSC-11 background is deliberately preserved by the
-    // theme write above, so a TUI that repaints its background at runtime won't re-gate (known limitation).
-    // Why value-gated: writing minimumContrastRatio clears xterm's contrast cache, so skip on no-op re-applies.
+    // Use configured background: preserving live OSC-11 mutations above means a TUI background change does not re-gate contrast.
     const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       theme?.background,
       appearance.mode,
@@ -179,12 +203,12 @@ export function applyTerminalAppearance(
     }
     // Why clear explicitly: allowTransparency has rendering cost and a stale `true` could bleed in from a prior opacity.
     pane.terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+      backdropActive ||
+      (settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1)
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
-    // Why not a direct write: a suspended (hidden) pane parks the value instead, so a
-    // settings change mid-hide cannot re-arm its blink timer behind the hidden surface.
+    // Hidden panes defer cursor blink so settings changes cannot restart their blink timer.
     setTerminalCursorBlinkOption(pane.terminal, settings.terminalCursorBlink)
     const paneSize = paneFontSizes.get(pane.id)
     const metricOptions = {
@@ -194,11 +218,8 @@ export function applyTerminalAppearance(
       fontWeightBold: terminalFontWeights.fontWeightBold,
       lineHeight: normalizeTerminalLineHeight(settings.terminalLineHeight)
     }
-    // Why value-gated: any settings write re-runs this over every mounted pane, and
-    // canApplyPaneMetricOptions forces style+layout; an unchanged no-op deferral
-    // would also arm a pointless refit on the next reveal.
-    // Why deferred: a metric write makes xterm clear/resize/full-refresh, which is
-    // wasted on a pane with no usable box and whose follow-up cols/rows fit can't run.
+    // Skip unchanged metrics: checking measurability forces layout and a no-op deferral needlessly schedules refit.
+    // Defer metric-triggered clear/resize/refresh until the pane can measure and fit.
     if (!paneMetricOptionsAlreadySettled(pane, metricOptions)) {
       applyOrDeferPaneMetricOptions(pane, metricOptions, canApplyPaneMetricOptions(pane))
     }
@@ -210,19 +231,18 @@ export function applyTerminalAppearance(
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
-    // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
-    // Why unconditional: setInlineImagesEnabled is idempotent (attach no-ops when
-    // already loaded, detach no-ops when absent), so this keeps live toggles in sync.
     manager.setPaneInlineImagesEnabled(
       pane.id,
       resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)
     )
     const transport = paneTransports.get(pane.id)
+    if (transport) {
+      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
+    }
     // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.
     const appearancePtyId = transport?.getPtyId()
     if (transport?.isConnected() && (!appearancePtyId || !getFitOverrideForPty(appearancePtyId))) {
-      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
       safeFitAndThen(pane, 'appearance-pty-resize', () => {
         const currentTransport = paneTransports.get(pane.id)
         if (
@@ -241,7 +261,6 @@ export function applyTerminalAppearance(
 
   manager.setPaneStyleOptions({
     splitBackground: paneBackground,
-    paneBackground,
     inactivePaneOpacity: paneStyles.inactivePaneOpacity,
     activePaneOpacity: paneStyles.activePaneOpacity,
     opacityTransitionMs: paneStyles.opacityTransitionMs,

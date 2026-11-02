@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalFreeTextInput } from '../../../src/shared/agent-session-journal-types'
-import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import type { AgentJournalFreeTextInput } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
 import {
   projectStructuredQuestion,
   structuredQuestionResponseTarget,

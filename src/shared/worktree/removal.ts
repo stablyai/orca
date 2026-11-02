@@ -1,13 +1,17 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { GitWorktreeInfo, Worktree } from './types'
 
+export function unregisteredFolderRefusal(worktreePath: string): Error {
+  return new Error(
+    `${worktreePath} is no longer a Git worktree, so its folder was left on disk. Delete the folder yourself to finish removing this workspace.`
+  )
+}
+
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
 export const UNSTOPPED_PTY_REMOVAL_PREFIX = 'Failed to physically stop every PTY for worktree:'
 
-// Why (#11960): the desktop force affordance is driven entirely by the classifier
-// below, so this hint and its matcher must stay in the same file — a message that
-// tells the user to force-delete while the UI hides the button is the same dead end.
+// Keep force hints and classifiers together so recommended actions remain visible (#11960).
 export const WORKTREE_TEARDOWN_FORCE_HINT = 'Retry with force delete (--force) to remove it anyway.'
 
 export type WorktreeForceDeleteReason =
@@ -16,28 +20,18 @@ export type WorktreeForceDeleteReason =
   | 'missing-registration'
   | 'unstopped-pty'
   | 'running-agent-session'
+  | 'submodules'
 
-// Why: everything before this separator is the worktree id — a user-chosen filesystem path.
-// Only the detail after it is Orca's own wording, so verdict matchers anchor on the boundary
-// rather than scanning the whole message and letting a path spell out a verdict.
+// Only text after this boundary is Orca’s verdict; the worktree ID is a user-chosen path.
 export const UNSTOPPED_PTY_DETAIL_SEPARATOR = ' — '
 
-// Why: verification distinguishes a process it watched stay alive from one it could not reach,
-// and the delete toast must not flatten the two — a user waiving "we could not confirm" is
-// making a different decision than one killing something Orca just saw running. The marker
-// and its matcher stay together for the same reason the force hint does. Shared by the PTY
-// sweep and the structured-session sweep, which both re-observe after their stop.
+// Keep proven-live and unverifiable stops distinct in delete toasts. Both PTY and structured-session sweeps re-observe after stopping.
 export const STILL_LIVE_DETAIL_PREFIX = 'still live:'
 
-// Why (#11960): a sweep that never answers wedges removal exactly like a stop that could not
-// be proven, and the waiver clears both — but this error carries different words, so without
-// its own matcher the force affordance stayed hidden for the very case it was added for.
+// Sweep timeouts need their own force matcher even without a per-PTY verdict (#11960).
 export const WORKTREE_TEARDOWN_TIMEOUT_PREFIX = 'Timed out waiting for physical PTY teardown:'
 
-// Why (#11960 again): a running agent SESSION blocks removal for the same reason an unstopped PTY
-// does, and it needs its own prefix for the same reason the timeout above needed one — the desktop
-// force affordance comes only from the classifier below, so a refusal with no matcher shows raw
-// CLI wording and hides the Force Delete button. Matcher and hint stay in this file together.
+// Running agent sessions also block removal; classify this prefix to expose the force waiver (#11960).
 export const RUNNING_AGENT_SESSION_REMOVAL_PREFIX =
   'Refusing to remove worktree with running agent sessions:'
 
@@ -104,6 +98,22 @@ export function getLockedWorktreeRemovalReason(error: string): string | null {
   return reason || null
 }
 
+// Name submodules in the dirty refusal before Git runs; retain the dirty sentence for older force classifiers.
+export const SUBMODULE_DIRTY_REMOVAL_DETAIL =
+  'Worktree has uncommitted or untracked changes, and it contains submodules.'
+
+// Carries Git's own refusal text so every client version classifies it as the submodule Force Delete reason.
+export const SUBMODULE_REMOVAL_REFUSAL =
+  'This checkout contains submodule repositories, and Git refuses to remove it without force (working trees containing submodules cannot be moved or removed). Force also deletes anything in those submodules that was never pushed: commits, local branches and stashes.'
+
+// Git refuses initialized submodules even when clean; force deletes their unpushed history too. English output lets clients classify older hosts.
+export function isSubmoduleWorktreeRemovalRefusal(error: string): boolean {
+  return (
+    error.includes('working trees containing submodules cannot be moved or removed') ||
+    error.includes(SUBMODULE_DIRTY_REMOVAL_DETAIL)
+  )
+}
+
 const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
   /Failed to delete worktree at [^\n]*\.\s*(?:(?:[MADRCUT][ MADRCUT]| [MADRCUT]|\?\?)\s+\S)/
 
@@ -113,25 +123,22 @@ export function classifyWorktreeForceDeleteReason(
   allowUnverifiedPtyStop = false
 ): WorktreeForceDeleteReason | null {
   if (isLockedWorktreeRemovalError(error)) {
-    // Why: a Git lock can represent an external safety contract. It must be
-    // unlocked explicitly rather than folded into Orca's dirty-file force path.
+    // A Git lock may encode an external safety contract; require explicit unlock.
     return null
   }
-  // Why (#11960): this must be decided before the `force` guard below. The ordinary
-  // delete confirmation already passes force:true to skip the dirty-file prompt, but
-  // it does NOT waive PTY-stop proof — so `force` alone is no evidence that the user
-  // has already spent this escape hatch. Only the waiver itself is.
+  // Ordinary desktop delete already sets force for dirty files; only allowUnverifiedPtyStop waives stop proof, so classify first (#11960).
   if (isUnstoppedPtyRemovalError(error)) {
     return allowUnverifiedPtyStop ? null : 'unstopped-pty'
   }
-  // Same placement and the same reason: decided BEFORE the `force` guard, because an ordinary
-  // desktop delete already passes force:true to skip the dirty-file prompt and that says nothing
-  // about whether the user has waived closing a live agent session. Only the waiver itself does.
+  // The same explicit waiver governs sessions; force alone only bypasses dirty-file refusal.
   if (isRunningAgentSessionRemovalError(error)) {
     return allowUnverifiedPtyStop ? null : 'running-agent-session'
   }
   if (force) {
     return null
+  }
+  if (isSubmoduleWorktreeRemovalRefusal(error)) {
+    return 'submodules'
   }
   if (error.includes('Worktree is no longer registered with Git but its directory remains')) {
     return 'orphan-directory'
@@ -151,25 +158,9 @@ export function classifyWorktreeForceDeleteReason(
   return null
 }
 
-// ─── Host qualification (STA-4343) ───────────────────────────────────
-//
-// A workspace id is `repoId::path` with no host component, so the local host, an
-// SSH host and a paired runtime can all publish the SAME id. The same repo at the
-// same path on two hosts is TWO workspaces, never one — removing by that id alone
-// destroys whichever checkout routing happens to pick, and routing prefers the
-// ACTIVE workspace's host, which is usually not the row the user confirmed.
-//
-// So a destructive removal travels as a host-qualified target and is ROUTED to
-// the confirmed host. Making the field required (not optional) is the point: a
-// future delete entry point cannot be written unguarded without a type error.
+// The same repoId::path can exist on several hosts. Route destructive removals to the confirmed row’s required host, never the active workspace’s host (STA-4343).
 
-/**
- * Identity for a destructive workspace removal.
- *
- * `executionHostId` is required but nullable on purpose: `null` states that the
- * confirmed row itself declares no host (a pre-host-qualified snapshot row), so
- * a caller has to make that claim deliberately instead of omitting the field.
- */
+/** Require an explicit host claim for destructive removal. null deliberately means the confirmed legacy row declares no host. */
 export type WorktreeRemovalTarget = {
   id: string
   executionHostId: ExecutionHostId | null

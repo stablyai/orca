@@ -1,6 +1,6 @@
 import type { DirEntry } from '../../../shared/filesystem-entry-types'
 import { normalizeRelativePath } from '@/lib/path'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import {
   assertLocalFilesystemFallbackAllowed,
@@ -13,16 +13,57 @@ import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
+import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
+import {
+  FILE_WRITE_OK,
+  parseFileWriteResult,
+  type FileWriteDiskPrecondition,
+  type FileWriteResult
+} from '../../../shared/file-write-disk-precondition'
+import { writeRemoteFileIfUnchanged } from './runtime-file-write-disk-precondition'
+import { writeRemoteFileStaged } from './runtime-staged-file-save'
+
+/** Null when the content fits one request; otherwise the refusal an older host's frame cap needs. */
+function remoteWriteTooLargeError(content: string): Error | null {
+  // Why: one UTF-16 unit escapes to at most 6 bytes, so most saves skip encoding.
+  if (content.length * 6 + 2 <= REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
+    return null
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(content)).length
+  return bytes > REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES
+    ? new Error(
+        `File is too large to save to a remote Orca server (${Math.ceil(bytes / 1024)} KB; the limit is ${REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES / 1024} KB).`
+      )
+    : null
+}
+
+/** Refuses a save the host's frame cap would reject by dropping the whole connection. */
+export function assertRemoteWriteFitsOneRequest(content: string): void {
+  const tooLarge = remoteWriteTooLargeError(content)
+  if (tooLarge) {
+    throw tooLarge
+  }
+}
 
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
   dirPath: string,
-  options: { followSymlinks?: boolean } = {}
+  {
+    wakeWslDistro,
+    access,
+    ...options
+  }: { followSymlinks?: boolean; wakeWslDistro?: boolean; access?: LocalFileAccess } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId, ...options })
+    return window.api.fs.readDir({
+      dirPath,
+      connectionId: context.connectionId,
+      ...options,
+      ...(wakeWslDistro ? { wakeWslDistro } : {}),
+      ...(access ? { access } : {})
+    })
   }
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
@@ -32,34 +73,71 @@ export async function readRuntimeDirectory(
   )
 }
 
+/** With `diskPrecondition`, a write whose target no longer matches the baseline is refused, not written. */
 export async function writeRuntimeFile(
   context: RuntimeFileOperationArgs,
   filePath: string,
   content: string,
-  access?: LocalFileAccess
-): Promise<void> {
+  access?: LocalFileAccess,
+  diskPrecondition?: FileWriteDiskPrecondition,
+  /** Runs at the last moment before the bytes are sent; throwing aborts the write. */
+  beforeSend?: () => void
+): Promise<FileWriteResult> {
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    await window.api.fs.writeFile(
-      withSshMutationExpectation(context, {
-        filePath,
-        content,
-        connectionId: context.connectionId,
-        ...localAccess(context.connectionId, access)
-      })
+    beforeSend?.()
+    return parseFileWriteResult(
+      await window.api.fs.writeFile(
+        withSshMutationExpectation(context, {
+          filePath,
+          content,
+          connectionId: context.connectionId,
+          ...localAccess(context.connectionId, access),
+          ...(diskPrecondition ? { diskPrecondition } : {})
+        })
+      )
     )
-    return
   }
-  await callRuntimeFileMutation(
-    remoteArgs.target,
-    'files.write',
-    withSshMutationExpectation(context, {
+  const tooLarge = remoteWriteTooLargeError(content)
+  if (tooLarge) {
+    const target = remoteArgs.target
+    const location = withSshMutationExpectation(context, {
       worktree: remoteArgs.worktreeSelector,
-      relativePath: remoteArgs.relativePath,
-      content
-    }),
-    15_000
+      relativePath: remoteArgs.relativePath
+    })
+    return writeRemoteFileStaged(
+      target,
+      location,
+      content,
+      diskPrecondition,
+      () => tooLarge,
+      beforeSend
+    )
+  }
+  const params = withSshMutationExpectation(context, {
+    worktree: remoteArgs.worktreeSelector,
+    relativePath: remoteArgs.relativePath,
+    content
+  })
+  if (!diskPrecondition) {
+    await callRuntimeFileMutation(
+      remoteArgs.target,
+      'files.write',
+      params,
+      15_000,
+      undefined,
+      beforeSend
+    )
+    return FILE_WRITE_OK
+  }
+  return writeRemoteFileIfUnchanged(
+    { ...context, target: remoteArgs.target },
+    filePath,
+    content,
+    params,
+    diskPrecondition,
+    beforeSend
   )
 }
 
@@ -159,7 +237,8 @@ export async function copyRuntimePath(
 export async function deleteRuntimePath(
   context: RuntimeFileOperationArgs,
   targetPath: string,
-  recursive?: boolean
+  recursive?: boolean,
+  options?: { permanent?: boolean }
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, targetPath)
   if (!remoteArgs) {
@@ -168,7 +247,8 @@ export async function deleteRuntimePath(
       withSshMutationExpectation(context, {
         targetPath,
         connectionId: context.connectionId,
-        recursive
+        recursive,
+        ...(options?.permanent === true ? { permanent: true } : {})
       })
     )
     return
@@ -190,7 +270,7 @@ export async function deleteRuntimeRelativePath(
   relativePath: string,
   recursive?: boolean
 ): Promise<boolean> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (
     target.kind !== 'environment' ||
     !context.worktreeId ||

@@ -1,28 +1,25 @@
-/**
- * Best-effort retirement of the terminal daemon when a managed stop asks for it.
- *
- * The daemon normally outlives orcad so terminals survive a restart (D7). Retirement happens
- * only when the daemon itself proves it owns no live session across every generation; a busy
- * or unanswering daemon stays up, and orcad's own stop never waits on that outcome.
- */
+// Daemons outlive orcad; retire only after their atomic cross-generation census proves no live sessions.
+// Busy/unresponsive daemons stay up, and orcad shutdown does not wait indefinitely.
 import {
   listLiveDaemonSessions,
   releaseDaemonRetirementFence,
   requestIdleDaemonRetirement
-} from '../daemon/daemon-init'
+} from '../daemon/daemon-provider-state'
+import type { DaemonIdleRetirementResult } from '../daemon/daemon-pty-runtime-state'
 import type { OrcadDaemonRetirementVerdict } from '../../shared/orcad-stop-request'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { ORCAD_DAEMON_RETIREMENT_TIMEOUT_MS } from './orcad-stop-deadlines'
 
 export type OrcadDaemonRetirement = {
   retirement: OrcadDaemonRetirementVerdict
   liveSessions: number | null
   reason: string | null
+  /** Whether timed-out work eventually retired the daemon. */
+  lateRetirement?: Promise<boolean>
 }
 
-/** Live sessions across every daemon generation, or `null` when any could not answer. */
 export async function countLiveOrcadDaemonSessions(): Promise<number | null> {
   try {
-    // The inventory lists live sessions only.
     return (await listLiveDaemonSessions())?.length ?? null
   } catch {
     return null
@@ -48,15 +45,25 @@ export async function retireOrcadDaemonIfIdle(
 ): Promise<OrcadDaemonRetirement> {
   const { request, releaseFence, countLiveSessions, timeoutMs } = { ...DEFAULT_PORTS, ...ports }
   const attempt = request().catch(() => ({ state: 'unverifiable' as const }))
-  const result = await withTimeout(attempt, timeoutMs, { state: 'timed-out' as const })
-  if (result.state === 'timed-out') {
-    // The fence cannot reopen while the attempt is pending; reopen it once a late refusal lands.
-    void attempt.then((late) => late.state !== 'retiring' && releaseFence())
-  }
+  const result = await withTimeout<DaemonIdleRetirementResult | { state: 'timed-out' }>(
+    attempt,
+    timeoutMs,
+    { state: 'timed-out' }
+  )
+  // Keep admission fenced while retirement is pending; reopen only after a definitive late refusal.
+  const lateRetirement =
+    result.state === 'timed-out'
+      ? attempt.then((late) => {
+          if (late.state !== 'retiring') {
+            releaseFence()
+          }
+          return late.state === 'retiring'
+        })
+      : undefined
   if (result.state === 'retiring') {
     return { retirement: 'retired', liveSessions: 0, reason: null }
   }
-  // A daemon that stays must not be left refusing new terminals.
+  // Surviving daemons must resume terminal admission.
   releaseFence()
   const liveSessions =
     result.state === 'busy' && result.liveSessions !== null
@@ -74,24 +81,10 @@ export async function retireOrcadDaemonIfIdle(
   return {
     retirement: 'unverifiable',
     liveSessions,
+    ...(lateRetirement ? { lateRetirement } : {}),
     reason:
       result.state === 'unsupported'
         ? 'The terminal daemon predates idle retirement, so it was left running.'
         : 'The host could not prove the daemon idle, so it was left running.'
-  }
-}
-
-/** No answer within the bound is `fallback`; the caller treats it as unverifiable. */
-async function withTimeout<T, F>(work: Promise<T>, timeoutMs: number, fallback: F): Promise<T | F> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      work,
-      new Promise<F>((resolve) => {
-        timer = setTimeout(() => resolve(fallback), timeoutMs)
-      })
-    ])
-  } finally {
-    clearTimeout(timer)
   }
 }

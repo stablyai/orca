@@ -23,6 +23,7 @@ export function FloatingLocalBackgroundSurface(): React.JSX.Element | null {
       layout={layout}
       focusedGroupId={focusedGroupId}
       isVisible={false}
+      prewarmStage={null}
       shouldMeasureHiddenWorktree={false}
       shouldColdParkTerminalPanes={false}
       isForceParked={false}

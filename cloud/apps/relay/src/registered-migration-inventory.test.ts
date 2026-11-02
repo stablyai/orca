@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 import { REGISTERED_MIGRATION_ABANDON_MS } from './registered-migration-abandonment.js'
 import {
@@ -7,8 +7,15 @@ import {
 } from './registered-migration-inventory.js'
 
 describe('registered migration inventory', () => {
+  const databases: RelayDatabase[] = []
+  afterEach(async () => {
+    for (const database of databases.splice(0)) {
+      await database.close()
+    }
+  })
   it('does not restart abandonment when an old source migration lease is refreshed', async () => {
     const database = await openInMemoryRelayDatabase()
+    databases.push(database)
     const now = REGISTERED_MIGRATION_ABANDON_MS + 10_000
     await insertCell(database, 'cell-a', false, 'existing-only')
     await insertCell(database, 'cell-b', true, 'migration-only')
@@ -34,18 +41,16 @@ describe('registered migration inventory', () => {
       '[orca-relay] migration inventory open=1 expiredRegisteredInactive=1 abandonedRegistered=1',
       '[orca-relay] migration pair sourceCellId=cell-a targetCellId=cell-b open=1 expiredRegisteredInactive=1 abandoned=1'
     ])
-    expect(
-      (
-        await readRegisteredMigrationInventory(
-          database,
-          now + 1
-        )
-      ).abandoned
-    ).toBe(1)
+    await database.query(`UPDATE relay_assignment_migrations SET expires_at = ?, updated_at = ?`, [
+      now + 1,
+      now
+    ])
+    expect((await readRegisteredMigrationInventory(database, now + 1)).abandoned).toBe(1)
   })
 
   it('includes unregistered open migrations without logging a host identity', async () => {
     const database = await openInMemoryRelayDatabase()
+    databases.push(database)
     const now = 10_000
     await insertCell(database, 'cell-a', false, 'existing-only')
     await insertCell(database, 'cell-b', true, 'migration-only')
@@ -67,9 +72,7 @@ describe('registered migration inventory', () => {
         }
       ]
     })
-    expect(formatRegisteredMigrationInventory(inventory).join('\n')).not.toContain(
-      '111111111111'
-    )
+    expect(formatRegisteredMigrationInventory(inventory).join('\n')).not.toContain('111111111111')
   })
 })
 

@@ -1,17 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 
-/**
- * Measures what an active preedit overlay hides, against what it renders.
- *
- * The overlay has an opaque background and is absolutely positioned over the grid, so every cell
- * its bounding rect covers is unreadable for the duration of the composition. That gives one
- * invariant worth asserting on screen: **the overlay must render everything it covers**. Composing
- * mid-line broke it — the box covered the character at the cursor and rendered only the preedit.
- *
- * This has to be measured from the real rect against the real cell grid. The class, the
- * `textContent` and `display` are all identical either way, and a DOM emulator reports every rect
- * as zero, so a unit-level arm cannot see the difference.
- */
+// Require the opaque preedit overlay to render every committed cell its real bounding rect covers.
+// Mid-line composition covered the cursor character but drew only preedit; class/text/display stay identical and DOM emulators return zero rects.
 export type MidlinePreeditOcclusionSample = {
   /** Row text from the cursor rightwards — the committed characters a mid-line preedit sits over. */
   rowTailFromCursor: string
@@ -73,8 +63,7 @@ function readMidlinePreeditOcclusion(): MidlinePreeditOcclusionSample {
   const preeditBounds = preedit?.getBoundingClientRect()
   const textareaBounds = textarea.getBoundingClientRect()
 
-  // A column counts as hidden when the overlay covers most of its cell, which keeps the sample
-  // stable against the sub-pixel width a proportional text node lands on.
+  // Count cells mostly covered by the overlay to tolerate proportional-text subpixel widths.
   let first: number | null = null
   let last = -1
   let hiddenByOverlay = ''

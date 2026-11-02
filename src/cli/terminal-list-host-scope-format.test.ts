@@ -41,6 +41,24 @@ describe('formatTerminalList host identity', () => {
   })
 })
 
+describe('formatTerminalList pane titles', () => {
+  it("prints a pane's user name over the terminal title, and the title when the host sends none", () => {
+    const named = formatTerminalList(listResult({ terminals: [terminal({ paneTitle: 'server' })] }))
+    expect(named).toContain('term_1  server  connected')
+    expect(formatTerminalList(listResult())).toContain('term_1  worker  connected')
+  })
+})
+
+describe('formatTerminalList orphaned marker', () => {
+  it('marks only the terminal with no pane binding', () => {
+    const list = formatTerminalList(
+      listResult({ terminals: [terminal(), terminal({ handle: 'term_2', orphaned: true })] })
+    )
+    expect(list).toContain('term_1  worker  connected  host=')
+    expect(list).toContain('term_2  worker  connected  orphaned  host=')
+  })
+})
+
 describe('formatTerminalList scope declaration', () => {
   it('states the covered and omitted hosts', () => {
     const output = formatTerminalList(

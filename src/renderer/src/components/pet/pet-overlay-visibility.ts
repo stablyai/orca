@@ -7,7 +7,6 @@ export function shouldRenderPetOverlay({
   petEnabled: boolean
   petVisible: boolean
 }): boolean {
-  // Why: petVisible defaults true until persisted UI hydrates. Waiting avoids
-  // flashing the pet for users who previously hid it.
+  // Wait for persisted UI so default visibility cannot flash pets the user hid.
   return persistedUIReady && petEnabled && petVisible
 }

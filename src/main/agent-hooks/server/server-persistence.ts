@@ -1,9 +1,11 @@
-import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 
 import { isValidPaneKey } from './server-status-identity'
-import { LAST_STATUS_FILE_VERSION, STATUS_PERSIST_DEBOUNCE_MS } from './server-constants'
+import {
+  HYDRATE_MAX_AGE_MS,
+  LAST_STATUS_FILE_VERSION,
+  STATUS_PERSIST_MIN_INTERVAL_MS
+} from './server-constants'
 import type {
   EnrichedAgentHookEventPayload,
   LastStatusFile,
@@ -12,8 +14,14 @@ import type {
 } from './server-types'
 import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
+import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
+import { AtomicSnapshotWriter } from '../../persistence/atomic-snapshot-writer'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
+  private statusSnapshotWriter: AtomicSnapshotWriter | null = null
+  private statusSnapshotWriterPath: string | null = null
+  private statusPersistFailing = false
+
   protected serializeStatusFile(): string {
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
@@ -27,21 +35,22 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         continue
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
-      // Why: the session journal is the durable truth for a structured row and the host republishes
-      // it on restore; a persisted copy would hydrate unconfirmed and fight that republish.
+      // Journal projections must not compete with unconfirmed copies hydrated from this cache.
       if (enrichedPayload.structuredHost) {
         continue
       }
       const {
         promptInteractionKey: _promptInteractionKey,
-        // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
+        // Facets are stitched at publication; discard any copy that reached the map.
+        programStatus: _programStatus,
+        programStatusOnly: _programStatusOnly,
+        // Hydration restamps restoredUnconfirmed.
         restoredUnconfirmed: _restoredUnconfirmed,
-        // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).
+        // Observation sequences belong to this runtime.
         observation: _observation,
         // Replay provenance is runtime-only and must not survive another restart.
         isReplay: _isReplay,
-        // A terminal handle belongs to the runtime that issued it; a hydrated one could only
-        // rejoin a row to somebody else's terminal.
+        // Terminal handles belong to this runtime and cannot safely rejoin a hydrated row.
         terminalHandle: _terminalHandle,
         hostTurnRevision: _hostTurnRevision,
         launchToken,
@@ -50,8 +59,6 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
-      // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
-      // replaced is read at hydrate and never written again.
       const { claudeTaskWakeupPending: _pendingWakeup, ...persistedStatus } =
         persistedPayload.payload
       entries[paneKey] = {
@@ -70,76 +77,157 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         }
       }
     }
+    // Panes without successor agents would otherwise retain exit evidence forever.
+    pruneAgentExits(this.agentExitedAtByPaneKey, Date.now() - HYDRATE_MAX_AGE_MS, (paneKey) =>
+      this.state.lastStatusByPaneKey.has(paneKey)
+    )
+    const agentExits = serializeAgentExits(this.agentExitedAtByPaneKey)
     const file: LastStatusFile = {
       version: LAST_STATUS_FILE_VERSION,
       entries,
-      authorityCommitments
+      authorityCommitments,
+      ...(agentExits.length > 0 ? { agentExits } : {})
     }
     return JSON.stringify(file)
   }
 
+  // Leading-edge throttling prevents event streams from postponing writes indefinitely (#26720).
   protected scheduleStatusPersist(): void {
     if (!this.lastStatusFilePath) {
       return
     }
-    // Why: reset the timer each call so the write fires only after the last event in a burst.
+    const now = Date.now()
+    // Persist authority changes immediately to preserve spool replay filtering after a crash.
+    const urgent = this.currentAuthorityFingerprint() !== this.lastPersistedAuthorityFingerprint
+    // A wall-clock rollback must not defer persistence indefinitely.
+    const dueAt = urgent
+      ? now
+      : Math.min(
+          this.lastStatusPersistStartedAt + STATUS_PERSIST_MIN_INTERVAL_MS,
+          now + STATUS_PERSIST_MIN_INTERVAL_MS
+        )
     if (this.statusPersistTimer) {
+      if (dueAt >= this.statusPersistDueAt) {
+        return
+      }
       clearTimeout(this.statusPersistTimer)
     }
+    this.statusPersistDueAt = Math.max(dueAt, now)
     this.statusPersistTimer = setTimeout(() => {
       this.statusPersistTimer = null
-      this.runStatusPersist()
-    }, STATUS_PERSIST_DEBOUNCE_MS)
-    // Why: don't keep the event loop alive just for a status flush — quit already flushes sync.
+      this.startStatusPersist()
+    }, this.statusPersistDueAt - now)
+    // Quit flushes synchronously; this timer must not keep the runtime alive.
     if (typeof this.statusPersistTimer.unref === 'function') {
       this.statusPersistTimer.unref()
     }
   }
 
   flushStatusPersistSync(): void {
-    if (this.statusPersistTimer) {
-      clearTimeout(this.statusPersistTimer)
-      this.statusPersistTimer = null
-    }
+    this.cancelStatusPersistTimer()
     if (!this.lastStatusFilePath) {
       return
     }
     this.runStatusPersist()
   }
 
+  /** Quit, hook-disable and hydration repair need synchronous writes; routine updates are async. */
   protected runStatusPersist(): void {
-    if (!this.lastStatusFilePath || !this.endpointDir) {
+    const writer = this.getStatusSnapshotWriter()
+    if (!writer) {
       return
     }
-    const json = this.serializeStatusFile()
-    if (json === this.lastWrittenJson) {
-      return
-    }
-    const tmpPath = join(this.endpointDir, `.last-status-${process.pid}-${randomUUID()}.tmp`)
-    let tmpWritten = false
+    this.lastStatusPersistStartedAt = Date.now()
+    this.lastPersistedAuthorityFingerprint = this.currentAuthorityFingerprint()
     try {
-      mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
-      if (process.platform !== 'win32') {
-        try {
-          chmodSync(this.endpointDir, 0o700)
-        } catch {
-          // best-effort
-        }
-      }
-      writeFileSync(tmpPath, json, { mode: 0o600 })
-      tmpWritten = true
-      renameSync(tmpPath, this.lastStatusFilePath)
-      this.lastWrittenJson = json
+      writer.writeSync(() => this.serializeStatusFile())
+      this.statusPersistFailing = false
     } catch (err) {
-      console.warn('[agent-hooks] failed to write last-status file:', err)
-      if (tmpWritten) {
-        try {
-          unlinkSync(tmpPath)
-        } catch {
-          // tmp already gone
-        }
+      this.reportStatusPersistFailure(err)
+    }
+  }
+
+  protected primeStatusPersistBaseline(onDiskJson: string): void {
+    this.getStatusSnapshotWriter()?.primeCommittedContent(onDiskJson)
+    this.lastPersistedAuthorityFingerprint = this.currentAuthorityFingerprint()
+  }
+
+  protected closeStatusSnapshotWriter(): void {
+    this.cancelStatusPersistTimer()
+    this.statusSnapshotWriter?.close()
+    this.statusSnapshotWriter = null
+    this.statusSnapshotWriterPath = null
+    this.lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
+    this.lastPersistedAuthorityFingerprint = null
+    this.statusPersistFailing = false
+  }
+
+  protected getStatusSnapshotWriter(): AtomicSnapshotWriter | null {
+    const filePath = this.lastStatusFilePath
+    if (!filePath) {
+      return null
+    }
+    if (!this.statusSnapshotWriter || this.statusSnapshotWriterPath !== filePath) {
+      this.statusSnapshotWriter?.close()
+      this.statusSnapshotWriter = new AtomicSnapshotWriter(() => filePath, {
+        fileMode: 0o600,
+        directoryMode: 0o700,
+        skipUnchanged: true
+      })
+      this.statusSnapshotWriterPath = filePath
+    }
+    return this.statusSnapshotWriter
+  }
+
+  /** Revision counters and live tokens avoid per-event hashing or serialization. */
+  protected currentAuthorityFingerprint(): string {
+    let fingerprint = `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}`
+    for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+      const launchToken = (payload as EnrichedAgentHookEventPayload).launchToken?.trim()
+      if (launchToken) {
+        fingerprint += `\n${paneKey}\t${launchToken}`
       }
     }
+    return fingerprint
+  }
+
+  private startStatusPersist(): void {
+    const writer = this.getStatusSnapshotWriter()
+    if (!writer) {
+      return
+    }
+    this.lastStatusPersistStartedAt = Date.now()
+    this.lastPersistedAuthorityFingerprint = this.currentAuthorityFingerprint()
+    writer
+      .write(() => this.serializeStatusFile())
+      .then(
+        () => {
+          this.statusPersistFailing = false
+        },
+        (err: unknown) => {
+          if (this.statusSnapshotWriter !== writer) {
+            return
+          }
+          this.reportStatusPersistFailure(err)
+          // Retry even if no later mutation arrives.
+          this.scheduleStatusPersist()
+        }
+      )
+  }
+
+  private cancelStatusPersistTimer(): void {
+    if (this.statusPersistTimer) {
+      clearTimeout(this.statusPersistTimer)
+      this.statusPersistTimer = null
+    }
+  }
+
+  private reportStatusPersistFailure(err: unknown): void {
+    if (!this.statusPersistFailing) {
+      console.warn('[agent-hooks] failed to write last-status file:', err)
+    }
+    this.statusPersistFailing = true
   }
 
   _resetPromptSentDedupeForTests(): void {

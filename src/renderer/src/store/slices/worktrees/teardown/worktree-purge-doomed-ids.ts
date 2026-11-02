@@ -17,7 +17,36 @@ export function collectWorktreePurgeDoomedIds(
   s: AppState,
   worktreeIdSet: Set<string>
 ): WorktreePurgeDoomedIds {
-  // Collect every tab id (and removed file id) we are about to orphan.
+  const tabs: { id: string; ptyId: string | null }[] = []
+  const browserWorkspaceIds: string[] = []
+  const fileIds: string[] = []
+  for (const id of worktreeIdSet) {
+    tabs.push(...(s.tabsByWorktree[id] ?? []))
+    for (const workspace of s.browserTabsByWorktree[id] ?? []) {
+      browserWorkspaceIds.push(workspace.id)
+    }
+    forgetDetachedHeadAutoDerivedDisplayName(id)
+  }
+  for (const file of s.openFiles) {
+    if (worktreeIdSet.has(file.worktreeId)) {
+      fileIds.push(file.id)
+      if (file.markdownPreviewSourceFileId) {
+        fileIds.push(file.markdownPreviewSourceFileId)
+      }
+    }
+  }
+  return collectSurfacePurgeDoomedIds(s, { tabs, browserWorkspaceIds, fileIds })
+}
+
+/** Doomed ids for named surfaces, which may sit in a workspace that stays (a surviving twin's). */
+export function collectSurfacePurgeDoomedIds(
+  s: AppState,
+  surfaces: {
+    tabs: readonly { id: string; ptyId: string | null }[]
+    browserWorkspaceIds: Iterable<string>
+    fileIds: Iterable<string>
+  }
+): WorktreePurgeDoomedIds {
   const doomedTabIds = new Set<string>()
   // Why: some terminal/agent maps are keyed by ptyId, not tabId; collect durable wake hints too since slept panes have left the live index.
   const doomedPtyIds = new Set<string>()
@@ -37,41 +66,22 @@ export function collectWorktreePurgeDoomedIds(
       addDoomedPtyId(ptyId)
     }
   }
-  const doomedBrowserWorkspaceIds = new Set<string>()
+  const doomedBrowserWorkspaceIds = new Set(surfaces.browserWorkspaceIds)
   const doomedPageIds = new Set<string>()
-  const removedFileIds = new Set<string>()
-  for (const id of worktreeIdSet) {
-    for (const tab of s.tabsByWorktree[id] ?? []) {
-      doomedTabIds.add(tab.id)
-      // Null-tolerant like the omit* helpers below: some callers pass partial state omitting this slice (production store always inits to {}).
-      addDoomedTabPtyIds(tab.id, tab.ptyId)
-      // Why: a removed worktree's panes are gone, so drop their hibernation output epochs from the module-level map (a future pane mints a fresh leafId at epoch 0).
-      forgetAgentHibernationTabOutput(tab.id)
-    }
-    for (const workspace of s.browserTabsByWorktree[id] ?? []) {
-      doomedBrowserWorkspaceIds.add(workspace.id)
-    }
-    // Why: drop the auto-derived detached-HEAD display name so the module-level map doesn't retain removed worktrees for the session.
-    forgetDetachedHeadAutoDerivedDisplayName(id)
+  const removedFileIds = new Set(surfaces.fileIds)
+  for (const tab of surfaces.tabs) {
+    doomedTabIds.add(tab.id)
+    addDoomedTabPtyIds(tab.id, tab.ptyId)
+    forgetAgentHibernationTabOutput(tab.id)
   }
-  // Why: same rationale for doomed tabs' foreground last-seen timestamps and agent-startup delivery guards — retired tab ids never recur.
   forgetForegroundTerminalTabs(doomedTabIds)
   forgetAgentStartupDeliveriesForTabs(doomedTabIds)
-  // Why: pane-authority aliases outlive the store maps they route to, so a purged
-  // tab would leave a permanent entry pointing at a pane that no longer exists.
+  // Authority aliases outlive store maps; purged tabs must not leave permanent routes to missing panes.
   forgetAgentPaneAuthorityAliasesByTabIds(doomedTabIds)
-  // Why: per-page browser maps are keyed by page id, so collect every page of a doomed workspace to evict here (the authoritative-scan reconcile skips closeBrowserTab's cleanup).
+  // Bulk reconcile skips closeBrowserTab, so collect all doomed workspace page IDs for eviction.
   for (const workspaceId of doomedBrowserWorkspaceIds) {
     for (const page of s.browserPagesByWorkspace[workspaceId] ?? []) {
       doomedPageIds.add(page.id)
-    }
-  }
-  for (const file of s.openFiles) {
-    if (worktreeIdSet.has(file.worktreeId)) {
-      removedFileIds.add(file.id)
-      if (file.markdownPreviewSourceFileId) {
-        removedFileIds.add(file.markdownPreviewSourceFileId)
-      }
     }
   }
   return {

@@ -1,3 +1,4 @@
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { AgentLaunchPaneAlreadyLiveError } from '../../shared/agent-launch-pane-already-live'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
@@ -20,8 +21,7 @@ export function allocateTerminalPaneIdentity(opts: { tabId?: string; leafId?: st
   return { tabId, leafId, paneKey: makePaneKey(tabId, leafId) }
 }
 
-/** A caller-minted `tabId:leafId` as the pair `createTerminal` adopts; an unparsable key yields
- *  nothing, so the runtime mints its own and the reported `paneKey` shows the caller it lost. */
+/** Adopt valid caller-minted tabId:leafId; otherwise mint locally and report the replacement paneKey. */
 export function paneIdentity(paneKey: string | undefined): { tabId?: string; leafId?: string } {
   const pane = paneKey ? parsePaneKey(paneKey) : null
   return pane ? { tabId: pane.tabId, leafId: pane.leafId } : {}
@@ -36,4 +36,20 @@ export function admitStablePaneAdoption(
     throw new AgentLaunchPaneAlreadyLiveError()
   }
   return Boolean(result.stablePaneOwner)
+}
+
+export function materializedStablePaneReply(
+  adoption: NonNullable<Awaited<ReturnType<NonNullable<RuntimePtyController['adoptStablePane']>>>>,
+  fallbackHandle: string
+) {
+  const { owner, result } = adoption
+  return {
+    ...result,
+    wslDistro: result.wslDistro ?? undefined,
+    stablePaneOwner: {
+      handle: owner.handle ?? fallbackHandle,
+      tabId: owner.tabId,
+      leafId: owner.leafId
+    }
+  }
 }

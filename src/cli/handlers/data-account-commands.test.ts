@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { RuntimeClient } from '../runtime-client'
-import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import { addDataAccount, listDataAccounts } from './data-account-commands'
 
 const client = new RuntimeClient(join(tmpdir(), 'orca-login-test'), 1000, null, null)

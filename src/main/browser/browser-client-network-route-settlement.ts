@@ -1,4 +1,3 @@
-/** Deferred settled when the registry's last route retires; consumers await it via retire(). */
 export function createRouteRetirement(): {
   promise: Promise<void>
   resolve: () => void
@@ -14,7 +13,7 @@ export function createRouteRetirement(): {
   return { promise, resolve, reject }
 }
 
-/** Awaits route work under the caller's abort signal, rejecting the moment it fires. */
+/** Abort the wait without cancelling the underlying route work. */
 export function waitForRoute<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
     return Promise.reject(new Error('browser_client_network_route_aborted'))

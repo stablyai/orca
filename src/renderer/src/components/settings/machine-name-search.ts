@@ -2,7 +2,6 @@ import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translateSearchKeyword } from './settings-search-keywords'
 
-/** Keywords for the machine name, shared by every pane that mounts the field. */
 export const getMachineNameSearchKeywords = createLocalizedCatalog(() => [
   ...translateSearchKeyword(
     'auto.components.settings.machine.name.search.machineName',

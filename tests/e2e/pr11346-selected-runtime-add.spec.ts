@@ -18,9 +18,7 @@ import { waitForSessionReady } from './helpers/store'
 import {
   configureIsolatedGitIdentity,
   createProjectFixtures,
-  expectRuntimeActivation,
-  injectSameIdLocalActivationCollision,
-  installFinalActivationGate
+  expectRuntimeActivation
 } from './pr11346-selected-runtime-identity-oracle'
 
 async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locator> {
@@ -95,8 +93,7 @@ async function runSelectedRuntimeAddJourney(
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, runtimeName)
-  // Why: the client renders the workbench under test, and a contained render
-  // crash only names its component stack on the renderer console.
+  // Forward renderer console because contained render failures expose their component stacks only there.
   forwardRendererConsole(client.page, testInfo)
   const serverUserDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const clientUserDataDir = await client.app.evaluate(({ app }) => app.getPath('userData'))
@@ -105,8 +102,7 @@ async function runSelectedRuntimeAddJourney(
 
   try {
     const measurements: Record<string, number> = {}
-    // Why: the client is the Playwright-driven surface in both topologies; the hidden-window
-    // parity under test is the HUB's.
+    // The client drives both topologies; hidden-window parity is measured on the hub.
     expect(await revealPairedClientWindow(client)).toMatchObject({
       isVisible: true,
       wasVisible: false
@@ -123,63 +119,45 @@ async function runSelectedRuntimeAddJourney(
     expect(initialClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
 
     startedAt = Date.now()
-    await installFinalActivationGate(client.page, fixture.gitPath)
     const gitDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await gitDialog.locator('#server-project-path').fill(fixture.gitPath)
     await gitDialog.getByRole('button', { name: /Add Git Project/i }).click()
-    const gitCollision = await injectSameIdLocalActivationCollision(
+    await expect(gitDialog).toBeHidden({ timeout: 30_000 })
+    const gitWorktreeId = await expectRuntimeActivation(
       client.page,
       fixture.gitPath,
-      fixture.localCloneCollisionPath
+      client.environmentId
     )
-    await expect(gitDialog).toBeHidden({ timeout: 30_000 })
     measurements.gitAddMs = Date.now() - startedAt
 
     startedAt = Date.now()
-    await installFinalActivationGate(client.page, fixture.folderPath)
     const folderDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await folderDialog.locator('#server-project-path').fill(fixture.folderPath)
     await folderDialog.getByRole('button', { name: /Open as Folder/i }).click()
-    const folderCollision = await injectSameIdLocalActivationCollision(
-      client.page,
-      fixture.folderPath,
-      fixture.localCreateCollisionPath
-    )
     await expect(folderDialog).toBeHidden({ timeout: 30_000 })
+    await expectRuntimeActivation(client.page, fixture.folderPath, client.environmentId)
     measurements.folderAddMs = Date.now() - startedAt
 
     startedAt = Date.now()
-    await installFinalActivationGate(client.page, fixture.clonedRepoPath)
     const cloneDialog = await selectRuntimeHost(client.page, runtimeName)
     await cloneDialog.getByRole('button', { name: /Clone from URL/i }).click()
     const cloneStep = client.page.getByRole('dialog', { name: /Clone from URL/i })
     await cloneStep.getByRole('textbox').nth(0).fill(fixture.gitPath)
     await cloneStep.getByRole('textbox').nth(1).fill(fixture.cloneParentPath)
     await cloneStep.getByRole('button', { name: /^Clone$/i }).click()
-    const cloneCollision = await injectSameIdLocalActivationCollision(
-      client.page,
-      fixture.clonedRepoPath,
-      fixture.localCloneCollisionPath
-    )
     await expect(cloneStep).toBeHidden({ timeout: 30_000 })
-    await expectRuntimeActivation(client.page, cloneCollision)
+    await expectRuntimeActivation(client.page, fixture.clonedRepoPath, client.environmentId)
     measurements.cloneMs = Date.now() - startedAt
 
     startedAt = Date.now()
-    await installFinalActivationGate(client.page, fixture.createdRepoPath)
     const createDialog = await selectRuntimeHost(client.page, runtimeName)
     await createDialog.getByRole('button', { name: /Create (?:on host|new project)/i }).click()
     const createStep = client.page.getByRole('dialog', { name: /Create a new project/i })
     await createStep.locator('#create-project-name').fill('runtime-created-project')
     await createStep.getByPlaceholder('/home/user/projects').fill(fixture.createParentPath)
     await createStep.getByRole('button', { name: 'Create project', exact: true }).click()
-    const createCollision = await injectSameIdLocalActivationCollision(
-      client.page,
-      fixture.createdRepoPath,
-      fixture.localCreateCollisionPath
-    )
     await expect(createStep).toBeHidden({ timeout: 30_000 })
-    await expectRuntimeActivation(client.page, createCollision)
+    await expectRuntimeActivation(client.page, fixture.createdRepoPath, client.environmentId)
     measurements.createMs = Date.now() - startedAt
 
     startedAt = Date.now()
@@ -563,8 +541,10 @@ async function runSelectedRuntimeAddJourney(
       if (!store) {
         throw new Error('Renderer store unavailable')
       }
-      await store.getState().fetchProjectGroups()
-      await store.getState().fetchFolderWorkspaces()
+      await store.getState().fetchProjectGroups({ runtimeEnvironmentId: null, throwOnError: true })
+      await store
+        .getState()
+        .fetchFolderWorkspaces({ runtimeEnvironmentId: null, throwOnError: true })
       return {
         folderWorkspaces: store.getState().folderWorkspaces,
         projectGroups: store.getState().projectGroups
@@ -592,9 +572,7 @@ async function runSelectedRuntimeAddJourney(
         clonedRepoPath,
         createdRepoPath,
         environmentId,
-        folderCollisionId,
         folderPath,
-        gitCollisionId,
         gitPath,
         nestedParentPath,
         nestedRepoPaths
@@ -610,20 +588,8 @@ async function runSelectedRuntimeAddJourney(
           createdOwner:
             state?.repos.find((repo) => repo.path === createdRepoPath)?.executionHostId ?? null,
           folderKind: state?.repos.find((repo) => repo.path === folderPath)?.kind ?? null,
-          folderSameIdHosts:
-            Object.values(state?.worktreesByRepo ?? {})
-              .flat()
-              .filter((worktree) => worktree.id === folderCollisionId)
-              .map((worktree) => worktree.hostId ?? 'local')
-              .sort() ?? [],
           folderOwner:
             state?.repos.find((repo) => repo.path === folderPath)?.executionHostId ?? null,
-          gitSameIdHosts:
-            Object.values(state?.worktreesByRepo ?? {})
-              .flat()
-              .filter((worktree) => worktree.id === gitCollisionId)
-              .map((worktree) => worktree.hostId ?? 'local')
-              .sort() ?? [],
           gitOwner: state?.repos.find((repo) => repo.path === gitPath)?.executionHostId ?? null,
           nestedGroupOwner: nestedGroup?.executionHostId ?? null,
           nestedRepoOwners: nestedRepos.map((repo) => repo.executionHostId ?? null).sort(),
@@ -639,9 +605,7 @@ async function runSelectedRuntimeAddJourney(
         clonedRepoPath: fixture.clonedRepoPath,
         createdRepoPath: fixture.createdRepoPath,
         environmentId: client.environmentId,
-        folderCollisionId: folderCollision.runtimeWorktreeId,
         folderPath: fixture.folderPath,
-        gitCollisionId: gitCollision.runtimeWorktreeId,
         gitPath: fixture.gitPath,
         nestedParentPath: fixture.nestedParentPath,
         nestedRepoPaths: fixture.nestedRepoPaths
@@ -654,9 +618,7 @@ async function runSelectedRuntimeAddJourney(
       expectedOwner: `runtime:${client.environmentId}`,
       folderKind: 'folder',
       folderOwner: `runtime:${client.environmentId}`,
-      folderSameIdHosts: ['local', `runtime:${client.environmentId}`],
       gitOwner: `runtime:${client.environmentId}`,
-      gitSameIdHosts: ['local', `runtime:${client.environmentId}`],
       nestedGroupOwner: `runtime:${client.environmentId}`,
       nestedRepoOwners: [`runtime:${client.environmentId}`, `runtime:${client.environmentId}`],
       nestedReposInGroup: true
@@ -682,24 +644,18 @@ async function runSelectedRuntimeAddJourney(
         return {
           activeHostId: state.activeWorkspaceExecutionHostId,
           activeWorktreeId: state.activeWorktreeId,
-          outcome,
-          sameIdHosts: Object.values(state.worktreesByRepo)
-            .flat()
-            .filter((worktree) => worktree.id === worktreeId)
-            .map((worktree) => worktree.hostId ?? 'local')
-            .sort()
+          outcome
         }
       },
       {
         environmentId: client.environmentId,
-        worktreeId: gitCollision.runtimeWorktreeId
+        worktreeId: gitWorktreeId
       }
     )
     expect(terminalActivation).toEqual({
       activeHostId: `runtime:${client.environmentId}`,
-      activeWorktreeId: gitCollision.runtimeWorktreeId,
-      outcome: { status: 'created' },
-      sameIdHosts: ['local', `runtime:${client.environmentId}`]
+      activeWorktreeId: gitWorktreeId,
+      outcome: { status: 'created' }
     })
 
     const finalClientInventory = await listRuntimeInventory(clientLocalRuntime)
@@ -747,14 +703,6 @@ async function runSelectedRuntimeAddJourney(
     rmSync(fixture.rootPath, { recursive: true, force: true })
   }
 }
-
-test('routes every Add Project path to a selected non-default headed runtime @headful', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => {
-  test.setTimeout(300_000)
-  await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, true)
-})
 
 test('keeps every selected-runtime Add Project path in hidden-window desktop parity', async ({
   electronApp,

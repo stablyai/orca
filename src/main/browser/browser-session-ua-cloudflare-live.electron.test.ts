@@ -19,8 +19,7 @@ let liveTargetUrl = 'https://dash.cloudflare.com/login'
 const repetitions = Number(process.env.ORCA_UA_CLOUDFLARE_REPETITIONS ?? 5)
 const failureText = 'There was a problem with verification. Please reload and try again.'
 
-// Several independent challenge deployments, not one origin. `native` runs on every site as a
-// positive control: if it fails too, that site proves nothing and its rows are void.
+// Use native mode as a per-site control; discard results if that control fails.
 const LIVE_SITES: { key: string; url: string }[] = [
   { key: 'cf-dash', url: 'https://dash.cloudflare.com/login' },
   { key: 'cf-nopecha', url: 'https://nopecha.com/demo/cloudflare' },
@@ -28,9 +27,7 @@ const LIVE_SITES: { key: string; url: string }[] = [
   { key: 'ua-sniff-whatsapp', url: 'https://web.whatsapp.com/' }
 ]
 
-// Why signal matching instead of one hardcoded failure string: each deployment words its block
-// differently, and inventing per-site strings is how a rig silently reports garbage. Capture the
-// evidence and compare arms.
+// Match several challenge signals because block wording varies by deployment.
 const BLOCK_SIGNALS = [
   'problem with verification',
   'just a moment',

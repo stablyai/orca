@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { classifyWorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 
-// Why: production never hands this function a literal reason — the store derives it from
-// classifyWorktreeForceDeleteReason (store/slices/worktrees.ts). Passing one in would let a
-// message the classifier rejects still render the force copy, testing a UI that never runs.
+// Use the production classifier so tests cannot render force-delete copy for an unreachable reason.
 function toastCopyForRemovalError(worktreeName: string, error: string): unknown {
   return getDeleteWorktreeToastCopy(worktreeName, classifyWorktreeForceDeleteReason(error), error)
 }
@@ -18,8 +16,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why (#11960): the PTY gate's error tells the user to force-delete, so the
-  // toast has to actually offer it — a reason of null hides the button entirely.
   it('uses terminal-teardown guidance when a PTY stop could not be proven', () => {
     expect(
       toastCopyForRemovalError(
@@ -34,8 +30,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why: Force Delete proceeds on a proven-live PTY too, so the copy must not describe
-  // that as an unconfirmed exit — the user is killing a terminal Orca watched running.
   it('names the running terminals when verification proved they are still live', () => {
     expect(
       toastCopyForRemovalError(
@@ -50,8 +44,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why: the structured sweep now CLOSES an attached session on the ordinary delete, so reaching
-  // this toast means the close was attempted and did not settle — not that Orca declined to try.
   it('offers force delete when an agent session could not be confirmed closed', () => {
     expect(
       toastCopyForRemovalError(
@@ -66,9 +58,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why: the same split the PTY pair above draws. Force Delete proceeds either way, and telling a
-  // user "could not confirm" about a conversation Orca watched stay attached asks them to waive a
-  // doubt that does not exist — the work in that conversation goes with the delete.
   it('names the running agent sessions when the close left them attached', () => {
     expect(
       toastCopyForRemovalError(
@@ -83,8 +72,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why: a sweep that never answered wedges removal the same way, and the waiver clears
-  // both — so it must reach the same force affordance instead of a dead end.
   it('offers force delete when the teardown sweep itself timed out', () => {
     expect(
       toastCopyForRemovalError(
@@ -99,8 +86,6 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  // Why: the same wedge worded by the provider instead of the deadline — a dropped SSH
-  // channel — must reach the same offer, or the escape hatch misses the case it was for.
   it('offers force delete when the sweep failed rather than timed out', () => {
     expect(
       toastCopyForRemovalError(

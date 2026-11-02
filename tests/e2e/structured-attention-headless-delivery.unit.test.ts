@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 it('loads and delivers actual host notifications in plain Node without Electron installed', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-headless-attention-'))
@@ -14,7 +14,7 @@ it('loads and delivers actual host notifications in plain Node without Electron 
         resolveDir: process.cwd(),
         sourcefile: 'structured-attention-headless-notification.ts',
         contents: `
-          import {createStructuredAttentionMobileDelivery} from './src/main/runtime/structured-agent-session-mobile-attention'
+          import {createStructuredAttentionMobileDelivery} from './src/main/runtime/agent-session/structured-agent-session-mobile-attention'
           import {RuntimeMobileNotificationController} from './src/main/runtime/runtime-mobile-notification-controller'
           import {getDefaultNotificationSettings} from './src/shared/notification-settings-defaults'
           const controller = new RuntimeMobileNotificationController()
@@ -24,6 +24,8 @@ it('loads and delivers actual host notifications in plain Node without Electron 
           const delivery = createStructuredAttentionMobileDelivery({
             readNotificationSettings: getDefaultNotificationSettings,
             readWorkspaceLabels: () => ({worktreeLabel:'Notes'}),
+            isWorkspaceMuted: () => false,
+            readOrchestration: () => undefined,
             dispatch: event => controller.dispatch(event),
             reconcile: state => controller.reconcileStructuredPromptAttention(state),
             now: () => 60_000

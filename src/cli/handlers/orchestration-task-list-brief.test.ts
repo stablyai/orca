@@ -1,57 +1,107 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-// Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
+import { okFixture } from '../test-fixtures'
+import { RuntimeClient } from '../runtime-client'
 
-async function runTaskListBrief(): Promise<{
-  result: { tasks: { spec: string; spec_truncated: boolean }[] }
-}> {
+const client = new RuntimeClient('/tmp/orca-task-brief', 60_000, null, null)
+afterEach(() => vi.restoreAllMocks())
+
+async function runTaskListBrief(): Promise<unknown> {
   vi.mocked(printResult).mockClear()
+  vi.spyOn(client, 'call').mockImplementation(callMock)
   await ORCHESTRATION_HANDLERS['orchestration task-list']({
-    flags: new Map([['brief', true]]),
-    client: { call: callMock },
+    flags: new Map<string, string | boolean>([
+      ['full', true],
+      ['brief', true],
+      ['run', 'run_1']
+    ]),
+    client,
+    cwd: '/tmp/repo',
     json: true
-  } as never)
-  return vi.mocked(printResult).mock.calls[0]?.[0] as {
-    result: { tasks: { spec: string; spec_truncated: boolean }[] }
+  })
+  expect(callMock).toHaveBeenCalledOnce()
+  expect(callMock).toHaveBeenCalledWith('orchestration.taskList', {
+    status: undefined,
+    ready: undefined,
+    brief: true,
+    run: 'run_1',
+    callerTerminalHandle: undefined
+  })
+  expect(printResult).toHaveBeenCalledOnce()
+  const printCall = vi.mocked(printResult).mock.calls[0]
+  if (!printCall) {
+    throw new Error('task-list did not print its response')
   }
+  expect(printCall[1]).toBe(true)
+  return printCall[0]
 }
 
 describe('orchestration task-list brief output', () => {
   it('requests server-side brief and falls back client-side for older runtimes', async () => {
-    callMock.mockReset().mockResolvedValue({
-      result: {
-        // No spec_truncated field — the pre-brief-runtime signature.
+    callMock.mockReset().mockResolvedValue(
+      okFixture('req_tasks', {
+        // Older runtimes omit spec_truncated.
         tasks: [{ id: 'task_1', spec: `First line\n${'detail '.repeat(40)}`, status: 'ready' }],
         count: 1
-      }
-    })
+      })
+    )
 
     const response = await runTaskListBrief()
 
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.taskList',
-      expect.objectContaining({ brief: true })
-    )
-    expect(response.result.tasks[0].spec).toHaveLength(160)
-    expect(response.result.tasks[0].spec_truncated).toBe(true)
+    expect(response).toHaveProperty('result.tasks.0.spec', `First line ${'detail '.repeat(21)}d…`)
+    expect(response).toHaveProperty('result.tasks.0.spec_truncated', true)
   })
 
   it('passes server-abbreviated rows through untouched', async () => {
     const serverTasks = [
       { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }
     ]
-    callMock.mockReset().mockResolvedValue({ result: { tasks: serverTasks, count: 1 } })
+    const serverResponse = okFixture('req_tasks', { tasks: serverTasks, count: 1 })
+    callMock.mockReset().mockResolvedValue(serverResponse)
 
     const response = await runTaskListBrief()
 
-    // Why: re-abbreviating a server-truncated spec would flip spec_truncated
-    // back to false (the truncated text fits the cap).
-    expect(response.result.tasks).toBe(serverTasks)
+    // Re-abbreviating would reset spec_truncated because the already-truncated text fits the cap.
+    expect(response).toHaveProperty('result.tasks', serverTasks)
+  })
+})
+
+describe('orchestration task-list concise output', () => {
+  it('lists each task without its spec or result', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(client, 'call').mockImplementation(callMock)
+    callMock.mockReset().mockResolvedValue(
+      okFixture('req_tasks', {
+        tasks: [
+          {
+            id: 'task_1',
+            spec: 'long spec '.repeat(200),
+            task_title: 'Audit',
+            status: 'completed',
+            result: 'long result '.repeat(200),
+            dispatch_id: 'ctx_1'
+          }
+        ],
+        count: 1
+      })
+    )
+    await ORCHESTRATION_HANDLERS['orchestration task-list']({
+      flags: new Map<string, string | boolean>([['run', 'run_1']]),
+      client,
+      cwd: '/tmp/repo',
+      json: true
+    })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
+      ok: true,
+      result: {
+        tasks: [{ id: 'task_1', status: 'completed', title: 'Audit', dispatchId: 'ctx_1' }]
+      }
+    })
   })
 })

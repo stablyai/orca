@@ -1,3 +1,4 @@
+import { LINEAR_AUTHENTICATION_ERROR } from '../../shared/integration-credential-errors'
 import type { LinearIssue } from '../../shared/linear/issue-types'
 import type {
   LinearCollectionResult,
@@ -49,8 +50,10 @@ function linearWorkspaceError(
   entry: LinearClientForWorkspace,
   error: unknown
 ): LinearWorkspaceError {
-  const message = error instanceof Error ? error.message : String(error)
-  const lower = message.toLocaleLowerCase()
+  const message = isAuthError(error)
+    ? LINEAR_AUTHENTICATION_ERROR
+    : 'Unable to load Linear issues. Try again.'
+  const lower = (error instanceof Error ? error.message : String(error)).toLowerCase()
   const type: LinearWorkspaceError['type'] = isAuthError(error)
     ? 'auth'
     : lower.includes('rate limit') || lower.includes('429')
@@ -88,7 +91,7 @@ async function readListIssuesForWorkspace(
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
       if (shouldThrowAuthError(workspaceId)) {
-        throw error
+        throw new Error(LINEAR_AUTHENTICATION_ERROR)
       }
     } else {
       console.warn('[linear] listIssues failed:', error)
@@ -140,7 +143,7 @@ async function readListIssuesPageForState(
     if (isAuthError(error)) {
       clearToken(state.entry.workspace.id)
       if (shouldThrowAuthError(workspaceId)) {
-        throw error
+        throw new Error(LINEAR_AUTHENTICATION_ERROR)
       }
     } else {
       console.warn('[linear] listIssues failed:', error)
@@ -198,9 +201,7 @@ async function readListIssuesAcrossWorkspaces(
   }))
   const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit)
 
-  // Why: "all workspaces" is a global sorted list. Pull one bounded page per
-  // workspace first, then spend additional API calls only where unseen issues
-  // can still change the global updatedAt cutoff.
+  // Seed every workspace, then fetch only where unseen issues could alter the global updatedAt cutoff.
   await Promise.all(states.map((state) => readListIssuesPageForState(state, first, workspaceId)))
 
   for (;;) {
@@ -238,9 +239,7 @@ export async function listIssues(
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const effectiveLimit = clampLinearIssueListLimit(limit)
   const attributeFilter = options?.attributeFilter
-  // Why: workspace-specific state/member/label ids cannot fan out safely across
-  // "all" workspaces; reject before creating clients so non-UI callers cannot
-  // get a misleading partial subset.
+  // Workspace-scoped facet IDs cannot safely fan out; reject before creating clients to avoid partial results.
   if (
     attributeFilter &&
     !isEmptyLinearIssueAttributeFilter(attributeFilter) &&

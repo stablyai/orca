@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import {
   clearGitStatusRefreshOrderingForTests,
   refreshGitStatusForWorktree,
@@ -7,9 +8,9 @@ import {
 } from './git-status-refresh'
 import {
   getCachedAutomaticPushTargetUpstreamStatus,
-  invalidateAutomaticPushTargetUpstreamStatusCache,
   storeCachedAutomaticPushTargetUpstreamStatus
 } from './push-target-upstream-refresh-cache'
+
 import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 
@@ -69,7 +70,8 @@ async function refreshAutomatically(options: {
   pushTarget?: GitPushTarget
 }): Promise<void> {
   await refreshGitStatusForWorktree({
-    settings: { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null },
+    target: runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId ?? null),
+    ownerHostId: null,
     worktreeId: 'wt-1',
     worktreePath: '/repo',
     connectionId: options.connectionId,
@@ -105,42 +107,6 @@ describe('push-target upstream refresh cache', () => {
       hasUpstream: true,
       upstreamName: 'fork/feature/pr-head',
       ahead: 1,
-      behind: 0
-    })
-  })
-
-  it('retries after a failed push-target refresh invalidates an unchanged automatic poll cache hit', async () => {
-    stubGitStatus([unchangedStatus])
-    const deps = makeDeps()
-    vi.mocked(deps.fetchUpstreamStatus)
-      .mockResolvedValueOnce({
-        hasUpstream: true,
-        upstreamName: 'fork/feature/pr-head',
-        ahead: 1,
-        behind: 0
-      })
-      .mockResolvedValueOnce({
-        hasUpstream: true,
-        upstreamName: 'fork/feature/pr-head',
-        ahead: 0,
-        behind: 0
-      })
-
-    await refreshAutomatically({ deps })
-    invalidateAutomaticPushTargetUpstreamStatusCache({
-      settings: { activeRuntimeEnvironmentId: null },
-      worktreeId: 'wt-1',
-      worktreePath: '/repo',
-      pushTarget
-    })
-    await refreshAutomatically({ deps })
-    await refreshAutomatically({ deps })
-
-    expect(deps.fetchUpstreamStatus).toHaveBeenCalledTimes(2)
-    expect(deps.setUpstreamStatus).toHaveBeenLastCalledWith('wt-1', {
-      hasUpstream: true,
-      upstreamName: 'fork/feature/pr-head',
-      ahead: 0,
       behind: 0
     })
   })
@@ -204,7 +170,7 @@ describe('push-target upstream refresh cache', () => {
 
     storeCachedAutomaticPushTargetUpstreamStatus(
       {
-        settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+        target: { kind: 'environment' as const, environmentId: 'runtime-1' },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         pushTarget,
@@ -215,7 +181,7 @@ describe('push-target upstream refresh cache', () => {
 
     expect(
       getCachedAutomaticPushTargetUpstreamStatus({
-        settings: { activeRuntimeEnvironmentId: 'runtime-2' },
+        target: { kind: 'environment' as const, environmentId: 'runtime-2' },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         pushTarget,
@@ -230,6 +196,8 @@ describe('push-target upstream refresh cache', () => {
 
     await refreshAutomatically({ deps })
     await refreshGitStatusForWorktreeStrict({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       pushTarget,

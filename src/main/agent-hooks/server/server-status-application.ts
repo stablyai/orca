@@ -1,33 +1,27 @@
+import { deriveCliWriterTopology } from './cli-writer-observation'
 import { createHash } from 'node:crypto'
 
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'
 import { isCommandCodeNewTurnWhileWorking } from '../../../shared/command-code-turn-boundary'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
+import { reduceHostTurnEnd } from '../../../shared/agent-hook-turn-end-timing'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentStatusObservation,
   AgentStatusObservationOrigin
 } from '../../../shared/agent-status-observation'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
-import type { AgentStatusState, ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import { mainAgentState } from '../../../shared/main-agent-status'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'
 
-/** Bounds the retained observation clock; eviction only degrades a replay to `now`. */
+// Evicting remembered evidence makes later replay fall back to its arrival time.
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
 
-function mainAgentState(payload: ParsedAgentStatusPayload): AgentStatusState {
-  return payload.mainAgent?.state ?? payload.state
-}
-
-/**
- * When the main agent's current turn began. Its own turn-opening event stamps it (the same
- * classifier the observation boundary uses), except a session boundary, which lands idle with no
- * turn open. Replays, child events and identity-only rows restate a turn rather than open one.
- */
+/** Only live main-agent turn boundaries establish a start; replay and child events preserve it. */
 function resolveTurnStartedAt(
   previous: EnrichedAgentHookEventPayload | undefined,
   payload: AgentHookEventPayload,
@@ -42,8 +36,7 @@ function resolveTurnStartedAt(
   ) {
     return payload.payload.sessionBoundary === true ? undefined : at
   }
-  // Why: a settled main agent running again with no opening event (an OSC repaint racing the
-  // prompt hook) is a turn edge nothing dated; carrying the old stamp would count from that turn.
+  // An undated return to work cannot inherit the completed turn's start.
   if (
     previous &&
     mainAgentState(previous.payload) === 'done' &&
@@ -58,7 +51,8 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
   protected refreshTerminalStatusEvidence(
     previous: EnrichedAgentHookEventPayload,
     mutationBefore?: EnrichedAgentHookEventPayload,
-    emitEnrichedStatus = false
+    emitEnrichedStatus = false,
+    newRun = false
   ): void {
     if (!this.canWriteLegacyStatusRow(previous)) {
       return
@@ -79,13 +73,18 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       isReplay: _isReplay,
       ...payload
     } = previous
-    const refreshed: EnrichedAgentHookEventPayload = {
-      ...payload,
-      receivedAt: now,
-      evidenceObservedAt: now,
-      stateStartedAt,
-      observation: this.stampObservation(payload, 'osc', now)
-    }
+    const refreshed = deriveCliWriterTopology(
+      {
+        ...payload,
+        receivedAt: now,
+        evidenceObservedAt: now,
+        stateStartedAt,
+        observation: this.stampObservation(payload, 'osc', now)
+      },
+      mutationBefore ?? previous,
+      this.cliWriterExecutionMatches,
+      newRun
+    )
     const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
     this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
     if (!this.writeLegacyStatusRow(refreshed)) {
@@ -93,9 +92,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     }
     this.commitStatusRowMutation(mutationBefore ?? previous, refreshed)
     this.scheduleStatusPersist()
-    // A dismissed row may retain only provider resume identity. Its preserved payload can still
-    // read `working`, but it is deliberately hidden from live readers and must not renew awake or
-    // mobile freshness leases.
+    // Hidden resume identity can still say working; it must not renew awake or mobile leases.
     if (refreshed.providerSessionOnly === true) {
       return
     }
@@ -123,8 +120,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
     )
   }
-  /** `observedAt` is the producer's own clock for evidence that has one (a session journal); it
-   *  stamps the evidence and state-start times while `receivedAt` keeps delivery order. */
+  /** Producer clocks date evidence and state; receivedAt retains delivery order. */
   protected attachStatusTiming(
     payload: AgentHookEventPayload,
     now = Date.now(),
@@ -150,24 +146,34 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         ? previous.stateStartedAt
         : (observedAt ?? now)
     const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
-    // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
+    // Relay rows carry their execution host's turn-end evidence.
+    const { hostTurn, ...turnEnd } = reduceHostTurnEnd(
+      previous,
+      payload,
+      observedAt ?? now,
+      payload.connectionId === null
+    )
+    const {
+      stopHookActive: _stopHookActive,
+      nativeTurnKey: _nativeTurnKey,
+      turnEndedAt: _turnEndedAt,
+      turnEndDisposition: _turnEndDisposition,
+      hostTurn: _hostTurn,
+      ...event
+    } = payload
     return {
-      ...payload,
+      ...event,
       receivedAt: now,
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
       stateStartedAt,
-      // Always written here, so a producer can never declare it.
-      turnStartedAt
+      // Producers cannot declare a main-agent turn start.
+      turnStartedAt,
+      ...turnEnd,
+      ...(hostTurn ? { hostTurn } : {})
     }
   }
 
-  /**
-   * A replay restates evidence already observed; it is not a new observation. Keeping
-   * `receivedAt` at `now` preserves delivery order (the connection-clear watermark and the
-   * renderer's four `<` drops all depend on it), while this clock records when the evidence
-   * was actually seen — so the staleness window measures age, not reconnect count.
-   * Without a remembered time the honest answer is `now`, which is today's behaviour.
-   */
+  /** Replay keeps evidence age separate from arrival order; unknown age falls back to now. */
   private resolveEvidenceObservedAt(
     payload: AgentHookEventPayload,
     previous: EnrichedAgentHookEventPayload | undefined,
@@ -245,7 +251,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       promptInteractionKey
     })
     try {
-      // Why: hooks prove a turn was submitted but not which UI launched the terminal; keep attribution low-cardinality.
+      // Hooks prove prompt submission but cannot identify the launching UI.
       track('agent_prompt_sent', {
         agent_kind: agentKind,
         launch_source: 'unknown',
@@ -257,9 +263,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     }
   }
 
-  /** Stamp who observed this event, in what order, on main's clock. Nothing reads it yet
-   *  (STA-4293) — it is stamped here because every main-side ingress funnels through
-   *  applyNormalizedStatus, so no origin can silently arrive untagged. */
+  /** Sequence every ingress with runtime provenance, including hook/OSC precedence. */
   protected stampObservation(
     payload: AgentHookEventPayload,
     origin: AgentStatusObservationOrigin,
@@ -268,14 +272,12 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     return this.observations.observe(payload.paneKey, {
       origin,
       observedAt,
-      // Why: reuse the listener's own per-provider classifier; a second list of raw event-name
-      // literals here would strand the providers whose boundary event is named anything else.
+      // Use provider classifiers; boundary event names vary.
       boundary:
         payload.source !== undefined && isNewTurnEvent(payload.source, payload.hookEventName),
       kind: payload.providerSessionOnly
         ? 'identity-only'
-        : // Why: a replay restates a turn that already happened, and OSC 9999 repaints the
-          // current state rather than announcing a change — neither is a fresh transition.
+        : // Replay and OSC restate status rather than establish a fresh transition.
           payload.isReplay === true || origin === 'osc'
           ? 'snapshot'
           : 'transition'

@@ -19,6 +19,7 @@ export type CodexUsageParseContext = {
   sessionCwd: string | null
   currentCwd: string | null
   currentModel: string | null
+  currentTurnId?: string | null
   previousTotals: CodexUsageRawUsage | null
   totalOnlyBaselinePending?: boolean
 }
@@ -86,6 +87,7 @@ export function parseCodexUsageRecord(
   }
 
   if (parsed.type === 'turn_context') {
+    context.currentTurnId = extractString(parsed.payload.turn_id)
     context.currentCwd =
       extractString(parsed.payload.cwd) ?? context.currentCwd ?? context.sessionCwd
     context.currentModel = extractModel(parsed.payload) ?? context.currentModel
@@ -98,9 +100,7 @@ export function parseCodexUsageRecord(
 
   const info = parsed.payload.info
   if (info == null || typeof info !== 'object') {
-    // Why: Codex emits token_count snapshots with null info for rate-limit
-    // updates. Treating them as malformed usage would make active sessions look
-    // flaky and create false scan errors for perfectly valid logs.
+    // Rate-limit updates legitimately emit token_count records with null info.
     return null
   }
 
@@ -143,9 +143,7 @@ export function parseCodexUsageRecord(
 
   context.previousTotals = resolvedUsage.nextTotals
 
-  // Why: the long-context tier is read as per request — GPT-5.6/6 pages say "full request", while
-  // GPT-5.4/5.5 pages say "full session", and one token_count's last_token_usage is one response.
-  // A total-only delta can span several requests, so it is never classed as long.
+  // Price long context per request; total-only deltas may span several requests.
   const isLongContext = lastUsage !== null && delta.inputTokens > LONG_CONTEXT_THRESHOLD_TOKENS
   const resolvedModel = extractModel(parsed.payload) ?? context.currentModel
   const hasInferredPricing = resolvedModel === null
@@ -153,7 +151,12 @@ export function parseCodexUsageRecord(
   return {
     sessionId: context.sessionId,
     timestamp: parsed.timestamp,
-    eventKey: buildCodexUsageEventKey(parsed.timestamp, totalUsage, lastUsage),
+    eventKey: buildCodexUsageEventKey(
+      // Fork copies rewrite timestamps but keep turn ids; last-only deltas need the timestamp to stay distinct.
+      totalUsage && context.currentTurnId ? context.currentTurnId : parsed.timestamp,
+      totalUsage,
+      lastUsage
+    ),
     cwd: context.currentCwd ?? context.sessionCwd,
     model: resolvedModel,
     hasInferredPricing,

@@ -20,6 +20,7 @@ type RegisteredWindowListener = {
 }
 
 function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
+  const dimensions = { css: { cell: { width: 8, height: 15 } } }
   const terminal = {
     cols: 80,
     rows: 24,
@@ -27,7 +28,16 @@ function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
     modes: {},
     element: null as HTMLElement | null,
     disposed: false,
-    _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } },
+    _core: {
+      _renderService: {
+        get dimensions(): typeof dimensions {
+          if (terminal.disposed) {
+            throw new Error('Renderer dimensions are unavailable after terminal disposal')
+          }
+          return dimensions
+        }
+      }
+    },
     buffer: {
       active: {
         viewportY: 0,
@@ -123,7 +133,6 @@ describe('terminal WebView init surface replacement', () => {
     } as unknown as new (options: TerminalOptions) => TerminalStub
     webWindow.ReactNativeWebView = { postMessage: vi.fn() }
     document.body.innerHTML = bodyMarkup()
-    // eslint-disable-next-line no-new-func
     new Function(TERMINAL_DOCUMENT_SCRIPT)()
   })
 
@@ -157,8 +166,7 @@ describe('terminal WebView init surface replacement', () => {
   })
 
   it('commits only the newest surface when phone-fit init calls overlap', () => {
-    // Why: restored terminals can receive desktop scrollback, a phone resize,
-    // and phone scrollback before any xterm replay callback has completed.
+    // Restored terminals may receive desktop replay, resize and phone replay before any xterm write completes.
     dispatchInit(120, 'desktop')
     animationFrames.shift()?.()
     dispatchInit(51, 'phone-resize')

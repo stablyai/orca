@@ -1,8 +1,8 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
@@ -15,10 +15,12 @@ import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
+  aiVaultResumeInSessionWorkspaceLabel,
   canJumpToAiVaultSessionWorktree,
   resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,
@@ -170,13 +172,13 @@ export function isKnownAiVaultResumeWorkspaceTarget(
 
   const workspaceKey = parseWorkspaceKey(workspaceId)
   if (workspaceKey?.type === 'folder') {
-    return state.folderWorkspaces.some(
+    return selectFolderWorkspaces(state).some(
       (workspace) => workspace.id === workspaceKey.folderWorkspaceId
     )
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  return getIndexedWorktreeMap(state.worktreesByRepo).has(worktreeId)
+  return getIndexedWorktreeMap(selectWorktreesByRepo(state)).has(worktreeId)
 }
 
 function resolveSupportedResumeWorktreeId(args: {
@@ -233,9 +235,7 @@ function resolveAiVaultResumeTargetState(args: {
   }
 }
 
-// Resume needs actual conversation content: a zero-turn transcript would resume
-// into an empty session. Copy stays available for blocked CLI sessions, while a
-// structured owner reopens natively and must never expose a legacy command.
+// Require real turns; blocked CLI sessions may still copy commands, but native-owned sessions must reopen natively.
 export function aiVaultSessionRowResumeGating(
   session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'structuredSession'>,
   state: Pick<AiVaultSessionResumeState, 'blocked'> | null
@@ -248,13 +248,11 @@ export function aiVaultSessionRowResumeGating(
 }
 
 export function aiVaultSessionResumeLabel(
-  state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'>
+  state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'> &
+    Partial<Pick<AiVaultSessionResumeState, 'worktreeId'>>
 ): string {
   if (state.usesSessionWorktree) {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-      'Resume in Worktree'
-    )
+    return aiVaultResumeInSessionWorkspaceLabel(state.worktreeId)
   }
   return translate(
     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',

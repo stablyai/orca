@@ -12,7 +12,7 @@ import {
 } from '../../../shared/protocol-version'
 installRuntimeFileClientEnvironment()
 const context = {
-  settings: { activeRuntimeEnvironmentId: 'owner-a' },
+  target: { kind: 'environment' as const, environmentId: 'owner-a' },
   worktreeId: 'folder-1',
   worktreePath: '/folder'
 }
@@ -59,6 +59,12 @@ it('old paired host retains scalar stats on that runtime and does not call the n
       ([args]) => args.method === 'files.stat' && args.selector === 'owner-a'
     )
   ).toBe(true)
+  expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.params)).toEqual(
+    paths.map((path) => ({
+      worktree: 'id:folder-1',
+      relativePath: path.slice('/folder/'.length)
+    }))
+  )
   expect(fsPathExists).not.toHaveBeenCalled()
 })
 it('new method missing after capability discovery falls back only for method_not_found', async () => {
@@ -85,4 +91,33 @@ it('remote errors stay errors, and an out-of-scope path cannot read the local fi
     { error: expect.stringContaining('outside') }
   ])
   expect(fsPathExists).not.toHaveBeenCalled()
+})
+it('coded-absence mode reports a file gone only from a per-path answer', async () => {
+  const strict = { codedAbsenceOnly: true }
+  status(['files.pathsExist'])
+  runtimeEnvironmentCall.mockResolvedValue({
+    id: 'batch',
+    ok: true,
+    result: [{ exists: false }, { error: 'ENOENT: no such file or directory' }]
+  })
+  expect(await runtimePathsExist(context, paths.slice(0, 2), undefined, strict)).toEqual([
+    { exists: false },
+    { error: 'ENOENT: no such file or directory' }
+  ])
+  // A whole-request "not found" (re-pairing) must not read as every path missing.
+  runtimeEnvironmentCall.mockResolvedValue({
+    id: 'batch',
+    ok: false,
+    error: { code: 'not_found', message: 'worktree not found' }
+  })
+  await expect(runtimePathsExist(context, [paths[0]], undefined, strict)).rejects.toThrow()
+})
+it('coded-absence mode cannot get a per-path answer from an old host', async () => {
+  status([])
+  expect(
+    await runtimePathsExist(context, [paths[0]], undefined, { codedAbsenceOnly: true })
+  ).toEqual([{ error: expect.any(String) }])
+  expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+    expect.objectContaining({ method: 'files.stat' })
+  )
 })

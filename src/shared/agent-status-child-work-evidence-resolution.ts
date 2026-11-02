@@ -16,12 +16,10 @@ import type { AgentChildWorkEvidenceHandle } from './agent-status-child-work-evi
 import type { AgentStatusStore } from './agent-status-store'
 import { agentStatusSubjectsEqual, type AgentStatusSubject } from './agent-status-subject'
 
-/** One producer per structured session: its provider's lane. The segment scopes its aliases, so
- *  a handle is unique per parent and provider without being unique across producers. */
+/** Scope aliases by producer/parent/provider segment; provider handles need not be globally unique. */
 export const STRUCTURED_CHILD_WORK_PRODUCER_ID = 'structured-session-child-work'
 const SEGMENT_ID = STRUCTURED_CHILD_WORK_PRODUCER_ID
-/** A run is named in the provider's own terms: a task runs under its spawn call, a thread under
- *  its turn. The kinds stay apart so a turn id can never pass for a spawn call. */
+/** Keep spawn-call and thread-turn run handles distinct so a turn ID cannot impersonate a spawn. */
 const RUN_ALIAS_KIND_BY_ID_KIND = {
   task_id: 'tool_use_id',
   thread_id: 'turn_id'
@@ -44,9 +42,7 @@ export type AgentChildWorkEvidenceScope = {
 export type AgentChildWorkHandleResolution = {
   child: AgentChildWorkRecord | null
   ambiguous: boolean
-  /** Highest generation any binding for the handle holds, live or retired. A retired binding
-   *  outlives the record it named and must fence that lifetime's late evidence, without banning
-   *  the provider id for ever. */
+  /** Retain the highest binding generation after record removal to fence late evidence while permitting future provider-ID reuse. */
   highestGeneration: number | null
 }
 
@@ -94,8 +90,7 @@ function probes(
   aliasKinds: readonly AgentChildWorkAliasKind[],
   alias: string
 ): AgentChildWorkAliasInput[] {
-  // The alias key carries `kind`, so a reclassified child answers under its old kind alone;
-  // probing every kind is what keeps a reclassification from minting a second child.
+  // Alias keys include kind; probe all kinds to prevent reclassification creating a duplicate child.
   return aliasKinds.flatMap((aliasKind) =>
     AGENT_CHILD_WORK_KINDS.map((kind) => ({
       parent: scope.parent,

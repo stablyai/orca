@@ -1,4 +1,9 @@
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/pty-provider-contract'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 
@@ -9,23 +14,60 @@ export class DegradedDaemonOwnerRecovery {
   constructor(
     providers: readonly IPtyProvider[],
     private readonly daemonAdapters: readonly DaemonPtyAdapter[],
-    routes: Map<string, IPtyProvider>,
+    private readonly routes: Map<string, IPtyProvider>,
     private readonly spawnFresh: (opts: PtySpawnOptions) => Promise<PtySpawnResult>
   ) {
     this.attachResolver = new DaemonSessionOwnerResolver(providers, routes)
     this.livenessResolver = new DaemonSessionOwnerResolver(daemonAdapters, routes)
   }
 
+  resolveFencedOwner = (id: string, incarnationId: string) =>
+    this.attachResolver.resolveTermination(id, incarnationId)
+
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
-    return opts.attachOnly && opts.sessionId
-      ? await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
-      : await this.spawnFresh(opts)
+    if (opts.attachOnly && opts.sessionId) {
+      return await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+    }
+    const result = await this.spawnFresh(opts)
+    const provider = this.routes.get(result.id)
+    if (provider && !result.exitedBeforeSpawnReply) {
+      this.recordRoute(result.id, provider, result.incarnationId)
+    }
+    return result
   }
+
+  observesForeground = (id: string): boolean =>
+    this.routes.get(id)?.supportsForegroundObservation?.(id) === true
+
+  getVerifiedRoute = (id: string): IPtyProvider | undefined =>
+    this.attachResolver.getVerifiedRoute(id)
 
   probe = async (sessionId: string): Promise<boolean | null> =>
     await this.livenessResolver.probe(sessionId)
 
   discoverRoutes = async (): Promise<void> => await this.attachResolver.discoverRoutes()
+
+  async listProcesses(
+    opts?: Parameters<IPtyProvider['listProcesses']>[0]
+  ): Promise<PtyProcessInfo[]> {
+    const ids = opts?.targetOwnerOnly ? opts.ptyIds : undefined
+    // Only established routes skip owner resolution; stop and liveness proofs never take this path.
+    if (!ids || ids.some((id) => !this.routes.has(id))) {
+      return this.attachResolver.listProcesses(opts)
+    }
+    const owners = new Set(ids.map((id) => this.routes.get(id)!))
+    const rows = await Promise.all(
+      [...owners].map(async (owner) =>
+        (
+          await owner.listProcesses({
+            ptyIds: ids.filter((id) => this.routes.get(id) === owner),
+            targetOwnerOnly: true
+          })
+        ).filter((row) => ids.includes(row.id) && this.routes.get(row.id) === owner)
+      )
+    )
+    return rows.flat()
+  }
 
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
     alive: string[]
@@ -55,10 +97,11 @@ export class DegradedDaemonOwnerRecovery {
     return { alive, killed }
   }
 
-  recordRoute(sessionId: string, provider: IPtyProvider): void {
-    this.attachResolver.recordRoute(sessionId, provider)
-    if (this.daemonAdapters.includes(provider as DaemonPtyAdapter)) {
-      this.livenessResolver.recordRoute(sessionId, provider as DaemonPtyAdapter)
+  recordRoute(sessionId: string, provider: IPtyProvider, incarnationId?: string): void {
+    this.attachResolver.recordRoute(sessionId, provider, incarnationId)
+    const adapter = this.daemonAdapters.find((candidate) => candidate === provider)
+    if (adapter) {
+      this.livenessResolver.recordRoute(sessionId, adapter, incarnationId)
     }
   }
 

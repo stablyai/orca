@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { SkillDiscoveryResult } from '../../../../shared/skills'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const discoverSkillsForRuntimeTarget = vi.hoisted(() =>
   vi.fn<(runtimeTarget: RuntimeClientTarget) => Promise<SkillDiscoveryResult>>()
@@ -25,7 +25,7 @@ import {
   resetSkillDiscoveryCacheForTests
 } from '@/hooks/installed-agent-skill-discovery'
 import { getInstalledAgentSkillDiscoveryCacheSizeForTests } from '@/hooks/installed-agent-skill-discovery-cache'
-import { createTestStore } from './store-test-helpers'
+import { createRuntimeStatusTestStore as createTestStore } from './runtime-status.test-fixture'
 
 function environment(id: string, pairingRevision = 1): PublicKnownRuntimeEnvironment {
   return {

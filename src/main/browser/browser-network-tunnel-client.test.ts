@@ -196,7 +196,7 @@ describe('BrowserNetworkTunnelClient', () => {
     )
 
     await expect(opening).rejects.toThrow('Browser tunnel destination failed: destination_error')
-    // Why: the errored destroy emits on a later tick; an unobserved 'error' fails the run here.
+    // Allow a deferred socket 'error' to surface before the test ends.
     await new Promise((resolve) => setImmediate(resolve))
     client.close()
   })

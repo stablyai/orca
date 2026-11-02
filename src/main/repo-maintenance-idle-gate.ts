@@ -8,17 +8,7 @@ import { hasWorktreeRemovalsInFlight } from './ipc/worktrees/worktree-ipc-contex
 import { hasPendingWorktreeCreatePreparations } from './worktree-create-preparation'
 import { hasPendingWorktreeRemovals } from './worktree-removal-table'
 
-/**
- * The app-wide "not now" answer for idle repo maintenance.
- *
- * `pack-refs` holds a general git admission slot for its whole run, which on a
- * large backlog is minutes, and takes the `packed-refs` lock while it writes.
- * Any ref deletion needs that same lock and gives up after
- * `core.packedRefsTimeout` (1s), so worktree removal in particular has to veto
- * this -- as does a create in flight, an agent mid-run, and shutdown. Battery is
- * a veto too: this is work the user did not ask for, and a plugged-in quiet
- * window always comes along later.
- */
+// pack-refs shares a ref lock with worktree deletion; defer while user work is active.
 export type RepoMaintenanceIdleInputs = {
   isQuitting: () => boolean
   getWorkingAgentCount: () => number
@@ -36,10 +26,7 @@ export function installRepoMaintenanceIdleGate(
       hasPendingWorktreeRemovals() ||
       isOnBatteryPower()
   )
-  // Do-not-start, never stop-what-is-running. Killing a pack to honour a battery
-  // or focus change would strand a ref lock roughly one time in five to save at
-  // most a couple of minutes of background unlinking; pushing the next attempt
-  // out costs nothing and risks nothing.
+  // Postpone future packs; killing one in flight can strand a ref lock.
   const onBattery = (): void => {
     postponeRepoRefMaintenance()
   }
@@ -51,8 +38,7 @@ export function installRepoMaintenanceIdleGate(
   return () => {
     app.off('browser-window-focus', onFocus)
     powerMonitor.off('on-battery', onBattery)
-    // Order matters: clearing the probe alone would leave armed timers running
-    // against a gate that can no longer see agents, creates, or shutdown.
+    // Stop armed timers before removing the activity probe.
     const stopped = disposeLocalRepoRefMaintenance()
     setRepoMaintenanceActivityProbe(null)
     return stopped
@@ -63,7 +49,7 @@ function isOnBatteryPower(): boolean {
   try {
     return powerMonitor.isOnBatteryPower()
   } catch {
-    // Absence of the API is not evidence of battery; desktops answer false anyway.
+    // An unavailable power API is not evidence of battery use.
     return false
   }
 }

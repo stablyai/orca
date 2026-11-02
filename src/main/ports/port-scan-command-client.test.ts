@@ -23,8 +23,7 @@ vi.mock('child_process', () => ({
   execFile: execFileMock
 }))
 
-// A worker_threads stand-in the tests drive directly: it records posted requests
-// and lets a test emit message/error/exit without a built worker bundle.
+// Drive worker events directly without requiring a built bundle.
 class FakeWorker {
   postedRequests: PortScanCommandRequest[] = []
   terminated = false
@@ -99,8 +98,7 @@ describe('PortScanCommandClient', () => {
     const second = client.run('ps', ['-p', '1'])
     await Promise.resolve()
 
-    // Why (#11161): a second in-flight request would have its deadline armed
-    // while the worker's loop is still blocked inside the first uv_spawn.
+    // A concurrent request's deadline would run while the first uv_spawn blocks (#11161).
     expect(workers[0].postedRequests.map((request) => request.command)).toEqual(['lsof'])
 
     workers[0].respond({ ok: true, stdout: 'lsof-out', spawnMs: 12 })
@@ -174,8 +172,7 @@ describe('PortScanCommandClient', () => {
     const client = makeClient(workers)
 
     const accepted = Array.from({ length: MAX_QUEUED_CALLS + 1 }, () => client.run('lsof', []))
-    // A different command than the accepted ones: the message must name the
-    // request that was actually shed, which is all a log has to identify it.
+    // Use a distinct overflow command so errors prove which request was dropped.
     const overflow = client.run('netstat', ['-ano'])
 
     const error = await overflow.catch((err: unknown) => err)
@@ -206,10 +203,7 @@ describe('PortScanCommandClient', () => {
   })
 })
 
-// Why: the packaged branch never runs in dev or e2e (both take the __dirname
-// path), so it is pinned here at the path-construction level. Whether Electron's
-// asar shim can load a Worker entry from inside app.asar is not testable here —
-// that still needs a packaged smoke test.
+// Dev/e2e never use packaged paths; this pins construction but cannot prove packaged Worker loading.
 describe('resolveWorkerEntryPath', () => {
   const WORKER_ENTRY_FILENAME = 'port-scan-command-worker-entry.js'
 
@@ -247,8 +241,7 @@ describe('resolveWorkerEntryPath', () => {
 
 const REAL_WORKER_BLOCK_MS = 800
 
-// Mirrors the worker entry's protocol but blocks its own thread first, standing
-// in for the endpoint-security hook that makes CreateProcessW take seconds.
+// Block the worker thread to model EDR delays inside CreateProcessW.
 const BLOCKING_WORKER_SCRIPT = `
 const { parentPort } = require('node:worker_threads')
 const { execFile } = require('node:child_process')
@@ -293,10 +286,7 @@ describe('PortScanCommandClient on a real worker thread', () => {
 })
 
 describe('resolveWorkerEntryPath on a non-Electron host', () => {
-  // Why: orcad reports isPackaged true (it is a production build), but
-  // process.resourcesPath is Electron-only and undefined there. Joining undefined threw
-  // a TypeError instead of failing as a missing worker — a crash where a clean
-  // "worker unavailable" was the honest outcome.
+  // orcad is packaged but lacks Electron resourcesPath; resolve as unavailable rather than throw.
   it('does not join an undefined resourcesPath', () => {
     expect(() =>
       resolveWorkerEntryPath({

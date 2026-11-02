@@ -1,8 +1,3 @@
-// Why: will-quit defers app.quit() until teardown settles. Teardown members
-// are individually bounded, but a wedged transport (half-open post-sleep
-// socket) can leave one unsettled forever and make Force Quit the only way
-// out (#9447). Racing a deadline guarantees quit always completes.
-
 import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../shared/quit-teardown-deadline'
 
 export { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../shared/quit-teardown-deadline'
@@ -39,12 +34,7 @@ export type SettledWithinMs<T> =
   | { outcome: 'failed'; error: unknown }
   | { outcome: 'timed-out' }
 
-/**
- * Races a teardown against a deadline. Why the three-way result rather than a nullable value: a
- * rejection and a timeout are different diagnoses on the quit path, and collapsing them makes a
- * genuine failure read as "timed out" in the log. Every teardown here is best-effort, so this never
- * throws. The timer is unref'd so it can never itself hold the process open.
- */
+// Keep failures distinct from timeouts so quit diagnostics remain accurate.
 export async function settleWithinMs<T>(
   promise: Promise<T>,
   timeoutMs: number

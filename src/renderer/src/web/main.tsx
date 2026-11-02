@@ -17,12 +17,19 @@ import {
   saveStoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
+import { initWebDeviceKeySupport } from './web-device-key-support'
+import { WebPairingSecurityNotice } from './WebPairingSecurityNotice'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
 import { installOsFileDropCancellationGuard } from '../lib/os-file-drop-cancellation-guard'
+import { installBodyOverlayAttributes } from '../lib/body-overlay-attributes'
+import { installAppKeyboardRouter } from '../lib/app-keyboard-router'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
+const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
+import.meta.hot?.dispose(disposeBodyOverlayAttributes)
+installAppKeyboardRouter()
 const App = lazy(() => import('../App'))
 
 function WebRoot(): React.JSX.Element {
@@ -69,9 +76,12 @@ function WebRoot(): React.JSX.Element {
 
   installWebPreloadApi()
   return (
-    <Suspense fallback={<div className="min-h-dvh bg-background" />}>
-      <App />
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="min-h-dvh bg-background" />}>
+        <App />
+      </Suspense>
+      <WebPairingSecurityNotice />
+    </>
   )
 }
 
@@ -92,16 +102,18 @@ function WebRootBoundary(): React.JSX.Element {
   )
 }
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <I18nProvider>
-    <WebRootBoundary />
-  </I18nProvider>
-)
+// Why await: where a new pairing may be stored depends on what this browser can keep secret.
+void initWebDeviceKeySupport()
+  .catch((error: unknown) => console.warn('[web] Device key probe failed', error))
+  .finally(() => {
+    ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+      <I18nProvider>
+        <WebRootBoundary />
+      </I18nProvider>
+    )
+  })
 
-// Why: the web client is its own entry point and hosts terminals too, so it has
-// to start the deferred WebGL addon load itself (see main.tsx). Dynamic because
-// this entry deliberately keeps the whole App graph — pane manager included —
-// out of its own startup chunk.
+// Prime WebGL here because web hosts terminals too; dynamic import keeps the App/pane-manager graph out of startup.
 void import('../lib/pane-manager/pane-webgl-renderer').then((module) =>
   module.primeTerminalWebglAddon()
 )

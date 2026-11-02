@@ -1,30 +1,35 @@
-// The one way any Orca send that speaks for another agent records who it is from: the sender's
-// party as orchestration resolves its address, and a bounded snapshot of its name.
-
 import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import {
   agentMessageSenderName,
   type AgentMessageSender
-} from '../../../shared/agent-session-message-source'
+} from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentType } from '../../../shared/agent-status-types'
 import type { OrchestrationDb } from './db'
 import { resolveOrchestrationParty } from './orchestration-party'
 
-/** A name from Orca's records for a party (never an agent-painted title); null when it has none.
- *  `reportedDispatchId`: the dispatch the sender's own `worker_done` in the message names. */
-export type SenderNameResolver = (
+/** What a sender is now: its recorded name, never an agent-painted title, and its agent. */
+export type SenderSnapshot = { name: string | null; agent: AgentType | null }
+
+/** reportedDispatchId comes from worker_done. */
+export type SenderSnapshotResolver = (
   party: AgentMessageSender['party'],
   reportedDispatchId?: string
-) => string | null
+) => SenderSnapshot
 
-/** A sender as a message records it, named now, for when it is gone. */
+/** Snapshot the sender's name and agent before its party disappears. */
 export function agentMessageSender(
   address: string,
   db: OrchestrationDb | null,
-  senderName: SenderNameResolver,
+  senderSnapshot: SenderSnapshotResolver,
   reportedDispatchId?: string
 ): AgentMessageSender {
   const party = senderParty(address, db)
-  return { party, name: snapshotName(senderName, party, reportedDispatchId) }
+  const snapshot = snapshotSender(senderSnapshot, party, reportedDispatchId)
+  return {
+    party,
+    name: agentMessageSenderName(snapshot.name),
+    ...(snapshot.agent ? { agent: snapshot.agent } : {})
+  }
 }
 
 function senderParty(address: string, db: OrchestrationDb | null): AgentMessageSender['party'] {
@@ -32,20 +37,20 @@ function senderParty(address: string, db: OrchestrationDb | null): AgentMessageS
     const { paneKey: _credential, ...party } = resolveOrchestrationParty(address, db)
     return party
   } catch {
-    // A worker this host lost the identity of: what the address itself says.
+    // If worker identity is lost, retain only what its address proves.
     return { address, terminalHandle: null, orcaSessionId: parseOrcaSessionAddress(address) }
   }
 }
 
-function snapshotName(
-  senderName: SenderNameResolver,
+function snapshotSender(
+  senderSnapshot: SenderSnapshotResolver,
   party: AgentMessageSender['party'],
   reportedDispatchId: string | undefined
-): string | null {
+): SenderSnapshot {
   try {
-    return agentMessageSenderName(senderName(party, reportedDispatchId))
+    return senderSnapshot(party, reportedDispatchId)
   } catch {
-    // A name is a label, never a reason the message is not delivered.
-    return null
+    // Failure to resolve a label must not block delivery.
+    return { name: null, agent: null }
   }
 }

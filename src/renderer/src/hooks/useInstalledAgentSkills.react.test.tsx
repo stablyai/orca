@@ -15,11 +15,14 @@ import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-envi
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import {
+  discoverInstalledAgentSkills,
+  resetSkillDiscoveryCacheForTests
+} from './installed-agent-skill-discovery'
 import { INSTALLED_AGENT_SKILL_DISCOVERY_FRESH_MS } from './installed-agent-skill-discovery-cache'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   type InstalledAgentSkillState,
-  _installedAgentSkillDiscoveryInternalsForTests,
   notifyInstalledAgentSkillsChanged,
   notifyInstalledAgentSkillsRefreshed,
   useInstalledAgentSkillNames
@@ -172,7 +175,7 @@ afterEach(async () => {
   latestState = null
   renderedStates.length = 0
   suspendNextProbeRender = null
-  _installedAgentSkillDiscoveryInternalsForTests.reset()
+  resetSkillDiscoveryCacheForTests()
   clearRuntimeCompatibilityCacheForTests()
   useAppStore.setState({
     settings: null,
@@ -212,8 +215,7 @@ beforeEach(() => {
 })
 
 describe('useInstalledAgentSkill', () => {
-  // A root that did not answer holds unknown skills, not zero. Reporting a bare
-  // "not installed" there is what offered Install for an already-installed skill.
+  // Unread roots contain unknown skills; claiming absent would offer Install for existing skills.
   it('says the scan was incomplete when an in-scope root did not answer', async () => {
     const scan = deferred<SkillDiscoveryResult>()
     const discover = vi
@@ -390,56 +392,8 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(true)
   })
 
-  it('detects a legacy Linear install through WSL skill discovery', async () => {
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover } }
-    })
-
-    await renderProbe({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(latestState?.installed).toBe(true)
-    expect(discover).toHaveBeenCalledWith({
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu',
-      names: ['orca-linear', 'linear-tickets'],
-      sourceKinds: ['home']
-    })
-  })
-
-  it('detects a legacy Linear install through project-runtime skill discovery', async () => {
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover } }
-    })
-
-    await renderProbe({ projectRuntime: projectWslRuntime })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(latestState?.installed).toBe(true)
-    expect(discover).toHaveBeenCalledWith({
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu',
-      projectRuntime: projectWslRuntime,
-      names: ['orca-linear', 'linear-tickets'],
-      sourceKinds: ['home']
-    })
-  })
-
   it('serves a focus rescan from cache so window switching does not walk disk', async () => {
-    // Why: the freshness window is wall-clock, so pin the clock — a stalled runner
-    // could otherwise cross it mid-test and turn this into a flake.
+    // Pin wall time so runner stalls cannot cross freshness boundaries mid-test.
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
     const firstScan = deferred<SkillDiscoveryResult>()
     const discover = vi
@@ -469,8 +423,7 @@ describe('useInstalledAgentSkill', () => {
       await flushMicrotasks()
     }
 
-    // Focus is a backstop, not a mutation signal: a burst of window switches
-    // costs no scans, and the surface never flashes unsettled.
+    // Focus bursts read freshness cache without scan storms or unsettled flashes.
     expect(discover).toHaveBeenCalledTimes(1)
     expect(latestState?.loading).toBe(false)
     expect(latestState?.settled).toBe(true)
@@ -507,30 +460,6 @@ describe('useInstalledAgentSkill', () => {
     })
   })
 
-  it('reuses cached discovery when another surface finishes re-checking', async () => {
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover } }
-    })
-
-    await renderProbe()
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(discover).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      notifyInstalledAgentSkillsRefreshed()
-      await Promise.resolve()
-    })
-
-    expect(discover).toHaveBeenCalledTimes(1)
-    expect(latestState?.installed).toBe(true)
-  })
-
   it('clears loading when a silent refresh supersedes an in-flight forced rescan', async () => {
     const firstScan = deferred<SkillDiscoveryResult>()
     const forcedScan = deferred<SkillDiscoveryResult>()
@@ -549,8 +478,7 @@ describe('useInstalledAgentSkill', () => {
       await firstScan.promise
     })
 
-    // The recheck button forces past the cache without clearing it, so the silent
-    // refresh below can still be served from it while this scan is in flight.
+    // Forced recheck bypasses without clearing cache, allowing concurrent silent reads to reuse its answer.
     await act(async () => {
       void latestState?.refresh()
     })
@@ -628,8 +556,7 @@ describe('useInstalledAgentSkill', () => {
       expect.objectContaining({ selector: 'env-1', method: 'skills.discover' })
     )
 
-    // Why: the remote hit is keyed per environment, so switching back to the
-    // local host must re-scan the client instead of replaying the server's list.
+    // Remote cache keys must not replay server skills after returning local.
     await act(async () => {
       setRuntimeOwner(null)
     })
@@ -639,10 +566,7 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(false)
   })
 
-  // Why: the skill INSTALL terminal routes through getSingleFocusedRuntimeEnvironmentId,
-  // which refuses to guess an owner while several runtimes are saved. Scanning the
-  // focused remote here would leave the badge stuck on "Not installed" forever,
-  // because the install actually lands on the local client.
+  // Scan must match install’s ambiguity-resolving owner policy; guessing focused remote while install routes local strands badges (#6789).
   it('scans the local host when several saved runtimes make the install host ambiguous', async () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
@@ -671,8 +595,7 @@ describe('useInstalledAgentSkill', () => {
       configurable: true,
       value: { skills: { discover }, runtimeEnvironments: { call } }
     })
-    // Why: a focused remote is already known here, so a missing gate resolves to
-    // the local host and caches a client scan under the local key.
+    // Known-but-unsettled remote ownership must not fall back and cache a client scan.
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as GlobalSettings,
       runtimeEnvironments: [{ id: 'env-1' }] as never,
@@ -688,8 +611,7 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(false)
   })
 
-  // Why: a failed catalog read must degrade to the local host, not strand every
-  // skill badge on a spinner with no retry affordance for the whole session.
+  // Failed catalog reads degrade locally instead of leaving every skill badge permanently pending.
   it('falls back to the local host once an unreadable catalog settles', async () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
@@ -712,8 +634,7 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(true)
   })
   it('does not rescan when a caller rebuilds an equivalent target object', async () => {
-    // Why: callers derive the target inside a store-backed useMemo, so an
-    // unrelated store write hands this hook a new object with the same key.
+    // Equivalent target objects from unrelated store writes must share key identity without rescanning.
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockRejectedValue(new Error('runtime host unreachable'))
@@ -731,8 +652,7 @@ describe('useInstalledAgentSkill', () => {
       await flushMicrotasks()
     }
 
-    // A failed scan caches nothing, so an unstable target identity would issue a
-    // fresh discovery per store write for as long as the host stays unreachable.
+    // Failed scans cache no result; unstable target identity would retry on every store write.
     expect(discover).toHaveBeenCalledTimes(1)
     expect(latestState?.error).toBe('runtime host unreachable')
     // No result ever landed, so "not installed" is a claim this scan cannot back.
@@ -765,9 +685,7 @@ describe('useInstalledAgentSkill', () => {
     expect(renderedStates[0]?.installed).toBe(true)
   })
 
-  // Why: a same-id re-pair keeps the environment id, so nothing else the hook
-  // keys on moves. The store evicts the module cache, but a mounted consumer
-  // must also drop the retired peer's list and scan the new one.
+  // Same-ID re-pair must invalidate mounted results as well as module cache and scan the new peer.
   it('rescans a mounted consumer when the focused runtime re-pairs under the same id', async () => {
     const discover = vi.fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
     let remoteSkills = [skill({ name: 'linear-tickets' })]
@@ -851,9 +769,7 @@ describe('useInstalledAgentSkill', () => {
     expect(renderedStates.some((state) => state.installed)).toBe(false)
   })
 
-  // Why: the reset once lived in a ref written during render. React drops the
-  // state updates of a render it throws away but not the ref write, so the retry
-  // saw "already reset" and kept painting the old target's list until a rescan.
+  // React discards render state updates but not ref writes; render-phase ref resets formerly left old-target results visible after suspension.
   it('still drops the old target list when React discards the render that saw the switch', async () => {
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
@@ -913,8 +829,7 @@ describe('useInstalledAgentSkill', () => {
   })
 
   it('empties the discovery cache when an install notification fires', async () => {
-    // Why: assert the cache directly — a mounted component forces a rescan and
-    // would hide a missing invalidation.
+    // Check cache directly; component mount forces rescans and could hide missing invalidation.
     const discover = vi
       .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
       .mockResolvedValueOnce(discoveryResult([]))
@@ -924,7 +839,6 @@ describe('useInstalledAgentSkill', () => {
       value: { skills: { discover } }
     })
 
-    const { discoverInstalledAgentSkills } = _installedAgentSkillDiscoveryInternalsForTests
     await discoverInstalledAgentSkills(false, undefined)
     await expect(discoverInstalledAgentSkills(false, undefined)).resolves.toEqual(
       expect.objectContaining({ skills: [] })

@@ -70,7 +70,7 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
     } as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
 
     expect(getAgentDetectionTargetKeyForWorktree(state, folderWorkspaceKey('runtime-folder'))).toBe(
-      'runtime:owner-env'
+      `runtime:owner-env:${encodeURIComponent(folderWorkspaceKey('runtime-folder'))}`
     )
     expect(projectGroupReads).toBe(0)
   })
@@ -105,62 +105,31 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
     expect(getAgentDetectionTargetKeyForWorktree(state, 'repo-1::/remote/worktree')).toBeUndefined()
   })
 
-  it('keeps the active runtime fallback for hydrated legacy worktrees', () => {
+  it('reads a server row by its stamp, never by the focused runtime', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only these owner fields.
     const state = {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       folderWorkspaces: [],
       projectGroups: [],
-      repos: [{ id: 'repo-1', connectionId: null, executionHostId: null }],
+      repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-1' }],
       worktreesByRepo: {
         'repo-1': [{ id: 'repo-1::worktree-1', repoId: 'repo-1' }]
       }
     } as unknown as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
 
-    expect(getAgentDetectionTargetKeyForWorktree(state, 'repo-1::worktree-1')).toBe('runtime:env-1')
-  })
-
-  it('builds one owner index per cold worktree and repo snapshot', () => {
-    let worktreeIdReads = 0
-    let repoIdReads = 0
-    const repos = Array.from({ length: 100 }, (_, index) => {
-      const repo = {
-        connectionId: null,
-        executionHostId: 'local'
-      }
-      Object.defineProperty(repo, 'id', {
-        enumerable: true,
-        get: () => {
-          repoIdReads += 1
-          return `repo-${index}`
-        }
-      })
-      return repo
+    const unstamped = {
+      ...state,
+      repos: state.repos?.map((repo) => ({ ...repo, executionHostId: null }))
+    }
+    expect(getAgentDetectionTargetKeyForWorktree(unstamped, 'repo-1::worktree-1')).toBe('local')
+    const key = getAgentDetectionTargetKeyForWorktree(state, 'repo-1::worktree-1')
+    // The workspace rides along so the paired host resolves its runtime (#19885).
+    expect(key).toBe('runtime:env-1:repo-1%3A%3Aworktree-1')
+    expect(parseAgentDetectionTargetKey(key)).toEqual({
+      kind: 'runtime',
+      environmentId: 'env-1',
+      worktreeId: 'repo-1::worktree-1'
     })
-    const worktrees = Array.from({ length: 100 }, (_, index) => {
-      const worktree = {
-        repoId: `repo-${index}`,
-        hostId: undefined
-      }
-      Object.defineProperty(worktree, 'id', {
-        enumerable: true,
-        get: () => {
-          worktreeIdReads += 1
-          return `worktree-${index}`
-        }
-      })
-      return worktree
-    })
-    const state = {
-      settings: { activeRuntimeEnvironmentId: null },
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos,
-      worktreesByRepo: { all: worktrees }
-    } as unknown as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
-
-    expect(getAgentDetectionTargetKeyForWorktree(state, 'worktree-99')).toBe('local')
-    expect(worktreeIdReads).toBe(100)
-    expect(repoIdReads).toBe(100)
   })
 })
 

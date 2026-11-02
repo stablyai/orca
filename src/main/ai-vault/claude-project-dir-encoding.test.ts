@@ -7,7 +7,6 @@ import {
 
 describe('encodeClaudeProjectPath', () => {
   it('emits one dash per non-alphanumeric character rather than per run', () => {
-    // The distinction is the whole contract: collapsing runs stops matching real bucket names.
     expect(encodeClaudeProjectPath('/Users/ada/orca/workspaces')).toBe('-Users-ada-orca-workspaces')
     expect(encodeClaudeProjectPath('/Users/ada/.orca/worktrees')).toBe('-Users-ada--orca-worktrees')
   })
@@ -47,7 +46,6 @@ describe('isClaudeProjectDirInScope', () => {
   })
 
   it('rejects a sibling that merely starts with the prefix', () => {
-    // Without the boundary, "orca" would absorb every workspace under "orcadyne".
     expect(isClaudeProjectDirInScope('-w-orcadyne-nautilus', ['-w-orca'])).toBe(false)
   })
 })

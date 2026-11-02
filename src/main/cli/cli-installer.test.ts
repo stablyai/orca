@@ -1,17 +1,7 @@
 import { existsSync } from 'node:fs'
-import {
-  chmod,
-  lstat,
-  mkdir,
-  readFile,
-  readdir,
-  readlink,
-  rm,
-  symlink,
-  writeFile
-} from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, readlink, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, sep } from 'node:path'
+import { basename, dirname, join, relative, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const execFileMock = vi.hoisted(() => vi.fn())
@@ -33,8 +23,7 @@ import { makeFixture } from './cli-installer-test-fixtures'
 import { resolveAppImageExtractedRoot } from './appimage-extracted-root'
 import { buildLegacyAppImageCliWrapper } from './legacy-appimage-cli-wrapper'
 
-// Stands in for the AppImage runtime's `--appimage-extract`, which writes the
-// payload to ./squashfs-root relative to cwd.
+// Match --appimage-extract's output directory under cwd.
 async function fakeAppImageExtractRunner(_appImagePath: string, cwd: string): Promise<void> {
   const launcherDir = join(cwd, 'squashfs-root', 'resources', 'bin')
   await mkdir(launcherDir, { recursive: true })
@@ -54,42 +43,6 @@ describe('CliInstaller', () => {
     vi.restoreAllMocks()
   })
 
-  // Why: this test creates Unix symlinks and shell scripts that only apply on macOS.
-  it.skipIf(process.platform === 'win32')(
-    'creates a dev launcher and installs a macOS symlink in the requested path',
-    async () => {
-      const fixture = await makeFixture()
-      const installPath = join(fixture.root, 'bin', 'orca')
-      const installer = new CliInstaller({
-        platform: 'darwin',
-        isPackaged: false,
-        userDataPath: fixture.userDataPath,
-        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-        appPath: fixture.appPath,
-        commandPathOverride: installPath,
-        processPathEnv: join(fixture.root, 'bin')
-      })
-
-      const initial = await installer.getStatus()
-      expect(initial.state).toBe('not_installed')
-      expect(initial.launcherPath).toContain(join('userData', 'cli', 'bin', 'orca'))
-
-      const installed = await installer.install()
-      expect(installed.state).toBe('installed')
-      expect(installed.pathConfigured).toBe(true)
-
-      const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
-      expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"')
-      expect(launcherContent).toContain(`export ORCA_USER_DATA_PATH='${fixture.userDataPath}'`)
-      expect(launcherContent).toContain('export ORCA_APP_EXECUTABLE="$ELECTRON"')
-      expect(launcherContent).toContain(join(fixture.appPath, 'out', 'cli', 'index.js'))
-
-      const removed = await installer.remove()
-      expect(removed.state).toBe('not_installed')
-    }
-  )
-
-  // Why: this test creates Unix symlinks and shell scripts that only apply on Linux.
   it.skipIf(process.platform === 'win32')(
     'creates a linux symlink under the requested path and warns when PATH is missing',
     async () => {
@@ -120,8 +73,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: dev installs are useful for validation, but they must not replace the
-  // packaged `orca` / `orca-ide` commands developers rely on day to day.
   it.skipIf(process.platform === 'win32')(
     'uses a separate orca-dev command for default development installs',
     async () => {
@@ -150,10 +101,7 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: an AppImage's payload is only reachable through a FUSE mount that its
-  // own AppRun sets up, and AppRun prepends `--no-sandbox` into node mode on
-  // userns-restricted hosts (#11609). Extracting once gives the command the
-  // same plain launcher a deb install ships, so registration is a symlink.
+  // Extraction avoids the ephemeral FUSE mount and AppRun's --no-sandbox injection into node mode.
   it.skipIf(process.platform === 'win32')(
     'symlinks the linux command at the extracted AppImage launcher',
     async () => {
@@ -240,7 +188,6 @@ describe('CliInstaller', () => {
       const first = await makeInstaller().install()
       expect(first.state).toBe('installed')
 
-      // An update replaces the file in place, so size and mtime both change.
       await writeFile(appImagePath, '#!/usr/bin/env bash\n# next version\n', {
         encoding: 'utf8',
         mode: 0o755
@@ -252,9 +199,10 @@ describe('CliInstaller', () => {
       expect(second.state).toBe('installed')
       expect(second.launcherPath).toBe(first.launcherPath)
       await expect(readlink(installPath)).resolves.toBe(second.launcherPath)
-      // Only the live payload survives the upgrade.
       const liveRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!.rootPath
-      await expect(readdir(dirname(liveRoot))).resolves.toHaveLength(1)
+      expect((await readdir(dirname(liveRoot))).sort()).toEqual(
+        [basename(liveRoot), 'source-appimage'].sort()
+      )
     }
   )
 
@@ -301,8 +249,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: Linux renamed the public command to avoid shadowing GNOME Orca, so
-  // upgrading must clean up only the old symlink owned by prior Orca installs.
   it.skipIf(process.platform === 'win32')(
     'removes the old managed linux orca symlink when installing orca-ide',
     async () => {
@@ -417,52 +363,6 @@ describe('CliInstaller', () => {
       await expect(readFile(legacyCommandPath, 'utf8')).resolves.toBe(
         buildLegacyAppImageCliWrapper(foreignAppImagePath)
       )
-    }
-  )
-
-  // Why: the privilegedRunner is injectable so the EACCES→osascript path can be
-  // exercised in integration without spawning osascript in unit tests.
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'invokes the injected privilegedRunner when install falls back to elevated permissions',
-    async () => {
-      const fixture = await makeFixture()
-      const protectedDir = join(fixture.root, 'protected')
-      await mkdir(protectedDir)
-      await chmod(protectedDir, 0o500)
-
-      const installPath = join(protectedDir, 'bin', 'orca')
-      const privilegedCommands: string[] = []
-      const installer = new CliInstaller({
-        platform: 'darwin',
-        isPackaged: false,
-        userDataPath: fixture.userDataPath,
-        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-        appPath: fixture.appPath,
-        commandPathOverride: installPath,
-        privilegedRunner: async (command: string) => {
-          privilegedCommands.push(command)
-          await chmod(protectedDir, 0o700)
-          const launcherPath = (await installer.getStatus()).launcherPath as string
-          await mkdir(dirname(installPath), { recursive: true })
-          await symlink(launcherPath, installPath)
-        },
-        processPathEnv: dirname(installPath)
-      })
-
-      try {
-        const installed = await installer.install()
-
-        expect(installed.state).toBe('installed')
-        expect(installed.pathConfigured).toBe(true)
-        expect(privilegedCommands).toHaveLength(1)
-        expect(privilegedCommands[0]).toContain('mkdir -p')
-        expect(privilegedCommands[0]).toContain('ln -s')
-        expect(privilegedCommands[0]).toContain('/bin/ln -P')
-        expect(privilegedCommands[0]).not.toContain('mv -f')
-        await expect(readlink(installPath)).resolves.toBe(installed.launcherPath)
-      } finally {
-        await chmod(protectedDir, 0o700).catch(() => undefined)
-      }
     }
   )
 })

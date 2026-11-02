@@ -75,24 +75,30 @@ const TEXT_FIELDS: Record<string, TextField> = {
   lastMessage: { cap: 512, carry: (lastMessage) => ({ lastMessage }), read: (c) => c?.lastMessage }
 }
 
-function hostileText(cap: number): [string, string][] {
+function hostileText(cap: number): [string, string, string | undefined][] {
   return [
-    ['a tab', 'col1\tcol2'],
-    ['a CRLF', 'line one\r\nline two'],
-    ['a line separator', 'one\u2028two'],
-    ['a paragraph separator', 'one\u2029two'],
-    ['a next-line control', 'one\u0085two'],
-    ['a no-break space inside and around', '\u00a0keep\u00a0this\u00a0'],
-    ['an escape sequence', 'plain \u001b[31mred'],
-    ['a delete', 'rub\u007fout'],
-    ['whitespace only', ' \t\r\n\u2028 '],
-    // A space at character cap - 1, cap and cap + 1: just inside the cut, on it, and past it.
-    ...[-1, 0, 1].map((offset): [string, string] => [
-      `a space at character cap${offset < 0 ? '' : '+'}${offset}`,
-      `${'x'.repeat(cap + offset - 1)} tail`
-    ]),
-    ['a surrogate pair split by the cut', `${'x'.repeat(cap - 1)}\u{1f600}tail`],
-    ['a surrogate pair ending at the cut', `${'x'.repeat(cap - 2)}\u{1f600}tail`]
+    ['a tab', 'col1\tcol2', 'col1 col2'],
+    ['a CRLF', 'line one\r\nline two', 'line one line two'],
+    ['a line separator', 'one\u2028two', 'one two'],
+    ['a paragraph separator', 'one\u2029two', 'one two'],
+    ['a next-line control', 'one\u0085two', 'one two'],
+    ['a no-break space inside and around', '\u00a0keep\u00a0this\u00a0', 'keep\u00a0this'],
+    ['an escape sequence', 'plain \u001b[31mred', 'plain  [31mred'],
+    ['a delete', 'rub\u007fout', 'rub out'],
+    ['whitespace only', ' \t\r\n\u2028 ', undefined],
+    ['a space at character cap-1', `${'x'.repeat(cap - 2)} tail`, `${'x'.repeat(cap - 2)} t`],
+    ['a space at character cap+0', `${'x'.repeat(cap - 1)} tail`, 'x'.repeat(cap - 1)],
+    ['a space at character cap+1', `${'x'.repeat(cap)} tail`, 'x'.repeat(cap)],
+    [
+      'a surrogate pair split by the cut',
+      `${'x'.repeat(cap - 1)}\u{1f600}tail`,
+      'x'.repeat(cap - 1)
+    ],
+    [
+      'a surrogate pair ending at the cut',
+      `${'x'.repeat(cap - 2)}\u{1f600}tail`,
+      `${'x'.repeat(cap - 2)}\u{1f600}`
+    ]
   ]
 }
 
@@ -105,25 +111,30 @@ function breaksOneLine(text: string): boolean {
 
 describe('child-work admission parses provider text into what the codec stores', () => {
   const cases = Object.entries(TEXT_FIELDS).flatMap(([field, spec]) =>
-    hostileText(spec.cap).map(([label, raw]) => [field, label, raw, spec] as const)
+    hostileText(spec.cap).map(
+      ([label, raw, expected]) => [field, label, raw, spec, expected] as const
+    )
   )
 
-  it.each(cases)('%s with %s is admitted at a fixed point', (_field, _label, raw, spec) => {
-    const { store, admission } = setup()
-    expect(admission.announce(observation(spec.carry(raw)))).toMatchObject({ accepted: true })
-    const stored = spec.read(store.getChild('child-1'))
-    expect(stored).toBe(normalizeChildWorkText(raw, spec.cap))
-    if (stored === undefined) {
-      return
+  it.each(cases)(
+    '%s with %s is admitted at a fixed point',
+    (_field, _label, raw, spec, expected) => {
+      const { store, admission } = setup()
+      expect(admission.announce(observation(spec.carry(raw)))).toMatchObject({ accepted: true })
+      const stored = spec.read(store.getChild('child-1'))
+      expect(stored).toBe(expected)
+      if (stored === undefined) {
+        return
+      }
+      expect(normalizeChildWorkText(stored, spec.cap)).toBe(stored)
+      // Independent of the normalizer: one line, trimmed, within the cap, no half pair at the cut.
+      expect(breaksOneLine(stored)).toBe(false)
+      expect(stored).toBe(stored.trim())
+      expect(stored.length).toBeLessThanOrEqual(spec.cap)
+      const last = stored.charCodeAt(stored.length - 1)
+      expect(last >= 0xd800 && last <= 0xdbff).toBe(false)
     }
-    expect(normalizeChildWorkText(stored, spec.cap)).toBe(stored)
-    // Independent of the normalizer: one line, trimmed, within the cap, no half pair at the cut.
-    expect(breaksOneLine(stored)).toBe(false)
-    expect(stored).toBe(stored.trim())
-    expect(stored.length).toBeLessThanOrEqual(spec.cap)
-    const last = stored.charCodeAt(stored.length - 1)
-    expect(last >= 0xd800 && last <= 0xdbff).toBe(false)
-  })
+  )
 
   it('keeps a surrogate pair whole when it ends exactly at the cap', () => {
     const { store, admission } = setup()

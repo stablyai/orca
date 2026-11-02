@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type SetStateAction
+} from 'react'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
@@ -11,10 +18,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 export type FloatingWorkspacePanelState = ReturnType<typeof useFloatingWorkspacePanel>
 
-/**
- * Drives the floating workspace overlay's open state (held in the store): persistence, the focus
- * it hands back on close, and the toggle/disable paths that can flip it from outside React.
- */
+/** Persist floating-overlay state and return focus on close, including external toggle/disable requests. */
 export function useFloatingWorkspacePanel() {
   const open = useAppStore((s) => s.floatingWorkspacePanelOpen)
   const setOpen = useAppStore((s) => s.setFloatingWorkspacePanelOpen)
@@ -25,9 +29,7 @@ export function useFloatingWorkspacePanel() {
   } | null>(null)
 
   const enabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
-  // Why tracked separately: the flag reads false while settings are still loading, and a
-  // false read at boot must not be treated as the user disabling the feature. The store
-  // initializes `settings` to null (not undefined) - fetchSettings replaces it atomically.
+  // Unhydrated null settings are not a user disable; wait for the atomic settings replacement.
   const settingsHydrated = useAppStore((s) => s.settings != null)
   const triggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
@@ -38,7 +40,7 @@ export function useFloatingWorkspacePanel() {
     (state) => (state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.length ?? 0) > 0
   )
 
-  // Why: floating workspace is a transient overlay; hotkey minimize returns focus to the surface the user came from.
+  // Return focus to the prior surface when hotkey-minimizing the overlay.
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const returnFocusFrameRef = useRef<number | null>(null)
 
@@ -84,7 +86,7 @@ export function useFloatingWorkspacePanel() {
   const setOpenWithFocus = useCallback(
     (nextOpen: SetStateAction<boolean>): void => {
       const resolvedOpen = typeof nextOpen === 'function' ? nextOpen(open) : nextOpen
-      // Why: recordFeatureInteraction updates Zustand subscribers; running it inside the state updater logs a render-phase update warning.
+      // Telemetry updates Zustand; keep it outside the updater to avoid render-phase writes.
       if (resolvedOpen && !open) {
         tourInteractionSnapshotRef.current = createFloatingWorkspaceTourInteractionSnapshot(
           useAppStore.getState()
@@ -94,9 +96,7 @@ export function useFloatingWorkspacePanel() {
         restoreReturnFocus()
       }
       setOpen(resolvedOpen)
-      // Why gated on the flag: `settings` is undefined until it hydrates, so the
-      // feature-off effect force-closes the panel on every boot. Persisting there would
-      // overwrite the user's restored `open` with a value they never chose.
+      // Persist only an enabled panel; an unhydrated flag must not overwrite restored open state.
       if (enabled) {
         persistFloatingTerminalPanelOpen(resolvedOpen)
       }
@@ -121,24 +121,37 @@ export function useFloatingWorkspacePanel() {
   }, [enabled, setOpenWithFocus])
 
   useEffect(() => {
-    // Why the hydration gate: this effect fires on every boot while settings are still
-    // undefined, and closing there discards the restored open state before the real flag
-    // value arrives. Only a hydrated flag-off is an actual disable.
+    // Only hydrated flag-off means disable; closing during settings load would discard restored open state.
     if (settingsHydrated && !enabled) {
       setOpenWithFocus(false)
     }
   }, [settingsHydrated, enabled, setOpenWithFocus])
 
-  return {
-    cancelReturnFocusFrame,
-    enabled,
-    open,
-    openMaximized,
-    setOpenWithFocus,
-    // Why: once the floating workspace owns tabs, keep it mounted while closed so hidden terminal/browser/editor panes retain local state.
-    shouldMountPanel: enabled && (open || visibleTabCount > 0 || hasLocalTerminalTabs),
-    showToggleButton: enabled && (triggerLocation === 'floating-button' || !statusBarVisible),
-    tourInteractionSnapshotRef,
-    visibleTabCount
-  }
+  const shouldMountPanel = enabled && (open || visibleTabCount > 0 || hasLocalTerminalTabs)
+  const showToggleButton = enabled && (triggerLocation === 'floating-button' || !statusBarVisible)
+  // Stable identity lets memoized root surfaces skip the App render each workspace switch causes.
+  return useMemo(
+    () => ({
+      cancelReturnFocusFrame,
+      enabled,
+      open,
+      openMaximized,
+      setOpenWithFocus,
+      // Retain panes’ local state while closed once the floating workspace owns tabs.
+      shouldMountPanel,
+      showToggleButton,
+      tourInteractionSnapshotRef,
+      visibleTabCount
+    }),
+    [
+      cancelReturnFocusFrame,
+      enabled,
+      open,
+      openMaximized,
+      setOpenWithFocus,
+      shouldMountPanel,
+      showToggleButton,
+      visibleTabCount
+    ]
+  )
 }

@@ -11,7 +11,7 @@ import {
 } from '@/components/github-checks-tab-state'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import { getCheckCounts, getChecksSummaryLabel } from '@/components/pr-check-counts'
-import { getBrokenChecks } from '@/components/pr-checks-fix-prompt'
+import { getBrokenChecks } from '../../../../../shared/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../shared/pr-check-severity-order'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
@@ -23,7 +23,7 @@ import {
 } from '@/lib/github-source-runtime-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
+import { resolveRepoExecutionHostPlatform } from '@/lib/execution-host-facts'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
 import type {
   GitHubWorkItem,
@@ -62,7 +62,7 @@ export function ChecksTab({
 }): React.JSX.Element {
   const targetRepoId = repoId ?? item.repoId
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const repo = useAppStore((s) =>
     targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
@@ -119,29 +119,42 @@ export function ChecksTab({
       }),
     [repo, settings]
   )
-  const fixChecksLaunchPlatform = useMemo(
-    () =>
-      resolveSourceControlLaunchPlatform({
-        connectionId: repo?.connectionId ?? null,
-        worktreePath: repo?.path ?? null,
-        projectRuntime: repo?.connectionId
-          ? undefined
-          : getLocalRepoProjectExecutionRuntimeContext(
-              // Why: repo-scoped resolution only reads repos/projects/settings, and subscribing keeps the launch platform fresh.
-              {
-                activeRepoId: null,
-                activeWorktreeId: null,
-                projects,
-                repos,
-                settings,
-                worktreesByRepo: {}
-              },
-              repo?.id,
-              CLIENT_PLATFORM
-            )
-      }),
-    [projects, repo?.connectionId, repo?.id, repo?.path, repos, settings]
-  )
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  // Why: the fix agent runs on the repo's execution host, so its OS decides quoting (#27971).
+  const fixChecksLaunchPlatform = useMemo(() => {
+    if (!repo) {
+      return undefined
+    }
+    const fact = resolveRepoExecutionHostPlatform(
+      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      repo,
+      () =>
+        getLocalRepoProjectExecutionRuntimeContext(
+          // Why: repo-scoped resolution only reads repos/projects/settings, and subscribing keeps the launch platform fresh.
+          {
+            activeRepoId: null,
+            activeWorktreeId: null,
+            projects,
+            repos,
+            settings,
+            worktreesByRepo: {}
+          },
+          repo.id,
+          CLIENT_PLATFORM
+        )
+    )
+    return fact.kind === 'known' ? fact.platform : undefined
+  }, [
+    projects,
+    repo,
+    repos,
+    runtimeStatusByEnvironmentId,
+    settings,
+    sshConnectionStates,
+    sshStateByEnvironment
+  ])
   // Why: parses a fresh host object per call, so memoize to keep the check action callbacks stable.
   const runtimeHost = useMemo(() => getGitHubSourceRuntimeHost(sourceContext), [sourceContext])
   const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
@@ -149,8 +162,7 @@ export function ChecksTab({
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)
-  // Why: keying the green tick off `list.length` painted an all-neutral PR green above the words
-  // "0 of N checks passing"; nothing passed, so it reads unresolved like the checks pill does.
+  // All-neutral checks remain unresolved; list length alone cannot justify a green tick.
   const SummaryIcon =
     counts.failing > 0
       ? CHECK_ICON.failure
@@ -331,7 +343,7 @@ export function ChecksTab({
       repoConnectionId={repo?.connectionId ?? null}
       targetRepoId={targetRepoId}
       item={item}
-      updateSettings={updateSettings}
+      updateSettings={updateSettingsOrThrow}
       updateRepo={updateRepo}
     />
   )

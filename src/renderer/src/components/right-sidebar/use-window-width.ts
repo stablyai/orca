@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 
-// Why: persisted right-sidebar widths can outlive the window size they were
-// chosen in. Clamp from the current window so the terminal/editor never render
-// underneath the sidebar after resize or hydration.
+// Clamp persisted widths to the current window so resized/hydrated sidebars cannot cover editor/terminal content.
 export function useWindowWidth(): number | null {
   const [windowWidth, setWindowWidth] = useState(() => getWindowWidth())
 

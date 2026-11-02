@@ -1,14 +1,21 @@
+import type { ManagedServerUpdateDeps } from './managed-server-update-check'
 import { describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import {
   OrcadHostUnsupportedError,
   OrcadStdioBridgeUnavailableError
-} from './orcad-host-unavailable'
+} from '../orcad/orcad-host-unavailable'
 import {
   resolveHostServerOnConnect,
   type HostServerOnConnectDeps
 } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
+import { unservedServerStatus } from './ssh-host-unserved-status'
+import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
+
+// Read the final callback because retry eligibility is decided under lifecycle lock.
+const failedBeforeOf = (autoUpdate: ManagedServerUpdateDeps['autoUpdate']) =>
+  vi.mocked(autoUpdate).mock.lastCall?.[1].failedBefore()
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
 
@@ -23,6 +30,18 @@ describe('which server an SSH host runs on connect', () => {
     })
     expect(d.ensureTunnel).toHaveBeenCalledWith('env-9')
     expect(d.convert).not.toHaveBeenCalled()
+  })
+
+  it("says when a converted host's server kept moved automations off", async () => {
+    const d = deps({
+      managedEnvironmentId: () => 'env-9',
+      retainCommittedSource: vi.fn(async () => 2)
+    })
+    await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
+      route: 'managed',
+      environmentId: 'env-9',
+      automationsLeftDisabled: 2
+    })
   })
 
   it('checks the server behind the tunnel on every connect to a converted host', async () => {
@@ -63,11 +82,35 @@ describe('which server an SSH host runs on connect', () => {
     expect(withState.progress).toHaveBeenCalledWith(target, 'converting')
   })
 
+  it('checks for an update right after pairing with a server another version runs', async () => {
+    const d = deps({
+      isEmptyHost: () => true,
+      deploy: vi.fn(async () => ({
+        outcome: 'already-current' as const,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the orchestrator reads only the environment id.
+        environment: { id: 'env-1' } as never,
+        activeVersion: '0.9'
+      })),
+      autoUpdate: vi.fn(async () => ({
+        outcome: 'deferred' as const,
+        code: 'orcad_update_terminals_running',
+        reason: '3 terminals are running'
+      }))
+    })
+    await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
+      route: 'managed',
+      environmentId: 'env-1',
+      update: { state: 'deferred', detail: '3 terminals are running' }
+    })
+    expect(d.autoUpdate).toHaveBeenCalledWith('env-1', expect.anything())
+    expect(d.abandonDeploy).not.toHaveBeenCalled()
+  })
+
   it('keeps the relay while relay terminals are live or unproven', async () => {
     for (const verdict of ['live', 'unverifiable'] as const) {
       const d = deps({ relayTerminals: async () => ({ verdict, count: 2 }) })
       await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-        route: 'relay',
+        route: 'unserved',
         reason: verdict === 'live' ? 'relay_terminals_live' : 'relay_terminals_unverifiable',
         terminals: 2
       })
@@ -77,7 +120,7 @@ describe('which server an SSH host runs on connect', () => {
       relayTerminals: async () => ({ verdict: 'live', count: 1, elsewhere: true })
     })
     await expect(resolveHostServerOnConnect(target, elsewhere)).resolves.toEqual({
-      route: 'relay',
+      route: 'unserved',
       reason: 'relay_terminals_live',
       terminals: 1,
       terminalsElsewhere: true
@@ -91,9 +134,21 @@ describe('which server an SSH host runs on connect', () => {
       })
     })
     await expect(resolveHostServerOnConnect(target, raced)).resolves.toEqual({
-      route: 'relay',
+      route: 'unserved',
       reason: 'relay_terminals_live'
     })
+  })
+
+  // COMPAT(legacy-relay-bridge): the census only reports; converting leaves relay terminals running.
+  it('converts anyway when the bridge takes the live or unproven relay terminals', async () => {
+    for (const verdict of ['live', 'unverifiable'] as const) {
+      const proof = { verdict, count: 2, bridged: true as const }
+      const d = deps({ relayTerminals: async () => proof })
+      await expect(resolveHostServerOnConnect(target, d)).resolves.toMatchObject({
+        route: 'managed'
+      })
+      expect(d.convert).toHaveBeenCalledWith(target, proof)
+    }
   })
 
   it('surfaces a refusal for any other reason, naming it', async () => {
@@ -106,9 +161,27 @@ describe('which server an SSH host runs on connect', () => {
       })
     })
     await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-      route: 'relay',
+      route: 'unserved',
       reason: 'refused',
       detail: 'An automation still runs on this host.'
+    })
+  })
+
+  it('offers "Move anyway" when only saved state refuses', async () => {
+    const d = deps({
+      convert: async () => ({
+        outcome: 'refused',
+        verdict: 'live',
+        code: 'orcad_migration_preflight_blocked',
+        reason: 'This SSH host cannot move yet: saved tabs and panes (2).',
+        canLeaveBehind: true
+      })
+    })
+    await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
+      route: 'unserved',
+      reason: 'refused',
+      detail: 'This SSH host cannot move yet: saved tabs and panes (2).',
+      canLeaveBehind: true
     })
   })
 
@@ -120,7 +193,7 @@ describe('which server an SSH host runs on connect', () => {
       }
     })
     await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-      route: 'relay',
+      route: 'unserved',
       reason: 'orcad_unavailable',
       detail: 'unsupported_host'
     })
@@ -141,7 +214,7 @@ describe('which server an SSH host runs on connect', () => {
       reason: 'orcad_unavailable'
     })
     expect(preflight.recordUnavailable).toHaveBeenCalledWith(target, 'native_preflight')
-    // The conversion fenced the host first; that fence must go before the relay serves it.
+    // Release failed-conversion fences before direct source can serve again.
     expect(preflight.abandonConversion).toHaveBeenCalledWith(target)
 
     const remembered = deps({ recordedUnavailable: () => 'unsupported_host' })
@@ -161,7 +234,7 @@ describe('which server an SSH host runs on connect', () => {
         },
         changed
       )
-    ).resolves.toEqual({ route: 'relay', reason: 'source_changed' })
+    ).resolves.toEqual({ route: 'unserved', reason: 'source_changed' })
     expect(changed.ensureTunnel).not.toHaveBeenCalled()
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -182,7 +255,7 @@ describe('which server an SSH host runs on connect', () => {
   it('touches no host when this build carries no orcad template', async () => {
     const d = deps({ hasTemplate: () => false, isEmptyHost: () => true })
     await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-      route: 'relay',
+      route: 'unserved',
       reason: 'orcad_unavailable',
       detail: 'artifacts_unavailable'
     })
@@ -197,11 +270,135 @@ describe('which server an SSH host runs on connect', () => {
       }
     })
     await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-      route: 'relay',
+      route: 'unserved',
       reason: 'failed',
       detail: 'Connection lost'
     })
     expect(d.recordUnavailable).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('names a conflict the server will keep refusing, and the way out, instead of a retry', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const d = deps({
+      convert: async () => {
+        throw new Error(
+          'orcad_migration_stage_failed:orcad_migration_repository_path_conflict:/root/migrepo'
+        )
+      }
+    })
+    const result = await resolveHostServerOnConnect(target, d)
+    expect(result).toMatchObject({ route: 'unserved', reason: 'refused' })
+    const detail = result.route === 'unserved' ? result.detail : ''
+    expect(detail).toContain('/root/migrepo')
+    expect(detail).toContain('remove that project from this desktop and connect again')
+    expect(d.abandonConversion).toHaveBeenCalledWith(target)
+    warn.mockRestore()
+  })
+
+  it('names relay terminals that hold a linked project, and how to end them', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const d = deps({
+      convert: async () => {
+        throw new Error('orcad_migration_linked_project_terminals:/root/my repo')
+      }
+    })
+    const result = await resolveHostServerOnConnect(target, d)
+    expect(result).toMatchObject({ route: 'unserved', reason: 'refused' })
+    const detail = result.route === 'unserved' ? result.detail : ''
+    expect(detail).toContain('started in /root/my repo are still running')
+    expect(detail).toContain('remove that project from this desktop and connect again')
+    warn.mockRestore()
+  })
+
+  it('keeps a host connected for the bridge when only its relay terminals stop the link (STA-10604)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    for (const code of ['linked_project_terminals', 'linked_project_unowned_terminals']) {
+      const d = deps({
+        relayTerminals: vi.fn(async () => ({
+          verdict: 'live' as const,
+          count: 1,
+          bridged: true as const
+        })),
+        convert: async () => {
+          throw new Error(`orcad_migration_${code}:/root/my repo`)
+        }
+      })
+      const result = await resolveHostServerOnConnect(target, d)
+      expect(result).toMatchObject({
+        route: 'unserved',
+        reason: 'relay_terminals_live',
+        terminals: 1,
+        bridged: true
+      })
+      expect(result.route === 'unserved' ? result.detail : '').toContain('/root/my repo')
+      // What the renderer admits keeps the mark its bridged panes and status line read.
+      if (result.route === 'unserved') {
+        expect(admitSshManagedServerStatus(unservedServerStatus(result))).toMatchObject({
+          managedServer: { kind: 'relay', bridged: true }
+        })
+      }
+      // The fence goes, so the next connect after the terminal exits links the project.
+      expect(d.abandonConversion).toHaveBeenCalledWith(target)
+    }
+    warn.mockRestore()
+  })
+
+  it('never keeps a host connected for the bridge on any other refusal or a held move', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const bridgedTerminals = vi.fn(async () => ({
+      verdict: 'live' as const,
+      count: 1,
+      bridged: true as const
+    }))
+    const conflict = deps({
+      relayTerminals: bridgedTerminals,
+      convert: async () => {
+        throw new Error('orcad_migration_repository_path_conflict:/root/migrepo')
+      }
+    })
+    const refused = await resolveHostServerOnConnect(target, conflict)
+    expect(refused).toMatchObject({ route: 'unserved', reason: 'refused' })
+    expect(refused).not.toHaveProperty('bridged')
+    const held = deps({
+      relayTerminals: bridgedTerminals,
+      hasUnfinishedConversion: () => true,
+      convert: async () => {
+        throw new Error('orcad_migration_linked_project_terminals:/root/my repo')
+      }
+    })
+    const heldResult = await resolveHostServerOnConnect(target, held)
+    expect(heldResult).toMatchObject({ route: 'unserved', reason: 'refused', held: true })
+    expect(heldResult).not.toHaveProperty('bridged')
+    warn.mockRestore()
+  })
+
+  it('never pins a relay terminal of unknown project on the linked one, and offers the way out', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const d = deps({
+      convert: async () => {
+        throw new Error('orcad_migration_linked_project_unowned_terminals:/root/my repo')
+      }
+    })
+    const result = await resolveHostServerOnConnect(target, d)
+    expect(result).toMatchObject({ route: 'unserved', reason: 'refused' })
+    const detail = result.route === 'unserved' ? result.detail : ''
+    expect(detail).toContain('can’t tell which project it belongs to')
+    expect(detail).not.toContain('started in /root/my repo')
+    expect(detail).toContain('copy of /root/my repo, remove that project from this desktop')
+    warn.mockRestore()
+  })
+
+  it('keeps a staged claim of another desktop’s move a retry, since it expires', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const d = deps({
+      convert: async () => {
+        throw new Error('orcad_migration_staged_claim_conflict:repository-path:/root/migrepo')
+      }
+    })
+    await expect(resolveHostServerOnConnect(target, d)).resolves.toMatchObject({
+      reason: 'failed'
+    })
     warn.mockRestore()
   })
 
@@ -214,7 +411,7 @@ describe('which server an SSH host runs on connect', () => {
       })
     })
     await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-      route: 'relay',
+      route: 'unserved',
       reason: 'orcad_unavailable',
       detail: 'ssh_tunnel_unavailable'
     })
@@ -232,7 +429,7 @@ describe('which server an SSH host runs on connect', () => {
       })
     })
     await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-      route: 'relay',
+      route: 'unserved',
       reason: 'orcad_unavailable',
       detail: 'ssh_tunnel_unavailable'
     })
@@ -273,7 +470,7 @@ describe('which server an SSH host runs on connect', () => {
       })
     })
     await expect(resolveHostServerOnConnect(target, d)).resolves.toMatchObject({
-      route: 'relay',
+      route: 'unserved',
       reason: 'failed',
       detail: 'orcad_migration_source_changed'
     })
@@ -290,10 +487,7 @@ describe('which server an SSH host runs on connect', () => {
         route: 'managed',
         environmentId: 'env-9'
       })
-      expect(d.autoUpdate).toHaveBeenCalledWith(
-        'env-9',
-        expect.objectContaining({ failedBefore: false })
-      )
+      expect(failedBeforeOf(d.autoUpdate)).toBe(false)
       expect(d.progress).not.toHaveBeenCalledWith(target, 'updating')
     })
 
@@ -319,7 +513,7 @@ describe('which server an SSH host runs on connect', () => {
           order.push('start')
           return { state: 'started' as const, boundPort: null }
         }),
-        // The restarted server's fresh daemon answers zero sessions, so the update goes ahead.
+        // Wake first so the restarted daemon can supply authoritative idle census.
         autoUpdate: vi.fn(async (_id, options) => {
           order.push('update')
           options.onUpdating()
@@ -380,10 +574,7 @@ describe('which server an SSH host runs on connect', () => {
       await expect(resolveHostServerOnConnect(target, later)).resolves.toMatchObject({
         update: { state: 'failed', detail: reason }
       })
-      expect(later.autoUpdate).toHaveBeenCalledWith(
-        'env-9',
-        expect.objectContaining({ failedBefore: true })
-      )
+      expect(failedBeforeOf(later.autoUpdate)).toBe(true)
       expect(later.recordUpdateFailure).not.toHaveBeenCalled()
     })
 
@@ -401,7 +592,8 @@ describe('which server an SSH host runs on connect', () => {
       })
       await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
         route: 'managed',
-        environmentId: 'env-9'
+        environmentId: 'env-9',
+        update: { state: 'check-failed', detail: 'ssh dropped' }
       })
       expect(d.recordUpdateFailure).not.toHaveBeenCalled()
     })

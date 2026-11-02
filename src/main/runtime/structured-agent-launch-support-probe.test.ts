@@ -1,11 +1,11 @@
+import { createAcpStructuredLaunchResolver } from './structured-agent-launch-composition.test-support'
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
-import { createAcpStructuredLaunchResolver } from '../acp/acp-structured-launch-resolution'
 import { structuredAgentSupportsLaunch } from './structured-agent-launch-support'
 
 const { loginShell } = vi.hoisted(() => {
@@ -36,11 +36,9 @@ async function fakeOpencode(dir: string, version: string): Promise<string> {
 }
 
 function runtimeWith(settings: Settings) {
-  return {
-    requireStore: () => ({ getSettings: () => settings }),
-    resolveRuntimeFileTarget: async () => ({ worktree: { path: root } })
-  }
+  return { requireStore: () => ({ getSettings: () => settings }) }
 }
+const workspace = async () => root
 
 function launchWith(settings: Settings) {
   return createAcpStructuredLaunchResolver(acpLaunchSpecFor('opencode')!, {
@@ -50,7 +48,8 @@ function launchWith(settings: Settings) {
         provider: 'opencode',
         providerHandleChain: [],
         accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } }
-      })
+      }),
+      pinLaunchDirectory: vi.fn()
     },
     readJournal: () => null,
     resolveWorkspacePath: async () => root,
@@ -91,26 +90,10 @@ describe.skipIf(process.platform === 'win32')(
         ...base,
         agentDefaultEnv: { opencode: { PATH: `${privateBin}:/usr/bin:/bin` } }
       }
-      expect(await structuredAgentSupportsLaunch('opencode', 'id:w', runtimeWith(settings))).toBe(
-        true
-      )
+      expect(
+        await structuredAgentSupportsLaunch('opencode', workspace, runtimeWith(settings))
+      ).toBe(true)
       expect((await launchWith(settings)).command).toBe(join(privateBin, 'opencode'))
-    })
-
-    it('keeps a refused release first on PATH on the terminal chat when nothing points elsewhere', async () => {
-      const settings = { ...base, agentDefaultEnv: {} }
-      expect(await structuredAgentSupportsLaunch('opencode', 'id:w', runtimeWith(settings))).toBe(
-        false
-      )
-    })
-
-    it('runs a stable 2.x first on PATH in the structured chat', async () => {
-      await fakeOpencode(shellBin, '2.0.21')
-      const settings = { ...base, agentDefaultEnv: {} }
-      expect(await structuredAgentSupportsLaunch('opencode', 'id:w', runtimeWith(settings))).toBe(
-        true
-      )
-      expect((await launchWith(settings)).command).toBe(join(shellBin, 'opencode'))
     })
 
     it('checks and launches the binary the Command setting names', async () => {
@@ -119,9 +102,9 @@ describe.skipIf(process.platform === 'win32')(
         agentDefaultEnv: {},
         agentCmdOverrides: { opencode: join(privateBin, 'opencode') }
       }
-      expect(await structuredAgentSupportsLaunch('opencode', 'id:w', runtimeWith(settings))).toBe(
-        true
-      )
+      expect(
+        await structuredAgentSupportsLaunch('opencode', workspace, runtimeWith(settings))
+      ).toBe(true)
       expect((await launchWith(settings)).command).toBe(join(privateBin, 'opencode'))
     })
 
@@ -132,9 +115,9 @@ describe.skipIf(process.platform === 'win32')(
         agentCmdOverrides: { opencode: join(root, 'missing', 'opencode') }
       }
       // Admitted, so the chat states why rather than silently opening a terminal.
-      expect(await structuredAgentSupportsLaunch('opencode', 'id:w', runtimeWith(settings))).toBe(
-        true
-      )
+      expect(
+        await structuredAgentSupportsLaunch('opencode', workspace, runtimeWith(settings))
+      ).toBe(true)
       await expect(launchWith(settings)).rejects.toMatchObject({
         name: 'AgentSessionPreSpawnError',
         reason: 'agentCommandNotRunnable'

@@ -1,9 +1,9 @@
-import type { RelayPlatform } from './relay-protocol'
+import type { RelayPlatform } from './remote-exec/remote-frame-protocol'
 
 export type RemotePathFlavor = 'posix' | 'windows'
-export type RemoteCommandDialect = 'posix' | 'powershell'
-export type RemoteOperatingSystem = 'linux' | 'darwin' | 'win32'
-export type RemoteArchitecture = 'x64' | 'arm64'
+type RemoteCommandDialect = 'posix' | 'powershell'
+type RemoteOperatingSystem = 'linux' | 'darwin' | 'win32'
+type RemoteArchitecture = 'x64' | 'arm64'
 
 export type RemoteHostPlatform = {
   relayPlatform: RelayPlatform
@@ -98,15 +98,16 @@ export function assertSafeRemotePathSegment(segment: string, pathFlavor: RemoteP
     return
   }
 
-  // Why: Win32 canonicalizes names and exposes devices/NTFS streams through
-  // otherwise ordinary-looking path segments, bypassing no-clobber checks.
+  // Reject Win32-canonicalized aliases/devices/NTFS streams that could bypass no-clobber checks.
   const normalized = normalizeWindowsRemotePath(segment)
   const deviceStem = normalized.split('.')[0]?.toUpperCase()
   if (
     normalized.includes('/') ||
     hasUnsafeWindowsPathChar(normalized) ||
     /[ .]$/u.test(normalized) ||
-    /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|CLOCK\$|COM[1-9¹²³]|LPT[1-9¹²³])$/u.test(deviceStem ?? '')
+    /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|CLOCK\$|COM[1-9\u00B9\u00B2\u00B3]|LPT[1-9\u00B9\u00B2\u00B3])$/u.test(
+      deviceStem ?? ''
+    )
   ) {
     throw new Error(`Unsafe remote path segment: ${JSON.stringify(segment)}`)
   }

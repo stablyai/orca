@@ -3,15 +3,13 @@ import { LoaderCircle } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { jiraSearchUsers } from '@/runtime/runtime-jira-client'
+import { jiraSearchUsers, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
 import { translate } from '@/i18n/i18n'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { JiraUser } from '../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import type { JiraUser } from '../../../shared/jira/jira-types'
 
 const USER_SEARCH_DEBOUNCE_MS = 250
 
-/** Renders the selectable user rows inside the picker popover. */
 export function JiraUserOptionList({
   users,
   onSelect
@@ -38,11 +36,7 @@ export function JiraUserOptionList({
   )
 }
 
-/**
- * Searchable single-user combobox for Jira user fields. These need an accountId,
- * not the display name a plain text box would collect, since Jira rejects a bare
- * string for user fields.
- */
+/** User fields require accountId values; Jira rejects display-name strings. */
 export type JiraUserPickerFixedOption = {
   key: string
   label: string
@@ -58,9 +52,10 @@ export function JiraUserPicker({
   disabled,
   label,
   fixedOptions,
-  searchUsers
+  searchUsers,
+  allowKnownUserId
 }: {
-  providerSettings: TaskSourceContext | GlobalSettings | null
+  providerSettings: RuntimeJiraSettings
   siteId?: string | null
   value: string
   selectedUser: JiraUser | null
@@ -71,11 +66,14 @@ export function JiraUserPicker({
   fixedOptions?: JiraUserPickerFixedOption[]
   /** Replaces the site-wide user search, e.g. with a project-scoped assignable search. Must be referentially stable. */
   searchUsers?: (query: string) => Promise<JiraUser[]>
+  allowKnownUserId?: boolean
 }): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<JiraUser[]>([])
   const [loading, setLoading] = useState(false)
+  const knownUserId = query.trim()
 
   useEffect(() => {
     if (!open) {
@@ -117,7 +115,8 @@ export function JiraUserPicker({
         value0: label
       })
     )
-  }, [label, selectedUser, value])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [label, selectedUser, value, languageRevision])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -168,6 +167,20 @@ export function JiraUserPicker({
             }}
           />
         )}
+        {allowKnownUserId && knownUserId ? (
+          <button
+            type="button"
+            onClick={() => {
+              onSelect({ accountId: knownUserId, displayName: knownUserId })
+              setOpen(false)
+            }}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent"
+          >
+            {translate('components.jiraUserPicker.useKnownId', 'Use known user ID "{{value0}}"', {
+              value0: knownUserId
+            })}
+          </button>
+        ) : null}
       </PopoverContent>
     </Popover>
   )

@@ -6,8 +6,7 @@ export const submittedReportIds = new Set<string>()
 const MAX_SUBMITTED_REPORT_IDS = 256
 
 export function rememberSubmittedReportId(reportId: string): void {
-  // Why: report ids are IPC input. Keep duplicate-send suppression useful for
-  // recent reports without retaining every id a broken renderer can vary.
+  // Bound IPC-controlled report IDs while retaining recent duplicate-send suppression.
   submittedReportIds.delete(reportId)
   submittedReportIds.add(reportId)
   while (submittedReportIds.size > MAX_SUBMITTED_REPORT_IDS) {
@@ -49,7 +48,6 @@ export async function getRequestedCrashReport(
   if (args?.reportId) {
     return store.getById(args.reportId)
   }
-  // Why: Help > Report Crash can intentionally submit without a report ID.
-  // Do not replace that uncaptured report with a pending crash that appears later.
+  // An explicit uncaptured report must not be replaced by a later pending crash.
   return args ? null : getLatestPendingReport(store)
 }

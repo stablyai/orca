@@ -7,7 +7,7 @@ import {
   type LocalGitExecOptions
 } from '../../gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import type { GhExecOptions } from './../github-exec-scope'
+import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import {
@@ -43,8 +43,7 @@ export async function fetchIssueWorkItem(
   }
 
   if (connectionId) {
-    // Why: SSH-backed gh has no repository cwd. A bare lookup could honor the
-    // local process GH_REPO/GH_HOST and return an unrelated repository item.
+    // SSH-backed gh has no local cwd; ambient GH_REPO/GH_HOST could identify unrelated work.
     return null
   }
 
@@ -55,7 +54,34 @@ export async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
-// Why: REST /pulls/{n} lacks latestReviews, so pull review fields from gh so reviewer lists aren't silently empty.
+/** One REST call for hover previews; skips the review, check and merge metadata a full lookup adds. */
+export async function fetchWorkItemPreview(
+  repoPath: string,
+  ownerRepo: GitHubApiRepository,
+  number: number,
+  type: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<MainWorkItem | null> {
+  const ghOptions = {
+    ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
+    ...githubHostExecOptions(ownerRepo)
+  }
+  const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
+  if (type === 'issue') {
+    const { stdout } = await ghExecFileAsync(['api', `${base}/issues/${number}`], ghOptions)
+    const item: Record<string, unknown> = JSON.parse(stdout)
+    // `#N` links point at /issues/N even when N is a PR.
+    if (!('pull_request' in item)) {
+      return mapIssueWorkItem(item)
+    }
+  }
+  const { stdout } = await ghExecFileAsync(['api', `${base}/pulls/${number}`], ghOptions)
+  const pull: Record<string, unknown> = JSON.parse(stdout)
+  return mapPullRequestWorkItem(pull, ownerRepo)
+}
+
+// REST pull data omits latestReviews; retain gh's reviewer fields.
 export const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
 
 export async function fetchPullRequestReviewFields(
@@ -117,10 +143,15 @@ export async function fetchPullRequestWorkItem(
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
-      // Why: merge-metadata GraphQL is best-effort — don't fall through to REST, which drops latestReviews and blanks bot-only reviewer lists.
+      // Best-effort merge metadata must not trigger a REST fallback that drops latestReviews.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
       try {
-        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        const mergeMetadata = await detectRepositoryMergeMetadata(
+          ownerRepo,
+          baseRefName,
+          ghOptions,
+          githubPRStackExecutionScope(connectionId, localGitOptions)
+        )
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,
@@ -149,8 +180,7 @@ export async function fetchPullRequestWorkItem(
   }
 
   if (connectionId) {
-    // Why: connection-backed gh cannot infer a repository from cwd. Refuse a
-    // bare call so process-level GH_REPO/GH_HOST cannot redirect the lookup.
+    // Refuse unresolved connection-backed identities instead of following ambient gh repository settings.
     return null
   }
 

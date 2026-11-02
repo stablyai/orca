@@ -1,8 +1,21 @@
-import { access, chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isCommandOnLocalPath, listLocalCommandPaths } from './command-path-resolver'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+
+// Exercise Windows filename folding through source listings on case-sensitive hosts.
+vi.mock('./command-path-directory-worker-client', async () => ({
+  readDetectionDirectoryViaWorker: vi.fn(
+    (await import('./command-path-directory')).readDetectionDirectory
+  )
+}))
+
+import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
+import {
+  findCommandsOnLocalPath,
+  isCommandOnLocalPath,
+  listLocalCommandPaths
+} from './command-path-resolver'
 
 describe('isCommandOnLocalPath', () => {
   it('returns false for an empty command', async () => {
@@ -74,11 +87,7 @@ describe('isCommandOnLocalPath', () => {
     let dir = ''
     beforeAll(async () => {
       dir = await mkdtemp(path.join(tmpdir(), 'cmd-resolver-win32-'))
-      // Why: the fixture extension matches a PATHEXT entry's case exactly so these
-      // tests are filesystem-portable. Real Windows resolves `.CMD` vs `.cmd`
-      // case-insensitively via the FS itself (same as where.exe); we deliberately
-      // do NOT emulate that in the resolver, so we must not depend on a
-      // case-insensitive FS here — this suite also runs on case-sensitive Linux CI.
+      // Match PATHEXT case in fixtures; real Windows handles filename case while Linux test filesystems do not.
       await writeFile(path.join(dir, 'tool.CMD'), '@echo off\n')
     })
     afterAll(async () => {
@@ -113,9 +122,7 @@ describe('isCommandOnLocalPath', () => {
     })
   })
 
-  // Why the full list exists (#22975): a dead version-manager shim passes the
-  // same executable check as the binary it shadows, so a winner-only lookup can
-  // only ever hand the caller the shim. The copies behind it are the answer.
+  // Executable-but-broken shims can shadow working binaries; retain later PATH candidates (#22975).
   describe.skipIf(process.platform === 'win32')('listLocalCommandPaths', () => {
     let front = ''
     let middle = ''
@@ -132,8 +139,6 @@ describe('isCommandOnLocalPath', () => {
       back = await mkdtemp(path.join(tmpdir(), 'cmd-list-back-'))
       await executable(front, 'gh', '#!/usr/bin/env bash\nexec /nope/asdf exec "gh" "$@"\n')
       await executable(back, 'gh', "#!/bin/sh\nprintf 'gh version 2.98.0\\n'\n")
-      // Both a non-executable file and a directory in the middle: neither is a
-      // match, and neither may end the scan.
       await writeFile(path.join(middle, 'gh'), 'not executable\n')
       await chmod(path.join(middle, 'gh'), 0o644)
       await mkdir(path.join(middle, 'glab'))
@@ -186,12 +191,7 @@ describe('isCommandOnLocalPath', () => {
     })
 
     it('drops a relative match the filesystem would otherwise find', async () => {
-      // Why a second relative case: `path.posix.join('.', 'gh')` collapses to
-      // `gh`, so the case above is unaffected by deleting the gate. `fs.access`
-      // resolves a relative candidate against the process cwd, so only a PATH
-      // entry that really reaches a fixture proves the filter — and the `access`
-      // proves that reach first, making this fail loudly instead of going
-      // vacuous if the suite is ever run from a directory that hides it.
+      // Ensure this relative PATH entry actually reaches a fixture before asserting the absolute-only filter.
       const relative = path.relative(process.cwd(), back)
       await expect(access(path.join(relative, 'gh'))).resolves.toBeUndefined()
       await expect(
@@ -200,8 +200,7 @@ describe('isCommandOnLocalPath', () => {
     })
 
     it('lists a PATH entry that repeats only once', async () => {
-      // Why it matters: callers spawn each entry, and `/usr/local/bin` appearing
-      // twice in a real PATH is normal — a doomed shim must not be probed twice.
+      // Duplicate PATH directories must not probe doomed shims repeatedly.
       await expect(
         listLocalCommandPaths('gh', {
           platform: 'linux',
@@ -223,6 +222,7 @@ describe('isCommandOnLocalPath', () => {
     it('lists every PATHEXT permutation on win32, in resolver order', async () => {
       const dir = await mkdtemp(path.join(tmpdir(), 'cmd-list-win32-'))
       try {
+        await writeFile(path.join(dir, 'tool'), '')
         await writeFile(path.join(dir, 'tool.CMD'), '@echo off\n')
         await writeFile(path.join(dir, 'tool.EXE'), '')
         await expect(
@@ -236,5 +236,163 @@ describe('isCommandOnLocalPath', () => {
         await rm(dir, { recursive: true, force: true })
       }
     })
+  })
+})
+
+describe('findCommandsOnLocalPath', () => {
+  // POSIX semantics must match the per-candidate lookup.
+  describe.skipIf(process.platform === 'win32')('posix', () => {
+    let dir = ''
+    beforeAll(async () => {
+      dir = await mkdtemp(path.join(tmpdir(), 'cmd-batch-posix-'))
+      await writeFile(path.join(dir, 'runme'), '#!/bin/sh\n')
+      await chmod(path.join(dir, 'runme'), 0o755)
+      await writeFile(path.join(dir, 'plain'), 'not executable\n')
+      await chmod(path.join(dir, 'plain'), 0o644)
+      await mkdir(path.join(dir, 'adir'))
+      await symlink(path.join(dir, 'runme'), path.join(dir, 'linkme'))
+    })
+    afterAll(async () => {
+      await rm(dir, { recursive: true, force: true })
+    })
+
+    it('returns only executable commands, with the same verdict as isCommandOnLocalPath', async () => {
+      const commands = ['runme', 'plain', 'adir', 'linkme', 'missing']
+      const options = { platform: 'linux' as const, env: { PATH: dir } }
+      const batch = await findCommandsOnLocalPath(commands, options)
+      for (const command of commands) {
+        expect(batch.has(command)).toBe(await isCommandOnLocalPath(command, options))
+      }
+      expect([...batch].sort()).toEqual(['linkme', 'runme'])
+    })
+
+    it('skips relative PATH entries like the absolute-only gate', async () => {
+      await expect(
+        findCommandsOnLocalPath(['runme'], { platform: 'linux', env: { PATH: '.' }, cwd: dir })
+      ).resolves.toEqual(new Set())
+    })
+
+    it('skips a missing PATH directory without failing the batch', async () => {
+      const missing = path.join(dir, 'does-not-exist')
+      await expect(
+        findCommandsOnLocalPath(['runme'], {
+          platform: 'linux',
+          env: { PATH: `${missing}:${dir}` }
+        })
+      ).resolves.toEqual(new Set(['runme']))
+    })
+  })
+
+  describe('win32', () => {
+    let dir = ''
+    beforeAll(async () => {
+      dir = await mkdtemp(path.join(tmpdir(), 'cmd-batch-win32-'))
+      await writeFile(path.join(dir, 'tool.CMD'), '@echo off\n')
+      await writeFile(path.join(dir, 'MiXeD.CmD'), '@echo off\n')
+      await writeFile(path.join(dir, 'literal-cli'), '')
+    })
+    afterAll(async () => {
+      await rm(dir, { recursive: true, force: true })
+    })
+
+    it('resolves bare commands via PATHEXT with the case-insensitive Path key', async () => {
+      await expect(
+        findCommandsOnLocalPath(['tool', 'other'], {
+          platform: 'win32',
+          env: { Path: dir, PATHEXT: '.COM;.EXE;.CMD;.BAT' }
+        })
+      ).resolves.toEqual(new Set(['tool']))
+    })
+
+    it('includes fallback extensions even when PATHEXT excludes them', async () => {
+      await expect(
+        findCommandsOnLocalPath(['tool'], {
+          platform: 'win32',
+          env: { Path: dir, PATHEXT: '.EXE;.COM' }
+        })
+      ).resolves.toEqual(new Set(['tool']))
+    })
+
+    it('matches Windows filenames case-insensitively', async () => {
+      await expect(
+        findCommandsOnLocalPath(['mixed'], {
+          platform: 'win32',
+          env: { Path: dir, PATHEXT: '.CMD' }
+        })
+      ).resolves.toEqual(new Set(['mixed']))
+    })
+
+    it('probes exact host filenames when the directory worker is unavailable', async () => {
+      vi.mocked(readDetectionDirectoryViaWorker).mockResolvedValueOnce(null)
+      await expect(
+        findCommandsOnLocalPath(['tool', 'missing'], {
+          platform: 'win32',
+          env: { Path: dir, PATHEXT: '.CMD' },
+          cwd: dir
+        })
+      ).resolves.toEqual(new Set(['tool']))
+    })
+
+    it('matches extensionless executable names checked by the agent fallback', async () => {
+      await expect(
+        findCommandsOnLocalPath(['literal-cli'], {
+          platform: 'win32',
+          env: { Path: dir, PATHEXT: '.EXE' }
+        })
+      ).resolves.toEqual(new Set(['literal-cli']))
+    })
+  })
+})
+
+// An execute-only directory cannot be listed, but stat on known names still works.
+describe.skipIf(process.platform === 'win32')(
+  'findCommandsOnLocalPath unreadable PATH entry',
+  () => {
+    let locked = ''
+    beforeAll(async () => {
+      locked = await mkdtemp(path.join(tmpdir(), 'cmd-batch-locked-'))
+      await writeFile(path.join(locked, 'runme'), '#!/bin/sh\n')
+      await chmod(path.join(locked, 'runme'), 0o755)
+      await chmod(locked, 0o111)
+    })
+    afterAll(async () => {
+      await chmod(locked, 0o755)
+      await rm(locked, { recursive: true, force: true })
+    })
+
+    it('probes known names directly when directory listing is denied', async ({ skip }) => {
+      const error = await readdir(locked).then(
+        () => null,
+        (error: unknown) => error
+      )
+      if (error === null) {
+        skip()
+        return
+      }
+      expect(error).toMatchObject({ code: 'EACCES' })
+      await expect(
+        findCommandsOnLocalPath(['runme', 'missing-a', 'missing-b', 'missing-c', 'missing-d'], {
+          platform: 'linux',
+          env: { PATH: locked }
+        })
+      ).resolves.toEqual(new Set(['runme']))
+    })
+  }
+)
+
+describe('findCommandsOnLocalPath shared candidate names', () => {
+  it('finds both a bare command and its dotted form when they resolve to the same file', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'cmd-batch-shared-'))
+    try {
+      await writeFile(path.join(dir, 'tool.CMD'), '@echo off\n')
+      await expect(
+        findCommandsOnLocalPath(['tool', 'tool.CMD'], {
+          platform: 'win32',
+          env: { Path: dir, PATHEXT: '.CMD;.EXE' }
+        })
+      ).resolves.toEqual(new Set(['tool', 'tool.CMD']))
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

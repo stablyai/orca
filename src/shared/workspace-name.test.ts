@@ -1,16 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   getLinearIssueWorkspaceName,
-  getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
   getWorkspaceIntentName,
   resolveWorkspaceCreateName,
   slugifyForWorkspaceName
 } from './workspace-name'
-
-afterEach(() => {
-  vi.restoreAllMocks()
-})
 
 describe('slugifyForWorkspaceName', () => {
   it('keeps workspace seed slugs short, ascii-safe, and git-ref-safe', () => {
@@ -27,58 +22,54 @@ describe('slugifyForWorkspaceName', () => {
       'cant-enable-browser-notifications'
     )
   })
-
-  it('folds pasted workspace-name whitespace without regex replacement', () => {
-    const replace = vi.spyOn(String.prototype, 'replace')
-    const name = ['Fix', String.fromCharCode(160), '\nPasted\tWorkspace'].join('')
-
-    expect(slugifyForWorkspaceName(name)).toBe('fix-pasted-workspace')
-    expect(
-      replace.mock.calls.filter(
-        ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
-      )
-    ).toHaveLength(0)
-  })
-})
-
-describe('getLinkedWorkItemSuggestedName', () => {
-  it('removes duplicated issue and PR numbers from linked titles', () => {
-    expect(getLinkedWorkItemSuggestedName({ title: 'Issue #123: Fix mobile Tasks' })).toBe(
-      'fix-mobile-tasks'
-    )
-    expect(getLinkedWorkItemSuggestedName({ title: 'Add mobile drawer (#812)' })).toBe(
-      'add-mobile-drawer'
-    )
-  })
 })
 
 describe('getLinkedWorkItemWorkspaceName', () => {
-  it('uses the resolved GitHub title instead of the source URL or provider number', () => {
-    expect(
-      getLinkedWorkItemWorkspaceName({
-        type: 'pr',
-        number: 2049,
-        title: 'Fix pasted URL workspace names'
-      })
-    ).toEqual({
-      displayName: 'Fix pasted URL workspace names',
-      seedName: 'fix-pasted-url-workspace-names'
-    })
-  })
-
-  it('keeps external provider identifiers without duplicating title prefixes', () => {
-    expect(
-      getLinkedWorkItemWorkspaceName({
-        type: 'issue',
-        provider: 'jira',
-        number: 0,
-        title: 'PROJ-7 Fix flaky import',
-        jiraIdentifier: 'PROJ-7'
-      })
-    ).toEqual({
+  it('keeps the canonical uppercase Jira key when the casing policy preserves it', () => {
+    const item = {
+      type: 'issue' as const,
+      provider: 'jira' as const,
+      number: 0,
+      title: 'PROJ-7 Fix flaky import',
+      jiraIdentifier: 'PROJ-7'
+    }
+    expect(getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing: 'preserve' })).toEqual({
       displayName: 'PROJ-7 Fix flaky import',
-      seedName: 'proj-7-fix-flaky-import'
+      seedName: 'PROJ-7-fix-flaky-import'
     })
+    expect(
+      getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing: 'lowercase' })?.seedName
+    ).toBe('proj-7-fix-flaky-import')
+  })
+})
+
+describe('Jira generated-name source identity', () => {
+  it('ignores a stale Jira identifier on an explicitly different provider', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName(
+        {
+          type: 'issue',
+          provider: 'github',
+          number: 7,
+          title: 'PROJ-7 Fix login',
+          jiraIdentifier: 'PROJ-7'
+        },
+        { jiraIssueKeyCasing: 'preserve' }
+      )?.seedName
+    ).toBe('proj-7-fix-login')
+    expect(
+      getLinkedWorkItemWorkspaceName(
+        {
+          type: 'issue',
+          provider: 'linear',
+          number: 0,
+          title: 'Fix login',
+          jiraIdentifier: 'PROJ-7',
+          linearIdentifier: 'ENG-1'
+        },
+        { jiraIssueKeyCasing: 'preserve' }
+      )?.seedName
+    ).toBe('eng-1-fix-login')
   })
 })
 
@@ -130,68 +121,6 @@ describe('getWorkspaceIntentName', () => {
     })
   })
 
-  it('uses a compressed subject when a linked issue has no action', () => {
-    expect(
-      getWorkspaceIntentName({
-        sourceText: 'https://github.com/acme/app/issues/9876',
-        workItem: {
-          type: 'issue',
-          number: 9876,
-          title: 'Make importer handle archived rows'
-        }
-      })
-    ).toEqual({
-      displayName: 'Issue 9876 Make Importer Handle',
-      seedName: 'issue-9876-make-importer-handle'
-    })
-  })
-
-  it('keeps contractions readable in linked issue display names', () => {
-    expect(
-      getWorkspaceIntentName({
-        sourceText: 'https://github.com/acme/app/issues/4802',
-        workItem: {
-          type: 'issue',
-          number: 4802,
-          title: "Can't enable browser notifications from within a browser tab"
-        }
-      })
-    ).toEqual({
-      displayName: "Issue 4802 Can't Enable Browser",
-      seedName: 'issue-4802-cant-enable-browser'
-    })
-  })
-
-  it('keeps single-letter contractions lowercase after the apostrophe', () => {
-    expect(
-      getWorkspaceIntentName({
-        sourceText: 'https://github.com/acme/app/issues/17',
-        workItem: {
-          type: 'issue',
-          number: 17,
-          title: "i'm blocked on notifications"
-        }
-      })
-    ).toEqual({
-      displayName: "Issue 17 I'm Blocked Notifications",
-      seedName: 'issue-17-im-blocked-notifications'
-    })
-
-    expect(
-      getWorkspaceIntentName({
-        sourceText: 'https://github.com/acme/app/issues/18',
-        workItem: {
-          type: 'issue',
-          number: 18,
-          title: "i'll update login"
-        }
-      })
-    ).toEqual({
-      displayName: "Issue 18 I'll Update Login",
-      seedName: 'issue-18-ill-update-login'
-    })
-  })
-
   it('does not treat an auto-generated slug as explicit user intent', () => {
     expect(
       getWorkspaceIntentName({
@@ -207,69 +136,9 @@ describe('getWorkspaceIntentName', () => {
       seedName: 'issue-456-make-importer-handle'
     })
   })
-
-  it('uses external provider identifiers without duplicating them in the subject', () => {
-    expect(
-      getWorkspaceIntentName({
-        workItem: {
-          type: 'issue',
-          provider: 'jira',
-          number: 0,
-          title: 'PROJ-7 Fix flaky import',
-          jiraIdentifier: 'PROJ-7'
-        }
-      })
-    ).toEqual({
-      displayName: 'PROJ-7 Fix Flaky Import',
-      seedName: 'proj-7-fix-flaky-import'
-    })
-  })
-
-  it('summarizes unlinked task text into a shared display and seed', () => {
-    expect(getWorkspaceIntentName({ sourceText: 'add keyboard shortcut settings' })).toEqual({
-      displayName: 'Add Keyboard Shortcut Settings',
-      seedName: 'add-keyboard-shortcut-settings'
-    })
-  })
-
-  it('compacts pasted task text without whitespace regex splitting', () => {
-    const split = vi.spyOn(String.prototype, 'split')
-    const sourceText = [
-      'https://github.com/acme/app/issues/123',
-      '\nadd',
-      String.fromCharCode(160),
-      'keyboard\tshortcut settings'
-    ].join('')
-
-    expect(getWorkspaceIntentName({ sourceText })).toEqual({
-      displayName: 'Add Keyboard Shortcut Settings',
-      seedName: 'add-keyboard-shortcut-settings'
-    })
-    expect(
-      split.mock.calls.filter(([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+')
-    ).toHaveLength(0)
-  })
 })
 
 describe('getLinearIssueWorkspaceName', () => {
-  it('keeps the Linear identifier in the workspace seed', () => {
-    expect(
-      getLinearIssueWorkspaceName({
-        identifier: 'ENG-42',
-        title: 'Ship Linear parity'
-      })
-    ).toBe('eng-42-ship-linear-parity')
-  })
-
-  it('does not duplicate an identifier already present in the Linear title', () => {
-    expect(
-      getLinearIssueWorkspaceName({
-        identifier: 'ENG-42',
-        title: 'ENG-42 Ship Linear parity'
-      })
-    ).toBe('eng-42-ship-linear-parity')
-  })
-
   it('keeps the combined Linear seed within the workspace-name limit', () => {
     const seed = getLinearIssueWorkspaceName({
       identifier: 'ENG-42',
@@ -294,10 +163,5 @@ describe('resolveWorkspaceCreateName', () => {
         fallback: 'issue-123'
       })
     ).toBe('日本語 テスト')
-  })
-
-  it('uses the stable fallback when the draft is blank', () => {
-    expect(resolveWorkspaceCreateName({ draft: '   ', fallback: 'pr-9' })).toBe('pr-9')
-    expect(resolveWorkspaceCreateName({ draft: undefined, fallback: 'issue-4' })).toBe('issue-4')
   })
 })

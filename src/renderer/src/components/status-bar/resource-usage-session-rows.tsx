@@ -11,9 +11,6 @@ import type { UnifiedSessionRow, UnifiedWorktreeRow } from './resource-usage-mer
 import { MetricPair, ROW_TRAILING_GUTTER_CLS, Sparkline } from './resource-usage-metrics'
 import { isResourceSessionActivationKey } from './resource-session-navigation'
 
-// ─── Session row ────────────────────────────────────────────────────
-
-// Exported (with WorktreeRow) for row-level regression tests pinning the kill affordance and remote-chip presentation.
 export function SessionRow({
   session,
   worktreeId,
@@ -63,27 +60,29 @@ export function SessionRow({
         {session.label}
       </span>
       <MetricPair cpu={session.cpu} memory={session.memory} size="small" />
-      {/* Why: kill X sits in the shared gutter for column alignment; bound rows reveal it on hover/focus, orphan rows always show it as reclaimable. */}
+      {/* Reserve the kill gutter for alignment; paired samples are read-only, while bound local rows reveal actions on hover/focus. */}
       <span className={ROW_TRAILING_GUTTER_CLS}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onKill(session)
-          }}
-          className={cn(
-            'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
-            session.bound &&
-              'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
-          )}
-          aria-label={translate(
-            'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
-            'Kill session {{value0}}',
-            { value0: session.sessionId }
-          )}
-        >
-          <X className="size-3" />
-        </button>
+        {session.readOnly ? null : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onKill(session)
+            }}
+            className={cn(
+              'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
+              session.bound &&
+                'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
+            )}
+            aria-label={translate(
+              'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
+              'Kill session {{value0}}',
+              { value0: session.sessionId }
+            )}
+          >
+            <X className="size-3" />
+          </button>
+        )}
       </span>
     </div>
   )
@@ -100,8 +99,6 @@ function BrowserRow({ browser }: { browser: BrowserWorkspace }): React.JSX.Eleme
     </div>
   )
 }
-
-// ─── Worktree row ───────────────────────────────────────────────────
 
 export function WorktreeRow({
   worktree,
@@ -179,13 +176,15 @@ export function WorktreeRow({
           disabled={!isNavigable}
         >
           <span className="text-xs font-medium truncate">{rowLabel}</span>
-          {/* Why: gate the chip on SSH connectionId, not missing data — warm-reattached local PTYs land here with hasLocalSamples=false. */}
+          {/* Use execution-host evidence; missing samples also occur during local warm reattach. */}
           {worktree.isRemote && (
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
-              {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1',
-                '· remote'
-              )}
+              {worktree.hostLabel
+                ? `· ${worktree.hostLabel}`
+                : translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1',
+                    '· remote'
+                  )}
             </span>
           )}
         </button>

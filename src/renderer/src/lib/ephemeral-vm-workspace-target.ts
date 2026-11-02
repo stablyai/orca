@@ -1,4 +1,8 @@
-import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
@@ -8,8 +12,12 @@ import {
   getEphemeralVmRecipeResultProjectRoot
 } from '../../../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../../shared/ephemeral-vm-recipe-diagnostics'
-import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
+  WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { translate } from '@/i18n/i18n'
+import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
 
 export type PrepareEphemeralVmWorkspaceTargetArgs = {
@@ -55,7 +63,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
     ...(args.provisionId ? { provisionId: args.provisionId } : {})
   })
   if (!provisioned.ok) {
-    return { ok: false, error: provisioned.error, stderr: provisioned.stderr }
+    return { ok: false, error: ephemeralVmErrorText(provisioned), stderr: provisioned.stderr }
   }
 
   const checkoutMode = getEphemeralVmRecipeResultCheckoutMode(provisioned.runtime.recipeResult)
@@ -71,18 +79,22 @@ export async function prepareEphemeralVmWorkspaceTarget(
     }
   }
 
-  const hostId =
-    provisioned.connectionType === 'ssh'
-      ? toSshExecutionHostId(provisioned.sshTargetId)
-      : toRuntimeExecutionHostId(provisioned.environment.id)
+  const { hostId, environmentId } = recipeWorkspaceHost(provisioned)
 
-  if (provisioned.connectionType === 'orca-server') {
+  if (environmentId) {
     try {
       await assertRuntimeEnvironmentCapability(
-        provisioned.environment.id,
+        environmentId,
         PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
         'The recipe-created Orca server does not support project setup.'
       )
+      if (checkoutMode === 'provisioned-root') {
+        await assertRuntimeEnvironmentCapability(
+          environmentId,
+          WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY,
+          'The Orca server on this VM cannot adopt a provisioned root. Update Orca on the VM.'
+        )
+      }
     } catch (error) {
       await cleanupProvisionedRuntime(provisioned.runtime.id)
       return {
@@ -92,7 +104,6 @@ export async function prepareEphemeralVmWorkspaceTarget(
       }
     }
   }
-
   let setup: ProjectHostSetupResult | null
   try {
     setup = await args.setupExistingFolder({
@@ -124,8 +135,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
     ...setup,
     setup: {
       ...setup.setup,
-      // Why: the sandbox reports its own checkout as "local"; the desktop app
-      // must route follow-up worktree operations back through this runtime.
+      // The sandbox calls its checkout local; desktop follow-up operations must still route through this runtime.
       hostId
     }
   }
@@ -144,9 +154,28 @@ export async function prepareEphemeralVmWorkspaceTarget(
     warnings: provisioned.warnings
   } satisfies PrepareEphemeralVmWorkspaceTargetResult
 
-  return provisioned.connectionType === 'orca-server'
-    ? { ...success, environmentId: provisioned.environment.id }
-    : success
+  return environmentId ? { ...success, environmentId } : success
+}
+
+type ProvisionedVm = Extract<
+  Awaited<ReturnType<typeof window.api.ephemeralVm.provision>>,
+  { ok: true }
+>
+
+/** A VM whose SSH host runs a managed server keeps its workspace on that server. */
+function recipeWorkspaceHost(provisioned: ProvisionedVm): {
+  hostId: ExecutionHostId
+  environmentId?: string
+} {
+  if (provisioned.connectionType === 'orca-server') {
+    const environmentId = provisioned.environment.id
+    return { hostId: toRuntimeExecutionHostId(environmentId), environmentId }
+  }
+  if (provisioned.environmentId) {
+    const { environmentId } = provisioned
+    return { hostId: toRuntimeExecutionHostId(environmentId), environmentId }
+  }
+  return { hostId: toSshExecutionHostId(provisioned.sshTargetId) }
 }
 
 async function cleanupProvisionedRuntime(runtimeId: string): Promise<void> {

@@ -127,7 +127,7 @@ describe('workspace pane normalization tab index', () => {
     expect(lookup.get('first')).toBe(first)
   })
 
-  it('resumes scanning and makes later misses constant-time', () => {
+  it('resumes scanning and reuses cached hits and misses', () => {
     const reads: string[] = []
     const tabs = ['first', 'second', 'third'].map((id) => {
       const tab = terminalTab(id, 'worktree', null)
@@ -146,9 +146,12 @@ describe('workspace pane normalization tab index', () => {
     expect(reads).toEqual(['first'])
     expect(lookup.get('second')).toBe(tabs[1])
     expect(reads).toEqual(['first', 'second'])
+    expect(lookup.get('first')).toBe(tabs[0])
+    expect(reads).toEqual(['first', 'second'])
     expect(lookup.get('missing')).toBeUndefined()
     expect(reads).toEqual(['first', 'second', 'third'])
     expect(lookup.get('missing')).toBeUndefined()
+    expect(lookup.get('first')).toBe(tabs[0])
     expect(reads).toEqual(['first', 'second', 'third'])
   })
 

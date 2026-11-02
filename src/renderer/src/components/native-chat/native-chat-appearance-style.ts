@@ -2,25 +2,32 @@ import './native-chat-appearance.css'
 import { useMemo, type CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildAppFontFamily } from '@/lib/app-font-family'
 import { getSystemPrefersDark, isTerminalBackgroundLight } from '@/lib/terminal-theme'
 import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
-export const NATIVE_CHAT_TRANSCRIPT_OUTER_CLASS = 'px-3 pt-10 pb-4 sm:px-4'
+// Bottom padding clears 20px control overhang; rail padding also covers its 34px overlay on macOS without scrollbar gutters.
+export function nativeChatTranscriptOuterClass(railVisible: boolean): string {
+  return railVisible ? 'px-9 pt-10 pb-10' : 'px-3 pt-10 pb-10 sm:px-4'
+}
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'
 
 export type NativeChatAppearanceStyle = CSSProperties &
   Record<`--${string}`, string | number> & {
     '--chat-font-size': string
+    '--chat-ui-font-size': string
     '--chat-code-font-size': string
     '--chat-content-max-width': string
     '--chat-inline-code-ratio': string
     '--chat-estimated-line-height': number
     '--chat-estimated-chars-per-line': number
+    '--chat-estimated-spacing-scale': number
   }
 
 // Width buckets keep a pixel-by-pixel resize from re-deriving the entire transcript.
@@ -39,7 +46,13 @@ export function selectNativeChatAppearanceSettings(
     terminalThemeLight: settings?.terminalThemeLight,
     terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme,
     terminalCustomThemes: settings?.terminalCustomThemes,
+    terminalPluginPalettes: settings?.terminalPluginPalettes,
+    pluginSystemEnabled: settings?.pluginSystemEnabled,
+    disabledPlugins: settings?.disabledPlugins,
     terminalColorOverrides: settings?.terminalColorOverrides,
+    terminalColorOverridesLight: settings?.terminalColorOverridesLight,
+    pluginAppThemeDark: settings?.pluginAppThemeDark,
+    pluginAppThemeLight: settings?.pluginAppThemeLight,
     terminalFontFamily: settings?.terminalFontFamily,
     terminalFontSize: settings?.nativeChatAppearance?.matchTerminalInterface
       ? settings.terminalFontSize
@@ -55,58 +68,24 @@ export function nativeChatContrastMix(contrast: number, light: boolean): number 
     : Math.min(100, Math.max(50, 78 + (value - 100) * 0.44))
 }
 
-export function nativeChatAppearanceStyle(
-  settings: Partial<GlobalSettings> | null | undefined,
-  measuredColumnWidthPx?: number | null,
-  systemPrefersDark = getSystemPrefersDark()
-): NativeChatAppearanceStyle {
-  const appearance = resolveNativeChatAppearanceSettings(settings?.nativeChatAppearance)
-  const { width } = appearance
-  const matching = appearance.matchTerminalInterface
-  const terminalFontSize = settings?.terminalFontSize ?? 14
-  const fontSize = matching ? terminalFontSize : appearance.fontSize
-  const codeFontSize = matching ? terminalFontSize : appearance.codeFontSize
-  const maxWidthPx = width === 'wide' ? 960 : width === 'full' ? Number.POSITIVE_INFINITY : 736
-  const measuredWidth = nativeChatColumnWidthBucket(measuredColumnWidthPx)
-  const columnWidthPx = Math.min(
-    measuredWidth ? measuredWidth : width === 'wide' ? 960 : 736,
-    maxWidthPx
-  )
-  const font = buildFontFamily(settings?.terminalFontFamily ?? '')
-  const style: NativeChatAppearanceStyle = {
-    '--chat-font-size': `${fontSize}px`,
-    '--chat-code-font-size': `${codeFontSize}px`,
-    '--chat-content-max-width': width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem',
-    '--chat-inline-code-ratio': `${codeFontSize / fontSize}em`,
-    '--chat-estimated-line-height': (22 * fontSize) / 14,
-    '--chat-estimated-chars-per-line': Math.max(
-      1,
-      Math.floor((((96 * columnWidthPx) / 736) * 14) / fontSize)
-    ),
-    '--chat-code-font-family': font
+/** Chat surfaces in the terminal's colors; the app theme already paints them under Match Terminal. */
+function applyTerminalChatColors(
+  style: NativeChatAppearanceStyle,
+  input: {
+    background: string
+    foreground: string
+    light: boolean
+    font: string
+    appMatchesTerminal: boolean
   }
-  let light = settings?.theme === 'light' || (settings?.theme === 'system' && !systemPrefersDark)
-  if (matching) {
-    const colors = resolveConfiguredTerminalColors(
-      {
-        theme: settings?.theme ?? 'dark',
-        terminalThemeDark: settings?.terminalThemeDark ?? '',
-        terminalThemeLight: settings?.terminalThemeLight ?? '',
-        terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme ?? false,
-        terminalCustomThemes: settings?.terminalCustomThemes,
-        terminalColorOverrides: settings?.terminalColorOverrides
-      },
-      systemPrefersDark
-    )
-    const hasThemeColors = Boolean(colors.background && colors.foreground)
-    const background = hasThemeColors ? colors.background : '#000000'
-    const foreground = hasThemeColors ? colors.foreground : '#fafafa'
-    light = isTerminalBackgroundLight(background)
-    style.colorScheme = light ? 'light' : 'dark'
+): void {
+  const { background, foreground, light, font, appMatchesTerminal } = input
+  style.colorScheme = light ? 'light' : 'dark'
+  style['--chat-font-family'] = font
+  if (!appMatchesTerminal) {
     // Ghost controls inherit a color, so remapping the token alone leaves the app's color in place.
     style.color = 'var(--foreground)'
     Object.assign(style, {
-      '--chat-font-family': font,
       '--background': 'var(--chat-canvas)',
       '--foreground': 'var(--chat-foreground-strong)',
       '--muted-foreground': 'var(--chat-source-muted-foreground)',
@@ -124,23 +103,100 @@ export function nativeChatAppearanceStyle(
       '--secondary': 'var(--muted)',
       '--secondary-foreground': 'var(--chat-foreground-strong)',
       '--ring': 'color-mix(in srgb, var(--chat-source-foreground) 44%, var(--chat-canvas))',
+      // Why: the terminal palette owns a matching chat, so a plugin theme's bubble yields too.
+      '--chat-user-message': 'initial',
       '--chat-source-background': background,
       '--chat-source-foreground': foreground,
       '--chat-source-muted-foreground':
-        'color-mix(in srgb, var(--chat-source-foreground) 62%, var(--chat-canvas))',
-      '--chat-canvas-mix': '0%',
-      '--chat-faint-mix': light ? '100%' : '83%',
-      '--chat-user-mix': light ? '4%' : '7%',
-      '--chat-user-border-mix': light ? '7%' : '6%',
-      '--chat-code-mix': light ? '2%' : '3.5%',
-      '--chat-code-base': light ? 'var(--chat-canvas)' : 'transparent',
-      '--chat-inline-code-mix': light ? '4%' : '6%',
-      '--chat-inline-code-base': light ? 'var(--chat-canvas)' : 'transparent',
-      '--chat-inline-code-border-mix': light ? '9%' : '8%',
-      '--chat-composer-mix': light ? '0%' : '4%',
-      '--chat-composer-base': light ? 'var(--chat-canvas)' : 'transparent',
-      '--chat-composer-border-mix': light ? '11%' : '9%'
+        'color-mix(in srgb, var(--chat-source-foreground) 62%, var(--chat-canvas))'
     })
+  }
+  Object.assign(style, {
+    '--chat-canvas-mix': '0%',
+    '--chat-faint-mix': light ? '100%' : '83%',
+    '--chat-user-mix': light ? '4%' : '7%',
+    '--chat-user-border-mix': light ? '7%' : '6%',
+    '--chat-code-mix': light ? '2%' : '3.5%',
+    '--chat-code-base': light ? 'var(--chat-canvas)' : 'transparent',
+    '--chat-inline-code-mix': light ? '4%' : '6%',
+    '--chat-inline-code-base': light ? 'var(--chat-canvas)' : 'transparent',
+    '--chat-inline-code-border-mix': light ? '9%' : '8%',
+    '--chat-composer-mix': light ? '0%' : '4%',
+    '--chat-composer-base': light ? 'var(--chat-canvas)' : 'transparent',
+    '--chat-composer-border-mix': light ? '11%' : '9%'
+  })
+}
+
+export function nativeChatAppearanceStyle(
+  settings: Partial<GlobalSettings> | null | undefined,
+  measuredColumnWidthPx?: number | null,
+  systemPrefersDark = getSystemPrefersDark()
+): NativeChatAppearanceStyle {
+  const appearance = resolveNativeChatAppearanceSettings(settings?.nativeChatAppearance)
+  const { width } = appearance
+  const matching = appearance.matchTerminalInterface
+  const terminalFontSize = settings?.terminalFontSize ?? 14
+  const fontSize = matching ? terminalFontSize : appearance.fontSize
+  const codeFontSize = matching ? terminalFontSize : appearance.codeFontSize
+  // Message text follows the terminal (10-24); labels, controls and spacing stay in the chat's 12-20.
+  const uiFontSize = Math.max(12, Math.min(20, fontSize))
+  const maxWidthPx = width === 'wide' ? 960 : width === 'full' ? Number.POSITIVE_INFINITY : 736
+  const measuredWidth = nativeChatColumnWidthBucket(measuredColumnWidthPx)
+  const columnWidthPx = Math.min(
+    measuredWidth ? measuredWidth : width === 'wide' ? 960 : 736,
+    maxWidthPx
+  )
+  const font = buildFontFamily(settings?.terminalFontFamily ?? '')
+  const style: NativeChatAppearanceStyle = {
+    '--chat-font-size': `${fontSize}px`,
+    '--chat-ui-font-size': `${uiFontSize}px`,
+    '--chat-code-font-size': `${codeFontSize}px`,
+    '--chat-content-max-width': width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem',
+    '--chat-inline-code-ratio': `${codeFontSize / fontSize}em`,
+    '--chat-estimated-line-height': (22 * fontSize) / 14,
+    '--chat-estimated-chars-per-line': Math.max(
+      1,
+      Math.floor((((96 * columnWidthPx) / 736) * 14) / fontSize)
+    ),
+    '--chat-estimated-spacing-scale': uiFontSize / 14,
+    '--chat-code-font-family': font,
+    ...(appearance.fontFamily
+      ? { '--chat-font-family': buildAppFontFamily(appearance.fontFamily) }
+      : {})
+  }
+  let light = settings?.theme === 'light' || (settings?.theme === 'system' && !systemPrefersDark)
+  const appMatchesTerminal =
+    (light ? settings?.pluginAppThemeLight : settings?.pluginAppThemeDark) ===
+    MATCH_TERMINAL_APP_THEME
+  if (matching || appMatchesTerminal) {
+    const colors = resolveConfiguredTerminalColors(
+      {
+        theme: settings?.theme ?? 'dark',
+        terminalThemeDark: settings?.terminalThemeDark ?? '',
+        terminalThemeLight: settings?.terminalThemeLight ?? '',
+        terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme ?? false,
+        terminalCustomThemes: settings?.terminalCustomThemes,
+        terminalPluginPalettes: settings?.terminalPluginPalettes,
+        pluginSystemEnabled: settings?.pluginSystemEnabled,
+        disabledPlugins: settings?.disabledPlugins,
+        terminalColorOverrides: settings?.terminalColorOverrides,
+        terminalColorOverridesLight: settings?.terminalColorOverridesLight
+      },
+      systemPrefersDark
+    )
+    const readable =
+      colors.background && colors.foreground
+        ? { background: colors.background, foreground: colors.foreground }
+        : null
+    const { background, foreground } = readable ?? { background: '#000000', foreground: '#fafafa' }
+    // Why also for the app theme: Match Terminal can paint the mode the setting doesn't ask for;
+    // an unreadable palette keeps the requested mode, as the app does.
+    if (readable || matching) {
+      light = isTerminalBackgroundLight(background)
+    }
+    if (matching) {
+      applyTerminalChatColors(style, { background, foreground, light, font, appMatchesTerminal })
+    }
   }
   const bodyMix = matching ? 100 : nativeChatContrastMix(appearance.contrast, light)
   style['--chat-foreground-mix'] = `${bodyMix}%`

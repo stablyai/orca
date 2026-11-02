@@ -170,10 +170,12 @@ describe('browserManager grab operations', () => {
       )
 
       expect(preventDefault).toHaveBeenCalledTimes(1)
-      expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
+      expect(rendererSendMock).toHaveBeenCalledWith(
+        'ui:browserPageTabShortcut',
+        expect.objectContaining({ code: 'KeyB', shift: true })
+      )
     })
 
-    // Default annotate chord: Cmd+Shift+C on macOS, Alt+Shift+N elsewhere.
     const annotateChord =
       process.platform === 'darwin'
         ? { meta: true, control: false, alt: false, shift: true, code: 'KeyC', key: 'C' }
@@ -197,6 +199,8 @@ describe('browserManager grab operations', () => {
         webContentsId: GRAB_GUEST_WEB_CONTENTS_ID,
         rendererWebContentsId: GRAB_RENDERER_WEB_CONTENTS_ID
       })
+      // Registration also reports audio state; this test is about the chord.
+      rendererSendMock.mockClear()
 
       const preventDefault = pressAnnotateChord()
 
@@ -205,7 +209,6 @@ describe('browserManager grab operations', () => {
       expect(rendererSendMock.mock.calls).toEqual([['browser:grabModeToggle', 'tab-1', 'annotate']])
     })
 
-    // A client-hosted guest registers no workspace, and its pane has no annotate to arm.
     it('leaves the annotate chord to a page with no local workspace', () => {
       const preventDefault = pressAnnotateChord()
 

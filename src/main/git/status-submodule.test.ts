@@ -76,14 +76,11 @@ describe('submodule diff routing', () => {
     statMock.mockReset()
     existsSyncMock.mockReset()
     statMock.mockResolvedValue({ isFile: () => true, size: 12 })
-    // Route git invocations by argv/cwd so the routing logic can resolve the
-    // gitlink oids without touching a real repo.
     gitExecFileAsyncMock.mockImplementation((args: string[], options?: { cwd?: string }) => {
       if (args[0] === 'config' && args.includes('.gitmodules')) {
-        // Only the parent worktree declares the submodule; the recursion into the
-        // submodule worktree must see no nested submodules.
+        // Declare the submodule only in its parent so recursion terminates.
         return Promise.resolve({
-          stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path flutter_mine\n' : ''
+          stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path\nflutter_mine\0' : ''
         })
       }
       if (args[0] === 'ls-files') {
@@ -122,11 +119,11 @@ describe('submodule diff routing', () => {
     const result = await getDiff(PARENT, 'flutter_mine/lib/main.dart', false)
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['show', '--end-of-options', `${OLD_OID}:lib/main.dart`],
+      ['cat-file', 'blob', '--', `${OLD_OID}:lib/main.dart`],
       { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
     )
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['show', '--end-of-options', `${NEW_OID}:lib/main.dart`],
+      ['cat-file', 'blob', '--', `${NEW_OID}:lib/main.dart`],
       { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
     )
     expect(result.kind).toBe('text')
@@ -138,7 +135,7 @@ describe('submodule diff routing', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[], options?: { cwd?: string }) => {
       if (args[0] === 'config' && args.includes('.gitmodules')) {
         return Promise.resolve({
-          stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path flutter_mine\n' : ''
+          stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path\nflutter_mine\0' : ''
         })
       }
       if (args[0] === 'ls-files') {
@@ -166,11 +163,11 @@ describe('submodule diff routing', () => {
     const result = await getDiff(PARENT, 'flutter_mine/lib/main.dart', true)
 
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['show', '--end-of-options', `${OLD_OID}:lib/main.dart`],
+      ['cat-file', 'blob', '--', `${OLD_OID}:lib/main.dart`],
       { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
     )
     expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
-      ['show', '--end-of-options', `${NEW_OID}:lib/main.dart`],
+      ['cat-file', 'blob', '--', `${NEW_OID}:lib/main.dart`],
       { cwd: SUBMODULE, maxBuffer: 10 * 1024 * 1024, preferWslDirectGit: true }
     )
     expect(result.kind).toBe('text')
@@ -179,12 +176,10 @@ describe('submodule diff routing', () => {
   })
 
   it('reads inner files from the working tree when the commit is unchanged', async () => {
-    // Override the gitlink oids so recorded == checked-out (no pointer move),
-    // routing the inner diff back to the index/working-tree blob read.
     gitExecFileAsyncMock.mockImplementation((args: string[], options?: { cwd?: string }) => {
       if (args[0] === 'config' && args.includes('.gitmodules')) {
         return Promise.resolve({
-          stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path flutter_mine\n' : ''
+          stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path\nflutter_mine\0' : ''
         })
       }
       if (args[0] === 'ls-files') {
@@ -200,11 +195,14 @@ describe('submodule diff routing', () => {
 
     const result = await getDiff(PARENT, 'flutter_mine/lib/main.dart', false)
 
-    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(['show', ':lib/main.dart'], {
-      cwd: SUBMODULE,
-      maxBuffer: 10 * 1024 * 1024,
-      preferWslDirectGit: true
-    })
+    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
+      ['cat-file', 'blob', '--', ':lib/main.dart'],
+      {
+        cwd: SUBMODULE,
+        maxBuffer: 10 * 1024 * 1024,
+        preferWslDirectGit: true
+      }
+    )
     expect(readFileMock).toHaveBeenCalledWith(path.join(SUBMODULE, 'lib/main.dart'))
     expect(result.kind).toBe('text')
     expect(result.originalContent).toBe('old\n')
@@ -212,12 +210,10 @@ describe('submodule diff routing', () => {
   })
 
   it('rejects inner submodule diffs whose .gitmodules path escapes the worktree', async () => {
-    // A crafted .gitmodules path must not let the inner diff read escape the
-    // selected worktree; loadDiff routes through resolveSubmoduleWorktreePath.
     gitExecFileAsyncMock.mockImplementation((args: string[], options?: { cwd?: string }) => {
       if (args[0] === 'config' && args.includes('.gitmodules')) {
         return Promise.resolve({
-          stdout: options?.cwd === PARENT ? 'submodule.evil.path ../evil\n' : ''
+          stdout: options?.cwd === PARENT ? 'submodule.evil.path\n../evil\0' : ''
         })
       }
       return Promise.resolve({ stdout: '' })
@@ -230,7 +226,7 @@ describe('submodule diff routing', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[], options?: { cwd?: string }) => {
       if (args[0] === 'config' && args.includes('.gitmodules')) {
         return Promise.resolve({
-          stdout: options?.cwd === PARENT ? 'submodule.evil.path ../evil\n' : ''
+          stdout: options?.cwd === PARENT ? 'submodule.evil.path\n../evil\0' : ''
         })
       }
       return Promise.resolve({ stdout: '' })
@@ -266,8 +262,8 @@ describe('listSubmodulePaths', () => {
       Promise.resolve({
         stdout:
           options?.wslDistro === 'debian'
-            ? 'submodule.lib.path debian-lib\n'
-            : 'submodule.lib.path ubuntu-lib\n'
+            ? 'submodule.lib.path\ndebian-lib\0'
+            : 'submodule.lib.path\nubuntu-lib\0'
       })
     )
 
@@ -279,6 +275,12 @@ describe('listSubmodulePaths', () => {
     ])
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads submodule names and paths that contain spaces', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'submodule.my lib.path\nmy lib\0' })
+
+    await expect(listSubmodulePaths('/repo')).resolves.toEqual(['my lib'])
   })
 })
 
@@ -318,7 +320,6 @@ describe('getSubmoduleStatus', () => {
     existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      // Clean worktree: the inner status stream returns nothing.
       if (args.includes('--raw')) {
         return Promise.resolve({ stdout: ':100644 100644 a b M\0lib/main.dart\0' })
       }
@@ -345,7 +346,6 @@ describe('getSubmoduleStatus', () => {
     existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      // Clean submodule worktree: the staged parent gitlink still has files to show.
       if (args.includes('--raw')) {
         return Promise.resolve({ stdout: ':100644 100644 a b M\0lib/main.dart\0' })
       }
@@ -409,7 +409,7 @@ describe('getSubmoduleStatus', () => {
       const name = args.includes('status') ? 'status' : args[0]
       events.push(`start:${name}`)
       if (name === 'status') {
-        // Hold the inner status open so a serialized caller could not have started the oid reads.
+        // Hold status open so the assertion detects serialization of the independent OID reads.
         await new Promise((resolve) => setTimeout(resolve, 5))
       }
       events.push(`end:${name}`)
@@ -424,7 +424,6 @@ describe('getSubmoduleStatus', () => {
 
     await getSubmoduleStatus('/repo', 'flutter_mine')
 
-    // Serialized reads only start ls-files/rev-parse once the inner status has resolved.
     expect(events.indexOf('start:ls-files')).toBeLessThan(events.indexOf('end:status'))
     expect(events.indexOf('start:rev-parse')).toBeLessThan(events.indexOf('end:status'))
   })

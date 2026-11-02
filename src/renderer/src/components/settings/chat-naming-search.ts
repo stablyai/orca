@@ -7,7 +7,7 @@ export const getChatNamingSearchEntry = createLocalizedCatalog((): SettingsSearc
   title: translate('settings.chat.names.title', 'Chat names'),
   description: translate(
     'settings.chat.names.description',
-    'Use an agent to name new chats from their first message. Without a generated name, chats stay Claude Chat or Codex Chat.'
+    'Use each chat’s agent to name it from its first message. Choose another naming agent in Advanced. Until a name is generated, a chat shows its first message.'
   ),
   keywords: [
     translate('settings.chat.names.enable', 'Name chats automatically'),

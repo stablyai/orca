@@ -98,7 +98,6 @@ describe('useQuickCommands', () => {
 
     await mount(client)
 
-    // Initial attempt + 5 replays, then give up rather than loop forever.
     expect(client.sendRequest).toHaveBeenCalledTimes(6)
     expect(state?.ready).toBe(false)
     expect(state?.error).toBe('RPC interrupted by connection migration')
@@ -279,7 +278,6 @@ describe('useQuickCommands', () => {
       sendRequest: vi
         .fn()
         .mockResolvedValueOnce(success([FIRST]))
-        // The host applies the targeted upsert to a list that desktop changed.
         .mockResolvedValueOnce(success([edited, SECOND]))
     } as unknown as RpcClient
     await mount(client)

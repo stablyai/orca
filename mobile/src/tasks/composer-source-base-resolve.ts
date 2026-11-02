@@ -1,17 +1,23 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrStartPoint } from '../../../src/shared/worktree/types'
 import { worktreeMrBaseResolve, worktreePrBaseResolve } from './mobile-workspace-create-operations'
+import type { ComposerBaseState } from './mobile-composer-source-types'
 
-// The resolved start point for a linked PR/MR: the base branch to create from
-// plus the optional review-compare ref, push target, and exact branch name.
 export type ComposerHostedBase = Pick<
   GitHubPrStartPoint,
   'baseBranch' | 'compareBaseRef' | 'pushTarget' | 'branchNameOverride' | 'maintainerCanModify'
 >
 
-// Resolves a GitHub PR's base via worktree.resolvePrBase, mirroring desktop's
-// select-time resolution. The runtime returns a soft { error } payload rather
-// than an RPC error for provider failures.
+export function toComposerBaseState(result: ComposerHostedBase): ComposerBaseState {
+  return {
+    baseBranch: result.baseBranch,
+    compareBaseRef: result.compareBaseRef,
+    pushTarget: result.pushTarget,
+    branchNameOverride: result.branchNameOverride
+  }
+}
+
+// Provider failure arrives as a soft error payload, not an RPC refusal.
 export async function resolveComposerPrBase(args: {
   client: RpcClient
   repoId: string
@@ -40,7 +46,43 @@ export async function resolveComposerPrBase(args: {
   return result as GitHubPrStartPoint
 }
 
-// Resolves a GitLab MR's base via worktree.resolveMrBase.
+export function resolveComposerHostedItemBase(args: {
+  client: RpcClient
+  repoId: string
+  provider: 'github' | 'gitlab'
+  type: 'issue' | 'pr' | 'mr'
+  number: number
+  branchName?: string
+  baseRefName?: string
+  isCrossRepository?: boolean
+}): Promise<ComposerHostedBase> | null {
+  const { client, repoId, provider, type, number, branchName, baseRefName, isCrossRepository } =
+    args
+  const crossRepo = isCrossRepository === undefined ? {} : { isCrossRepository }
+  if (provider === 'github') {
+    return type === 'pr'
+      ? resolveComposerPrBase({
+          client,
+          repoId,
+          prNumber: number,
+          ...(branchName ? { headRefName: branchName } : {}),
+          ...(baseRefName ? { baseRefName } : {}),
+          ...crossRepo
+        })
+      : null
+  }
+  return type === 'mr'
+    ? resolveComposerMrBase({
+        client,
+        repoId,
+        mrIid: number,
+        ...(branchName ? { sourceBranch: branchName } : {}),
+        ...(baseRefName ? { targetBranch: baseRefName } : {}),
+        ...crossRepo
+      })
+    : null
+}
+
 export async function resolveComposerMrBase(args: {
   client: RpcClient
   repoId: string

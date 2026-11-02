@@ -199,7 +199,7 @@ for (const width of [1920, 1280]) {
     })
     await expect(preview).toHaveClass(/markdown-dark/)
     await orcaPage.screenshot({ path: path.join(proofDirectory, 'toc-dark.png') })
-    await orcaPage.getByRole('button', { name: 'More actions', exact: true }).click()
+    await orcaPage.getByRole('button', { name: 'File actions', exact: true }).click()
     await expect(
       orcaPage.getByRole('menuitem', { name: 'Export as PDF', exact: true })
     ).toHaveAttribute('aria-disabled', 'true')

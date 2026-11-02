@@ -5,8 +5,7 @@ import {
 } from './pane-title-overlay-rects'
 
 describe('clearPaneTitleOverlayRects', () => {
-  // Why: this identity contract IS the React #185 guard — a fresh {} literal is
-  // never state-equal, so returning one here commits a render every pass.
+  // Stable identity prevents React #185 loops: a fresh empty object commits another render on every pass.
   it('returns the same reference when already empty', () => {
     const prev = {}
     expect(clearPaneTitleOverlayRects(prev)).toBe(prev)

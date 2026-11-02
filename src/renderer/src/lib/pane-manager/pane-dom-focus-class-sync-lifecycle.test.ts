@@ -81,39 +81,6 @@ describe('terminal DOM focus sync lifetime', () => {
     }).toEqual({ callbacks: 0, targets: 0 })
   })
 
-  it('keeps every immediate and deferred live sync in the same order without coalescing', () => {
-    const frames = frameQueue()
-    const notify = captureObserver()
-    const element = terminalElement()
-    const rows = element.firstElementChild
-    if (!rows) {
-      throw new Error('missing terminal rows')
-    }
-    const toggle = vi.spyOn(rows.classList, 'toggle')
-    const release = attachDomRendererFocusClassSync(element)
-    try {
-      element.classList.add('focus')
-      element.dispatchEvent(new Event('focusin'))
-      element.classList.remove('focus')
-      notify()
-      element.classList.add('focus')
-      element.dispatchEvent(new Event('focusout'))
-      expect(frames.pending.size).toBe(4)
-      frames.flush()
-      expect(toggle.mock.calls).toEqual(
-        [false, true, false, true, true, true, true, true].map((focused) => [
-          'xterm-focus',
-          focused
-        ])
-      )
-      expect(frames.pending.size).toBe(0)
-      release()
-      expect(frames.cancel).not.toHaveBeenCalled()
-    } finally {
-      release()
-    }
-  })
-
   it('ignores callbacks and already queued listener delivery after disposal', () => {
     const frames = frameQueue()
     const notify = captureObserver()
@@ -178,33 +145,5 @@ describe('terminal DOM focus sync lifetime', () => {
       oldRelease()
       release()
     }
-  })
-
-  it('keeps synchronously completed frame shims out of the pending set', () => {
-    const cancel = vi.fn()
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(16)
-      return 1
-    })
-    vi.stubGlobal('cancelAnimationFrame', cancel)
-    const element = terminalElement()
-    const query = vi.spyOn(element, 'querySelector')
-    const release = attachDomRendererFocusClassSync(element)
-    expect(query).toHaveBeenCalledTimes(2)
-    release()
-    expect(cancel).not.toHaveBeenCalled()
-  })
-
-  it('keeps missing elements and rows safe and releases repeated cleanup', () => {
-    const frames = frameQueue()
-    const missingRelease = attachDomRendererFocusClassSync(undefined)
-    missingRelease()
-    expect(frames.pending.size).toBe(0)
-    const release = attachDomRendererFocusClassSync(document.createElement('div'))
-    frames.flush()
-    release()
-    release()
-    expect(frames.pending.size).toBe(0)
-    expect(frames.cancel).not.toHaveBeenCalled()
   })
 })

@@ -1,8 +1,7 @@
-import type { LegacySshProjectionSemantics } from '../../ssh-pty-legacy-projection'
 import {
   recordHiddenRendererPtyDataDrop,
   shouldDropHiddenRendererPtyData
-} from '../../pty-hidden-delivery-gate'
+} from './pty-hidden-delivery-gate'
 import {
   rendererVisibilityKnownPtys,
   visibleRendererPtys,
@@ -19,6 +18,11 @@ import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import { clearFlushTimerIfIdle } from './flush'
+import {
+  advancePtyEscapeBoundary,
+  markPtyRendererStreamGap,
+  takePtyGapEscapeState
+} from './pty-gap-escape-state'
 import type { PtyIpcSession } from '../session'
 
 export function rendererPtyIsKnownHidden(id: string): boolean {
@@ -33,17 +37,12 @@ export function acceptPtyDataForRenderer(
     sequenceChars?: number
     transformed?: boolean
   },
-  outputSeq: number | undefined,
-  projection?: LegacySshProjectionSemantics
+  outputSeq: number | undefined
 ): void {
   const rawLength = payload.sequenceChars ?? payload.data.length
   const preservesSeq = !payload.transformed && rawLength === payload.data.length
   const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
-  const projectionId = projection?.identity.projectionSemanticsId
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
-    if (projectionId) {
-      session.sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
-    }
     if (session.flushTimer) {
       clearTimeout(session.flushTimer)
       session.flushTimer = null
@@ -58,34 +57,30 @@ export function acceptPtyDataForRenderer(
     return
   }
   if (session.rendererExitingPtyIds.has(payload.id)) {
-    if (projectionId) {
-      session.sshOutputIntake?.transferProjections([projectionId], 'pty-exiting')
-    }
     return
   }
+  const escapeStateBefore = advancePtyEscapeBoundary(payload.id, payload.data)
   if (shouldDropHiddenRendererPtyData(payload.id, session.getSettings?.())) {
-    if (projectionId) {
-      session.sshOutputIntake?.transferProjections([projectionId], 'hidden-drop')
-    }
-    const droppedChars = projection ? rawLength : payload.data.length
+    const droppedChars = payload.data.length
     const drop = recordHiddenRendererPtyDataDrop(payload.id, droppedChars)
     warnIfDroppingHiddenBytesForVisiblePty(session, payload.id, droppedChars)
     if (drop.shouldEmitRestoreMarker) {
-      sendModelRestoreNeededMarker(session, payload.id, 'hidden-drop', outputSeq)
+      sendModelRestoreNeededMarker(
+        session,
+        payload.id,
+        'hidden-drop',
+        outputSeq,
+        drop.hiddenDropEpisode
+      )
     }
     return
   }
   if (payload.data.length === 0 && !payload.transformed) {
-    if (projectionId) {
-      session.sshOutputIntake?.transferProjections([projectionId], 'empty-projection')
-    }
     return
   }
+  const gapEscapeState = takePtyGapEscapeState(payload.id, escapeStateBefore)
   const containsBackgroundOutput = rendererPtyIsKnownHidden(payload.id)
   const overflowMarkedBeforeAppend = session.pendingOverflowMarkedPtys.has(payload.id)
-  if (projection?.desktopSpan) {
-    session.sourceCreditPendingPtys.add(payload.id)
-  }
   const pending = appendPendingPtyData(
     session,
     payload.id,
@@ -96,15 +91,16 @@ export function acceptPtyDataForRenderer(
     containsBackgroundOutput,
     rawLength,
     payload.transformed === true,
-    projectionId
+    gapEscapeState
   )
+  if (pending.droppedOutput === true) {
+    markPtyRendererStreamGap(payload.id)
+  }
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
     !overflowMarkedBeforeAppend &&
     session.pendingOverflowMarkedPtys.has(payload.id)
-  // Why the 2026 release goes BEFORE the 2031 data: that payload ends with a
-  // deliberately-retained INCOMPLETE private-mode sequence (extractPrivateModeScanTail),
-  // and an ESC after it would abort the dangling CSI and lose the carried mode.
+  // Emit DEC 2026 release first; an ESC after the salvaged partial mode-2031 CSI would abort its continuation.
   const nextData =
     pending.data +
     getDroppedSynchronizedOutputRendererData(pending) +
@@ -131,24 +127,20 @@ export function acceptPtyDataForRenderer(
     }
     session.pendingOverflowMarkedPtys.delete(payload.id)
     try {
-      sendPtyDataToRenderer(
-        session,
-        payload.id,
-        {
-          id: payload.id,
-          data: nextData,
-          ...(typeof pending.startSeq === 'number'
-            ? {
-                seq: pending.startSeq + (pending.rawLength ?? nextData.length),
-                rawLength: pending.rawLength ?? nextData.length
-              }
-            : {}),
-          ...(pending.transformed ? { transformed: true } : {}),
-          ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
-          ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
-        },
-        pending.projectionAdmissionIds
-      )
+      sendPtyDataToRenderer(session, payload.id, {
+        id: payload.id,
+        data: nextData,
+        ...(typeof pending.startSeq === 'number'
+          ? {
+              seq: pending.startSeq + (pending.rawLength ?? nextData.length),
+              rawLength: pending.rawLength ?? nextData.length
+            }
+          : {}),
+        ...(pending.transformed ? { transformed: true } : {}),
+        ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
+        ...(pending.droppedOutput === true ? { droppedOutput: true } : {}),
+        ...(pending.gapEscapeState ? { gapEscapeState: pending.gapEscapeState } : {})
+      })
     } finally {
       session.updateProducerFlowControl(payload.id)
     }

@@ -1,26 +1,27 @@
 // @vitest-environment happy-dom
+import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import type { NotificationSettings } from '../../src/shared/notification-settings-types'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../src/shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryPage } from '../../src/shared/agent-session/agent-session-wire'
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
 } from '../../src/main/runtime/runtime-mobile-notification-controller'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import {
   call,
   installStructuredHostStub,
@@ -36,7 +37,7 @@ import {
 } from '@/store/slices/store-test-helpers'
 
 import { useAppStore } from '@/store'
-import { useAutoAckViewedAgent } from '@/hooks/useAutoAckViewedAgent'
+import { useReadOnScreenAttention } from '@/hooks/useReadOnScreenAttention'
 import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
 import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
@@ -50,12 +51,14 @@ export const REMOTE_TARGET = { kind: 'environment', environmentId: 'relay-host' 
 export const NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: true,
   agentTaskComplete: true,
+  agentNeedsInput: true,
   terminalBell: true,
   suppressWhenFocused: true,
   customSoundId: 'system',
   customSoundPath: null,
   customSoundVolume: 1,
-  mutedNotificationSourceIds: []
+  mutedNotificationSourceIds: [],
+  notifyHiddenWorkspaces: false
 }
 export const SCOPE = {
   executionHostId: 'local',
@@ -66,6 +69,7 @@ export const SCOPE = {
 export let fixture: {
   directory: string
   controller: RuntimeMobileNotificationController
+  relayControllers: RuntimeMobileNotificationController[]
   events: MobileNotificationEvent[]
   items: AgentJournalRenderItem[]
   sequence: number
@@ -161,7 +165,7 @@ export function ReadSurface({
   return null
 }
 export function AttentionPolicy(): null {
-  useAutoAckViewedAgent()
+  useReadOnScreenAttention()
   return null
 }
 export function readCalls(): number {
@@ -207,6 +211,8 @@ beforeEach(() => {
   const delivery = createStructuredAttentionMobileDelivery({
     readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
     readWorkspaceLabels: () => ({}),
+    isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42
@@ -222,11 +228,13 @@ beforeEach(() => {
       ]
     ]),
     readStatusState: () => projectStructuredAgentSessionStatusState(fixture.items),
+    readChildWork: () => undefined,
     now: hostClock
   })
   fixture = {
     directory,
     controller,
+    relayControllers: [],
     events,
     items,
     sequence,
@@ -338,7 +346,7 @@ beforeEach(() => {
     settings: createGlobalSettingsFixture({ experimentalTerminalAttention: true })
   })
 })
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   clearStructuredHostStub()
   resetStructuredAgentSessionReadOwnersForTests()
@@ -346,5 +354,10 @@ afterEach(() => {
   resetStructuredAgentSessionStatusFeedsForTests()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  await Promise.all(
+    [fixture.controller, ...fixture.relayControllers].map((controller) =>
+      controller.closeDismissals()
+    )
+  )
   rmSync(fixture.directory, { recursive: true, force: true })
 })

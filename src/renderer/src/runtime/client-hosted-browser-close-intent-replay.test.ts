@@ -91,6 +91,13 @@ describe('replaying client-hosted browser closes on reconnect', () => {
     await first
 
     expect(callRuntimeRpc).toHaveBeenCalledOnce()
+
+    callRuntimeRpc.mockResolvedValue({ closed: true })
+    const later = storeWith(['remote-b'])
+    await replayClientHostedBrowserCloseIntents('env-a', later)
+
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+    expect(later.clearClientHostedBrowserCloseIntents).toHaveBeenCalledWith('env-a', ['remote-b'])
   })
 })
 

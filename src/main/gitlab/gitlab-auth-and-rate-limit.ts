@@ -43,13 +43,13 @@ export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
       ? 'GLAB_TOKEN'
       : null
   try {
-    // Why: a host-global diagnostic must not wake an unrelated default WSL distro.
+    // A host-global auth diagnostic must not wake the default WSL distro.
     const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
       allowDefaultWslFallback: false
     })
     const output = `${stdout}\n${stderr}`
     const hosts = parseGlabAuthStatusHosts(output)
-    // Why: refreshing auth must advance the provider cache key past a stale null result.
+    // Advance provider cache identity after auth refresh so stale negative results cannot persist.
     rememberGlabKnownHosts(hosts)
     return {
       glabAvailable: true,
@@ -150,7 +150,7 @@ function rememberGitLabRateLimitSnapshot(
   snapshot: GitLabRateLimitSnapshot
 ): void {
   pruneGitLabRateLimitCache()
-  // Why: self-managed hostnames come from repo config; keep this cache bounded across many transient hosts.
+  // Self-hosted names are user-controlled; bound retention across transient hosts.
   gitLabRateLimitCache.delete(cacheKey)
   gitLabRateLimitCache.set(cacheKey, snapshot)
   pruneGitLabRateLimitCache()
@@ -170,7 +170,7 @@ export async function getRateLimit(options?: {
 
   await acquire()
   try {
-    // Why: GitLab exposes REST budget headers inconsistently; a null bucket means this host omitted them.
+    // Hosts can omit REST budget headers; absent buckets remain unknown.
     const args = host ? ['--hostname', host, 'user'] : ['user']
     const { headers } = await glabApiWithHeaders(args)
     const snapshot = parseGitLabRateLimitSnapshot(headers, host)
@@ -183,5 +183,3 @@ export async function getRateLimit(options?: {
     release()
   }
 }
-
-/** Resolve a project's full GitLab project ref (host + path); null for non-GitLab remotes. */

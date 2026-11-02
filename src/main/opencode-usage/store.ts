@@ -11,7 +11,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedState,
@@ -30,6 +30,7 @@ import {
   buildOpenCodeUsageSummary
 } from './snapshot-rollups'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
 
 let _openCodeUsageFile: string | null = null
 
@@ -61,8 +62,8 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
       normalizeState: normalizePersistedState,
       sourceKey: 'processedDatabases',
       dataPresenceKey: 'hasAnyOpenCodeData',
-      jsonIndent: 2,
-      scan: openCodeUsageProvider.scan
+      scan: openCodeUsageProvider.scan,
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 

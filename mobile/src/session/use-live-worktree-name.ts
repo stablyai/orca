@@ -6,7 +6,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
 import { getLiveWorktreeDisplayName } from './worktree-display-name'
-import { FLOATING_WORKSPACE_TITLE, isFloatingWorkspaceWorktreeId } from './floating-workspace'
+import { getFloatingWorkspaceTitle, isFloatingWorkspaceWorktreeId } from './floating-workspace'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   classifyWorktreeShowResponse,
   type WorktreeShowResolution
@@ -23,8 +24,9 @@ type Params = {
 
 export type LiveWorktreeName = {
   name: string
-  /** What the host last proved about this worktree still existing — see the bounce in
-   *  use-missing-worktree-bounce.ts. */
+  /** Where the worktree lives on its host; null until the host's record arrives. */
+  path: string | null
+  hostId: string | null
   resolution: WorktreeShowResolution
 }
 
@@ -34,22 +36,22 @@ export function useLiveWorktreeName({
   routeName,
   worktreeId
 }: Params): LiveWorktreeName {
-  // Why: the floating sentinel has no worktree record, so worktree.show would
-  // fail forever and keep the 3s fallback poll alive; its title is fixed.
+  useMobileTranslation()
+  // Floating workspaces have no worktree record; probing would keep fallback polling forever.
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
   const routeNameHint = routeName?.trim() ?? ''
-  const [worktreeName, setWorktreeName] = useState(() => ({
-    worktreeId,
-    name: routeNameHint
-  }))
-  // Why: keyed by id so a verdict about the previous route can never survive into the next one.
+  const [worktreeName, setWorktreeName] = useState<{
+    worktreeId: string
+    name: string
+    path?: string | null
+    hostId?: string | null
+  }>(() => ({ worktreeId, name: routeNameHint }))
+  // Key verdicts by route so a previous workspace’s deletion cannot escape into the new one.
   const [resolved, setResolved] = useState<{
     worktreeId: string
     resolution: WorktreeShowResolution
   }>(() => ({ worktreeId, resolution: 'unknown' }))
-  // Why: a transient desktop repo-scan rejection collapses the catalog to zero rows and
-  // answers selector_not_found for a live worktree — one miss is suspicion, not proof.
-  // The fallback poll guarantees a confirming read (a failed show never stops it).
+  // Repo-scan failures can misreport live workspaces as missing; require a confirming fallback read.
   const missingStreakRef = useRef({ worktreeId, count: 0 })
 
   useEffect(() => {
@@ -85,8 +87,7 @@ export function useLiveWorktreeName({
         }
       }
       const refreshWorktreeName = async (): Promise<void> => {
-        // Why: an event-driven refresh can overtake a slow fallback request;
-        // only the newest read may publish or stop the retry poll.
+        // Only the newest request may publish or stop polling; events can overtake slow fallback reads.
         const generation = ++refreshGeneration
         try {
           const response = await sessionWorktreeRecordRead.request(client, {
@@ -111,10 +112,7 @@ export function useLiveWorktreeName({
               ? current
               : { worktreeId, resolution }
           )
-          // The resolution above comes off the raw reply on purpose: `selector_not_found` is what
-          // proves the worktree is gone, and no acceptance policy carries a refusal code. The skip
-          // below is the same verdict as main's `!response.ok`, since a refusal is the only reply
-          // this policy declines.
+          // Read selector_not_found before skip interpretation; only its confirmed code proves deletion.
           const accepted = sessionWorktreeRecordRead.interpret(response)
           if (!accepted.accepted) {
             return
@@ -122,10 +120,15 @@ export function useLiveWorktreeName({
           const worktree = accepted.value
           const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
           if (liveName) {
+            const path = worktree?.path || null
+            const hostId = worktree?.hostId ?? null
             setWorktreeName((current) =>
-              current.worktreeId === worktreeId && current.name === liveName
+              current.worktreeId === worktreeId &&
+              current.name === liveName &&
+              current.path === path &&
+              current.hostId === hostId
                 ? current
-                : { worktreeId, name: liveName }
+                : { worktreeId, name: liveName, path, hostId }
             )
           }
           hasSuccessfulRefresh = true
@@ -168,8 +171,7 @@ export function useLiveWorktreeName({
               stopFallbackPoll()
             }
             if (replayedAfterReconnect) {
-              // Why: client events are not queued while disconnected, so replay
-              // readiness must re-read the title once to close that event gap.
+              // Reconnect must reread once because disconnected clients miss title invalidations.
               invalidateAndRefresh()
             }
             return
@@ -187,9 +189,7 @@ export function useLiveWorktreeName({
           }
         }
       )
-      // Why: route params are only an entry hint. The desktop/runtime owns
-      // displayName. Modern runtimes push invalidations; the poll remains only
-      // until that stream proves available, preserving older-runtime behavior.
+      // Runtime displayName owns the title; retain fallback polling until invalidations prove available on this host.
       void refreshWorktreeName()
       return () => {
         stale = true
@@ -200,11 +200,12 @@ export function useLiveWorktreeName({
   )
 
   if (isFloatingWorkspace) {
-    // The sentinel has no worktree record to resolve, so nothing is ever proven about it.
-    return { name: FLOATING_WORKSPACE_TITLE, resolution: 'unknown' }
+    return { name: getFloatingWorkspaceTitle(), path: null, hostId: 'local', resolution: 'unknown' }
   }
   return {
     name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
+    path: worktreeName.worktreeId === worktreeId ? (worktreeName.path ?? null) : null,
+    hostId: worktreeName.worktreeId === worktreeId ? (worktreeName.hostId ?? null) : null,
     resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'
   }
 }

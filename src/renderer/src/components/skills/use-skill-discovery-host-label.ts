@@ -1,12 +1,8 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 
-/**
- * Names the machine whose skill folders were scanned, so a remote or WSL user
- * can tell at a glance why sharing is unavailable without reading a per-row
- * sentence. Returns null while the owning runtime is still unknown.
- */
+/** Name the scanned owner for the page-wide sharing restriction; return null while ownership is unresolved. */
 export function useSkillDiscoveryHostLabel(target: RuntimeClientTarget | null): string | null {
   const environmentName = useAppStore((state) =>
     target?.kind === 'environment'

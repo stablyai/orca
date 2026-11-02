@@ -24,9 +24,7 @@ import { readArchivedStructuredJournal } from '../../orchestration-structured-wo
 
 const ARCHIVED_TERMINAL_PAGE_LINES = 2_000
 
-// Serves the frozen output source after the live PTY is gone: a decoded transcript snapshot or
-// the stored redacted terminal tail. Cursors stay Dispatch-scoped and source-pinned exactly like
-// live reads.
+// Serve frozen transcript/redacted-tail output after PTY exit; preserve Dispatch-scoped, source-pinned cursors.
 export async function readArchivedWorkerOutput(args: {
   db: OrchestrationDb
   dispatchId: string
@@ -192,8 +190,7 @@ function archivedStatus(args: Parameters<typeof readArchivedWorkerOutput>[0]): {
   terminal: 'running' | 'exited' | 'unknown'
   liveness: PtyLivenessVerdict['status']
 } {
-  // A durable release is host-confirmed only after the close settles. Unknown and
-  // in-flight releases retain their archive, but must not manufacture an exit.
+  // Archive retention proves no exit; only a settled host-confirmed release does.
   const liveness =
     args.liveness ?? (args.resource.release_state === 'released' ? 'exited' : 'unverifiable')
   return {

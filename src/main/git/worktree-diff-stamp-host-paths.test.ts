@@ -15,9 +15,7 @@ import { readWorktreeDiffStamp } from './source-control/worktree-diff-stamp'
 const slashed = (value: unknown): string => String(value).replaceAll('\\', '/')
 const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
-// Why this file: git in a WSL distro reports the worktree as `/mnt/c/...`, and the gitdir resolve
-// reaches it on its own. If the working-tree read did not travel the same way, the stamp would be
-// built from a real HEAD and a permanently absent file — a settled diff that survives every edit.
+// Stamp working files in host spelling too; an always-missing guest path would make edits invisible.
 describe('readWorktreeDiffStamp on a drvfs-spelled WSL worktree', () => {
   beforeEach(() => {
     readFileMock.mockReset()
@@ -27,7 +25,6 @@ describe('readWorktreeDiffStamp on a drvfs-spelled WSL worktree', () => {
       if (value === 'C:/repo/wt/.git') {
         return 'gitdir: /mnt/c/repo/.git/worktrees/wt\n'
       }
-      // Detached HEAD, so the stamp needs no ref-store walk.
       if (value === 'C:/repo/.git/worktrees/wt/HEAD') {
         return `${'a'.repeat(40)}\n`
       }
@@ -50,7 +47,6 @@ describe('readWorktreeDiffStamp on a drvfs-spelled WSL worktree', () => {
       expect(statMock.mock.calls.map(([target]) => slashed(target))).toContain(
         'C:/repo/wt/src/a.ts'
       )
-      // The working-tree component is what moves when the user edits, so it has to be present.
       expect(stamp?.newestMtimeMs).toBe(1_000)
     } finally {
       platformSpy.mockRestore()

@@ -5,7 +5,7 @@ import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo,
   getProjectedWorktreeLineageChildrenByParentId
-} from './worktree-lineage-projection'
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 function makeWorktree(id: string): Worktree {
   return {
@@ -27,10 +27,7 @@ function makeLineage(childId: string, parentId: string): WorktreeLineage {
   } as unknown as WorktreeLineage
 }
 
-/**
- * A sidebar-scale fixture: one root with many children, mirroring the shape the
- * row builder scans on every store write.
- */
+/** Model the many-child lineage shape scanned on each store write. */
 function buildFixture(childCount: number): {
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>
@@ -47,45 +44,6 @@ function buildFixture(childCount: number): {
 }
 
 describe('worktree lineage projection cache', () => {
-  it('reuses the cyclic-id scan for an unchanged input pair', () => {
-    const { lineageById, worktreeMap } = buildFixture(8)
-    const first = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
-    const second = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
-    expect(second).toBe(first)
-  })
-
-  it('reuses the children projection for an unchanged input pair', () => {
-    const { lineageById, worktreeMap } = buildFixture(8)
-    const first = getProjectedWorktreeLineageChildrenByParentId(lineageById, worktreeMap)
-    const second = getProjectedWorktreeLineageChildrenByParentId(lineageById, worktreeMap)
-    expect(second).toBe(first)
-    expect(first.get('root')?.map((worktree) => worktree.id)).toEqual([
-      'child-0',
-      'child-1',
-      'child-2',
-      'child-3',
-      'child-4',
-      'child-5',
-      'child-6',
-      'child-7'
-    ])
-  })
-
-  it('rescans when either input is replaced', () => {
-    const { lineageById, worktreeMap } = buildFixture(4)
-    const baseline = getProjectedWorktreeLineageChildrenByParentId(lineageById, worktreeMap)
-
-    const replacedLineage = { ...lineageById }
-    expect(getProjectedWorktreeLineageChildrenByParentId(replacedLineage, worktreeMap)).not.toBe(
-      baseline
-    )
-
-    const replacedWorktrees = new Map(worktreeMap)
-    expect(getProjectedWorktreeLineageChildrenByParentId(lineageById, replacedWorktrees)).not.toBe(
-      baseline
-    )
-  })
-
   it('reflects a removed lineage edge as soon as the record is replaced', () => {
     const { lineageById, worktreeMap } = buildFixture(2)
     expect(

@@ -1,22 +1,6 @@
 #!/usr/bin/env node
-// Benchmark: cost of validating an agent-status payload on every hook event.
-//
-// 13 of the 15 per-source normalizers in agent-hook-listener.ts built a plain
-// object, JSON.stringify'd it, and handed the string to parseAgentStatusPayload,
-// which runs assertJsonTextStructureWithinLimits (a per-character scan of the
-// WHOLE serialized string) plus JSON.parse — only to reach the same
-// normalizeAgentStatusObject the object path calls directly. Claude and Codex
-// were already converted, with a comment calling the round trip "pure overhead
-// on this hot per-hook path"; the other 13 were not.
-//
-// Why the gap widens with payload size: the direct path's field normalizer stops
-// at the field cap (`normalized.length < maxLength`), so it is O(cap). The round
-// trip is O(input) — and the input is bounded only by the 1 MB hook request
-// limit, since tool_response text is passed through uncapped for most sources.
-//
-// Amplifier this models in the second table: resolveToolState stores the raw
-// value in lastToolByPaneKey and inherits it until a turn reset, so one large
-// tool result is re-serialized and re-scanned on every later event of the turn.
+// Compare serialize/structural-scan/parse/normalize with direct bounded normalization on the per-hook path.
+// Round trip is O(input) up to 1MB, direct field normalization O(cap); inherited tool results amplify repeated work across a turn.
 import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
@@ -34,8 +18,7 @@ function readMirroredConstant(name) {
   return Number(match[1].replaceAll('_', ''))
 }
 
-// Read the cap the direct path clamps at, so a drifted value fails loudly here
-// instead of quietly changing what this benchmark claims.
+// Read production cap so drift cannot silently change benchmark claims.
 const ASSISTANT_MESSAGE_CAP = readMirroredConstant('AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH')
 
 const ITERATIONS = Number.parseInt(process.env.ORCA_HOOK_NORM_BENCH_ITERATIONS ?? '400', 10)
@@ -205,8 +188,7 @@ for (const row of rows) {
   )
 }
 
-// A single large tool result is inherited across the turn, so every later event
-// re-pays the round trip on bytes that were already validated once.
+// Inherited tool result makes later events repeatedly serialize already-validated bytes.
 const TURN_EVENTS = 20
 const inherited = makePayload(200 * 1024)
 const beforeTurnMs = (measure(validateViaRoundTrip, inherited) * TURN_EVENTS).toFixed(2)

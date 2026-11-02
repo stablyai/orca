@@ -5,15 +5,7 @@ import {
 } from '@/store/slices/worktrees/session/worktree-slice-lookups'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
-// Why a shared fake store: the recovery budget is a field on the tab row, so a
-// fake that only answered booleans cannot express what these modules read. The
-// store actions below are the REAL ones, driven over a minimal state bag —
-// every suite that exercises the ledger needs exactly that, and a second copy
-// would be free to drift from the shape the store actually writes.
-//
-// Deliberately imports nothing from terminal-pane-recovery: the `@/store` mock
-// factory imports THIS module, so a back-edge to the module under test would
-// deadlock the factory. The request/settle cycle lives in the sibling driver.
+// Drive real row-ledger actions over minimal state so suites cannot drift from durable budget writes. Do not import recovery here: the store mock factory imports this module and a back-edge deadlocks.
 
 export type StoredTerminalTab = Pick<TerminalTab, 'id' | 'viewMode' | 'generation' | 'recovery'>
 
@@ -38,8 +30,7 @@ export const recoveryLedgerMocks: RecoveryLedgerMocks = {
     terminalLayoutsByTabId: {} as Record<string, unknown>,
     pendingStartupByTabId: {} as Record<string, unknown>
   },
-  // Records tabIds the store ACTUALLY remounted, so every assertion keeps
-  // meaning "a remount happened" rather than "a remount was asked for".
+  // Record completed remounts, not merely requests, so assertions reflect actual admission.
   remountTerminalTabForRecovery: vi.fn<(tabId: string) => void>(),
   getTab: vi.fn<() => { viewMode?: 'terminal' | 'chat' } | null>(() => ({})),
   recordRendererCrashBreadcrumb: vi.fn(),

@@ -4,10 +4,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { isLongSkillDescription } from './skill-description-length'
 
-/**
- * A skill description doubles as its trigger documentation, so it can run for
- * paragraphs. Show the opening lines and let the reader ask for the rest.
- */
+/** Descriptions include long trigger documentation; disclose the rest after the opening lines. */
 export function SkillDescriptionDisclosure({
   description,
   className

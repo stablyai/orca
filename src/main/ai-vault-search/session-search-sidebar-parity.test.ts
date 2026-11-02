@@ -7,11 +7,6 @@ import {
   type SessionSearchHarness
 } from './session-search-engine-test-fixture'
 
-// `repo:` and `path:` have to mean one thing. The sessions panel and the index
-// answer from different stores by different mechanisms, so the only way to keep
-// them equal is for both to run the same predicate; this asserts they do, over
-// the shapes where a second SQL spelling went wrong.
-
 let harness: SessionSearchHarness | null = null
 
 afterEach(async () => {
@@ -46,7 +41,6 @@ const SESSIONS: Fixture[] = [
     filePath: 'C:\\Users\\Ada\\.claude\\four.jsonl',
     text: 'harbor windows lane'
   },
-  // A space in the path, which is what a quoted operator value exists for.
   {
     id: 5,
     cwd: '/Users/ada/My Project',
@@ -55,8 +49,6 @@ const SESSIONS: Fixture[] = [
   }
 ]
 
-// Each of these matched in the panel and missed in the index while the engine
-// tried to say `repo:` / `path:` in SQL.
 const QUERIES = [
   'harbor path:jsonl',
   'harbor repo:orca/session-search',
@@ -101,11 +93,7 @@ function asSession(fixture: Fixture): AiVaultSession {
   } as AiVaultSession
 }
 
-/**
- * The panel's own answer. The whole query, not the operators cut out of it: a
- * whitespace split would cut a quoted value in half, and every fixture's preview
- * holds `harbor`, so the free text the panel also applies selects all of them.
- */
+/** Keep the full query so quoted operator values use the panel’s parser. */
 function sidebarIds(query: string): string[] {
   return filterAiVaultSessions(SESSIONS.map(asSession), {
     query,
@@ -138,8 +126,6 @@ it.each(QUERIES)('answers %s the way the sessions panel does', async (query) => 
 })
 
 it('is not vacuous: these queries do select, and reject, real sessions', () => {
-  // A parity suite where every query matched everything, or nothing, would pass
-  // against any predicate at all.
   const answers = QUERIES.map((query) => sidebarIds(query).length)
   expect(answers.some((count) => count > 0 && count < SESSIONS.length)).toBe(true)
   expect(answers.some((count) => count === 0)).toBe(true)

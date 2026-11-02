@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { buildHookProcessCapture } from './hook-process-capture'
 import { readAgentProcessIdentity } from '../../shared/agent-process-presence'
@@ -30,7 +30,7 @@ describe('Claude outer hook process capture', () => {
             `HOME=${home}`,
             'PATH=/usr/bin:/bin',
             'ORCA_PANE_KEY=presence-test-pane',
-            // Why: the agent's shell zone may differ from Orca's; the identity must not.
+            // Agent timezone differences must not change process identity.
             ...(timeZone ? [`TZ=${timeZone}`] : []),
             '/bin/sh',
             '-c',

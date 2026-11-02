@@ -179,6 +179,104 @@ describe('GitHub PR refresh owner-host routing', () => {
     }
   )
 
+  it.each(['activation', 'checks'] as const)(
+    'routes paired SSH %s refresh through its explicit runtime owner despite a direct twin',
+    async (trigger) => {
+      const store = createTestStore()
+      const pairedRepo = makeRepo({
+        id: 'repo',
+        path: '/paired/repo',
+        executionHostId: 'runtime:server',
+        connectionId: 'builder'
+      })
+      const workspace = {
+        ...makeWorktree('repo', 'feature/paired', 'wt-paired'),
+        hostId: 'ssh:builder' as const,
+        runtimeOwnerEnvironmentId: 'server'
+      }
+      seed(store, {
+        activeWorktreeId: workspace.id,
+        activeWorkspaceExecutionHostId: 'ssh:builder',
+        repos: [
+          { ...pairedRepo, path: '/direct/repo', executionHostId: 'ssh:builder' },
+          pairedRepo
+        ],
+        worktreesByRepo: { repo: [workspace] }
+      })
+      runtimeEnvironmentCall.mockResolvedValue({ ok: true, result: null })
+
+      if (trigger === 'activation') {
+        store.getState().refreshGitHubForWorktreeIfStale(workspace.id)
+      } else {
+        store.getState().refreshGitHubForWorktree(workspace.id)
+      }
+
+      await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'server',
+          method: 'github.prForBranch',
+          params: expect.objectContaining({ repo: 'repo', branch: 'feature/paired' })
+        })
+      )
+      expect(enqueuePRRefresh).not.toHaveBeenCalled()
+
+      runtimeEnvironmentCall.mockClear()
+      store.setState({ repos: [{ ...pairedRepo, connectionId: 'another-machine' }] })
+      store.getState().refreshGitHubForWorktree(workspace.id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(enqueuePRRefresh).not.toHaveBeenCalled()
+    }
+  )
+
+  it('routes PR refresh to the runtime repo id when an SSH row shares its path', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-shared-path',
+      ok: true,
+      result: makePR({ number: 26 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/shared/repo'
+    const branch = 'feature/shared-path'
+    seed(store, {
+      repos: [
+        makeRepo({
+          id: 'repo-ssh',
+          path: repoPath,
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        }),
+        makeRepo({
+          id: 'repo-runtime',
+          path: repoPath,
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: {
+        'repo-runtime': [makeWorktree('repo-runtime', branch, 'wt-runtime')]
+      }
+    })
+
+    store.getState().enqueueGitHubPRRefresh('wt-runtime', 'manual', 100)
+
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.prForBranch',
+      params: {
+        repo: 'repo-runtime',
+        branch,
+        linkedPRNumber: null,
+        currentHeadOid: 'head-oid',
+        reason: 'manual'
+      },
+      timeoutMs: 30_000
+    })
+  })
+
   it('keeps connected SSH PR refresh on the local coordinator even when a runtime is focused', () => {
     const store = createTestStore()
     const repoPath = '/ssh/repo'

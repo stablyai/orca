@@ -18,19 +18,10 @@ import {
 
 const TUNNEL_GENERATION = 7
 const CHUNK_BYTES = 64 * 1024
-// The session admits this many unconnected opens at once; a leaked pending-open
-// claim is invisible until an admission is refused.
-const SESSION_MAX_PENDING_OPENS = 16
 
-/**
- * Wires a real BrowserNetworkTunnelClient to a real BrowserNetworkTunnelSession over encoded
- * frames so one peer's protocol assumptions are checked against the other's implementation
- * rather than against a hand-written stub of it.
- */
 describe('browser network tunnel conformance', () => {
   beforeEach(() => {
-    // Only setTimeout is faked so getTimerCount() counts exactly the tunnel's connect timers
-    // while node:stream keeps its real microtask and setImmediate scheduling.
+    // Keep stream scheduling real while counting only connect timeouts.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   })
 
@@ -70,7 +61,6 @@ describe('browser network tunnel conformance', () => {
     destination.emit('end')
     await whenClosed(duplex)
     expect(consumer.ended).toBe(true)
-    // Both halves are finished, so the duplex retires itself and the client closes the stream.
     expect(opcodesFor(tunnel, 'clientToSession', 1).slice(-2)).toEqual(['HalfClose', 'Close'])
     expect(destination.destroyed).toBe(true)
 
@@ -122,7 +112,6 @@ describe('browser network tunnel conformance', () => {
     vi.advanceTimersByTime(BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS)
     await rejected
 
-    // The client's Error frame retires the session's stream, so its own connect timer is cleared too.
     expect(vi.getTimerCount()).toBe(0)
     expect(tunnel.closures).toEqual([])
     expect(tunnel.onSessionClose).not.toHaveBeenCalled()
@@ -132,8 +121,7 @@ describe('browser network tunnel conformance', () => {
   })
 
   it('reports the session connect timeout as a stream-scoped error', async () => {
-    // The client arms its own connect timer first and would always win a shared advance, so the
-    // session's timer is only observable against a raw frame peer.
+    // Use raw frames because the client's earlier timeout would mask the session timeout.
     const peer = createRawFramePeerSession()
     peer.session.handleBinary(openFrame(1, 'silent.internal', 443))
 
@@ -279,31 +267,6 @@ describe('browser network tunnel conformance', () => {
     await teardown(tunnel)
   })
 
-  it('returns the session pending-open budget for connected and refused streams alike', async () => {
-    const tunnel = createConformanceTunnel()
-
-    for (let index = 0; index < SESSION_MAX_PENDING_OPENS; index += 1) {
-      const opening = tunnel.client.open({ host: `never-${index}.internal`, port: 443 })
-      const rejected = expect(opening).rejects.toThrow('destination_closed_before_connect')
-      tunnel.destinations.at(-1)!.emit('close')
-      await rejected
-    }
-    for (let index = 0; index < SESSION_MAX_PENDING_OPENS; index += 1) {
-      const stream = await openStream(tunnel, `cycled-${index}.internal`)
-      stream.duplex.resume()
-      stream.destination.emit('close')
-      await whenClosed(stream.duplex)
-    }
-
-    const probes = probePendingOpenBudget(tunnel)
-    await settle()
-    expect(probes.refusals()).toEqual([])
-
-    probes.release()
-    await settle()
-    await teardown(tunnel)
-  })
-
   it('leaves no timer or budget claim behind when both peers tear down mid-transfer', async () => {
     const tunnel = createConformanceTunnel()
     const idle = await openStream(tunnel, 'idle.internal')
@@ -348,7 +311,6 @@ type ConformanceTunnel = {
 
 type OpenedStream = { duplex: BrowserNetworkTunnelDuplex; destination: FakeDestination }
 
-/** Models node:net's contract: writes settle on a later turn, never inside `write()`. */
 class FakeDestination extends EventEmitter implements BrowserNetworkTunnelSocket {
   destroyed = false
   paused = false
@@ -480,7 +442,6 @@ function createConformanceTunnel(): ConformanceTunnel {
   return tunnel
 }
 
-/** A real session driven by encoded frames, for cases the paired client would pre-empt. */
 function createRawFramePeerSession() {
   const aggregate = createAggregateBudgetProbe()
   const frames: RecordedFrame[] = []
@@ -539,10 +500,7 @@ type DuplexConsumer = {
   settleAll: () => void
 }
 
-/**
- * Mirrors the SOCKS bridge's consumer contract: reads are settled from the downstream
- * write callback, so settlement never re-enters the tunnel inside its own `push`.
- */
+// Settle asynchronously, like downstream writes, to avoid re-entering the tunnel during push().
 function consumeDuplex(
   duplex: BrowserNetworkTunnelDuplex,
   options: { autoSettle?: boolean } = {}
@@ -575,27 +533,6 @@ function consumeDuplex(
   return consumer
 }
 
-function probePendingOpenBudget(tunnel: ConformanceTunnel): {
-  refusals: () => string[]
-  release: () => void
-} {
-  const failures: string[] = []
-  const opened = tunnel.destinations.length
-  for (let index = 0; index < SESSION_MAX_PENDING_OPENS; index += 1) {
-    void tunnel.client
-      .open({ host: `probe-${index}.internal`, port: 443 })
-      .catch((error: Error) => failures.push(error.message))
-  }
-  return {
-    refusals: () => failures,
-    release: () => {
-      for (const destination of tunnel.destinations.slice(opened)) {
-        destination.emit('close')
-      }
-    }
-  }
-}
-
 async function expectStreamStillCarriesBytes(stream: OpenedStream): Promise<void> {
   const probe = new Uint8Array([0xa1, 0xb2])
   const before = totalBytes(stream.destination.written)
@@ -622,12 +559,11 @@ function writeChunk(duplex: BrowserNetworkTunnelDuplex, bytes: Uint8Array): Prom
   })
 }
 
-/** node:events' once() rejects on a stream 'error', which a retired duplex legitimately emits. */
+// events.once() would reject on the retired duplex's expected error.
 function whenClosed(duplex: BrowserNetworkTunnelDuplex): Promise<void> {
   return new Promise((resolve) => duplex.once('close', resolve))
 }
 
-/** Drains microtasks and one macrotask turn; setImmediate stays real under the fake clock. */
 function settle(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
 }

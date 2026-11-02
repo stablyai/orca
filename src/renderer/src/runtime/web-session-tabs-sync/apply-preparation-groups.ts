@@ -1,6 +1,6 @@
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
-import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import {
   isWebSessionBrowserPlacementGroupReserved,
   peekWebSessionBrowserPlacementGroup
@@ -43,19 +43,13 @@ export function prepareWebSessionTabsSnapshotGroups(
       entry.clientGroupId ? [[entry.unifiedTab.id, entry.clientGroupId]] : []
     )
   )
-  // Why: once this worktree has client groups, placement is client-owned — snapshots may only
-  // append never-seen tabs, drop vanished ones, and honor explicit focus intent. Host order,
-  // host actives, and host layout apply only on first adoption (no client groups yet).
+  // Existing client groups own placement: append unseen tabs, drop vanished tabs and honor explicit focus. Only first adoption takes host order/actives/layout.
   const clientOwnedPlacement = (() => {
-    // Why: a preserveLocalLayout owner keeps the local layout authoritative, so placement
-    // is client-owned even before any local group record exists — first adoption on an
-    // empty worktree must repair a rendered-leaf-without-record or materialize a rendered
-    // group instead of publishing the tab into a group no local leaf will ever show.
+    // preserveLocalLayout owns first adoption too; repair rendered leaves/groups or new tabs can land in invisible groups.
     if (!nextUnifiedTabs || (currentGroups.length === 0 && !options?.preserveLocalLayout)) {
       return null
     }
-    // Why: an entity-identical replacement (provisional terminal → mirrored surface, local
-    // editor → host editor tab) is a rename — its position and focus must carry over.
+    // Entity-identical local/provisional-to-mirror replacements are renames; preserve position and focus.
     const rekeyedTabIds = new Map<string, string>()
     for (const [provisionalTabId, hostTabId] of provisionalHandoffHostTabIds) {
       const mirroredId = toWebTerminalSurfaceTabId(hostTabId)
@@ -74,10 +68,7 @@ export function prepareWebSessionTabsSnapshotGroups(
         group.tabOrder.map((tabId) => rekeyedTabIds.get(tabId) ?? tabId)
       )
     )
-    // Why: a pending record is this client's own create intent — authoritative even when the
-    // provisional tab was provisionally adopted elsewhere or the target group record lags its leaf.
-    // The entry's own clientGroupId comes first, so a group the user moved the row into after the
-    // create was recorded wins over the group the create asked for.
+    // Client placement intent repairs early adoption/lagging groups, but the row’s current clientGroupId wins after user moves.
     const placementMoves = mirroredBrowserTabs.flatMap((entry) => {
       const recordedGroupId = peekWebSessionBrowserPlacementGroup({
         environmentId,

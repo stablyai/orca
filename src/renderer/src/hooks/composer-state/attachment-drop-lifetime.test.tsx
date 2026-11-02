@@ -8,7 +8,7 @@ import { useAttachmentDropState } from './attachment-drop-state'
 const mocks = vi.hoisted(() => ({ toastError: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/runtime/runtime-file-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
+vi.mock('@/runtime/runtime-file-import-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
 
 const stat = vi.fn(async (_input: { filePath: string }) => ({ isDirectory: false }))
 let originalApi: PropertyDescriptor | undefined
@@ -25,7 +25,8 @@ function renderDrop(strict = false) {
         promptCaretFrameRef: { current: null },
         promptTextareaRef: createRef<HTMLTextAreaElement>(),
         selectedRepoPath: '/folder-workspace',
-        selectedRepoSettings: null,
+        selectedRepoRuntimeEnvironmentId: null,
+        selectedWorktreeId: null,
         setAgentPrompt: prompt,
         setAttachmentPaths: attach
       }),

@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { FolderWorkspacePathStatusRequest } from '../../../shared/folder-workspace-path-status'
 import {
@@ -8,7 +8,6 @@ import {
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath
 } from '../../project-groups/folder-workspace-path-status'
-import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -19,6 +18,11 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { visibleFolderWorkspaces } from '../../ssh/orcad-retained-source'
+import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
+import {
+  isLocalWslMoveRow,
+  shouldDropWslMoveProjectUpdate
+} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,
@@ -33,7 +37,7 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_path_status_args'
     ) as FolderWorkspacePathStatusRequest
-    return getFolderWorkspacePathStatus(store, args, { getSshFilesystemProvider })
+    return getFolderWorkspacePathStatus(store, args)
   })
 
   ipcMain.handle(
@@ -53,21 +57,17 @@ export function registerFolderWorkspaceHandlers(
       if (!group || !folderPath) {
         throw new Error('folder_workspace_project_group_not_found')
       }
-      const status = await getFolderWorkspacePathStatusForPath(
-        {
-          folderPath,
-          projectGroupId: group.id,
-          connectionId: args.connectionId ?? group.connectionId ?? null,
-          projectGroups,
-          repos: store.getRepos()
-        },
-        { getSshFilesystemProvider }
-      )
-      assertFolderWorkspacePathUsable(status)
-      const workspace = store.createFolderWorkspace({
-        ...args,
-        creatorProvenance: { kind: 'host' }
+      const status = await getFolderWorkspacePathStatusForPath({
+        folderPath,
+        projectGroupId: group.id,
+        connectionId: args.connectionId ?? group.connectionId ?? null,
+        projectGroups,
+        repos: store.getRepos()
       })
+      assertFolderWorkspacePathUsable(status)
+      const workspace = await createFolderWorkspaceWithPluginHooks(args, (request) =>
+        store.createFolderWorkspace({ ...request, creatorProvenance: { kind: 'host' } })
+      )
       notifyReposChanged(mainWindow)
       return workspace
     }
@@ -81,6 +81,15 @@ export function registerFolderWorkspaceHandlers(
         rawArgs,
         'invalid_folder_workspace_update_args'
       )
+      const existing = store.getFolderWorkspace(args.folderWorkspaceId)
+      const ref = { folderWorkspaceId: args.folderWorkspaceId }
+      if (
+        existing &&
+        isLocalWslMoveRow(existing) &&
+        shouldDropWslMoveProjectUpdate(store, ref, args.updates)
+      ) {
+        return existing
+      }
       if (
         typeof args.updates.folderPath === 'string' &&
         args.updates.folderPath.trim().length > 0
@@ -90,19 +99,16 @@ export function registerFolderWorkspaceHandlers(
           return null
         }
         const projectGroups = store.getProjectGroups()
-        const status = await getFolderWorkspacePathStatusForPath(
-          {
-            folderPath: args.updates.folderPath,
-            projectGroupId: workspace.projectGroupId,
-            connectionId:
-              workspace.connectionId ??
-              projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
-              null,
-            projectGroups,
-            repos: store.getRepos()
-          },
-          { getSshFilesystemProvider }
-        )
+        const status = await getFolderWorkspacePathStatusForPath({
+          folderPath: args.updates.folderPath,
+          projectGroupId: workspace.projectGroupId,
+          connectionId:
+            workspace.connectionId ??
+            projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
+            null,
+          projectGroups,
+          repos: store.getRepos()
+        })
         assertFolderWorkspacePathUsable(status)
       }
       const updated = store.updateFolderWorkspace(args.folderWorkspaceId, args.updates)
@@ -119,7 +125,7 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_delete_args'
     )
-    // Why: the runtime owns PTY/browser/session teardown and notifies on success.
+    // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
     return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId)).deleted
   })
 }

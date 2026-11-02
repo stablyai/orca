@@ -23,9 +23,7 @@ describe('shared agent-hook-listener', () => {
     vi.unstubAllEnvs()
   })
 
-  // Why (#15117): the Windows script posts stdin verbatim through curl, so an event that
-  // fires without a payload arrives as `payload=""` rather than the `{}` the POSIX script
-  // substitutes. Both transports must still produce the status transition.
+  // Windows can post empty stdin verbatim while POSIX substitutes {}; both must transition (#15117).
   it('accepts an Antigravity event whose payload is empty or whitespace-only', () => {
     for (const payload of ['', '   ', '\r\n']) {
       const started = normalizeHookPayload(
@@ -47,8 +45,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  // Why (#15117): this is the shape Windows actually produces — curl omits the form field
-  // entirely when the agent supplies no stdin, so the key is absent rather than empty.
+  // Windows curl can omit the field entirely when no stdin arrives (#15117).
   it('accepts an Antigravity event that carries no payload key at all', () => {
     const started = normalizeHookPayload(
       state,
@@ -79,9 +76,7 @@ describe('shared agent-hook-listener', () => {
     ).toBeNull()
   })
 
-  // Why: the empty-payload allowance is Antigravity's documented policy, not a global one —
-  // every other source must keep rejecting a body it cannot parse.
-  it('does not extend the empty-payload allowance to other sources', () => {
+  it('keeps Gemini rejection of empty or missing payloads', () => {
     for (const payload of ['', undefined]) {
       expect(
         normalizeHookPayload(
@@ -155,9 +150,7 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
 
-    // Why: Antigravity can invoke managed hooks without stdin. The wrapper
-    // posts `{}` in that case, and the event name is still enough to keep the
-    // visible status alive.
+    // Managed hooks can lack stdin; event name alone still establishes status.
     expect(started?.payload).toMatchObject({
       state: 'working',
       prompt: '',
@@ -201,8 +194,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('reads newline-heavy Antigravity user requests without wrapper regex matching', () => {
-    const matchSpy = vi.spyOn(String.prototype, 'match')
+  it('reads a bounded preview from newline-heavy Antigravity user requests', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-large-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
     const requestText = 'Fix the failing test\n'.repeat(300)
@@ -227,16 +219,9 @@ describe('shared agent-hook-listener', () => {
         'production'
       )
 
-      expect(started?.payload.prompt).toContain('Fix the failing test')
-      expect(started?.payload.prompt).not.toContain('<USER_REQUEST>')
-      expect(started?.payload.prompt).not.toContain('</USER_REQUEST>')
-      const usedRequestWrapperMatch = matchSpy.mock.calls.some(
-        ([pattern]) =>
-          pattern instanceof RegExp &&
-          pattern.source.includes('<USER_REQUEST>') &&
-          pattern.source.includes('[\\s\\S]')
+      expect(started?.payload.prompt).toBe(
+        'Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the fai'
       )
-      expect(usedRequestWrapperMatch).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -428,6 +413,7 @@ describe('shared agent-hook-listener', () => {
       state: 'working',
       agentType: 'antigravity'
     })
+    expect(event?.payload.mainAgent).toBeUndefined()
   })
 
   it('keeps Antigravity tool hooks active after a non-idle Stop for the same transcript', () => {
@@ -497,6 +483,108 @@ describe('shared agent-hook-listener', () => {
     expect(lateTool).toBeNull()
   })
 
+  // Event order captured from agy 1.4.7 (#17650); transcript contents below are synthetic, not origin evidence.
+  it('keeps an Antigravity parent working until its own idle Stop when a subagent finishes', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-subagent-'))
+    const writeTranscript = (name: string, request: string, reply: string): string => {
+      const path = join(tmpDir, `${name}.jsonl`)
+      writeFileSync(
+        path,
+        `${[
+          JSON.stringify({ source: 'USER_EXPLICIT', type: 'USER_INPUT', content: request }),
+          JSON.stringify({ source: 'MODEL', type: 'PLANNER_RESPONSE', content: reply })
+        ].join('\n')}\n`
+      )
+      return path
+    }
+    const parent = {
+      conversationId: 'parent-conversation',
+      lastUserInput: 'translate',
+      transcriptPath: writeTranscript('parent', 'translate', 'Parent final report')
+    }
+    const child = {
+      conversationId: 'child-conversation',
+      lastUserInput: '',
+      transcriptPath: writeTranscript('child', 'translate to fr', 'Subagent report')
+    }
+    const subagentCall = { name: 'invoke_subagent', args: { TypeName: 'self', Prompt: 'fr' } }
+    const send = (hookEventName: string, payload: Record<string, unknown>) =>
+      normalizeHookPayload(
+        state,
+        'antigravity',
+        { paneKey: PANE_KEY, hook_event_name: hookEventName, payload },
+        'production'
+      )?.payload ?? null
+
+    try {
+      const events = [
+        send('PreInvocation', parent),
+        send('PreToolUse', { ...parent, toolCall: subagentCall }),
+        send('PostToolUse', { ...parent, toolCall: subagentCall }),
+        send('PreInvocation', child),
+        send('Stop', { ...parent, fullyIdle: false }),
+        send('PostInvocation', child),
+        send('Stop', { ...child, fullyIdle: true }),
+        send('PreInvocation', parent)
+      ]
+      expect(events.map((event) => event?.state ?? null)).toEqual([
+        'working',
+        'working',
+        'working',
+        null,
+        'working',
+        null,
+        null,
+        'working'
+      ])
+      // Held open for helpers, so the terminal's done for the parent's turn cannot settle it.
+      expect(events[4]?.mainAgent?.state).toBe('done')
+
+      const done = normalizeHookPayload(
+        state,
+        'antigravity',
+        { paneKey: PANE_KEY, hook_event_name: 'Stop', payload: { ...parent, fullyIdle: true } },
+        'production'
+      )
+      expect(done?.payload).toMatchObject({
+        state: 'done',
+        lastAssistantMessage: 'Parent final report'
+      })
+      expect(send('PostToolUse', { ...parent, toolCall: subagentCall })).toBeNull()
+      expect(send('PreInvocation', parent)?.state).toBe('working')
+      const nextStop = send('Stop', { ...parent, fullyIdle: false })
+      expect(nextStop?.state).toBe('working')
+      expect(nextStop?.mainAgent).toBeUndefined()
+      expect(
+        send('PreInvocation', { conversationId: 'next-conversation', lastUserInput: 'next' })?.state
+      ).toBe('working')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('tracks a new Antigravity conversation after the parent exits mid-subagent', () => {
+    const send = (hookEventName: string, payload: Record<string, unknown>) =>
+      normalizeHookPayload(
+        state,
+        'antigravity',
+        { paneKey: PANE_KEY, hook_event_name: hookEventName, payload },
+        'production'
+      )?.payload.state ?? null
+    const parent = { conversationId: 'parent-conversation', lastUserInput: 'translate' }
+    send('PreInvocation', parent)
+    send('PreToolUse', { ...parent, toolCall: { name: 'invoke_subagent', args: {} } })
+    expect(send('PreInvocation', { conversationId: 'child', lastUserInput: '' })).toBeNull()
+
+    // agy was quit mid-subagent, so no idle Stop ever closed the parent; the user relaunched it.
+    const next = { conversationId: 'next-conversation', lastUserInput: 'hello' }
+    expect([
+      send('PreInvocation', next),
+      send('PreToolUse', { ...next, toolCall: { name: 'ask_question', args: {} } }),
+      send('Stop', { ...next, fullyIdle: true })
+    ]).toEqual(['working', 'waiting', 'done'])
+  })
+
   it('treats Antigravity Stop transcripts as pending result text', () => {
     expect(
       hasPendingAgentResultText('antigravity', {
@@ -521,7 +609,7 @@ describe('shared agent-hook-listener', () => {
     ).toBe(false)
   })
 
-  it('lets Copilot Stop consume a generic message without scheduling transcript retry', () => {
+  it('does not mark Copilot result text pending when a generic message is present', () => {
     expect(
       hasPendingAgentResultText('copilot', {
         payload: {

@@ -6,8 +6,7 @@ import { forEachLine } from './text-line-offsets'
 const BACKTICK = 96
 const BACKSLASH = 92
 
-// Why: spans are stored as flat [start, end, start, end, …] absolute offsets so
-// a full-document scan allocates one reusable array instead of an object per span.
+// Reuse flat offset pairs to avoid allocating an object per span during whole-document scans.
 function collectInlineCodeSpans(
   content: string,
   lineStart: number,
@@ -34,14 +33,18 @@ function collectInlineCodeSpans(
 }
 
 export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
+  // Advance delimiter cursors monotonically to avoid rescanning each line’s remaining document tail.
+  let nextOpen = content.indexOf('[[')
+  if (nextOpen === -1) {
+    return []
+  }
+  let nextClose = content.indexOf(']]', nextOpen + 2)
+  if (nextClose === -1) {
+    return []
+  }
   const ranges: IRange[] = []
   const inlineCodeSpans: number[] = []
   const isInsideFence = createMarkdownFenceRangeCursor(getMarkdownFenceRanges(content))
-  // Why: `indexOf` on the whole document would rescan the tail once per line.
-  // Both cursors only ever move forward, and every probe position is
-  // monotonic, so the delimiter search stays linear in document length.
-  let nextOpen = content.indexOf('[[')
-  let nextClose = content.indexOf(']]')
 
   forEachLine(content, (lineStart, lineEnd, lineNumber) => {
     if (isInsideFence(lineStart)) {
@@ -66,8 +69,7 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
       if (end === -1 || end + 2 > lineEnd) {
         break
       }
-      // Why: most lines hold no wiki link, so the inline-code scan is deferred
-      // until one is actually found.
+      // Most lines have no wiki links; defer code-span scanning until a link is found.
       if (!spansCollected) {
         collectInlineCodeSpans(content, lineStart, lineEnd, inlineCodeSpans)
         spansCollected = true
@@ -140,8 +142,7 @@ export function createMarkdownDocLinkDecorationController(
       return
     }
     cancelPendingRefresh()
-    // Why: wiki-link decoration scans read the full Monaco model. During typing
-    // the exact highlight can lag briefly; coalescing avoids one full scan per key.
+    // Coalesce whole-model decoration scans; highlights may briefly lag rather than rescan on every key.
     refreshTimer = setTimeout(refreshNow, MARKDOWN_DOC_LINK_DECORATION_REFRESH_DELAY_MS)
   }
 

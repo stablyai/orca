@@ -1,7 +1,14 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useChecksDetailTimer } from './use-checks-detail-timer'
-import { ChecksDetailPollingPolicy } from './checks-detail-polling-policy'
+import {
+  ChecksDetailPollingPolicy,
+  nextChecksPollBackoffMs
+} from '../../../../../shared/github/checks-detail-polling-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { gitLabPipelineJobsToPRChecks } from '../../../../../shared/gitlab-pipeline-checks'
+import {
+  gitLabPipelineJobsToPRChecks,
+  gitLabPipelineToPRCheck
+} from '../../../../../shared/gitlab-pipeline-checks'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey
@@ -10,6 +17,10 @@ import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import { fetchGitLabMRDetailsForChecks, gitLabMRCommentsToPRComments } from './gitlab-review-client'
+import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import { translate } from '@/i18n/i18n'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
@@ -25,10 +36,11 @@ export type ChecksPanelPollingInput = Pick<
     | 'pollIntervalRef'
     | 'prevChecksRef'
     | 'repo'
-    | 'settings'
     | 'setChecks'
+    | 'setChecksError'
     | 'setChecksLoading'
     | 'setComments'
+    | 'setCommentsError'
     | 'setCommentsLoading'
     | 'gitLabProjectRefRef'
   > &
@@ -58,12 +70,17 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     activeGitLabReview ? hostedReviewCacheKey : prCacheKey
   ])
   const gitLabDetailsLoadingGenerationRef = useRef(0)
-  // Fetch checks via cached store method
   const fetchChecks = useCallback(
     async ({
       force = false,
-      prNumberOverride
-    }: { force?: boolean; prNumberOverride?: number | null } = {}) => {
+      prNumberOverride,
+      wakeWslDistro = false
+    }: {
+      force?: boolean
+      prNumberOverride?: number | null
+      /** Opening the panel or tab: a user act that may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+    } = {}) => {
       const {
         repo,
         prNumber,
@@ -74,6 +91,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         isCurrentAsyncResult,
         setChecksLoading,
         setChecks,
+        setChecksError,
         pollIntervalRef,
         prevChecksRef
       } = modelRef.current
@@ -99,7 +117,9 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           {
             force,
             throwOnError: true,
-            repoId: repo.id
+            repoId: repo.id,
+            repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+            ...(wakeWslDistro ? { wakeWslDistro: true } : {})
           }
         )
         if (!isCurrentAsyncResult(requestKey)) {
@@ -109,10 +129,10 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
 
         // Unchanged details back off; a changed result restores the selected cadence.
         const signature = policyRef.current.accept(result)
-        pollIntervalRef.current =
-          signature === prevChecksRef.current
-            ? Math.min(pollIntervalRef.current * 2, 120_000)
-            : 60_000
+        pollIntervalRef.current = nextChecksPollBackoffMs(
+          pollIntervalRef.current,
+          signature === prevChecksRef.current ? 'unchanged' : 'changed'
+        )
         prevChecksRef.current = signature
       } catch (err) {
         if (
@@ -122,9 +142,13 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         ) {
           return
         }
-        console.warn('Failed to fetch PR checks:', err)
+        // A stopped WSL distro is refused, not failed: the shown checks stay, Refresh starts it.
+        if (!isWslDistroNotRunningRefusal(err)) {
+          console.warn('Failed to fetch PR checks:', err)
+        }
+        setChecksError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
         policyRef.current.fail()
-        pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
+        pollIntervalRef.current = nextChecksPollBackoffMs(pollIntervalRef.current, 'failed')
       } finally {
         if (
           isCurrentAsyncResult(
@@ -143,14 +167,15 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
       mrNumberOverride,
       headShaOverride,
       commitAsCurrent = false,
-      settingsOverride,
-      isRequestCurrent
+      isRequestCurrent,
+      background = false
     }: {
       mrNumberOverride?: number | null
       headShaOverride?: string | null
       commitAsCurrent?: boolean
-      settingsOverride?: ChecksPanelControllerState['settings']
       isRequestCurrent?: () => boolean
+      /** A poll or tab entry: refused rather than booting a stopped WSL distro. */
+      background?: boolean
     } = {}) => {
       const {
         activeGitLabReview,
@@ -158,13 +183,14 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         branch,
         hostedReviewCacheKey,
         asyncResultKeyRef,
-        settings,
         activeWorktree,
         isCurrentAsyncResult,
         gitLabProjectRefRef,
         setChecks,
+        setChecksError,
         setChecksLoading,
         setComments,
+        setCommentsError,
         setCommentsLoading,
         pollIntervalRef,
         prevChecksRef
@@ -196,9 +222,9 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         const details = await fetchGitLabMRDetailsForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          settings: settingsOverride ?? settings,
           iid: targetMRNumber,
-          repoOwnerExecutionHostId: activeWorktree?.hostId
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+          background
         })
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
@@ -207,22 +233,34 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           throw new Error('GitLab MR details are unavailable')
         }
         gitLabProjectRefRef.current = details.item.projectRef ?? null
-        const result = gitLabPipelineJobsToPRChecks(details?.pipelineJobs ?? [])
-        setChecks(result)
+        const result = gitLabPipelineJobsToPRChecks(details.pipelineJobs ?? [])
+        const pipelineCheck = details.pipeline
+          ? gitLabPipelineToPRCheck(
+              details.pipeline,
+              translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
+            )
+          : null
+        setChecks(result, pipelineCheck)
         setComments(gitLabMRCommentsToPRComments(details?.comments))
-        const signature = policyRef.current.accept(result)
-        pollIntervalRef.current =
-          signature === prevChecksRef.current
-            ? Math.min(pollIntervalRef.current * 2, 120_000)
-            : 60_000
+        const signature = policyRef.current.accept(result, pipelineCheck)
+        pollIntervalRef.current = nextChecksPollBackoffMs(
+          pollIntervalRef.current,
+          signature === prevChecksRef.current ? 'unchanged' : 'changed'
+        )
         prevChecksRef.current = signature
       } catch (err) {
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
         }
-        console.warn('Failed to fetch GitLab MR checks:', err)
+        if (!isWslDistroNotRunningRefusal(err)) {
+          console.warn('Failed to fetch GitLab MR checks:', err)
+        }
+        // One MR details request contains both pipeline and discussion; report failure for both.
+        const message = checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo))
+        setChecksError(message)
+        setCommentsError(message)
         policyRef.current.fail()
-        pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
+        pollIntervalRef.current = nextChecksPollBackoffMs(pollIntervalRef.current, 'failed')
       } finally {
         if (
           gitLabDetailsLoadingGenerationRef.current === loadingGeneration &&

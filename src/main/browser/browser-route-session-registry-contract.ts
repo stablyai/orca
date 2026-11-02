@@ -1,3 +1,4 @@
+import type { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
 import type {
   BrowserRoutePartitionIdentity,
   DerivedBrowserRoutePartition
@@ -7,18 +8,24 @@ import type { BrowserRouteElectronSession } from './browser-route-session-policy
 
 export type BrowserRoutePartitionBindingStore = {
   get(partition: string): string | null
-  /** Returns partitions evicted to make room; their storage is now the caller's to destroy. */
-  set(partition: string, fingerprint: string, storageScope: string): readonly string[]
+  /** Returns evicted partitions whose storage the caller must destroy. */
+  set(
+    partition: string,
+    fingerprint: string,
+    storageScope: string,
+    alias?: string
+  ): readonly string[]
   touch(partition: string): void
   findPartitionByFingerprint(fingerprint: string): string | null
-  rebind(partition: string, fingerprint: string, storageScope: string): void
+  rebind(partition: string, fingerprint: string, storageScope: string, alias?: string): void
 }
 
 export type BrowserRouteSessionRegistryDependencies = {
   derivePartition?: (identity: BrowserRoutePartitionIdentity) => DerivedBrowserRoutePartition
-  validateProfile(browserProfileId: string): void
+  validateProfile(browserProfileId: string, metadata?: BrowserClientProfileMetadata): void
   getSession(partition: string): BrowserRouteElectronSession
   setupPolicies(input: {
+    profileMetadata?: BrowserClientProfileMetadata
     partition: string
     browserProfileId: string
     session: BrowserRouteElectronSession
@@ -26,7 +33,6 @@ export type BrowserRouteSessionRegistryDependencies = {
   clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
   retirePageAuthority(input: BrowserRoutePageAuthorityRetirement): boolean
   bindingStore: BrowserRoutePartitionBindingStore
-  /** Destroys the storage of partitions the binding store evicted at capacity. */
   releaseEvictedPartitions?: (partitions: readonly string[]) => void
   maxLivePartitions?: number
   maxPagesPerPartition?: number

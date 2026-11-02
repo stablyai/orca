@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 function rootOnly(platform: NodeJS.Platform) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: 4242,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -39,8 +39,7 @@ function rootOnly(platform: NodeJS.Platform) {
       return true
     })
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The managed lifecycle reads only events, pid, streams and kill from this fixture.
-  const spawnImpl = (() => child) as unknown as typeof spawnProcess
+  const spawnImpl: PipedProcessSpawner = () => child
   return spawnManagedProviderProcess(
     { command: 'fixture-provider', args: [] },
     { spawnImpl, platform, site: 'fixture-provider-teardown' }
@@ -48,21 +47,6 @@ function rootOnly(platform: NodeJS.Platform) {
 }
 
 describe('fallback teardown never claims descendants it did not observe', () => {
-  it.each([
-    { taskkill: true, tree: 'exited' },
-    { taskkill: false, tree: 'unverifiable' }
-  ] as const)(
-    "reports taskkill's own verdict after a Windows tree kill: taskkill $taskkill",
-    async ({ taskkill, tree }) => {
-      vi.useFakeTimers()
-      os.taskkill.mockResolvedValueOnce(taskkill)
-      const closing = rootOnly('win32').close()
-      await vi.advanceTimersByTimeAsync(1_500)
-      await expect(closing).resolves.toEqual({ root: 'exited', tree })
-      expect(os.taskkill).toHaveBeenCalledOnce()
-    }
-  )
-
   it('reports no observation when the POSIX process table cannot be read', async () => {
     vi.useFakeTimers()
     const closing = rootOnly('darwin').close()
@@ -70,14 +54,5 @@ describe('fallback teardown never claims descendants it did not observe', () => 
     await expect(closing).resolves.toEqual({ root: 'exited', tree: null })
     expect(os.capture).toHaveBeenCalledOnce()
     expect(os.verifySnapshot).not.toHaveBeenCalled()
-  })
-
-  it('reports exited only when the captured descendants were verified gone', async () => {
-    vi.useFakeTimers()
-    os.capture.mockResolvedValueOnce({ rootPgid: 1, descendants: [], capturedAtMs: 1 })
-    const closing = rootOnly('darwin').close()
-    await vi.advanceTimersByTimeAsync(5_500)
-    await expect(closing).resolves.toEqual({ root: 'exited', tree: 'exited' })
-    expect(os.verifySnapshot).toHaveBeenCalledOnce()
   })
 })

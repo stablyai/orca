@@ -1,0 +1,3 @@
+{"direction":"out","process":"p1","message":{"jsonrpc":"2.0","id":6,"method":"session/prompt","params":{"sessionId":"session-1","prompt":[{"type":"text","text":"/compact"}]}}}
+{"direction":"in","process":"p1","message":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"session-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Compaction complete. Tokens: 32639 -> 17109 (saved 15530)."},"messageId":"message-1"}}}}
+{"direction":"in","process":"p1","message":{"jsonrpc":"2.0","id":6,"result":{"stopReason":"end_turn"}}}

@@ -1,7 +1,7 @@
+import type { PairedRuntimeConnection } from './paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import { runtimeEnvironmentSshAccessBinding } from './runtime-environment-authority-binding'
 export { runtimeEnvironmentSshAccessBinding } from './runtime-environment-authority-binding'
-import type { PairingOffer } from './pairing'
 import {
   getPreferredPairingOffer,
   RuntimeSshAccessOperationSchema,
@@ -66,7 +66,7 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
     expectedEnvironment: KnownRuntimeEnvironment
     requestId: string
     verifiedRuntimeId: string
-    verifiedPairing: PairingOffer
+    verifiedConnection: PairedRuntimeConnection
     tunnel: RuntimeSshTunnelLink
     now?: number
   }
@@ -74,7 +74,7 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
   const views = readEnvironmentStore(userDataPath).environments
   const completed = views.find((entry) => entry.id === args.expectedEnvironment.id)
   if (completed?.sshAccess?.requestId && completed.sshAccess.requestId === args.requestId) {
-    return requireMatchingCompletedLink(completed, args)
+    return requireMatchingCompletedLink(completed, linkedRuntimeId(userDataPath, completed), args)
   }
   const context = readAccessContext(userDataPath, args.expectedEnvironment)
   const existing = context.view
@@ -93,9 +93,9 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
   if (
     !args.verifiedRuntimeId.trim() ||
     (existing.runtimeId !== null && existing.runtimeId !== args.verifiedRuntimeId) ||
-    args.verifiedPairing.publicKeyB64 !== offer.publicKeyB64 ||
-    args.verifiedPairing.deviceToken !== offer.deviceToken ||
-    args.verifiedPairing.pairedDeviceId !== offer.pairedDeviceId
+    args.verifiedConnection.hostPublicKeyB64 !== offer.publicKeyB64 ||
+    args.verifiedConnection.credential.deviceToken !== offer.deviceToken ||
+    args.verifiedConnection.pairedDeviceId !== offer.pairedDeviceId
   ) {
     throw invalid('The SSH endpoint did not verify as this paired server.')
   }
@@ -122,7 +122,7 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
         id: endpointId,
         kind: 'websocket',
         label: 'SSH tunnel',
-        endpoint: args.verifiedPairing.endpoint,
+        endpoint: args.verifiedConnection.endpoint,
         publicKeyB64: offer.publicKeyB64,
         deviceToken: offer.deviceToken
       }
@@ -198,6 +198,7 @@ export function cancelRuntimeEnvironmentSshAccessLink(
 /** A retried completion must name exactly the link it already completed. */
 function requireMatchingCompletedLink(
   completed: KnownRuntimeEnvironment,
+  linkedRuntime: string | undefined,
   args: Parameters<typeof linkVerifiedRuntimeEnvironmentSshAccess>[1]
 ): KnownRuntimeEnvironment {
   const access = completed.sshAccess!
@@ -205,7 +206,6 @@ function requireMatchingCompletedLink(
   const prior = expectedIntent
     ? {
         ...completed,
-        runtimeId: args.expectedEnvironment.runtimeId,
         pairingRevision: args.expectedEnvironment.pairingRevision,
         sshAccess: undefined,
         connectionDependency: undefined,
@@ -217,11 +217,11 @@ function requireMatchingCompletedLink(
   requireUnchangedEnvironment([prior], args.expectedEnvironment)
   const offer = getPreferredPairingOffer(completed)
   if (
-    completed.runtimeId !== args.verifiedRuntimeId ||
-    offer.endpoint !== args.verifiedPairing.endpoint ||
-    offer.deviceToken !== args.verifiedPairing.deviceToken ||
-    offer.publicKeyB64 !== args.verifiedPairing.publicKeyB64 ||
-    offer.pairedDeviceId !== args.verifiedPairing.pairedDeviceId ||
+    linkedRuntime !== args.verifiedRuntimeId ||
+    offer.endpoint !== args.verifiedConnection.endpoint ||
+    offer.deviceToken !== args.verifiedConnection.credential.deviceToken ||
+    offer.publicKeyB64 !== args.verifiedConnection.hostPublicKeyB64 ||
+    offer.pairedDeviceId !== args.verifiedConnection.pairedDeviceId ||
     access.sshTargetId !== args.tunnel.sshTargetId ||
     access.sshTargetGeneration !== args.tunnel.sshTargetGeneration ||
     access.localPort !== args.tunnel.localPort ||
@@ -234,6 +234,17 @@ function requireMatchingCompletedLink(
     throw invalid('SSH access retry does not match its completed link.')
   }
   return completed
+}
+
+/** The runtime the link verified; the store's runtimeId moves on at every server restart. */
+function linkedRuntimeId(
+  userDataPath: string,
+  completed: KnownRuntimeEnvironment
+): string | undefined {
+  const persisted = readPersistedEnvironmentStore(userDataPath).environments.find(
+    (entry) => entry.id === completed.id
+  )
+  return persisted && readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, persisted)?.runtimeId
 }
 
 function readAccessContext(

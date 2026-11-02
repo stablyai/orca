@@ -1,7 +1,34 @@
 import type { KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
 
+const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
+
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
+  {
+    id: 'chat.find',
+    title: 'Find in chat',
+    group: 'Chat',
+    scope: 'chat',
+    searchKeywords: ['shortcut', 'chat', 'find', 'search'],
+    defaultBindings: platformBindings(['Mod+F'])
+  },
+  {
+    id: 'terminal.toggleNativeChat',
+    title: 'Switch between Chat UI and terminal',
+    group: 'Chat',
+    scope: 'terminal',
+    conflictGroups: ['global', 'tabs', 'terminal', 'chat', 'fileExplorer'],
+    implicitDefaultYields: true,
+    searchKeywords: ['shortcut', 'chat', 'chat ui', 'native chat', 'terminal', 'toggle', 'switch'],
+    defaultBindings: {
+      darwin: ['Mod+Shift+J'],
+      // Why: Ctrl+Alt chords skip the physical-key fallback (AltGr guard), so a
+      // letter primary would fail on non-Latin layouts and IMEs. Mod+Shift+J stays
+      // as the alias wherever Switch worktree is remapped or terminal-first.
+      linux: WINDOWS_LINUX_TOGGLE_BINDINGS,
+      win32: WINDOWS_LINUX_TOGGLE_BINDINGS
+    }
+  },
   {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',

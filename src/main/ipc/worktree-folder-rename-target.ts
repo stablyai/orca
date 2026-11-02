@@ -12,16 +12,7 @@ export type WorktreeFolderRenamePlan = {
   newWorktreeId: string
 }
 
-/**
- * Decide whether (and where) to rename a worktree's on-disk folder so it matches
- * the work-derived branch leaf. Returns null to skip — degrading to "branch +
- * display renamed, folder kept" — when the move would be unsafe or pointless:
- * remote (SSH folder moves aren't mirrored), Windows (the OS locks a directory
- * that is the running agent's cwd), the name already matches, or current path
- * settings would relocate the worktree to a different parent rather than rename
- * it in place. newWorktreeId is built from the same path passed to the move, so
- * it matches the id git reports back after `git worktree move`.
- */
+/** Rename only safe same-parent local paths; skip Windows cwd locks and remote hosts, preserving the Git-reported ID. */
 export function planWorktreeFolderRename(args: {
   repoId: string
   repoPath: string
@@ -39,19 +30,14 @@ export function planWorktreeFolderRename(args: {
   if (!newPath || newPath === args.oldWorktreePath) {
     return null
   }
-  // Why: keep this a pure rename. If path settings changed since creation the
-  // computed target could sit under a different parent — moving there would
-  // relocate, not rename, so skip rather than surprise the user.
-  // posix.dirname is safe here: win32 is filtered out above, so every remaining
-  // path (remote/Linux/Mac) uses forward slashes.
+  // Changed path settings must not relocate the worktree; non-Windows paths use POSIX separators.
   if (posix.dirname(newPath) !== posix.dirname(args.oldWorktreePath)) {
     return null
   }
   return {
     oldPath: args.oldWorktreePath,
     newPath,
-    // Why: folder workspaces can have multiple live instances backed by the
-    // same folder path, so preserve any synthetic instance suffix when re-keying.
+    // Folder instances can share a path; preserve their synthetic identity suffix.
     newWorktreeId: `${args.repoId}${WORKTREE_ID_SEPARATOR}${newPath}${args.worktreeIdSuffix ?? ''}`
   }
 }

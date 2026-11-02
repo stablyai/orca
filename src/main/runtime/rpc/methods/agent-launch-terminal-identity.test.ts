@@ -1,14 +1,4 @@
-/**
- * Whether a terminal launch names the pane it created.
- *
- * A `term_*` handle is a main-side mapping — terminal-handle-links.ts:309 says the renderer cannot
- * resolve one — so a client that draws its own tabs could not tell which tab `agent.launch` had
- * just asked the host to build. The runtime already mints that pane and reports it as `paneKey`;
- * the surface factory used to discard it, which is the one identity channel this method declined.
- *
- * Identity travels; placement does not. Nothing here asks for a group, an order or a focus — those
- * stay with whichever client is drawing, and mobile, which has no tabs, reads none of this.
- */
+/** Return runtime-minted paneKey because a client renderer cannot resolve main-side term_* handles. Identity crosses the wire; placement stays with the client. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { isAgentLaunchResult } from '../../../../shared/agent-launch-intent'
@@ -136,8 +126,7 @@ describe('the pane a terminal launch created', () => {
 })
 
 describe('reading a recorded launch back', () => {
-  // The replay resolver narrows a stored row with this guard, so a field it does not check is a
-  // field a replay hands back unvalidated — and one it over-checks is a refused replay.
+  // Replay uses this guard; missing validation leaks unchecked fields, over-validation rejects recorded answers.
   const BASE = {
     worktreeId: 'wt-7',
     receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'ok' }

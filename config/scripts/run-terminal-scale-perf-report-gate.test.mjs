@@ -15,16 +15,16 @@ function tempReportPath() {
   return join(dir, 'report.json')
 }
 
-function makeSpawnSync({ onScaleRun, scaleStatus = 0 } = {}) {
+function makeSpawnSync({ onScaleRun, scaleStatus = 0, statuses = {} } = {}) {
   const calls = []
   const spawnSyncImpl = vi.fn((command, args, options) => {
     calls.push({ args, command, options })
     if (args[0] === 'config/scripts/run-terminal-scale-perf-e2e.mjs') {
       onScaleRun?.()
       writeSync(options.stdio[1], '{"suites":[]}')
-      return { signal: null, status: scaleStatus }
+      return { signal: null, status: statuses[args[0]] ?? scaleStatus }
     }
-    return { signal: null, status: 0 }
+    return { signal: null, status: statuses[args[0]] ?? 0 }
   })
   return { calls, spawnSyncImpl }
 }
@@ -153,9 +153,14 @@ describe('run-terminal-scale-perf-report-gate', () => {
     expect(readFileSync(reportPath, 'utf8')).toBe('{"suites":[]}')
   })
 
-  it('stops before summarize and budget checks when the scale run fails', () => {
+  it.each([
+    ['scale', 'config/scripts/run-terminal-scale-perf-e2e.mjs', 1],
+    ['summary', 'config/scripts/summarize-terminal-perf-report.mjs', 2],
+    ['budget', 'config/scripts/check-terminal-perf-report-budgets.mjs', 3],
+    ['HTML', 'config/scripts/generate-terminal-perf-html-report.mjs', 4]
+  ])('returns the %s failure and stops subsequent stages', (_stage, failedScript, count) => {
     const reportPath = tempReportPath()
-    const { calls, spawnSyncImpl } = makeSpawnSync({ scaleStatus: 7 })
+    const { calls, spawnSyncImpl } = makeSpawnSync({ statuses: { [failedScript]: 7 } })
 
     const status = runTerminalScalePerfReportGate({
       argv: ['--report', reportPath],
@@ -163,8 +168,13 @@ describe('run-terminal-scale-perf-report-gate', () => {
     })
 
     expect(status).toBe(7)
-    expect(calls.map((call) => call.args[0])).toEqual([
-      'config/scripts/run-terminal-scale-perf-e2e.mjs'
-    ])
+    expect(calls.map((call) => call.args[0])).toEqual(
+      [
+        'config/scripts/run-terminal-scale-perf-e2e.mjs',
+        'config/scripts/summarize-terminal-perf-report.mjs',
+        'config/scripts/check-terminal-perf-report-budgets.mjs',
+        'config/scripts/generate-terminal-perf-html-report.mjs'
+      ].slice(0, count)
+    )
   })
 })

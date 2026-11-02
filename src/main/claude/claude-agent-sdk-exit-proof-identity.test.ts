@@ -33,8 +33,6 @@ describe('Claude child root identity', () => {
       terminateDescendants
     })
 
-    // POSIX runs no bare-pid root operation: the handle kill lands and the
-    // verification still speaks.
     await expect(tree.reap()).resolves.toBe('exited')
     expect(terminateDescendants).toHaveBeenCalled()
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
@@ -60,8 +58,6 @@ describe('Claude child root identity', () => {
     })
 
     await expect(tree.reap()).resolves.toBe('unverifiable')
-    // No admissible snapshot means no row may be signalled from its number, but
-    // the root still leaves through the handle Node owns.
     expect(terminateDescendants).not.toHaveBeenCalled()
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })

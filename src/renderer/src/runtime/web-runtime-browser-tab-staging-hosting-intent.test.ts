@@ -13,6 +13,7 @@ vi.mock('../store', () => ({ useAppStore: { getState: mocks.getState } }))
 
 const ENVIRONMENT_ID = 'web-env-1'
 const REMOTE_PAGE_ID = 'remote-page-1'
+const WORKTREE_ID = 'repo::/worktree'
 const STAGED: StagedWebRuntimeBrowserTab = {
   workspaceId: 'workspace-1',
   pageId: 'page-1',
@@ -37,6 +38,7 @@ describe('restageWebRuntimeBrowserTabHostingIntent', () => {
 
     const next = restageWebRuntimeBrowserTabHostingIntent(STAGED, {
       environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
       remotePageId: REMOTE_PAGE_ID,
       clientHosted: true
     })
@@ -60,7 +62,12 @@ describe('restageWebRuntimeBrowserTabHostingIntent', () => {
 
     const next = restageWebRuntimeBrowserTabHostingIntent(
       { ...STAGED, clientHosted: true },
-      { environmentId: ENVIRONMENT_ID, remotePageId: REMOTE_PAGE_ID, clientHosted: false }
+      {
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId: REMOTE_PAGE_ID,
+        clientHosted: false
+      }
     )
 
     expect(next).toEqual({ ...STAGED, clientHosted: false })
@@ -76,6 +83,7 @@ describe('restageWebRuntimeBrowserTabHostingIntent', () => {
 
     const next = restageWebRuntimeBrowserTabHostingIntent(STAGED, {
       environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
       remotePageId: REMOTE_PAGE_ID,
       clientHosted: false
     })
@@ -89,6 +97,7 @@ describe('restageWebRuntimeBrowserTabHostingIntent', () => {
 
     const next = restageWebRuntimeBrowserTabHostingIntent(STAGED, {
       environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
       remotePageId: REMOTE_PAGE_ID,
       clientHosted: true
     })

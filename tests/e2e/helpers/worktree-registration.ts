@@ -2,21 +2,10 @@ import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import type { CommitMessageAiSettings } from '../../../src/shared/commit-message-ai-types'
 
-// Why: these specs create worktrees via raw `git worktree add`, which bypasses
-// Orca's own add/remove path — the one thing that invalidates the main-process
-// worktrees.list scan cache (DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000). So a
-// read inside the TTL window can serve a stale miss. No renderer-reachable
-// cache-invalidation seam exists without adding product surface, so poll past
-// the deterministic 5s boundary. Budget 10s (not 6s, which sits dangerously
-// close to a 5s TTL if one scan is slow); the informative message keeps a
-// genuinely never-loading worktree failing loudly.
+// Raw git worktree add bypasses Orca’s 5s scan-cache invalidation; poll for 10s to cross the TTL and allow a slow scan.
 const WORKTREE_CACHE_TTL_POLL_MS = 10_000
 
-/**
- * Loads the repo's worktrees into the renderer store and resolves the id of the
- * worktree at `targetWorktreePath`, polling past the 5s scan-cache TTL so a
- * raw `git worktree add` that Orca never observed still becomes visible.
- */
+// Resolve a raw Git worktree through the renderer store after the scan-cache TTL.
 async function resolveE2eWorktreeId(
   page: Page,
   repoPath: string,
@@ -32,13 +21,12 @@ async function resolveE2eWorktreeId(
             if (!store) {
               throw new Error('window.__store is not available')
             }
-            await store.getState().fetchRepos()
+            await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
             const repo = store.getState().repos.find((entry) => entry.path === repoPath)
             if (!repo) {
               throw new Error(`Seeded E2E repo was not registered: ${repoPath}`)
             }
-            // Why: use the store's own fetch (like loadWorktreesUntilPathsPresent)
-            // so both TTL workarounds stay behaviorally identical.
+            // Use the same store fetch as loadWorktreesUntilPathsPresent to keep TTL workarounds aligned.
             await store.getState().fetchWorktrees(repo.id)
             const listedWorktrees = store.getState().worktreesByRepo[repo.id] ?? []
             const normalize = (value: string): string =>
@@ -65,12 +53,7 @@ async function resolveE2eWorktreeId(
   return worktreeId
 }
 
-/**
- * Shared setup for the Source Control specs: resolves the target worktree
- * (surviving the scan-cache TTL race), activates it, optionally applies AI
- * commit-message settings, loads its git status, and opens the Source Control
- * sidebar tab.
- */
+// Resolve and activate the Source Control worktree, apply optional AI settings, then load status and open its sidebar.
 export async function openSourceControlForWorktree(
   page: Page,
   repoPath: string,
@@ -115,11 +98,7 @@ export async function openSourceControlForWorktree(
     .toBe(true)
 }
 
-/**
- * Polls `fetchWorktrees` past the scan-cache TTL until every expected path is
- * registered in the store. Used by the Workspace Space git-status spec, which
- * adds 60 worktrees via raw git and would otherwise read a stale partial scan.
- */
+// Poll past the scan-cache TTL until every raw-Git fixture worktree appears.
 export async function loadWorktreesUntilPathsPresent(
   page: Page,
   repoId: string,

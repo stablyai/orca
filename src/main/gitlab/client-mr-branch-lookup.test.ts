@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GlUtils from './gl-utils'
+import { derivePipelineStatus, mapMRInfo } from './mappers'
+import { gitlabMrCheckCases } from '../../shared/gitlab-mr-checks.test-fixture'
+import { mapGitLabReview } from '../source-control/forge-review-mappers'
+import {
+  __resetHostedReviewBranchCacheForTests,
+  withHostedReviewBranchCache
+} from '../source-control/hosted-review-branch-cache'
 
 const {
   glabExecFileAsyncMock,
@@ -48,7 +55,20 @@ import {
 } from './client'
 import { resetGitLabMrMocks } from './client-mr-test-harness'
 
+type MergeRequestDetail = Parameters<typeof mapMRInfo>[0]
+
+function mockBranchLookup(mr: MergeRequestDetail): void {
+  glabExecFileAsyncMock
+    .mockResolvedValueOnce({ stdout: JSON.stringify([mr]) })
+    .mockResolvedValueOnce({ stdout: JSON.stringify(mr) })
+}
+
 describe('gitlab client — MR operations', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    __resetHostedReviewBranchCacheForTests()
+  })
+
   beforeEach(() => {
     resetGitLabMrMocks({
       glabExecFileAsyncMock,
@@ -66,12 +86,16 @@ describe('gitlab client — MR operations', () => {
     getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
     glabExecFileAsyncMock.mockRejectedValue(new Error('glab: connection refused'))
 
-    // The swallowing variant collapses a real failure into a false "no MR".
     await expect(getMergeRequestForBranch('/repo', 'feature/x')).resolves.toBeNull()
-    // The throwing variant makes the failure visible so eligibility records
-    // `unavailable` rather than a false "No merge request found".
+    // Strict lookup preserves unavailable transport as distinct from a confirmed missing review.
     await expect(getMergeRequestForBranchOrThrow('/repo', 'feature/x')).rejects.toThrow(
       /connection refused/
+    )
+  })
+
+  it.each(gitlabMrCheckCases)('maps $name to the shared consumer review', ({ raw, review }) => {
+    expect(mapGitLabReview(mapMRInfo(raw, derivePipelineStatus(raw.head_pipeline)))).toStrictEqual(
+      review
     )
   })
 
@@ -139,18 +163,36 @@ describe('gitlab client — MR operations', () => {
   })
 
   describe('getMergeRequestForBranch', () => {
+    it('settles mergeable manual pipelines consistently for by-number, linked and discovered MRs', async () => {
+      getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+      const detail = {
+        iid: 7,
+        title: 'Manual release',
+        state: 'opened',
+        head_pipeline: { status: 'manual' },
+        detailed_merge_status: 'mergeable'
+      }
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
+        stdout: JSON.stringify(args[1].includes('source_branch=') ? [{ iid: 7 }] : detail)
+      }))
+      const reviews = await Promise.all([
+        getMergeRequest('/repo', 7),
+        getMergeRequestForBranch('/repo', 'feature/manual', 7),
+        getMergeRequestForBranch('/repo', 'feature/manual')
+      ])
+      expect(reviews.every((mr) => mr?.pipelineStatus === 'neutral')).toBe(true)
+      expect(reviews.every((mr) => mr?.mergeable === 'MERGEABLE')).toBe(true)
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    })
+
     it('finds the most recently updated MR for a branch across states', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            iid: 7,
-            title: 'WIP',
-            state: 'merged',
-            sha: 'abc',
-            head_pipeline: { status: 'success' }
-          }
-        ])
+      mockBranchLookup({
+        iid: 7,
+        title: 'WIP',
+        state: 'merged',
+        sha: 'abc',
+        head_pipeline: { status: 'success' }
       })
 
       const mr = await getMergeRequestForBranch('/repo', 'feature/foo')
@@ -166,9 +208,7 @@ describe('gitlab client — MR operations', () => {
       )
     })
 
-    // Why: GitLab does not proactively recompute merge status on list endpoints, so without the
-    // recheck request the row can sit at `unchecked` forever and the sidebar merge button — which
-    // gates on MERGEABLE — never becomes available.
+    // List endpoints require explicit asynchronous recheck before merge status can converge.
     it('asks GitLab to recheck merge status on the branch lookup', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
@@ -180,22 +220,107 @@ describe('gitlab client — MR operations', () => {
 
     it('uses legacy pipeline payloads when branch MR lists omit head_pipeline', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            iid: 8,
-            title: 'Legacy pipeline branch',
-            state: 'opened',
-            sha: 'def',
-            pipeline: { status: 'failed' }
-          }
-        ])
+      mockBranchLookup({
+        iid: 8,
+        title: 'Legacy pipeline branch',
+        state: 'opened',
+        sha: 'def',
+        pipeline: { status: 'failed' }
       })
 
       const mr = await getMergeRequestForBranch('/repo', 'feature/legacy-pipeline')
       expect(mr?.number).toBe(8)
       expect(mr?.pipelineStatus).toBe('failure')
     })
+
+    it.each([{}, { head_pipeline: null }, { head_pipeline: { status: 'success' } }])(
+      'reads the failed head pipeline from detail instead of the branch list: %j',
+      async (pipelineFields) => {
+        const detail = {
+          iid: 5049,
+          title: 'Pipeline regression',
+          state: 'opened',
+          sha: 'abc',
+          head_pipeline: { status: 'failed' }
+        }
+        getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+        glabExecFileAsyncMock
+          .mockResolvedValueOnce({
+            stdout: JSON.stringify([{ ...detail, head_pipeline: undefined, ...pipelineFields }])
+          })
+          .mockResolvedValueOnce({ stdout: JSON.stringify(detail) })
+          .mockResolvedValueOnce({ stdout: JSON.stringify(detail) })
+
+        const discovered = await getMergeRequestForBranch('/repo', 'feature/pipeline')
+        const linked = await getMergeRequestForBranch('/repo', 'feature/pipeline', 5049)
+        expect(discovered).toEqual(linked)
+        expect(discovered).toMatchObject({ number: 5049, pipelineStatus: 'failure' })
+        expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(3)
+        expect(glabExecFileAsyncMock.mock.calls[1]).toEqual(glabExecFileAsyncMock.mock.calls[2])
+      }
+    )
+
+    it('preserves detail failures for strict callers instead of returning a neutral list row', async () => {
+      getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+      for (const lookup of [getMergeRequestForBranch, getMergeRequestForBranchOrThrow]) {
+        glabExecFileAsyncMock
+          .mockResolvedValueOnce({
+            stdout: JSON.stringify([{ iid: 6, title: 'Flaky', state: 'opened' }])
+          })
+          .mockRejectedValueOnce(new Error('glab: 502'))
+        const result = lookup('/repo', 'flaky')
+        await (lookup === getMergeRequestForBranchOrThrow
+          ? expect(result).rejects.toThrow('glab: 502')
+          : expect(result).resolves.toBeNull())
+      }
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('glab: 502'))
+      await expect(getMergeRequestForBranchOrThrow('/repo', 'flaky', 6)).rejects.toThrow(
+        'glab: 502'
+      )
+      expect(glabExecFileAsyncMock.mock.calls[4]).toEqual(glabExecFileAsyncMock.mock.calls[3])
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(5)
+      expect(releaseMock).toHaveBeenCalledTimes(3)
+    })
+
+    it.each([10, 100])(
+      'caches list and detail together while polling %i branch rows',
+      async (rows) => {
+        vi.useFakeTimers()
+        getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+        const detail = {
+          iid: 7,
+          title: 'CI failure',
+          state: 'opened',
+          head_pipeline: { status: 'failed' }
+        }
+        glabExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
+          stdout: JSON.stringify(args[1].includes('source_branch=') ? [{ iid: 7 }] : detail)
+        }))
+        const poll = () =>
+          Promise.all(
+            Array.from({ length: rows }, (_, row) => {
+              const branch = `feature/${row}`
+              return withHostedReviewBranchCache(
+                { repoPath: '/repo', executionHostId: 'local', branch },
+                { headOid: null },
+                async () => {
+                  const mr = await getMergeRequestForBranchOrThrow('/repo', branch)
+                  return mr ? mapGitLabReview(mr) : null
+                }
+              )
+            })
+          )
+        const results = await Promise.all([poll(), poll()])
+        expect(results[0]).toHaveLength(rows)
+        expect(results[0].every((review) => review?.status === 'failure')).toBe(true)
+        await vi.advanceTimersByTimeAsync(59_999)
+        await poll()
+        expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2 * rows)
+        await vi.advanceTimersByTimeAsync(1)
+        await poll()
+        expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(4 * rows)
+      }
+    )
 
     it('strips refs/heads/ prefix from the branch arg', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
@@ -303,16 +428,12 @@ describe('gitlab client — MR operations', () => {
 
     it('routes local WSL merge-request branch lookup through the selected distro', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            iid: 12,
-            title: 'WSL branch',
-            state: 'opened',
-            sha: 'abc',
-            head_pipeline: { status: 'success' }
-          }
-        ])
+      mockBranchLookup({
+        iid: 12,
+        title: 'WSL branch',
+        state: 'opened',
+        sha: 'abc',
+        head_pipeline: { status: 'success' }
       })
 
       const mr = await getMergeRequestForBranch('/repo', 'feature/wsl', null, null, {
@@ -331,16 +452,12 @@ describe('gitlab client — MR operations', () => {
 
     it('hides a stale closed MR whose source branch is the repo default branch (#9171)', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            iid: 7,
-            title: 'Accidental MR from main',
-            state: 'closed',
-            sha: 'stale-main-oid',
-            head_pipeline: { status: 'success' }
-          }
-        ])
+      mockBranchLookup({
+        iid: 7,
+        title: 'Accidental MR from main',
+        state: 'closed',
+        sha: 'stale-main-oid',
+        head_pipeline: { status: 'success' }
       })
 
       await expect(getMergeRequestForBranch('/repo', 'main')).resolves.toBeNull()
@@ -348,16 +465,12 @@ describe('gitlab client — MR operations', () => {
 
     it('hides a stuck-locked MR whose source branch is the repo default branch (#9171)', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            iid: 9,
-            title: 'Wedged mid-merge MR from main',
-            state: 'locked',
-            sha: 'locked-main-oid',
-            head_pipeline: { status: 'success' }
-          }
-        ])
+      mockBranchLookup({
+        iid: 9,
+        title: 'Wedged mid-merge MR from main',
+        state: 'locked',
+        sha: 'locked-main-oid',
+        head_pipeline: { status: 'success' }
       })
 
       await expect(getMergeRequestForBranch('/repo', 'main')).resolves.toBeNull()
@@ -365,36 +478,27 @@ describe('gitlab client — MR operations', () => {
 
     it('keeps an open MR whose source branch is the repo default branch', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            iid: 8,
-            title: 'main → release',
-            state: 'opened',
-            sha: 'abc',
-            head_pipeline: { status: 'success' }
-          }
-        ])
+      mockBranchLookup({
+        iid: 8,
+        title: 'main → release',
+        state: 'opened',
+        sha: 'abc',
+        head_pipeline: { status: 'success' }
       })
 
       const mr = await getMergeRequestForBranch('/repo', 'main')
       expect(mr?.number).toBe(8)
-      // Open results never consult git for the default branch (lazy resolution).
       expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     })
 
     it('keeps a closed MR on a feature branch (behavior preserved)', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            iid: 9,
-            title: 'Rejected work',
-            state: 'closed',
-            sha: 'def',
-            head_pipeline: { status: 'failed' }
-          }
-        ])
+      mockBranchLookup({
+        iid: 9,
+        title: 'Rejected work',
+        state: 'closed',
+        sha: 'def',
+        head_pipeline: { status: 'failed' }
       })
 
       const mr = await getMergeRequestForBranch('/repo', 'feature/rejected')
@@ -443,8 +547,6 @@ describe('gitlab client — MR operations', () => {
     })
 
     it('returns null for an empty / detached-HEAD branch arg', async () => {
-      // Why: during a rebase the branch is empty — mirror github/getPRForBranch's
-      // early return without calling glab.
       await expect(getMergeRequestForBranch('/repo', '')).resolves.toBeNull()
       expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
     })

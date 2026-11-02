@@ -9,7 +9,19 @@ const asyncStorage = vi.hoisted(() => ({
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
-import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
+import {
+  dispatchMobileStructuredCommand,
+  type MobileStructuredCommandHolds
+} from './mobile-structured-composer-command'
+
+const IDLE: MobileStructuredCommandHolds = {
+  working: false,
+  prompt: false,
+  background: false,
+  backgroundTasksRunning: false,
+  sending: false
+}
+const holding = (shown: Partial<MobileStructuredCommandHolds>) => () => ({ ...IDLE, ...shown })
 
 function setup() {
   const sendRequest = vi.fn<
@@ -32,14 +44,14 @@ function setup() {
       setOption: vi.fn(async () => true),
       conversationCommands: ['clear', 'compact']
     },
-    busy: () => null,
+    holds: () => IDLE,
+    startFailures: () => [],
     waitsInLine: () => false,
     onError: vi.fn(),
     timeoutMs: 15000
   }
   return { input, sendRequest }
 }
-/** The fields one recorded request carried, read without asserting their shape. */
 function requestFields(call: readonly unknown[] | undefined): Record<string, unknown> {
   const params = call?.[1]
   return typeof params === 'object' && params !== null
@@ -86,7 +98,6 @@ describe('mobile structured conversation commands', () => {
     sendRequest.mockResolvedValueOnce(answer)
     expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
     expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    // Only the operation id differs between the two requests.
     expect(sendRequest.mock.calls[1]?.[1]).not.toEqual(sendRequest.mock.calls[0]?.[1])
   })
   it.each(['attachments', 'old host', 'arguments', 'pending work'])(
@@ -103,16 +114,25 @@ describe('mobile structured conversation commands', () => {
         input.text = '/compact instructions'
       }
       if (reason === 'pending work') {
-        input.busy = () => 'working'
+        input.holds = holding({ working: true })
       }
       expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
       expect(sendRequest).not.toHaveBeenCalled()
       expect(input.onError).toHaveBeenCalled()
     }
   )
+  it('leaves a session-reported command such as OMP /fast to an ordinary send', async () => {
+    const { input, sendRequest } = setup()
+    input.text = '/fast'
+    input.controller.agent = 'omp'
+    expect(await dispatchMobileStructuredCommand(input)).toBeNull()
+    expect(input.onError).not.toHaveBeenCalled()
+    input.controller.sessionCommands = [{ name: 'fast', kind: 'command' }]
+    expect(await dispatchMobileStructuredCommand(input)).toBeNull()
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
   it('/clear is a plain command on every host: no withdrawal fields, nothing persisted', async () => {
-    // The host carries queued cards to the replacement session itself; the
-    // client asks for nothing back and has nothing to restore.
+    // The host carries cards to replacement sessions; client restoration would duplicate them.
     const { input, sendRequest } = setup()
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('accepted')
     const fields = requestFields(sendRequest.mock.calls[0])
@@ -133,31 +153,30 @@ describe('mobile structured conversation commands', () => {
         }
       }
     })
-    input.busy = () => 'working'
+    input.holds = holding({ working: true })
     input.waitsInLine = (command) => command === 'compact'
     expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
     const fields = requestFields(sendRequest.mock.calls[0])
     expect(fields).toMatchObject({ command: 'compact', delivery: 'queue-if-active' })
     expect(input.onError).not.toHaveBeenCalled()
-    // A /clear never waits: the busy check still answers it.
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(sendRequest).toHaveBeenCalledOnce()
   })
   it('a /clear while the agent works says so in plain words', async () => {
     const { input, sendRequest } = setup()
-    input.busy = () => 'working'
+    input.holds = holding({ working: true })
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /clear when it's done.",
       { refusedWhile: 'working' }
     )
-    input.busy = () => 'prompt'
+    input.holds = holding({ prompt: true })
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "Answer the agent's question or approval, then run /clear.",
       { refusedWhile: 'prompt' }
     )
-    input.busy = () => 'working'
+    input.holds = holding({ working: true })
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /compact when it's done.",
@@ -184,19 +203,39 @@ describe('mobile structured conversation commands', () => {
     }
     sendRequest.mockResolvedValue(refused)
     input.waitsInLine = () => true
-    input.busy = () => 'working'
+    input.holds = holding({ working: true })
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /compact when it's done.",
       { refusedWhile: 'working' }
     )
-    // Ahead of the phone: said as any failure, so it can't go before it is read.
-    input.busy = () => null
+    // Keep a newer host’s unreadable cause as failure rather than claiming which work blocked it.
+    input.holds = () => IDLE
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /compact when it's done.",
       undefined
     )
+  })
+  it('holds for background tasks or a message still sending, and waits silently behind one in line', async () => {
+    const { input, sendRequest } = setup()
+    input.holds = holding({ background: true, backgroundTasksRunning: true })
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      'Wait for pending work and messages to finish before using this command.',
+      { refusedWhile: 'background' }
+    )
+    input.holds = holding({ sending: true })
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      'Your earlier message is still being sent. Run /compact once it has gone.',
+      { refusedWhile: 'sending' }
+    )
+    input.waitsInLine = () => true
+    vi.mocked(input.onError).mockClear()
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).not.toHaveBeenCalled()
+    expect(sendRequest).not.toHaveBeenCalled()
   })
   it('keeps ordinary messages on the existing send path', async () => {
     const { input, sendRequest } = setup()

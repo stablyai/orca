@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
-import { makeRepo, makeTerminalTab } from '../../persistence-test-harness'
+import { makeRepo } from '../persistence-test-harness'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import { planTerminalLeafMove } from './terminal-leaf-move'
 import {
   closeMoveTestStores,
@@ -86,17 +88,26 @@ describe('moving a pane to a new tab', () => {
   })
 
   it('re-keys the SSH lease and moves within the partition that holds the tab', async () => {
-    const store = openStore(newDataFile())
+    const dataFile = newDataFile()
+    // Seed relay-era leases from disk.
+    writeFileSync(
+      dataFile,
+      JSON.stringify({
+        sshRemotePtyLeases: [
+          {
+            targetId: 'ssh-1',
+            ptyId: 'pty-agent',
+            worktreeId: WT,
+            tabId: SOURCE,
+            leafId: MOVED,
+            state: 'attached'
+          }
+        ]
+      })
+    )
+    const store = openStore(dataFile)
     const hostId = toSshExecutionHostId('ssh-1')
     await seedSplitSource(store, hostId)
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'pty-agent',
-      worktreeId: WT,
-      tabId: SOURCE,
-      leafId: MOVED,
-      state: 'attached'
-    })
 
     await expect(
       store.moveTerminalLeafToNewTab({ ...moveRequest, ptyId: 'pty-agent' })
@@ -165,7 +176,16 @@ describe('moving a pane to a new tab', () => {
   })
 
   it('records a persistence.terminal-topology span without pane keys or PTY ids', async () => {
-    const records: { name: string; attributes: Record<string, unknown> }[] = []
+    const records: {
+      name: string
+      attributes: Record<string, unknown>
+      traceId: string
+      spanId: string
+      parentSpanId?: string
+      startTimeUnixNano: string
+      endTimeUnixNano: string
+      durationMs: number
+    }[] = []
     setActiveSink({
       push: (record) => {
         records.push(JSON.parse(JSON.stringify(record)))
@@ -198,15 +218,37 @@ describe('moving a pane to a new tab', () => {
           'topology.refusal': 'leaf_in_other_tab'
         }
       ])
-      expect(JSON.stringify(spans)).not.toMatch(/pty-|tab-source|tab-target|2222/)
+      const transportFields = new Set([
+        'traceId',
+        'spanId',
+        'parentSpanId',
+        'startTimeUnixNano',
+        'endTimeUnixNano',
+        'durationMs'
+      ])
+      for (const span of spans) {
+        expect(span.traceId).toMatch(/^[a-f0-9]{32}$/)
+        expect(span.spanId).toMatch(/^[a-f0-9]{16}$/)
+        if (span.parentSpanId !== undefined) {
+          expect(span.parentSpanId).toMatch(/^[a-f0-9]{16}$/)
+        }
+        expect(span.startTimeUnixNano).toMatch(/^\d+$/)
+        expect(span.endTimeUnixNano).toMatch(/^\d+$/)
+        expect(Number.isFinite(span.durationMs)).toBe(true)
+        expect(span.durationMs).toBeGreaterThanOrEqual(0)
+      }
+      // Random IDs and clocks can coincidentally contain the leaf's numeric prefix.
+      const payloads = spans.map((span) =>
+        Object.fromEntries(Object.entries(span).filter(([key]) => !transportFields.has(key)))
+      )
+      expect(JSON.stringify(payloads)).not.toMatch(/pty-|tab-source|tab-target|2222/)
     } finally {
       _resetTracerForTests()
     }
   })
 })
 
-// After a restart the relay reattach writes the SSH pane into `local` as well as `ssh:`; a move
-// that left either copy behind refused the moved pane and the next relay reattach.
+// Relay reattach can duplicate SSH panes into local; all holders must move or future binds refuse.
 describe('moving an SSH pane held by both partitions', () => {
   it('moves every copy, so the target reattach and the next relay reattach both bind', async () => {
     const store = openStore(newDataFile())
@@ -237,7 +279,6 @@ describe('moving an SSH pane held by both partitions', () => {
     ).toBe(true)
   })
 
-  // Relay reattach into local, move, target reattach in ssh:, next-start relay reattach.
   it('keeps one holder per partition across a restart, and the next relay reattach binds', async () => {
     const dataFile = newDataFile()
     const store = openStore(dataFile)
@@ -326,20 +367,17 @@ describe('moving an SSH pane held by both partitions', () => {
   })
 })
 
-// STA-9259: detach, then the moved pane's reattach binding, then a renderer snapshot that still
-// shows the pre-move layout, then a restart. Before the move transaction this left one leaf and
-// one PTY in both tabs.
+// STA-9259: move, reattach, stale renderer save and restart must retain one leaf/PTY owner.
 describe('STA-9259 move sequence', () => {
   it('keeps one owner through reattach, a stale renderer save and a restart', async () => {
     const dataFile = newDataFile()
     const store = openStore(dataFile)
-    // Load sweeps sessions of unregistered repos, so the restart needs a real owner.
+    // Register the owner so restart pruning retains this workspace.
     store.addRepo(makeRepo({ id: 'repo-1', path: '/tmp/move-worktree' }))
     await seedSplitSource(store)
     const preMoveRendererSnapshot = structuredClone(store.getWorkspaceSession())
 
     await store.moveTerminalLeafToNewTab({ ...moveRequest, ptyId: 'pty-agent' })
-    // The moved pane mounts in the target tab and reattaches with its stable-owner fence.
     const reattached = await store.persistPtyBinding({
       worktreeId: WT,
       tabId: TARGET,
@@ -350,7 +388,7 @@ describe('STA-9259 move sequence', () => {
       origin: 'reattach'
     })
     expect(reattached).toBe(true)
-    // A debounced renderer save that predates the move must not resurrect the source copy.
+    // A pre-move renderer snapshot must not resurrect source membership.
     store.setWorkspaceSession(preMoveRendererSnapshot)
     expect(ownersOf(store.getWorkspaceSession(), 'pty-agent')).toEqual([TO])
     expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([TARGET])

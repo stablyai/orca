@@ -32,8 +32,7 @@ function stop(
   })
 }
 
-// A replacement session is the only evidence Orca gets for the exits Claude emits no terminating
-// hook for (/clear, relaunch, resume). See PLAN-STA-4612 §4.1.
+// Replacement proves the old session ended when Claude emits no terminating hook (/clear/relaunch/resume); PLAN-STA-4612 §4.1.
 describe('Claude session replacement voids the replaced session claims', () => {
   it('voids a session cron gate held by the previous session', () => {
     const state = createHookListenerState()
@@ -75,9 +74,7 @@ describe('Claude session replacement voids the replaced session claims', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('teammate-kept', LEAF_ID)
 
-    // Anchor the owning session on a LEAD event first. Subagent/teammate events branch out of
-    // normalizeClaudeEvent before the void ever runs, so without this the replacement below finds
-    // no previous owner, returns early, and the assertion certifies a guard it never exercised.
+    // Anchor a lead owner first; child events bypass owner replacement and would leave this assertion unexercised.
     claudeEvent(state, paneKey, {
       hook_event_name: 'UserPromptSubmit',
       session_id: SESSION_A,
@@ -116,9 +113,7 @@ describe('Claude session replacement voids the replaced session claims', () => {
   })
 
   it('KEEPS a running background-shell gate across the replacement', () => {
-    // /clear keeps the Claude process alive, so a background shell can outlive the conversation and
-    // the previous inventory is positive evidence it was running. Retiring it here would decide the
-    // open live-shell product question inside this change. See PLAN-STA-4612 §6.3.
+    // /clear leaves the process/background shells alive; retain positive live-shell evidence pending product policy (PLAN-STA-4612 §6.3).
     const state = createHookListenerState()
     const paneKey = makePaneKey('bg-gate-kept', LEAF_ID)
 
@@ -141,15 +136,15 @@ describe('Claude session replacement voids the replaced session claims', () => {
     const paneKey = makePaneKey('same-session', LEAF_ID)
 
     stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
-    const same = stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
+    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
+    const same = stop(state, paneKey, SESSION_A)
 
     expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
     expect(same?.payload.state).toBe('working')
   })
 
   it('voids nothing when a CHILD event carries a foreign session id', () => {
-    // Claude has no equivalent of the Codex child-session guard, so a child payload's own
-    // session_id reaches the same extraction path as the lead's.
+    // Claude lacks Codex's child-session guard, so child session_id reaches lead identity extraction.
     const state = createHookListenerState()
     const paneKey = makePaneKey('child-session', LEAF_ID)
 
@@ -193,7 +188,7 @@ describe('Claude session replacement voids the replaced session claims', () => {
     expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(false)
   })
 
-  it('leaves the lead-state record to the incoming fold rather than deleting it', () => {
+  it('folds the replacement session prompt into the lead working state', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('lead-untouched', LEAF_ID)
 

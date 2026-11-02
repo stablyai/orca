@@ -1,0 +1,94 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  handlers,
+  store,
+  REPO_PATH,
+  WORKTREE_FEATURE_PATH,
+  detectConflictOperationMock,
+  resetFilesystemIpcMocks
+} from './filesystem-test-harness'
+
+const getLocalGitOptionsForRegisteredWorktreeMock = vi.hoisted(() => vi.fn())
+
+vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
+vi.mock(
+  '../../wsl-unc-delete',
+  async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
+)
+vi.mock(
+  '../../crash-reporting/crash-breadcrumb-store',
+  async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
+)
+vi.mock(
+  '../../git/status',
+  async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
+)
+vi.mock(
+  '../../git/check-ignored-paths',
+  async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
+)
+vi.mock(
+  '../../git/worktree',
+  async () => (await import('./filesystem-test-harness')).gitWorktreeMock
+)
+vi.mock('../local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock,
+  getLocalGitOptionsForRepo: vi.fn(() => ({})),
+  getLocalRepoForRegisteredWorktree: vi.fn(() => undefined)
+}))
+
+import { registerFilesystemHandlers } from './filesystem'
+import {
+  registerWorktreeRootsForRepo,
+  invalidateAuthorizedRootsCache
+} from '../registered-worktree-roots-cache'
+
+// Read .git in the worktree's own host namespace, including WSL.
+describe('git:conflictOperation local routing', () => {
+  beforeEach(() => {
+    resetFilesystemIpcMocks()
+    invalidateAuthorizedRootsCache()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    detectConflictOperationMock.mockResolvedValue('merge')
+  })
+
+  it("probes with the registered worktree's local git options", async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:conflictOperation')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+    ).resolves.toBe('merge')
+
+    expect(getLocalGitOptionsForRegisteredWorktreeMock).toHaveBeenCalledWith(
+      store,
+      WORKTREE_FEATURE_PATH,
+      WORKTREE_FEATURE_PATH
+    )
+    expect(detectConflictOperationMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      wslDistro: 'Ubuntu'
+    })
+  })
+})
+
+describe('git:conflictOperation ssh routing', () => {
+  beforeEach(() => {
+    resetFilesystemIpcMocks()
+    detectConflictOperationMock.mockReset()
+  })
+
+  it('reports an SSH host as not served instead of falling back to this machine', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:conflictOperation')!(null, {
+        worktreePath: '/remote/wt',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('Remote connection dropped')
+    expect(detectConflictOperationMock).not.toHaveBeenCalled()
+  })
+})

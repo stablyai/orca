@@ -6,7 +6,6 @@ vi.mock('./bundled-skill-guides.js', () => ({
       name: 'alpha',
       description: 'Use when alpha work is needed.',
       markdown: '# Alpha\n\nShort.\n',
-      fullMarkdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n',
       aliases: ['legacy-alpha'],
       references: [
         { name: 'first-gate', markdown: '# First gate\n\nDo the first thing.\n' },
@@ -17,7 +16,6 @@ vi.mock('./bundled-skill-guides.js', () => ({
       name: 'zeta',
       description: 'Use when zeta work is needed.',
       markdown: '# Zeta\n',
-      fullMarkdown: '# Zeta\n',
       aliases: [],
       references: []
     }
@@ -171,16 +169,5 @@ describe('orca skills get --reference', () => {
     expect(process.exitCode).toBe(1)
     expect(errorSpy).toHaveBeenNthCalledWith(1, 'Use either --references or --full, not both.')
     expect(errorSpy).toHaveBeenNthCalledWith(2, 'Use either --references or --reference, not both.')
-  })
-
-  it('still serves the kernel and the full package unchanged', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(['skills', 'get', 'alpha'], '/tmp/repo')
-    await main(['skills', 'get', 'alpha', '--full'], '/tmp/repo')
-
-    expect(stdoutText(stdoutSpy)).toBe(
-      '# Alpha\n\nShort.\n# Alpha\n\nShort.\n\n## References\n\nFull.\n'
-    )
   })
 })

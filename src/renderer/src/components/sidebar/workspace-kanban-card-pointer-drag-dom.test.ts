@@ -43,9 +43,6 @@ describe('workspace kanban pointer drag card drop index', () => {
     expect(resolveWorkspaceCardDropIndexFromRects(cardRects, 140)).toBe(3)
   })
 
-  // Why: a virtualized lane only renders its window, so rendered position is
-  // not lane position. Without the carried index a drop into a scrolled lane
-  // would land near the top of the list.
   it('uses the lane index of a rendered card rather than its rendered position', () => {
     const virtualized = [
       { top: 0, bottom: 40, index: 20 },

@@ -1,14 +1,16 @@
-// Loads every saved draft into memory once at startup, with the journal's unconfirmed changes
-// replayed on top. A change made before the load lands is kept: an edit wins over the loaded
-// draft, and an append is applied again on top of it.
+// Preserve pre-hydration edits and replay appends on top of loaded drafts plus the unload journal.
 
 import {
   dirtyScopes,
+  isNativeChatSetupDraft,
+  installNativeChatDraftRecord,
   load,
   nextSavedAt,
+  nativeChatDraftPositions,
   notifyScope,
   records,
-  unverifiedScopes
+  reconcileRestoredImageChecks,
+  type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
 import {
   flushNativeChatComposerDrafts,
@@ -26,12 +28,10 @@ import {
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
-// Why bounded: a database that will not open must not be retried for the whole run; after the
-// last try the drafts stay in memory and a refused save shows as one.
+// Bound database-open retries; after exhaustion retain memory changes and expose refused saves.
 const RETRY_DELAYS_MS = [1_000, 5_000, 30_000]
 
 let hydration: Promise<void> | null = null
-let started = false
 let failedLoads = 0
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -48,10 +48,18 @@ function withAppends(
     return { draft: loaded, changed: false }
   }
   const merged = missing.reduce((draft, entry) => entry.append(draft), loaded)
-  return { draft: { ...merged, savedAt: nextSavedAt() }, changed: true }
+  return {
+    draft: { ...merged, savedAt: nextSavedAt() },
+    changed: true,
+    position: nativeChatDraftPositions.get(merged)
+  }
 }
 
-type DraftLoadResult = { draft: StoredNativeChatComposerDraft; changed: boolean }
+type DraftLoadResult = {
+  draft: StoredNativeChatComposerDraft
+  changed: boolean
+  position?: NativeChatDraftPosition
+}
 
 function applyLoaded(
   loaded: ReadonlyMap<string, unknown>,
@@ -60,7 +68,9 @@ function applyLoaded(
 ): void {
   const drafts = new Map<string, StoredNativeChatComposerDraft | null>()
   for (const [scopeKey, value] of loaded) {
-    drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+    if (!isNativeChatSetupDraft(scopeKey)) {
+      drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+    }
   }
   for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, journal)) {
     dirtyScopes.add(scopeKey)
@@ -80,9 +90,13 @@ function applyLoaded(
       dirtyScopes.add(scopeKey)
       continue
     }
-    const { draft, changed } = withAppends(scopeKey, stored, readAtSequence)
-    records.set(scopeKey, draft)
-    unverifiedScopes.add(scopeKey)
+    const { draft, changed, position } = withAppends(scopeKey, stored, readAtSequence)
+    reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
+    installNativeChatDraftRecord(
+      scopeKey,
+      draft,
+      position ?? (changed ? undefined : { at: 'start', pending: true })
+    )
     if (changed) {
       dirtyScopes.add(scopeKey)
     }
@@ -118,13 +132,14 @@ function retryLater(error: unknown): void {
 
 /** Loads every saved draft into memory, once; a failed load is retried a few times, then left. */
 export function hydrateNativeChatComposerDrafts(): Promise<void> {
-  started = true
   hydration ??= (async () => {
     removeLegacyLocalStorageNativeChatComposerDrafts()
     installNativeChatComposerDraftBroadcast()
     // Why read here: storage applies changes in order, so this load reads every append made so far.
     const readAtSequence = load.appendSequence
-    const journal = snapshotNativeChatComposerDraftJournal()
+    const journal = snapshotNativeChatComposerDraftJournal().filter(
+      (entry) => !isNativeChatSetupDraft(entry.scopeKey)
+    )
     applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
   })().catch(retryLater)
   return hydration
@@ -142,14 +157,7 @@ export async function waitForNativeChatComposerDrafts(timeoutMs: number): Promis
   clearTimeout(timer)
 }
 
-/** The load of saved drafts has started and not landed (nor been given up): a draft may exist that
- *  memory doesn't hold yet. */
-export function isNativeChatComposerDraftLoadPending(): boolean {
-  return started && !load.hydrated
-}
-
 export function resetNativeChatComposerDraftLoadForTests(): void {
-  started = false
   if (retryTimer !== null) {
     clearTimeout(retryTimer)
     retryTimer = null

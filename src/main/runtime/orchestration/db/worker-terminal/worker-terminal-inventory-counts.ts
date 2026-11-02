@@ -43,9 +43,7 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
   return { where, values }
 }
 
-/** The only place worker terminal state is derived for filtering or counting: raw columns out of
- *  SQL, the verdict from the one TS state machine, so no second copy can drift from it.
- *  Ordered newest first because the filtered listing pages by slicing this scan. */
+/** Derive all filtering/counting through the single state machine; newest-first order supports paging. */
 export function scanWorkerTerminalStates(
   this: OrchestrationDb,
   where: string[],

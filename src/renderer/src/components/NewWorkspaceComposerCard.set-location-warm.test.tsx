@@ -5,12 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { hostOptions, renderCard } from './NewWorkspaceComposerCard.test-fixture'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 
-// Counts evaluations of the set-location chunk. A dynamic import evaluates a module once,
-// so this only moves when the composer actually reaches for the chunk.
+// Count module evaluation so tests detect whether the composer requests the chunk.
 const chunk = vi.hoisted(() => ({ loads: 0 }))
 
-// Renders a marker unconditionally so the "warming did not mount it" assertion below can
-// actually fail; a `() => null` stub would make that check vacuous.
+// Render a marker so warming-without-mounting assertions cannot pass vacuously.
 vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => {
   chunk.loads += 1
   return {
@@ -86,8 +84,7 @@ const unavailableHostOptions: ProjectHostSetupOption[] = [
   }
 ]
 
-// Declaration order matters here and nowhere else: a module evaluates once, so the
-// no-warm cases have to observe the counter before anything warms it.
+// Run no-warm cases first: dynamic import evaluates the shared module only once.
 describe('NewWorkspaceComposerCard set-location chunk warm', () => {
   let container: HTMLDivElement | null = null
 

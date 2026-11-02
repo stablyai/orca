@@ -2,8 +2,7 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 
-// Why mocked: the win32 plain-shell teardown sweeps for real, and an unmocked run would put a
-// live process-table probe -- and, on a recycled pid, a taskkill /T /F -- behind these tests.
+// Keep fake PIDs away from real process probes and taskkill.
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
@@ -12,9 +11,7 @@ vi.mock('../pty-descendant-termination', () => ({
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
 type ExitableSubprocess = SubprocessHandle & { exit: (code: number) => void }
 
-/** Shells that report their exit only after `exitDelayMs`, holding the teardown claim open the
- *  way a real one does while the Windows sweep probes and taskkills its tree. Collected so a test
- *  can retire an intentionally unkillable child instead of leaking its exit waiter. */
+/** Hold teardown until delayed exit; expose handles so tests can settle otherwise unkillable children. */
 function spawnSubprocessWithSlowExit(exitDelayMs: number): {
   spawnSubprocess: Mock<SpawnSubprocess>
   handles: ExitableSubprocess[]
@@ -60,7 +57,6 @@ describe('TerminalHost recreate during teardown', () => {
     const sessionId = 'wt-1@@respawning-pane'
     await host.createOrAttach({ sessionId, cols: 80, rows: 24, streamClient: streamClient() })
 
-    // The pane closes and immediately respawns onto its own stable id (#18046).
     const killed = host.kill(sessionId, { immediate: true })
     const recreated = await host.createOrAttach({
       sessionId,
@@ -82,8 +78,6 @@ describe('TerminalHost recreate during teardown', () => {
     await host.createOrAttach({ sessionId, cols: 80, rows: 24, streamClient: streamClient() })
 
     const killed = host.kill(sessionId, { immediate: true })
-    // Why unchanged: adopting a doomed session would hand the pane a shell teardown owns; the
-    // caller retires the pane binding on this error and spawns fresh.
     await expect(
       host.createOrAttach({
         sessionId,
@@ -111,8 +105,7 @@ describe('TerminalHost recreate during teardown', () => {
       rows: 24,
       streamClient: streamClient()
     })
-    // Why: dispose joins pending creations, so a create that waited out teardown must re-read the
-    // fence rather than publish a session nothing will shut down.
+    // A create resuming after teardown must recheck shutdown before publishing.
     const disposed = host.dispose()
 
     await expect(create).rejects.toThrow('Terminal host is shutting down')
@@ -122,8 +115,7 @@ describe('TerminalHost recreate during teardown', () => {
   })
 
   it('leaves a canceled create waiting on teardown instead of the full exit budget', async () => {
-    // Why a child that never exits on its own: the create must leave on its abort signal, not on
-    // the teardown settling, so the teardown deliberately outlives the assertion.
+    // Keep teardown pending beyond the assertion to prove cancellation releases the create.
     const { spawnSubprocess, handles } = spawnSubprocessWithSlowExit(30_000)
     const host = new TerminalHost({ spawnSubprocess })
     const sessionId = 'wt-1@@canceled-pane'

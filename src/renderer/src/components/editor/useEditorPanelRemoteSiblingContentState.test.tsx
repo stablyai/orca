@@ -13,23 +13,25 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
       settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined,
       connectionId?: string
     ) => connectionId ?? settings?.activeRuntimeEnvironmentId ?? null
-  ),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+  )
 }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: vi.fn(),
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: vi.fn()
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(),
@@ -43,16 +45,40 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
 
-vi.mock('./migrate-restored-editor-file-owner', () => ({
+vi.mock(import('./migrate-restored-editor-file-owner'), async (importOriginal) => ({
+  ...(await importOriginal()),
   migrateRestoredEditorFileOwner: mocks.migrateRestoredEditorFileOwner
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: vi.fn(() => 'local'),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(() => null)
+  getExecutionHostIdForWorktree: vi.fn(() => 'local')
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+// These fixtures' workspaces live on runtime-1, so an unstamped tab resolves there.
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    runtimeEnvironmentId: string | null | undefined
+  ) =>
+    runtimeEnvironmentId === null
+      ? { kind: 'local' as const }
+      : { kind: 'environment' as const, environmentId: runtimeEnvironmentId ?? 'runtime-1' }
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 vi.mock('./useEditorPanelExternalContentEvents', () => ({
   useEditorPanelExternalContentEvents: vi.fn(),

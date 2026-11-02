@@ -1,7 +1,6 @@
 import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
-import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
@@ -21,11 +20,11 @@ import { SearchableSetting } from './SearchableSetting'
 import { StepBadge } from './SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 type BrowserUseCookieImportStepProps = {
   cookiesImported: boolean
   isImportingDefault: boolean
-  disabled: boolean
   sourceLabel: string | null
   onConfigureMoreBrowsers?: () => void
 }
@@ -33,7 +32,6 @@ type BrowserUseCookieImportStepProps = {
 export function BrowserUseCookieImportStep({
   cookiesImported,
   isImportingDefault,
-  disabled,
   sourceLabel,
   onConfigureMoreBrowsers
 }: BrowserUseCookieImportStepProps): React.JSX.Element {
@@ -64,7 +62,7 @@ export function BrowserUseCookieImportStep({
         result
       )
     } else {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -81,7 +79,7 @@ export function BrowserUseCookieImportStep({
         result
       )
     } else if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -96,7 +94,7 @@ export function BrowserUseCookieImportStep({
         'Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.'
       )}
       keywords={getBrowserUsePaneSearchEntries()[1].keywords}
-      className={cn('rounded-xl border border-border/60 bg-card/50 p-4', disabled && 'opacity-60')}
+      className="rounded-xl border border-border/60 bg-card/50 p-4"
     >
       <div className="flex items-start gap-3">
         <StepBadge

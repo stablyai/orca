@@ -66,7 +66,6 @@ describe('reduceHardScrollUpOnWheel', () => {
 
   it('shows after a sustained hard upward wheel burst', () => {
     let state = createHardScrollUpDetectorState()
-    // ~5 hard ticks in < window: 5 * 160 = 800 >= hardTotalDeltaPx
     for (let i = 0; i < 5; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         ...DEEP,
@@ -156,7 +155,6 @@ describe('reduceHardScrollUpOnWheel', () => {
 describe('reduceHardScrollUpOnScroll', () => {
   it('shows when scrollbar drag velocity is hard upward', () => {
     let state = createHardScrollUpDetectorState()
-    // Drop 500px in 250ms => 2000 px/s
     state = reduceHardScrollUpOnScroll(state, {
       scrollTop: 1500,
       maxScroll: 4000,

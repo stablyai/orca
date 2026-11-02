@@ -1,13 +1,10 @@
-import {
-  stripAnsiEscapeSequences,
-  TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../shared/ansi-escape-sequences'
 import { aiVaultAgentLabel } from '../shared/ai-vault-types'
 import type {
   AiVaultSearchHit,
   AiVaultSearchResponse,
   AiVaultSearchStatus
 } from '../shared/ai-vault-search-types'
+import { terminalSafeLine } from '../shared/terminal-safe-text'
 
 type SessionSearchResults = Extract<AiVaultSearchResponse, { kind: 'results' }>
 /** Malformed cursors are a caller mistake and leave through the CLI error channel. */
@@ -16,20 +13,8 @@ export type PrintableSessionSearchResponse = Exclude<
   { kind: 'malformed-cursor' }
 >
 
-/**
- * Transcript text reaches the terminal verbatim, so an OSC 52 or cursor sequence
- * inside a tool log would otherwise run on the reader's terminal. The `[[` `]]`
- * match marks are left as the engine wrote them: this CLI emits no ANSI anywhere,
- * so a colour scheme invented here would be the only one in the surface.
- */
-export function terminalSafe(value: string): string {
-  return stripAnsiEscapeSequences(value).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
-}
-
 function oneLine(value: string): string {
-  return terminalSafe(value)
-    .replaceAll(/[\r\n]+/g, ' ')
-    .trim()
+  return terminalSafeLine(value).trim()
 }
 
 function formatHit(hit: AiVaultSearchHit): string {
@@ -85,8 +70,7 @@ function formatUnavailable(
   if (reason === 'unsupported-agent') {
     return 'This host does not support history search for the selected agent. Update Orca on that host or select another agent.'
   }
-  // The CLI scopes with --path, never with an identity, so this only reaches a
-  // caller that built a request by hand.
+  // Only hand-built requests can select an unknown identity; the CLI scopes by path.
   if (reason === 'scope-unknown') {
     return 'This host does not know the workspace or project that search was scoped to.'
   }

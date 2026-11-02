@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindReason
-} from '../../../../shared/agent-session-rewind'
+} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 
 const reasonCopy = {
   unsupported: () =>
@@ -69,7 +69,6 @@ export function nativeChatRewindUnavailableCopy(): string {
   )
 }
 
-/** The unknown outcome, said where the message has already gone back to the composer. */
 export function nativeChatRewindReturnedUnknownCopy(): string {
   return translate(
     'components.native-chat.rewind.outcomeUnknownReturned',

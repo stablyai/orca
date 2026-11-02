@@ -1,5 +1,4 @@
-import { getCellHeight } from './fit-scale'
-import { getCellWidth, getTotalScale } from './viewport-transform'
+import { getCellHeight, getCellWidth, getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
 
 export function cellToViewportPx(scope: TerminalDocumentScope, col: number, absRow: number) {
@@ -26,11 +25,7 @@ export function getLineText(scope: TerminalDocumentScope, absRow: number) {
   return line.translateToString(false)
 }
 
-// Why: getLineText collapses wide chars (emoji, CJK) to one string char, so a
-// tap's CELL column no longer equals the STRING index that url/path matchers use.
-// Convert by measuring the string length up to the tapped cell (the count of
-// string chars before it). Without this, taps on lines with a leading wide char
-// (e.g. agent output prefixed with ⏺) resolve to the wrong column and miss.
+// Wide cells collapse in strings; convert cell columns to string offsets before slicing row text.
 export function cellColToStringIndex(scope: TerminalDocumentScope, absRow: number, col: number) {
   if (!scope.term) {
     return col
@@ -41,6 +36,3 @@ export function cellColToStringIndex(scope: TerminalDocumentScope, absRow: numbe
   }
   return line.translateToString(false, 0, col).length
 }
-
-// File-path-under-tap detection (matchFilePathAtColumn). See path-tap.ts;
-// mirrors the unit-tested terminal-path-tap.ts.

@@ -19,6 +19,7 @@ it('computes each runtime identity once per sort with identical stable ordering'
   reads = 0
   const sorted = sortRuntimeFeatures(features)
   expect(reads).toBe(2000)
+  expect(sorted).toHaveLength(expected.length)
   sorted.forEach((entry, index) => expect(entry).toBe(expected[index]))
   const required = { ...features[0], replacement: true }
   const merged = new Map(features.map((entry) => [featureIdentity(entry), entry]))
@@ -29,5 +30,6 @@ it('computes each runtime identity once per sort with identical stable ordering'
   reads = 0
   const actual = mergeRuntimeFeatures(features, [required])
   expect(reads).toBeLessThanOrEqual(4000)
+  expect(actual).toHaveLength(expectedMerged.length)
   actual.forEach((entry, index) => expect(entry).toBe(expectedMerged[index]))
 })

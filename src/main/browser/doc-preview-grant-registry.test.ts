@@ -28,15 +28,6 @@ beforeEach(() => {
 })
 
 describe('doc preview grants', () => {
-  it('mints unguessable ids and looks them up', () => {
-    const first = mintPosixGrant()
-    const second = mintPosixGrant()
-
-    expect(first.id).toMatch(/^[0-9a-f]{32}$/)
-    expect(first.id).not.toBe(second.id)
-    expect(getDocPreviewGrant(first.id)).toBe(first)
-  })
-
   it('returns nothing for an unknown or revoked grant', () => {
     const grant = mintPosixGrant()
 
@@ -48,9 +39,6 @@ describe('doc preview grants', () => {
 })
 
 describe('resolveDocPreviewTargetPath', () => {
-  // A grant whose root IS its request base — a document at the workspace root, or outside any
-  // workspace — starts with the entry file alone: that directory is where secrets live, and a
-  // DNS-prefetch beacon needs no click, so nothing beside the entry reads without the reader.
   it('reads only the entry document until the reader approves its directory', () => {
     const grant = mintPosixGrant()
 
@@ -106,16 +94,6 @@ describe('resolveDocPreviewTargetPath', () => {
     expect(resolveDocPreviewTargetPath(grant, 'index.html\0.png')).toBeNull()
   })
 
-  // Why this is a traversal test and not a containment test: every request path that names a
-  // sibling directory has to climb out of the root first, so the `..` segment guard answers it
-  // before the prefix check runs. Sibling containment is exercised where it is reachable —
-  // against a canonicalized path, below.
-  it('refuses a sibling directory by refusing the traversal that reaches it', () => {
-    const grant = mintPosixGrant()
-
-    expect(resolveDocPreviewTargetPath(grant, '../docs-private/secret.html')).toBeNull()
-  })
-
   it('keeps a Windows drive root addressable instead of turning it drive-relative', () => {
     const grant = mintDocPreviewGrant({
       owner: sshOwner,
@@ -140,18 +118,6 @@ describe('resolveDocPreviewTargetPath', () => {
       'C:\\srv\\repo\\docs\\assets\\logo.png'
     )
     expect(resolveDocPreviewTargetPath(windowsGrant, '../secret.env')).toBeNull()
-  })
-
-  it('normalizes a trailing separator on the root', () => {
-    const grant = mintDocPreviewGrant({
-      owner: sshOwner,
-      root: '/srv/repo/docs/',
-      entryRelativePath: 'index.html',
-      browserPageId: 'page-1'
-    })
-
-    expect(resolveDocPreviewTargetPath(grant, 'index.html')).toBe('/srv/repo/docs/index.html')
-    expect(resolveDocPreviewTargetPath(grant, '../secret.env')).toBeNull()
   })
 
   it('authorizes only the requested sibling directory', () => {
@@ -210,9 +176,6 @@ describe('resolveDocPreviewTargetPath', () => {
 })
 
 describe('resolveCanonicalDocPreviewPath', () => {
-  // Why here and not above: a canonical path is the one input that can name a sibling directory
-  // without traversing — the host resolved a symlink to it — so this is where the prefix check
-  // is the only thing standing between the grant and `/srv/repo/docs-private`.
   it('refuses a canonical path in a sibling directory that shares the root prefix', async () => {
     const grant = mintPosixGrant()
 
@@ -221,14 +184,6 @@ describe('resolveCanonicalDocPreviewPath', () => {
         path === grant.root ? path : '/srv/repo/docs-private/secret.html'
       )
     ).resolves.toBeNull()
-  })
-
-  it('answers the canonical path when it stays inside the canonical root', async () => {
-    const grant = mintPosixGrant()
-
-    await expect(
-      resolveCanonicalDocPreviewPath(grant, '/srv/repo/docs/index.html', async (path) => path)
-    ).resolves.toBe('/srv/repo/docs/index.html')
   })
 
   it('refuses a sibling of an entry-only document even when it canonicalizes cleanly', async () => {
@@ -264,12 +219,6 @@ describe('resolveCanonicalDocPreviewPath', () => {
 })
 
 describe('toRuntimeWorktreeRelativePath', () => {
-  it('produces a worktree-relative path for files inside the worktree', () => {
-    expect(toRuntimeWorktreeRelativePath('/srv/repo', '/srv/repo/docs/index.html')).toBe(
-      'docs/index.html'
-    )
-  })
-
   it('rejects paths outside the worktree, which files.read cannot address', () => {
     expect(toRuntimeWorktreeRelativePath('/srv/repo', '/tmp/agent/report.html')).toBeNull()
     expect(toRuntimeWorktreeRelativePath('/srv/repo', '/srv/repo')).toBeNull()

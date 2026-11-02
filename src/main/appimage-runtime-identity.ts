@@ -55,7 +55,11 @@ function inspectRegularFile<T>(
     return null
   } finally {
     if (fd !== undefined) {
-      closeSync(fd)
+      try {
+        closeSync(fd)
+      } catch {
+        // Advisory cleanup must not override the verified inspection result.
+      }
     }
   }
 }
@@ -143,7 +147,6 @@ function hasAppImagePackageEvidence(runtimeRoot: string, resourcesPath: string):
   }
 }
 
-/** Returns whether the process inherited an AppImage file path to validate. */
 export function hasAppImagePathEnvironment(environment: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(environment.APPIMAGE)
 }

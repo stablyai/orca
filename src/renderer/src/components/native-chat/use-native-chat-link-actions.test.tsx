@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
+import type * as HttpLinkRoutingModule from '@/lib/http-link-routing'
 
 const mocks = vi.hoisted(() => ({
   openHttpLink: vi.fn(),
@@ -16,7 +17,10 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/lib/http-link-routing', () => ({ openHttpLink: mocks.openHttpLink }))
+vi.mock('@/lib/http-link-routing', async (importOriginal) => ({
+  ...(await importOriginal<typeof HttpLinkRoutingModule>()),
+  openHttpLink: mocks.openHttpLink
+}))
 
 vi.mock('./native-chat-http-link-source-owner', () => ({
   resolveNativeChatHttpLinkSourceOwner: () => ({ kind: 'local' }),

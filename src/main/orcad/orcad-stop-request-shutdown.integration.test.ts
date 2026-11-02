@@ -1,26 +1,20 @@
-/**
- * The packaged orcad stops through its slot's stop-request file within the shutdown deadline.
- *
- * On Windows this is the only graceful stop: a signal there is TerminateProcess, which skips
- * the flush and leaves the instance lock. So every lane, Windows included, proves the real
- * server notices the file, shuts down cleanly (exit 0, lock released) before the 15 s
- * deadline, and published an instance lock carrying a real process start time.
- */
+// Windows signals skip graceful cleanup; prove the packaged stop-file path flushes and releases locks.
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../shared/orcad-artifacts'
 import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
 import {
   killChildAndWait,
   killProfileDaemons,
+  recordProfileDaemons,
   removeTestRoot
 } from './orcad-daemon-teardown-fixture'
-import { parseOrcadReadinessOutput } from '../ssh/orcad-remote-launch'
+import { parseOrcadReadinessOutput } from '../managed-server/install/orcad-remote-launch'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
-import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
+import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 import {
   installPackagedOrcadSlotForTests,
   locatePinnedNodeForTests,
@@ -38,7 +32,7 @@ const skip = skipForMissingInputs('artifact', [
 let root = ''
 const children: ReturnType<typeof spawnProcess>[] = []
 
-/** Without Vitest's markers: daemon-entry.js does not start its server under VITEST. */
+/** Clear Vitest markers so daemon-entry starts its server. */
 function hostEnv(userData: string): NodeJS.ProcessEnv {
   return {
     ...Object.fromEntries(
@@ -56,11 +50,12 @@ afterEach(async () => {
     await killChildAndWait(child)
   }
   if (root) {
-    // The terminal daemon deliberately outlives orcad; it must be gone before its profile is.
+    // Daemons outlive the server; stop them before deleting their data root.
     await killProfileDaemons(join(root, 'data'))
     await removeTestRoot(root)
   }
-})
+  // Cold Windows arm64 slots can take over a minute to delete.
+}, 180_000)
 
 describe.skipIf(skip)('packaged orcad stop request', () => {
   it(`stops cleanly within ${ORCAD_SHUTDOWN_DEADLINE_MS} ms of its slot's stop-request file`, async () => {
@@ -95,16 +90,15 @@ describe.skipIf(skip)('packaged orcad stop request', () => {
 
     const lock = readOrcadInstanceLockRecord(join(userData, ORCAD_LOCK_FILE_NAME))
     expect(lock?.pid).toBe(child.pid)
-    // Windows: the process-tree addon's creation time; POSIX: /proc or ps. Never null here.
     expect(lock?.startedAtMs).toEqual(expect.any(Number))
     expect(Math.abs(lock!.startedAtMs! - launchedAt)).toBeLessThan(30_000)
 
+    await recordProfileDaemons(userData)
     const requestedAt = Date.now()
     writeFileSync(join(slotDir, ORCAD_STOP_REQUEST_FILENAME), '')
     const code = await exited
     const elapsedMs = Date.now() - requestedAt
     expect(code, stderr.slice(-2000)).toBe(0)
-    // The listener polls once a second when the watcher misses the write.
     expect(elapsedMs).toBeLessThan(ORCAD_SHUTDOWN_DEADLINE_MS)
     expect(existsSync(join(userData, ORCAD_LOCK_FILE_NAME))).toBe(false)
     expect(existsSync(join(slotDir, ORCAD_STOP_REQUEST_FILENAME))).toBe(false)

@@ -136,12 +136,7 @@ function parseOptionalLabel(
   return value === undefined ? '' : isChildWorkText(value, maxLength) ? value : null
 }
 
-/** The host's integrity gate for its own store, strict by design: an unknown key or enum arm
- *  rejects the whole record. Never a cross-version decoder — anything reading records or views
- *  from another build must ignore unknown keys and degrade unknown arms, or negotiate
- *  (docs/reference/remote-wire-compatibility.md, Rules 1 and 4).
- *  Every malformed field rejects, descriptive or not: admission drops bad provider facts before
- *  they get here, so a value outside its image is a writer bug, never data to repair silently. */
+/** Strict host-store integrity gate, never a cross-version decoder: unknown keys/arms or malformed facts reject the record as a writer bug. Admission drops bad provider facts first. Foreign records/views need permissive decoding or negotiation (remote-wire-compatibility.md, Rules 1/4). */
 export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | null {
   if (
     !isRecord(value) ||
@@ -227,8 +222,7 @@ export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | 
   ) {
     return null
   }
-  // A settled record written without these fields (an older writer) reads as an unknown ending
-  // at its last evidence, never as success.
+  // Legacy settled records missing outcome/time remain unknown at their last evidence, never success.
   const settled = value.membership === 'settled'
   const outcome = isOutcome(value.outcome) ? value.outcome : settled ? 'unknown' : undefined
   const settledAt = isTimestamp(value.settledAt)

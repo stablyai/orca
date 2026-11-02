@@ -7,7 +7,7 @@ import {
   createMobileE2EEV2Fixture,
   MOBILE_E2EE_V2_VECTOR
 } from '../../../src/shared/mobile-e2ee-v2-fixtures'
-import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
 
 function hex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -32,7 +32,9 @@ describe('mobile E2EE v2 key schedule', () => {
 
   it('derives unique direction keys and session IDs across fresh client nonces', () => {
     const { hello, ready, sharedSecret } = createMobileE2EEV2Fixture()
-    const fingerprints = new Set<string>()
+    const mobileToDesktopKeys = new Set<string>()
+    const desktopToMobileKeys = new Set<string>()
+    const sessionIds = new Set<string>()
     for (let index = 0; index < 128; index++) {
       const nonce = new Uint8Array(32)
       new DataView(nonce.buffer).setUint32(28, index, false)
@@ -47,12 +49,12 @@ describe('mobile E2EE v2 key schedule', () => {
         clientNonce: handshake.clientNonce,
         desktopNonce: handshake.desktopNonce
       })
-      fingerprints.add(
-        [schedule.mobileToDesktopKey, schedule.desktopToMobileKey, schedule.sessionId]
-          .map(hex)
-          .join(':')
-      )
+      mobileToDesktopKeys.add(hex(schedule.mobileToDesktopKey))
+      desktopToMobileKeys.add(hex(schedule.desktopToMobileKey))
+      sessionIds.add(hex(schedule.sessionId))
     }
-    expect(fingerprints.size).toBe(128)
+    expect(mobileToDesktopKeys.size).toBe(128)
+    expect(desktopToMobileKeys.size).toBe(128)
+    expect(sessionIds.size).toBe(128)
   })
 })

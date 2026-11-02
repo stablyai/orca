@@ -1,7 +1,7 @@
-import type { Page } from '@stablyai/playwright-test'
+import { expect, type Page } from '@stablyai/playwright-test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { attachRepoAndOpenTerminal } from './helpers/orca-restart'
 import { configureRendererScaleFixture } from '../../config/scripts/idle-cpu-renderer-scale-fixture.mjs'
 
@@ -65,7 +65,37 @@ export async function seedSpinnerWorkspaces(
     (count) => Object.values(window.__store!.getState().worktreesByRepo).flat().length === count,
     options.worktrees
   )
-  return configureRendererScaleFixture(page, options, repoPath)
+  const seeded = await configureRendererScaleFixture(page, options, repoPath)
+  const expandedChildAgentLists = options.subagentsPerAgent
+    ? await expandMountedChildAgentLists(page)
+    : 0
+  return { ...seeded, expandedChildAgentLists }
+}
+
+// Child agent lists start collapsed (#36936); open mounted ones so subagent spinners render.
+async function expandMountedChildAgentLists(page: Page) {
+  const collapsed =
+    '[data-worktree-sidebar] [data-agent-child-disclosure-button][aria-expanded="false"]'
+  await page.waitForSelector(collapsed, { state: 'attached' })
+  let expanded = 0
+  // Expanding grows cards and can mount more virtualized cards, so click until none remain.
+  await expect
+    .poll(
+      async () => {
+        const clicked = await page.evaluate((selector) => {
+          const buttons = [...document.querySelectorAll<HTMLElement>(selector)]
+          for (const button of buttons) {
+            button.click()
+          }
+          return buttons.length
+        }, collapsed)
+        expanded += clicked
+        return clicked
+      },
+      { intervals: [250] }
+    )
+    .toBe(0)
+  return expanded
 }
 
 export async function refreshSpinnerAgents(page: Page) {

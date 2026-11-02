@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { mergeFontSuggestions } from './SettingsConstants'
+import { listInstalledFontFamilies, setInstalledFontsUnavailable } from './installed-font-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
 import {
@@ -50,6 +51,8 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     updateSettingsOrThrow
   } = model
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
+  // Windowed lists need a render when the scroller attaches.
+  const [contentScrollElement, setContentScrollElement] = useState<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const installedFontsLoadedRef = useRef(false)
   const installedFontsLoadPromiseRef = useRef<Promise<void> | null>(null)
@@ -65,7 +68,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges || hasUnsavedChatPromptChanges
-  // Why: the close guard registers once, so it reads latest dirty state from a ref instead of a lagging closure.
+  // The once-registered close guard reads current dirty state through a ref.
   const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
   hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
 
@@ -102,7 +105,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
       if (node) {
         return
       }
-      // Why: clear the transient search filter on close, else the next visit opens with whole sections still hidden.
+      // Clear transient search on close so later visits do not inherit hidden sections.
       setSettingsSearchQuery('')
     },
     [setSettingsSearchQuery]
@@ -110,16 +113,17 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
 
   const setContentScrollNode = useCallback((node: HTMLDivElement | null): void => {
     contentScrollRef.current = node
+    setContentScrollElement(node)
     if (node !== null) {
       return
     }
-    // Why: cancel pending subsection jumps with the scroll container so a stale deep-link frame can't run after close.
+    // Cancel pending subsection jumps so stale frames cannot run after close.
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
     cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
   }, [])
 
   useEffect(() => {
-    // Why: StrictMode replays mount effects; async font requests should still commit while Settings is mounted.
+    // StrictMode replays mount effects; font requests may still commit while mounted.
     settingsMountedRef.current = true
     return () => {
       settingsMountedRef.current = false
@@ -142,28 +146,25 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
       return
     }
 
-    installedFontsLoadPromiseRef.current = window.api.settings
-      .listFonts()
+    installedFontsLoadPromiseRef.current = listInstalledFontFamilies()
       .then((fonts) => {
         if (!settingsMountedRef.current) {
           return
         }
-        // Latch after the first successful attempt even when empty, so a font-less system doesn't reissue listFonts() each time.
+        // Latch empty results too so an unreadable font list is not re-requested on every focus.
         installedFontsLoadedRef.current = true
-        if (fonts.length === 0) {
-          return
+        setInstalledFontsUnavailable(fonts.length === 0)
+        if (fonts.length > 0) {
+          setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
         }
-        setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
       })
-      .catch(() => {
-        // Fall back to curated cross-platform suggestions.
-      })
+      .catch(() => setInstalledFontsUnavailable(true))
       .finally(() => {
         installedFontsLoadPromiseRef.current = null
       })
   }, [setFontSuggestions])
 
-  // Pure prompt (no side effects): the close guard must ask without clearing drafts, since a later guard can still cancel the close.
+  // Ask without clearing drafts because a later close guard may still veto.
   const promptDiscardSourceControlAiPromptChanges = useCallback((): Promise<boolean> => {
     return confirm({
       title: translate(
@@ -209,6 +210,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
 
   return {
     contentScrollRef,
+    contentScrollElement,
     searchInputRef,
     pendingNavSectionRef,
     pendingScrollTargetRef,

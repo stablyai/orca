@@ -1,34 +1,20 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { sessionFileExecutionNamespace } from '../../shared/ai-vault-scope-cwd-match'
+export { sessionFileExecutionNamespace } from '../../shared/ai-vault-scope-cwd-match'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { sessionSortTime } from './session-scanner-accumulator'
 
-// Why: the session bridge and the real-home backfill hardlink one physical
-// Codex rollout into multiple scanned roots (managed runtime home and the
-// user's own ~/.codex), so every bridged/backfilled session used to list once
-// per root (#7521). These helpers collapse those aliases to one canonical row.
+// Bridging and backfill expose one rollout through multiple roots; list only its canonical alias (#7521).
 
-// Matches Codex rollout logs: rollout-<timestamp>-<session uuid>.jsonl. The
-// bridge and backfill preserve the name, but the name alone is not identity:
-// pre-parse dedup also requires a shared inode and post-parse requires the id.
+// Rollout names narrow candidates; inode or parsed session ID must still prove identity.
 const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl$/
 
-// Why: not node:path.basename — a posix host scans remote/WSL win32 paths, so
-// separators must be handled independently of the local platform.
+// Hosts can scan foreign-platform paths, so handle both separators independently of node:path.
 function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
 }
 
-// Why: local Windows discovery scans both the host and every WSL distro under
-// one `local` host id, even though hardlinks and resume identity cannot cross
-// those execution boundaries.
-function codexPathExecutionNamespace(filePath: string): string {
-  const wslPath = parseWslUncPath(filePath)
-  return wslPath ? `wsl:${wslPath.distro.toLowerCase()}` : 'native'
-}
-
-/** Returns a pre-parse alias key only when metadata proves a shared hardlink. */
 export function codexRolloutHardlinkIdentity(file: {
   dev?: number
   ino?: number
@@ -50,17 +36,7 @@ export function codexRolloutHardlinkIdentity(file: {
   return `${dev}:${ino}`
 }
 
-/**
- * Ranks a Codex session root for canonical-alias selection, lowest wins.
- *
- * Host real home (null) is canonical: after the real-home flip the managed
- * home's auth.json is no longer refreshed, so resume must not stamp it. The
- * Orca managed runtime home and each per-account self-contained home
- * (codex-accounts/<id>/home) beat other homes (WSL/remote real homes, custom
- * CODEX_HOMEs) because those are the roots codex actually refreshes for their
- * lane — the shared runtime home for the managed mirror, and the per-account
- * home once a managed account launches directly against it.
- */
+/** Prefer the real host home, then managed homes, so resume uses the canonical authentication lane. */
 function codexSessionRootRank(codexHome: string | null): number {
   if (codexHome === null) {
     return 0
@@ -71,11 +47,7 @@ function codexSessionRootRank(codexHome: string | null): number {
   return isSharedRuntimeHome || isPerAccountManagedHome ? 1 : 2
 }
 
-/**
- * Drops pre-parse Codex rollout candidates that alias an already-kept rollout
- * hardlink in a preferred root, so proven aliases never consume the parse
- * budget. Same-name copies remain until parsed identity proves they alias.
- */
+/** Proven hardlink aliases must not consume parse budget; same-name copies still need session-ID proof. */
 export function dedupeCodexRolloutFileAliases<T>(
   candidates: readonly T[],
   accessors: {
@@ -99,7 +71,7 @@ export function dedupeCodexRolloutFileAliases<T>(
     if (!hardlinkIdentity) {
       continue
     }
-    const aliasKey = `${codexPathExecutionNamespace(filePath)}\0${fileName}\0${hardlinkIdentity}`
+    const aliasKey = `${sessionFileExecutionNamespace(filePath)}\0${fileName}\0${hardlinkIdentity}`
     const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
     const best = bestByAlias.get(aliasKey)
     if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
@@ -116,13 +88,12 @@ export function dedupeCodexRolloutFileAliases<T>(
       return true
     }
     const best = bestByAlias.get(
-      `${codexPathExecutionNamespace(accessors.getFilePath(candidate))}\0${fileName}\0${hardlinkIdentity}`
+      `${sessionFileExecutionNamespace(accessors.getFilePath(candidate))}\0${fileName}\0${hardlinkIdentity}`
     )
     return !best || best.candidate === candidate
   })
 }
 
-/** Applies cheap hardlink proof before bounded cross-volume copy proof. */
 export async function dedupeCodexRolloutAliases<T>(
   candidates: readonly T[],
   accessors: {
@@ -138,15 +109,10 @@ export async function dedupeCodexRolloutAliases<T>(
   return dedupeCodexRolloutCopyAliases(hardlinkDeduped, accessors, readSessionMetaId, signal)
 }
 
-// Matches the scan's own parse batch width. UNC candidates are additionally
-// serialized by the WSL transcript gate, so this only widens native reads.
+// Match parse batch width; the WSL transcript gate separately serializes UNC reads.
 const COPY_PROOF_READ_CONCURRENCY = 8
 
-/**
- * Drops cross-volume rollout copies only when bounded session metadata proves
- * the same Codex session id. Unreadable or ambiguous candidates remain for the
- * full parser and its existing post-parse identity check.
- */
+/** Bounded metadata must prove copy identity; unreadable or ambiguous files stay for full parsing. */
 export async function dedupeCodexRolloutCopyAliases<T>(
   candidates: readonly T[],
   accessors: {
@@ -167,7 +133,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
       continue
     }
-    const key = `${codexPathExecutionNamespace(filePath)}\0${fileName}`
+    const key = `${sessionFileExecutionNamespace(filePath)}\0${fileName}`
     const group = groups.get(key)
     if (group) {
       group.push(candidate)
@@ -176,9 +142,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     }
   }
 
-  // Only same-name groups can alias, so the read fans out across every
-  // contested candidate at once rather than one group at a time — a corpus
-  // with a full second history copy has thousands of two-file groups.
+  // Batch across same-name groups so large mirrored histories do not serialize thousands of two-file reads.
   const contested = [...groups.values()].filter((group) => group.length > 1).flat()
   if (contested.length === 0) {
     return [...candidates]
@@ -231,7 +195,7 @@ export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
     return null
   }
-  return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
+  return `${session.executionHostId}\0${sessionFileExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
 }
 
 export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {

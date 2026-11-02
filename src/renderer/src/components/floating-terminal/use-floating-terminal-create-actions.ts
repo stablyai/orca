@@ -7,6 +7,7 @@ import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useFloatingWorkspaceId, useFloatingWorkspaceHost } from '@/lib/floating-workspace-host'
@@ -15,8 +16,9 @@ import { floatingWorkspaceEnvironmentId } from '../../../../shared/floating-work
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
+const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 type FloatingTerminalCreateActionsInput = Pick<
   FloatingTerminalPanelStoreState,
@@ -66,8 +68,9 @@ export function useFloatingTerminalCreateActions({
 
   const createFloatingTerminalTab = useCallback(
     (shellOverride?: string) => {
-      const tab = createTab(worktreeId, activeGroup?.id, shellOverride)
-      focusTerminalTabSurface(tab.id)
+      const tabId = createBrowserUuid()
+      createTab(worktreeId, activeGroup?.id, shellOverride, { id: tabId })
+      focusTerminalTabSurface(tabId)
     },
     [activeGroup, createTab, worktreeId]
   )
@@ -98,7 +101,7 @@ export function useFloatingTerminalCreateActions({
           markdownCwd,
           FLOATING_TERMINAL_WORKTREE_ID,
           getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
-          LOCAL_RUNTIME_SETTINGS
+          LOCAL_TARGET
         )
         if (!fileInfo) {
           return

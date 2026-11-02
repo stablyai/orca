@@ -67,7 +67,6 @@ type CreateProjectLocationFieldProps = {
   isCreating: boolean
   manualParentEntry: boolean
   runtimeEnvironmentId?: string | null
-  sshTargetId?: string | null
   onParentChange: (value: string) => void
   onPickParent: () => void
   onBrowseServer: () => void
@@ -78,7 +77,6 @@ export function CreateProjectLocationField({
   isCreating,
   manualParentEntry,
   runtimeEnvironmentId,
-  sshTargetId,
   onParentChange,
   onPickParent,
   onBrowseServer
@@ -110,7 +108,7 @@ export function CreateProjectLocationField({
                 size="icon"
                 className="h-11 w-11 shrink-0"
                 onClick={onBrowseServer}
-                disabled={isCreating || (!runtimeEnvironmentId && !sshTargetId)}
+                disabled={isCreating || !runtimeEnvironmentId}
                 aria-label={translate(
                   'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
                   'Browse host filesystem'

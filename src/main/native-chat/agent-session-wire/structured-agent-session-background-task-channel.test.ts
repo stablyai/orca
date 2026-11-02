@@ -1,6 +1,3 @@
-// The strip channel always answers a conversation's roster from the host's child records; each
-// subscriber's frames carry it (see structured-agent-session-subscribers.test.ts).
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
@@ -28,7 +25,8 @@ type Stops = { supportsTaskStop: boolean; supportsStopAll: boolean } | undefined
 
 function channelOver(
   children: () => AgentChildWorkView[] = () => [child],
-  stops: () => Stops = () => ({ supportsTaskStop: true, supportsStopAll: true })
+  stops: () => Stops = () => ({ supportsTaskStop: true, supportsStopAll: true }),
+  incomplete: () => boolean = () => false
 ) {
   const sessions = new StructuredAgentSessionConversations({
     deliver: () => {},
@@ -39,7 +37,7 @@ function channelOver(
   const channel = new StructuredAgentSessionBackgroundTaskChannel(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the channel reads only the record store's fence and the adapter's stop capability.
     {
-      store: { getRecord: () => null },
+      store: { getConversation: () => null },
       adapter: { backgroundTaskStops: stops }
     } as unknown as StructuredAgentSessionHostDeps,
     sessions,
@@ -48,7 +46,8 @@ function channelOver(
     async () => {
       throw new Error('not opened here')
     },
-    children
+    children,
+    incomplete
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the map reads only the journal's commit observer and the session's provider.
   const session = {
@@ -70,8 +69,23 @@ describe('the background-task channel', () => {
     })
   })
 
-  // A task that finished while no pane listened, then an idle sweep that stopped the provider:
-  // a pane resuming must read "none", not silence it would take as "unchanged" (#24227).
+  // Unlisted live work must keep the strip incomplete and stoppable.
+  it('keeps the strip, with its Stop, for work the host could not record', () => {
+    const { sessions, channel, session } = channelOver(
+      () => [],
+      () => ({ supportsTaskStop: true, supportsStopAll: true }),
+      () => true
+    )
+    sessions.set('session-1', session)
+
+    expect(channel.read('session-1')).toEqual({
+      state: 'monitoring',
+      supportsTaskStop: true,
+      children: [],
+      incomplete: true
+    })
+  })
+
   it('answers "none" for a conversation no provider holds, not "unknown"', () => {
     const { sessions, channel, session } = channelOver(
       () => [],
@@ -82,8 +96,6 @@ describe('the background-task channel', () => {
     expect(channel.read('session-1')).toBeNull()
   })
 
-  // Claude's release path settles the last child after the adapter let go of the session, so no
-  // provider answers for it any more: the strip must still hide.
   it('hides the strip when its last child settles after the provider let go of the session', () => {
     let views: AgentChildWorkView[] = [child]
     let held: Stops = { supportsTaskStop: true, supportsStopAll: true }

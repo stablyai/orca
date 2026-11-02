@@ -1,7 +1,3 @@
-import {
-  remoteSessionContentLines,
-  type RemoteSessionContent
-} from './remote-session-content-lines'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
@@ -14,11 +10,11 @@ import type {
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
-  addPreviewMessage,
   createAccumulator,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionText } from './session-scanner-messages'
 import {
   asRecord,
   copilotModelMetricsTotal,
@@ -46,21 +42,6 @@ export async function parseCopilotSessionFile(
   return parseCopilotSessionLines({ file, lines, platform, messages })
 }
 
-export async function parseCopilotSessionContent(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {},
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseCopilotSessionLines({
-    file,
-    lines: remoteSessionContentLines(content, signal),
-    platform,
-    options
-  })
-}
-
 function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string): void {
   const record = parseJsonObject(line)
   if (!record) {
@@ -74,6 +55,12 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
       accumulator.sessionId = sessionId
     }
     updateTimeline(accumulator, extractString(data.startTime))
+    // Folder-trust notices are optional; session.start records the launch directory.
+    const context = asRecord(data.context)
+    if (context) {
+      accumulator.cwd ??= extractString(context.cwd) ?? extractString(context.gitRoot)
+      accumulator.branch ??= extractString(context.branch)
+    }
     return
   }
   if (record.type === 'session.model_change' && data) {
@@ -81,24 +68,20 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
     return
   }
   if (record.type === 'session.info' && data) {
-    accumulator.cwd = extractTrustedFolder(data.message) ?? accumulator.cwd
+    accumulator.cwd ??= extractTrustedFolder(data.message)
     return
   }
   if (record.type === 'user.message' && data) {
     accumulator.messageCount++
-    accumulator.title ??= normalizeTitleText(
-      extractString(data.transformedContent) ?? extractString(data.content) ?? ''
-    )
-    addPreviewMessage(accumulator, {
-      role: 'user',
-      text: extractString(data.transformedContent) ?? extractString(data.content),
-      timestamp: record.timestamp
-    })
+    // Why: transformedContent is the prompt plus context Copilot injects (`<current_datetime>`).
+    const text = extractString(data.content) ?? extractString(data.transformedContent)
+    accumulator.title ??= normalizeTitleText(text ?? '')
+    addSessionText(accumulator, { role: 'user', text, timestamp: record.timestamp })
     return
   }
   if (record.type === 'assistant.message' && data) {
     accumulator.messageCount++
-    addPreviewMessage(accumulator, {
+    addSessionText(accumulator, {
       role: 'assistant',
       text: extractString(data.content),
       timestamp: record.timestamp

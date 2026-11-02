@@ -1,4 +1,3 @@
-/** Durable outcomes of a managed stop, in the data root beside the instance lock. */
 import { lstatSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { z } from 'zod'
@@ -10,6 +9,7 @@ import {
   OrcadCompletedStopReceiptSchema,
   OrcadManagedStopRequestSchema,
   OrcadDaemonRetirementRecordSchema,
+  orcadManagedStopRequestKey,
   type OrcadCompletedStopReceipt,
   type OrcadDaemonRetirementRecord,
   type OrcadManagedStopRequest
@@ -17,7 +17,7 @@ import {
 
 const RECEIPT_MAX_BYTES = 64 * 1024
 
-export type ReceiptKind = 'completed' | 'retirement' | 'decision'
+type ReceiptKind = 'completed' | 'retirement' | 'decision'
 
 export function orcadStopReceiptPath(request: OrcadManagedStopRequest, kind: ReceiptKind): string {
   const { transactionId, instance } = OrcadManagedStopRequestSchema.parse(request)
@@ -29,7 +29,7 @@ export function orcadStopReceiptPath(request: OrcadManagedStopRequest, kind: Rec
   )
 }
 
-/** `null` when absent; a receipt for a different request throws rather than reading as absent. */
+/** Absent returns null; mismatched request receipts throw. */
 export function readOrcadStopReceipt<T extends { request: OrcadManagedStopRequest }>(
   request: OrcadManagedStopRequest,
   kind: ReceiptKind,
@@ -49,8 +49,7 @@ export function readOrcadStopReceipt<T extends { request: OrcadManagedStopReques
   const receipt = schema.parse(
     JSON.parse(readNodeFileSyncWithinLimit(path, RECEIPT_MAX_BYTES).buffer.toString('utf8'))
   )
-  const expected = OrcadManagedStopRequestSchema.parse(request)
-  if (JSON.stringify(receipt.request) !== JSON.stringify(expected)) {
+  if (orcadManagedStopRequestKey(receipt.request) !== orcadManagedStopRequestKey(request)) {
     throw new Error('orcad_stop_receipt_mismatch')
   }
   return receipt
@@ -68,10 +67,8 @@ export function readOrcadCompletedStopReceipt(
   return readOrcadStopReceipt(request, 'completed', OrcadCompletedStopReceiptSchema)
 }
 
-/**
- * Called only after exit is proven; rewriting an existing receipt re-runs its fsync. A retiring
- * request whose orcad left no retirement record reports `unverifiable`, never `retired`.
- */
+/** Persist only after proven exit and fsync even existing receipts.
+ * Missing retirement records remain unverifiable. */
 export function persistOrcadCompletedStopReceipt(
   request: OrcadManagedStopRequest,
   exitedAt: Date
@@ -105,6 +102,9 @@ export function persistOrcadDaemonRetirementRecord(
     schemaVersion: 1,
     kind: 'orcad_managed_stop_retirement',
     request: OrcadManagedStopRequestSchema.parse(request),
-    ...outcome
+    // Name fields explicitly; extra in-process fields would fail the strict schema.
+    retirement: outcome.retirement,
+    liveSessions: outcome.liveSessions,
+    reason: outcome.reason
   })
 }

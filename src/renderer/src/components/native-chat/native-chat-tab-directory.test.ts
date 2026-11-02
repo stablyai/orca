@@ -21,7 +21,6 @@ const FLOATING_TERMINAL_TAB = {
 const WORKTREE_TAB = { id: 'worktree-chat-1', entityId: 'session-2' }
 const SSH_HOST = 'ssh:box-1'
 
-// The shape skill discovery passes: no detected rows.
 function state(overrides: Partial<NativeChatTabDirectoryState> = {}): NativeChatTabDirectoryState {
   return {
     floatingWorkspacePath: '/home/me/changed-setting',
@@ -45,6 +44,20 @@ function state(overrides: Partial<NativeChatTabDirectoryState> = {}): NativeChat
 }
 
 describe('resolveNativeChatTabDirectory', () => {
+  it.each(['opencode', 'grok', 'omp', 'pi'])(
+    'answers a floating %s chat with its pinned folder, as for Claude and Codex',
+    (agent) => {
+      const tab = { ...FLOATING_TAB, agentSessionAgent: agent }
+      expect(
+        resolveNativeChatTabDirectory(
+          state({ unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] } }),
+          tab.id,
+          FLOATING_TERMINAL_WORKTREE_ID
+        )
+      ).toBe('/home/me/pinned')
+    }
+  )
+
   it('answers a floating chat with its pinned folder after the floating setting moved', () => {
     expect(
       resolveNativeChatTabDirectory(state(), FLOATING_TAB.id, FLOATING_TERMINAL_WORKTREE_ID)

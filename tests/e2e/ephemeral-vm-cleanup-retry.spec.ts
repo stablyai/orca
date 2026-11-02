@@ -49,10 +49,6 @@ test('shows interrupted hidden SSH cleanup as retryable', async ({ electronApp, 
     state.openSettingsPage()
   })
   await expect(orcaPage.getByPlaceholder('Search settings')).toBeVisible()
-  await orcaPage
-    .getByRole('group', { name: 'Remote server workflow' })
-    .getByRole('button', { name: /^Cloud VM/ })
-    .click()
 
   const runtimes = orcaPage.locator('[data-settings-section="temporary-vm-runtimes"]')
   await expect(runtimes.getByText('Interrupted cleanup')).toBeVisible()
@@ -164,8 +160,6 @@ async function openCloudVmRuntimes(page: Page): Promise<void> {
     state.openSettingsPage()
   })
   await expect(page.getByPlaceholder('Search settings')).toBeVisible()
-  await page
-    .getByRole('group', { name: 'Remote server workflow' })
-    .getByRole('button', { name: /^Cloud VM/ })
-    .click()
+  // Why no click: the Cloud VMs card lists its runtimes on the servers page itself.
+  await expect(page.locator('[data-settings-section="temporary-vm-runtimes"]')).toBeVisible()
 }

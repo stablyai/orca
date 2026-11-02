@@ -26,48 +26,37 @@ function isEmptyRow(row: PmNode): boolean {
   return row.childCount > 0
 }
 
-/**
- * Structural Backspace inside tables:
- * 1. Fully empty row → delete row (or the table if it was the last row)
- * 2. Empty cell in a row that still has content → step to the previous cell
- * 3. Otherwise fall through to the default content delete
- */
+/** Backspace removes empty rows/tables or moves to a previous cell; other content uses default deletion. */
 export function handleRichMarkdownTableBackspace(editor: Editor): boolean {
   const { state } = editor
   if (!state.selection.empty || !isInTable(state)) {
     return false
   }
 
-  // selectionCell resolves *before* the cell: nodeAfter is the cell, parent the
-  // row, node(-1) the table.
+  // selectionCell resolves before the cell; its parent is the row and node(-1) is the table.
   const $cell = selectionCell(state)
   const cell = $cell.nodeAfter
   if (!cell || !isEmptyCell(cell)) {
     return false
   }
 
-  // $cell.pos + 2 is the start of the cell's first textblock. A caret past it
-  // sits in a second empty paragraph, which should join rather than drop a row.
+  // Only the first textblock’s start can drop a row; later empty paragraphs should join normally.
   if (state.selection.from !== $cell.pos + 2) {
     return false
   }
 
   if (!isEmptyRow($cell.parent)) {
-    // Step back a cell instead of joining across the cell boundary into the
-    // previous cell's text. Consume either way so ProseMirror never merges the
-    // table into whatever precedes it.
+    // Consume even at the first cell so ProseMirror cannot merge the table into preceding content.
     editor.commands.goToPreviousCell()
     return true
   }
 
-  // Why: prosemirror-tables deleteRow refuses when only one row remains;
-  // deleteTable is the correct last-row exit.
+  // deleteRow refuses the last row, so exit via deleteTable.
   if ($cell.node(-1).childCount <= 1) {
     return editor.commands.deleteTable()
   }
 
-  // Why: GFM re-synthesizes an empty header on serialize, so deleting the
-  // header row would vanish from the editor but return on the next reload.
+  // Keep empty headers because GFM would regenerate a deleted header on reload.
   if (isHeaderRow($cell.parent)) {
     return true
   }

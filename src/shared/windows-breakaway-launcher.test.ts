@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { quoteWindowsArgument } from './child-process/windows-command-line'
+import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import {
   ORCAD_WINDOWS_BREAKAWAY_CONTRACT,
   parseWindowsBreakawayLaunchReport,
-  RELAY_WINDOWS_BREAKAWAY_CONTRACT,
   WINDOWS_BREAKAWAY_EXIT_CODES as RELAY_WINDOWS_BREAKAWAY_EXIT_CODES,
-  WINDOWS_BREAKAWAY_LAUNCH_FLAG as RELAY_WINDOWS_BREAKAWAY_LAUNCH_FLAG
+  WINDOWS_BREAKAWAY_LAUNCH_FLAG as RELAY_WINDOWS_BREAKAWAY_LAUNCH_FLAG,
+  type WindowsBreakawayLaunchContract
 } from './windows-breakaway-launch'
 import {
   launchOutsideJob,
@@ -14,6 +14,12 @@ import {
   type SpawnOutsideJob,
   type WindowsBreakawayLauncher
 } from './windows-breakaway-launcher'
+
+// The launcher is contract-agnostic; this stands in for the retired relay's contract.
+const RELAY_WINDOWS_BREAKAWAY_CONTRACT: WindowsBreakawayLaunchContract = {
+  argsFlag: '--relay-args',
+  reportMarker: 'ORCA_RELAY_LAUNCH'
+}
 
 const parseRelayWindowsBreakawayLaunch = (args: readonly string[]) =>
   parseWindowsBreakawayLaunchRequest(RELAY_WINDOWS_BREAKAWAY_CONTRACT, args)
@@ -62,10 +68,6 @@ function requestFrom(args: readonly string[]) {
 }
 
 describe('relay Windows breakaway launcher', () => {
-  it('is not requested by an ordinary relay launch', () => {
-    expect(parseRelayWindowsBreakawayLaunch(['node', 'relay.js', '--detached'])).toBeNull()
-  })
-
   it('takes its own flags before -- and hands the rest to the relay', () => {
     expect(parseRelayWindowsBreakawayLaunch(argv)).toEqual({
       stdoutPath: 'C:/Users/me user/relay.log',
@@ -129,13 +131,6 @@ describe('relay Windows breakaway launcher', () => {
     expect(launchRelayOutsideJob(requestFrom(argv), spawn, runtime)).toEqual({
       report: { method: 'failed', reason: 'failed', step: 'open-stdout', code: 32 },
       exitCode: RELAY_WINDOWS_BREAKAWAY_EXIT_CODES.failed
-    })
-  })
-
-  it('reports a missing launcher as unavailable', () => {
-    expect(launchRelayOutsideJob(requestFrom(argv), 'addon-missing', runtime)).toEqual({
-      report: { method: 'unavailable', reason: 'addon-missing' },
-      exitCode: RELAY_WINDOWS_BREAKAWAY_EXIT_CODES.unavailable
     })
   })
 

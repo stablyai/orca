@@ -1,6 +1,4 @@
-// Why a sidecar next to orca-data.json: scan snapshots rewrite wholesale and can reach hundreds
-// of KB; folding them into orca-data.json would rewrite the whole state file per scan (the
-// githubCache sidecar precedent). Best-effort by design: a lost snapshot only costs a rescan.
+// Separate snapshots avoid rewriting all app state per scan; a lost snapshot only costs a rescan.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -34,7 +32,6 @@ export function withSidecarSnapshotQueue<T>(file: string, task: () => Promise<T>
   return run
 }
 
-/** Parsed sidecar contents, or null when the file is missing or not valid JSON. */
 export async function readSidecarSnapshot(file: string): Promise<unknown> {
   try {
     return JSON.parse(await readFile(file, 'utf-8')) as unknown

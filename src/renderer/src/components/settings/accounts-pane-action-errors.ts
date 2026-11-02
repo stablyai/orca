@@ -1,3 +1,4 @@
+import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../../../shared/claude-sign-in-link'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/codex-auth-errors'
 
 export function getCodexAccountErrorDescription(error: unknown): string {
@@ -8,11 +9,7 @@ export function getCodexAccountErrorDescription(error: unknown): string {
     .trim()
   const normalizedMessage = message.toLowerCase()
 
-  // Why: Codex account actions cross the Electron IPC boundary, and invoke()
-  // failures often include transport-level wrapper text that is useful in
-  // devtools but noisy in product UI. Normalize the handful of expected auth
-  // failures here so users see actionable sign-in guidance instead of IPC
-  // internals or raw upstream wording.
+  // Normalize expected auth failures into actionable guidance without Electron wrappers or raw upstream wording.
   if (normalizedMessage.includes('timed out waiting for codex login to finish')) {
     return 'Codex sign-in took too long to finish. Please try again.'
   }
@@ -40,7 +37,7 @@ export function getClaudeAccountErrorDescription(error: unknown): string {
       .replace(/^Error occurred in handler for 'claudeAccounts:[^']+':\s*/i, '')
       .replace(/^Error invoking remote method 'claudeAccounts:[^']+':\s*/i, '')
       .replace(/^Error:\s*/i, '')
-      .trim() || 'Claude sign-in failed. Please try again.'
+      .trim() || CLAUDE_SIGN_IN_FAILED_MESSAGE
   )
 }
 

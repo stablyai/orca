@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import { probeFolderAccessForFreshDaemon } from './daemon-folder-access-probe'
 
@@ -83,7 +83,6 @@ describe('probeFolderAccessForFreshDaemon', () => {
     expect(lastSpec().args.at(-1)).toBe('/Users/alice/Documents/a b; rm -rf /')
   })
 
-  // Why: the path is the child's sole argv entry, so Node reads a leading dash as its own option.
   it('refuses a relative path instead of handing it to Node as a flag', async () => {
     await expect(probeFolderAccessForFreshDaemon('-e')).resolves.toBe('unknown')
     expect(runProcessMock).not.toHaveBeenCalled()

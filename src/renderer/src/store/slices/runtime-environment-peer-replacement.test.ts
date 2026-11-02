@@ -58,11 +58,26 @@ describe('which re-paired environments name a different machine', () => {
     expect(retired(managed(), managed({ generation: 2, pairingRevision: 2 }))).toEqual(['env-1'])
   })
 
-  it('retires a re-paired environment that is not a managed server', () => {
+  it('retires a hand-paired server re-paired to a different key', () => {
     const paired = { id: 'env-1', createdAt: 1, pairingRevision: 1, hostKeyFingerprint: 'k' }
     expect(
-      classifyPeerReplacements([paired], [{ ...paired, pairingRevision: 2 }], ['env-1']).retired
+      classifyPeerReplacements(
+        [paired],
+        [{ ...paired, pairingRevision: 2, hostKeyFingerprint: 'other' }],
+        ['env-1']
+      ).retired
     ).toEqual(['env-1'])
+  })
+
+  it('keeps a hand-paired server whose new pairing carries the same key, so its tabs survive', () => {
+    const paired = { id: 'env-1', createdAt: 1, pairingRevision: 1, hostKeyFingerprint: 'k' }
+    expect(
+      classifyPeerReplacements([paired], [{ ...paired, pairingRevision: 2 }], ['env-1'])
+    ).toEqual({
+      retired: [],
+      sameHost: [{ id: 'env-1', fromRevision: 1, toRevision: 2 }],
+      pending: []
+    })
   })
 
   it('leaves an environment alone while its pairing is unchanged', () => {
@@ -77,7 +92,8 @@ describe('which re-pairs a live pane may follow', () => {
   it('reports a same-key update as a same-host rotation from the old pairing', () => {
     expect(classify(managed(), managed({ pairingRevision: 2 }))).toEqual({
       retired: [],
-      sameHost: [{ id: 'env-1', fromRevision: 1, toRevision: 2 }]
+      sameHost: [{ id: 'env-1', fromRevision: 1, toRevision: 2 }],
+      pending: []
     })
   })
 
@@ -88,10 +104,17 @@ describe('which re-pairs a live pane may follow', () => {
     expect(classify(managed(), managed({ generation: 2, pairingRevision: 2 })).sameHost).toEqual([])
   })
 
+  it('reports no pending re-pair when the old pairing had no key to prove it by', () => {
+    expect(
+      classify(managed({ hostKey: null }), managed({ pairingRevision: 2, hostKey: null })).pending
+    ).toEqual([])
+  })
+
   it('reports a deferred re-pair only once its key proves the same host, from the original pairing', () => {
     expect(classify(managed(), managed({ pairingRevision: 2, hostKey: null }))).toEqual({
       retired: [],
-      sameHost: []
+      sameHost: [],
+      pending: [{ id: 'env-1', fromRevision: 1 }]
     })
     expect(
       classifyPeerReplacements(
@@ -99,6 +122,10 @@ describe('which re-pairs a live pane may follow', () => {
         [managed({ pairingRevision: 2 })],
         []
       )
-    ).toEqual({ retired: [], sameHost: [{ id: 'env-1', fromRevision: 1, toRevision: 2 }] })
+    ).toEqual({
+      retired: [],
+      sameHost: [{ id: 'env-1', fromRevision: 1, toRevision: 2 }],
+      pending: []
+    })
   })
 })

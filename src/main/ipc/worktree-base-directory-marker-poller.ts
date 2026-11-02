@@ -14,20 +14,13 @@ import type {
   WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 
-// Why: the mtime gate is an optimization, not a correctness boundary — some
-// filesystems have coarse dir timestamps, and pending `.git` markers expire.
-// A periodic ungated scan guarantees eventual convergence.
+// Coarse timestamps and expired marker probes can miss changes; ungated backstops ensure convergence.
 export const WORKTREE_BASE_BACKSTOP_TICKS = 15
 
-// Why: a `.git` completion marker lands within moments of its worktree dir
-// (git writes it before populating the checkout). Dirs that never get one are
-// not worktrees; stop re-statting them after this many ticks and let the
-// backstop scan cover the pathological case.
+// Worktree .git markers arrive early; expire fast probes and let backstops cover unfinished directories.
 const PENDING_MARKER_MAX_TICKS = 300
 
-// Why: matches the git-common poller's fan-out bound (#17828) — bounded
-// concurrency turns hundreds of serial round trips into a handful of batches
-// without dumping every candidate onto libuv's 4-thread pool at once.
+// Bound metadata fanout to match Git-common polling without flooding libuv (#17828).
 export const MARKER_PROBE_CONCURRENCY = 8
 
 function statSignature(s: { mtimeMs: number; ctimeMs: number; ino: number }): string {
@@ -54,8 +47,7 @@ async function hasGitMarker(dir: string): Promise<boolean> {
 type BaseSnapshot = {
   // worktree-candidate dir → whether its `.git` completion marker exists
   markers: Map<string, boolean>
-  // dirs whose listing determines the candidate set: the root plus any
-  // nested repo containers. Their stat signatures gate the next full scan.
+  // Listings of these root/container directories define the candidates and gate rescans.
   gateDirs: string[]
   // index-aligned with gateDirs, each sampled *before* that dir's listing
   gateSignatures: string[]
@@ -69,18 +61,14 @@ async function readdirSafe(path: string): Promise<Dirent[]> {
   }
 }
 
-// Depth-1 worktree dirs (flat layout), plus depth-2 dirs under each nested
-// repo's container, mirroring what worktree-base-directory-event-filter
-// matches: `<wt>/.git` completion markers and `<wt>` deletions.
+// Match flat and nested layouts at the same depths as the native event filter.
 async function snapshotBase(
   rootPath: string,
   repos: ReadonlyMap<string, WorktreeBaseRepoWatchConfig>
 ): Promise<BaseSnapshot> {
   const markers = new Map<string, boolean>()
   const gateDirs = [rootPath]
-  // Why: sampling the signature before the listing makes a write that races the
-  // scan look stale next tick (one redundant rescan) instead of invisible until
-  // the backstop, which is up to 15 ticks of missed creates/deletes.
+  // Sample before listing so racing writes invalidate the next tick instead of waiting for the backstop.
   const gateSignatures = [await dirSignature(rootPath)]
   const configs = [...repos.values()]
   const includeFlat = configs.some((config) => !config.nestWorkspaces)
@@ -90,8 +78,6 @@ async function snapshotBase(
       .map((config) => normalizeRuntimePathForComparison(config.repoName))
   )
 
-  // Root vanished or unreadable: readdirSafe yields [], producing the same
-  // empty markers/candidates result as the old watcher's error path.
   const rootEntries = await readdirSafe(rootPath)
 
   const candidates: string[] = []
@@ -198,8 +184,7 @@ export async function startBasePoller(
       dueDirs.push(dir)
     }
     const events: WorktreeBasePollEvent[] = []
-    // Same bound as the full scan's fan-out: serial probes cost D x latency per tick,
-    // which a WSL- or network-backed base directory pays for up to `pendingMarkerMaxTicks`.
+    // Bound pending-marker probes too, especially for WSL or network-backed base paths.
     await forEachWithConcurrency(dueDirs, MARKER_PROBE_CONCURRENCY, async (dir) => {
       options.onPendingMarkerProbe?.(join(dir, '.git'))
       if (await hasGitMarker(dir)) {
@@ -219,8 +204,7 @@ export async function startBasePoller(
       await fullScan()
       return
     }
-    // Idle fast path: when the dirs whose listings define the candidate set
-    // are untouched, skip the readdir + per-candidate stat fan-out entirely.
+    // Unchanged candidate-listing directories skip readdir and per-marker fanout.
     const signatures = await Promise.all(snapshot.gateDirs.map(dirSignature))
     const gateChanged =
       signatures.length !== snapshot.gateSignatures.length ||
@@ -247,8 +231,7 @@ export async function startBasePoller(
       return
     }
     ticking = true
-    // Why: measure from tick start so the cadence is start-to-start (like the old setInterval), not
-    // gap-after-completion — otherwise each visible refresh lands a full scan-duration late every tick.
+    // Measure start-to-start cadence so scan duration does not add a full interval of lag.
     const startedAt = Date.now()
     try {
       await poll(forceFullScan)
@@ -258,9 +241,7 @@ export async function startBasePoller(
       ticking = false
     }
     if (!disposed) {
-      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
-      // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
-      // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
+      // Clamp wall-clock jumps so NTP cannot postpone refreshes beyond one interval.
       const nextDelay = Math.max(
         0,
         Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
@@ -275,8 +256,7 @@ export async function startBasePoller(
       return
     }
     parkedWhileHidden = false
-    // Why: the ordinary dir-signature gate can miss same-granule changes made
-    // while hidden; resume must diff a fresh full snapshot against the baseline.
+    // Resume forces a full diff because hidden same-granule changes can evade directory signatures.
     void tick(true)
   })
 

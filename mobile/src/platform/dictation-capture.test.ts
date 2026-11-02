@@ -1,24 +1,13 @@
-/**
- * The native half of the capture seam: the calls it makes, and which interruptions end a capture.
- *
- * Thin by design — this file is five device calls behind a shape the page can answer — but the
- * interruption rule is shared with `dictation-capture.web.ts` and is exactly where the two drifted:
- * the page treated every interruption as a loss while this one has always gated on `began` and
- * `blocked`, so an `ended` on its own cancelled a live dictation on the page and nothing natively.
- */
+// Pin the native interruption rule too: began/blocked end capture, while ended alone returns the OS session and must leave dictation alive.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const engine = vi.hoisted(() => ({
   listeners: new Map<string, (event: { data: unknown }) => void>(),
   calls: new Array<string>(),
-  /** Set by a case that wants the JSI binding to fail the way a device can. */
-  throwOn: new Set<string>(),
-  /** Set by a case that wants an engine that will not come up. */
+  tearDownFails: false,
   openFails: false,
-  /** The screen lock, apart from the engine's own calls: it is queued behind a microtask, so
-   *  interleaving it with the synchronous ones would pin an order nothing depends on. */
+  // Record queued screen-lock calls separately; their microtask order relative to synchronous engine calls is not a contract.
   screen: new Array<string>(),
-  /** Every tag the lock named. One capture holds one tag, so this is a set of size one. */
   screenTags: new Set<string>()
 }))
 
@@ -41,15 +30,12 @@ vi.mock('@orca/expo-two-way-audio', () => ({
   },
   tearDown: () => {
     engine.calls.push('tearDown')
-    if (engine.throwOn.has('tearDown')) {
+    if (engine.tearDownFails) {
       throw new Error('the audio session would not tear down')
     }
   },
   toggleRecording: (on: boolean) => {
     engine.calls.push(`toggleRecording(${String(on)})`)
-    if (engine.throwOn.has(`toggleRecording(${String(on)})`)) {
-      throw new Error('the audio engine would not stop')
-    }
     return true
   }
 }))
@@ -69,19 +55,17 @@ vi.mock('expo-keep-awake', () => ({
 import { useDictationCapture } from './dictation-capture'
 
 beforeEach(async () => {
-  // The capture is a module const, so its lock carries between cases: give the screen back and let
-  // the queue drain before the next case reads it.
+  // Release the module-scoped capture lock and drain its queue between cases.
   useDictationCapture().release()
   await flushScreen()
   engine.listeners.clear()
   engine.calls.length = 0
-  engine.throwOn.clear()
+  engine.tearDownFails = false
   engine.openFails = false
   engine.screen.length = 0
   engine.screenTags.clear()
 })
 
-/** The lock's device calls are queued behind a microtask; a case reads them after they have run. */
 async function flushScreen(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
@@ -94,15 +78,13 @@ describe('which interruptions end a native capture', () => {
       interrupted += 1
     })
     const fire = (data: string) => engine.listeners.get('onAudioInterruption')?.({ data })
-    // `ended` on its own is the OS handing the session back, not taking it away. A dictation that
-    // cancelled on it would end itself the moment a notification chime finished playing.
+    // Ended returns control after a chime; it must not cancel dictation.
     fire('ended')
     expect(interrupted).toBe(0)
     fire('began')
     expect(interrupted).toBe(1)
     fire('blocked')
     expect(interrupted).toBe(2)
-    // And a kind from a newer engine is not an interruption this build can describe.
     fire('something-new')
     expect(interrupted).toBe(2)
   })
@@ -115,14 +97,8 @@ describe('the calls the native half makes', () => {
     expect(engine.calls).toEqual(['permission', 'initialize'])
     expect(capture.begin()).toBe(true)
     await capture.end()
-    capture.release()
-    expect(engine.calls).toEqual([
-      'permission',
-      'initialize',
-      'toggleRecording(true)',
-      'toggleRecording(false)',
-      'tearDown'
-    ])
+    // Muting alone would keep the session and leave other apps' audio ducked until unmount.
+    expect(engine.calls).toEqual(['permission', 'initialize', 'toggleRecording(true)', 'tearDown'])
   })
 
   it('hands every microphone event over with nothing dropped', () => {
@@ -144,7 +120,6 @@ describe('the screen the native microphone holds awake', () => {
     await capture.end()
     await flushScreen()
     expect(engine.screen).toEqual(['+', '-'])
-    // One tag, and it is the module's own: nothing above the seam mints or names it.
     expect(engine.screenTags.size).toBe(1)
   })
 
@@ -165,7 +140,6 @@ describe('the screen the native microphone holds awake', () => {
     })
     await flushScreen()
     expect(engine.screen).toEqual([])
-    // And the release that follows a failed open asks the device for nothing either.
     capture.release()
     await flushScreen()
     expect(engine.screen).toEqual([])
@@ -182,30 +156,10 @@ describe('the screen the native microphone holds awake', () => {
 
 describe('a device whose audio session will not shut down', () => {
   it('resolves `end` rather than rejecting it, which the contract promises', async () => {
-    // `end` is async, so a throw from the binding becomes a rejection. Every caller reaches it as
-    // `void capture.end()` inside a synchronous try/catch, which cannot see a rejection — so the
-    // failure left the app with an unhandled rejection instead of a logged one, and the cleanup
-    // that was meant to keep going was never the thing at risk.
-    engine.throwOn.add('toggleRecording(false)')
+    // Synchronous try cannot catch void end() rejection; swallow/log binding failures inside cleanup to prevent unhandled rejections.
+    engine.tearDownFails = true
     const capture = useDictationCapture()
     await expect(capture.end()).resolves.toBeUndefined()
-    expect(engine.calls).toEqual(['toggleRecording(false)'])
-  })
-
-  it('does not throw out of `release`, which runs bare in the unmount path', async () => {
-    engine.throwOn.add('tearDown')
-    const capture = useDictationCapture()
-    expect(() => capture.release()).not.toThrow()
-    await Promise.resolve()
     expect(engine.calls).toEqual(['tearDown'])
-  })
-
-  it('still stops the engine when the tear-down is the half that fails', async () => {
-    engine.throwOn.add('tearDown')
-    const capture = useDictationCapture()
-    await capture.end()
-    capture.release()
-    await Promise.resolve()
-    expect(engine.calls).toEqual(['toggleRecording(false)', 'tearDown'])
   })
 })

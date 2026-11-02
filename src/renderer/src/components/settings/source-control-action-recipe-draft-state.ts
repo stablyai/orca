@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  transportActionArgumentChoices,
+  demoteActionArgumentChoices,
+  type ActionArgumentChoices
+} from '../../../../shared/source-control-action-argument-choices'
+import { liftActionPermissionArgs } from '../../../../shared/source-control-action-permission-lift'
+import { useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
 } from '../../../../shared/source-control-ai-types'
 import {
   setSourceControlActionDefault,
+  type SourceControlActionLaunchPreferences,
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { ActionRecipeDraftState } from './source-control-ai-action-recipe-draft'
@@ -103,21 +110,83 @@ export function useSourceControlActionRecipeDraftState({
     }))
   }
 
-  const onActionAgentArgsChange = (actionId: SourceControlActionId, value: string): void => {
-    setActionRecipeDraftState((current) => ({
-      ...current,
-      values: {
-        ...current.values,
-        [actionId]: {
-          ...current.values[actionId],
-          agentArgs: value
+  const onActionAgentArgsChange = (
+    actionId: SourceControlActionId,
+    value: string,
+    commit = false
+  ): void => {
+    setActionRecipeDraftState((current) => {
+      const { agentId: _binding, ...valueDraft } = commit
+        ? liftActionPermissionArgs(
+            {
+              ...current.values[actionId],
+              agentId: config.actions?.[actionId]?.agentId,
+              argumentChoices: transportActionArgumentChoices(current.values[actionId], value),
+              agentArgs: value
+            },
+            true,
+            actionId
+          )
+        : {
+            ...current.values[actionId],
+            agentId: config.actions?.[actionId]?.agentId,
+            argumentChoices: transportActionArgumentChoices(current.values[actionId], value),
+            agentArgs: value
+          }
+      return { ...current, values: { ...current.values, [actionId]: valueDraft } }
+    })
+  }
+
+  const onActionLaunchPreferencesChange = (
+    actionId: SourceControlActionId,
+    update: SetStateAction<SourceControlActionLaunchPreferences | undefined>,
+    userArgs?: string,
+    argumentChoices?: ActionArgumentChoices | null
+  ): void => {
+    setActionRecipeDraftState((current) => {
+      const latest = current.values[actionId].launchPreferences
+      const next = typeof update === 'function' ? update(latest) : update
+      // A completion with no owned change must not materialize an explicit clear.
+      if (typeof update === 'function' && next === latest) {
+        return current
+      }
+      return {
+        ...current,
+        values: {
+          ...current.values,
+          [actionId]: {
+            ...current.values[actionId],
+            launchPreferences: next,
+            ...(argumentChoices !== undefined
+              ? { argumentChoices: argumentChoices ?? undefined }
+              : {}),
+            ...(userArgs !== undefined ? { agentArgs: userArgs } : {})
+          }
         }
       }
-    }))
+    })
+  }
+
+  const retireActionAgentDocument = (actionId: SourceControlActionId, agentId: unknown): void => {
+    setActionRecipeDraftState((current) => {
+      const value = current.values[actionId]
+      if (!value.argumentChoices || value.argumentChoices.syntaxAgent === agentId) {
+        return current
+      }
+      return {
+        ...current,
+        values: { ...current.values, [actionId]: demoteActionArgumentChoices(value) }
+      }
+    })
   }
 
   const saveActionTemplateDraft = async (actionId: SourceControlActionId): Promise<void> => {
-    const nextValue = actionRecipeDraftState.values[actionId]
+    const submitted = actionRecipeDraftState.values[actionId]
+    const { agentId: _binding, ...nextValue } = liftActionPermissionArgs(
+      { ...actionRecipeDraftState.values[actionId], agentId: config.actions?.[actionId]?.agentId },
+      true,
+      actionId
+    )
     if (
       JSON.stringify(nextValue) === JSON.stringify(actionRecipeDraftState.baseValues[actionId]) ||
       savingActionTemplateIds[actionId]
@@ -130,16 +199,18 @@ export function useSourceControlActionRecipeDraftState({
         return {
           actions: setSourceControlActionDefault(current.actions, actionId, {
             commandInputTemplate: nextValue.commandInputTemplate,
-            agentArgs: nextValue.agentArgs
+            agentArgs: nextValue.agentArgs,
+            launchPreferences: nextValue.launchPreferences,
+            argumentChoices: nextValue.argumentChoices
           })
         }
       })
       setActionRecipeDraftState((current) => ({
-        values: current.values,
-        baseValues: {
-          ...current.baseValues,
-          [actionId]: nextValue
-        }
+        values:
+          JSON.stringify(current.values[actionId]) === JSON.stringify(submitted)
+            ? { ...current.values, [actionId]: nextValue }
+            : current.values,
+        baseValues: { ...current.baseValues, [actionId]: nextValue }
       }))
     } finally {
       setSavingActionTemplateIds((current) => ({ ...current, [actionId]: false }))
@@ -178,6 +249,8 @@ export function useSourceControlActionRecipeDraftState({
     savingActionTemplateIds,
     onActionTemplateChange,
     onActionAgentArgsChange,
+    onActionLaunchPreferencesChange,
+    retireActionAgentDocument,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable

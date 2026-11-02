@@ -1,22 +1,15 @@
 export type MobilePairingConnectionMode = 'automatic' | 'local-only'
 
-/**
- * Resolve the pairing path to show / remember.
- *
- * - Explicit saved preference wins (user already chose).
- * - Otherwise default to Anywhere (`automatic`). Relay still requires sign-in
- *   at QR time; the UI can keep Anywhere selected while signed out.
- */
+/** Signed-out desktops default to LAN: Relay sign-in links an account and needs an explicit choice; persisted automatic does not prove consent.
+ * Explicit Relay remains selectable; sign-in restores saved Anywhere. */
 export function resolveMobilePairingConnectionMode(
-  saved: MobilePairingConnectionMode | null | undefined
+  saved: MobilePairingConnectionMode | null | undefined,
+  context: { signedIn: boolean }
 ): MobilePairingConnectionMode {
-  return saved === 'local-only' ? 'local-only' : 'automatic'
+  return saved === 'local-only' || !context.signedIn ? 'local-only' : 'automatic'
 }
 
-/**
- * Mode encoded into a pairing QR. Anywhere cannot be committed without a
- * signed-in desktop session for Relay.
- */
+/** Anywhere QR mode requires a signed-in desktop Relay session. */
 export function effectiveMobilePairingConnectionMode(args: {
   preferred: MobilePairingConnectionMode
   signedIn: boolean
@@ -27,12 +20,7 @@ export function effectiveMobilePairingConnectionMode(args: {
   return args.preferred
 }
 
-/**
- * Whether a scannable pairing offer may be minted for the selected path. Anywhere
- * (Relay) needs a signed-in desktop; minting a local-only QR under the Relay
- * label would misrepresent what the code encodes, so both surfaces gate
- * generation on this rather than silently degrading to local-only.
- */
+/** Gate both mint surfaces: unsigned Anywhere cannot silently produce a LAN-only QR under the Relay label. */
 export function canMintMobilePairingOffer(args: {
   connectionMode: MobilePairingConnectionMode
   signedIn: boolean

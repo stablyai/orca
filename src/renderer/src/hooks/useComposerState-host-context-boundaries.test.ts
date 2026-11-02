@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getInitialAutoManagedWorkspaceName,
   getInitialGitHubPrStartPointSelection,
   getMatchingLinkedTaskSourceContext,
-  isExplicitWorkspaceNameInput,
   resolveSmartGitHubCreateNames,
   resolveInitialWorkspaceRunSeed
 } from './composer-state/composer-decisions'
@@ -39,7 +37,7 @@ describe('useComposerState host-context boundaries', () => {
         },
         repoId: 'repo-1'
       })
-    ).toEqual({ repoId: 'repo-1', item })
+    ).toEqual({ kind: 'github-pr', repoId: 'repo-1', item })
     expect(
       getInitialGitHubPrStartPointSelection({
         item,
@@ -55,32 +53,6 @@ describe('useComposerState host-context boundaries', () => {
     ).toBeNull()
   })
 
-  it('treats typed workspace names as user-authored, not auto-managed', () => {
-    expect(isExplicitWorkspaceNameInput({ name: 'keep-my-name', lastAutoName: '' })).toBe(true)
-    expect(
-      isExplicitWorkspaceNameInput({
-        name: 'keep-my-name',
-        lastAutoName: 'keep-my-name'
-      })
-    ).toBe(false)
-    expect(isExplicitWorkspaceNameInput({ name: '#1234', lastAutoName: '' })).toBe(false)
-    expect(
-      isExplicitWorkspaceNameInput({
-        name: 'https://github.com/stablyai/orca/pull/1234',
-        lastAutoName: ''
-      })
-    ).toBe(false)
-  })
-
-  it('does not auto-own arbitrary prefilled names', () => {
-    expect(
-      getInitialAutoManagedWorkspaceName({
-        initialName: 'keep-my-name',
-        initialLinkedWorkItem: null
-      })
-    ).toBe('')
-  })
-
   it('preserves explicit names when a linked PR start point resolves at submit time', () => {
     expect(
       resolveSmartGitHubCreateNames({
@@ -93,64 +65,28 @@ describe('useComposerState host-context boundaries', () => {
     ).toEqual({ workspaceName: 'edited workspace', displayName: undefined })
   })
 
-  it('keeps smart GitHub names for auto-managed PR start-point submissions', () => {
-    expect(
-      resolveSmartGitHubCreateNames({
-        resolutionKind: 'pr-start-point',
-        smartWorkspaceName: 'title-derived-name',
-        smartDisplayName: 'Title derived name',
-        fallbackWorkspaceName: 'https://github.com/stablyai/orca/pull/6772',
-        nameIsAutoManaged: true
-      })
-    ).toEqual({ workspaceName: 'title-derived-name', displayName: 'Title derived name' })
-  })
-
-  it('auto-owns linked-item generated prefilled names', () => {
-    expect(
-      getInitialAutoManagedWorkspaceName({
-        initialName: 'fix-workspace-name',
-        initialLinkedWorkItem: {
-          type: 'issue',
-          provider: 'github',
-          number: 1234,
-          title: 'Fix workspace name',
-          url: 'https://github.com/stablyai/orca/issues/1234'
-        }
-      })
-    ).toBe('fix-workspace-name')
-  })
-
-  it('seeds initial workspace run target from the task source context', () => {
+  it('uses an explicit creation target without borrowing the linked Jira account host', () => {
     expect(
       resolveInitialWorkspaceRunSeed({
         initialTaskSourceContext: {
-          projectId: 'logical-project',
-          hostId: 'ssh:builder',
-          projectHostSetupId: 'setup-builder'
-        }
+          projectId: 'account-backed-task-source',
+          hostId: 'local',
+          projectHostSetupId: 'unrelated-setup'
+        },
+        initialWorkspaceTarget: { projectId: 'mapped-project', hostId: 'ssh:builder' }
       })
-    ).toEqual({
-      projectId: 'logical-project',
-      hostId: 'ssh:builder',
-      projectHostSetupId: 'setup-builder'
-    })
+    ).toEqual({ projectId: 'mapped-project', hostId: 'ssh:builder', projectHostSetupId: null })
+  })
 
+  it('keeps a restored draft target ahead of an explicit creation target', () => {
     expect(
       resolveInitialWorkspaceRunSeed({
         draftProjectId: 'draft-project',
         draftHostId: 'local',
-        draftProjectHostSetupId: 'setup-local',
-        initialTaskSourceContext: {
-          projectId: 'logical-project',
-          hostId: 'ssh:builder',
-          projectHostSetupId: 'setup-builder'
-        }
+        draftProjectHostSetupId: 'draft-setup',
+        initialWorkspaceTarget: { projectId: 'mapped-project', hostId: 'ssh:builder' }
       })
-    ).toEqual({
-      projectId: 'draft-project',
-      hostId: 'local',
-      projectHostSetupId: 'setup-local'
-    })
+    ).toEqual({ projectId: 'draft-project', hostId: 'local', projectHostSetupId: 'draft-setup' })
   })
 
   it('restores Jira draft context only when its site and issue identity agree', () => {

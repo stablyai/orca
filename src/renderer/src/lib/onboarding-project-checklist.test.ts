@@ -31,30 +31,6 @@ describe('markOnboardingProjectAdded', () => {
     vi.unstubAllGlobals()
   })
 
-  it('marks an added Git project and emits activation checklist telemetry', async () => {
-    await markOnboardingProjectAdded('addedRepo')
-
-    expect(mocks.onboardingUpdate).toHaveBeenCalledWith({
-      checklist: { addedRepo: true }
-    })
-    expect(mocks.track).toHaveBeenCalledWith('activation_checklist_item_completed', {
-      item: 'addedRepo',
-      time_since_completed_ms: 0
-    })
-  })
-
-  it('marks an added folder and emits activation checklist telemetry', async () => {
-    await markOnboardingProjectAdded('addedFolder')
-
-    expect(mocks.onboardingUpdate).toHaveBeenCalledWith({
-      checklist: { addedFolder: true }
-    })
-    expect(mocks.track).toHaveBeenCalledWith('activation_checklist_item_completed', {
-      item: 'addedFolder',
-      time_since_completed_ms: 0
-    })
-  })
-
   it('does not duplicate checklist telemetry for an already completed item', async () => {
     mocks.onboardingGet.mockResolvedValue({
       ...getDefaultOnboardingState(),

@@ -108,9 +108,7 @@ function validateRow(row) {
     parseCount(row.rendererDroppedBacklogs, 'rendererDroppedBacklogs', row, failures),
     budgets.rendererDroppedBacklogs
   )
-  // Why: parked-memory rows carry heap/view-count metrics with no latency
-  // budget; recognize them so memory-only scenarios pass the gate instead of
-  // tripping the "no recognized budget metrics" guard.
+  // Accept parked-memory heap/view metrics without latency budgets or memory-only reports trip the no-recognized-metrics guard.
   for (const fieldName of ['heapUsedMB', 'liveTerminals', 'livePaneManagers']) {
     if (parseCount(row[fieldName], fieldName, row, failures) != null) {
       checkedMetricCount += 1

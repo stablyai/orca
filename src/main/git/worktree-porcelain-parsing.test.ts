@@ -1,4 +1,3 @@
-// parseWorktreeList: porcelain block parsing, lock/prunable markers, NUL-delimited output.
 import { describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(

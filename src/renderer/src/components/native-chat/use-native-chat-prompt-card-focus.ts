@@ -1,31 +1,57 @@
-import { useLayoutEffect, type RefObject } from 'react'
+import { useLayoutEffect, useRef, type RefObject } from 'react'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
 
-/** Whether `element` is nothing in particular (the body) or inside the chat pane holding `card`. */
+const PROMPT_CARD_WANTS_FOCUS_SELECTOR = '[data-native-chat-prompt-card-focus]'
+const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
+  '[data-native-chat-prompt-card-focus-target]:not(:disabled)'
+
+function focusPromptCard(card: HTMLElement): void {
+  const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR) ?? card
+  target.focus()
+}
+
+/** Focus the shown card requesting it unless keep already names a control inside it; return false when ineligible. */
+export function focusNativeChatPromptCard(root: Element, keep: Element | null): boolean {
+  const card = Array.from(
+    root.querySelectorAll<HTMLElement>(PROMPT_CARD_WANTS_FOCUS_SELECTOR)
+  ).find((candidate) => !candidate.closest('[hidden], [inert]'))
+  if (!card || (keep !== card && card.contains(keep))) {
+    return false
+  }
+  focusPromptCard(card)
+  return true
+}
+
 export function isInNativeChatPaneOf(card: HTMLElement | null, element: Element | null): boolean {
   return (
     !element ||
     element === document.body ||
+    card?.closest('.native-chat-pane-shell') === element ||
     Boolean(card?.closest(NATIVE_CHAT_ROOT_SELECTOR)?.contains(element))
   )
 }
 
-/**
- * Focus a prompt card when it takes the input region, in the same commit, so keys leave this
- * pane's hidden composer at once. Never takes focus from another surface the user is in, nor
- * from a control inside the card. `step` re-runs it when the card swaps its content, which
- * drops focus to the body if the focused control was replaced.
- */
+/** Claim focus during commit when replacing the composer/card content; preserve other surfaces and controls already inside the card. */
 export function useNativeChatPromptCardFocus(
   cardRef: RefObject<HTMLElement | null>,
   shouldFocus: boolean,
   step?: number
 ): void {
+  const previousStepRef = useRef(step)
   useLayoutEffect(() => {
+    const stepChanged = previousStepRef.current !== step
+    previousStepRef.current = step
     const card = cardRef.current
     const active = document.activeElement
-    if (shouldFocus && isInNativeChatPaneOf(card, active) && !card?.contains(active)) {
-      card?.focus()
+    // Arriving cards must not steal keys from find or queued-message edits.
+    if (
+      card &&
+      shouldFocus &&
+      isInNativeChatPaneOf(card, active) &&
+      (active === card || !card.contains(active) || stepChanged) &&
+      !active?.closest('[data-native-chat-find-bar], [data-queued-message-editor]')
+    ) {
+      focusPromptCard(card)
     }
   }, [cardRef, shouldFocus, step])
 }

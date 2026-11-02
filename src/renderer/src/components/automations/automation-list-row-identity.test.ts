@@ -1,12 +1,4 @@
-/**
- * One automation ID under two authorities, followed from the cached host rows
- * all the way into the search index.
- *
- * These are the joins the list makes between a record and its host. Each one
- * used to be a bare automation ID, which is unique only inside one authority
- * (doc:38) — so the desktop's `a-1` and a runtime SSH host's `a-1` shared a
- * slot, and whichever was written last won it.
- */
+/** Follow colliding authority-local IDs from host cache through list/search joins so the last host cannot overwrite another’s row. */
 
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -25,7 +17,12 @@ import {
   matchAutomationListSearchRowKeys
 } from './automation-list-search-rows'
 import { REPO_ID } from './automations-page-fixtures'
-import { automationRepoForRow, automationWorktreeForRow } from './automation-list-row-identity'
+import { makeFolderWorkspace } from '../sidebar/folder-workspace-composer-submit-fixtures'
+import {
+  automationFolderWorktreeForRow,
+  automationRepoForRow,
+  automationWorktreeForRow
+} from './automation-list-row-identity'
 
 const repoMap = new Map([
   [REPO_ID, { id: REPO_ID, displayName: 'orca', path: '/src/orca' } as Repo]
@@ -158,23 +155,30 @@ describe('automation list row identity across hosts', () => {
         displayName: 'Runtime workspace'
       }
     ] as Worktree[]
-    const fallbackRepos = new Map([[REPO_ID, repos[1]]])
-    const fallbackWorktrees = new Map([['ws-1', worktrees[1]]])
 
-    expect(rows.map((row) => automationRepoForRow(row, repos, fallbackRepos)?.displayName)).toEqual(
-      ['Desktop repo', 'Runtime repo']
-    )
+    expect(rows.map((row) => automationRepoForRow(row, repos)?.displayName)).toEqual([
+      'Desktop repo',
+      'Runtime repo'
+    ])
     expect(
       rows.map((row) => {
-        const repo = automationRepoForRow(row, repos, fallbackRepos)
-        return automationWorktreeForRow(
-          row,
-          { [REPO_ID]: worktrees },
-          repo,
-          fallbackWorktrees,
-          'ws-1'
-        )?.displayName
+        const repo = automationRepoForRow(row, repos)
+        return automationWorktreeForRow(row, { [REPO_ID]: worktrees }, repo, repos, 'ws-1')
+          ?.displayName
       })
     ).toEqual(['Desktop workspace', 'Runtime workspace'])
+  })
+
+  it('resolves a folder workspace target inside each row authority', () => {
+    const rows = collidedListRows().rows
+    const folders = [
+      makeFolderWorkspace({ id: 'fw-1', name: 'Desktop folder' }),
+      makeFolderWorkspace({ id: 'fw-1', name: 'Runtime folder', executionHostId: 'runtime:gpu' })
+    ]
+
+    expect(
+      rows.map((row) => automationFolderWorktreeForRow(row, folders, 'folder:fw-1')?.displayName)
+    ).toEqual(['Desktop folder', 'Runtime folder'])
+    expect(automationFolderWorktreeForRow(rows[0], folders, 'ws-1')).toBeUndefined()
   })
 })

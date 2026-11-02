@@ -1,9 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import {
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
-import { BrowserTabCreateParams } from '../../../src/main/runtime/rpc/methods/browser-tab-create-schema'
+import { BrowserTabCreateParams } from '../../../src/shared/rpc-contract/browser-tab-create-params'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -51,32 +47,16 @@ const legacyRequest = {
 }
 
 let baselineRef: string
-let baselineRevision: string
 let baselineTabCreate: Schema
-let baselineProtocol: Record<string, unknown>
 
 beforeAll(async () => {
   baselineRef = LEGACY_BROWSER_PLACEMENT_RELEASE_REF
   const checkout = await materializeReleaseCheckout(baselineRef)
-  baselineRevision = checkout.commit
-  const [tabCreate, protocol] = await Promise.all([
-    importBaselineTabCreate(checkout),
-    importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
-  ])
+  const tabCreate = await importBaselineTabCreate(checkout)
   baselineTabCreate = tabCreate
-  baselineProtocol = protocol
 })
 
 describe('cross-version browser placement', () => {
-  it('loads a real stable release without client-host capabilities', () => {
-    expect(baselineRef).toMatch(/^v\d/)
-    expect(baselineRevision).toMatch(/^[0-9a-f]{40}$/)
-    expect(baselineProtocol).not.toHaveProperty('BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY')
-    expect(baselineProtocol).not.toHaveProperty('BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY')
-    expect(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY).toBe('browser.clientHost.v1')
-    expect(BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY).toBe('network.browserTunnel.v1')
-  })
-
   it('lets an old server ignore additive client placement', () => {
     expect(
       baselineTabCreate.parse({

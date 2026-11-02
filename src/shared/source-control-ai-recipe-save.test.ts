@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from './constants'
 import {
-  normalizeWritableRepoSourceControlAiOverrides,
   saveSourceControlActionRecipe,
   toSourceControlAiRepoUpdate
 } from './source-control-ai-recipe-save'
@@ -64,7 +63,6 @@ describe('source-control AI recipe saves', () => {
               agentArgs: '--model sonnet'
             },
             pullRequest: {
-              agentId: null,
               commandInputTemplate: '{basePrompt}\n\nlegacy review'
             }
           },
@@ -76,50 +74,35 @@ describe('source-control AI recipe saves', () => {
     })
   })
 
-  it('clears empty repo source-control AI writes with the JSON boundary sentinel', () => {
-    expect(toSourceControlAiRepoUpdate({ prCreationDefaults: { draft: null } })).toEqual({
-      sourceControlAi: null
-    })
-  })
-
-  it('preserves boolean-only hosted-review defaults and strips legacy null defaults on write', () => {
-    expect(
-      normalizeWritableRepoSourceControlAiOverrides({
-        prCreationDefaults: {
-          draft: true,
-          useTemplate: null,
-          generateDetailsOnOpen: false
-        }
-      })
-    ).toEqual({
-      prCreationDefaults: {
-        draft: true,
-        generateDetailsOnOpen: false
-      }
-    })
-  })
-
-  it('stores repo custom commands when saving a custom-command recipe', () => {
+  it('keeps the action model when saving a repo recipe', () => {
+    const launchPreferences = {
+      agentId: 'codex' as const,
+      model: 'gpt-5.6-terra',
+      options: { effort: 'high' }
+    }
     const result = saveSourceControlActionRecipe({
       target: { type: 'repo', repoId: 'repo-1' },
       settings: settings(),
       repo: null,
-      actionId: 'commitMessage',
-      recipe: {
-        agentId: 'custom',
-        commandInputTemplate: '{basePrompt}'
-      },
-      customAgentCommand: 'repo-agent {prompt}'
+      actionId: 'fixChecks',
+      recipe: { agentId: 'codex', commandInputTemplate: '{basePrompt}', launchPreferences }
     })
 
     expect(result).toMatchObject({
       update: {
         sourceControlAi: {
-          customAgentCommand: 'repo-agent {prompt}',
           actionOverrides: {
-            commitMessage: {
-              agentId: 'custom',
-              commandInputTemplate: '{basePrompt}'
+            fixChecks: {
+              agentId: 'codex',
+              commandInputTemplate: '{basePrompt}',
+              launchPreferences: {
+                agentId: 'codex',
+                modelSelection: {
+                  base: 'default',
+                  model: { agentId: 'codex', value: 'gpt-5.6-terra' },
+                  options: { effort: { agentId: 'codex', value: 'high' } }
+                }
+              }
             }
           }
         }
@@ -127,31 +110,10 @@ describe('source-control AI recipe saves', () => {
     })
   })
 
-  it('writes global recipes through a complete normalized source-control AI value', () => {
-    const result = saveSourceControlActionRecipe({
-      target: { type: 'global' },
-      settings: settings(),
-      actionId: 'pullRequest',
-      recipe: {
-        agentId: 'custom',
-        commandInputTemplate: '{basePrompt}\n\nreview',
-        agentArgs: '--verbose'
-      },
-      customAgentCommand: 'review-agent {prompt}'
+  it('clears empty repo source-control AI writes with the JSON boundary sentinel', () => {
+    expect(toSourceControlAiRepoUpdate({ prCreationDefaults: { draft: null } })).toEqual({
+      sourceControlAi: null
     })
-
-    expect(result.target).toEqual({ type: 'global' })
-    expect('sourceControlAi' in result).toBe(true)
-    if (!('sourceControlAi' in result)) {
-      throw new Error('Expected a global save result')
-    }
-    expect(result.sourceControlAi.actions?.pullRequest).toEqual({
-      agentId: 'custom',
-      commandInputTemplate: '{basePrompt}\n\nreview',
-      agentArgs: '--verbose'
-    })
-    expect(result.sourceControlAi.customAgentCommand).toBe('review-agent {prompt}')
-    expect(result.sourceControlAi.enabled).toBe(true)
   })
 
   it('replaces global recipes so cleared CLI args do not survive', () => {

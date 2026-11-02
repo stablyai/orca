@@ -15,8 +15,7 @@ function copyIfPresent(source: string, target: string): void {
     return
   }
   mkdirSync(dirname(target), { recursive: true })
-  // Why: tmp+rename so a crash mid-copy cannot leave a truncated target that
-  // the exists() guard above would then treat as a completed migration.
+  // Publish atomically: partial copies must not pass the completed-migration existence check.
   const tmpTarget = `${target}.tmp`
   copyFileSync(source, tmpTarget)
   renameSync(tmpTarget, target)

@@ -1,15 +1,4 @@
-/**
- * Memory-leak regression: TerminalHost must reap dead sessions.
- *
- * SessionIds are minted fresh per pane and never reused, so a `TerminalHost`
- * that never removes exited sessions from its `sessions` map leaks one dead
- * `Session` and its `@xterm/headless` scrollback grid per terminal for the
- * lifetime of the long-lived daemon process.
- *
- * The fix wires a Session `onExit` hook to `TerminalHost.reapSession`, which
- * disposes the emulator and drops the entry from the map. These tests assert the
- * emulator is disposed when a subprocess exits (before the fix it never was).
- */
+/** Dead sessions must release both their host-map entry and headless scrollback grid. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
@@ -66,8 +55,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
   let spawnFn: TerminalHostOptions['spawnSubprocess']
 
   beforeEach(() => {
-    // Pin POSIX so immediate force-kill teardown is deterministic across host OSes; the
-    // Windows taskkill tree-kill path is covered in terminal-session-teardown.test.ts.
+    // Pin POSIX for deterministic teardown; Windows tree termination has separate coverage.
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     killWithDescendantSweepMock.mockReset()
@@ -129,10 +117,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     })
 
     await host.dispose()
-    // Why: live sessions retain the native owner until force-kill is accepted
-    // and physical exit proves the child can no longer hold the ptmx fd.
-    // Exited sessions take the disposeSubprocess() path instead (see the test
-    // below). See docs/fix-pty-fd-leak.md.
+    // Live sessions retain the native owner until physical exit proves cleanup is safe.
     expect(lastSubprocess.forceKill).toHaveBeenCalled()
     expect(lastSubprocess.dispose).toHaveBeenCalled()
   })
@@ -144,15 +129,11 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
       rows: 24,
       streamClient: streamClient()
     })
-    // Alive: emulator is held, not disposed.
     expect(emulatorDispose).not.toHaveBeenCalled()
     expect(host.listSessions()).toHaveLength(1)
 
-    // Natural exit.
     lastSubprocess._onExitCb?.(0)
 
-    // The dead session's emulator (its scrollback buffer) is freed and the
-    // session is gone from the map — not merely skipped by listSessions.
     expect(emulatorDispose).toHaveBeenCalledTimes(1)
     expect(host.listSessions()).toHaveLength(0)
   })
@@ -169,7 +150,6 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
       lastSubprocess._onExitCb?.(0)
     }
 
-    // Every dead session was reaped: one emulator disposed per cycle, none retained.
     expect(emulatorDispose).toHaveBeenCalledTimes(CYCLES)
     expect(host.listSessions()).toHaveLength(0)
   })
@@ -203,7 +183,6 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     lastSubprocess._onExitCb?.(137)
     await killed
 
-    // Emulator freed and session dropped from the map (no lingering dead entry).
     expect(emulatorDispose).toHaveBeenCalledTimes(1)
     expect(host.listSessions()).toHaveLength(0)
     expect(host.isKilled('session-1')).toBe(true)
@@ -216,8 +195,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
       const stubbornHost = new TerminalHost({
         spawnSubprocess: () => {
           const sub = createMockSubprocess()
-          // Stubborn child: ignores graceful kill, so the KILL_TIMEOUT_MS timer
-          // must force-dispose it.
+          // A force-kill request must not dispose the handle until exit is reported.
           sub.kill = vi.fn()
           sub.forceKill = vi.fn()
           stubbornSubprocess = sub
@@ -231,11 +209,10 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
         streamClient: streamClient()
       })
 
-      // Graceful kill — the no-op subprocess.kill never fires onExit.
       stubbornHost.kill('stubborn')
       expect(emulatorDispose).not.toHaveBeenCalled()
 
-      // The 5s fallback sends SIGKILL but cannot claim physical cleanup yet.
+      // The fallback requests force-kill but still cannot claim physical exit.
       vi.advanceTimersByTime(5000)
 
       expect(emulatorDispose).not.toHaveBeenCalled()
@@ -265,7 +242,6 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
         host.kill(`session-${i}`)
       }
 
-      // Oldest tombstones should be evicted
       expect(host.isKilled('session-0')).toBe(false)
       expect(host.isKilled('session-4')).toBe(true)
     })
@@ -353,12 +329,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     })
 
     it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {
-      // Why: after a session's subprocess has exited (onExit fired), proc.pid
-      // refers to a reaped child whose pid may have been recycled. Force-killing
-      // it would process.kill(recycled_pid, 'SIGKILL') — killing a stranger.
-      // The exit now reaps the session via session.dispose(), which skips
-      // forceKill once _state==='exited' (only the fd is released). host.dispose
-      // then only ever sees live sessions.
+      // Never force-kill a reaped child’s PID, which may now identify an unrelated process.
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -366,14 +337,10 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      // Natural exit reaps session-1 synchronously: its subprocess fd is
-      // released (dispose) but it is never force-killed, and it is dropped from
-      // the map (so it is not listed and not touched by host.dispose below).
       const exitedSub = lastSubprocess
       lastSubprocess._onExitCb?.(0)
       expect(host.listSessions()).toEqual([])
 
-      // A second, live session remains in the map for host.dispose to reap.
       await host.createOrAttach({
         sessionId: 'session-2',
         cols: 80,

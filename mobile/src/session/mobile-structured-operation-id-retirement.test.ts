@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { requestMobileStructuredAgentSessionCancel } from './mobile-structured-agent-session-cancel'
@@ -57,6 +57,7 @@ function cancelArgs(client: RpcClient, hostAnswersRepeatedStops: boolean | null 
     stateRef: { current: runningState() },
     promptCancelSupported: null,
     hostAnswersRepeatedStops,
+    hostStopsConversation: null,
     inFlight: new Map<string, Promise<boolean>>(),
     onSendError: vi.fn()
   }

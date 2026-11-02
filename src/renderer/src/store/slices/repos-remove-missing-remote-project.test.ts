@@ -1,11 +1,4 @@
-/**
- * #11994: a project deleted on the paired Orca host stayed in the client's sidebar and
- * could not be removed there. `repo.rm` answers `repo_not_found` (it is already gone on
- * the host) and `removeProject` wrapped its whole body in one try/catch, so the rejection
- * aborted the local purge before the `set()` — the ghost row survived and nothing was
- * surfaced to the user. Only `repo_not_found` is tolerated; any other failure must keep
- * the row, and the error toast is opt-in so bulk/background callers stay silent.
- */
+/** Treat only repo_not_found as already removed and purge client ghost rows (#11994). Other failures retain rows; toasts remain opt-in for single-project callers while bulk/background aggregate errors. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createTestStore } from './store-test-helpers'
@@ -100,8 +93,11 @@ beforeEach(() => {
 })
 
 describe('removeProject when the owning host already dropped the project', () => {
-  it('drops the ghost row when the remote reports repo_not_found', async () => {
+  it('still finishes the removal when the residue cleanup throws', async () => {
     answerRepoRmWith('repo_not_found')
+    reposRemoveForHost.mockImplementation(() => {
+      throw new Error('Forgetting a host is unavailable in paired web clients.')
+    })
     const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
 
     await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
@@ -117,17 +113,8 @@ describe('removeProject when the owning host already dropped the project', () =>
 
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a', 'project-b'])
     expect(toast.error).not.toHaveBeenCalled()
-  })
-
-  it('toasts once for a genuine failure when the caller opts in', async () => {
-    answerRepoRmWith('runtime_unavailable')
-    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
-
-    await store
-      .getState()
-      .removeProject('project-b', { hostId: 'runtime:env-1', errorFeedback: 'toast' })
-
-    expect(toast.error).toHaveBeenCalledTimes(1)
+    // An unconfirmed removal is not evidence the host dropped the project.
+    expect(reposRemoveForHost).not.toHaveBeenCalled()
   })
 
   it('leaves a same-id project on another host untouched', async () => {

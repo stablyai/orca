@@ -1,15 +1,21 @@
-/**
- * The typed conflicts an authority returns when a request's captured owner no
- * longer matches its stored automation.
- *
- * These cross two transports that keep nothing but a string: Electron IPC
- * rewraps the message ("Error invoking remote method 'x': Error: …") and an
- * older runtime maps unknown error classes to `runtime_error`. So every message
- * ends with `: <code>`, the machine-token convention `hasRuntimeRpcErrorCode`
- * already matches, and callers strip the tail before display.
- */
+/** End messages with : <code> so owner conflicts survive Electron IPC wrapping and old runtime_error flattening. hasRuntimeRpcErrorCode reads the token; strip it before display. */
 
 import { hasRuntimeRpcErrorCode } from './runtime-rpc-error-code'
+import { AUTOMATION_ORPHAN_ISSUES, type AutomationCapturedHostIssue } from './automation-list-scope'
+
+// Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
+export const AUTOMATION_CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, string> = {
+  [AUTOMATION_ORPHAN_ISSUES.hostReselection]:
+    'Edit the automation and reselect its host before running it.',
+  [AUTOMATION_ORPHAN_ISSUES.malformed]:
+    'The automation host identity is incomplete. Edit the automation and reselect its host before running it.',
+  [AUTOMATION_ORPHAN_ISSUES.targetMissing]:
+    'The automation host is no longer registered, so this automation has nowhere to run.',
+  [AUTOMATION_ORPHAN_ISSUES.targetReplaced]:
+    'The automation host was removed and re-registered, so this automation must be re-adopted before it can run.',
+  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]:
+    'The automation workspace spans more than one host, so Orca cannot tell which one to run it on.'
+}
 
 export const AUTOMATION_OWNER_CONFLICT_CODES = {
   /** The stored selector or its SSH generation differs from the captured one. */
@@ -43,8 +49,8 @@ export function automationOwnerConflictMessage(code: AutomationOwnerConflictCode
 export class AutomationOwnerConflictError extends Error {
   readonly code: AutomationOwnerConflictCode
 
-  constructor(code: AutomationOwnerConflictCode) {
-    super(`${CONFLICT_MESSAGES[code]}: ${code}`)
+  constructor(code: AutomationOwnerConflictCode, message = CONFLICT_MESSAGES[code]) {
+    super(`${message}: ${code}`)
     this.name = 'AutomationOwnerConflictError'
     this.code = code
   }
@@ -60,13 +66,7 @@ export function isAutomationOwnerConflictCode(
   return typeof value === 'string' && CODE_VALUES.includes(value as AutomationOwnerConflictCode)
 }
 
-/**
- * The conflict an authority returned, whatever the transport left of it.
- *
- * The single classifier for every client: matching `.code` alone reads only the
- * hop that preserves the error class, and a flattened `runtime_error` would
- * then lose the recovery the user needs.
- */
+/** Classify across transports by preserved code/message token; .code alone loses recovery after runtime_error flattening. */
 export function matchAutomationOwnerConflict(error: unknown): AutomationOwnerConflictCode | null {
   for (const code of CODE_VALUES) {
     if (hasRuntimeRpcErrorCode(error, code)) {

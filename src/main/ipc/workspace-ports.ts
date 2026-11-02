@@ -1,10 +1,12 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type {
   WorkspacePortAdvertisedUrlChangedEvent,
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
+  WorkspacePortPageProbeRequest,
+  WorkspacePortPageProbeResult,
   WorkspacePortScanRequest,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
@@ -13,6 +15,7 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import { probeWorkspacePortPage } from '../ports/workspace-port-page-probe'
 
 type WorkspacePortHandlersOptions = {
   advertisedUrlEvents?: Pick<AdvertisedUrlWatcher, 'onDidChange'>
@@ -40,6 +43,7 @@ export function registerWorkspacePortHandlers(
 
   ipcMain.removeHandler('workspacePorts:scan')
   ipcMain.removeHandler('workspacePorts:kill')
+  ipcMain.removeHandler('workspacePorts:probePage')
   ipcMain.handle(
     'workspacePorts:scan',
     (_event, rawArgs?: unknown): Promise<WorkspacePortScanResult> => {
@@ -74,6 +78,14 @@ export function registerWorkspacePortHandlers(
       }
       const worktrees = getStoreWorkspacePortProbes(store, args.repoId)
       return killWorkspacePort(worktrees, args)
+    }
+  )
+
+  ipcMain.handle(
+    'workspacePorts:probePage',
+    async (_event, rawArgs?: unknown): Promise<WorkspacePortPageProbeResult> => {
+      const args = parseProbePageRequest(rawArgs)
+      return args ? probeWorkspacePortPage(args) : { kind: 'not-page' }
     }
   )
 }
@@ -117,4 +129,17 @@ function parseKillRequest(value: unknown): WorkspacePortKillRequest | null {
     pid,
     port
   }
+}
+
+function parseProbePageRequest(value: unknown): WorkspacePortPageProbeRequest | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const host = 'host' in value ? value.host : undefined
+  const port = 'port' in value ? value.port : undefined
+  if (typeof host !== 'string' || typeof port !== 'number' || !Number.isSafeInteger(port)) {
+    return null
+  }
+  const protocol = 'protocol' in value && value.protocol === 'https' ? 'https' : 'http'
+  return { host, port, protocol }
 }

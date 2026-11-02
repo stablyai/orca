@@ -1,9 +1,5 @@
-/**
- * Design D7.1 R1/R3/R4 and D7.2: a live terminal survives the orcad runtime swap in both
- * directions. The last Bun orcad (ORCA_BUN_ORCAD_SLOT) and this checkout's Node slot (out/orcad)
- * are installed side by side as `~/.orca-remote/orcad-<version>/`, launched and stopped with
- * the client's own deploy commands, and share one data root.
- */
+// Test live terminal survival across Bun/Node slot switches using real deploy commands and one data root.
+import type * as ExecCommandModule from '../ssh/remote-exec/remote-exec-command'
 import { build } from 'esbuild'
 import {
   copyFileSync,
@@ -18,7 +14,7 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
@@ -39,27 +35,37 @@ import {
   getOrcaProfileIndexPath,
   getOrcaProfileStateDatabaseFile
 } from '../orca-profiles/profile-storage-paths'
-import type { SshConnection } from '../ssh/ssh-connection'
-import { emptyOrcadActivationRecord, orcadGcPinnedDirNames } from '../ssh/orcad-activation-record'
-import { gcOldOrcadVersions } from '../ssh/orcad-remote-gc'
+import {
+  emptyOrcadActivationRecord,
+  orcadGcPinnedDirNames
+} from '../managed-server/activation/orcad-activation-record'
+import { gcOldOrcadVersions } from '../managed-server/install/orcad-remote-gc'
 import {
   ORCAD_PID_FILENAME,
-  ORCAD_READINESS_FILENAME,
+  ORCAD_READINESS_FILENAME
+} from '../managed-server/install/orcad-remote-host-support'
+import {
   orcadLaunchCommand,
   parseOrcadReadinessOutput
-} from '../ssh/orcad-remote-launch'
-import { parseOrcadStopOutcome, stopOrcadCommand } from '../ssh/orcad-remote-process-control'
-import { RELAY_REMOTE_DIR } from '../ssh/relay-protocol'
+} from '../managed-server/install/orcad-remote-launch'
+import {
+  parseOrcadStopOutcome,
+  stopOrcadCommand
+} from '../managed-server/install/orcad-remote-process-control'
+import { RELAY_REMOTE_DIR } from '../ssh/remote-exec/remote-frame-protocol'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import {
   skipForMissingInputs,
   hostServerTarget,
   locatePinnedNodeForTests
 } from './orcad-node-slot-fixture'
+import { unusedSshConnection } from '../ssh/unused-host-transport.test-fixture'
 
-// GC runs its real commands, against this machine instead of an SSH host.
 const { execMock } = vi.hoisted(() => ({ execMock: vi.fn() }))
-vi.mock('../ssh/ssh-relay-deploy-helpers', () => ({ execCommand: execMock }))
+vi.mock('../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand: execMock
+}))
 
 type Runtime = 'Bun' | 'Node'
 type Slot = { runtime: Runtime; dir: string; version: string }
@@ -98,7 +104,7 @@ let backupDriver = ''
 let bunProtocolVersion = 0
 const launched = new Set<number>()
 
-/** Without Vitest's markers: daemon-entry.js does not start its server under VITEST. */
+/** Clear Vitest markers so daemon-entry starts its server. */
 function hostEnv(): NodeJS.ProcessEnv {
   return {
     ...Object.fromEntries(
@@ -131,7 +137,6 @@ function linkOrCopy(from: string, to: string): void {
   }
 }
 
-/** Hard-links a slot tree into place: an install copies bytes, and links keep the test cheap. */
 function installTree(source: string, destination: string): void {
   mkdirSync(destination, { recursive: true })
   for (const entry of readdirSync(source, { withFileTypes: true })) {
@@ -153,7 +158,6 @@ function installSlot(caseRoot: string, runtime: Runtime, source: string): Slot {
   return { runtime, dir, version }
 }
 
-/** Both slots under one `.orca-remote/`, the Node one with its shared `runtimes/` entry. */
 function installSlots(caseRoot: string): { slots: Record<Runtime, Slot>; nodeRuntime: string } {
   const slots = {
     Bun: installSlot(caseRoot, 'Bun', bunSlotSource!),
@@ -266,7 +270,6 @@ async function killLaunched(): Promise<void> {
   await killAndAwaitExit(pids)
 }
 
-/** The protocol the Bun slot's own daemon reports, read from a throwaway launch. */
 async function probeBunDaemonProtocol(): Promise<number> {
   const probeRoot = mkdtempSync(join(root, 'bun-probe-'))
   const slot = installSlot(probeRoot, 'Bun', bunSlotSource!)
@@ -278,24 +281,22 @@ async function probeBunDaemonProtocol(): Promise<number> {
   } finally {
     await stop(slot).catch(() => {})
     await killLaunched()
-    // Even after a failed launch: the daemon outlives orcad, and only its pid file names it.
+    // Failed launches can still leave a daemon; use its persistent PID record.
     await killProfileDaemons(userDataDir)
   }
 }
 
-// Windows has no orcad launch path (POSIX-only, orcad-remote-host-support.ts), so no inputs.
 const skip = skipForMissingInputs('cross-runtime', posix ? missing : [])
 
 describe.skipIf(skip || !posix)('a live terminal across the Bun and Node orcad runtimes', () => {
   beforeAll(async () => {
-    // Short root: macOS caps a unix socket path at 104 bytes and the daemon's lives in the data root.
+    // Keep macOS socket paths below the 104-byte limit.
     root = realpathSync(mkdtempSync('/tmp/orca-xrt-'))
     client = join(root, 'daemon-client.cjs')
     backupDriver = join(root, 'backup-driver.cjs')
     execMock.mockImplementation(async (_conn: unknown, command: string) => shell(command))
     writeFileSync(
       backupDriver,
-      // The shipped worker entry, driven the way orcad drives it, under the slot's own runtime.
       `const { Worker } = require('node:worker_threads')
 const [workerPath, databasePath, profileId, targetPath] = process.argv.slice(2)
 const worker = new Worker(workerPath, { workerData: { databasePath, profileId, targetPath } })
@@ -305,7 +306,6 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
     )
     await build({
       stdin: {
-        // orcad's own daemon client, playing a paired client's terminal.
         contents: `
         import { DaemonPtyAdapter } from './src/main/daemon/daemon-pty-adapter'
         import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './src/main/daemon/daemon-spawner'
@@ -366,7 +366,7 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
     '%s orcad hands its daemon and profile to the %s orcad',
     { timeout: 240_000 },
     async ([from, to], context) => {
-      // A daemon at another protocol is never adopted across an update, so there is no hand-over.
+      // Protocol-mismatched daemons cannot be adopted across updates.
       if (bunProtocolVersion !== PROTOCOL_VERSION) {
         context.skip(
           `the Bun orcad's daemon speaks protocol ${bunProtocolVersion}, this checkout ${PROTOCOL_VERSION}`
@@ -389,7 +389,6 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
           protocolVersion: PROTOCOL_VERSION
         })
         daemonPid = forked.pid!
-        // The daemon runs on the runtime the outgoing slot shipped, not on the test's Node.
         const runtimes = {
           Bun: join(slots.Bun.dir, orcadBunRuntimeFilename(process.platform)),
           Node: nodeRuntime
@@ -404,7 +403,6 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
         expect(isAlive(created.pid)).toBe(true)
 
         const second = await launch(incoming, userDataDir)
-        // Adopted, not replaced: same daemon, still reporting the outgoing build.
         expect(second.health!.terminalDaemon).toMatchObject({
           state: 'live',
           ownsFreshSessions: true,
@@ -413,7 +411,6 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
           entryPath: join(outgoing.dir, 'daemon-entry.js'),
           protocolVersion: PROTOCOL_VERSION
         })
-        // The incoming runtime opened the outgoing runtime's profile database.
         expect(first.health!.profileStateAuthority?.classification).toBe('neither')
         expect(second.health!.profileStateAuthority).toMatchObject({
           backend: 'sqlite',
@@ -424,7 +421,6 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
         const attached = await daemonClient('attach', userDataDir, sessionId, 'AFTER')
         expect(attached).toEqual({ pid: created.pid, isReattach: true, output: true })
 
-        // R4: the slot the live daemon was forked from survives GC; an idle stale slot does not.
         const stale = join(caseRoot, RELAY_REMOTE_DIR, 'orcad-0.0.1+dead')
         mkdirSync(stale)
         writeFileSync(join(stale, ORCAD_INSTALL_COMPLETE_FILENAME), '')
@@ -435,8 +431,7 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
         const record = { ...emptyOrcadActivationRecord(), active: incoming.version }
         expect(orcadGcPinnedDirNames(record)).not.toContain(`orcad-${outgoing.version}`)
         await gcOldOrcadVersions({
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is replaced by a local shell for every connection access.
-          conn: {} as SshConnection,
+          conn: unusedSshConnection(),
           host,
           remoteHome: caseRoot,
           currentDirAbsPath: incoming.dir,

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 
 const workflow = parse(
   readFileSync(new URL('../../.github/workflows/cloud-verify.yml', import.meta.url), 'utf8')

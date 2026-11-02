@@ -125,7 +125,6 @@ describe('host system default session migration pass preparation', () => {
 
     expect(service.prepareHostSystemDefaultSessionMigrationPass()).toBe(true)
 
-    // Recording this launch must not erase the demand the marker still carries.
     expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({
       needsFullScan: true
     })

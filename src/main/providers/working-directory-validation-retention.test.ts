@@ -6,9 +6,6 @@ const { stat } = vi.hoisted(() => ({
 }))
 vi.mock('node:fs/promises', () => ({ stat }))
 vi.mock('../wsl', () => ({
-  wslUncDirectoryExists: () => {
-    throw new Error('Unexpected WSL probe')
-  },
   wslUncDirectoryExistsAsync: () => {
     throw new Error('Unexpected WSL probe')
   }

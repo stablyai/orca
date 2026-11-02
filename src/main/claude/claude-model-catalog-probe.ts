@@ -1,81 +1,288 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
+import {
+  buildClaudeModelListArgs,
+  CLAUDE_MODEL_LIST_STDIN
+} from '../../shared/claude-model-list-probe'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
+import {
+  isCompleteClaudeModelListing,
+  listedModels,
+  record
+} from './structured/launch/claude-structured-model-catalog'
+import {
+  claudeFastModeSupport,
+  wireClaudeModels
+} from './structured/launch/claude-structured-catalog-listing'
+import { readClaudeSettingsApplied } from './structured/launch/claude-structured-session-options'
+import { readClaudeControlResponses } from './claude-control-responses'
+import { claudeStructuredLaunchArgs } from './structured/launch/claude-structured-launch-args'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
-import { discoverModelsLocal } from '../text-generation/commit-message-model-discovery'
-import { commandBackslashMode } from '../text-generation/commit-message-text-generation'
-import { spawnSourceControlAgent } from '../text-generation/source-control-agent-launch'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import {
+  CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,
-  type ClaudeStructuredLaunchResolverDeps
-} from './claude-structured-launch-resolution'
+  type ClaudeStructuredLaunchPartDeps
+} from './structured/launch/claude-structured-launch-resolution'
+import {
+  resolveClaudeChildEnvSources,
+  type ClaudeEnvDeps
+} from './structured/launch/claude-structured-child-env'
 import type {
   AgentModelCatalogProbe,
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { AgentModelCatalogLookup } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
+import {
+  AgentModelCatalogProbeError,
+  runAgentModelCatalogListing
+} from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 
-export type ClaudeModelCatalogProbeDeps = Pick<
-  ClaudeStructuredLaunchResolverDeps,
-  'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
-> & {
-  authSwitchSettleTimeoutMs?: number
-  /** Test seams; production runs the one-shot listing child. */
-  discover?: typeof discoverModelsLocal
-  spawnAgent?: typeof spawnSourceControlAgent
+export type ClaudeModelCatalogProbeDeps = ClaudeEnvDeps &
+  Pick<ClaudeStructuredLaunchPartDeps, 'resolveAuthPolicy'> & {
+    /** Existing captured environment only: saved preference reads never recover a missing CLI. */
+    resolveSavedEnvironment?: () => Promise<Record<string, string>>
+    resolveLaunchArgs?: () => Promise<string[]> | string[]
+    /** Test seam; production runs the shared supervised listing. */
+    runListing?: typeof runAgentModelCatalogListing
+  }
+
+// Use the session's binary, environment and account for one-shot control requests.
+export async function runClaudeListing(
+  deps: ClaudeModelCatalogProbeDeps,
+  request: {
+    accountHomePath: string
+    stdin: string
+    site: string
+    cwd?: string
+    signal?: AbortSignal
+    isCurrent?: () => boolean
+  }
+): Promise<string> {
+  // Explicitly pinning the default directory changes the CLI's Keychain identity.
+  const { command, prefixArgs, env } = await waitForPromiseWithSignal(
+    resolveClaudeStructuredInvocation({ ...deps, signal: request.signal }, (base) => ({
+      ...base,
+      ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
+    })),
+    request.signal
+  )
+  const run = (args: readonly string[]) => {
+    request.signal?.throwIfAborted()
+    if (request.isCurrent && !request.isCurrent()) {
+      throw new Error('Listing context retired')
+    }
+    return (deps.runListing ?? runAgentModelCatalogListing)(
+      {
+        command,
+        args: [...prefixArgs, ...args],
+        stdin: request.stdin,
+        ...(request.cwd ? { cwd: request.cwd } : {})
+      },
+      { site: request.site, inheritedEnv: env, signal: request.signal }
+    )
+  }
+  const result = await runClaudeBackgroundAttempts({
+    agentId: 'claude',
+    run: (strictMcp) =>
+      run(buildClaudeModelListArgs(strictMcp)).catch((error: unknown) => {
+        if (error instanceof AgentModelCatalogProbeError) {
+          return error
+        }
+        throw error
+      }),
+    failedExit: (outcome) =>
+      outcome instanceof AgentModelCatalogProbeError && outcome.reason === 'exit'
+        ? outcome.failedExit
+        : undefined
+  })
+  if (result instanceof AgentModelCatalogProbeError) {
+    throw result
+  }
+  return result
 }
 
-/**
- * Lists models without a live session, through the existing one-shot CLI
- * listing — but under the SAME binary and environment the structured session
- * launch resolves, so a probe can never list under a different install or
- * shell env than the sessions it stands in for.
- */
+// List models and settings with the same resolved executable, environment and account as sessions.
 export function createClaudeModelCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
-  return async (accountHomePath: string): Promise<AgentModelCatalogSuccess> => {
-    // Same pin rule as the session spawn: naming the CLI's default dir would move
-    // it off the default Keychain item and list under another identity.
-    const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
-      ...base,
-      ...claudeConfigDirEnvPatch(accountHomePath, { env: base })
-    }))
-    const result = await (deps.discover ?? discoverModelsLocal)({
-      agentId: 'claude',
-      binary: command,
-      env,
-      options: {},
-      backslash: commandBackslashMode({ kind: 'local', cwd: '' }),
-      // The resolved absolute command replaces the plan's bare binary directly:
-      // routing it through the command-override template would re-tokenize a
-      // path that may contain spaces.
-      spawnAgent: (input) =>
-        (deps.spawnAgent ?? spawnSourceControlAgent)({ ...input, binary: command })
-    })
-    if (!result.success && result.unavailable) {
-      throw new AgentModelCatalogUnavailableError(result.unavailable)
+  const resolve = async (
+    accountHome: Parameters<AgentModelCatalogProbe>[0],
+    cwd?: string,
+    lookup: AgentModelCatalogLookup = 'recover',
+    operation?: StructuredAgentResolutionOperation
+  ) => {
+    assertStructuredAgentResolutionCurrent(operation)
+    const configuredArgs = claudeStructuredLaunchArgs(
+      cwd ? ((await deps.resolveLaunchArgs?.()) ?? []) : []
+    )
+    assertStructuredAgentResolutionCurrent(operation)
+    const userArgs = [
+      ...Object.entries(configuredArgs.extraArgs).flatMap(([key, value]) =>
+        value === null ? [`--${key}`] : [`--${key}`, value]
+      ),
+      ...configuredArgs.additionalDirectories.flatMap((directory) => ['--add-dir', directory])
+    ]
+    const argsFor = (strictMcp: boolean) => [
+      ...buildClaudeModelListArgs(strictMcp, userArgs),
+      ...(cwd ? ['--setting-sources', CLAUDE_DEFAULT_SETTING_SOURCES.join(',')] : []),
+      ...userArgs
+    ]
+    const args = argsFor(true)
+    const launchDeps = {
+      ...deps,
+      operation,
+      ...(lookup === 'saved' ? { resolveInheritedEnv: deps.resolveSavedEnvironment } : {}),
+      ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
+      ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
     }
-    // The spec's static fallback must never pass as a listing: Claude's real
-    // list replaces the seed, so only a probe-origin answer is a catalog.
-    if (!result.success || result.catalogOrigin !== 'probe' || result.models.length === 0) {
-      throw new Error(result.success ? 'claude listed no models' : result.error)
-    }
+    const sources = await resolveClaudeChildEnvSources(launchDeps)
+    assertStructuredAgentResolutionCurrent(operation)
+    const { command, prefixArgs, env, account } = await resolveClaudeStructuredInvocation(
+      launchDeps,
+      (base) => ({
+        ...base,
+        ...claudeConfigDirEnvPatch(requireLegacyAgentSessionAccountHome(accountHome).path, {
+          env: base
+        })
+      }),
+      sources
+    )
+    assertStructuredAgentResolutionCurrent(operation)
     return {
-      models: result.models.map((model) => ({
-        id: model.id,
-        label: model.label,
-        ...(model.description ? { description: model.description } : {}),
-        isDefault: model.isDefault === true,
-        // No defaultEffort: the listing's thinking default is the commit-message generator's
-        // choice, not the effort Claude runs; the store keeps the one a live child reported.
-        efforts: (model.thinkingLevels ?? []).map((level) => ({
-          value: level.id,
-          label: level.label
-        })),
-        ...(model.supportsFastMode !== undefined
-          ? { supportsFastMode: model.supportsFastMode }
-          : {})
-      })),
-      fastModeTierByModel: new Map(),
-      origin: 'probe'
+      identity: {
+        command,
+        prefixArgs,
+        args,
+        cwd,
+        overlay: Object.entries(sources.overlay ?? {}).sort()
+      },
+      run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
+        assertStructuredAgentResolutionCurrent(operation)
+        signal?.throwIfAborted()
+        const outcome = await runClaudeBackgroundAttempts({
+          agentId: 'claude',
+          run: (strictMcp) => {
+            assertStructuredAgentResolutionCurrent(operation)
+            signal?.throwIfAborted()
+            return (deps.runListing ?? runAgentModelCatalogListing)(
+              {
+                command,
+                args: [...prefixArgs, ...argsFor(strictMcp)],
+                ...(cwd ? { cwd } : {}),
+                stdin: `${CLAUDE_MODEL_LIST_STDIN}${JSON.stringify({ type: 'control_request', request_id: 'orca-model-settings', request: { subtype: 'get_settings' } })}\n${JSON.stringify({ type: 'control_request', request_id: 'orca-signin-discovery', request: { subtype: 'initialize' } })}\n`
+              },
+              {
+                site: 'claude-model-catalog-probe',
+                inheritedEnv: env,
+                signal,
+                partialOutput: {
+                  timeoutMs: 2_000,
+                  ready: (stdout) => {
+                    const replies = readClaudeControlResponses(stdout)
+                    return (
+                      listedModels(replies.get('orca-model-discovery')).length > 0 &&
+                      replies.has('orca-model-settings')
+                    )
+                  }
+                }
+              }
+            ).catch((error: unknown) => {
+              if (error instanceof AgentModelCatalogProbeError) {
+                return error
+              }
+              throw error
+            })
+          },
+          failedExit: (outcome) =>
+            outcome instanceof AgentModelCatalogProbeError && outcome.reason === 'exit'
+              ? outcome.failedExit
+              : undefined
+        })
+        if (outcome instanceof AgentModelCatalogProbeError) {
+          if (outcome.executableMissing) {
+            throw new AgentModelCatalogUnavailableError({ reason: 'cliMissing' })
+          }
+          throw outcome
+        }
+        const stdout = outcome
+        const replies = readClaudeControlResponses(stdout)
+        const listing = replies.get('orca-model-discovery')
+        const models = listedModels(listing)
+        const settings = replies.get('orca-model-settings')
+        const applied = record(record(settings)?.applied)
+        const configured =
+          applied &&
+          ['model', 'effort'].every(
+            (key) => applied[key] == null || typeof applied[key] === 'string'
+          )
+            ? (readClaudeSettingsApplied(settings) ?? undefined)
+            : undefined
+        if (models.length === 0) {
+          throw new Error('claude listed no models')
+        }
+        const fastModeSupport = claudeFastModeSupport(models)
+        return {
+          models: wireClaudeModels(models),
+          origin: 'probe',
+          complete: isCompleteClaudeModelListing(listing) && configured !== undefined,
+          ...(fastModeSupport ? { fastModeSupport } : {}),
+          ...(configured ? { configured } : {}),
+          ...(claudeCatalogSignedOut(replies.get('orca-signin-discovery'), settings, env)
+            ? { unavailable: { reason: 'notSignedIn', account } }
+            : {})
+        }
+      }
     }
   }
+  return Object.assign<
+    AgentModelCatalogProbe,
+    Pick<AgentModelCatalogProbe, 'resolve' | 'resolveLegacy'>
+  >(
+    async (home, options) =>
+      (
+        await resolve(
+          home,
+          options?.cwd ?? options?.workspacePath ?? process.cwd(),
+          'recover',
+          options?.operation
+        )
+      ).run(options?.signal),
+    { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
+  )
+}
+
+function claudeCatalogSignedOut(
+  initialization: unknown,
+  settings: unknown,
+  env: Readonly<Record<string, string>>
+): boolean {
+  const account = record(record(initialization)?.account)
+  const effective = record(record(settings)?.effective)
+  if (
+    !account ||
+    !effective ||
+    account.tokenSource !== 'none' ||
+    (account.apiProvider !== undefined && account.apiProvider !== 'firstParty') ||
+    (account.apiKeySource && account.apiKeySource !== 'none') ||
+    account.email ||
+    account.subscriptionType
+  ) {
+    return false
+  }
+  const configuredEnv = record(effective.env)
+  const endpoint = configuredEnv?.ANTHROPIC_BASE_URL ?? env.ANTHROPIC_BASE_URL
+  if (typeof endpoint === 'string' && endpoint.trim()) {
+    try {
+      const url = new URL(endpoint)
+      return url.protocol === 'https:' && url.hostname === 'api.anthropic.com'
+    } catch {
+      return false
+    }
+  }
+  return true
 }

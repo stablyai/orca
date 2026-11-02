@@ -114,9 +114,9 @@ async function updateAdmittedEnabledOnDisk(enabled: boolean): Promise<{
 }
 
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
-  const status = await client.getCliStatus()
-  if (!status.result.runtime.reachable) {
-    if (status.result.app.running) {
+  const status = await client.getOfflineRuntimeAdmission()
+  if (!status.reachable) {
+    if (status.legacyPidRunning) {
       throw new RuntimeClientError(
         'runtime_error',
         'Orca is running but unavailable. Retry when it responds, or stop Orca before changing agent hooks offline.'
@@ -140,7 +140,7 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 }
 
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
-  // Why the path: it names the home a status reports on, which the CLI's process may not share with the app's panes.
+  // The CLI and app panes may use different homes; identify the one this status describes.
   const statusSummary = result.statuses
     .map(
       (status) =>
@@ -181,7 +181,7 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks prepare-codex': async ({ client, flags }) => {
     rejectRemoteHookSelection(flags)
     if (!process.env.WSL_DISTRO_NAME?.trim()) {
-      // Why a no-op: native pane wrappers from builds up to v1.4.216 still call it; delete once no supported build's wrapper does.
+      // Native wrappers through v1.4.216 still call this; retain the no-op until they are unsupported.
       return
     }
     try {

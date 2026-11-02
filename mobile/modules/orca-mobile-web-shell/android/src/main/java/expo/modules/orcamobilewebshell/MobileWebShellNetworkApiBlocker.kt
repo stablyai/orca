@@ -5,13 +5,9 @@ import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 
-/**
- * CSP is the fence for fetch and XMLHttpRequest. This script exists only for the two things the
- * native layer is never shown: a WebSocket handshake, which neither `blockNetworkLoads` nor
- * `shouldInterceptRequest` sees, and a service worker registration, whose only native control is
- * process-global and would reconfigure the app's other WebViews. Kept in step with the iOS copy.
- * `configurable: false` with `writable: false` is the only property shape the page cannot put back.
- */
+/** CSP fences fetch/XHR; document-start script blocks unobservable WebSocket handshakes and
+ * service workers whose native switch is process-global. Keep iOS in sync; both non-configurable
+ * and non-writable are needed to prevent page replacement. */
 internal val MOBILE_WEB_SHELL_NETWORK_API_BLOCKER = """
   (function(){
   var deny=function(){throw new TypeError('Network access is disabled')};
@@ -21,10 +17,7 @@ internal val MOBILE_WEB_SHELL_NETWORK_API_BLOCKER = """
   })();
 """.trimIndent()
 
-/**
- * Null when the WebView provider is older than the document-start script feature (Chromium 83).
- * The feature query is the capability; a version string is not, so nothing here parses one.
- */
+/** Query document-start-script capability (Chromium 83 floor), not version strings. */
 internal fun installMobileWebShellNetworkApiBlocker(
   webView: WebView,
   allowedOrigin: String

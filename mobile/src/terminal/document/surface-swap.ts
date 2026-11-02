@@ -3,7 +3,6 @@ import { disposeTermObservers } from './write-queue'
 import { attachSurfaceEventHandlers } from './surface-touch-gestures'
 import type { TerminalDocumentScope, TerminalDocumentTerminal } from './document-scope'
 
-/** The surfaces and terminal a swap is replacing, handed back to whoever commits it. */
 export type TerminalSurfaceSwap = {
   oldTerm: TerminalDocumentTerminal | null
   oldSurface: HTMLElement | null
@@ -11,8 +10,7 @@ export type TerminalSurfaceSwap = {
 }
 
 export function beginTerminalSurfaceSwap(scope: TerminalDocumentScope) {
-  // Why: a superseded hidden replacement must not remain between the last
-  // painted surface and the newest one, or the newest commits below the viewport.
+  // Remove superseded hidden surfaces so the newest replacement cannot commit below the viewport.
   if (scope.pendingSurface) {
     try {
       scope.pendingSurface.remove()
@@ -24,6 +22,7 @@ export function beginTerminalSurfaceSwap(scope: TerminalDocumentScope) {
     }
     scope.pendingSurface = null
     scope.pendingTerm = null
+    scope.term = scope.committedTerm
   }
   const swap = {
     oldTerm: scope.committedTerm,
@@ -63,9 +62,7 @@ export function commitTerminalSurfaceSwap(
   scope.pendingSurface = null
 }
 
-// Why: phone-fit startup can issue several init() calls before xterm finishes replaying, so the
-// last painted surface is tracked apart from its replacement — on the scope (ruling 21), because
-// the page mounts this module more than once and a second mount must not inherit the first's.
+// Startup may overlap replays; track the last painted surface separately from its hidden replacement per document.
 export function startSurfaceSwap(scope: TerminalDocumentScope) {
   scope.surface = elementInRoot(scope.root, 'terminal-surface')
   scope.committedSurface = scope.surface

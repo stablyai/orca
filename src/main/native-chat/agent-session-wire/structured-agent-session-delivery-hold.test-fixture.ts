@@ -1,13 +1,8 @@
-// Ways a test holds a session's work at a chosen step, so a Stop or close asked for meanwhile runs
-// in a known order against the delivery loop's handover.
-
 import { vi } from 'vitest'
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
-/** Holds the delivery loop's next step as it begins, inside the session's lane, until `release`:
- *  a Stop or close asked for meanwhile runs ahead of the handover. `held` resolves once the step
- *  has reached the hold. */
+/** Hold preparation so Stop/close queues before handover; held confirms the gate was reached. */
 export function holdDelivery(): { held: Promise<void>; release: () => void } {
   const gate = Promise.withResolvers<void>()
   const reached = Promise.withResolvers<void>()
@@ -28,8 +23,7 @@ export function holdDelivery(): { held: Promise<void>; release: () => void } {
   return { held: reached.promise, release: () => gate.resolve() }
 }
 
-/** Holds the session's lane until the returned release: whatever is asked for meanwhile runs in
- *  the order it was asked, ahead of a handover the delivery loop asks for after it. */
+/** Hold serialization so intervening operations queue before delivery handover. */
 export function holdLane(host: StructuredAgentSessionHost, sessionId: string): () => void {
   const held = Promise.withResolvers<void>()
   void host['tasks'].serialize(sessionId, () => held.promise)

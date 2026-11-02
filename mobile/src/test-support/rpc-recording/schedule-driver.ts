@@ -57,7 +57,6 @@ export function siblingSchedules(
   }))
 }
 
-/** Completions are rebound so a lifecycle boundary can land between a request and its reply. */
 export function bindCompletions(steps: readonly ScenarioStep[]): ScenarioStep[] {
   return steps.flatMap((step): ScenarioStep[] =>
     'complete' in step

@@ -1,21 +1,9 @@
 import type { Automation, AutomationExecutionTargetType } from './automations-types'
+import type { Repo } from './repo-types'
+import { getRepoSshConnectionId } from './execution-host'
 import type { AutomationWorkspaceSshPin } from './automation-workspace-pin'
 
-/**
- * Decides which execution target an automation is stored against.
- *
- * The old rule (`repo?.connectionId ? 'ssh' : 'local'`) silently wrote the
- * literal `local` whenever the repo lookup missed, so deleting a project turned
- * an SSH automation into a local one that would then run on the wrong host.
- * Both paths now fail closed instead: create refuses an unresolvable project,
- * and update preserves the stored selector unless the caller explicitly asked
- * to move the record to a project that does resolve.
- *
- * A `local` record whose folder workspace pins it to an SSH host captures that
- * registration's generation too. Without a capture, `captured ?? current` always
- * reads the *current* generation, so a host removed and re-added under the same
- * id can never be told from the one the user chose.
- */
+/** Fail closed when project resolution misses: create refuses; update retains the target unless explicitly moved. Capture SSH registration generations even through local folder-workspace pins so same-ID re-registration cannot impersonate the chosen host. */
 
 export type AutomationExecutionTargetSelection = {
   executionTargetType: AutomationExecutionTargetType
@@ -23,7 +11,7 @@ export type AutomationExecutionTargetSelection = {
   executionTargetGeneration?: number
 }
 
-export type AutomationExecutionTargetRepo = { connectionId?: string | null }
+export type AutomationExecutionTargetRepo = Pick<Repo, 'connectionId' | 'executionHostId'>
 
 export type AutomationStoredExecutionTarget = Pick<
   Automation,
@@ -48,7 +36,7 @@ function selectionForRepo(
   sshTargetGeneration: number | undefined,
   workspaceSshPin: AutomationWorkspaceSshPin | undefined
 ): AutomationExecutionTargetSelection {
-  const connectionId = repo.connectionId?.trim()
+  const connectionId = getRepoSshConnectionId(repo)
   if (!connectionId) {
     // A pinned workspace is the record's real host, so the local target captures its generation.
     return withGeneration(
@@ -62,15 +50,7 @@ function selectionForRepo(
   )
 }
 
-/**
- * Apply a derived selection, clearing a stale generation when the record moves
- * off SSH.
- *
- * `retainedWorkspaceSshPin` is the pin the record keeps across the move. Its
- * capture is evidence of one registration incarnation and survives even when the
- * pinned target is currently unregistered — dropping it there would let a later
- * same-id registration read as the host the user chose.
- */
+/** Clear stale generation when moving off SSH, but retain workspace-pin evidence even if currently unregistered; otherwise same-ID re-registration impersonates the chosen host. */
 export function applyAutomationExecutionTarget<T extends AutomationStoredExecutionTarget>(
   record: T,
   selection: AutomationExecutionTargetSelection,
@@ -95,15 +75,7 @@ export function deriveAutomationExecutionTargetForCreate(input: {
   return selectionForRepo(input.repo, input.sshTargetGeneration, input.workspaceSshPin)
 }
 
-/**
- * Update re-derives only when the caller asked to move the record, and then
- * fails closed on an unresolvable project.
- *
- * A resolved repo is not a request to move: re-deriving from it re-adopts an
- * orphan onto whatever registration that repo points at today — which pause,
- * still enabled on orphans, would silently do — and strips a captured
- * generation whenever the current target has none.
- */
+/** Re-derive only on explicit moves and refuse unresolved projects. Resolving a repo alone cannot re-adopt orphans onto current registrations or erase captured generations during pause. */
 export function deriveAutomationExecutionTargetForUpdate(input: {
   current: AutomationStoredExecutionTarget
   repo: AutomationExecutionTargetRepo | undefined

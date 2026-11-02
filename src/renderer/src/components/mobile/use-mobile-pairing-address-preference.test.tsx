@@ -52,8 +52,6 @@ afterEach(() => cleanup())
 
 describe('useMobilePairingAddressPreference', () => {
   it('does not invalidate the offer on the first address resolution', () => {
-    // Why: the renderer's first pick matches the default main already minted
-    // with, so invalidating there would drop a QR that is still correct.
     const { result, onSelectionInvalidated } = renderPreference()
 
     act(() => result.current.selectAddressAfterRefresh([LAN]))

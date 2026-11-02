@@ -34,22 +34,4 @@ describe('worktree operation generation', () => {
       )
     ).toThrow('owner changed')
   })
-
-  it('uses the default route resolver when no provenance resolver is provided', () => {
-    const state = {
-      repos: [{ id: 'repo', connectionId: null, executionHostId: 'local' as const }],
-      worktreesByRepo: {
-        repo: [{ id: WORKTREE_ID, repoId: 'repo', hostId: 'local' as const }]
-      }
-    }
-
-    expect(
-      assertWorktreeOperationGenerationSnapshotCurrent(
-        () => state,
-        WORKTREE_ID,
-        captureWorktreeOperationGenerationSnapshot(LOCAL_ROUTE),
-        () => new Error('owner changed')
-      )
-    ).toEqual(LOCAL_ROUTE)
-  })
 })

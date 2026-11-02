@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { realpathSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { join } from 'node:path'
@@ -15,16 +16,9 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
-// STA-4422 regression: a transient lstat failure on the ownership marker
-// (Windows AV/indexer EPERM/EBUSY) must NOT deselect the managed account. The
-// poll skips instead, and the selection survives — before the fix one fault
-// cleared it permanently.
-
 const lstatFaults = vi.hoisted(() => {
   const state = {
-    /** path -> remaining injected EPERM failures */
     pending: new Map<string, number>(),
-    /** paths that fail on EVERY read until released (models a held AV lock) */
     held: new Set<string>(),
     failOnce(path: string): void {
       state.pending.set(path, (state.pending.get(path) ?? 0) + 1)
@@ -92,9 +86,10 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -132,24 +127,19 @@ describe('STA-4422 Codex sessions keep logging out', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
-    // Anchor: a healthy poll resolves the managed home and touches nothing.
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: managedHomePath
     })
     expect(store.updateSettings).not.toHaveBeenCalled()
 
-    // Hold the marker for the whole window, the way an AV scan does. A
-    // single-shot fault would be too weak: it could be masked by any future
-    // retry and would green-light an unimplemented fix.
+    // Hold the lock across retries so a one-shot fault cannot hide an unsafe fallback.
     const markerPath = join(realpathSync(managedHomePath), '.orca-managed-home')
     lstatFaults.hold(markerPath)
 
     const duringLock = service.prepareForRateLimitFetch()
 
-    // The fault really was consumed by the code under test.
     expect(lstatFaults.heldReads(markerPath)).toBeGreaterThan(0)
-    // THE FIX: skip the poll rather than retargeting the user's real ~/.codex.
     expect(duringLock).toEqual({ kind: 'skip' })
     expect(
       service.resolveCodexManagedAccountHomeForInactiveFetch(
@@ -157,17 +147,14 @@ describe('STA-4422 Codex sessions keep logging out', () => {
       )
     ).toEqual({ kind: 'skip' })
     expect(duringLock).not.toEqual({ kind: 'ready', codexHomePath: getSystemCodexHomePath() })
-    // THE FIX: the selection survives, and nothing was persisted.
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
     expect(store.getSettings().activeCodexManagedAccountIdsByRuntime?.host).toBe('account-1')
     expect(store.updateSettings).not.toHaveBeenCalled()
 
-    // Repeated evaluation must not accumulate into a destructive verdict.
     expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
     expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
     expect(store.updateSettings).not.toHaveBeenCalled()
 
-    // Recovery is automatic: the next readable poll resolves normally.
     lstatFaults.release(markerPath)
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
@@ -189,7 +176,6 @@ describe('STA-4422 Codex sessions keep logging out', () => {
       'account-1',
       createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
     )
-    // A proven trust failure: the marker names a different account.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), 'someone-else\n', 'utf-8')
     const store = createStore(
       createSettings({
@@ -204,8 +190,6 @@ describe('STA-4422 Codex sessions keep logging out', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
-    // Why this case matters: the fix must not make the gate toothless. A
-    // successful observation that fails a trust check still deselects.
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()

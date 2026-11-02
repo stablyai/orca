@@ -53,9 +53,8 @@ function isOptionalPackageImport(artifactRoot, importer, specifier) {
   if (specifier.startsWith('.') || isAbsolute(specifier)) {
     return false
   }
-  const segments = specifier.split('/')
-  const packageName = specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0]
-  let directory = realpathSync(dirname(importer))
+  const packageName = bareSpecifierPackage(specifier)
+  let directory = dirname(importer)
 
   while (!isOutsideRoot(artifactRoot, directory)) {
     const packageJson = join(directory, 'package.json')
@@ -78,13 +77,45 @@ function isOptionalPackageImport(artifactRoot, importer, specifier) {
   return false
 }
 
+function bareSpecifierPackage(specifier) {
+  const segments = specifier.split('/')
+  return specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0]
+}
+
+// Accept external realpath only via actual in-root node_modules link: global pnpm store lives outside artifact while dependency remains shipped.
+function linkedPathInsideRoot(artifactRoot, importer, specifier, resolved) {
+  const isBare = !specifier.startsWith('.') && !isAbsolute(specifier)
+  let directory = dirname(importer)
+  while (!isOutsideRoot(artifactRoot, directory)) {
+    // Bare import crosses node_modules link; relative import crosses linked package directory.
+    const candidates = isBare
+      ? [join(directory, 'node_modules', bareSpecifierPackage(specifier)), directory]
+      : [directory]
+    for (const candidate of candidates) {
+      if (!existsSync(candidate)) {
+        continue
+      }
+      const physical = realpathSync(candidate)
+      if (physical !== candidate && !isOutsideRoot(physical, resolved)) {
+        return join(candidate, relative(physical, resolved))
+      }
+    }
+    if (directory === artifactRoot) {
+      break
+    }
+    directory = dirname(directory)
+  }
+  return null
+}
+
 function resolveRuntimeImport(outDir, artifactRoot, importer, specifier) {
   if (BUILTINS.has(specifier) || isBuiltin(specifier)) {
     return null
   }
   let resolved
   try {
-    resolved = createRequire(importer).resolve(specifier)
+    // Why physical: Node resolves from the realpath, so a store-linked importer must not see the artifact's own node_modules.
+    resolved = createRequire(realpathSync(importer)).resolve(specifier)
   } catch (error) {
     if (isOptionalPackageImport(artifactRoot, importer, specifier)) {
       return null
@@ -96,6 +127,10 @@ function resolveRuntimeImport(outDir, artifactRoot, importer, specifier) {
     )
   }
   if (isOutsideRoot(artifactRoot, resolved)) {
+    const linked = linkedPathInsideRoot(artifactRoot, importer, specifier, resolved)
+    if (linked !== null) {
+      return linked
+    }
     throw new Error(
       `[verify-skills-cli-runtime] import "${specifier}" from ` +
         `${artifactPath(outDir, importer)} resolved outside ${artifactRoot}: ${resolved}`

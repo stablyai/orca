@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { Badge } from '../ui/badge'
@@ -7,19 +7,30 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 
+type CredentialStatus = boolean | 'loading' | 'unavailable'
+
+/** Keeps late initial reads from replacing a completed credential mutation. */
 export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): React.JSX.Element {
   const [draft, setDraft] = useState('')
-  const [configured, setConfigured] = useState(false)
+  const [credentialStatus, setCredentialStatus] = useState<CredentialStatus>('loading')
   const [busy, setBusy] = useState(false)
+  const statusReadGeneration = useRef(0)
+  const configured = credentialStatus === true
   useEffect(() => {
     let active = true
+    const generation = statusReadGeneration.current
     void window.api.opencodeGoCredentials.getStatus().then(
       (status) => {
-        if (active) {
-          setConfigured(status.apiKeyConfigured)
+        if (active && generation === statusReadGeneration.current) {
+          setCredentialStatus(status.apiKeyConfigured)
         }
       },
-      () => console.error('Failed to load OpenCode Go credential status')
+      () => {
+        if (active && generation === statusReadGeneration.current) {
+          setCredentialStatus('unavailable')
+        }
+        console.error('Failed to load OpenCode Go credential status')
+      }
     )
     return () => {
       active = false
@@ -32,7 +43,8 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
       const status = clear
         ? await window.api.opencodeGoCredentials.clearApiKey()
         : await window.api.opencodeGoCredentials.saveApiKey(draft.trim())
-      setConfigured(status.apiKeyConfigured)
+      statusReadGeneration.current += 1
+      setCredentialStatus(status.apiKeyConfigured)
       setDraft('')
       onSaved()
     } catch {
@@ -63,9 +75,19 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
           )}
         </Label>
         <Badge variant={configured ? 'secondary' : 'outline'}>
-          {configured
-            ? translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
-            : translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
+          {credentialStatus === 'loading'
+            ? translate(
+                'auto.components.settings.AccountsPane.opencodeGo.apiKey.checking',
+                'Checking…'
+              )
+            : credentialStatus === 'unavailable'
+              ? translate(
+                  'auto.components.settings.AccountsPane.opencodeGo.apiKey.unavailable',
+                  'Status unavailable'
+                )
+              : configured
+                ? translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
+                : translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
         </Badge>
       </div>
       <div className="flex gap-2">

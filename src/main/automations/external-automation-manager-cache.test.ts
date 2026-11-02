@@ -10,7 +10,7 @@ import type { ExternalAutomationManager } from '../../shared/automations-types'
 function manager(id: string): ExternalAutomationManager {
   return {
     id,
-    provider: 'hermes',
+    provider: 'openclaw',
     label: id,
     targetLabel: 'this computer',
     target: { type: 'local' },
@@ -29,69 +29,68 @@ describe('ExternalAutomationManagerCache', () => {
     const cache = new ExternalAutomationManagerCache()
 
     for (let index = 0; index < MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES + 4; index += 1) {
-      cache.write({ ownerKey: `owner-${index}`, provider: 'hermes' }, null)
+      cache.write({ ownerKey: `owner-${index}`, provider: 'openclaw' }, null)
     }
 
     expect(cache.size).toBe(MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES)
   })
 
-  it('keys entries per owner and per provider', () => {
+  it('keeps each owner’s manager and failure separate', () => {
     const cache = new ExternalAutomationManagerCache()
+    const failedOwner = 'owner:desktop:ssh:target-b:1'
 
-    cache.write({ ownerKey: selfOwner, provider: 'hermes' }, manager('hermes:local'))
-    cache.writeFailure({ ownerKey: selfOwner, provider: 'openclaw' }, new Error('no openclaw'))
-    cache.write({ ownerKey: sshOwner, provider: 'hermes' }, manager('hermes:ssh:target-a'))
+    cache.write({ ownerKey: selfOwner, provider: 'openclaw' }, manager('openclaw:local'))
+    cache.writeFailure({ ownerKey: failedOwner, provider: 'openclaw' }, new Error('no openclaw'))
+    cache.write({ ownerKey: sshOwner, provider: 'openclaw' }, manager('openclaw:ssh:target-a'))
 
-    expect(cache.read({ ownerKey: selfOwner, provider: 'hermes' })?.manager?.id).toBe(
-      'hermes:local'
+    expect(cache.read({ ownerKey: selfOwner, provider: 'openclaw' })?.manager?.id).toBe(
+      'openclaw:local'
     )
-    expect(cache.read({ ownerKey: selfOwner, provider: 'openclaw' })?.error).toBe('no openclaw')
-    expect(cache.read({ ownerKey: selfOwner, provider: 'hermes' })?.error).toBeNull()
-    expect(cache.read({ ownerKey: sshOwner, provider: 'hermes' })?.manager?.id).toBe(
-      'hermes:ssh:target-a'
+    expect(cache.read({ ownerKey: failedOwner, provider: 'openclaw' })?.error).toBe('no openclaw')
+    expect(cache.read({ ownerKey: selfOwner, provider: 'openclaw' })?.error).toBeNull()
+    expect(cache.read({ ownerKey: sshOwner, provider: 'openclaw' })?.manager?.id).toBe(
+      'openclaw:ssh:target-a'
     )
   })
 
   it('drops only the named host when a mutation invalidates it', () => {
     const cache = new ExternalAutomationManagerCache()
-    cache.write({ ownerKey: selfOwner, provider: 'hermes' }, manager('hermes:local'))
-    cache.write({ ownerKey: sshOwner, provider: 'hermes' }, manager('hermes:ssh:target-a'))
+    cache.write({ ownerKey: selfOwner, provider: 'openclaw' }, manager('openclaw:local'))
     cache.write({ ownerKey: sshOwner, provider: 'openclaw' }, manager('openclaw:ssh:target-a'))
 
     cache.invalidateOwner(sshOwner)
 
-    expect(cache.read({ ownerKey: selfOwner, provider: 'hermes' })).not.toBeNull()
-    expect(cache.read({ ownerKey: sshOwner, provider: 'hermes' })).toBeNull()
+    expect(cache.read({ ownerKey: selfOwner, provider: 'openclaw' })).not.toBeNull()
     expect(cache.read({ ownerKey: sshOwner, provider: 'openclaw' })).toBeNull()
   })
 
   it('treats an entry past its TTL as absent', () => {
     let now = 1_000
     const cache = new ExternalAutomationManagerCache({ ttlMs: 100, now: () => now })
-    cache.write({ ownerKey: selfOwner, provider: 'hermes' }, manager('hermes:local'))
+    cache.write({ ownerKey: selfOwner, provider: 'openclaw' }, manager('openclaw:local'))
 
     now += 100
-    expect(cache.read({ ownerKey: selfOwner, provider: 'hermes' })).not.toBeNull()
+    expect(cache.read({ ownerKey: selfOwner, provider: 'openclaw' })).not.toBeNull()
     now += 1
-    expect(cache.read({ ownerKey: selfOwner, provider: 'hermes' })).toBeNull()
+    expect(cache.read({ ownerKey: selfOwner, provider: 'openclaw' })).toBeNull()
   })
 
   it('prunes expired entries when the cache is accessed', () => {
     let now = 1_000
     const cache = new ExternalAutomationManagerCache({ ttlMs: 100, now: () => now })
     for (let index = 0; index < 10; index += 1) {
-      cache.write({ ownerKey: `owner-${index}`, provider: 'hermes' }, manager(String(index)))
+      cache.write({ ownerKey: `owner-${index}`, provider: 'openclaw' }, manager(String(index)))
     }
     now += 101
 
-    expect(cache.read({ ownerKey: 'unrelated', provider: 'hermes' })).toBeNull()
+    expect(cache.read({ ownerKey: 'unrelated', provider: 'openclaw' })).toBeNull()
     expect(cache.size).toBe(0)
   })
 
   it('serves a fresh entry without reloading, and reloads on refresh', async () => {
     const cache = new ExternalAutomationManagerCache()
-    const load = vi.fn(() => Promise.resolve(manager('hermes:local')))
-    const key = { ownerKey: selfOwner, provider: 'hermes' }
+    const load = vi.fn(() => Promise.resolve(manager('openclaw:local')))
+    const key = { ownerKey: selfOwner, provider: 'openclaw' }
 
     await cache.resolve(key, load)
     await cache.resolve(key, load)
@@ -104,7 +103,7 @@ describe('ExternalAutomationManagerCache', () => {
   it('records a load failure as error state rather than throwing', async () => {
     const cache = new ExternalAutomationManagerCache()
 
-    const entry = await cache.resolve({ ownerKey: sshOwner, provider: 'hermes' }, () =>
+    const entry = await cache.resolve({ ownerKey: sshOwner, provider: 'openclaw' }, () =>
       Promise.reject(new Error('relay refused'))
     )
 
@@ -114,15 +113,15 @@ describe('ExternalAutomationManagerCache', () => {
 
   it('propagates cancellation and leaves the previous entry untouched', async () => {
     const cache = new ExternalAutomationManagerCache()
-    const key = { ownerKey: sshOwner, provider: 'hermes' }
-    cache.write(key, manager('hermes:ssh:target-a'))
+    const key = { ownerKey: sshOwner, provider: 'openclaw' }
+    cache.write(key, manager('openclaw:ssh:target-a'))
 
     await expect(
       cache.resolve(key, () => Promise.reject(new ExternalAutomationProbeCancelledError()), {
         refresh: true
       })
     ).rejects.toBeInstanceOf(ExternalAutomationProbeCancelledError)
-    expect(cache.read(key)?.manager?.id).toBe('hermes:ssh:target-a')
+    expect(cache.read(key)?.manager?.id).toBe('openclaw:ssh:target-a')
   })
 })
 

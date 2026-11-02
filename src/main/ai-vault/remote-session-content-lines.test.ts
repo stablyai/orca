@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { remoteSessionContentLines } from './remote-session-content-lines'
 
-// Mirrors REMOTE_CONTENT_YIELD_CHAR_COUNT in the implementation.
 const YIELD_CHAR_COUNT = 256 * 1024
 
 async function collect(content: string, signal: AbortSignal): Promise<string[]> {

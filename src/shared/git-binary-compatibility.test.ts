@@ -1,21 +1,34 @@
-import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, unlink, utimes, writeFile } from 'node:fs/promises'
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  utimes,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { promisify } from 'node:util'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import * as gitRunner from '../main/git/runner'
+import { getRemoteFileUrl } from '../main/git/repo'
 import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
 } from './git-merge-tree-capability'
-import { isBranchCheckedOutInWorktreeError } from './git-branch-delete-refusal'
+import {
+  branchHasNoUnmergedChangesOnAnyTarget,
+  refreshBranchCleanupTargetRefs,
+  type GitBranchCleanupExec
+} from './git-branch-cleanup'
+import { GitCapabilityCache } from './git-capability-cache'
+import {
+  createGitObjectQuarantine,
+  GIT_OBJECT_QUARANTINE_DIR_PREFIX
+} from './git-object-quarantine'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
-import {
-  hasUnsupportedRevParsePathFormatEcho,
-  isUnsupportedWorktreeAddLockReasonError,
-  isUnsupportedWorktreeListZError
-} from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 import { buildGitGrepArgs } from './text-search'
 import { parseGitRemoteFetchUrls } from './git-remote-url-index'
@@ -25,23 +38,27 @@ import {
   gitlabMergeRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
 } from './review-head-tracking-ref'
-import { parseWorktreeList } from './git-worktree-porcelain-parser'
-import { fastForwardLocalBaseBranch } from './worktree/local-base-branch-fast-forward'
 import { gitChangeListArgs, parseGitChangeList } from './git-change-list'
 import { encodeGitPathspecs } from './git-pathspec-stdin'
-import { endSubprocessStdin } from './subprocess-stdin-write'
+import { GitBinaryTestFixture } from './git-binary.test-fixture'
+import { registerGitRepositoryRegistrationBinaryCompatibilityCase } from './git-repository-registration-binary-compatibility.test-cases'
+import { registerGitLocalBaseBranchBinaryCompatibilityCase } from './git-local-base-branch-binary-compatibility.test-cases'
 import { registerGitResolutionBinaryCompatibilityCases } from './git-resolution-binary-compatibility.test-cases'
+import { registerGitWorktreeBinaryCompatibilityCases } from './git-worktree-binary-compatibility.test-cases'
+import { registerPluginGitDownloadBinaryCompatibilityCase } from './plugin-git-download-binary-compatibility.test-cases'
 
-const execFileAsync = promisify(execFile)
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
 const binary = process.env.ORCA_GIT_COMPAT_BINARY
 const expectedVersion = process.env.ORCA_GIT_COMPAT_VERSION
 const describeBinaryCompatibility = image || binary ? describe : describe.skip
+const PAIRS_REFS_TEST =
+  'pairs published, tracked and default refs with configured repositories, on the selected Git binary'
 
 type GitResult = { stdout: string; stderr: string }
 
 describeBinaryCompatibility('real Git binary compatibility', () => {
   let repoPath = ''
+  let fixture: GitBinaryTestFixture
   let version = { major: 0, minor: 0 }
 
   async function runGit(
@@ -49,53 +66,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     env?: NodeJS.ProcessEnv,
     stdin?: string
   ): Promise<GitResult> {
-    if (image) {
-      const dockerUser =
-        typeof process.getuid === 'function' && typeof process.getgid === 'function'
-          ? ['--user', `${process.getuid()}:${process.getgid()}`]
-          : []
-      const pending = execFileAsync(
-        'docker',
-        [
-          'run',
-          '--rm',
-          ...(stdin === undefined ? [] : ['-i']),
-          '--network=none',
-          ...dockerUser,
-          ...Object.entries(env ?? {}).flatMap(([key, value]) =>
-            value === undefined ? [] : ['--env', `${key}=${value}`]
-          ),
-          '-v',
-          `${repoPath}:/repo`,
-          '-w',
-          '/repo',
-          image,
-          '-c',
-          'safe.directory=/repo',
-          ...args
-        ],
-        { maxBuffer: 2 * 1024 * 1024 }
-      )
-      if (stdin !== undefined) {
-        endSubprocessStdin(pending.child.stdin, stdin)
-      }
-      return pending
-    }
-    const pending = execFileAsync(binary!, args, {
-      cwd: repoPath,
-      env: {
-        ...process.env,
-        HOME: repoPath,
-        XDG_CONFIG_HOME: repoPath,
-        GIT_CONFIG_NOSYSTEM: '1',
-        ...env
-      },
-      maxBuffer: 2 * 1024 * 1024
-    })
-    if (stdin !== undefined) {
-      endSubprocessStdin(pending.child.stdin, stdin)
-    }
-    return pending
+    return fixture.exec(args, fixture.executionRoot, env, stdin)
   }
 
   function supports(major: number, minor: number): boolean {
@@ -117,7 +88,9 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   }
 
   beforeAll(async () => {
-    repoPath = await mkdtemp(join(tmpdir(), 'orca-git-binary-compat-'))
+    repoPath = await realpath(await mkdtemp(join(tmpdir(), 'orca-git-binary-compat-')))
+    fixture = new GitBinaryTestFixture(repoPath, '/repo')
+    await fixture.start()
     const versionOutput = await runGit(['--version'])
     expect(versionOutput.stdout).toContain(`git version ${expectedVersion}`)
     const match = versionOutput.stdout.match(/git version (\d+)\.(\d+)/)
@@ -134,9 +107,161 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
 
   afterAll(async () => {
     if (repoPath) {
-      await rm(repoPath, { recursive: true, force: true })
+      try {
+        await fixture.stop()
+      } finally {
+        await rm(repoPath, { recursive: true, force: true })
+      }
     }
   })
+
+  // Each Git call is a docker exec: image runs take 22-25 s of a 30 s default, so loaded runners tripped it.
+  it(PAIRS_REFS_TEST, { timeout: image ? 90_000 : undefined }, async () => {
+    const root = join(repoPath, 'copy-url')
+    await mkdir(root)
+    const cwd = image ? '/repo/copy-url' : root
+    const git = (...args: string[]) => runGit(['-C', cwd, ...args])
+    let overflow = false
+    const exec = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockImplementation(async (args, options) => {
+        const result = await git(...args)
+        if (args[0] === 'for-each-ref' && !args.some((arg) => arg.startsWith('--contains='))) {
+          expect(Buffer.byteLength(result.stdout)).toBeLessThan(1024)
+        }
+        if (Buffer.byteLength(result.stdout) > (options?.maxBuffer ?? Infinity)) {
+          overflow = true
+          throw new Error('stdout exceeded maxBuffer')
+        }
+        return result
+      })
+    try {
+      const url = (ref: string | null, remote = 'origin', path = root) =>
+        expect(getRemoteFileUrl(path, 'a b.ts', 10, 20)).resolves.toBe(
+          ref === null
+            ? null
+            : `https://github.com/org/${remote}/blob/${encodeURIComponent(ref)}/a%20b.ts#L10-L20`
+        )
+      await url(null) // Non-Git folder.
+      await git('init', '-q')
+      await git('symbolic-ref', 'HEAD', 'refs/heads/main')
+      await git('config', 'user.name', 'Test')
+      await git('config', 'user.email', 'test@example.invalid')
+      await git('config', 'core.hooksPath', join(root, 'no-hooks'))
+      await git('remote', 'add', 'origin', 'https://github.com/org/origin.git')
+      await url(null) // Unborn.
+      await git('-c', 'commit.gpgSign=false', 'commit', '--allow-empty', '-qm', 'base')
+      const base = (await git('rev-parse', 'HEAD')).stdout.trim()
+      await git('update-ref', 'refs/remotes/origin/main', base)
+      await git('checkout', '-qb', 'feature/local')
+      await git('-c', 'commit.gpgSign=false', 'commit', '--allow-empty', '-qm', 'feature')
+      const head = (await git('rev-parse', 'HEAD')).stdout.trim()
+      await url('main')
+      const forkFetchConfig = 'remote.team/fork.x.fetch'
+      const publicationRef = 'refs/remotes/origin/published'
+      await git('remote', 'add', 'team/fork.x', 'https://github.com/org/team-fork.git')
+      for (const [mapping, destination] of [
+        ['+refs/heads/review-*:refs/cache/published-*', 'refs/cache/published-feature'],
+        ['+refs/heads/*:refs/c*end', 'refs/cache/team/feature-end']
+      ]) {
+        await git('config', forkFetchConfig, mapping)
+        await git('update-ref', destination, head)
+        await url(head, 'team-fork')
+        await git('update-ref', '-d', destination)
+      }
+      await git('config', forkFetchConfig, '+refs/heads/review/*:refs/hosting-cache/*')
+      await git('update-ref', 'refs/hosting-cache/topic', base)
+      await git('config', 'branch.feature/local.remote', 'team/fork.x')
+      await git('config', 'branch.feature/local.merge', 'refs/heads/review/topic')
+      await url('review/topic', 'team-fork')
+      const tree = (await git('rev-parse', 'HEAD^{tree}')).stdout.trim()
+      const descendant = (await git('commit-tree', tree, '-p', head, '-m', 'later')).stdout.trim()
+      for (const [destination, tip, remote] of [
+        [publicationRef, head, 'origin'], // Publication elsewhere beats an ahead upstream.
+        ['refs/hosting-cache/topic', head, 'team-fork'], // Upstream wins ties.
+        ['refs/hosting-cache/topic', descendant, 'team-fork'] // Contains an ancestor.
+      ]) {
+        await git('update-ref', destination, tip)
+        await url(head, remote)
+      }
+      await git('remote', 'remove', 'origin')
+      await git('checkout', '--detach', '-q')
+      await url(head, 'team-fork') // Detached, no origin, custom destination.
+      await git('update-ref', 'refs/hosting-cache/topic', base)
+      await git('symbolic-ref', 'refs/remotes/team/fork.x/HEAD', 'refs/hosting-cache/topic')
+      await url('review/topic', 'team-fork') // Mapped named default.
+      await git('remote', 'add', 'origin', 'https://github.com/org/origin.git')
+      await git('config', 'remote.origin.fetch', '+refs/heads/review/*:refs/remotes/origin/*')
+      await git('update-ref', 'refs/remotes/origin/main', base)
+      await git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+      await url('review/main') // Mapped origin default, never destination suffix.
+      await git('config', 'remote.origin.fetch', '+refs/heads/*:refs/origin-cache/*')
+      await git('config', forkFetchConfig, `+refs/heads/published:${publicationRef}`)
+      await git('update-ref', publicationRef, head)
+      await url(head, 'team-fork') // Origin-looking destination belongs to fork.
+      await git('remote', 'add', 'unsupported', '/unhosted.git')
+      await git('config', 'remote.unsupported.fetch', `+refs/heads/other:${publicationRef}`)
+      await url(null) // Unsupported owner still makes attribution ambiguous.
+      await git('remote', 'remove', 'unsupported')
+      await git('config', '--add', forkFetchConfig, `+refs/heads/other:${publicationRef}`)
+      await url(null) // Ambiguity inside one remote cannot disappear.
+      await git('config', '--unset-all', forkFetchConfig)
+      await git('config', forkFetchConfig, '+refs/heads/review/*:refs/hosting-cache/*')
+      await git('checkout', '-q', 'feature/local')
+      await git('update-ref', '-d', 'refs/hosting-cache/topic')
+      await git('update-ref', 'refs/hosting-cache/topic/descendant', base)
+      await url(null) // Descendants prove neither upstream nor dangling default target exists.
+      await git('update-ref', '-d', 'refs/hosting-cache/topic/descendant')
+      await git('config', 'branch.feature/local.remote', '.')
+      await git('config', 'branch.feature/local.merge', 'refs/heads/main')
+      await url(null)
+      if (supports(2, 29)) {
+        await git('update-ref', 'refs/hosting-cache/topic', head)
+        await git('config', '--add', forkFetchConfig, '^refs/heads/review/topic')
+        await url(null)
+      }
+      await git('remote', 'remove', 'team/fork.x')
+      await git('remote', 'set-url', 'origin', '/unhosted.git')
+      await url(null) // No supported URL.
+      await git('remote', 'set-url', 'origin', 'https://github.com/org/origin.git')
+      await git('config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*')
+      await git('update-ref', 'refs/remotes/origin/main', base)
+      await git('update-ref', '-d', publicationRef)
+      for (const tip of [base, head, base]) {
+        await runGit(
+          ['-C', cwd, 'update-ref', '--stdin'],
+          undefined,
+          Array.from(
+            { length: 4500 },
+            (_, i) => `update refs/remotes/origin/${'x'.repeat(220)}${i} ${tip}\n`
+          ).join('')
+        )
+        overflow = false
+        await url('main')
+        expect(overflow).toBe(tip === head)
+      }
+      const counts: number[] = []
+      for (const n of [10, 100]) {
+        for (let i = counts.length ? 10 : 0; i < n; i++) {
+          await git('remote', 'add', `r${i}`, `https://github.com/org/r${i}.git`)
+          await git('update-ref', `refs/remotes/r${i}/main`, head)
+        }
+        await git('symbolic-ref', 'refs/remotes/r0/HEAD', 'refs/remotes/r0/main')
+        exec.mockClear()
+        await url(head, 'r0')
+        counts.push(exec.mock.calls.length)
+      }
+      expect(counts).toEqual([7, 7])
+      await mkdir(join(root, 'linked'))
+      await git('worktree', 'add', '--detach', join(cwd, 'linked'), head)
+      exec.mockImplementation((args) => runGit(['-C', join(cwd, 'linked'), ...args]))
+      await url(head, 'r0', join(root, 'linked'))
+    } finally {
+      exec.mockRestore()
+    }
+  })
+
+  registerGitRepositoryRegistrationBinaryCompatibilityCase(runGit, () => repoPath, Boolean(image))
 
   it('stages, unstages and restores NUL-delimited literal pathspecs from stdin', async () => {
     const fixturePath = join(repoPath, 'stdin-pathspec')
@@ -317,171 +442,14 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
-  it('recognizes worktree-list and rev-parse compatibility boundaries', async () => {
-    await expectPreferredOrRecognizedFallback(
-      ['worktree', 'list', '--porcelain', '-z'],
-      supports(2, 36),
-      isUnsupportedWorktreeListZError
-    )
-    await expect(runGit(['worktree', 'list', '--porcelain'])).resolves.toMatchObject({
-      stdout: expect.stringContaining('worktree ')
-    })
+  registerGitWorktreeBinaryCompatibilityCases(
+    runGit,
+    () => repoPath,
+    supports,
+    expectPreferredOrRecognizedFallback
+  )
 
-    // Why: the `prunable` porcelain annotation landed in Git 2.31 — five
-    // releases before `-z` (2.36) — so only Git <2.31 emits neither and needs
-    // Orca's path-existence fallback (issue #8389).
-    await runGit(['worktree', 'add', '-b', 'compat-stale', 'stale-wt'])
-    await rm(join(repoPath, 'stale-wt'), { recursive: true, force: true })
-    const staleList = await runGit(['worktree', 'list', '--porcelain'])
-    expect(staleList.stdout.includes('prunable')).toBe(supports(2, 31))
-
-    const preferred = await runGit([
-      'rev-parse',
-      '--path-format=absolute',
-      '--show-toplevel',
-      '--git-common-dir',
-      '--git-dir'
-    ])
-    expect(hasUnsupportedRevParsePathFormatEcho(preferred.stdout)).toBe(!supports(2, 31))
-    await expect(
-      runGit(['rev-parse', '--show-toplevel', '--git-common-dir', '--git-dir'])
-    ).resolves.toBeDefined()
-  })
-
-  // Why pin this: worktree removal decides whether to prune and retry `branch -d` by
-  // matching Git's refusal text, and the wording moved inside the supported range
-  // (<=2.40 "Cannot delete branch 'x' checked out at", >=2.43 "cannot delete branch 'x'
-  // used by worktree at"). It is also the only evidence that the refusal is a stderr
-  // message on every supported Git rather than something a caller could read off stdout.
-  it('refuses to delete a branch another worktree holds, on stderr, in a recognized wording', async () => {
-    await runGit(['worktree', 'add', '-b', 'compat-held', 'held-wt'])
-    try {
-      const refusal = await runGit(['branch', '-d', '--', 'compat-held']).then(
-        () => null,
-        (error: unknown) => error
-      )
-      expect(refusal).not.toBeNull()
-      expect(isBranchCheckedOutInWorktreeError(refusal)).toBe(true)
-      const streams = refusal as { stdout?: string; stderr?: string }
-      expect(streams.stderr ?? '').toMatch(/delete branch .*compat-held/i)
-      expect(streams.stdout ?? '').toBe('')
-    } finally {
-      await runGit(['worktree', 'remove', '--force', 'held-wt'])
-      await runGit(['branch', '-D', 'compat-held'])
-    }
-  })
-
-  it('removes locked prepared worktrees without a separate unlock', async () => {
-    await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-discard', 'HEAD'])
-    await runGit(['-C', 'compat-discard', 'reset', '--hard', 'HEAD'])
-    await runGit(['worktree', 'lock', '--reason', 'owned preparation', 'compat-discard'])
-    await runGit(['worktree', 'remove', '--force', '--force', 'compat-discard'])
-    expect((await runGit(['worktree', 'list', '--porcelain'])).stdout).not.toContain(
-      'compat-discard'
-    )
-  })
-
-  it('supports prepared worktree creation and finalization', async () => {
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    const lockPath = join(repoPath, '.git', 'worktrees', 'compat-prepared', 'locked')
-    const lockReason = 'orca-create-preparation:v1:compat\n'
-    try {
-      await runGit([
-        'worktree',
-        'add',
-        '--detach',
-        '--no-checkout',
-        '--lock',
-        '--reason',
-        lockReason.slice(0, -1),
-        'compat-prepared',
-        'HEAD'
-      ])
-      expect(supports(2, 33)).toBe(true)
-    } catch (error) {
-      expect(supports(2, 33)).toBe(false)
-      expect(isUnsupportedWorktreeAddLockReasonError(error)).toBe(true)
-      await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-prepared', 'HEAD'])
-      await writeFile(lockPath, lockReason, { flag: 'wx' })
-    }
-    await expect(readFile(lockPath, 'utf8')).resolves.toBe(lockReason)
-    await expect(readFile(join(repoPath, 'compat-prepared', 'tracked.txt'))).rejects.toThrow()
-    await runGit(['-C', 'compat-prepared', 'reset', '--hard', 'HEAD'])
-    const lockPointers = await runGit([
-      '-C',
-      'compat-prepared',
-      'rev-parse',
-      '--git-path',
-      'locked',
-      '--git-common-dir'
-    ])
-    const pointerLines = lockPointers.stdout.split('\n')
-    expect(pointerLines).toHaveLength(3)
-    expect(pointerLines[0]?.replace(/\r$/, '').replaceAll('\\', '/')).toMatch(
-      /\.git\/worktrees\/compat-prepared\/locked$/
-    )
-    expect(pointerLines[1]?.replace(/\r$/, '').replaceAll('\\', '/')).toMatch(/(?:^|\/)\.git$/)
-    expect(pointerLines[2]).toBe('')
-    // Why: `-f -f` moves a locked preparation while preserving its lock reason (Git >=2.25).
-    await runGit(['worktree', 'move', '-f', '-f', 'compat-prepared', 'compat-final'])
-    await runGit([
-      '-C',
-      'compat-final',
-      'checkout',
-      '--no-track',
-      '-b',
-      'compat-prepared-final',
-      head
-    ])
-
-    await expect(runGit(['-C', 'compat-final', 'branch', '--show-current'])).resolves.toMatchObject(
-      { stdout: 'compat-prepared-final\n' }
-    )
-    await expect(runGit(['-C', 'compat-final', 'rev-parse', 'HEAD'])).resolves.toMatchObject({
-      stdout: `${head}\n`
-    })
-    await expect(readFile(lockPath, 'utf8')).resolves.toBe(lockReason)
-    await unlink(lockPath)
-    await runGit(['worktree', 'remove', '--force', 'compat-final'])
-    await runGit(['branch', '-D', 'compat-prepared-final'])
-  })
-
-  // Why pin this: the prepared-checkout retarget bound reads these as data, and it fails closed,
-  // so a version that printed a different shape would silently stop every retarget rather than
-  // error. Built with `commit-tree` so the check leaves no ref, branch, or worktree behind.
-  it('measures retarget drift identically on every supported Git', async () => {
-    const tree = (await runGit(['rev-parse', 'HEAD^{tree}'])).stdout.trim()
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    const ahead1 = (await runGit(['commit-tree', tree, '-p', head, '-m', 'drift 1'])).stdout.trim()
-    const ahead2 = (
-      await runGit(['commit-tree', tree, '-p', ahead1, '-m', 'drift 2'])
-    ).stdout.trim()
-
-    await expect(
-      runGit(['rev-list', '--count', '--max-count=101', '--end-of-options', `${head}..${ahead2}`])
-    ).resolves.toMatchObject({ stdout: '2\n' })
-    // `--max-count` must report the capped number, not the full one: the bound reads it as a
-    // ceiling, so a Git that returned the true count would reject every retarget instead.
-    await expect(
-      runGit(['rev-list', '--count', '--max-count=1', '--end-of-options', `${head}..${ahead2}`])
-    ).resolves.toMatchObject({ stdout: '1\n' })
-    await expect(
-      runGit(['rev-list', '--count', '--max-count=101', '--end-of-options', `${ahead2}..${head}`])
-    ).resolves.toMatchObject({ stdout: '0\n' })
-
-    await expect(runGit(['merge-base', '--end-of-options', head, ahead2])).resolves.toMatchObject({
-      stdout: `${head}\n`
-    })
-    // A parentless commit shares no history, which is the case the bound must reject however few
-    // commits each side carries.
-    const unrelated = (await runGit(['commit-tree', tree, '-m', 'unrelated root'])).stdout.trim()
-    await expect(runGit(['merge-base', '--end-of-options', head, unrelated])).rejects.toBeDefined()
-  })
-
-  // Why pin this: Orca answers "which remote has this URL" from one `git remote -v`
-  // instead of one `git remote get-url` per remote. That is only equivalent if both
-  // commands report the same URL — the insteadOf-expanded first `remote.<name>.url`,
-  // which a raw config read does not produce — on every supported Git.
+  // remote -v must match get-url’s insteadOf-expanded first fetch URL across supported Git versions; raw config is insufficient.
   it('reports the same fetch URL from remote -v as from remote get-url', async () => {
     await runGit(['config', 'url.git@example.invalid:.insteadOf', 'https://example.invalid/'])
     await runGit(['remote', 'add', 'compat-single', 'https://example.invalid/a/repo.git'])
@@ -522,11 +490,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       isNoWriteFetchHeadUnsupportedError
     )
     await expect(readFile(fetchHeadPath, 'utf-8')).resolves.toBe('sentinel\n')
-    // Why: ref search ships the excludes built by `getRemoteHeadExcludes`
-    // (src/main/git/repo-base-ref-search.ts) — a single-component wildcard plus
-    // an exact exclude per slash-containing remote name. The correctness of
-    // that split rests on `*` not crossing `/` under wildmatch, which only a
-    // real binary can prove.
+    // Ref-search excludes rely on * not crossing / under real Git wildmatch; slash-containing remotes need exact HEAD excludes.
     const commitOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     for (const ref of [
       'refs/remotes/origin/main',
@@ -563,8 +527,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         'refs/remotes/origin/compat-nested/HEAD',
         'refs/remotes/origin/main'
       ])
-      // The wildcard cannot reach a slash-containing remote's HEAD slot, which
-      // is the whole reason the exact excludes are emitted alongside it.
+      // The wildcard cannot reach slash-containing remotes, requiring the exact excludes.
       expect(await listRefs(wildcardExcludeArgv)).toContain('refs/remotes/foo/bar/HEAD')
     }
     await expect(
@@ -588,6 +551,60 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
+  it('refreshes a cleanup base with maintenance disabled and an explicit refspec', async () => {
+    const branch = 'compat-cleanup-source'
+    const remote = 'compat-cleanup'
+    const target = `refs/remotes/${remote}/${branch}`
+    await runGit(['branch', branch, 'HEAD'])
+    await runGit(['remote', 'add', remote, '.'])
+    try {
+      await expect(
+        refreshBranchCleanupTargetRefs((args) => runGit(args), [target])
+      ).resolves.toEqual([target])
+      expect((await runGit(['rev-parse', target])).stdout).toBe(
+        (await runGit(['rev-parse', branch])).stdout
+      )
+    } finally {
+      await runGit(['remote', 'remove', remote])
+      await runGit(['branch', '-D', branch])
+    }
+  })
+
+  // Unsupported --write-tree may leave crash debris that Git <2.35 cannot prune; create scratch stores only after support is known.
+  it('makes a merge-tree scratch object store only once this Git is known to write trees', async () => {
+    const branch = 'compat-cleanup-merged'
+    await runGit(['branch', branch, 'HEAD'])
+    const objectsPath = join(repoPath, '.git', 'objects')
+    const quarantine = createGitObjectQuarantine(async () => ({
+      hostPath: objectsPath,
+      gitPath: image ? '/repo/.git/objects' : objectsPath
+    }))
+    let scratchFolders = 0
+    const runCleanupGit: GitBranchCleanupExec = (args, options) =>
+      options?.discardWrittenObjects
+        ? quarantine.run((env) => {
+            scratchFolders += env ? 1 : 0
+            return runGit(args, env)
+          })
+        : runGit(args)
+    const capabilities = new GitCapabilityCache()
+    const check = () =>
+      branchHasNoUnmergedChangesOnAnyTarget(runCleanupGit, branch, ['HEAD'], capabilities)
+
+    try {
+      await expect(check()).resolves.toBe(supports(2, 38))
+      await expect(check()).resolves.toBe(supports(2, 38))
+      expect(scratchFolders).toBe(supports(2, 38) ? 1 : 0)
+      expect(
+        (await readdir(objectsPath)).filter((entry) =>
+          entry.startsWith(GIT_OBJECT_QUARANTINE_DIR_PREFIX)
+        )
+      ).toEqual([])
+    } finally {
+      await runGit(['branch', '-D', branch])
+    }
+  })
+
   it('supports exact show-ref probes', async () => {
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     const originRef = 'refs/remotes/origin/compat-exact'
@@ -608,10 +625,28 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ).rejects.toMatchObject({ code: 1 })
   })
 
+  it('lists exact and descendant refs from batched for-each-ref probes', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    const presentRef = 'refs/remotes/origin/compat-batch'
+    const nestedRef = 'refs/remotes/origin/compat-batch-parent/nested'
+    await runGit(['update-ref', presentRef, head])
+    await runGit(['update-ref', nestedRef, head])
+
+    // A miss still exits 0; callers keep only exact lines, so the parent stays absent.
+    await expect(
+      runGit([
+        'for-each-ref',
+        '--format=%(refname)',
+        '--',
+        presentRef,
+        'refs/remotes/origin/compat-batch-parent',
+        'refs/remotes/missing/compat-batch'
+      ])
+    ).resolves.toMatchObject({ stdout: `${presentRef}\n${nestedRef}\n` })
+  })
+
   it('packs loose refs and reads the maintenance opt-out at the baseline', async () => {
-    // Why: idle ref maintenance runs `pack-refs --all --prune` on every supported
-    // Git rather than the 2.45+ `--auto` form, and reads `maintenance.auto` to
-    // honour a user who disabled Git's own auto-maintenance. Both must work at 2.25.
+    // Pin baseline Git 2.25 pack-refs --all --prune (not 2.45+ --auto) and maintenance.auto opt-out reads.
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     const packedRef = 'refs/remotes/origin/compat-pack-refs'
     await runGit(['update-ref', packedRef, head])
@@ -619,7 +654,6 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
 
     await expect(runGit(['pack-refs', '--all', '--prune'])).resolves.toBeDefined()
 
-    // The loose file is gone and the ref still resolves through packed-refs.
     await expect(readFile(join(repoPath, '.git', packedRef), 'utf-8')).rejects.toMatchObject({
       code: 'ENOENT'
     })
@@ -630,7 +664,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       packedRef
     )
 
-    // `--get` exits 1 on an unset key; that absence must read as consent, not opt-out.
+    // Unset config exits 1; absence means consent, not opt-out.
     await expect(runGit(['config', '--bool', '--get', 'maintenance.auto'])).rejects.toMatchObject({
       code: 1
     })
@@ -728,10 +762,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
-  // Why pin this: --verify swallows --end-of-options but --symbolic-full-name echoes
-  // it deliberately, on every version tested (2.25 through 2.49). git-history.ts skips
-  // that line; if a future git stopped emitting it, the skip stays correct, but if this
-  // assertion ever flips the reason for the skip is worth re-reading.
+  // Git 2.25–2.49 echoes --end-of-options with --symbolic-full-name but consumes it with --verify; git-history skips the echoed line.
   it('echoes the option marker from rev-parse --symbolic-full-name', async () => {
     const result = await runGit(['rev-parse', '--symbolic-full-name', '--end-of-options', 'HEAD'])
     const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean)
@@ -740,10 +771,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
   })
 
-  // Why pin this: `show --end-of-options <oid>:<path>` is the only Git command on the
-  // pinned SSH branch-diff path, and both blob sides depend on it resolving against the
-  // named commit rather than live HEAD, and on failing (not falling back) for a path
-  // absent at that commit — that failure is what renders additions and deletions.
+  // Pinned SSH branch diffs require show <oid>:<path> to use that commit and reject missing paths; failure represents additions/deletions.
   it('reads a blob at a pinned object id', async () => {
     await writeFile(join(repoPath, 'pinned.txt'), 'pinned\n')
     await runGit(['add', 'pinned.txt'])
@@ -760,8 +788,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       runGit(['show', '--end-of-options', `${pinnedOid}:absent.txt`])
     ).rejects.toBeDefined()
   })
-  // Why pin this: an older Git echoes %(decorate:…) and exits zero, so only %D
-  // in the same record carries the badges (#15507). Asserts the echo and the recovery.
+  // Older Git echoes %(decorate:...) with exit 0; %D in the same record must recover badges (#15507).
   it('reads commit decorations on both sides of the %(decorate:...) boundary', async () => {
     await writeFile(join(repoPath, 'decorated.txt'), 'decorated\n')
     await runGit(['add', 'decorated.txt'])
@@ -809,68 +836,8 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     expect(included).toEqual(['vendored/inner.txt'])
   })
 
-  // Why pin this: the owner-checkout fast-forward overrides the user's merge settings with flags
-  // and `-c` keys; every one must parse on the baseline, and a branch-level `-s ours` must not win.
-  it('fast-forwards a checked-out base branch with the exact owner arguments', async () => {
-    const worktree = 'compat-ff-wt'
-    const branch = 'compat-ff-main'
-    const marker = join(repoPath, worktree, 'compat-ff-hook-ran')
-    const hookPath = join(repoPath, '.git', 'hooks', 'post-merge')
-    await runGit(['worktree', 'add', '-q', '-b', branch, worktree])
-    const localOid = (await runGit(['-C', worktree, 'rev-parse', 'HEAD'])).stdout.trim()
-    await writeFile(join(repoPath, worktree, 'compat-ff-added.txt'), 'upstream\n')
-    await runGit(['-C', worktree, 'add', 'compat-ff-added.txt'])
-    await runGit(['-C', worktree, 'commit', '-qm', 'upstream'])
-    const remoteOid = (await runGit(['-C', worktree, 'rev-parse', 'HEAD'])).stdout.trim()
-    await runGit(['update-ref', `refs/remotes/origin/${branch}`, remoteOid])
-    await runGit(['-C', worktree, 'reset', '-q', '--hard', localOid])
-    await runGit(['config', `branch.${branch}.mergeOptions`, '-s ours'])
-    // Why: an uninstalled source-built Git (the CI baseline) has no templates, so no hooks dir.
-    await mkdir(dirname(hookPath), { recursive: true })
-    await writeFile(hookPath, '#!/bin/sh\necho ran > compat-ff-hook-ran\n', { mode: 0o755 })
-    const merges: string[][] = []
-    // Why `-C`: in the Docker lane, paths Git reports are container paths, not host ones.
-    const git = {
-      exec: (args: string[], cwd: string) => {
-        if (args.includes('merge')) {
-          merges.push(args)
-        }
-        return runGit(['-C', cwd, ...args])
-      },
-      listWorktrees: async (path: string) =>
-        parseWorktreeList((await runGit(['-C', path, 'worktree', 'list', '--porcelain'])).stdout)
-    }
-
-    try {
-      const outcome = await fastForwardLocalBaseBranch(git, {
-        repoPath: image ? '/repo' : repoPath,
-        fullRef: `refs/heads/${branch}`,
-        remoteTrackingRef: `refs/remotes/origin/${branch}`
-      })
-
-      expect(outcome).toMatchObject({ status: 'updated' })
-      expect(merges).toHaveLength(1)
-      await expect(
-        runGit(['rev-list', '--parents', '-1', `refs/heads/${branch}`])
-      ).resolves.toMatchObject({ stdout: `${remoteOid} ${localOid}\n` })
-      await expect(
-        readFile(join(repoPath, worktree, 'compat-ff-added.txt'), 'utf-8')
-      ).resolves.toBe('upstream\n')
-      await expect(readFile(marker, 'utf-8')).rejects.toMatchObject({ code: 'ENOENT' })
-
-      // Control: the hook and the branch setting are both live for a plain fast-forward.
-      await runGit(['-C', worktree, 'reset', '-q', '--hard', localOid])
-      await runGit(['-C', worktree, 'merge', '--ff-only', '-q', remoteOid])
-      await expect(readFile(marker, 'utf-8')).resolves.toBe('ran\n')
-      await expect(runGit(['rev-parse', `refs/heads/${branch}`])).resolves.not.toMatchObject({
-        stdout: `${remoteOid}\n`
-      })
-    } finally {
-      await rm(hookPath, { force: true })
-      await runGit(['config', '--unset', `branch.${branch}.mergeOptions`])
-      await runGit(['worktree', 'remove', '--force', worktree])
-    }
-  })
+  registerGitLocalBaseBranchBinaryCompatibilityCase(runGit, () => repoPath, Boolean(image))
+  registerPluginGitDownloadBinaryCompatibilityCase(runGit, () => repoPath)
   registerGitResolutionBinaryCompatibilityCases(runGit, (name) =>
     image ? `/repo/${name}.git` : join(repoPath, `${name}.git`)
   )

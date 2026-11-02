@@ -1,0 +1,171 @@
+import {
+  closeTestStores,
+  createStoreWithSshRemotePtyLeases,
+  testState
+} from '../persistence-test-harness'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { TEST_LEAF_1 } from '../persistence-session-fixtures'
+import { PtyExitProof } from '../../pty-exit-proof'
+
+vi.mock('electron', () => ({
+  app: { getPath: () => testState.dir },
+  safeStorage: { isEncryptionAvailable: () => false }
+}))
+
+vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
+
+describe('operator-closed SSH lease tombstones', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(async () => {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  // Detached panes outgrow the lease’s frozen tab ID, so tab-qualified scrubbing cannot reach their binding.
+  async function storeWithDetachedPaneBinding(): Promise<
+    Awaited<ReturnType<typeof createStoreWithSshRemotePtyLeases>>
+  > {
+    const store = createStoreWithSshRemotePtyLeases([
+      {
+        targetId: 'ssh-1',
+        ptyId: 'remote-pty',
+        worktreeId: 'wt1',
+        tabId: 'tab-old',
+        leafId: TEST_LEAF_1,
+        state: 'attached'
+      }
+    ])
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab-new',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab-new',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-new': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty' }
+        }
+      }
+    })
+    return store
+  }
+
+  it('keeps the tombstone while a binding the scrub could not reach still names the pty', async () => {
+    const store = await storeWithDetachedPaneBinding()
+
+    store.markSshRemotePtyLease(
+      'ssh-1',
+      'ssh:ssh-1@@remote-pty',
+      PtyExitProof.from('exit-observed', undefined)
+    )
+
+    // The retained terminated lease must continue to refuse stale binding replay.
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
+      expect.objectContaining({ ptyId: 'remote-pty', state: 'terminated' })
+    ])
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId['tab-new'].ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty'
+    })
+  })
+
+  it('keeps an operator-closed lease that still owes an undelivered stop', async () => {
+    const pendingKill = { incarnationId: 'inc-1', requestedAt: 1, attempts: 0 }
+    const store = createStoreWithSshRemotePtyLeases([
+      { targetId: 'ssh-1', ptyId: 'remote-pty', state: 'attached', pendingKill }
+    ])
+
+    store.markSshRemotePtyLease(
+      'ssh-1',
+      'ssh:ssh-1@@remote-pty',
+      PtyExitProof.from('exit-observed', undefined)
+    )
+
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
+      expect.objectContaining({ ptyId: 'remote-pty', state: 'terminated', pendingKill })
+    ])
+  })
+
+  // Expired leases protect intentionally running shells from orphan sweeping; expiry does not prove exit.
+  it('keeps a superseded expired lease when a sibling pane is closed', async () => {
+    const store = createStoreWithSshRemotePtyLeases([
+      {
+        targetId: 'ssh-1',
+        ptyId: 'remote-pty-1',
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_1,
+        state: 'expired',
+        supersededBy: 'remote-pty-2'
+      },
+      {
+        targetId: 'ssh-1',
+        ptyId: 'remote-pty-2',
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_1,
+        state: 'attached'
+      },
+      { targetId: 'ssh-1', ptyId: 'remote-pty-3', state: 'attached' }
+    ])
+
+    store.markSshRemotePtyLease(
+      'ssh-1',
+      'ssh:ssh-1@@remote-pty-3',
+      PtyExitProof.from('exit-observed', undefined)
+    )
+
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
+      expect.objectContaining({
+        ptyId: 'remote-pty-1',
+        state: 'expired',
+        supersededBy: 'remote-pty-2'
+      }),
+      expect.objectContaining({ ptyId: 'remote-pty-2', state: 'attached' })
+    ])
+  })
+
+  it('retires every unreachable tombstone for the target, not only the one just closed', async () => {
+    const store = createStoreWithSshRemotePtyLeases([
+      ...['remote-pty-1', 'remote-pty-2', 'remote-pty-3'].map((ptyId) => ({
+        targetId: 'ssh-1',
+        ptyId,
+        state: 'terminated' as const
+      })),
+      { targetId: 'ssh-2', ptyId: 'other-pty', state: 'terminated' }
+    ])
+    expect(store.getSshRemotePtyLeases()).toHaveLength(4)
+
+    store.markSshRemotePtyLease(
+      'ssh-1',
+      'ssh:ssh-1@@remote-pty-1',
+      PtyExitProof.from('exit-observed', undefined)
+    )
+
+    expect(store.getSshRemotePtyLeases()).toEqual([
+      expect.objectContaining({ targetId: 'ssh-2', ptyId: 'other-pty' })
+    ])
+  })
+})

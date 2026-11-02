@@ -1,14 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 
-/**
- * Streams an append-only JSONL ledger one record at a time.
- *
- * Why: the backfill audit holds one line per published session file and neither
- * ledger is ever compacted, so a large Codex history makes a `readFileSync` plus
- * whole-file `JSON.parse` a multi-megabyte block of the Electron main thread.
- * Reading chunk by chunk keeps the window responsive while the pass runs.
- */
+/** Stream growing ledgers to avoid blocking the main thread with whole-file reads. */
 export async function* streamCodexSessionLedgerRecords(
   filePath: string,
   options: { throwOnReadFailure?: boolean } = {}
@@ -26,8 +19,7 @@ export async function* streamCodexSessionLedgerRecords(
     }
   } catch (error) {
     if (options.throwOnReadFailure && !isNotFoundError(error)) {
-      // Why: the audit is the heal work queue. Treating EACCES/EIO as empty
-      // would write a completion marker that permanently skips every session.
+      // Unreadable healing queues cannot count as empty and certify sessions as complete.
       throw error
     }
   } finally {
@@ -41,7 +33,6 @@ function parseLedgerRecord(raw: string): Record<string, unknown> | null {
   }
   try {
     const parsed: unknown = JSON.parse(raw)
-    // Torn tails are quarantined by the writer's leading newline; skip them.
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : null

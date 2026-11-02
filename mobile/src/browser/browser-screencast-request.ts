@@ -13,12 +13,7 @@ export type {
   MobileBrowserViewMode
 } from './browser-screencast-request-parameters'
 
-/**
- * Native: nothing bounds one frame, so the mobile view asks for the density it wants.
- *
- * The socket delivers a screencast frame as its own message with no per-message ceiling above it.
- * The `.web.ts` sibling has one, and budgets the area it asks for against it.
- */
+// Native socket frames have no bridge per-message cap; request desired density. Web sibling budgets area to fit its cap.
 export function buildMobileBrowserScreencastRequest(
   layout: BrowserStreamLayout | null,
   pixelRatio: number,

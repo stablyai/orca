@@ -10,13 +10,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 /** The persisted focus-recency map is host-qualified for new writes. */
 export type WorktreeVisitOwner = Pick<Worktree, 'id' | 'hostId'>
 
-/**
- * Read recency for one visible row.
- *
- * The bare lookup is deliberately second: it keeps sessions written before
- * host-qualified recency useful without letting a legacy value override a
- * newer host-specific visit.
- */
+/** Prefer host-qualified recency; bare keys preserve older sessions without overriding newer host-specific visits. */
 export function getWorktreeVisitTimestamp(
   timestamps: Readonly<Record<string, number>> | undefined,
   worktree: WorktreeVisitOwner
@@ -46,16 +40,11 @@ export function getWorktreeIdFromVisitKey(key: string): string {
   if (separator === -1) {
     return key
   }
-  // Empty host is the canonical unknown-host bucket. Known host ids are the
-  // other valid prefixes; a legacy worktree id may itself contain `|`.
+  // Empty/known host prefixes identify qualified keys; legacy raw IDs can themselves contain |.
   if (isWorktreeHostIdentity(key)) {
     return getWorktreeIdFromHostIdentity(key)
   }
   return key
-}
-
-export function isHostQualifiedVisitKey(key: string): boolean {
-  return getWorktreeIdFromVisitKey(key) !== key
 }
 
 /** Remove all recency entries belonging to one or more raw worktree ids. */
@@ -100,4 +89,28 @@ export function removeWorktreeVisitEntriesForTargets(
     next[key] = timestamp
   }
   return changed ? next : (timestamps as Record<string, number>)
+}
+
+/**
+ * Move one host's recency to another host when the same workspaces now live there (an SSH host
+ * converted to its managed server). Bare legacy keys and other hosts are untouched; a collision
+ * keeps the newer visit.
+ */
+export function rekeyWorktreeVisitHost(
+  timestamps: Readonly<Record<string, number>>,
+  fromHostId: ExecutionHostId,
+  toHostId: ExecutionHostId
+): Readonly<Record<string, number>> {
+  const prefix = `${fromHostId}|`
+  if (!Object.keys(timestamps).some((key) => key.startsWith(prefix))) {
+    return timestamps
+  }
+  const next: Record<string, number> = {}
+  for (const [key, timestamp] of Object.entries(timestamps)) {
+    const target = key.startsWith(prefix)
+      ? composeWorktreeHostIdentity(toHostId, getWorktreeIdFromHostIdentity(key))
+      : key
+    next[target] = Math.max(next[target] ?? timestamp, timestamp)
+  }
+  return next
 }

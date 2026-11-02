@@ -16,8 +16,8 @@ vi.mock('../../../window/clipboard-image-temp-file', () => ({
   saveClipboardImageBufferAsTempFile
 }))
 
+import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard-params'
 import {
-  CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
   CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT,
   CLIPBOARD_METHODS,
   resetClipboardImageUploadsForTest
@@ -154,7 +154,7 @@ describe('clipboard RPC methods', () => {
     }
   })
 
-  it('accepts chunked uploads and forwards the recorded connectionId on commit', async () => {
+  it('accepts chunked uploads and forwards the recorded connectionId and file name on commit', async () => {
     saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/orca-paste-image.png')
     const dispatcher = makeDispatcher()
     const contentBase64 = Buffer.from('png-bytes').toString('base64')
@@ -162,7 +162,8 @@ describe('clipboard RPC methods', () => {
     const start = await dispatcher.dispatch(
       makeRequest('clipboard.startImageUpload', {
         expectedBase64Length: contentBase64.length,
-        connectionId: 'ssh-1'
+        connectionId: 'ssh-1',
+        fileName: 'notes.txt'
       })
     )
     expect(start.ok).toBe(true)
@@ -195,7 +196,8 @@ describe('clipboard RPC methods', () => {
       )
     ).resolves.toMatchObject({ ok: true, result: '/tmp/orca-paste-image.png' })
     expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('png-bytes'), {
-      connectionId: 'ssh-1'
+      connectionId: 'ssh-1',
+      fileName: 'notes.txt'
     })
     expect(hasMobileClipboardImagePath('device-a', '/tmp/orca-paste-image.png')).toBe(false)
   })

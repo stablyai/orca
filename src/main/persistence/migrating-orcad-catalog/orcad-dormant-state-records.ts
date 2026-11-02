@@ -1,7 +1,7 @@
 import type {
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'

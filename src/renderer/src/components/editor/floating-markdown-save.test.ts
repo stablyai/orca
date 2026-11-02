@@ -1,15 +1,17 @@
+import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { floatingWorkspaceId } from '../../../../shared/floating-workspace-id'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+import { bumpEditorDiscardEpoch } from './editor-discard-epoch'
 import { createEditorSaveQueue } from './editor-save-queue'
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn(), write: vi.fn() }))
 vi.mock('@/runtime/floating-markdown-client', () => ({ readFloatingMarkdownTab: mocks.read }))
-vi.mock('@/runtime/runtime-file-client', async (importOriginal) => ({
+vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   writeRuntimeFile: mocks.write
 }))
@@ -64,7 +66,7 @@ describe('floating markdown save queue', () => {
   it('keeps the draft when another device changed the document', async () => {
     mocks.read.mockResolvedValue({ document: { content: 'changed elsewhere' }, save: mocks.save })
     const queue = createEditorSaveQueue(useAppStore)
-    await expect(queue.queueSave(file, 'edited')).rejects.toThrow('remote document changed')
+    await expect(queue.queueSave(file, 'edited')).resolves.toBe('blocked-stale')
     expect(mocks.save).not.toHaveBeenCalled()
     expect(mocks.write).not.toHaveBeenCalled()
     expect(useAppStore.getState().editorDrafts[file.id]).toBe('edited')
@@ -103,7 +105,7 @@ describe('floating markdown save queue', () => {
       } else if (change === 'repaired') {
         replaceRuntimeEnvironmentRevisions([{ id: 'one', createdAt: 1, pairingRevision: 2 }])
       } else {
-        queue.bumpSaveGeneration(file.id)
+        bumpEditorDiscardEpoch(editorBufferIdOfView(useAppStore.getState(), file.id))
       }
       finishRead()
       await settled

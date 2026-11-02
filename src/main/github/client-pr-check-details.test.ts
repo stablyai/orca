@@ -17,7 +17,6 @@ vi.mock('./gh-utils', () => ({
   ghRepoExecOptions: (context: { repoPath: string }) => ({ cwd: context.repoPath }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
-  // Why: origin repository resolution calls getOwnerRepoForRemote, not getOwnerRepo.
   getOwnerRepoForRemote: (
     repoPath: string,
     remoteName: string,
@@ -153,7 +152,8 @@ describe('getPRCheckDetails', () => {
         cwd: '/repo-root',
         host: 'github.com',
         signal: expect.any(AbortSignal)
-      })
+      }),
+      expect.objectContaining({ onTerminationPending: expect.any(Function) })
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
@@ -162,7 +162,8 @@ describe('getPRCheckDetails', () => {
         cwd: '/repo-root',
         host: 'github.com',
         signal: expect.any(AbortSignal)
-      })
+      }),
+      expect.objectContaining({ onTerminationPending: expect.any(Function) })
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
@@ -171,16 +172,63 @@ describe('getPRCheckDetails', () => {
         cwd: '/repo-root',
         host: 'github.com',
         signal: expect.any(AbortSignal)
-      })
+      }),
+      expect.objectContaining({ onTerminationPending: expect.any(Function) })
     )
   })
+
+  it.each([
+    { status: 'completed', count: 0, calls: 1 },
+    { status: 'in_progress', count: 0, calls: 2 },
+    { status: 'completed', count: 1, calls: 2 },
+    { status: 'completed', count: undefined, calls: 2 }
+  ])(
+    'only skips authoritative empty annotations for a completed check: %j',
+    async ({ status, count, calls }) => {
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+      ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        if (args[1] === 'repos/acme/widgets/check-runs/88') {
+          return {
+            stdout: JSON.stringify({
+              name: 'verify',
+              status,
+              conclusion: status === 'completed' ? 'failure' : null,
+              output: { title: 'Output retained', summary: 'Details', annotations_count: count }
+            })
+          }
+        }
+        if (args[1] === 'repos/acme/widgets/check-runs/88/annotations?per_page=20') {
+          return {
+            stdout: JSON.stringify(
+              count === 1
+                ? [
+                    {
+                      path: 'src/index.ts',
+                      start_line: 1,
+                      end_line: 1,
+                      annotation_level: 'failure',
+                      message: 'Retained'
+                    }
+                  ]
+                : []
+            )
+          }
+        }
+        throw new Error(`Unexpected request: ${args.join(' ')}`)
+      })
+      const details = await getPRCheckDetails('/repo-root', { checkRunId: 88 })
+      expect(details).toMatchObject({ title: 'Output retained', summary: 'Details', status })
+      expect(details?.annotations).toHaveLength(count === 1 ? 1 : 0)
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(calls)
+    }
+  )
 
   it('rejects provider failures so callers can distinguish them from unavailable details', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockRejectedValueOnce(new Error('authentication failed'))
 
     await expect(getPRCheckDetails('/repo-root', { checkRunId: 88 })).rejects.toThrow(
-      'authentication failed'
+      'Could not load check details.'
     )
   })
 
@@ -291,12 +339,13 @@ describe('getPRCheckDetails', () => {
     })
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       4,
-      ['api', 'repos/acme/widgets/actions/jobs/8801/logs'],
+      ['api', 'repos/acme/widgets/actions/jobs/8801/logs', '--allow-escape-sequences'],
       expect.objectContaining({
         cwd: '/repo-root',
         host: 'github.com',
         signal: expect.any(AbortSignal)
-      })
+      }),
+      expect.objectContaining({ onTerminationPending: expect.any(Function) })
     )
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
   })

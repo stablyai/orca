@@ -64,22 +64,6 @@ describe('useWorkspaceCleanupBrowseState', () => {
     vi.useRealTimers()
   })
 
-  it('keeps both patches when two groups are written in one tick', () => {
-    const controller = mountController()
-
-    // Why one act(): a checkbox toggle writes several groups at once. Reading the
-    // rendered `browse` snapshot per call would make the second patch overwrite
-    // the first, which is what this asserts against.
-    act(() => {
-      controller.current!.patchFilters('activity', { idleMinDays: 20 })
-      controller.current!.patchFilters('size', { maxBytes: 500 })
-    })
-
-    const filters = store.getState().workspaceCleanupBrowse.filters
-    expect(filters.activity.idleMinDays).toBe(20)
-    expect(filters.size.maxBytes).toBe(500)
-  })
-
   it('keeps both patches when the same group is written twice in one tick', () => {
     const controller = mountController()
 

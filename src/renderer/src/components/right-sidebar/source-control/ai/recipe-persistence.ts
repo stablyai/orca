@@ -52,7 +52,9 @@ export async function saveSourceControlAiActionRecipeForTarget({
     await updateSettings({ sourceControlAi: result.sourceControlAi })
     return
   }
-  await updateRepo(result.target.repoId, result.update)
+  if (!(await updateRepo(result.target.repoId, result.update))) {
+    throw new Error('Could not save the Source Control AI action.')
+  }
 }
 
 export async function saveSourceControlTextGenerationDefaults({

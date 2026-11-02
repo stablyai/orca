@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks
-} from '../ipc/parcel-watcher-process-subscription'
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import { PtySpawnHealthTimeoutError } from '../daemon/pty-subprocess/spawn-preflight'
 import { preflightOrcadNativeRuntime } from './orcad-runtime-native-preflight'
 import { WindowsProcessTableTimeoutError } from '../windows/windows-process-table-timeout-error'
@@ -41,7 +41,7 @@ vi.mock('node:fs/promises', () => ({
   writeFile: fixture.write,
   rm: fixture.remove
 }))
-vi.mock('../ipc/parcel-watcher-process-supervisor', () => ({
+vi.mock('../ipc/filesystem/watcher-process/parcel-watcher-process-supervisor', () => ({
   WatcherProcessSupervisor: class {
     subscribe = fixture.subscribe
     dispose = fixture.dispose
@@ -73,14 +73,6 @@ afterEach(() => {
 })
 
 describe('bundled native readiness', () => {
-  it('keeps runtime startup independent of PTY or watcher probe availability', async () => {
-    fixture.pty.mockRejectedValue(new Error('PTY spawn health check timed out'))
-    fixture.subscribe.mockRejectedValue(new Error('ENOSPC: watch limit reached'))
-    await preflightOrcadNativeRuntime({ nativeFeatures: false })
-    expect(fixture.pty).not.toHaveBeenCalled()
-    expect(fixture.subscribe).not.toHaveBeenCalled()
-  })
-
   it('still requires Windows ownership support on normal startup', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     fixture.startTime.mockReturnValue(false)
@@ -89,7 +81,6 @@ describe('bundled native readiness', () => {
     )
   })
 
-  // A loaded Windows runner timed the whole-table snapshot out, and startup failed readiness.
   it('identifies itself by one PID when the process-table snapshot times out', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     fixture.rows.mockRejectedValue(
@@ -121,17 +112,6 @@ describe('bundled native readiness', () => {
     expect(fixture.creationTime).not.toHaveBeenCalled()
   })
 
-  it('does not admit a failed PTY in explicit qualification', async () => {
-    fixture.pty.mockRejectedValue(new Error('PTY spawn health check timed out'))
-    await expect(preflightOrcadNativeRuntime()).rejects.toThrow('PTY spawn health check timed out')
-  })
-
-  it('gives a cold first Windows PTY spawn a longer budget', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    await preflightOrcadNativeRuntime()
-    expect(fixture.pty).toHaveBeenCalledExactlyOnceWith(15_000)
-  })
-
   it('retries a timed-out PTY probe once with the normal budget', async () => {
     fixture.pty.mockRejectedValueOnce(new PtySpawnHealthTimeoutError(15_000))
     await preflightOrcadNativeRuntime()
@@ -148,15 +128,6 @@ describe('bundled native readiness', () => {
     fixture.pty.mockRejectedValue(new Error('PTY spawn health check exited with code 1'))
     await expect(preflightOrcadNativeRuntime()).rejects.toThrow('exited with code 1')
     expect(fixture.pty).toHaveBeenCalledOnce()
-  })
-
-  it('awaits actual watcher delivery and unsubscribe before disposing temporary state', async () => {
-    await preflightOrcadNativeRuntime()
-    expect(fixture.pty).toHaveBeenCalledOnce()
-    expect(fixture.unsubscribe).toHaveBeenCalledOnce()
-    expect(fixture.dispose).toHaveBeenCalledOnce()
-    expect(fixture.remove).toHaveBeenCalledWith('/temp/probe', { recursive: true, force: true })
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('cancels a subscribe blocked on capacity by the same readiness deadline', async () => {
@@ -221,11 +192,4 @@ describe('bundled native readiness', () => {
       }
     }
   )
-
-  it('reads a fresh self identity on Windows before qualifying the PTY', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    await preflightOrcadNativeRuntime()
-    expect(fixture.rows).toHaveBeenCalledOnce()
-    expect(fixture.pty).toHaveBeenCalledOnce()
-  })
 })

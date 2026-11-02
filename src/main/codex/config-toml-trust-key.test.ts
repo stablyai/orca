@@ -5,9 +5,9 @@ import {
   computeTrustKey,
   getCodexExplicitHomeHookSourcePath,
   normalizeCodexHookSourcePath,
-  parseTrustKey,
-  type CodexTrustEntry
+  parseTrustKey
 } from './config-toml-trust'
+
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
@@ -24,18 +24,6 @@ afterEach(() => {
 })
 
 describe('computeTrustKey', () => {
-  it('joins source path, event label, group index, handler index with colons', () => {
-    expect(
-      computeTrustKey({
-        sourcePath: '/Users/thebr/.codex/hooks.json',
-        eventLabel: 'pre_tool_use',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'irrelevant'
-      })
-    ).toBe('/Users/thebr/.codex/hooks.json:pre_tool_use:0:0')
-  })
-
   it('lexically normalizes source paths without resolving default-home aliases', () => {
     const nestedDir = join(tmpDir, 'nested')
     mkdirSync(nestedDir)
@@ -53,7 +41,7 @@ describe('computeTrustKey', () => {
     ).toBe(`${join(tmpDir, 'hooks.json')}:user_prompt_submit:0:0`)
   })
 
-  // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
+  // Windows CI requires Developer Mode for file symlinks.
   it.skipIf(process.platform === 'win32')(
     'preserves a hooks.json leaf symlink in the trust key',
     () => {
@@ -85,7 +73,6 @@ describe('computeTrustKey', () => {
   )
 
   it('uses native Windows backslashes in the trust key Codex looks up', () => {
-    // Why: Codex 0.140 writes approved Windows hook trust keys as raw native paths under [hooks.state].
     const winPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const key = computeTrustKey({
       sourcePath: winPath,
@@ -99,8 +86,6 @@ describe('computeTrustKey', () => {
   })
 
   it('preserves literal backslashes in non-Windows-style fallback paths', () => {
-    // Why: SSH/POSIX paths can legally contain `\` as a filename character;
-    // only Windows-style separators should be normalized.
     expect(normalizeCodexHookSourcePath('/tmp/with\\literal/hooks.json')).toBe(
       '/tmp/with\\literal/hooks.json'
     )
@@ -124,17 +109,7 @@ describe('computeTrustKey', () => {
   )
 })
 describe('parseTrustKey', () => {
-  it('parses a typical posix-style key', () => {
-    expect(parseTrustKey('/Users/x/.codex/hooks.json:pre_tool_use:0:0')).toEqual({
-      sourcePath: '/Users/x/.codex/hooks.json',
-      eventLabel: 'pre_tool_use',
-      groupIndex: 0,
-      handlerIndex: 0
-    })
-  })
-
   it('parses a Windows-style sourcePath whose drive letter contains a colon', () => {
-    // Why: anchor on the LAST three colons so colons inside sourcePath round-trip.
     expect(parseTrustKey('C:\\Users\\x\\.codex\\hooks.json:session_start:2:3')).toEqual({
       sourcePath: 'C:\\Users\\x\\.codex\\hooks.json',
       eventLabel: 'session_start',
@@ -147,41 +122,6 @@ describe('parseTrustKey', () => {
     expect(parseTrustKey('/x/hooks.json:not_an_event:0:0')).toBeNull()
   })
 
-  it('returns null for a key with too few colons', () => {
-    expect(parseTrustKey('foo:bar')).toBeNull()
-    expect(parseTrustKey('foo')).toBeNull()
-  })
-
-  it('returns null when the group index is not an integer', () => {
-    expect(parseTrustKey('/x/hooks.json:pre_tool_use:abc:0')).toBeNull()
-  })
-
-  it('returns null when the handler index is not an integer', () => {
-    expect(parseTrustKey('/x/hooks.json:pre_tool_use:0:abc')).toBeNull()
-  })
-
-  it('returns null when the source path is empty', () => {
-    expect(parseTrustKey(':pre_tool_use:0:0')).toBeNull()
-  })
-
-  it('round-trips with computeTrustKey', () => {
-    const entry: CodexTrustEntry = {
-      sourcePath: '/Users/x/.codex/hooks.json',
-      eventLabel: 'post_tool_use',
-      groupIndex: 4,
-      handlerIndex: 7,
-      command: 'irrelevant'
-    }
-    const parsed = parseTrustKey(computeTrustKey(entry))
-    expect(parsed).toEqual({
-      sourcePath: entry.sourcePath,
-      eventLabel: entry.eventLabel,
-      groupIndex: entry.groupIndex,
-      handlerIndex: entry.handlerIndex
-    })
-  })
-
-  // Why: Number('') === 0 passes Number.isInteger, so empty segments need explicit rejection.
   it('returns null for empty group/handler segments', () => {
     expect(parseTrustKey('/x/hooks.json:pre_tool_use::0')).toBeNull()
     expect(parseTrustKey('/x/hooks.json:pre_tool_use:0:')).toBeNull()

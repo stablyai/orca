@@ -71,8 +71,7 @@ function setPlatform(platform: NodeJS.Platform): void {
 }
 
 beforeEach(() => {
-  // Why: the keychain source is macOS-only by an explicit platform check, so
-  // these cases must pin the platform rather than inherit the CI runner's.
+  // Keychain reads are macOS-only; pin the platform rather than inherit the runner.
   setPlatform('darwin')
   keychainState.token = null
   keychainState.error = null
@@ -168,8 +167,7 @@ describe('readCursorAuthSession', () => {
   })
 
   it('prefers a live desktop session over an expired keychain one', async () => {
-    // Why: a user who signed the CLI in once and now works only in the IDE would
-    // otherwise be told "sign-in expired" forever while a usable session sat below.
+    // An expired CLI token must not mask a live IDE session.
     keychainState.token = expiredJwt('auth0|user_stale')
     desktopState.result = {
       status: 'ok',
@@ -186,7 +184,6 @@ describe('readCursorAuthSession', () => {
   })
 
   it('still returns the expired session when no live one exists anywhere', async () => {
-    // Why: the expiry message is the actionable answer in that case.
     keychainState.token = expiredJwt('auth0|user_stale')
     const result = await readCursorAuthSession(options)
     expect(result.status === 'ok' && result.session.source).toBe('keychain')

@@ -109,8 +109,7 @@ describe('resolveChecksPanelWorktreeFromTerminalCwd', () => {
       displayName: 'Application'
     })
 
-    // `/repo/application` starts with `/repo/app` as a string, but the
-    // separator boundary must keep the cwd from matching the shorter sibling.
+    // Containment must respect separators, not just string prefixes.
     expect(
       resolveChecksPanelWorktreeFromTerminalCwd('/repo/application/src', [app, application])
     ).toBe(application)
@@ -169,7 +168,7 @@ it('normalizes only the cwd, each root, and the matching path when roots do not 
   const normalize = vi.spyOn(String.prototype, 'normalize')
   try {
     expect(resolveChecksPanelWorktreeFromTerminalCwd('/repo/w150/src/a', worktrees)?.id).toBe('150')
-    // 1 cwd + 300 candidate roots + 1 matched path; main normalized 600.
+    // One cwd + 300 roots + one matched path.
     expect(normalize.mock.calls.length).toBe(302)
   } finally {
     normalize.mockRestore()

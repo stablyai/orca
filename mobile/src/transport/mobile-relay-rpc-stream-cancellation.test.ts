@@ -1,3 +1,5 @@
+import { setFlagsFromString } from 'node:v8'
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import type { RpcResponse } from './types'
@@ -22,7 +24,58 @@ const serverSubscriptions = [
   ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe']
 ] as const
 
+// Expose GC without execArgv so these cases run under the default pool and in mobile CI.
+setFlagsFromString('--expose-gc')
+const gc: () => void = globalThis.gc ?? runInNewContext('gc')
+
+async function collectCallbacks(): Promise<void> {
+  for (let round = 0; round < 3; round++) {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    gc()
+  }
+}
+
+function subscribeCapturedCallbacks(streams: MobileRelayRpcStreams) {
+  const listenerPayload = new Uint8Array(1024 * 1024)
+  const binaryPayload = new Uint8Array(1024 * 1024)
+  const cancel = streams.subscribe('browser.screencast', {}, () => listenerPayload.byteLength, {
+    onBinaryFrame: () => binaryPayload.byteLength
+  })
+  return {
+    cancel,
+    listener: new WeakRef(listenerPayload),
+    binary: new WeakRef(binaryPayload)
+  }
+}
+
 describe('mobile relay subscription cancellation', () => {
+  it.each(['cancel', 'clear'] as const)(
+    'releases callbacks on %s before their connection waiter settles',
+    async (action) => {
+      const wait = Promise.withResolvers<void>()
+      const { streams, sendFrame } = createStreams(() => wait.promise)
+      const captured = subscribeCapturedCallbacks(streams)
+      try {
+        await collectCallbacks()
+        expect(captured.listener.deref()).toBeDefined()
+        expect(captured.binary.deref()).toBeDefined()
+        if (action === 'cancel') {
+          captured.cancel()
+        } else {
+          streams.clear()
+        }
+        await collectCallbacks()
+        expect(captured.listener.deref() === undefined).toBe(true)
+        expect(captured.binary.deref() === undefined).toBe(true)
+        expect(sendFrame).not.toHaveBeenCalled()
+      } finally {
+        wait.resolve()
+        await wait.promise
+        streams.clear()
+      }
+    }
+  )
+
   it.each(serverSubscriptions)('cleans up ready %s exactly once', async (method, unsubscribe) => {
     const { streams, sendFrame } = createStreams()
     const listener = vi.fn()

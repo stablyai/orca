@@ -2,14 +2,10 @@ import { useCallback } from 'react'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 
-// Why: a plain ESC byte is what the agent TUIs read as the interrupt key over a
-// PTY (matching how xterm forwards Escape). The richer interrupt-intent
-// inference (agent-interrupt-intent.ts) is driven by the existing PTY input
-// observers, so writing ESC through the same send path feeds that machinery.
+// Write ESC through the PTY path so existing input observers infer interrupt intent just as for xterm.
 const ESC = '\x1b'
 
-/** Stop the hosted agent: the structured lane's own stop when a turn is running,
- *  else the ESC keystroke the TUI reads as its interrupt. */
+/** Use structured Stop for a running turn; otherwise send the TUI’s ESC interrupt. */
 export function useNativeChatComposerInterrupt(args: {
   /** A prompt card owns the input: Escape must not reach the agent as Deny. */
   inert?: boolean
@@ -30,7 +26,7 @@ export function useNativeChatComposerInterrupt(args: {
     }
     const target = resolveTarget()
     if (target) {
-      sendRuntimePtyInput(target.settings, target.ptyId, ESC, 'driving')
+      sendRuntimePtyInput(target.ptyId, ESC, 'driving')
     }
   }, [inert, cancelPendingSends, isWorking, onStop, resolveTarget])
 }

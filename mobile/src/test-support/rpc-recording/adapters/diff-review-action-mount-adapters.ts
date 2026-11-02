@@ -8,21 +8,14 @@ import type {
 } from '../../../session/mobile-diff-review-screen-model'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as NativeChatStaleInput from '../../../session/native-chat/mobile-native-chat-stale-input'
 
 const WORKSPACE = 'workspace-1'
 const HOST = 'host-1'
 const FILE = 'src/app.ts'
 const TERMINAL = 'terminal-1'
 
-/**
- * Everything the review screen writes: the note/review-state metadata save, the stage/unstage/
- * discard mutations, the reveal-in-session open, and the two ways review notes reach a terminal.
- *
- * One mount, because the screen composes the comment, git and send hooks into a single interaction
- * surface and they share the client and the error setter. The send arm also drives the stale-input
- * heal, whose clearing write only happens when a prior image paste marked the handle — so the
- * marker is set by an action rather than assumed.
- */
+// Compose review writes as one real surface; seed stale-input healing through the image-paste action that arms it.
 export function diffReviewActionMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -34,9 +27,9 @@ export function diffReviewActionMountAdapters(
       const reviewSheets = modules.load<
         typeof import('../../../session/mobile-diff-review-sheets')
       >('mobile/src/session/mobile-diff-review-sheets.ts')
-      const staleInput = modules.load<
-        typeof import('../../../session/mobile-native-chat-stale-input')
-      >('mobile/src/session/mobile-native-chat-stale-input.ts')
+      const staleInput = modules.load<typeof NativeChatStaleInput>(
+        'mobile/src/session/native-chat/mobile-native-chat-stale-input.ts'
+      )
       staleInput.resetMobileNativeChatStaleInputForTests()
       const comment: DiffComment = {
         side: 'modified',
@@ -68,7 +61,6 @@ export function diffReviewActionMountAdapters(
       }
       let screenState: ReviewScreenState = {
         kind: 'ready',
-        // These actions never read the status; the queue item above is what they branch on.
         status: mountFixture<Extract<ReviewScreenState, { kind: 'ready' }>['status']>({
           entries: []
         }),
@@ -98,22 +90,20 @@ export function diffReviewActionMountAdapters(
             hostId: HOST,
             worktreeId: WORKSPACE,
             screenState,
-            diffState: { kind: 'idle' },
             currentItem: item,
             queue: [item],
             filteredQueue: [item],
-            filter: 'all',
             currentIndex: 0,
-            activeHunkIndex: null,
             composer: null,
             composerBody: '',
-            listRef: { current: null },
             setScreenState: (update) => {
               screenState = typeof update === 'function' ? update(screenState) : update
             },
-            setFilter: () => {},
-            setCurrentIndex: () => {},
-            setActiveHunkIndex: () => {},
+            selectIndex: () => {},
+            selectKey: () => {},
+            moveSelection: () => {},
+            // Viewed state stays on the phone here; GitHub-viewed files have their own recordings.
+            remoteViewed: () => null,
             setComposerBody: () => {},
             setActionError: (update) => {
               actionError = typeof update === 'function' ? update(actionError) : update
@@ -147,9 +137,6 @@ export function diffReviewActionMountAdapters(
             }
             if (name === 'discard') {
               return interactions.runGitMutation('git.discard', item)
-            }
-            if (name === 'stage-reviewed') {
-              return interactions.stageReviewedFiles()
             }
             if (name === 'open-send-sheet') {
               return interactions.openSendSheet()

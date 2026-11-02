@@ -6,7 +6,9 @@ import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import type { BrowserFindTarget } from '../../shared/browser-find-source'
+import type { BrowserPageTabShortcut } from '../../shared/browser-page-command-target'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
+import { matchesGuestTabShortcut } from './browser-guest-tab-shortcut'
 
 export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean
@@ -21,6 +23,9 @@ export type GuestShortcutForwardContext = {
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
   forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => void
+  /** False for plugin frames: no address bar, history, find or page zoom, and Close closes the
+   *  active tab rather than a browser source. */
+  browserPage?: boolean
 }
 
 export function forwardGuestShortcutInput(
@@ -39,16 +44,26 @@ export function forwardGuestShortcutInput(
     resolveWorkspaceId,
     forwardBrowserPageZoom
   } = ctx
+  const page = ctx.browserPage !== false
   const keybindings = getKeybindings?.()
   if (action?.type === 'zoom') {
-    // Why: focused guest key events never reach the renderer-owned webview ref that applies Orca's page zoom.
+    if (!page) {
+      return false
+    }
     forwardBrowserPageZoom(event, action.direction)
     return true
   }
   if (input.isAutoRepeat) {
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
-      action?.type === 'deleteCurrentWorkspace'
+      action?.type === 'deleteCurrentWorkspace' ||
+      // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
+      matchesGuestTabShortcut(
+        input,
+        process.platform,
+        keybindings,
+        isMobileEmulatorEnabled?.() ?? true
+      )
     ) {
       event.preventDefault()
       return true
@@ -56,7 +71,7 @@ export function forwardGuestShortcutInput(
     return false
   }
   if (action?.type === 'worktreeHistoryNavigate') {
-    // Why: preventDefault unconditionally so the guest never handles Cmd+Alt+Arrow itself, even when the renderer can't be resolved.
+    // Suppress guest history handling even if no renderer can be resolved.
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:worktreeHistoryNavigate', action.direction)
@@ -70,24 +85,6 @@ export function forwardGuestShortcutInput(
     return true
   }
 
-  // Why: match outside the allowlist so both the new Shift binding and upgraders' seeded Alt binding reach the renderer.
-  const switchAllTypesDirection = keybindingMatchesAction(
-    'tab.nextAllTypes',
-    input,
-    process.platform,
-    keybindings
-  )
-    ? 1
-    : keybindingMatchesAction('tab.previousAllTypes', input, process.platform, keybindings)
-      ? -1
-      : null
-  if (switchAllTypesDirection !== null) {
-    event.preventDefault()
-    const renderer = resolveRenderer(browserTabId)
-    renderer?.send('ui:switchTabAcrossAllTypes', switchAllTypesDirection)
-    return true
-  }
-
   if (keybindingMatchesAction('tab.previousRecent', input, process.platform, keybindings)) {
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
@@ -95,72 +92,59 @@ export function forwardGuestShortcutInput(
     return true
   }
 
-  // Why: terminal-tab switching defaults to Ctrl+PageUp/PageDown but goes through the registry so disable/rebind still works.
-  const terminalTabDirection = keybindingMatchesAction(
-    'tab.nextTerminal',
-    input,
-    process.platform,
-    keybindings
-  )
-    ? 1
-    : keybindingMatchesAction('tab.previousTerminal', input, process.platform, keybindings)
-      ? -1
-      : null
-  if (terminalTabDirection !== null) {
-    event.preventDefault()
-    const renderer = resolveRenderer(browserTabId)
-    renderer?.send('ui:switchTerminalTab', terminalTabDirection)
-    return true
-  }
-
   const renderer = resolveRenderer(browserTabId)
   if (!renderer) {
     return false
   }
-  // Why: floating-panel guests route close/index chords to the panel (carrying their source id) so they hit the floating workspace, not the main tab strip.
+  // Route floating guests to their own workspace for close/index shortcuts.
   const isFloatingGuest = resolveWorktreeId?.(browserTabId) === FLOATING_TERMINAL_WORKTREE_ID
-  if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
-    renderer.send('ui:newBrowserTab')
-  } else if (
-    process.platform === 'darwin' &&
-    (isMobileEmulatorEnabled?.() ?? true) &&
-    keybindingMatchesAction('tab.newSimulator', input, process.platform, keybindings)
-  ) {
-    renderer.send('ui:newSimulatorTab')
-  } else if (keybindingMatchesAction('tab.newMarkdown', input, process.platform, keybindings)) {
-    renderer.send('ui:newMarkdownTab')
-  } else if (keybindingMatchesAction('tab.newTerminal', input, process.platform, keybindings)) {
-    // Why: Cmd/Ctrl+T opens a terminal even when a browser guest is focused (Shift+B is the new-browser-tab shortcut).
-    renderer.send('ui:newTerminalTab')
-  } else if (
+  if (
+    page &&
     keybindingMatchesAction('browser.focusAddressBar', input, process.platform, keybindings)
   ) {
-    // Why: the address bar lives in renderer chrome, not the guest page; forward so the pane owning it can focus its input.
     renderer.send('ui:focusBrowserAddressBar', { browserPageId: browserTabId })
-  } else if (keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)) {
-    // Why: forward hard reload so reloadIgnoringCache() runs on the renderer's parked-webview ref that owns the guest surface.
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.showHistory', input, process.platform, keybindings)
+  ) {
+    renderer.send('ui:showBrowserHistory', { browserPageId: browserTabId })
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)
+  ) {
+    // The renderer owns the parked webview used for reload.
     renderer.send('ui:hardReloadBrowserPage', { browserPageId: browserTabId })
-  } else if (keybindingMatchesAction('browser.reload', input, process.platform, keybindings)) {
-    // Why: forward soft reload so the renderer's reload() hits the parked-webview eviction the guest's built-in shortcut skips.
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.reload', input, process.platform, keybindings)
+  ) {
+    // Renderer reload also handles parked-webview eviction.
     renderer.send('ui:reloadBrowserPage', { browserPageId: browserTabId })
-  } else if (keybindingMatchesAction('browser.find', input, process.platform, keybindings)) {
-    // Why: active browser splits share one renderer; preserve the registered guest owner so only
-    // its Find bar opens. A client-hosted guest has no registered workspace, and dropping the
-    // chord there both suppressed it in the guest and delivered nothing.
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.find', input, process.platform, keybindings)
+  ) {
+    // Target the owning split; client-hosted guests can receive Find without a workspace ID.
     const browserWorkspaceId = resolveWorkspaceId?.(browserTabId) || undefined
     const target: BrowserFindTarget = { browserPageId: browserTabId, browserWorkspaceId }
     renderer.send('ui:findInBrowserPage', target)
   } else if (
-    // Why: client-hosted guests register no workspace and their pane has no annotate listener, so leave the chord to the page.
+    // Client-hosted panes have no workspace or annotation listener; leave the chord to the page.
+    page &&
     resolveWorkspaceId?.(browserTabId) &&
     keybindingMatchesAction('browser.annotateElement', input, process.platform, keybindings)
   ) {
     renderer.send('browser:grabModeToggle', browserTabId, 'annotate')
-  } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
-    // Why: macOS Logitech side-button remaps arrive as history keystrokes, not mouse events; forward so the renderer can goBack().
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.back', input, process.platform, keybindings)
+  ) {
+    // macOS side-button remaps can arrive as history keys instead of mouse events.
     renderer.send('ui:browserHistoryNavigate', { browserPageId: browserTabId, direction: 'back' })
-  } else if (keybindingMatchesAction('browser.forward', input, process.platform, keybindings)) {
-    // Why: same as browser.back; the focused guest cannot call the renderer-owned webview's goForward() directly.
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.forward', input, process.platform, keybindings)
+  ) {
     renderer.send('ui:browserHistoryNavigate', {
       browserPageId: browserTabId,
       direction: 'forward'
@@ -168,17 +152,12 @@ export function forwardGuestShortcutInput(
   } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
     if (isFloatingGuest) {
       renderer.send('ui:closeFloatingItem', { sourceId: browserTabId })
-    } else {
-      // Why: carry the guest's page id — activeTabType/activeBrowserTabId can be stale in split
-      // layouts (guest focus doesn't reach the group's focus-capture), silently dropping the close.
+    } else if (page) {
+      // Guest focus may leave active-tab state stale in splits; close by source ID.
       renderer.send('ui:closeActiveTab', { sourceId: browserTabId })
+    } else {
+      renderer.send('ui:closeActiveTab')
     }
-  } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
-    renderer.send('ui:switchTab', 1)
-  } else if (
-    keybindingMatchesAction('tab.previousSameType', input, process.platform, keybindings)
-  ) {
-    renderer.send('ui:switchTab', -1)
   } else if (action?.type === 'toggleWorktreePalette') {
     renderer.send('ui:toggleWorktreePalette')
   } else if (action?.type === 'openQuickOpen') {
@@ -216,10 +195,30 @@ export function forwardGuestShortcutInput(
       return false
     }
     renderer.send('ui:dictationKeyDown')
+  } else if (
+    matchesGuestTabShortcut(
+      input,
+      process.platform,
+      keybindings,
+      isMobileEmulatorEnabled?.() ?? true
+    )
+  ) {
+    // Why: replay into the renderer's own tab-shortcut handler so a page answers tab chords exactly as the rest of Orca does.
+    const { key, code, alt, meta, control, shift, doubleTapModifier } = input
+    const shortcut: BrowserPageTabShortcut = {
+      key,
+      code,
+      alt,
+      meta,
+      control,
+      shift,
+      doubleTapModifier
+    }
+    renderer.send('ui:browserPageTabShortcut', shortcut)
   } else {
     return false
   }
-  // Why: preventDefault stops the guest page from also processing the chord (e.g. Cmd+T opening a browser-internal new-tab page).
+  // Prevent the guest from also handling the forwarded chord.
   event.preventDefault()
   return true
 }

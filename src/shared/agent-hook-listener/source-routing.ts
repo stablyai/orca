@@ -1,7 +1,5 @@
 import type { AgentHookSource } from '../agent-hook-relay'
 
-// ─── URL routing ────────────────────────────────────────────────────
-
 export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> = Object.freeze({
   '/hook/claude': 'claude',
   '/hook/codex': 'codex',
@@ -29,7 +27,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/muse': 'muse',
   '/hook/zcode': 'zcode',
   '/hook/dsh': 'dsh',
-  '/hook/jcode': 'jcode'
+  '/hook/jcode': 'jcode',
+  '/hook/kiro': 'kiro'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

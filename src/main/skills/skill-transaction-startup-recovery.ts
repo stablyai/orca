@@ -132,8 +132,7 @@ function pendingTransactions(
   return [...pending.values()]
 }
 
-/** Merged after the map-based dedupe so a kind that shares a canonical path with
- *  an install or removal joins that transaction rather than racing it. */
+/** Merge shared-path journal kinds into the existing transaction rather than replaying them concurrently. */
 function mergeJournalCandidates(
   pending: PendingTransaction[],
   candidates: readonly { canonicalPath: string; journalKey: string }[],
@@ -232,9 +231,7 @@ async function recoverPendingSkillTransactionsUnobserved(
             ...(placementJournal?.actions.map((action) => action.rootPath) ?? [])
           ])
         : undefined
-      // Why explicit rather than only widening the constructor list: the delete
-      // journal is the sole record of which roots its moves are allowed to
-      // touch, and replay must be authorized for them before it operates.
+      // Authorize replay from journal roots before touching disk; they are its sole containment evidence.
       if (deleteJournal) {
         filesystem?.authorizeRoots(deleteJournal.allowedRoots)
       }

@@ -1,7 +1,9 @@
+import { getWorkspaceReferenceIdentity } from '../../../../shared/workspace-reference-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import {
   buildTaskSourceContextFromRepo,
+  haveConflictingTaskSourceAccounts,
   normalizeTaskSourceContext,
   type TaskSourceContext,
   type TaskProvider
@@ -64,8 +66,10 @@ export function isWorkspaceAttachmentLinked(
   items: readonly WorkspaceAttachment[],
   candidate: WorkspaceAttachment
 ): boolean {
+  const identity = getWorkspaceReferenceIdentity(candidate)
   return items.some((item) => {
     if (
+      getWorkspaceReferenceIdentity(item) === identity ||
       matchesWorkspaceAttachmentIdentity(candidate, item) ||
       matchesWorkspaceAttachmentIdentity(item, candidate)
     ) {
@@ -88,9 +92,7 @@ export function isWorkspaceAttachmentLinked(
       !newContext ||
       (oldContext.hostId === newContext.hostId &&
         oldContext.projectId === newContext.projectId &&
-        (!oldContext.accountLabel ||
-          !newContext.accountLabel ||
-          oldContext.accountLabel === newContext.accountLabel))
+        !haveConflictingTaskSourceAccounts(oldContext, newContext))
     )
   })
 }

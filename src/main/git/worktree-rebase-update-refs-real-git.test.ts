@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { GitBinaryTestFixture } from '../../shared/git-binary.test-fixture'
 
 vi.mock('./runner', () => ({ gitExecFileAsync: vi.fn(), gitExecFileSync: vi.fn() }))
 vi.mock('./local-repo-ref-maintenance', () => ({
@@ -10,53 +10,20 @@ vi.mock('./local-repo-ref-maintenance', () => ({
 }))
 
 import { forceDeleteLocalBranch } from './worktree-branch-removal'
-import { forceDeletePreservedRelayBranch } from '../../relay/git-handler-branch-cleanup'
 
-const image = process.env.ORCA_GIT_COMPAT_IMAGE
-const binary = process.env.ORCA_GIT_COMPAT_BINARY ?? 'git'
-const dockerUser =
-  typeof process.getuid === 'function' && typeof process.getgid === 'function'
-    ? ['--user', `${process.getuid()}:${process.getgid()}`]
-    : []
+let fixture: GitBinaryTestFixture
 let root = ''
 let repo = ''
 let checkout = ''
 
 async function git(args: string[], cwd = repo): Promise<{ stdout: string; stderr: string }> {
-  const result = await runProcess({
-    program: image ? 'docker' : binary,
-    args: image
-      ? [
-          'run',
-          '--rm',
-          '--network=none',
-          ...dockerUser,
-          '-v',
-          `${root}:${root}`,
-          '-w',
-          cwd,
-          image,
-          '-c',
-          `safe.directory=${cwd}`,
-          ...args
-        ]
-      : args,
-    cwd,
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: join(root, 'empty-config'),
-      GIT_CONFIG_NOSYSTEM: '1'
-    },
-    maxOutputBytes: 2 * 1024 * 1024
-  })
-  if (result.code !== 0) {
-    throw Object.assign(new Error(result.stderr), { code: result.code, stderr: result.stderr })
-  }
-  return result
+  return fixture.exec(args, cwd, { GIT_CONFIG_GLOBAL: join(root, 'empty-config') })
 }
 
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'orca-rebase-reservation-')))
+  fixture = new GitBinaryTestFixture(root)
+  await fixture.start()
   repo = join(root, 'repo')
   checkout = join(root, 'checkout')
   await mkdir(repo)
@@ -78,14 +45,18 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true })
+  try {
+    await fixture.stop()
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 describe('rebase branch reservations with real Git', () => {
-  it.for(['native', 'relay'] as const)(
+  it.for(['native'] as const)(
     '%s retains auxiliary branches reserved by a paused real rebase --update-refs',
     { timeout: 120_000 },
-    async (host, context) => {
+    async (_host, context) => {
       await git(['worktree', 'add', '-q', '-b', 'feature', checkout])
       await writeFile(join(checkout, 'first'), 'first\n')
       await git(['add', 'first'], checkout)
@@ -117,10 +88,7 @@ describe('rebase branch reservations with real Git', () => {
         /checked out|used by worktree/
       )
       const cleanupGit = vi.fn((args: string[], cwd: string) => git(args, cwd))
-      const remove = () =>
-        host === 'native'
-          ? forceDeleteLocalBranch(repo, 'auxiliary', expected, cleanupGit)
-          : forceDeletePreservedRelayBranch(cleanupGit, repo, 'auxiliary', expected)
+      const remove = () => forceDeleteLocalBranch(repo, 'auxiliary', expected, cleanupGit)
       await expect(remove()).rejects.toThrow('checked out in another worktree')
       expect(cleanupGit.mock.calls.map(([args]) => args)).toEqual([
         ['worktree', 'list', '--porcelain']

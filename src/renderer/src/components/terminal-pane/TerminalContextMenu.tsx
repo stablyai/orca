@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import {
   Clipboard,
-  ClipboardCopy,
   Copy,
   Eraser,
   GitFork,
@@ -28,11 +27,15 @@ import {
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  formatOptionalPrimaryShortcutLabel,
+  formatPrimaryShortcutLabel
+} from '@/hooks/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
-import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
 import { AgentSessionContinuationMenuItem } from './AgentSessionContinuationMenuItem'
+import { AgentSessionContextCopyMenuItem } from './AgentSessionContextCopyMenuItem'
+import { ClearPaneTitleMenuItem } from './ClearPaneTitleMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
 
@@ -42,6 +45,7 @@ type TerminalContextMenuProps = {
   menuPoint: { x: number; y: number }
   menuOpenedAtRef: React.RefObject<number>
   canClosePane: boolean
+  closePaneLabel: string
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
   onCopy: () => void
@@ -102,7 +106,7 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-60"
+        className="min-w-60"
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(e) => {
@@ -134,6 +138,7 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
 function TerminalContextMenuItems({
   onOpenChange,
   canClosePane,
+  closePaneLabel,
   canExpandPane,
   menuPaneIsExpanded,
   onCopy,
@@ -182,7 +187,7 @@ function TerminalContextMenuItems({
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
-      nativeChat: nativeChatToggleShortcutLabel(isMacPlatform())
+      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
     }),
     [keybindings]
   )
@@ -225,23 +230,22 @@ function TerminalContextMenuItems({
           'Fork Agent Session…'
         )}
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={onCopyAgentSessionContext}>
-        <ClipboardCopy />
-        {translate('auto.components.terminal.pane.TerminalContextMenu.cff67afad1', 'Copy Context')}
-      </DropdownMenuItem>
+      <AgentSessionContextCopyMenuItem onSelect={onCopyAgentSessionContext} />
       {canToggleNativeChat ? (
         <DropdownMenuItem onSelect={onToggleNativeChat}>
           {isNativeChatView ? <SquareTerminal /> : <MessageSquare />}
           {isNativeChatView
             ? translate(
                 'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                'Switch to terminal view'
+                'Continue with Terminal Agent'
               )
             : translate(
                 'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Switch to chat view'
+                'Continue in Chat UI'
               )}
-          <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
+          {shortcuts.nativeChat ? (
+            <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuSeparator />
@@ -291,8 +295,7 @@ function TerminalContextMenuItems({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {
-          // Why: Set Title moves focus into an overlay input. Force-close
-          // before opening it so the menu's focus guards are not still active.
+          // Close focus guards before opening the title editor overlay.
           onOpenChange(false)
           onSetTitle()
         }}
@@ -304,16 +307,10 @@ function TerminalContextMenuItems({
         ) : null}
       </DropdownMenuItem>
       {canClearPaneTitle ? (
-        <DropdownMenuItem onSelect={onClearPaneTitle}>
-          <X />
-          {translate(
-            'auto.components.terminal.pane.TerminalContextMenu.clearPaneTitle',
-            'Clear Pane Title'
-          )}
-          {showClearPaneTitleShortcut ? (
-            <DropdownMenuShortcut>{shortcuts.clearPaneTitle}</DropdownMenuShortcut>
-          ) : null}
-        </DropdownMenuItem>
+        <ClearPaneTitleMenuItem
+          onSelect={onClearPaneTitle}
+          shortcut={showClearPaneTitleShortcut ? shortcuts.clearPaneTitle : undefined}
+        />
       ) : null}
       {canCopyAgentSessionId ? (
         <DropdownMenuItem onSelect={onCopyAgentSessionId}>
@@ -340,10 +337,7 @@ function TerminalContextMenuItems({
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
             <X />
-            {translate(
-              'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-              'Close Pane'
-            )}
+            {closePaneLabel}
             <DropdownMenuShortcut>{shortcuts.close}</DropdownMenuShortcut>
           </DropdownMenuItem>
         </>

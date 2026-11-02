@@ -1,8 +1,4 @@
-// Real-binary coverage: the fingerprint's whole job is to predict what `git worktree list` would
-// report, so a mocked filesystem would only prove the assumptions, not the Git layout they model.
-// Also listed in pr.yml's Windows boundary step: reading Git's admin layout directly depends on
-// Windows path resolution, CRLF in `HEAD`/`gitdir`/`commondir`, and whether `worktree move`/`lock`
-// and deleting a live checkout behave as they do on POSIX. The Linux shards cannot reach any of it.
+// Use real Git to verify admin fingerprints, including Windows path/CRLF/move/lock semantics that Linux mocks cannot cover.
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
@@ -139,7 +135,6 @@ describe('readRepoWorktreeAdminFingerprint', () => {
   })
 
   it('resolves the same admin state from a linked worktree path', async () => {
-    // A linked worktree can itself be the registered repo path; both must describe one common dir.
     expect(await fingerprint(worktreePath)).toBe(await fingerprint(repoPath))
   })
 

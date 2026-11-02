@@ -1,9 +1,4 @@
-/**
- * Untracked line counts come from direct lstat/open calls, not from git, so on a Windows host
- * driving a WSL distro they must be issued against the Win32 spelling of the worktree. These
- * assert the exact path that reaches the filesystem: translated for a guest-rooted worktree,
- * verbatim for one that is already spelled in this process's own namespace.
- */
+// Untracked line counts use Node I/O, so WSL guest paths need Win32 spelling while host paths stay literal.
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
@@ -86,21 +81,10 @@ describe('untracked line stats on a WSL worktree read by a Windows host', () => 
     vi.restoreAllMocks()
   })
 
-  it('counts an untracked file through the distro UNC spelling of the worktree', async () => {
+  it('invalidates an overlapping untracked branch total through the WSL filesystem spelling', async () => {
     const target = path.join(UNC_WORKTREE, 'fresh.txt')
-    untrackedFiles.set(target, 'one\ntwo\nthree\n')
-    const entries = [untrackedEntry('fresh.txt')]
-
-    const complete = await attachLineStats(GUEST_WORKTREE, entries, { wslDistro: 'Ubuntu' })
-
-    expect(lstatPaths).toEqual([target])
-    expect(entries[0].added).toBe(3)
-    expect(complete).toBe(true)
-  })
-
-  it('adds untracked lines to the branch total through the same spelling', async () => {
-    const target = path.join(UNC_WORKTREE, 'fresh.txt')
-    untrackedFiles.set(target, 'one\ntwo\nthree\n')
+    untrackedFiles.set(target, 'one\ntwo\n')
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '0\t2\tfresh.txt\0', stderr: '' })
     const input = createBranchLineTotalInput(
       GUEST_WORKTREE,
       [untrackedEntry('fresh.txt')],
@@ -108,26 +92,10 @@ describe('untracked line stats on a WSL worktree read by a Windows host', () => 
       true
     )
 
-    const total = await input?.compute()
-
+    expect(await input?.compute()).toBeNull()
     expect(lstatPaths).toEqual([target])
-    expect(total?.added).toBe(3)
   })
 
-  it('maps a drvfs worktree onto its drive spelling', async () => {
-    const target = path.join(String.raw`C:\repo`, 'fresh.txt')
-    untrackedFiles.set(target, 'one\n')
-    const entries = [untrackedEntry('fresh.txt')]
-
-    await attachLineStats('/mnt/c/repo', entries, { wslDistro: 'Ubuntu' })
-
-    expect(lstatPaths).toEqual([target])
-    expect(entries[0].added).toBe(1)
-  })
-
-  // One case per spelling in a single test: the guest row pins that re-spelling still happens, so
-  // the whole test dies if the production hunks are reverted, and each verbatim row pins one half
-  // of the guard that keeps a path this process can already open from being re-spelt onto nothing.
   it('re-spells the guest form only, leaving every host-openable spelling byte-identical', async () => {
     const cases: { worktree: string; expected: string }[] = [
       { worktree: GUEST_WORKTREE, expected: UNC_WORKTREE },

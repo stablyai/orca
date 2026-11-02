@@ -1,20 +1,7 @@
-import type { Worker } from 'node:worker_threads'
+import type { WorkerRequestTransport, WorkerThreadFactory } from './worker-thread-transport'
+export type { WorkerRequestTransport, WorkerThreadFactory } from './worker-thread-transport'
 
-export type WorkerRequestTransport = Pick<Worker, 'unref' | 'postMessage' | 'terminate'> & {
-  on(...args: Parameters<Worker['on']>): unknown
-  off(...args: Parameters<Worker['off']>): unknown
-  removeAllListeners(): unknown
-}
-
-export type WorkerThreadFactory = () => WorkerRequestTransport
-
-/**
- * Owns the lifetime of one lazily-spawned worker thread: spawn on demand,
- * listener wiring, teardown, and idle expiry. It holds no request state, so
- * every decision about which call a message belongs to stays with its client,
- * and a failed spawn is reported rather than thrown so the client can fail its
- * queued calls closed instead of moving the work back onto the main thread.
- */
+/** Clients own request state and must fail queued calls when spawning fails. */
 export class LazyWorkerThreadHost<TResponse> {
   private worker: WorkerRequestTransport | null = null
   private idleTimer: NodeJS.Timeout | null = null
@@ -29,14 +16,11 @@ export class LazyWorkerThreadHost<TResponse> {
       onMessage: (response: TResponse) => void
       onError: (error: Error) => void
       onExit: (code: number) => void
-      /** Nothing active and nothing queued, checked again when the idle timer fires. */
+      /** No active or queued requests; checked again at idle expiry. */
       isIdle: () => boolean
-      /** First spawn failure only: a repeating one must not repeat the log. */
+      /** Called only for the first spawn failure. */
       onUnavailable: (error: unknown) => void
-      /**
-       * No replacement until a terminated worker has exited (#24572): terminate()
-       * cannot interrupt a native call, so respawning would stack threads on it.
-       */
+      /** Native calls can delay termination; wait for exit before spawning another worker (#24572). */
       awaitRetirement?: boolean
     }
   ) {}
@@ -45,12 +29,11 @@ export class LazyWorkerThreadHost<TResponse> {
     return this.worker
   }
 
-  /** A terminated worker has not exited yet, so `ensure` refuses to spawn. */
   get isRetiring(): boolean {
     return this.retiring !== null
   }
 
-  /** The live worker, spawning one if needed; null when no worker can be had. */
+  /** Returns null if spawning fails or a previous worker is still retiring. */
   ensure(): WorkerRequestTransport | null {
     if (this.worker) {
       return this.worker
@@ -110,8 +93,7 @@ export class LazyWorkerThreadHost<TResponse> {
     }
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null
-      // Re-checked here: a request arriving as the timer fires must never be
-      // lost to a self-exiting worker.
+      // Recheck idle state so requests arriving during the delay survive.
       if (this.options.isIdle()) {
         this.destroy()
       }

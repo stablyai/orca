@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { deriveGitRemoteIdentity } from '../shared/git-remote-identity'
+import type { Repo } from '../shared/repo-types'
 
 const {
   callMock,
@@ -43,6 +45,18 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+
+function storedRepo(remote?: string): Repo {
+  return {
+    id: 'repo',
+    path: '/tmp/repo',
+    displayName: 'project',
+    badgeColor: '',
+    addedAt: 1,
+    kind: remote ? 'git' : 'folder',
+    gitRemoteIdentity: remote ? deriveGitRemoteIdentity(`origin\t${remote} (fetch)\n`) : null
+  }
+}
 
 const ISSUE_URL = 'https://gitlab.example.com:8443/group/sub/project/-/work_items/53'
 
@@ -126,19 +140,7 @@ describe('GitLab flag project identity', () => {
       queueFixtures(
         callMock,
         okFixture('req_repo', {
-          repo: {
-            id: 'repo',
-            kind: remote ? 'git' : 'folder',
-            ...(remote
-              ? {
-                  gitRemoteIdentity: {
-                    remoteUrl: remote,
-                    canonicalKey: 'unused',
-                    remoteName: 'origin'
-                  }
-                }
-              : {})
-          }
+          repo: storedRepo(remote)
         }),
         okFixture('req_write', {
           worktree: buildWorktree('/tmp/repo/child', 'linked-task'),
@@ -146,7 +148,7 @@ describe('GitLab flag project identity', () => {
           warnings: []
         })
       )
-      vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       const target =
         command === 'create'
           ? ['--repo', 'id:repo', '--name', 'linked-task', '--no-parent']
@@ -165,16 +167,26 @@ describe('GitLab flag project identity', () => {
         )
       } else {
         expect(callMock).toHaveBeenCalledTimes(readCount)
+        expect(JSON.parse(logSpy.mock.calls[0][0])).toMatchObject({
+          ok: false,
+          error: {
+            code: 'invalid_argument',
+            message: expect.stringContaining('must match the workspace source project')
+          }
+        })
         expect(process.exitCode).toBe(1)
       }
     })
   }
 
-  it('accepts an scp remote without guessing a web port', async () => {
+  it.each([
+    'git@gitlab.com:group/project.git',
+    'ssh://git@altssh.gitlab.com:443/group/project.git'
+  ])('matches GitLab issue and MR URLs against stored remote %s', async (remoteUrl) => {
     queueFixtures(
       callMock,
       okFixture('req_repo', {
-        repo: { id: 'repo', gitRemoteIdentity: { remoteUrl: 'git@gitlab.com:group/project.git' } }
+        repo: storedRepo(remoteUrl)
       }),
       okFixture('req_create', {
         worktree: buildWorktree('/tmp/repo/child', 'linked-task'),
@@ -192,6 +204,8 @@ describe('GitLab flag project identity', () => {
         '--name',
         'linked-task',
         '--no-parent',
+        '--gitlab-issue',
+        'https://gitlab.com/group/project/-/issues/53',
         '--gitlab-mr',
         'https://gitlab.com/group/project/-/merge_requests/77/diffs',
         '--json'
@@ -201,7 +215,7 @@ describe('GitLab flag project identity', () => {
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'worktree.create',
-      expect.objectContaining({ linkedGitLabMR: 77 })
+      expect.objectContaining({ linkedGitLabIssue: 53, linkedGitLabMR: 77 })
     )
   })
 })

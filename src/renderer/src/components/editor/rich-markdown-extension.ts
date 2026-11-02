@@ -20,7 +20,8 @@ export function createRichMarkdownExtension(
   codec: RichMarkdownEditorCodec,
   htmlSuperscriptLinks = false
 ) {
-  return RichMarkdownExtension.extend({
+  // configure() first so extend() does not link this per-editor child onto the shared module extension.
+  return RichMarkdownExtension.configure().extend({
     onBeforeCreate(event) {
       this.parent?.(event)
       preserveLiteralMarkdownSource(this.editor, codec, htmlSuperscriptLinks)

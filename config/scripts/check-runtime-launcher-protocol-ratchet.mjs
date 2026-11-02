@@ -1,6 +1,4 @@
-// R3 gate (docs/reference/node-runtime-design.html, D7.1): swapping the process that hosts orcad
-// or the daemon is not a daemon protocol change, so one PR must not do both. A bump riding along
-// with a runtime swap would strand every live terminal on upgrade and rollback at once.
+// R3/D7.1: never combine runtime-host swaps with daemon protocol bumps; together they strand live terminals on upgrade and rollback.
 // Usage: node check-runtime-launcher-protocol-ratchet.mjs --base <ref>
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -15,16 +13,16 @@ export const RUNTIME_LAUNCHER_PATHS = [
   'src/main/orcad/launcher.ts',
   'config/scripts/orcad-entry-build.mjs',
   'src/shared/node-runtime-pin.ts',
-  'src/main/ssh/pinned-runtime-materializer.ts',
-  'src/main/ssh/runtime-archive-download.ts',
-  'src/main/ssh/orcad-remote-node-runtime.ts',
+  'src/main/node-runtime/pinned-runtime-materializer.ts',
+  'src/main/node-runtime/runtime-archive-download.ts',
+  'src/main/managed-server/install/orcad-remote-node-runtime.ts',
   // orcad slot layout: which runtime file a packaged slot carries.
   'src/shared/orcad-artifacts.ts',
   'config/scripts/build-orcad.mjs',
   'config/scripts/build-orcad-node.mjs',
   'config/scripts/build-orcad-template.mjs',
   // Remote slot runtime selection.
-  'src/main/ssh/orcad-remote-runtime.ts',
+  'src/main/managed-server/install/orcad-remote-runtime.ts',
   // Terminal daemon host launch: which executable the daemon child is forked from.
   'src/main/daemon/daemon-launched-child.ts',
   'src/main/daemon/daemon-launched-child-spawn.ts',

@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
@@ -12,13 +12,7 @@ import {
 } from '../chat-assignee-admission'
 import type { OrchestrationParty } from '../../../../orchestration/orchestration-party'
 
-/**
- * Admits a caller-supplied `--terminal` as this dispatch's worker pane.
- *
- * Three refusals, all of which must happen before anything is created: a coordinator adopted as its
- * own worker answers its own dispatch preamble forever, a pane in another worktree is not this
- * dispatch's to take, and a pane with no agent cannot read a preamble at all.
- */
+/** Before any effects, refuse coordinator self-assignment, foreign-workspace panes and terminals without agents. */
 export async function assertExplicitWorkerTerminalUsable(args: {
   runtime: OrcaRuntimeService
   terminal: string
@@ -30,9 +24,7 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   const explicitTerminal = await runtime.showTerminal(terminal)
   const targetPane = runtime.getTerminalPaneKey(terminal)
   const callerPane = coordinator?.paneKey ?? runtime.getTerminalPaneKey(from)
-  // A structured coordinator has no terminal to show, so its own identity is the raw handle plus
-  // the pane key; showing `from` unconditionally would throw for exactly those callers. A
-  // handle-less session has no terminal at all, so its address is its identity.
+  // Structured coordinators may have no showable terminal; compare their handle/pane identity, or session address for handle-less callers.
   const coordinatorHandle =
     coordinator?.terminalHandle === null
       ? coordinator.address

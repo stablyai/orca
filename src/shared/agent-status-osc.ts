@@ -1,6 +1,8 @@
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import { parseAgentStatusPayload } from './agent-status-types'
 import { ownRetainedString } from './own-retained-string'
+import type { ProgramStatusFacet } from './program-status/facet'
+import type { AgentStatus } from './agent-title-core'
 
 const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 
@@ -24,16 +26,28 @@ export type ProcessedAgentStatusChunk = {
   cleanData: string
   payloads: ParsedAgentStatusPayload[]
   lastPayloadCleanOffset: number | null
+  /** Each payload's end offset in `cleanData`, so other in-band status can merge in byte order. */
+  payloadCleanOffsets?: number[]
+  /** The subset of `payloads` projected from OSC 7501 records; these yield to the pane's hook row. */
+  programStatusPayloads?: ReadonlySet<ParsedAgentStatusPayload>
+  /** The subset of those whose program left no records (see ProgramStatusPayload.removesRow). */
+  programStatusRowRemovals?: ReadonlySet<ParsedAgentStatusPayload>
+  /** The chunk's net OSC 7501 facet change: new facet, `null` when cleared, absent when unchanged. */
+  programStatusFacet?: ProgramStatusFacet | null
+  /** Each change in the program's OSC 7501 activity, in byte order with `cleanData` offsets.
+   *  Title trackers classify by it ahead of title glyphs while it is non-null. */
+  programActivity?: readonly ProgramActivityChange[]
 }
+
+/** The program's OSC 7501 activity from `offset` on; `null` once it stops reporting. */
+export type ProgramActivityChange = { offset: number; activity: AgentStatus | null }
 
 function findAgentStatusTerminator(
   data: string,
   searchFrom: number,
   next: { belIndex: number; stIndex: number }
 ): { index: number; length: 1 | 2 } | null {
-  // Reuse forward matches, including absence, for this chunk's remaining frames.
-  // Requires `searchFrom` to increase on every call for one `data`; a rewind would
-  // reuse a match that is no longer the earliest.
+  // Cache forward matches (including absence) per chunk; searchFrom must increase or the cached match may no longer be earliest.
   if (next.belIndex !== -1 && next.belIndex < searchFrom) {
     next.belIndex = data.indexOf('\x07', searchFrom)
   }
@@ -49,22 +63,15 @@ function findAgentStatusTerminator(
   return { index: next.stIndex, length: 2 }
 }
 
-/**
- * Stateful OSC 9999 parser for PTY streams.
- * Why: hidden/model-owned terminal output needs the same agent-status parsing
- * as mounted terminal panes, even when no terminal view is rendered.
- */
+/** Parse OSC 9999 for hidden/model-owned terminals as well as mounted views. */
 export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgentStatusChunk {
   const MAX_PENDING = 64 * 1024
   let pending = ''
-  // How much of `pending` already failed a terminator search, so a frame split across
-  // many chunks re-scans only the new bytes instead of the whole accumulation.
+  // Track searched pending bytes so split frames scan new bytes instead of the whole accumulation.
   let pendingSearched = 0
 
   return (data: string): ProcessedAgentStatusChunk => {
-    // Ordinary terminal output is by far the common case. Keep it on the
-    // identity path unless the chunk ends with a split OSC marker; this avoids
-    // rebuilding a clean-data string for every PTY frame.
+    // Keep ordinary output on the identity path unless it ends in a split marker, avoiding clean-string rebuilds per PTY chunk.
     if (pending.length === 0 && !data.includes(OSC_AGENT_STATUS_PREFIX)) {
       const carry = findAgentStatusPrefixCarry(data)
       if (carry.length === 0) {
@@ -85,6 +92,7 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
 
     const payloads: ParsedAgentStatusPayload[] = []
     let lastPayloadCleanOffset: number | null = null
+    const payloadCleanOffsets: number[] = []
     let cleanData = ''
     let cursor = 0
     const nextTerminator = { belIndex: 0, stIndex: 0 }
@@ -122,10 +130,16 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
       if (parsed) {
         payloads.push(parsed)
         lastPayloadCleanOffset = cleanData.length
+        payloadCleanOffsets.push(lastPayloadCleanOffset)
       }
       cursor = terminator.index + terminator.length
     }
 
-    return { cleanData, payloads, lastPayloadCleanOffset }
+    return {
+      cleanData,
+      payloads,
+      lastPayloadCleanOffset,
+      ...(payloads.length > 0 ? { payloadCleanOffsets } : {})
+    }
   }
 }

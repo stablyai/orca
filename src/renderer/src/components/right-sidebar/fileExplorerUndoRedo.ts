@@ -1,9 +1,6 @@
-/**
- * Linear undo/redo for file explorer mutations (delete, create, rename).
- * Uses in-memory closures so each step carries the exact paths/content needed
- * to reverse or replay the operation without relying on OS trash restore
- * (which is not exposed in a portable way here).
- */
+/** Keep exact mutation paths/content in memory; OS trash restore has no portable API here. */
+import { FileWriteRefusedError } from '../../../../shared/file-write-disk-precondition'
+
 const MAX_STEPS = 50
 
 type ExplorerOp = {
@@ -32,7 +29,15 @@ export async function undoFileExplorer(): Promise<boolean> {
   if (!op) {
     return false
   }
-  await op.undo()
+  try {
+    await op.undo()
+  } catch (error) {
+    // Only refusals guarantee no write and can retry; timeouts may have applied, so replay could overwrite newer changes.
+    if (error instanceof FileWriteRefusedError) {
+      past.push(op)
+    }
+    throw error
+  }
   future.push(op)
   return true
 }
@@ -42,7 +47,14 @@ export async function redoFileExplorer(): Promise<boolean> {
   if (!op) {
     return false
   }
-  await op.redo()
+  try {
+    await op.redo()
+  } catch (error) {
+    if (error instanceof FileWriteRefusedError) {
+      future.push(op)
+    }
+    throw error
+  }
   past.push(op)
   return true
 }

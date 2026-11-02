@@ -340,8 +340,7 @@ describe('terminal recovery session-tabs snapshot validation', () => {
     expect(legacy.tabs[2]).not.toHaveProperty('placement')
   })
 
-  // Wire-compat Rule 3: a newer host may publish labels this client has never seen. Rejecting the
-  // whole snapshot would stall recovery forever; recovery reads none of these, so they pass through.
+  // Wire-compat Rule 3: recovery ignores extensible labels, so newer enum values must pass without stalling recovery.
   it.each([
     ['tabs.4.agent', 'gemini'],
     ['tabs.0.agentStatus.state', 'future-state'],

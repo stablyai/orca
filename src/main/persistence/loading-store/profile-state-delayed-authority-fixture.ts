@@ -11,6 +11,7 @@ import type {
   ProfileStateDomainReplacement
 } from './profile-state-authority'
 import { Store } from './store'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 
 export function deferred<T>() {
   let resolve!: (value: T) => void
@@ -22,7 +23,6 @@ export function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-/** Delay the authority boundary while retaining real SQLite and Store serialization. */
 export class DelayedAuthority implements AsyncProfileStateAuthority {
   readonly asynchronous = true
   private next:
@@ -36,7 +36,6 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
 
   constructor(readonly inner: ProfileStateSqliteAuthority) {}
 
-  /** Fail the next profile write the way a full disk would, after any paused gate opens. */
   failNextWrite() {
     this.failNext = true
   }
@@ -110,7 +109,10 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-export async function fixture(legacyOpenCodeGoApiKey?: string) {
+export async function fixture(
+  legacyOpenCodeGoApiKey?: string,
+  retainedChatSetting: Record<string, unknown> = {}
+) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-worker-coordination-'))
   const path = join(directory, 'profile-state.db')
   const inner = new ProfileStateSqliteAuthority(path, 'coordination-test')
@@ -121,6 +123,7 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
         ...initial,
         settings: {
           ...initial.settings,
+          ...retainedChatSetting,
           ...(legacyOpenCodeGoApiKey ? { opencodeGoApiKey: legacyOpenCodeGoApiKey } : {})
         }
       })
@@ -146,4 +149,37 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
     }
   }
   return { store, authority, readState }
+}
+
+export async function withReopenedProfileStore(
+  saved: { settings: { workspaceDir: string } },
+  filename: string,
+  inspect: (store: Store) => void | Promise<void>
+) {
+  const store = new Store({
+    serializedState: JSON.stringify(saved),
+    dataFile: join(saved.settings.workspaceDir, filename)
+  })
+  try {
+    await inspect(store)
+  } finally {
+    await store.freezeWritesAsync()
+  }
+}
+
+// Runtime spawns bind only a pane admitted before the process starts.
+export async function admitRuntimeSpawnPane(
+  store: Store,
+  pane: { worktreeId: string; tabId: string; leafId: string },
+  connectionId?: string | null
+): Promise<void> {
+  await store.admitTerminalPane(
+    {
+      type: 'createTerminalTab',
+      workspace: pane.worktreeId,
+      tabId: pane.tabId,
+      leafId: pane.leafId
+    },
+    connectionId ? toSshExecutionHostId(connectionId) : undefined
+  )
 }

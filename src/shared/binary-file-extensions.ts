@@ -1,7 +1,6 @@
 import { IMAGE_FILE_EXTENSIONS } from './image-file-extensions'
 
-// SVG is an image format that editors open as source text, so it stays out of
-// the binary set even though it lives in IMAGE_FILE_EXTENSIONS.
+// Keep SVG out of binary extensions because editors open it as source text.
 const TEXT_IMAGE_EXTENSIONS = new Set(['.svg'])
 
 const NON_IMAGE_BINARY_EXTENSIONS = [
@@ -71,10 +70,7 @@ export const BINARY_FILE_EXTENSIONS: readonly string[] = Object.freeze([
 
 const BINARY_FILE_EXTENSION_SET = new Set(BINARY_FILE_EXTENSIONS)
 
-/**
- * Extension-only guess at "this file is not text". Content-based detection
- * lives in `isBinaryBuffer`; use this only where the bytes are unavailable.
- */
+/** Guess by extension only without bytes; use isBinaryBuffer for content-based detection. */
 export function hasBinaryFileExtension(filePath: string | undefined): boolean {
   if (filePath === undefined) {
     return false

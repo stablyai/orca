@@ -40,8 +40,7 @@ class MobileWebShellGenerationTest {
     assertEquals(4, entries.size)
     assertEquals(File(DIRECTORY, "index.html"), entries["/"]!!.file)
     assertEquals("text/html; charset=utf-8", entries["/"]!!.contentType)
-    // Only "/" reaches the document: a second URL for the same bytes would answer without the CSP
-    // header, which rides the document response alone.
+    // Only / may serve document bytes with CSP; no entrypoint alias.
     assertNull(entries["/index.html"])
     assertEquals(File(DIRECTORY, "assets/bb.png"), entries["/assets/bb.png"]!!.file)
     assertEquals("image/png", entries["/assets/bb.png"]!!.contentType)

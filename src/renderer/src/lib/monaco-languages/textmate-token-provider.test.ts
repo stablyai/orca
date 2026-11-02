@@ -1,80 +1,45 @@
-import { createRequire } from 'node:module'
-import { readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
-import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
-import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
-import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
+import { describe, expect, it, vi } from 'vitest'
+import { loadNodeOniguruma } from '../syntax-highlighting/oniguruma-test-harness'
+import { loadLeanTextMateGrammar } from './register-lean'
+import { loadNimTextMateGrammar } from './register-nim'
 import { loadTypstTextMateGrammar } from './register-typst'
 import { createTextMateTokensProvider } from './textmate-token-provider'
 
-const require = createRequire(import.meta.url)
-
-let nodeOnigurumaPromise: Promise<IOnigLib> | undefined
-
-async function loadNodeOniguruma(): Promise<IOnigLib> {
-  nodeOnigurumaPromise ??= (async () => {
-    const wasmPath = require.resolve('vscode-oniguruma/release/onig.wasm')
-    const wasmBytes = await readFile(wasmPath)
-    const wasmBuffer = wasmBytes.buffer.slice(
-      wasmBytes.byteOffset,
-      wasmBytes.byteOffset + wasmBytes.byteLength
-    )
-    await loadWASM(wasmBuffer)
-    return { createOnigScanner, createOnigString }
-  })()
-
-  return nodeOnigurumaPromise
-}
+vi.mock('../syntax-highlighting/oniguruma', () => ({ loadOniguruma: loadNodeOniguruma }))
 
 describe('createTextMateTokensProvider', () => {
-  it('tokenizes Nim with the vendored TextMate grammar', async () => {
-    const provider = await createTextMateTokensProvider({
-      scopeName: 'source.nim',
-      loadGrammar: async (scopeName) =>
-        scopeName === 'source.nim' ? (nimGrammar as unknown as IRawGrammar) : null,
-      loadOniguruma: loadNodeOniguruma
-    })
-
-    const procLine = provider.tokenize('proc greet(name: string) =', provider.getInitialState())
-    const procScopes = procLine.tokens.map((token) => token.scopes)
-    expect(procScopes).toContain('keyword.other')
-    expect(procScopes).toContain('entity.name.function.nim')
-    expect(procScopes).toContain('storage.type.concrete.nim')
-
-    const commentLine = provider.tokenize('# hello', provider.getInitialState())
-    expect(commentLine.tokens.map((token) => token.scopes)).toContain(
-      'comment.line.number-sign.nim'
-    )
-  })
-
-  it('tokenizes Typst markup, code, and math through the lazy grammar loader', async () => {
-    const provider = await createTextMateTokensProvider({
-      scopeName: 'source.typst',
-      loadGrammar: loadTypstTextMateGrammar,
-      loadOniguruma: loadNodeOniguruma
-    })
+  it('tokenizes Lean definitions, proof keywords, Unicode binders, strings, and comments', async () => {
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadLeanTextMateGrammar })
     const scopesOf = (line: string) =>
       provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
 
-    expect(scopesOf('#let width = 12pt')).toEqual(
-      expect.arrayContaining(['keyword.other.typst', 'constant.numeric.length.typst'])
+    expect(scopesOf('theorem identity (p : Prop) : p → p := by')).toEqual(
+      expect.arrayContaining(['keyword.other.definitioncommand.lean4', 'storage.type.lean4'])
     )
-    expect(scopesOf('#set text(font: "Inter")')).toEqual(
-      expect.arrayContaining(['entity.name.function.typst', 'string.quoted.double.typst'])
-    )
-    expect(scopesOf('// note')).toContain('comment.line.double-slash.typst')
-    expect(scopesOf('$ sum_(k=0)^n k $')).toContain('string.other.math.typst')
+    expect(scopesOf('  show p from h')).toContain('keyword.other.lean4')
+    expect(scopesOf('#check ∀ (α : Type), α → α')).toContain('storage.type.lean4')
+    expect(scopesOf('#eval "hello"')).toContain('string.quoted.double.lean4')
+    expect(scopesOf('-- proof note')).toContain('comment.line.double-dash.lean4')
+  })
+
+  it('carries nested Lean block comments across lines and resumes code after both closers', async () => {
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadLeanTextMateGrammar })
+    let state = provider.tokenize('/- outer /- inner', provider.getInitialState()).endState
+    state = provider.tokenize('-/ still outer', state).endState
+    const hidden = provider.tokenize('theorem hidden : True := by trivial', state)
+    expect(hidden.tokens.map((token) => token.scopes)).toEqual(['comment.block.lean4'])
+    const closed = provider.tokenize('-/', hidden.endState)
+    const line = 'def answer : Nat := 42'
+    const after = provider.tokenize(line, closed.endState)
+    expect(after.tokens).toEqual(provider.tokenize(line, provider.getInitialState()).tokens)
+    expect(after.tokens.length).toBeGreaterThan(1)
   })
 
   it.each([
     ['```rust', 'let x = 1', '```', '#let y = 2'],
     ['````', '```', '````', '#let y = 2']
   ])('carries a Typst raw block until its matching fence closes (%s)', async (...lines) => {
-    const provider = await createTextMateTokensProvider({
-      scopeName: 'source.typst',
-      loadGrammar: loadTypstTextMateGrammar,
-      loadOniguruma: loadNodeOniguruma
-    })
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadTypstTextMateGrammar })
 
     let state = provider.getInitialState()
     const lineScopes = lines.map((line) => {
@@ -88,11 +53,7 @@ describe('createTextMateTokensProvider', () => {
   })
 
   it('carries Typst math across lines and returns to code after the closing dollar', async () => {
-    const provider = await createTextMateTokensProvider({
-      scopeName: 'source.typst',
-      loadGrammar: loadTypstTextMateGrammar,
-      loadOniguruma: loadNodeOniguruma
-    })
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadTypstTextMateGrammar })
     const opening = provider.tokenize('$', provider.getInitialState())
     const clone = opening.endState.clone()
     expect(clone.equals(opening.endState)).toBe(true)
@@ -118,11 +79,7 @@ describe('createTextMateTokensProvider', () => {
     ['$', '// $ ignored', 'x + y', '$'],
     ['#let formula = $ "cost $5" + \\$ $']
   ])('returns to Typst code after a comment or math region (%j)', async (...lines) => {
-    const provider = await createTextMateTokensProvider({
-      scopeName: 'source.typst',
-      loadGrammar: loadTypstTextMateGrammar,
-      loadOniguruma: loadNodeOniguruma
-    })
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadTypstTextMateGrammar })
     let state = provider.getInitialState()
     for (const line of lines) {
       state = provider.tokenize(line, state).endState
@@ -136,11 +93,7 @@ describe('createTextMateTokensProvider', () => {
   })
 
   it('keeps nested Typst block comments active until both closers', async () => {
-    const provider = await createTextMateTokensProvider({
-      scopeName: 'source.typst',
-      loadGrammar: loadTypstTextMateGrammar,
-      loadOniguruma: loadNodeOniguruma
-    })
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadTypstTextMateGrammar })
     let state = provider.tokenize('/* outer /* inner', provider.getInitialState()).endState
     state = provider.tokenize('*/ still outer', state).endState
     expect(provider.tokenize('#let hidden = 2', state).tokens.map((token) => token.scopes)).toEqual(
@@ -148,13 +101,39 @@ describe('createTextMateTokensProvider', () => {
     )
   })
 
-  it('fails clearly when a scope has no grammar', async () => {
-    await expect(
-      createTextMateTokensProvider({
-        scopeName: 'source.unknown',
-        loadGrammar: async () => null,
-        loadOniguruma: loadNodeOniguruma
-      })
-    ).rejects.toThrow('No TextMate grammar registered for scope source.unknown')
+  it('converges to an equal state after an edit so Monaco stops re-tokenizing', async () => {
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadTypstTextMateGrammar })
+    const stored = provider.tokenize('#let width = 12pt', provider.getInitialState()).endState
+    const edited = provider.tokenize('#let width = 14pt', provider.getInitialState()).endState
+
+    expect(edited).not.toBe(stored)
+    expect(edited.equals(stored)).toBe(true)
+    expect(provider.tokenize('$ x', provider.getInitialState()).endState.equals(stored)).toBe(false)
   })
+
+  it.each([
+    ['Lean', loadLeanTextMateGrammar, '/-'.repeat(40000), 'def value : Nat := 42'],
+    ['Nim', loadNimTextMateGrammar, 'abcdefghij'.repeat(8000), 'proc greet() = discard'],
+    ['Typst', loadTypstTextMateGrammar, '#let x = 12pt; *b* $x^2$ '.repeat(2000), '#let y = 2']
+  ])(
+    'leaves a minified %s line and the lines after it plain instead of freezing',
+    async (_language, loadGrammar, longLine, nextLine) => {
+      const provider = await createTextMateTokensProvider({ loadGrammar })
+      const initial = provider.getInitialState()
+      const started = performance.now()
+      const long = provider.tokenize(longLine, initial)
+      const next = provider.tokenize(nextLine, long.endState)
+
+      // Untimed, these lines take tens of seconds; the length cap skips them outright.
+      expect(performance.now() - started).toBeLessThan(1000)
+      expect(long.tokens).toHaveLength(1)
+      expect(next.tokens).toHaveLength(1)
+      expect(next.tokens[0].scopes).toBe(long.tokens[0].scopes)
+      expect(next.endState.equals(long.endState)).toBe(true)
+      // Shortening the line recolors from the state before it, so the plain tail re-tokenizes.
+      const shortened = provider.tokenize(nextLine, initial)
+      expect(shortened.tokens.length).toBeGreaterThan(1)
+      expect(shortened.endState.equals(long.endState)).toBe(false)
+    }
+  )
 })

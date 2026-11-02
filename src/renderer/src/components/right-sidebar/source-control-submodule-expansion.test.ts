@@ -427,8 +427,6 @@ describe('collectListSelectionEntries', () => {
       EMPTY
     )
 
-    // The expanded submodule's child file must be selectable, mirroring the rows
-    // that actually render in list view.
     expect(collectListSelectionEntries(rows)).toEqual([
       { key: 'unstaged::flutter_mine', entry, area: 'unstaged' },
       {

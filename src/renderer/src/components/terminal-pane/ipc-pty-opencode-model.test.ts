@@ -4,10 +4,7 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
 import type { IpcPtyTransportOptions } from './pty-transport-types'
 
-vi.mock('../../runtime/runtime-rpc-client', async () => ({
-  callRuntimeRpc: vi.fn(),
-  RuntimeRpcCallError: (await import('../../runtime/runtime-rpc-result')).RuntimeRpcCallError
-}))
+vi.mock('../../runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 const spawn = vi.fn(async () => ({ id: 'pty_host', isReattach: true }))
 const options = (): IpcPtyTransportOptions => ({
   worktreeId: 'folder:private',

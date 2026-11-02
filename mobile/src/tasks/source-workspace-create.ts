@@ -17,9 +17,9 @@ import {
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
 import type { WorktreeCreateAgentLaunch } from './agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
+import { getClientWorktreeCreateCandidate } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 
-// The agent bundle the modal resolved: `choice` drives launch resolution — the
-// host applies the agent's launch args (permission flags) and shell quoting.
+// Host resolution applies agent permission flags and shell quoting.
 export type WorkspaceCreateAgentBundle = {
   choice: WorkspaceAgentChoice
 }
@@ -34,8 +34,8 @@ export type CreateWorkspaceFromComposerArgs = {
   nameIsAutoManaged?: boolean
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
-  /** Whether the host can settle the surface itself; false keeps the agent-first create. */
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
+  branchIntentSupported?: boolean | Promise<boolean>
 }
 
 export async function createWorkspaceFromComposerSource(
@@ -82,6 +82,16 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
       }
     }
   }
+  if (item.provider === 'jira') {
+    return {
+      provider: 'jira',
+      source: {
+        key: item.jiraIdentifier ?? '',
+        title: item.title,
+        url: item.url
+      }
+    }
+  }
   return {
     provider: 'linear',
     source: {
@@ -111,8 +121,7 @@ async function createWorkItemWorkspace(args: {
   const item = selection.item
   const taskItem = toTaskItem(item, targetRepoId)
 
-  // The composer resolves PR/MR base at select time; only re-resolve as a
-  // fallback when a linked PR/MR reached create without one.
+  // Reuse select-time PR/MR base resolution; resolve again only when a linked item lacks it.
   let baseBranch = selection.baseBranch
   let compareBaseRef = selection.compareBaseRef
   let pushTarget = selection.pushTarget
@@ -144,12 +153,9 @@ async function createWorkItemWorkspace(args: {
     pushTarget,
     nameIsAutoManaged: args.nameIsAutoManaged
   })
-  // buildTaskWorkspaceCreateParams computes the name; reuse it as the retry base
-  // so collisions still append -2, -3, ... like the blank path does.
+  // Reuse the computed name for collision suffixes, matching blank-workspace creation.
   const baseName = String(params.name)
-  // Deliberately NOT routed through `agent.launch`: an agent-carrying work-item create pre-fills
-  // the issue/PR URL as an unsent `startupDraft`, and a structured session has nowhere to put one
-  // — routing it would submit the URL as the first turn. Keep the terminal until drafts land.
+  // Keep linked work items on terminals: structured sessions cannot hold their unsent URL draft and would submit it as a turn.
   return createWorktreeWithNameRetry({
     client,
     baseName,
@@ -169,6 +175,7 @@ async function createBranchWorkspace(args: {
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
+  branchIntentSupported?: boolean | Promise<boolean>
 }): Promise<WorktreeCreateResult> {
   const {
     client,
@@ -193,9 +200,7 @@ async function createBranchWorkspace(args: {
   }
 
   if (selection.reuse) {
-    // Reusing a fixed existing branch: branchNameOverride is pinned to the reused
-    // branch, so a branch collision can't be cleared by suffixing the display
-    // name — fail fast instead of burning the retry budget.
+    // A reused branch is fixed; display-name suffixes cannot resolve its collision, so fail before wasting retries.
     const baseName = resolveMobileWorkspaceCreateName({
       draft: workspaceName,
       fallback: selection.localBranchName
@@ -206,6 +211,7 @@ async function createBranchWorkspace(args: {
       worktreeCreateIdempotency: args.worktreeCreateIdempotency,
       ...(agentLaunch ? { agentLaunch } : {}),
       maxAttempts: 1,
+      branchIntentSupported: args.branchIntentSupported,
       buildParams: (name) =>
         applyCommon({
           repo: `id:${targetRepoId}`,
@@ -215,13 +221,12 @@ async function createBranchWorkspace(args: {
             : {}),
           setupDecision,
           baseBranch: selection.refName,
-          branchNameOverride: selection.localBranchName
+          branchNameOverride: selection.localBranchName,
+          branchIntent: 'open-existing-v2'
         })
     })
   }
 
-  // New branch off the selected ref. The retry base is the branch name so a
-  // collision bumps the branch itself.
   const baseName = resolveMobileWorkspaceCreateName({
     draft: workspaceName,
     fallback: selection.branchNameOverride || selection.localBranchName
@@ -230,19 +235,24 @@ async function createBranchWorkspace(args: {
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
+    branchIntentSupported: args.branchIntentSupported,
     ...(agentLaunch ? { agentLaunch } : {}),
-    buildParams: (candidate) => {
+    buildParams: (candidate, attempt) => {
       const params: WorkspaceCreateParams = {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
+        branchIntent: 'create-new',
         baseBranch: selection.baseBranch,
         ...(manualDisplayName
           ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
           : {})
       }
       if (selection.branchNameOverride) {
-        params.branchNameOverride = candidate
+        params.branchNameOverride = getClientWorktreeCreateCandidate(
+          selection.branchNameOverride,
+          attempt
+        )
       }
       return applyCommon(params)
     }
@@ -275,10 +285,7 @@ async function createNewBranchWorkspace(args: {
   const agentLaunch = resolveComposerAgentLaunch(createdWithAgentId, args.agentLaunchSupported)
   const manualDisplayName = nameIsAutoManaged === true ? undefined : workspaceName?.trim()
   const comment = note?.trim()
-  // A brand-new branch off the repo's default base. The typed name is kept as the
-  // git branch (via branchNameOverride) so a slash like `feature/login` survives;
-  // the runtime sanitizes the worktree folder from the same name. The retry base is
-  // the branch name so a collision bumps the branch (and folder) together.
+  // Preserve typed git branch names, including slashes; sanitize only the folder, and retry suffixes against the branch name.
   return createWorktreeWithNameRetry({
     client,
     baseName: selection.branchName,

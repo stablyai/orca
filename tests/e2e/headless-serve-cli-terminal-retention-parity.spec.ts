@@ -1,24 +1,5 @@
-/**
- * TOPOLOGY (b): isolated windowless `orca serve` host, paired to a separate
- * real desktop client. Parity arm for
- * paired-cli-terminal-graph-sync-tab-retention.spec.ts, which covers the
- * attached-window desktop host; both import the same oracle unchanged so
- * neither topology can be claimed to prove the other by accident.
- *
- * This host CANNOT exhibit the desktop defect, and that is the point of the
- * arm rather than a weakness of it: the old gate was
- * `getAvailableAuthoritativeWindow() === null`, so a windowless host already
- * persisted the binding on main, and with no renderer there is no renderer
- * graph sync to prune anything. The spec therefore asserts the topology
- * (a headless publication epoch, never a renderer one) and then the
- * no-regression claim that matters now the persist is unconditional: further
- * CLI dispatches must leave every earlier host-created terminal in the host
- * inventory, still bound to its original PTY and still answering.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Run the same retention oracle against a windowless serve host and the paired desktop topology.
+// Without renderer graph publication, this arm proves headless parity rather than the desktop prune regression.
 import { rmSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
@@ -141,9 +122,7 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
     expect(published.tabIds, 'serve host never published the CLI-created terminal').toContain(
       first.tabId
     )
-    // TOPOLOGY ASSERTION: with no renderer there is no renderer-owned
-    // publication to inherit, which is precisely why this host cannot reach the
-    // window-conditioned prune the desktop arm reproduces.
+    // Require a headless publication epoch so this arm cannot accidentally exercise renderer-owned publication.
     expect(
       published.publicationEpoch,
       'a windowless serve host must publish under a headless epoch; a renderer epoch would mean this arm is not testing the headless path'
@@ -151,8 +130,7 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
     await waitForClientTab(client.page, worktreeId, toWebTerminalSurfaceTabId(first.tabId))
     await proveSameLivePty(call, first, 'headless-first-alive')
 
-    // The next dispatch, i.e. what the remote agent does when it spawns more
-    // agents. On this host it is the only thing that republishes the worktree.
+    // Dispatch again to republish the worktree and expose any loss of earlier terminals.
     const second = await createHostCliTerminal(
       call,
       worktreeId,
@@ -162,8 +140,6 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
     expect(second.ptyId).not.toBe(first.ptyId)
     await waitForClientTab(client.page, worktreeId, toWebTerminalSurfaceTabId(second.tabId))
 
-    // SIGNAL 1 — the host inventory still carries both, each still naming the
-    // PTY it was created with.
     const afterSecond = await readHostTerminalInventory(call, worktreeId)
     expect(
       afterSecond.tabIds,
@@ -176,7 +152,6 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
     ).toBe(first.ptyId)
     expect(afterSecond.ptyIdByTabId[second.tabId]).toBe(second.ptyId)
 
-    // SIGNAL 2 — independent of the inventory: both original processes answer.
     await proveSameLivePty(call, first, 'headless-first-after-second')
     await proveSameLivePty(call, second, 'headless-second-alive')
 

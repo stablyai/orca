@@ -1,17 +1,14 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { Duplex } from 'node:stream'
 import type { Socket as NetSocket } from 'node:net'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { SshResolvedConfig } from './ssh-config-parser'
-import { shellEscape } from './ssh-connection-utils'
-import { isOpenSshConfigBackedTarget } from './system-ssh-args'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
 
-// Why: ProxyJump and jumpHost are syntactic sugar for ProxyCommand.
-// OpenSSH internally converts `ProxyJump bastion` to
-// `ProxyCommand ssh -W %h:%p bastion`. We do the same so that ssh2
-// gets a single proxy spawn path regardless of how the tunnel was configured.
-export type EffectiveProxy =
+// Normalize ProxyJump/jumpHost to the ProxyCommand equivalent so ssh2 has one proxy transport path.
+type EffectiveProxy =
   | { kind: 'proxy-command'; command: string }
   | { kind: 'jump-host'; jumpHost: string }
 
@@ -38,10 +35,7 @@ export function resolveEffectiveProxy(
   return undefined
 }
 
-// Why: cmd.exe has no quoting that survives arbitrary values — `%VAR%` expands
-// inside quotes and `""` re-opens the unquoted state — so the only safe Windows
-// expansion is to reject metacharacters instead of pretending to escape them.
-// Hosts, ports and usernames never legitimately contain these.
+// cmd expands %VAR% inside quotes and can reopen quoting; reject unsafe host/user/port metacharacters rather than fake escaping.
 const CMD_UNSAFE_PATTERN = /["%&|<>^\r\n]/
 
 function cmdEscape(s: string): string {
@@ -55,16 +49,11 @@ function cmdEscape(s: string): string {
 
 type ShellSpawnConfig = { file: string; args: string[]; windowsVerbatimArguments: boolean }
 
-// Why: ssh2 doesn't natively support ProxyCommand. When the SSH config
-// specifies one (e.g. `cloudflared access ssh --hostname %h`), we spawn
-// the command and bridge its stdin/stdout into a Duplex stream that ssh2
-// uses as its transport socket via `config.sock`.
+// ssh2 lacks ProxyCommand; bridge the user snippet's stdin/stdout through config.sock.
 function getShellSpawnConfig(command: string): ShellSpawnConfig {
   if (process.platform === 'win32') {
     const comspec = process.env.ComSpec || 'cmd.exe'
-    // Why: mirror Node's own `shell: true` form. `/s` makes cmd.exe strip the
-    // outer quotes and take the rest verbatim; without verbatim arguments Node
-    // would backslash-escape inner quotes, which cmd.exe does not understand.
+    // Match Node shell invocation with /s and verbatim args; cmd does not understand Node's backslash quote escaping.
     return {
       file: comspec,
       args: ['/d', '/s', '/c', `"${command}"`],
@@ -74,9 +63,7 @@ function getShellSpawnConfig(command: string): ShellSpawnConfig {
   return { file: '/bin/sh', args: ['-c', command], windowsVerbatimArguments: false }
 }
 
-// Why: ProxyJump takes a comma-separated chain, but `ssh -W host:port dest`
-// only tunnels through a single final hop. Preceding hops become that hop's own
-// -J chain, which is how OpenSSH expands a multi-hop ProxyJump.
+// Use the final hop with -W and pass preceding hops as its -J chain, matching OpenSSH.
 function jumpHostSpawnArgs(jumpHost: string, host: string, port: number): string[] {
   const hops = jumpHost
     .split(',')
@@ -101,23 +88,19 @@ export function spawnProxyCommand(
 ): { process: ChildProcess; sock: NetSocket } {
   const proc =
     proxy.kind === 'jump-host'
-      ? // Why: ProxyJump is structured input, not a shell snippet. Spawn ssh
-        // directly so jump-host values cannot escape through shell parsing.
+      ? // Spawn structured ProxyJump argv directly so values cannot escape through a shell.
         spawnProcess({
           program: 'ssh',
           args: jumpHostSpawnArgs(proxy.jumpHost, host, port)
         })
       : (() => {
-          const escape = process.platform === 'win32' ? cmdEscape : shellEscape
+          const escape = process.platform === 'win32' ? cmdEscape : quotePosixShell
           const expanded = proxy.command
             .replace(/%h/g, escape(host))
             .replace(/%p/g, escape(String(port)))
             .replace(/%r/g, escape(user))
           const shell = getShellSpawnConfig(expanded)
-          // Why not spawnProcess here: a ProxyCommand is a user-authored shell
-          // snippet, so it keeps its own verbatim command line. The console
-          // still has to be hidden -- a cmd.exe spawn from a GUI process always
-          // flashes and steals foreground otherwise (#10488).
+          // User-authored ProxyCommand needs verbatim shell semantics; hide its Windows console to avoid focus theft (#10488).
           return spawn(shell.file, shell.args, {
             stdio: ['pipe', 'pipe', 'pipe'],
             windowsHide: true,
@@ -125,8 +108,7 @@ export function spawnProxyCommand(
           })
         })()
 
-  // Why: a single PassThrough for both directions creates a feedback loop.
-  // Reads come from the proxy's stdout; writes go to its stdin.
+  // Keep proxy stdout/stdin separate; a bidirectional PassThrough would feed output back as input.
   let cleanedUp = false
   const cleanup = (): void => {
     if (cleanedUp) {
@@ -140,14 +122,12 @@ export function spawnProxyCommand(
     proc.off('error', onProcessError)
   }
   const onStdoutData = (data: Buffer): void => {
-    // Why: honour the Duplex's backpressure so a slow ssh2 consumer cannot
-    // buffer the proxy's output unboundedly.
+    // Honor Duplex backpressure so slow consumers cannot buffer proxy output unboundedly.
     if (!stream.push(data)) {
       proc.stdout!.pause()
     }
   }
-  // Why: an undrained stderr pipe fills and blocks the proxy process, which
-  // looks like a silently hung connection.
+  // Drain stderr or its full pipe blocks the proxy and looks like hung SSH.
   const onStderrData = (data: Buffer): void => {
     const text = data.toString('utf-8').trimEnd()
     if (text) {

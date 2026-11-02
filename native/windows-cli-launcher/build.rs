@@ -11,6 +11,7 @@ fn main() {
     println!("cargo:rerun-if-changed=app.manifest");
     println!("cargo:rerun-if-env-changed=ORCA_LAUNCHER_VERSION");
     println!("cargo:rerun-if-env-changed=ORCA_LAUNCHER_ICON");
+    println!("cargo:rerun-if-env-changed=ORCA_LAUNCHER_FILENAME");
 
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
@@ -30,8 +31,9 @@ fn main() {
         "LegalCopyright",
         "Copyright (C) Stably AI. All rights reserved.",
     );
-    resource.set("InternalName", "orca.exe");
-    resource.set("OriginalFilename", "orca.exe");
+    let filename = env::var("ORCA_LAUNCHER_FILENAME").unwrap_or_else(|_| "orca.exe".into());
+    resource.set("InternalName", &filename);
+    resource.set("OriginalFilename", &filename);
     resource.set("FileVersion", &format!("{major}.{minor}.{patch}.0"));
     resource.set("ProductVersion", &version);
     resource.set_version_info(

@@ -36,8 +36,7 @@ export function shouldOpenStatusBarContextMenu(target: EventTarget | null): bool
     return true
   }
 
-  // Why: Radix portal events can still bubble through the StatusBar React tree;
-  // nested status-bar surfaces opt out so their right-clicks stay local.
+  // Radix portal events bubble through React; exempt nested surfaces so their context menus stay local.
   return (
     closestTarget.closest(FLOATING_TERMINAL_TOGGLE_SELECTOR) === null &&
     closestTarget.closest(STATUS_BAR_CONTEXT_MENU_EXEMPT_SELECTOR) === null

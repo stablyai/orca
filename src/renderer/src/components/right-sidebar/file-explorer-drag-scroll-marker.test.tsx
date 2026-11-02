@@ -115,8 +115,7 @@ function virtualRowsElement(
 }
 
 describe('file explorer draggable rows carry the wheel-scroll marker', () => {
-  // Why: every draggable row must be tagged so the wheel-capture handler can
-  // rescue trackpad scroll that Chromium otherwise swallows over draggable nodes.
+  // Tag draggable rows so wheel capture can rescue scrolling swallowed by Chromium.
   it('marks file and directory rows so the wheel handler can target them', async () => {
     const container = await renderToBody(virtualRowsElement([fileNode, directoryNode]))
 
@@ -147,35 +146,43 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
 
     expect(readWorkspaceFileDragSource(transfer)).toEqual({
       executionHostId: 'runtime:old-env',
-      workspaceId: 'old-workspace'
+      workspaceId: 'old-workspace',
+      runtimeEnvironmentId: 'old-env'
     })
   })
 
-  it('omits ownership when selected cached rows came from different hosts', async () => {
-    const localNode: TreeNode = { ...fileNode, operationOwner: { kind: 'local' } }
-    const sshNode: TreeNode = {
-      ...directoryNode,
-      operationOwner: { kind: 'ssh', connectionId: 'remote-1' }
+  it.each([false, true])(
+    'omits mixed-owner selections, including nested SSH: %s',
+    async (nested) => {
+      const localNode: TreeNode = {
+        ...fileNode,
+        operationOwner: nested
+          ? { kind: 'runtime', executionHostId: 'ssh:remote-1', environmentId: 'env-a' }
+          : { kind: 'local' }
+      }
+      const sshNode: TreeNode = {
+        ...directoryNode,
+        operationOwner: nested
+          ? { kind: 'runtime', executionHostId: 'ssh:remote-1', environmentId: 'env-b' }
+          : { kind: 'ssh', connectionId: 'remote-1' }
+      }
+      const container = await renderToBody(
+        virtualRowsElement([localNode, sshNode], {
+          selectedPaths: new Set([localNode.path, sshNode.path]),
+          sourceWorkspaceId: 'workspace-1'
+        })
+      )
+      const transfer = new DataTransfer()
+      const event = new Event('dragstart', { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'dataTransfer', { value: transfer })
+
+      container.querySelector('[data-file-explorer-row]')?.dispatchEvent(event)
+
+      expect(readWorkspaceFileDragSource(transfer)).toBeNull()
     }
-    const container = await renderToBody(
-      virtualRowsElement([localNode, sshNode], {
-        selectedPaths: new Set([localNode.path, sshNode.path]),
-        sourceWorkspaceId: 'workspace-1'
-      })
-    )
-    const transfer = new DataTransfer()
-    const event = new Event('dragstart', { bubbles: true, cancelable: true })
-    Object.defineProperty(event, 'dataTransfer', { value: transfer })
+  )
 
-    container.querySelector('[data-file-explorer-row]')?.dispatchEvent(event)
-
-    expect(readWorkspaceFileDragSource(transfer)).toBeNull()
-  })
-
-  // A selection outlives the rows that showed it: nothing prunes selectedPaths
-  // when a directory collapses, and the drag still carries every selected path.
-  // Resolving only against visible rows refused a drag whose owner the cache
-  // knows perfectly well.
+  // Collapsed selections still drag; recover ownership from cache when visible rows omit them.
   it('stamps a selection that reaches under a collapsed directory', async () => {
     const owner = { kind: 'local' } as const
     const collapsedChild: TreeNode = {
@@ -201,7 +208,6 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
       },
       '/repo/src': { children: [collapsedChild], operationOwner: owner }
     }
-    // `expanded` is empty, so /repo/src is collapsed and a.ts is not a row.
     const projection = createVisibleFileExplorerRowProjection(
       { dirCache, expanded: new Set<string>(), worktreePath: '/repo' },
       {
@@ -233,8 +239,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
     })
   })
 
-  // The virtualizer re-renders on every scroll frame; a per-render owner scan
-  // over the whole selection would be paid on each of them.
+  // Virtualized rows rerender every scroll frame; avoid scanning selection ownership on each one.
   it('resolves drag ownership at dragstart, not while rendering rows', async () => {
     const localNode: TreeNode = { ...fileNode, operationOwner: { kind: 'local' } }
     const otherNode: TreeNode = { ...directoryNode, operationOwner: { kind: 'local' } }

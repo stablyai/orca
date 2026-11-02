@@ -1,3 +1,5 @@
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
 import type { WorktreeLineage, WorktreeLineageWarning } from '../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -48,6 +50,14 @@ export class RuntimeLineageError extends Error {
   ) {
     super(message)
   }
+}
+
+export const LINEAGE_PARENT_AMBIGUOUS = 'LINEAGE_PARENT_AMBIGUOUS'
+
+export function formatAmbiguousCwdParentMessage(agent?: TuiAgent): string {
+  return `Orca did not create the workspace${agent ? ` or start ${agent}` : ''} because more than one workspace matched the current directory when this request was prepared.
+Run \`orca worktree list --limit 10000 --json\` with the same server and host selection. Match path and host; if truncated, repeat with a larger --limit using totalCount. Choose id:<id> (or identity:<identity.key> for a shared ID), then add --parent-worktree <selector> to your original invocation, or deliberately use --no-parent. Pass the selector as one argument quoted for your shell.
+To choose a parent, start a fresh request without --retry-launch; retrying the old ID returns this refusal.`
 }
 
 export class WorktreeIdRequiresFullPathError extends Error {
@@ -265,5 +275,35 @@ export async function resolveRuntimeWorktreeCreateLineage(
     ...(terminalContextResolved && input.callerTerminalHandle
       ? { createdByTerminalHandle: input.callerTerminalHandle }
       : {})
+  }
+}
+
+/** Match update/hydrate/projection host boundaries (#12757): reject explicit cross-host parents before create, warn/drop inferred ones; unknown hosts stay permissive. */
+export function enforceCreateLineageHostBoundary(
+  resolution: WorktreeLineageResolution,
+  childHostId: ExecutionHostId | undefined
+): WorktreeLineageResolution {
+  if (resolution.kind !== 'lineage' || resolution.parent.type !== 'worktree') {
+    return resolution
+  }
+  const parentHostId = resolution.parent.worktree.hostId
+  if (!childHostId || !parentHostId || parentHostId === childHostId) {
+    return resolution
+  }
+  const message = 'Parent worktree must be on the same execution host as the new worktree.'
+  if (resolution.capture.confidence === 'explicit') {
+    throw new RuntimeLineageError('LINEAGE_PARENT_CONTEXT_CONFLICT', message, {
+      nextSteps: ['Pass a parent on the same execution host, or retry with --no-parent.']
+    })
+  }
+  return {
+    kind: 'none',
+    warnings: [
+      {
+        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        message: `Worktree created without lineage. ${message}`,
+        details: { parentWorktreeId: resolution.parent.worktree.id, parentHostId, childHostId }
+      }
+    ]
   }
 }

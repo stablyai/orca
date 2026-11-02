@@ -1,20 +1,14 @@
 import { runWslProcess } from './wsl/wsl-runner'
 import { isSafeFishHistorySession } from './fish-history-session'
+import { isWslDistroRunning } from './wsl-background-distro-gate'
 
-/** Deduped by distro+session, so a rescan that re-queues the same tombstone
- *  joins the running call instead of spawning a second `wsl.exe`.
- *
- *  Not otherwise rate-limited: the caller admits at most
- *  MAX_PENDING_HISTORY_TREE_REMOVALS tombstones at a time, so fanout is bounded
- *  but can still be dozens of `wsl.exe` launches during a startup GC drain on a
- *  machine with many dead WSL fish worktrees. Narrowing that belongs with the
- *  tombstone scheduler that owns the admission, not here. */
-const cleanupsInFlight = new Map<string, Promise<void>>()
+/** Stopped distros must wait for a later cleanup; GC cannot boot them. */
+export type WslFishHistoryCleanupOutcome = 'deleted' | 'skipped' | 'distro-stopped'
 
-/** Why run this INSIDE the distro: the history file lives on the distro's own
- *  filesystem under its `$XDG_DATA_HOME`/`$HOME`, which only a shell in there
- *  can resolve. `string match -qr '^/'` rejects a relative XDG_DATA_HOME the
- *  same way fish itself does before falling back. */
+/** Join identical cleanups; the tombstone scheduler bounds concurrency across different sessions. */
+const cleanupsInFlight = new Map<string, Promise<WslFishHistoryCleanupOutcome>>()
+
+/** Resolve data home inside the distro, rejecting relative XDG_DATA_HOME as fish does. */
 function fishCleanupScript(session: string): string {
   return [
     'set -l data_home $XDG_DATA_HOME',
@@ -26,17 +20,18 @@ function fishCleanupScript(session: string): string {
 export function deleteWslFishHistoryFile(
   distro: string,
   session: string,
-  run: typeof runWslProcess = runWslProcess
-): Promise<void> {
+  run: typeof runWslProcess = runWslProcess,
+  isRunning: (distro: string) => Promise<boolean> = isWslDistroRunning
+): Promise<WslFishHistoryCleanupOutcome> {
   if (!distro.trim() || !isSafeFishHistorySession(session)) {
-    return Promise.resolve()
+    return Promise.resolve('skipped')
   }
   const key = `${distro}\0${session}`
   const existing = cleanupsInFlight.get(key)
   if (existing) {
     return existing
   }
-  const cleanup = runCleanup(distro, session, run).finally(() => {
+  const cleanup = runCleanup(distro, session, run, isRunning).finally(() => {
     cleanupsInFlight.delete(key)
   })
   cleanupsInFlight.set(key, cleanup)
@@ -46,15 +41,15 @@ export function deleteWslFishHistoryFile(
 async function runCleanup(
   distro: string,
   session: string,
-  run: typeof runWslProcess
-): Promise<void> {
+  run: typeof runWslProcess,
+  isRunning: (distro: string) => Promise<boolean>
+): Promise<WslFishHistoryCleanupOutcome> {
+  if (!(await isRunning(distro))) {
+    return 'distro-stopped'
+  }
   const result = await run({
     distro,
-    // 'preferred', not 'none': `fish` is a bare name, so it is a PATH lookup.
-    // A fish from linuxbrew or nix lives only on the login PATH, and without it
-    // this throws on a distro where the cleanup would have worked. The probe
-    // failing is still fine -- the old `--exec fish` spawn sourced no login
-    // shell either, so running on the default PATH is no worse than before.
+    // Prefer login PATH for fish installed by linuxbrew/nix, but permit the default PATH if probing fails.
     loginPath: 'preferred',
     program: 'fish',
     args: ['--command', fishCleanupScript(session)],
@@ -65,20 +60,16 @@ async function runCleanup(
       `wsl fish history cleanup failed for ${distro}: code=${result.code} timedOut=${result.timedOut}`
     )
   }
+  return 'deleted'
 }
 
-/** Test-only: drop in-flight state so one test's pending work cannot reach the next. */
 export function __resetWslFishHistoryCleanups(): void {
   cleanupsInFlight.clear()
 }
 
-/** Await every in-flight cleanup; for deterministic shutdown and tests.
- *  Why snapshot-and-drain rather than re-reading the map in the loop condition:
- *  an entry that has settled but whose `.finally` has not yet removed it would
- *  make `while (size > 0)` re-await a resolved promise forever, starving the
- *  event loop instead of returning. */
+/** Await each cleanup once so settled entries awaiting finally removal cannot starve the event loop. */
 export async function flushWslFishHistoryCleanups(): Promise<void> {
-  const awaited = new Set<Promise<void>>()
+  const awaited = new Set<Promise<WslFishHistoryCleanupOutcome>>()
   let pending = [...cleanupsInFlight.values()]
   while (pending.length > 0) {
     for (const cleanup of pending) {

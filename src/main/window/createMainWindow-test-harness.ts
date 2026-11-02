@@ -16,9 +16,9 @@ export const attachRouteGuestMock: MainWindowSpy = vi.fn(() => false)
 export const retireRouteRendererMock: MainWindowSpy = vi.fn()
 export const attachClientPageRendererMock: MainWindowSpy = vi.fn()
 export const retireClientPageRendererMock: MainWindowSpy = vi.fn()
-export const buildFromTemplateMock: Mock<(...args: unknown[]) => { popup: MainWindowSpy }> = vi.fn(
-  () => ({ popup: menuPopupMock })
-)
+export const buildFromTemplateMock: Mock<
+  (...args: unknown[]) => { popup: MainWindowSpy; closePopup: MainWindowSpy }
+> = vi.fn(() => ({ popup: menuPopupMock, closePopup: vi.fn() }))
 export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSpy }> = vi.fn(
   function () {
     return { show: notificationShowMock }
@@ -27,7 +27,11 @@ export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSp
 export const powerMonitorOnMock: MainWindowSpy = vi.fn()
 export const powerMonitorRemoveListenerMock: MainWindowSpy = vi.fn()
 export const routePartitionAllowedMock: Mock<(partition: string) => boolean> = vi.fn(() => false)
-export const isMock = { dev: false }
+export const appMock: { isPackaged: boolean; on: MainWindowSpy; removeListener: MainWindowSpy } = {
+  isPackaged: true,
+  on: vi.fn(),
+  removeListener: vi.fn()
+}
 export const macosTahoeMock = { value: false }
 
 type IpcMainMock = {
@@ -45,7 +49,7 @@ const ipcMainMock: IpcMainMock = {
 }
 
 export type ElectronModuleMock = {
-  app: { on: MainWindowSpy; removeListener: MainWindowSpy }
+  app: typeof appMock
   BrowserWindow: typeof browserWindowMock
   ipcMain: IpcMainMock
   Menu: { buildFromTemplate: typeof buildFromTemplateMock }
@@ -66,11 +70,10 @@ export type BrowserManagerModuleMock = {
   }
 }
 
-// Why: vi.mock factories are hoisted per test file, so each file calls these builders instead of
-// re-declaring the shared electron surface.
+// vi.mock factories are hoisted per suite; builders reuse the Electron surface without duplicating it.
 export function electronModuleMock(): ElectronModuleMock {
   return {
-    app: { on: vi.fn(), removeListener: vi.fn() },
+    app: appMock,
     BrowserWindow: browserWindowMock,
     ipcMain: ipcMainMock,
     Menu: { buildFromTemplate: buildFromTemplateMock },
@@ -82,12 +85,6 @@ export function electronModuleMock(): ElectronModuleMock {
       getDisplayMatching: () => ({ scaleFactor: 2 })
     },
     shell: { openExternal: openExternalMock }
-  }
-}
-
-export function electronToolkitUtilsMock() {
-  return {
-    is: isMock
   }
 }
 
@@ -129,7 +126,7 @@ export function resetMainWindowMocks(): void {
   powerMonitorRemoveListenerMock.mockReset()
   routePartitionAllowedMock.mockReset()
   routePartitionAllowedMock.mockReturnValue(false)
-  isMock.dev = false
+  appMock.isPackaged = true
   macosTahoeMock.value = false
   ipcMainMock.on.mockReset()
   ipcMainMock.removeListener.mockReset()
@@ -164,6 +161,7 @@ export function createRendererRecoveryWindowHarness(): RendererRecoveryWindowHar
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn()

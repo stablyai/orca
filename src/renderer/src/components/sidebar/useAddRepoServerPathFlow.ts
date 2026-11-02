@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { track } from '@/lib/telemetry'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
@@ -13,7 +12,14 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  wslHostWindowsDriveRefusalForLinuxPath,
+  type WslHostWindowsDriveRefusal
+} from '../../../../shared/wsl-host-windows-drive-refusal'
+import { getWindowsPathAccess } from '@/lib/windows-path-access'
+import type { AddRepoPathOptions } from '@/store/repos/repo-state'
+import { addRepoBusyLabels } from './add-repo-busy-labels'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -28,6 +34,7 @@ type ShowNestedRepoReview = (args: {
 
 export function useAddRepoServerPathFlow({
   addRepoPath,
+  addNonGitFolder,
   activeRuntimeEnvironmentId,
   closeModal,
   fetchWorktrees,
@@ -37,24 +44,26 @@ export function useAddRepoServerPathFlow({
   setNestedScanInProgress,
   showNestedRepoReview,
   onGitRepoReady,
-  setAddProjectBusyLabel
+  setAddProjectBusyLabel,
+  onWindowsDriveRefusal
 }: {
   addRepoPath: (
     path: string,
     kind?: 'git' | 'folder',
-    options?: { runtimeEnvironmentId?: string | null }
+    options?: AddRepoPathOptions
   ) => Promise<Repo | null>
+  addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>
   activeRuntimeEnvironmentId: string | null
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
   scanNestedRepos: (
     path: string,
-    connectionId?: string,
-    controls?: {
+    connectionId: string | undefined,
+    controls: {
       scanId?: string
       onProgress?: (scan: NestedRepoScanResult) => void
-      runtimeEnvironmentId?: string | null
+      runtimeEnvironmentId: string | null
     }
   ) => Promise<NestedRepoScanResult | null>
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
@@ -66,6 +75,8 @@ export function useAddRepoServerPathFlow({
     executionHostId?: ExecutionHostId
   ) => Promise<void>
   setAddProjectBusyLabel: (label: string | null) => void
+  /** Shown inline by the dialog, whether this client or the host refused. */
+  onWindowsDriveRefusal: (refusal: WslHostWindowsDriveRefusal) => void
 }): {
   serverPath: string
   isAddingServerPath: boolean
@@ -89,9 +100,23 @@ export function useAddRepoServerPathFlow({
       if (!path) {
         return
       }
+      // A WSL host refuses /mnt/<drive> up front, before a slow drvfs scan; the host re-checks by mount.
+      const driveRefusal =
+        activeRuntimeEnvironmentId &&
+        getWindowsPathAccess(toRuntimeExecutionHostId(activeRuntimeEnvironmentId))
+          ? wslHostWindowsDriveRefusalForLinuxPath(path)
+          : null
+      if (driveRefusal) {
+        onWindowsDriveRefusal(driveRefusal)
+        return
+      }
       const gen = ++serverAddGenRef.current
       setIsAddingServerPath(true)
-      setAddProjectBusyLabel(kind === 'git' ? 'Scanning for repositories...' : 'Opening folder...')
+      setAddProjectBusyLabel(
+        kind === 'git'
+          ? addRepoBusyLabels.scanningRepositories()
+          : addRepoBusyLabels.openingFolder()
+      )
       try {
         if (kind === 'git') {
           const attemptId = createNestedRepoTelemetryAttemptId()
@@ -157,16 +182,22 @@ export function useAddRepoServerPathFlow({
             return
           }
         }
-        setAddProjectBusyLabel(kind === 'git' ? 'Opening project...' : 'Opening folder...')
-        const repo = await addRepoPath(path, kind, {
-          runtimeEnvironmentId: activeRuntimeEnvironmentId
-        })
+        setAddProjectBusyLabel(
+          kind === 'git' ? addRepoBusyLabels.openingProject() : addRepoBusyLabels.openingFolder()
+        )
+        const options = {
+          runtimeEnvironmentId: activeRuntimeEnvironmentId,
+          onWindowsDriveRefusal
+        }
+        const repo =
+          kind === 'folder'
+            ? await addNonGitFolder(path, options)
+            : await addRepoPath(path, kind, options)
         if (gen !== serverAddGenRef.current) {
           return
         }
         if (repo && isGitRepoKind(repo)) {
-          // Why: once the repo exists, a transient non-authoritative refresh
-          // should fall through to project reveal instead of leaving the add flow open.
+          // A persisted repo should still reveal after a transient non-authoritative refresh.
           const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
           await fetchWorktrees(repo.id, ownerOptions)
           if (gen !== serverAddGenRef.current) {
@@ -174,9 +205,6 @@ export function useAddRepoServerPathFlow({
           }
           await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
         } else if (repo) {
-          // Why: folder repos skip the Git default-checkout handoff; their synthetic
-          // root workspace is opened by the folder add flow.
-          await markOnboardingProjectAdded('addedFolder')
           closeModal()
         }
       } finally {
@@ -190,11 +218,13 @@ export function useAddRepoServerPathFlow({
     },
     [
       addRepoPath,
+      addNonGitFolder,
       activeRuntimeEnvironmentId,
       closeModal,
       fetchWorktrees,
       getNestedRepoRuntimeKind,
       onGitRepoReady,
+      onWindowsDriveRefusal,
       scanNestedRepos,
       serverPath,
       setActiveNestedScanId,

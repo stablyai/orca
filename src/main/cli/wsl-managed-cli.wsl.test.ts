@@ -2,13 +2,13 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { getManagedWslCliDir } from './wsl-managed-cli'
-import { buildLocalShellReadyWrapperFiles } from '../providers/local-pty-shell-ready-wrapper-fileset'
+import { buildLocalShellReadyWrapperFiles } from '../providers/local-pty/local-pty-shell-ready-wrapper-fileset'
 
 // Explicit opt-in: never require a developer's WSL installation for unit tests.
 const enabled = process.platform === 'win32' && process.env.ORCA_TEST_MANAGED_WSL === '1'
@@ -101,7 +101,6 @@ it.skipIf(!enabled)(
       expect((await shell('orca-dev --exit')).code).toBe(23)
 
       env.ORCA_WSL_CLI_DIR = join(root, 'missing-cli')
-      // An unusable CLI warns but never blocks the shell.
       const missing = await shell('echo SHELL_CONTINUED')
       expect(missing.code).toBe(0)
       expect(missing.stdout).toContain('SHELL_CONTINUED')

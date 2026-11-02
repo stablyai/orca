@@ -11,7 +11,7 @@ on:
       - deleted
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: readme-downloads-badge
@@ -19,21 +19,35 @@ concurrency:
 
 jobs:
   update:
-    # Why: this workflow commits to main, so forks should not create divergent badge commits.
+    # Badge updates belong to the upstream repository.
     if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
     steps:
+      - name: Generate badge update token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: 2590194
+          private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Checkout main
         uses: actions/checkout@v6
         with:
           ref: main
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Render downloads badge
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/scripts/render-readme-downloads-badge.mjs
 
-      - name: Commit badge update
+      - name: Propose badge update
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           if git diff --quiet -- docs/assets/readme-downloads.svg; then
@@ -41,8 +55,31 @@ jobs:
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="automation/readme-downloads-badge"
+          expected="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)"
+          git checkout -b "$branch"
+          git config user.name "buf0-bot[bot]"
+          git config user.email "252831055+buf0-bot[bot]@users.noreply.github.com"
           git add docs/assets/readme-downloads.svg
           git commit -m "Update README downloads badge"
-          git push origin main
+          git push --force-with-lease="refs/heads/$branch:$expected" origin "HEAD:refs/heads/$branch"
+
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$branch" --json url --jq '.[0].url // empty')"
+          if [ -n "$existing" ]; then
+            echo "Updated $existing"
+            exit 0
+          fi
+
+          body="$RUNNER_TEMP/readme-downloads-pr.md"
+          cat > "$body" <<'BODY'
+          ## ELI5
+          Refresh the README downloads badge with the current release download count.
+
+          ## Visual Proof
+          N/A — generated badge count only; no application UI change.
+
+          ## Testing
+          Generated from published release assets by the README Downloads Badge workflow.
+          BODY
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "Update README downloads badge" --body-file "$body"

@@ -10,7 +10,7 @@ const control = vi.hoisted(() => ({
   clear: () => {}
 }))
 const ownership = vi.hoisted(() => ({
-  ptyOwnership: new Map<string, null>(),
+  ptyOwnership: new Map<string, string>(),
   ptyIncarnationById: new Map<string, string>()
 }))
 vi.mock('../agent-hooks/server', () => ({
@@ -43,7 +43,7 @@ function fixture() {
     isPtyStopRequested: () => false,
     subscribeToPtyExit: (_ptyId: string, _listener: () => void) => () => {}
   }
-  ownership.ptyOwnership.set(result.id, null)
+  ownership.ptyOwnership.set(result.id, 'local')
   ownership.ptyIncarnationById.set(result.id, result.incarnationId)
   const context = {
     env: {
@@ -72,12 +72,12 @@ function fixture() {
 }
 
 describe('native prompt admission after spawn commit', () => {
-  it('waits through delayed persistence and later runtime identity admission', async () => {
+  it('waits for canonical commit and runtime identity before claiming once', async () => {
     const f = fixture()
     const committed = commitPtyWithOpenCodePromptIntent(f.context, async () => {
       await f.waiting
       f.facts.recordSpawnCommit(f.result)
-      return f.result
+      return { kind: 'committed' as const, result: f.result }
     })
     expect(control.claim(f.body)).toBe('pending')
     f.release()
@@ -86,6 +86,23 @@ describe('native prompt admission after spawn commit', () => {
     f.admit()
     expect(control.claim(f.body)).toBe(true)
     expect(control.claim(f.body)).toBe(false)
+  })
+
+  it('cancels a registration-exited outcome despite later facts and identity admission', async () => {
+    const f = fixture()
+    const outcome = { kind: 'registration-exited' as const, result: f.result }
+    const committed = commitPtyWithOpenCodePromptIntent(f.context, async () => {
+      await f.waiting
+      return outcome
+    })
+    expect(control.claim(f.body)).toBe('pending')
+    f.release()
+    await expect(committed).resolves.toBe(outcome)
+    expect(control.claim(f.body)).toBe(false)
+    f.facts.recordSpawnCommit(f.result)
+    f.admit()
+    expect(control.claim(f.body)).toBe(false)
+    expect(control.claim({ ...f.body, requestId: 'late-operation' })).toBe(false)
   })
 
   it('keeps pre-commit driving input sticky even if the draft is erased', async () => {

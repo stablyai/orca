@@ -24,7 +24,7 @@ export function gitCleanupOptions(
   cwd: string,
   options: GitWorktreeExecOptions
 ): GitExecOptionsForWorktree {
-  // Why: cancellation must not strand a partially moved worktree; cleanup is bounded separately.
+  // Cancellation must not strand a partial move; cleanup has its own bound.
   return gitExecOptions(cwd, { ...options, signal: undefined })
 }
 

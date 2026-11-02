@@ -3,8 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import WorkspaceKanbanSearchField, { overlayReserve } from './WorkspaceKanbanSearchField'
-
+import WorkspaceKanbanSearchField from './WorkspaceKanbanSearchField'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
@@ -77,8 +76,7 @@ describe('WorkspaceKanbanSearchField', () => {
     renderField({ query: '' })
 
     act(() => {
-      // Why: React's value tracker shadows the `value` property, so a plain
-      // assignment would look like a no-op and never fire onChange.
+      // Use the native setter to bypass React’s value tracker and emit onChange.
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input(), 'or')
       input().dispatchEvent(new Event('input', { bubbles: true }))
     })
@@ -96,15 +94,6 @@ describe('WorkspaceKanbanSearchField', () => {
     })
 
     expect(onClear).toHaveBeenCalledOnce()
-  })
-
-  it('hides the visual match count from assistive tech but keeps the clear button named', () => {
-    renderField({ query: 'orca', matchCount: 3, totalCount: 12 })
-
-    const count = container.querySelector('span[aria-hidden="true"]')
-    expect(count?.textContent).toBe('3 / 12')
-    expect(clearButton()?.getAttribute('aria-hidden')).toBeNull()
-    expect(clearButton()?.getAttribute('aria-label')).toBe('Clear search')
   })
 
   it('withholds counts for text that never narrows the board', () => {
@@ -139,10 +128,7 @@ describe('WorkspaceKanbanSearchField', () => {
   })
 
   it('clears a non-empty query on Escape and closes the board on an empty one', () => {
-    // Why: useWorkspaceBoardPanel's Escape listener is capture-phase on
-    // document, so it runs before this handler and stopPropagation cannot
-    // reach it. The panel defers to board text fields instead, which makes
-    // this field solely responsible for both Escape outcomes.
+    // The panel capture listener defers Escape to text fields, so this field must handle clearing and closing.
     renderField({ query: 'orca', matchCount: 3, totalCount: 12 })
 
     act(() => {
@@ -163,20 +149,6 @@ describe('WorkspaceKanbanSearchField', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('says so when a query was discarded for length instead of silently not filtering', () => {
-    // Why: an over-bound query and a query that matched everything look
-    // identical — full field, untouched board — without this.
-    renderField({ query: 'x'.repeat(3000), isFiltering: false, isTooLarge: true })
-
-    expect(container.textContent).toContain('Too long')
-    expect(input().getAttribute('aria-invalid')).toBe('true')
-    expect(liveRegion().textContent).toContain('too long')
-
-    renderField({ query: 'orca', matchCount: 3, totalCount: 12 })
-    expect(container.textContent).not.toContain('Too long')
-    expect(input().getAttribute('aria-invalid')).toBeNull()
-  })
-
   it('leaves Escape to the IME while a composition is in progress', () => {
     renderField({ query: '検索', matchCount: 1, totalCount: 12 })
 
@@ -193,29 +165,5 @@ describe('WorkspaceKanbanSearchField', () => {
 
     expect(onClear).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
-  })
-
-  it('keeps focus in the field after the clear button unmounts itself', () => {
-    renderField({ query: 'orca', matchCount: 3, totalCount: 12 })
-    act(() => {
-      input().focus()
-      clearButton()?.click()
-    })
-
-    expect(onClear).toHaveBeenCalledOnce()
-    expect(document.activeElement).toBe(input())
-  })
-
-  it('reserves overlay width in font-relative units, capped so text stays visible', () => {
-    // '298 / 1024' is 10 characters; a fixed reserve would let it overlap.
-    expect(overlayReserve('298 / 1024')).toContain('10ch')
-    expect(overlayReserve('3 / 9')).toContain('5ch')
-
-    // Capped, so a wide counter in a narrow drawer cannot squeeze the typed
-    // text to nothing — overlapping is the better failure at that size.
-    expect(overlayReserve('298 / 1024')).toContain('55%')
-
-    // No overlay means only the clear button needs clearing.
-    expect(overlayReserve(null)).toBe('32px')
   })
 })

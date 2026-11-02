@@ -32,8 +32,14 @@ export function resolveLocalWindowsTerminalRuntimeOptions(args: {
   settings: LocalWindowsTerminalRuntimeSettings
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
   fallbackHostShell?: string
+  /** OpenSSH login shell; outranks only the shipped `powershell.exe` default, as on the relay. */
+  sshLoginShell?: string
 }): LocalWindowsTerminalRuntimeOptions {
-  const settingsShell = args.settings?.terminalWindowsShell
+  const configuredShell = args.settings?.terminalWindowsShell
+  const settingsShell =
+    args.sshLoginShell && (!configuredShell || configuredShell === 'powershell.exe')
+      ? args.sshLoginShell
+      : configuredShell
   const settingsWslDistro = args.settings?.terminalWindowsWslDistro ?? null
   const projectRuntime = args.projectRuntime
   if (!projectRuntime) {
@@ -74,8 +80,7 @@ export function resolveLocalWindowsTerminalShellOverrideForTab(args: {
   fallbackHostShell?: string
 }): string | undefined {
   if (args.projectRuntime?.status === 'repair-required') {
-    // Why: repair-required WSL still owns the project runtime; the tab should
-    // advertise the intended runtime instead of falling back to host metadata.
+    // Repair-required WSL still owns the runtime; advertise it rather than host metadata.
     return 'wsl.exe'
   }
 

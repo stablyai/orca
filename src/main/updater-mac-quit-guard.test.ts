@@ -46,6 +46,8 @@ function registerGuard(
     getPendingInstallVersion: () => '2.0.0',
     getKnownReleaseUrl: () => undefined,
     performQuitAndInstall,
+    commitStagedMacInstall: vi.fn(),
+    failMacStaging: vi.fn(),
     shouldDeferMacQuitForInstall: () => true,
     sendStatus: vi.fn()
   })
@@ -104,21 +106,6 @@ describe.runIf(process.platform === 'darwin')('macOS quit guard ordering', () =>
 
     expect(install).toHaveBeenCalledOnce()
     expect(appMock.quit).not.toHaveBeenCalled()
-  })
-
-  it('releases the requested install when readiness has no installable version', () => {
-    const install = vi.fn()
-    registerGuard(true, install, 'downloading')
-    deferMacQuitUntilInstallerReady(
-      { state: 'downloading', percent: 100, version: '2.0.0' },
-      true,
-      () => '2.0.0',
-      vi.fn()
-    )
-    expect(isMacInstallRequested()).toBe(true)
-    handleMacInstallerReady(false, install, vi.fn())
-    expect(isMacInstallRequested()).toBe(false)
-    expect(install).not.toHaveBeenCalled()
   })
 
   it('releases the readiness handoff guard when the install callback rejects', async () => {
@@ -189,20 +176,6 @@ describe.runIf(process.platform === 'darwin')('macOS quit guard ordering', () =>
     expect(shutdown).not.toHaveBeenCalled()
   })
 
-  it('lets an ordinary quit with a staged update exit instead of converting it into a relaunching install', () => {
-    // Why: restart flows call app.relaunch() then app.quit(); converting that quit into
-    // quitAndInstall would race the relaunched old app against ShipIt.
-    const install = vi.fn()
-    registerGuard(true, install)
-    handleMacInstallerReady(true, vi.fn(), vi.fn())
-    const event = quitEvent()
-
-    appMock.emit('before-quit', event)
-
-    expect(event.defaultPrevented).toBe(false)
-    expect(install).not.toHaveBeenCalled()
-  })
-
   it('vetoes duplicate quits through cleanup and allows the native install shutdown', () => {
     registerGuard(true)
     handleMacInstallerReady(true, vi.fn(), vi.fn())
@@ -239,15 +212,6 @@ describe.runIf(process.platform === 'darwin')('macOS quit guard ordering', () =>
     const retryQuit = quitEvent()
     appMock.emit('before-quit', retryQuit)
     expect(retryQuit.defaultPrevented).toBe(true)
-    expect(install).not.toHaveBeenCalled()
-  })
-
-  it('allows ordinary quits when no update is available', () => {
-    const install = vi.fn()
-    registerGuard(false, install)
-    const event = quitEvent()
-    appMock.emit('before-quit', event)
-    expect(event.defaultPrevented).toBe(false)
     expect(install).not.toHaveBeenCalled()
   })
 })

@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useFileExplorerImport } from './useFileExplorerImport'
 
 const mocks = vi.hoisted(() => ({ importPaths: vi.fn(), prepare: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('./file-explorer-operation-owner', () => ({

@@ -1,7 +1,4 @@
-// The probe is the one place an inspection becomes a verdict, so it is the one place that has to
-// know `hasChildProcesses` cannot hold the third answer. A host that could not read its own process
-// table spells that the same way as one that read it and found nothing; Windows relays spelled it
-// `false` unconditionally, which read here as `exited` -- an idle verdict for a pane nobody looked at.
+// hasChildProcesses=false can mean missing host evidence, especially legacy Windows relays; it must not alone prove idle.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { inspectRuntimeTerminalProcessMock } = vi.hoisted(() => ({
@@ -13,8 +10,6 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 }))
 
 import { probePtyRunningWork } from './pty-running-work-probe'
-
-const SETTINGS = { activeRuntimeEnvironmentId: null }
 
 describe('probePtyRunningWork child-process evidence', () => {
   beforeEach(() => {
@@ -28,9 +23,9 @@ describe('probePtyRunningWork child-process evidence', () => {
       childProcessEvidence: 'no-children'
     })
 
-    await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
+    await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
 
-    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith(SETTINGS, 'pty-a', {
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith('pty-a', {
       scanChildProcesses: true
     })
   })
@@ -42,7 +37,7 @@ describe('probePtyRunningWork child-process evidence', () => {
       childProcessEvidence: 'unverifiable'
     })
 
-    const [probe] = await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
+    const [probe] = await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
 
     expect(probe).toMatchObject({
       verdict: 'unverifiable',
@@ -58,7 +53,7 @@ describe('probePtyRunningWork child-process evidence', () => {
       childProcessEvidence: 'no-children'
     })
 
-    const [probe] = await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
+    const [probe] = await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
 
     expect(probe?.verdict).toBe('exited')
   })
@@ -70,7 +65,7 @@ describe('probePtyRunningWork child-process evidence', () => {
       childProcessEvidence: 'children'
     })
 
-    const [probe] = await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
+    const [probe] = await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
 
     expect(probe?.verdict).toBe('live')
   })
@@ -85,8 +80,8 @@ describe('probePtyRunningWork child-process evidence', () => {
       hasChildProcesses: false
     })
 
-    const [live] = await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
-    const [idle] = await probePtyRunningWork(SETTINGS, ['pty-b'], { timeoutMs: 1000 })
+    const [live] = await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
+    const [idle] = await probePtyRunningWork(['pty-b'], { timeoutMs: 1000 })
 
     expect(live?.verdict).toBe('live')
     expect(idle?.verdict).toBe('exited')

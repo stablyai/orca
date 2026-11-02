@@ -1,11 +1,9 @@
 import { useCallback, useMemo } from 'react'
 import { applyDocumentTheme } from '@/lib/document-theme'
+import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import {
-  COMPUTER_USE_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import { COMPUTER_USE_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import {
   getAgentSkillNavInstallStatus,
   getLinearAgentSkillNavInstallStatus
@@ -22,7 +20,7 @@ export function useSettingsNavigationModel(
   model: SettingsStoreModel,
   interactions: SettingsInteractionController
 ) {
-  // Why: recompute scrollback mode only when the row value changes, not on every settings mutation.
+  // Unrelated settings mutations must not recompute scrollback mode.
   if (model.settings?.terminalScrollbackRows !== model.prevScrollbackRows) {
     model.setPrevScrollbackRows(model.settings?.terminalScrollbackRows)
     if (model.settings) {
@@ -36,9 +34,12 @@ export function useSettingsNavigationModel(
     }
   }
 
-  const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    applyDocumentTheme(theme)
-  }, [])
+  const applyTheme = useCallback(
+    // Why the painted theme: Match Terminal may paint the other mode than the one picked.
+    (theme: 'system' | 'dark' | 'light') =>
+      applyDocumentTheme(resolvePaintedTheme(model.settings, theme)),
+    [model.settings]
+  )
 
   const displayedGitUsername = model.repos[0]?.gitUsername ?? ''
   const baseNavSections = useSettingsNavigationMetadata()
@@ -52,9 +53,7 @@ export function useSettingsNavigationModel(
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     model.computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
-    const applicableFreshnessInventory = model.skillFreshnessApplies
-      ? model.skillFreshnessInventory
-      : null
+    const applicableSkillPlan = model.skillFreshnessApplies ? model.skillPlan : null
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
@@ -62,7 +61,7 @@ export function useSettingsNavigationModel(
           name: ORCHESTRATION_SKILL_NAME,
           installed: orchestrationSkillInstalled,
           loading: orchestrationSkillLoading,
-          inventory: applicableFreshnessInventory
+          plan: applicableSkillPlan
         })
       ]
     ])
@@ -73,7 +72,7 @@ export function useSettingsNavigationModel(
           skills: linearSkills,
           installed: linearSkillInstalled,
           loading: linearSkillLoading,
-          inventory: applicableFreshnessInventory
+          plan: applicableSkillPlan
         })
       )
     }
@@ -84,7 +83,7 @@ export function useSettingsNavigationModel(
           name: COMPUTER_USE_SKILL_NAME,
           installed: computerUseSkillInstalled,
           loading: computerUseSkillLoading,
-          inventory: applicableFreshnessInventory
+          plan: applicableSkillPlan
         })
       )
       if (model.settings) {
@@ -110,7 +109,7 @@ export function useSettingsNavigationModel(
     model.settings,
     model.showDesktopOnlySettings,
     model.skillFreshnessApplies,
-    model.skillFreshnessInventory,
+    model.skillPlan,
     model.voiceModelStatesLoading,
     orchestrationSkillInstalled,
     orchestrationSkillLoading

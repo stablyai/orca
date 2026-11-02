@@ -25,6 +25,8 @@ export function TerminalPaneNativeChatPortal({
     isActive,
     isRendererVisible,
     managedPanes,
+    paneTitles,
+    readNativeChatTerminalDraft,
     readNativeChatTerminalScreen,
     resolveAgentForLeaf,
     switchNativeChatToTerminal,
@@ -54,7 +56,11 @@ export function TerminalPaneNativeChatPortal({
       contextMenu.runForPane(chatPane.id, contextMenu.onContinueAgentSessionInNewSession),
     onForkAgentSession: () =>
       void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
+    onCopyAgentSessionContext: () =>
+      void contextMenu.runForPane(chatPane.id, contextMenu.onCopyAgentSessionContext),
     onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
+    canClearPaneTitle: Boolean(paneTitles[chatPane.id]),
+    onClearPaneTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onClearPaneTitle),
     onCopyTerminalId: () => void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
     onCopyPaneId: () => void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
     canCopyAgentSessionId: chatPaneSessionId !== null,
@@ -77,6 +83,7 @@ export function TerminalPaneNativeChatPortal({
         ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
         onSwitchToTerminal={switchNativeChatToTerminal}
         readTerminalScreen={readNativeChatTerminalScreen}
+        readTerminalDraft={readNativeChatTerminalDraft}
         contextMenuActions={contextMenuActions}
       />
     </NativeChatPaneCover>,

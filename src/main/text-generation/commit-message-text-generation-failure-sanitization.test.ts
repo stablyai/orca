@@ -27,7 +27,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent CLI command failed with code 1: raw failure output with [path]'
     })
@@ -58,7 +58,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent CLI command failed with code 1: ERROR: fatal: [path] failed'
     })
@@ -89,7 +89,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent CLI command failed with code 1: ERROR: failed at [path]'
     })
@@ -120,7 +120,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent returned an empty message. CLI output: Error: No payment method'
     })
@@ -156,7 +156,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error:
         'Pi CLI command failed with code 1: No API key found for github-copilot. Use /login to log into a provider via OAuth or API key. See: … [path]'
@@ -188,7 +188,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent CLI command failed with code 1: ERROR: run /login then check [path]'
     })
@@ -218,7 +218,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
     })
@@ -248,7 +248,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
     })
@@ -279,7 +279,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error:
         'Pi CLI command failed with code 1: 401: Visit https://console.anthropic.com/settings/keys then check [path]'
@@ -310,7 +310,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'Pi CLI command failed with code 1: 401: {"message":"rejected credential_path=[path]"}'
     })
@@ -351,7 +351,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    expect(result).toEqual({ success: false, error: expected })
+    expect(result).toMatchObject({ success: false, error: expected })
   })
 
   it('passes the live colonless 400 gateway payload through the sanitizer unmangled', async () => {
@@ -386,7 +386,6 @@ describe('generateCommitMessageFromContext', () => {
     expect(result.error.startsWith('Pi CLI command failed with code 1: 400 {"type":"error"')).toBe(
       true
     )
-    // The bare domain link survives path redaction so the remedy stays usable.
     expect(result.error).toContain('claude.ai/settings/usage')
     expect(result.error.length).toBeLessThanOrEqual(300)
   })

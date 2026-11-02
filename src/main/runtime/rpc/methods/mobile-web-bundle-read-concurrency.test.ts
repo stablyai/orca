@@ -1,8 +1,5 @@
-/**
- * The behaviours that only exist while a read is genuinely in flight or genuinely failing: the
- * per-connection cap, an abort that arrives mid-read, and a verify whose open throws. All three go
- * through a gate on `open`, so none of them depends on a race between an event loop and a stopwatch.
- */
+import '../unused-default-rpc-methods.test-fixture'
+/** Gate open to test in-flight read caps, cancellation and verification failure without timing races. */
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -171,7 +168,6 @@ describe('chunk reads in flight on one connection', () => {
     )
     await settleMicrotasks()
 
-    // One verification open for the four of them; the rest are the four chunk reads.
     const opensBeforeRelease = gate.opens
     gate.release()
     await Promise.all(together)
@@ -195,13 +191,10 @@ describe('a client that disconnects while its chunk is being read', () => {
 
     expect(response.ok).toBe(false)
     expect(errorMessage(response)).toBe('client_disconnected')
-    // The verification open happened before the abort; the chunk read never did.
     expect(gate.opens).toBe(1)
   })
 
-  // Honouring `signal` exists so a client that is gone stops costing file reads. Verification
-  // streams the whole asset, up to the contract's 10 MiB ceiling, so the check that matters is the
-  // one before it: not a single open.
+  // Abort before verification: hashing can read the entire 10 MiB asset after the client has gone.
   it('does not hash the asset at all when the signal was already aborted', async () => {
     const controller = new AbortController()
     controller.abort()
@@ -233,8 +226,7 @@ describe('a client that disconnects while its chunk is being read', () => {
 })
 
 describe('a verify whose read of the asset fails', () => {
-  // The verdict cache is never invalidated, so remembering a transient EIO as "these bytes are
-  // wrong" would poison the asset until the desktop restarts.
+  // Do not cache transient EIO as a failed hash verdict and poison the asset until restart.
   it('is not remembered as a verdict, so the next read still verifies', async () => {
     gate.failNextOpen()
 

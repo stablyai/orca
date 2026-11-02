@@ -15,8 +15,7 @@ describe('antivirus detection report', () => {
     try {
       const artifact = join(directory, 'orca-windows-setup.exe')
       await writeFile(artifact, 'orca', 'utf8')
-      // Lowercase hex sha256, so a reporter's `shasum -a 256` output and ours
-      // compare directly — that comparison is what makes a submission credible.
+      // Use lowercase hex SHA-256 to compare directly with reporter’s shasum output.
       expect(await hashFile(artifact)).toBe(
         'e0c924608fdcda8536bd9cc86b0fce0ab2d54ecc1e8ed9673624c39cde7f7820'
       )
@@ -78,12 +77,14 @@ describe('antivirus detection report', () => {
       known: true,
       scanned: 70,
       flagged: [
-        { engine: 'TrendMicro', category: 'malicious', detection: 'Trojan.MSIL.MSILHERACLES' }
+        { engine: 'TrendMicro', category: 'malicious', detection: 'Trojan.MSIL.MSILHERACLES' },
+        { engine: 'Microsoft', category: 'suspicious', detection: 'Behavior:Win32/Test' }
       ]
     })
 
-    expect(report).toContain('1 of 70 engines flag this build')
+    expect(report).toContain('2 of 70 engines flag this build')
     expect(report).toContain('TrendMicro: Trojan.MSIL.MSILHERACLES')
+    expect(report).toContain('Microsoft: Behavior:Win32/Test')
   })
 
   it('flags the release when any single artifact carries a verdict', () => {

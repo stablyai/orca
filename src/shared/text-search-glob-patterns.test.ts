@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { splitSearchGlobPatterns } from './text-search-glob-patterns'
 import {
   buildGitGrepArgs,
@@ -36,7 +36,7 @@ describe('compound search globs', () => {
     expect(splitSearchGlobPatterns(input, 'git')).toEqual(expected)
   })
 
-  it('scans deeply nested groups without recursion or expanding alternatives', () => {
+  it('preserves 20000 nested groups without expanding alternatives', () => {
     const pattern = `${'{'.repeat(20_000)}a,b${'}'.repeat(20_000)}`
     expect(splitSearchGlobPatterns(`${pattern}, *.md`)).toEqual([pattern, '*.md'])
   })

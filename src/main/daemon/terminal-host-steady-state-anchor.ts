@@ -3,19 +3,14 @@ import type { RemoteForegroundEvidence } from '../../shared/foreground-process-e
 import { buildPaneProcessFingerprint } from '../providers/posix-pane-foreground-fingerprint'
 import type { Session } from './session'
 
-/**
- * What the last FULL capture proved about a pane: a recognized agent name, the pane subtree
- * fingerprint at that moment, and node-pty's raw foreground name at that moment. A later cheap
- * tick may re-serve `agentName` only while both of the latter still match.
- */
+/** Full-capture identity may be reused only while its pane fingerprint and raw foreground name match. */
 export type SteadyStateAnchor = {
   agentName: string
   fingerprint: string
   rawFallback: string | null
 }
 
-// Weakly keyed: an anchor dies with its Session, and a recycled pid under a new Session can
-// never inherit one. Retired sessions fail `isAlive` before any read gets here regardless.
+// Key by Session so a new session or recycled PID cannot inherit an old anchor.
 const anchors = new WeakMap<Session, SteadyStateAnchor>()
 
 export function getSteadyStateAnchor(session: Session): SteadyStateAnchor | null {
@@ -26,11 +21,7 @@ export function clearSteadyStateAnchor(session: Session): void {
   anchors.delete(session)
 }
 
-/**
- * Record (or drop) the anchor after a full capture. Only a `live` verdict naming a recognized
- * agent establishes one: the cheap tier is licensed by proven identity, never by a fallback name
- * or an unverifiable read, so a pane without one always pays for the full capture.
- */
+/** Only verified live agent identity can establish an anchor for cheap polling. */
 export async function rememberSteadyStateAnchor(
   session: Session,
   evidence: RemoteForegroundEvidence,

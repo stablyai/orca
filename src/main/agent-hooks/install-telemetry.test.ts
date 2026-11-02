@@ -16,17 +16,28 @@ describe('recordManagedHookInstallFailure', () => {
     vi.restoreAllMocks()
   })
 
-  it('records the agent and truncated error message', () => {
-    recordManagedHookInstallFailure('codex', new Error('x'.repeat(500)))
+  it('records the agent and an error category instead of the raw message', () => {
+    recordManagedHookInstallFailure('codex', new Error('install failed'))
 
-    expect(trackMock).toHaveBeenCalledTimes(1)
-    const [eventName, props] = trackMock.mock.calls[0] as [
-      string,
-      { agent: string; error_message: string }
-    ]
-    expect(eventName).toBe('agent_hook_install_failed')
-    expect(props.agent).toBe('codex')
-    expect(props.error_message).toHaveLength(200)
+    expect(trackMock).toHaveBeenCalledExactlyOnceWith('agent_hook_install_failed', {
+      agent: 'codex',
+      error_message: 'unknown'
+    })
+  })
+
+  it('sends only the errno code for filesystem errors, never the path', () => {
+    recordManagedHookInstallFailure(
+      'claude',
+      Object.assign(
+        new Error("EACCES: permission denied, open '/home/someone/.claude/settings.json'"),
+        { code: 'EACCES' }
+      )
+    )
+
+    expect(trackMock).toHaveBeenCalledExactlyOnceWith('agent_hook_install_failed', {
+      agent: 'claude',
+      error_message: 'EACCES'
+    })
   })
 
   it('handles non-Error values and telemetry failures', () => {
@@ -35,5 +46,13 @@ describe('recordManagedHookInstallFailure', () => {
     })
 
     expect(() => recordManagedHookInstallFailure('cursor', { code: 'EACCES' })).not.toThrow()
+    expect(trackMock).toHaveBeenCalledExactlyOnceWith('agent_hook_install_failed', {
+      agent: 'cursor',
+      error_message: 'EACCES'
+    })
+    expect(console.error).toHaveBeenCalledWith(
+      '[agent-hooks] Failed to record install-failure telemetry:',
+      expect.objectContaining({ message: 'telemetry failed' })
+    )
   })
 })

@@ -29,7 +29,7 @@ describe('resolveNativeChatModelDiscoveryContext', () => {
       runtime: {
         worktreeId: 'wt-local',
         worktreePath: '/repo/local',
-        settings: { activeRuntimeEnvironmentId: null }
+        target: { kind: 'local' }
       }
     })
   })

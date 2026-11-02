@@ -28,7 +28,7 @@ export function getTrustedSystemUserHookSignatures(
   try {
     trustEntries = readHookTrustEntries(getSystemCodexConfigTomlPath())
   } catch (error) {
-    // Why: a hand-broken system config.toml should only disable user-hook trust mirroring, not block Orca's managed runtime hooks.
+    // Invalid system config disables user-trust mirroring without blocking managed hooks.
     console.warn('[codex-hook-service] failed to read system hook trust entries', error)
     return signatures
   }
@@ -59,7 +59,7 @@ export function getTrustedSystemUserHookSignatures(
           return
         }
         const signature = getCodexHookTrustSignature(entry)
-        // Why: runtime deduping collapses identical definitions; if any duplicate stays enabled, keep the mirrored hook enabled.
+        // Deduplication must keep a hook enabled if any copy is enabled.
         if (state.enabled || !signatures.has(signature)) {
           signatures.set(signature, state)
         }
@@ -84,7 +84,7 @@ function resolveTrustedSystemHookState(
     return { enabled: reorderedEnabled, trustedHash: expectedHash }
   }
   if (state?.trustedHash) {
-    // Why: carry a key-matched system hash verbatim — recomputing caused #7110 re-approval loops since Codex owns its hash algorithm.
+    // #7110: preserve Codex's verbatim hash to avoid reapproval loops from recomputation.
     return { enabled: state.enabled !== false, trustedHash: state.trustedHash }
   }
   return null
@@ -110,7 +110,7 @@ function getTrustedSystemHookHashesByEvent(
       trustedHashesByEvent.set(parsed.eventLabel, hashes)
     }
     const enabled = state.enabled !== false
-    // Why: Codex trust keys include hook indices, but the hash still proves the same event+command identity was approved after a reorder.
+    // Content hashes preserve approval across positional-key changes after reordering.
     if (enabled || !hashes.has(state.trustedHash)) {
       hashes.set(state.trustedHash, enabled)
     }

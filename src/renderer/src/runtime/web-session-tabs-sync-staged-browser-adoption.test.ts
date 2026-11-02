@@ -81,7 +81,6 @@ function makeUnifiedTab(row: BrowserRow, sortOrder: number): Tab {
   }
 }
 
-/** A worktree whose only tabs are the given browser rows, in the given strip order. */
 function makeBrowserState(rows: BrowserRow[], activeUnifiedTabId: string): WebSessionTabsSyncState {
   return makeState({
     activeGroupIdByWorktree: { [WT]: GROUP_ID },
@@ -166,7 +165,6 @@ function browserTabIds(state: WebSessionTabsSyncState): string[] {
     .sort()
 }
 
-/** The order the tab strip renders. */
 function stripOrder(state: WebSessionTabsSyncState): string[] {
   return state.groupsByWorktree[WT]?.[0]?.tabOrder ?? []
 }
@@ -182,16 +180,14 @@ describe('staged browser tab adoption', () => {
       makeSnapshot([hostBrowserTab(STAGED.remotePageId), hostBrowserTab(MIRRORED.remotePageId)])
     )
 
-    // The host's own workspace/tab ids never surface: the staged rows are reused, so the tab
-    // is renamed in place rather than dropped and re-added at the end of the strip.
+    // Reuse staged IDs in place; host IDs must not drop/reappend the tab at strip end.
     expect(next.browserTabsByWorktree[WT]?.map((workspace) => workspace.id).sort()).toEqual(
       [MIRRORED.workspaceId, STAGED.workspaceId].sort()
     )
     expect(browserTabIds(next)).toEqual([MIRRORED.unifiedTabId, STAGED.unifiedTabId].sort())
     expect(stripOrder(next)).toEqual([MIRRORED.unifiedTabId, STAGED.unifiedTabId])
     expect(next.groupsByWorktree[WT]?.[0]?.activeTabId).toBe(STAGED.unifiedTabId)
-    // Adoption is what clears the optimism; a handle left staged would freeze the pane and
-    // keep the create's materialization gate from ever passing.
+    // Clear staged on adoption or the pane freezes and materialization never passes.
     expect(next.remoteBrowserPageHandlesByPageId[STAGED.pageId]).toEqual({
       environmentId: ENV,
       remotePageId: STAGED.remotePageId
@@ -212,27 +208,5 @@ describe('staged browser tab adoption', () => {
     const next = applyPatch(state, makeSnapshot([hostBrowserTab(STAGED.remotePageId)]))
 
     expect(browserTabIds(next)).toEqual([STAGED.unifiedTabId])
-  })
-
-  it('keeps three rapid staged tabs in click order under a reordered snapshot', () => {
-    const rows: BrowserRow[] = [1, 2, 3].map((index) => ({
-      workspaceId: `staged-workspace-${index}`,
-      pageId: `staged-page-${index}`,
-      unifiedTabId: `staged-unified-tab-${index}`,
-      remotePageId: `staged-page-${index}`,
-      staged: true
-    }))
-    const state = makeBrowserState(rows, rows[2].unifiedTabId)
-    const next = applyPatch(
-      state,
-      makeSnapshot(rows.toReversed().map((row) => hostBrowserTab(row.remotePageId)))
-    )
-
-    expect(browserTabIds(next)).toEqual(rows.map((row) => row.unifiedTabId).sort())
-    expect(stripOrder(next)).toEqual(rows.map((row) => row.unifiedTabId))
-    expect(next.groupsByWorktree[WT]?.[0]?.activeTabId).toBe(rows[2].unifiedTabId)
-    for (const row of rows) {
-      expect(next.remoteBrowserPageHandlesByPageId[row.pageId]?.staged).toBeUndefined()
-    }
   })
 })

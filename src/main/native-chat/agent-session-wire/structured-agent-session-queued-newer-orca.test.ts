@@ -1,6 +1,3 @@
-// A chat journal a newer Orca wrote does not open here: its history read and every queue write (a
-// queued send, Send-now, Delete, Resume) are refused as a newer Orca's chat, and nothing is written.
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   openTestJournalHostDatabase,
@@ -38,14 +35,12 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-/** The chat reopens on a database a newer Orca stamped. The host's database object is the one
- *  the rig built, so its open-time verdict is set in place; every store write checks that. */
+/** Stamp the existing rig database with a newer open verdict; writes must honor it too. */
 async function reopenOnNewerOrcaDatabase(close: () => Promise<unknown>): Promise<void> {
   await close()
   Object.defineProperty(openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
 }
 
-/** The history read a newer Orca's chat gets: refused, as every reader's is. */
 async function expectHistoryRefused(): Promise<void> {
   await expect(
     rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })

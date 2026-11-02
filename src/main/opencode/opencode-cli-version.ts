@@ -4,7 +4,7 @@ import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../shared/agent-hook-scrub-safe-env'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   getOpenCodeCliCapabilities,
   type OpenCodeCliCapabilities

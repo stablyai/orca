@@ -1,78 +1,50 @@
 import { WorkerThreadRequestQueue } from '../worker-thread-request-queue'
 import type { WorkerThreadFactory } from '../lazy-worker-thread-host'
-import type {
-  ClaudeUsageDailyAggregate,
-  ClaudeUsagePersistedFile,
-  ClaudeUsageSession
-} from '../claude-usage/types'
-import type {
-  CodexUsageDailyAggregate,
-  CodexUsagePersistedFile,
-  CodexUsageSession
-} from '../codex-usage/types'
-import type {
-  OpenCodeUsageDailyAggregate,
-  OpenCodeUsagePersistedDatabase,
-  OpenCodeUsageSession
-} from '../opencode-usage/types'
-import type {
-  MuseUsageDailyAggregate,
-  MuseUsagePersistedFile,
-  MuseUsageSession
-} from '../muse-usage/types'
+import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-usage/types'
+import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
+import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
+import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageScanWorkerProviderId,
   UsageScanWorkerRequest,
   UsageScanWorkerRequestBody,
   UsageScanWorkerResponse,
+  UsageScanWorkerScanBody,
   UsageScanWorkerValue
 } from './usage-scan-worker-protocol'
+import type {
+  UsageCacheSplitRequest,
+  UsageCacheSplitResult,
+  UsageSourceCacheRef
+} from './usage-source-cache-file'
 import { isUsageScanWorkerProgress } from './usage-scan-worker-protocol'
+import { createUsageScanWorkerTransport } from './usage-scan-worker-cache-cleanup'
 
-// Why (#20940): this module owns the request half of the shared usage scan
-// worker — FIFO one-at-a-time dispatch, a no-progress deadline, respawn-on-fault
-// — while WorkerThreadRequestQueue owns the queue mechanics and
-// LazyWorkerThreadHost owns the thread's lifetime. The default spawn and the
-// process-wide singleton live in usage-scan-worker-spawn.ts.
+// #20940: serialize provider scans with WorkerThreadRequestQueue; LazyWorkerThreadHost owns thread lifetime and the spawn module owns layout/singleton.
 
-// Why no-progress rather than wall clock: a cold scan of a real history is
-// legitimately minutes — 637 s measured on a 30 GB corpus with 300 worktrees
-// before #21130, ~51 s after — and a slower disk or a larger corpus goes past
-// any fixed budget. A wall-clock deadline killed those scans, recorded a scan
-// error, and left the cache unadvanced, so the next refresh started cold and
-// died at the same point, forever. The worker posts a file counter as it goes
-// (`UsageScanWorkerProgress`), so this window only has to cover the gap between
-// two files; it stays generous because a single huge rollout is still one gap.
+// Cold corpora can exceed any total deadline; time only gaps between progress reports. A huge rollout is one gap, so keep the window generous.
 export const USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS = 10 * 60_000
-// One user action refreshes several providers in a burst, and the store's own
-// staleness window is 5 minutes. Long enough to serve a burst, short enough that
-// an idle app is not holding a thread.
+// Keep the worker through provider-refresh bursts, then release the idle thread.
 export const IDLE_TEARDOWN_MS = 60_000
 export const MAX_CONSECUTIVE_DEATHS = 3
 
 /** Thrown when no worker could be started at all, as distinct from a fault. */
 export class UsageScanWorkerUnavailableError extends Error {}
 
-type ProviderScanResult<TSource, TSession, TDaily> = {
-  source: TSource[]
+type ProviderScanResult<TSession, TDaily> = {
   sessions: TSession[]
   dailyAggregates: TDaily[]
 }
 
-/**
- * Main-thread bridge that runs first-party usage scans on a worker thread.
- * Every route fails closed: a worker that cannot spawn, times out, or crashes
- * rejects, and the caller's store records a scan error and keeps the previous
- * projection rather than moving the parse back onto the main thread.
- */
+/** Unavailable, timed-out or crashed workers reject; stores retain their previous projection instead of parsing on main. */
 export class UsageScanWorkerClient {
   private readonly queue: WorkerThreadRequestQueue<UsageScanWorkerRequest, UsageScanWorkerResponse>
 
   constructor(options: { workerFactory: WorkerThreadFactory; log?: (message: string) => void }) {
     const log = options.log ?? ((message: string) => console.warn(message))
     this.queue = new WorkerThreadRequestQueue({
-      factory: options.workerFactory,
+      factory: () => createUsageScanWorkerTransport(options.workerFactory),
       idleTeardownMs: IDLE_TEARDOWN_MS,
       maxConsecutiveDeaths: MAX_CONSECUTIVE_DEATHS,
       createUnavailableError: (message) => new UsageScanWorkerUnavailableError(message),
@@ -80,20 +52,33 @@ export class UsageScanWorkerClient {
       describeTimeout: (timeoutMs) => `Usage scan worker reported no progress for ${timeoutMs}ms`,
       describeExit: (code) => `Usage scan worker exited with code ${code}`,
       describeCrashLoop: (lastError) => `Usage scan worker crashed repeatedly (${lastError})`,
-      // Why: never fall back to scanning on the main thread here. A missing
-      // bundle or a resource-exhausted spawn must surface as a scan error, not
-      // reintroduce the main-process occupancy this boundary exists to remove.
+      // Missing/resource-starved workers must fail closed; main-thread scanning would reintroduce event-loop blocking.
       onUnavailable: (err) =>
         log(`[usage-scan] worker unavailable; usage scans will report an error. ${message(err)}`)
     })
   }
 
-  /**
-   * Run one provider's scan on the worker.
-   * @param body - Provider id, worktree refs, and that provider's previous cache.
-   * @returns The worker's value for that provider.
-   */
-  async scan(body: UsageScanWorkerRequestBody): Promise<UsageScanWorkerValue> {
+  /** sourceCache identifies provider records that stay on the worker. */
+  scan(body: UsageScanWorkerScanBody): Promise<UsageScanWorkerValue> {
+    return this.dispatch(body)
+  }
+
+  /** Split a cache that still carries its per-source records, so main parses only the report. */
+  async splitCacheFile(request: UsageCacheSplitRequest): Promise<UsageCacheSplitResult> {
+    const value = await this.dispatch({ operation: 'splitCacheFile', ...request })
+    if (value.operation !== 'splitCacheFile') {
+      throw new Error(`Usage scan worker answered ${value.operation}, expected splitCacheFile`)
+    }
+    return {
+      reportText: value.reportText,
+      migrated: value.migrated,
+      ...(value.reportIntegrityVerified === undefined
+        ? {}
+        : { reportIntegrityVerified: value.reportIntegrityVerified })
+    }
+  }
+
+  private async dispatch(body: UsageScanWorkerRequestBody): Promise<UsageScanWorkerValue> {
     const response = await this.queue.dispatch(
       (id) => ({ ...body, id }),
       USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS
@@ -110,92 +95,55 @@ function message(error: unknown): string {
 }
 
 /** A response for the wrong provider means the worker and client disagree on the protocol. */
-function wrongProvider(expected: UsageScanWorkerProviderId, actual: string): Error {
+function wrongProvider(expected: UsageScanWorkerProviderId, value: UsageScanWorkerValue): Error {
+  const actual = value.operation === 'scan' ? value.providerId : value.operation
   return new Error(`Usage scan worker answered for ${actual}, expected ${expected}`)
 }
 
-/**
- * Scan Claude usage transcripts on the shared worker.
- * @param scan - Dispatch function, injected so tests need no real thread.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param previous - Last scan's per-file cache.
- * @returns Processed files plus the session and daily projections.
- */
 export async function scanClaudeUsageOnWorker(
-  scan: (body: UsageScanWorkerRequestBody) => Promise<UsageScanWorkerValue>,
+  scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],
-  previous: ClaudeUsagePersistedFile[]
-): Promise<
-  ProviderScanResult<ClaudeUsagePersistedFile, ClaudeUsageSession, ClaudeUsageDailyAggregate>
-> {
-  const value = await scan({ providerId: 'claude', worktrees, previous })
-  if (value.providerId !== 'claude') {
-    throw wrongProvider('claude', value.providerId)
+  sourceCache: UsageSourceCacheRef
+): Promise<ProviderScanResult<ClaudeUsageSession, ClaudeUsageDailyAggregate>> {
+  const value = await scan({ operation: 'scan', providerId: 'claude', worktrees, sourceCache })
+  if (value.operation !== 'scan' || value.providerId !== 'claude') {
+    throw wrongProvider('claude', value)
   }
-  return value
+  return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }
 
-/**
- * Scan Codex rollouts on the shared worker.
- * @param scan - Dispatch function, injected so tests need no real thread.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param previous - Last scan's per-file cache.
- * @returns Processed files plus the session and daily projections.
- */
 export async function scanCodexUsageOnWorker(
-  scan: (body: UsageScanWorkerRequestBody) => Promise<UsageScanWorkerValue>,
+  scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],
-  previous: CodexUsagePersistedFile[]
-): Promise<
-  ProviderScanResult<CodexUsagePersistedFile, CodexUsageSession, CodexUsageDailyAggregate>
-> {
-  const value = await scan({ providerId: 'codex', worktrees, previous })
-  if (value.providerId !== 'codex') {
-    throw wrongProvider('codex', value.providerId)
+  sourceCache: UsageSourceCacheRef
+): Promise<ProviderScanResult<CodexUsageSession, CodexUsageDailyAggregate>> {
+  const value = await scan({ operation: 'scan', providerId: 'codex', worktrees, sourceCache })
+  if (value.operation !== 'scan' || value.providerId !== 'codex') {
+    throw wrongProvider('codex', value)
   }
-  return value
+  return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }
 
-/**
- * Scan OpenCode usage databases on the shared worker.
- * @param scan - Dispatch function, injected so tests need no real thread.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param previous - Last scan's per-database cache.
- * @returns Processed databases plus the session and daily projections.
- */
 export async function scanOpenCodeUsageOnWorker(
-  scan: (body: UsageScanWorkerRequestBody) => Promise<UsageScanWorkerValue>,
+  scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],
-  previous: OpenCodeUsagePersistedDatabase[]
-): Promise<
-  ProviderScanResult<
-    OpenCodeUsagePersistedDatabase,
-    OpenCodeUsageSession,
-    OpenCodeUsageDailyAggregate
-  >
-> {
-  const value = await scan({ providerId: 'opencode', worktrees, previous })
-  if (value.providerId !== 'opencode') {
-    throw wrongProvider('opencode', value.providerId)
+  sourceCache: UsageSourceCacheRef
+): Promise<ProviderScanResult<OpenCodeUsageSession, OpenCodeUsageDailyAggregate>> {
+  const value = await scan({ operation: 'scan', providerId: 'opencode', worktrees, sourceCache })
+  if (value.operation !== 'scan' || value.providerId !== 'opencode') {
+    throw wrongProvider('opencode', value)
   }
-  return value
+  return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }
 
-/**
- * Scan Muse Code session logs on the shared worker.
- * @param scan - Dispatch function, injected so tests need no real thread.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param previous - Last scan's per-file cache.
- * @returns Processed files plus the session and daily projections.
- */
 export async function scanMuseUsageOnWorker(
-  scan: (body: UsageScanWorkerRequestBody) => Promise<UsageScanWorkerValue>,
+  scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],
-  previous: MuseUsagePersistedFile[]
-): Promise<ProviderScanResult<MuseUsagePersistedFile, MuseUsageSession, MuseUsageDailyAggregate>> {
-  const value = await scan({ providerId: 'muse', worktrees, previous })
-  if (value.providerId !== 'muse') {
-    throw wrongProvider('muse', value.providerId)
+  sourceCache: UsageSourceCacheRef
+): Promise<ProviderScanResult<MuseUsageSession, MuseUsageDailyAggregate>> {
+  const value = await scan({ operation: 'scan', providerId: 'muse', worktrees, sourceCache })
+  if (value.operation !== 'scan' || value.providerId !== 'muse') {
+    throw wrongProvider('muse', value)
   }
-  return value
+  return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }

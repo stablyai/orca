@@ -137,7 +137,6 @@ describe('estimateWorktreeParentPickerHeight', () => {
   it('grows with the candidate count up to the list cap', () => {
     expect(estimateWorktreeParentPickerHeight(1)).toBe(79 + 56)
     expect(estimateWorktreeParentPickerHeight(3)).toBe(79 + 168)
-    // Why: matches the height measured on a rendered picker in the dev app.
     expect(estimateWorktreeParentPickerHeight(300)).toBe(367)
   })
 
@@ -234,4 +233,23 @@ describe('parent picker keyboard input', () => {
     expect(preventDefault).not.toHaveBeenCalled()
     expect(stopPropagation).not.toHaveBeenCalled()
   })
+})
+
+const { rejectAppStoreAccess } = vi.hoisted(() => ({
+  rejectAppStoreAccess: vi.fn(() => {
+    throw new Error('Pure helper tests must not access the app store')
+  })
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(rejectAppStoreAccess, {
+    getState: rejectAppStoreAccess,
+    getInitialState: rejectAppStoreAccess,
+    setState: rejectAppStoreAccess,
+    subscribe: rejectAppStoreAccess
+  })
+}))
+
+afterEach(() => {
+  expect(rejectAppStoreAccess).not.toHaveBeenCalled()
 })

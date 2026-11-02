@@ -1,6 +1,6 @@
 import type { DirectoryAccountAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
-import { CODEX_STRUCTURED_HANDLE_NAMESPACE } from '../../shared/agent-session-provider-handle-encoding'
-import { isCodexTurnOptionKey } from './codex-structured-turn-start'
+import { CODEX_STRUCTURED_HANDLE_NAMESPACE } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isCodexTurnOptionKey } from './codex-turn-option-keys'
 
 export const CODEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   agent: 'codex',
@@ -12,7 +12,7 @@ export const CODEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
     compact: true,
     // A goal change at rest starts the agent first.
     threadGoal: true,
-    contextUsage: false,
+    contextUsage: true,
     imagePrompts: true,
     steering: 'inject',
     // Approval and sandbox policy ride on the thread; the app-server enforces them.

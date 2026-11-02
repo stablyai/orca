@@ -1,15 +1,11 @@
-// Why: this is the pure filter/group/query core for Agent Session History.
-// It lives in /shared (not renderer) so the mobile package can reuse it —
-// Metro only watches mobile/ + repo-root src/shared, never src/renderer.
-// INVARIANT: /shared is a leaf — this module must NOT import from src/renderer.
+// Keep filters in shared for mobile: Metro watches mobile and src/shared, never renderer. This shared leaf must not import renderer modules.
 import {
-  createNormalizedPathInsideOrEqualMatcher,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
 } from './cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 import { splitAiVaultSearchQuery } from './ai-vault-search-query-operators'
-import { parseWslUncPath } from './wsl-paths'
+import { aiVaultSessionInScope, createAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
 import type {
   AiVaultAgent,
   AiVaultGroup,
@@ -25,9 +21,7 @@ import {
 import type { ExecutionHostId } from './execution-host'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
 
-// Why: the plain project descriptor is relocated here (no runtime dep) so the
-// filter-state type can reference it without dragging the renderer-located
-// ai-vault-session-projects runtime logic into /shared.
+// Move the plain descriptor type without importing renderer project-attribution runtime.
 export type AiVaultSessionProject = {
   kind: 'repo' | 'folder' | 'unknown'
   key: string
@@ -80,19 +74,15 @@ export function filterAiVaultSessions(
 
   const agentSet = new Set(filters.agents)
   const parsedQuery = parseVaultQuery(filters.query)
-  const workspaceMatchers =
-    filters.scope === 'workspace'
-      ? filters.activeWorktreePaths.map(createAiVaultWorkspaceMatcher)
-      : []
+  const inWorkspace = createAiVaultScopeCwdMatcher(
+    filters.scope === 'workspace' ? filters.activeWorktreePaths : []
+  )
 
   const filtered = sessions.filter((session) => {
     if (!agentSet.has(session.agent)) {
       return false
     }
-    // Hide plain empty sessions, but keep sessions with resumable content
-    // (some parsers only learn turns from previews, e.g. Grok) and zero-turn
-    // sessions that still carry recoverable content (queued prompts /
-    // subagent transcripts) so a lost conversation is surfaced distinctly.
+    // Hide only truly empty sessions; retain preview-inferred turns and queued/subagent recovery content so lost conversations remain visible.
     if (
       filters.hideEmptySessions &&
       !isAiVaultSessionResumableContent(session) &&
@@ -101,9 +91,7 @@ export function filterAiVaultSessions(
       return false
     }
     if (filters.scope === 'workspace') {
-      const cwd = session.cwd
-      const normalizedCwd = cwd ? normalizeRuntimePathForComparison(cwd) : null
-      if (normalizedCwd === null || !workspaceMatchers.some((matches) => matches(normalizedCwd))) {
+      if (!aiVaultSessionInScope(inWorkspace, session)) {
         return false
       }
     }
@@ -164,14 +152,7 @@ export function folderLabel(pathValue: string | null): string {
   return parts[0] ?? pathValue
 }
 
-/**
- * Why comparison-normalized: cwd is copied verbatim out of agent transcripts, so
- * one folder arrives with and without a trailing slash and in both NFD/NFC — each
- * spelling otherwise became its own group under an identical `folderLabel`. Also
- * avoids blanket lowercasing, which merged distinct case-sensitive POSIX folders.
- * The `folder:` prefix matches the folder project key so project grouping and its
- * fallback agree.
- */
+/** Normalize trailing separators and NFD/NFC without folding distinct POSIX case-sensitive folders. Match folder: project keys so fallback and project grouping agree. */
 export function folderGroupKey(pathValue: string | null): string {
   return pathValue ? `folder:${normalizeRuntimePathForComparison(pathValue)}` : 'unknown'
 }
@@ -180,14 +161,7 @@ export function agentLabel(agent: AiVaultAgent): string {
   return aiVaultAgentLabel(agent)
 }
 
-/**
- * One reading of `repo:` / `path:` for the whole product.
- *
- * Delegates to `splitAiVaultSearchQuery`, which the search index also plans
- * from, so a query cannot mean one thing in this list and another in the index.
- * The values come back folded because everything this file compares is folded;
- * the index keeps the unfolded form, which is why the split itself does not.
- */
+/** Delegate operators to the index's shared parser; fold values here for panel matching while the index retains original case. */
 export function parseVaultQuery(query: string): ParsedQuery {
   const split = splitAiVaultSearchQuery(query)
   const fold = (values: readonly string[]): string[] => values.map((value) => value.toLowerCase())
@@ -202,22 +176,11 @@ export function parseVaultQuery(query: string): ParsedQuery {
 export type AiVaultQueryOperatorTarget = {
   cwd: string | null
   filePath: string
-  /**
-   * What `repo:` matches. The panel passes a resolved project label when it has
-   * one; everything else falls back to the last two path segments.
-   */
+  /** Prefer the resolved project label; fall back to the last two path segments. */
   repoLabel?: string
 }
 
-/**
- * Whether one session satisfies every `repo:` and `path:` term.
- *
- * The single definition of what those operators mean. The search index applies
- * this over its retrieved rows rather than expressing it in SQL, because SQL
- * cannot: LIKE folds ASCII and nothing else, and `path:` searches the transcript
- * path as well as the working directory. Both keys are conjunctive, matching
- * the qualifier semantics the panel has always had.
- */
+/** Apply conjunctive repo/path matching after indexed retrieval: SQL LIKE folds only ASCII and path also covers transcript paths, so SQL cannot express the shared semantics. */
 export function matchesAiVaultQueryOperators(
   target: AiVaultQueryOperatorTarget,
   operators: { repoTerms: readonly string[]; pathTerms: readonly string[] }
@@ -303,15 +266,4 @@ function getGroupIdentity(
     }
   }
   return { key: folderGroupKey(session.cwd), label: folderLabel(session.cwd) }
-}
-
-function createAiVaultWorkspaceMatcher(workspacePath: string): (normalizedCwd: string) => boolean {
-  const matches = createNormalizedPathInsideOrEqualMatcher(workspacePath)
-  const workspaceWslPath = parseWslUncPath(workspacePath)
-  if (!workspaceWslPath) {
-    return matches
-  }
-  // WSL transcripts record Linux cwd even when the workspace uses a UNC path.
-  const matchesLinux = createNormalizedPathInsideOrEqualMatcher(workspaceWslPath.linuxPath)
-  return (cwd) => matches(cwd) || matchesLinux(cwd)
 }

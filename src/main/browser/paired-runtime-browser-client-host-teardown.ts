@@ -16,19 +16,26 @@ export type BrowserClientHostCompositionTeardown = {
   executor: TeardownExecutor
   routeSets: TeardownRouteSets
   error: Error
-  /** Receives the executor close that had to wait on unsettled handlers, so `whenClosed` can join it. */
+  /** Lets whenClosed join executor cleanup deferred behind running handlers. */
   deferExecutorClose(close: Promise<void>): void
   reportCleanupError(error: Error): void
 }
 
-/**
- * Tears a composition's host, executor, and routes down, reporting every failure rather than the
- * first.
- *
- * Returns whether the host's handlers had already settled. When they had not, the executor close is
- * deferred behind them instead of racing them: closing an executor out from under a running handler
- * strands the page it was working on.
- */
+export function fenceBrowserClientHostComposition(
+  routeSets: { fence(error: Error): void },
+  executor: { fenceNavigation(): void },
+  error: Error,
+  reportCleanupError: (error: Error) => void
+): void {
+  routeSets.fence(error)
+  try {
+    executor.fenceNavigation()
+  } catch (navigationError) {
+    reportCleanupError(asCompositionError(navigationError))
+  }
+}
+
+/** Returns whether handlers settled; executor cleanup waits for them to avoid stranding pages. */
 export async function closeBrowserClientHostComposition(
   input: BrowserClientHostCompositionTeardown
 ): Promise<boolean> {

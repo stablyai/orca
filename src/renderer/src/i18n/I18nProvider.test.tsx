@@ -6,24 +6,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getDefaultSettings } from '../../../shared/constants'
 import { UI_LANGUAGE_ENGLISH, UI_LANGUAGE_SPANISH } from '../../../shared/ui-language'
+import {
+  getBrowserLanguageDetection,
+  setRendererLanguageDetection
+} from '../../../shared/ui-locale'
 import { useAppStore } from '@/store'
 import { i18n } from './i18n'
+import * as rendererI18n from './i18n'
+import { useLanguageReadiness } from './language-readiness'
+import * as languageReadiness from './language-readiness'
+import { usePluginLanguagePackStore } from '../store/plugin-language-packs'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { I18nProvider } from './I18nProvider'
 
-// Why: settings arrive async over IPC after first render. The provider used to
-// fall back to the 'system' language while settings were null, kicking off an
-// OS-locale changeLanguage that raced with — and could permanently override —
-// the persisted preference. These tests pin the fixed ordering.
+// Wait for async settings before selecting the OS locale, or an in-flight load can override the persisted preference.
 
 const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
 
-// Why: the 'system' UI language resolves through navigator.language; stubbing it
-// lets these tests simulate a non-English OS locale (the #7188 repro) without
-// depending on the host machine's locale.
+// Stub navigator.language to reproduce a non-English OS independently of the test host.
 const ORIGINAL_SYSTEM_LOCALE = navigator.language
 function stubSystemLocale(tag: string): void {
   Object.defineProperty(navigator, 'language', { value: tag, configurable: true })
+  Object.defineProperty(navigator, 'languages', { value: [tag], configurable: true })
 }
 
 async function renderProvider(): Promise<void> {
@@ -37,6 +42,13 @@ async function renderProvider(): Promise<void> {
 }
 
 beforeEach(() => {
+  useLanguageReadiness.setState(useLanguageReadiness.getInitialState(), true)
+  vi.spyOn(languageReadiness, 'initializeLanguageDetection').mockImplementation(async () => {
+    const detection = getBrowserLanguageDetection()
+    setRendererLanguageDetection(detection)
+    useLanguageReadiness.setState({ detection })
+    return detection
+  })
   useAppStore.setState(initialAppState, true)
 })
 
@@ -53,6 +65,67 @@ afterEach(async () => {
 })
 
 describe('I18nProvider startup language', () => {
+  it.each(['loaded', 'failed'] as const)(
+    'starts an explicit catalog before detection finishes and waits for detection when %s',
+    async (outcome) => {
+      const detection = getBrowserLanguageDetection()
+      let finishDetection: () => void = () => {}
+      vi.spyOn(languageReadiness, 'initializeLanguageDetection').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishDetection = () => resolve(detection)
+          })
+      )
+      const load = vi.spyOn(rendererI18n, 'loadRendererUiLanguage')
+      if (outcome === 'loaded') {
+        load.mockResolvedValue('fr')
+      } else {
+        load.mockRejectedValue(new Error('Catalog offline'))
+      }
+      const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
+      useAppStore.setState({ settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'fr' } })
+
+      await renderProvider()
+
+      expect(load).toHaveBeenCalledWith('fr')
+      expect(changeLanguage).not.toHaveBeenCalled()
+      expect(useLanguageReadiness.getState()).toMatchObject({ ready: false, loading: true })
+
+      await act(async () => finishDetection())
+
+      expect(changeLanguage).toHaveBeenCalledWith(outcome === 'loaded' ? 'fr' : 'en')
+      await vi.waitFor(() =>
+        expect(useLanguageReadiness.getState()).toMatchObject({
+          ready: true,
+          loading: false,
+          error: outcome === 'failed'
+        })
+      )
+    }
+  )
+
+  it('waits for detection before resolving the system language catalog', async () => {
+    const detection = getBrowserLanguageDetection()
+    let finishDetection: () => void = () => {}
+    vi.spyOn(languageReadiness, 'initializeLanguageDetection').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishDetection = () => resolve(detection)
+        })
+    )
+    const load = vi.spyOn(rendererI18n, 'loadRendererUiLanguage').mockResolvedValue('en')
+    useAppStore.setState({ settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'system' } })
+
+    await renderProvider()
+
+    expect(load).not.toHaveBeenCalled()
+
+    await act(async () => finishDetection())
+
+    expect(load).toHaveBeenCalledWith('system')
+    expect(useLanguageReadiness.getState().ready).toBe(true)
+  })
+
   it('does not apply any language while settings are still loading', async () => {
     const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
 
@@ -71,13 +144,11 @@ describe('I18nProvider startup language', () => {
       })
     })
 
-    expect(changeLanguage).toHaveBeenCalledWith('es')
+    await vi.waitFor(() => expect(changeLanguage).toHaveBeenCalledWith('es'))
   })
 
   it('applies persisted English even if i18n reports it as already active', async () => {
-    // Why: i18n.language stays stale while a lazy catalog load is in flight; a
-    // guard comparing against it skipped the correction back to the persisted
-    // language and let the in-flight OS locale win.
+    // i18n.language stays stale during lazy loading; comparing it can skip correcting an in-flight OS-locale switch.
     const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
 
     await renderProvider()
@@ -91,14 +162,11 @@ describe('I18nProvider startup language', () => {
   })
 
   it('never applies the OS locale on a non-English system when English is persisted (#7188)', async () => {
-    // Why: on a Spanish OS the pre-fix provider kicked off changeLanguage('es')
-    // while settings were still null, and the in-flight OS switch then beat the
-    // persisted English preference. The fix applies nothing until settings load.
+    // No locale request may start before persisted settings arrive, even on a Spanish OS.
     stubSystemLocale('es-ES')
     const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
 
     await renderProvider()
-    // No OS-locale switch is kicked off while settings are still loading.
     expect(changeLanguage).not.toHaveBeenCalled()
 
     await act(async () => {
@@ -107,7 +175,7 @@ describe('I18nProvider startup language', () => {
       })
     })
 
-    // English wins and the Spanish OS locale is never requested.
+    expect(useLanguageReadiness.getState().detection?.locale).toBe('es')
     expect(changeLanguage).toHaveBeenCalledWith('en')
     expect(changeLanguage).not.toHaveBeenCalledWith('es')
   })
@@ -127,6 +195,99 @@ describe('I18nProvider startup language', () => {
       })
     })
 
-    expect(changeLanguage).toHaveBeenLastCalledWith('es')
+    await vi.waitFor(() => expect(changeLanguage).toHaveBeenLastCalledWith('es'))
   })
+})
+
+it('does not apply a delayed catalog after a newer saved preference', async () => {
+  let finishSpanish: (locale: string) => void = () => {}
+  const load = vi
+    .spyOn(rendererI18n, 'loadRendererUiLanguage')
+    .mockImplementation(async (language) => {
+      if (language === 'es') {
+        return new Promise<string>((resolve) => {
+          finishSpanish = resolve
+        })
+      }
+      return 'en'
+    })
+  const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
+  await renderProvider()
+  await act(async () => {
+    useAppStore.setState({ settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'es' } })
+  })
+  await vi.waitFor(() => expect(load).toHaveBeenCalledWith('es'))
+  await act(async () => {
+    useAppStore.setState({ settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' } })
+  })
+  await vi.waitFor(() => expect(changeLanguage).toHaveBeenCalledWith('en'))
+  await act(async () => finishSpanish('es'))
+  expect(changeLanguage).not.toHaveBeenCalledWith('es')
+  expect(i18n.language).toBe('en')
+})
+
+it('settles catalog failure to English with recovery while preserving the saved language', async () => {
+  vi.spyOn(rendererI18n, 'loadRendererUiLanguage').mockRejectedValue(new Error('Catalog offline'))
+  await renderProvider()
+  await act(async () => {
+    useAppStore.setState({ settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'fr' } })
+  })
+  await vi.waitFor(() =>
+    expect(useLanguageReadiness.getState()).toMatchObject({ ready: true, error: true })
+  )
+  expect(i18n.language).toBe('en')
+  expect(useAppStore.getState().settings?.uiLanguage).toBe('fr')
+})
+
+it('continues in English while plugin discovery is pending without changing the saved preference', async () => {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { plugins: { listLanguagePacks: () => new Promise(() => {}) } }
+  })
+  usePluginLanguagePackStore.setState({ entries: [], loaded: false })
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'plugin:example.missing/de' }
+  })
+  await renderProvider()
+  await vi.waitFor(() =>
+    expect(useLanguageReadiness.getState()).toMatchObject({ ready: true, error: false })
+  )
+  expect(i18n.language).toBe('en')
+  expect(usePluginLanguagePackStore.getState().loaded).toBe(false)
+  expect(useAppStore.getState().settings?.uiLanguage).toBe('plugin:example.missing/de')
+})
+
+it("re-applies a plugin language only when the selected pack's content changes", async () => {
+  const id = 'plugin:example.german/de-DE' as const
+  const pack = (save: string) => ({
+    id,
+    resourceLanguage: pluginLanguageResourceId(id),
+    pluginKey: 'example.german',
+    coverage: 100,
+    locale: 'de-DE',
+    catalog: { common: { save } }
+  })
+  let listed = [pack('Speichern')]
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { plugins: { listLanguagePacks: async () => structuredClone(listed) } }
+  })
+  usePluginLanguagePackStore.setState({ entries: [], loaded: false })
+  useAppStore.setState({ settings: { ...getDefaultSettings('/tmp'), uiLanguage: id } })
+  await renderProvider()
+  await act(() => usePluginLanguagePackStore.getState().fetchEntries())
+  await vi.waitFor(() => expect(i18n.language).toBe(pluginLanguageResourceId(id)))
+  const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
+  const removeBundle = vi.spyOn(i18n, 'removeResourceBundle')
+
+  // Plugin-change refreshes rebuild every registration over IPC, even when nothing changed.
+  await act(() => usePluginLanguagePackStore.getState().fetchEntries())
+  await vi.waitFor(() => expect(useLanguageReadiness.getState().loading).toBe(false))
+  expect(changeLanguage).not.toHaveBeenCalled()
+  expect(removeBundle).not.toHaveBeenCalled()
+
+  listed = [pack('Sichern')]
+  await act(() => usePluginLanguagePackStore.getState().fetchEntries())
+  await vi.waitFor(() => expect(changeLanguage).toHaveBeenCalledWith(pluginLanguageResourceId(id)))
+  expect(rendererI18n.translate('common.save', 'Save')).toBe('Sichern')
 })

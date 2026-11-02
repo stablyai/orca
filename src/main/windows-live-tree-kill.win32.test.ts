@@ -5,9 +5,9 @@ import { spawn, ChildProcess } from 'node:child_process'
 import { subscribe, unsubscribe } from 'node:diagnostics_channel'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../shared/app-environment'
-import { setProcessTreeKillGate } from '../shared/child-process/process-tree-kill-gate'
-import { signalProcessTree } from '../shared/child-process/process-tree-termination'
-import { windowsSystem32Binary } from '../shared/child-process/windows-system-binary'
+import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { removeTreeSync } from '../shared/windows-transient-lock-removal'
 import {
   findSelfInitiatedTreeKills,
@@ -16,21 +16,9 @@ import {
 import { installMainProcessTreeKillGate } from './own-chromium-tree-kill-guard'
 import { terminateWindowsProcessTree } from './windows-process-tree-kill'
 
-/**
- * The unit tests pin the gate's decision against a mocked `taskkill`; this pins
- * what that decision does to real Windows processes.
- *
- * Both are needed. Every claim the gate makes is about a mechanism the mocks
- * cannot show: that `taskkill /T /F` actually reaps a detached grandchild, that
- * a refusal actually leaves that tree standing, and that the handle-addressed
- * root kill the refusal path falls back to actually reaps the root while
- * orphaning its descendants — the asymmetry the PR discloses rather than fixes.
- *
- * Runs only on win32; skipped elsewhere.
- */
+/** Exercise real taskkill and root-only fallback behavior with detached descendants. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
-/** Read live by the guard on every kill, so a case can flip it mid-test. */
 let orcaChromiumPids: number[] = []
 
 function appEnvironment(): AppEnvironment {
@@ -85,7 +73,6 @@ function observeSpawn(message: unknown): void {
   }
 }
 
-/** A real root with a real grandchild; the grandchild reports its pid on disk. */
 async function spawnLiveTree(): Promise<{
   child: ChildProcess
   rootPid: number
@@ -163,12 +150,10 @@ describeOnWindows('own-Chromium gate against real Windows process trees', () => 
     expect(isAlive(leafPid)).toBe(true)
     expect(findSelfInitiatedTreeKills(Date.now())).toEqual([])
 
-    // The fallback every gated site runs after a refusal.
     child.kill('SIGKILL')
     expect(await waitFor(() => !isAlive(rootPid))).toBe(true)
     // Let root-owned job cleanup finish before asserting independent survival.
     await sleep(250)
-    // Disclosed asymmetry: a refusal orphans descendants rather than reaping them.
     expect(isAlive(leafPid)).toBe(true)
   })
 

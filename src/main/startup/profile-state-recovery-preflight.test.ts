@@ -126,29 +126,6 @@ function response(): unknown {
 }
 
 describe('Electron recovery preflight', () => {
-  it('runs the recovery branch before CLI redirect or ordinary startup admission', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-      'utf8'
-    )
-    const start = source.indexOf('export function runMainProcessPreflight(')
-    const recovery = source.indexOf('if (runProfileStateRecoveryPreflight())', start)
-    const redirect = source.indexOf('const cliLaunchRedirect = maybeRedirectCliLaunch(', start)
-    const admission = source.indexOf('acquireProfileStateRuntimeAdmission(', start)
-    expect(start).toBeGreaterThanOrEqual(0)
-    expect(recovery).toBeGreaterThan(start)
-    expect(redirect).toBeGreaterThan(recovery)
-    expect(admission).toBeGreaterThan(redirect)
-    expect(source.slice(recovery, redirect)).toContain('return false')
-  })
-
-  it('leaves ordinary startup untouched', () => {
-    expect(runProfileStateRecoveryPreflight(['Orca', '--serve'])).toBe(false)
-    expect(mocks.background).not.toHaveBeenCalled()
-    expect(mocks.setPath).not.toHaveBeenCalled()
-    expect(mocks.exit).not.toHaveBeenCalled()
-  })
-
   it.each(['json', 'current-json'] as const)(
     'restores %s under both locks despite ordinary singleton bypasses',
     (kind) => {

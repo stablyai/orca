@@ -1,21 +1,9 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync } from 'node:fs'
 import { connect } from 'node:net'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { describe, expect, it, afterEach, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
 import { rejectNodeWebSocketOverCapacity } from './node-websocket-lifecycle'
-import { loadOrCreateTlsCertificate } from '../tls-certificate'
-
-// Why: disable TLS verification for self-signed certs in tests.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-
-function makeTls() {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'ws-transport-test-'))
-  return loadOrCreateTlsCertificate(userDataPath)
-}
 
 function heartbeatLifecycle(transport: WebSocketTransport) {
   return transport as unknown as {
@@ -53,29 +41,23 @@ describe('WebSocketTransport', () => {
     handler?: (msg: string, reply: (response: string) => void) => void,
     options: { preAuthTimeoutMs?: number } = {}
   ) {
-    const tls = makeTls()
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
-      // Why: random "free" ports can still collide before listen() binds.
-      // Port 0 lets the OS reserve an available port atomically.
+      // Port 0 reserves atomically; probed free ports can race.
       port: 0,
-      tlsCert: tls.cert,
-      tlsKey: tls.key,
       preAuthTimeoutMs: options.preAuthTimeoutMs
     })
     if (handler) {
       transport.onMessage(handler)
     }
     transports.push(transport)
-    return { transport, tls }
+    return { transport }
   }
 
   function connectWs(target: number | WebSocketTransport): Promise<WebSocket> {
     const port = typeof target === 'number' ? target : target.resolvedPort
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`wss://127.0.0.1:${port}`, {
-        rejectUnauthorized: false
-      })
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`)
       ws.once('open', () => resolve(ws))
       ws.once('error', reject)
     })
@@ -259,7 +241,6 @@ describe('WebSocketTransport', () => {
 
     const ws = await connectWs(transport)
 
-    // Why: ws maxPayload is 1MB — sending >1MB should trigger close.
     const oversized = 'x'.repeat(1024 * 1024 + 100)
 
     await new Promise<void>((resolve) => {
@@ -280,7 +261,6 @@ describe('WebSocketTransport', () => {
     const ws = await connectWs(transport)
     ws.send(JSON.stringify({ id: 'req-1', method: 'test' }))
 
-    // Why: wait for the handler to capture the reply function.
     await new Promise<void>((resolve) => {
       const interval = setInterval(() => {
         if (capturedReply) {
@@ -292,10 +272,8 @@ describe('WebSocketTransport', () => {
 
     ws.close()
 
-    // Why: wait for the WebSocket to fully close before trying to reply.
     await new Promise((resolve) => setTimeout(resolve, 50))
 
-    // Should not throw — guards with readyState check.
     expect(() => capturedReply!(JSON.stringify({ id: 'req-1', ok: true }))).not.toThrow()
   })
 
@@ -409,8 +387,7 @@ describe('WebSocketTransport', () => {
   })
 
   it('bounds raw TCP sockets above the WebSocket connection budget', async () => {
-    // Why: the WebSocket cap applies only after upgrade, so raw sockets need a
-    // finite independent bound without reducing the 128 legitimate WS slots.
+    // Bound raw sockets independently before upgrade without consuming legitimate WS capacity.
     const { transport } = await createTransport()
     await transport.start()
 
@@ -420,10 +397,7 @@ describe('WebSocketTransport', () => {
   })
 
   it('force-terminates an over-capacity socket that ignores the close frame', async () => {
-    // Why: a backgrounded/half-open phone may never ack the 1013 close, so a
-    // bare ws.close() retains its descriptor until the heartbeat. A reconnect
-    // flood can fill the TCP headroom during that window, so rejection must
-    // hard-close on a short fixed deadline.
+    // Half-open peers may never ACK 1013; hard-close rejected sockets promptly so reconnect floods cannot exhaust TCP headroom.
     const { transport } = await createTransport()
     await transport.start()
 
@@ -504,14 +478,10 @@ describe('WebSocketTransport', () => {
     await first.start()
     const occupiedPort = first.resolvedPort
 
-    // Why: second transport requests the same port, which is now occupied.
-    // It should silently fall back to an OS-assigned port instead of throwing.
-    const tls = makeTls()
+    // A conflicting port must fall back rather than fail startup.
     const second = new WebSocketTransport({
       host: '127.0.0.1',
-      port: occupiedPort,
-      tlsCert: tls.cert,
-      tlsKey: tls.key
+      port: occupiedPort
     })
     transports.push(second)
 
@@ -525,12 +495,9 @@ describe('WebSocketTransport', () => {
   })
 
   it('falls back to OS-assigned port when preferred port is reserved', async () => {
-    const tls = makeTls()
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
-      port: 6769,
-      tlsCert: tls.cert,
-      tlsKey: tls.key
+      port: 6769
     })
     transports.push(transport)
 
@@ -566,18 +533,10 @@ describe('WebSocketTransport', () => {
   })
 
   it('reaps a half-open client that stops responding to pings', async () => {
-    // Why: regression cover for the half-open-socket leak that would
-    // strand mobile clients in the connection pool until OS TCP keepalive
-    // (~2 hours) reaped them. With the heartbeat, two consecutive ping
-    // ticks without a pong should cause terminate() to fire and free the
-    // slot. Verifying via the server's connection-close handler, which
-    // is what frees up the MAX_WS_CONNECTIONS budget in production.
-    const tls = makeTls()
+    // Half-open peers otherwise occupy mobile slots for ~2h; verify heartbeat teardown through the production capacity-releasing close handler.
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
       port: 0,
-      tlsCert: tls.cert,
-      tlsKey: tls.key,
       heartbeatIntervalMs: 50
     })
     transport.onMessage(() => {})
@@ -588,17 +547,11 @@ describe('WebSocketTransport', () => {
       serverClosed = true
     })
 
-    // Why: setClientId is what registers the ws → clientId mapping that
-    // onConnectionClose fires off. Hook the connection event before
-    // start so we can stamp every accepted ws with a token.
+    // Stamp accepted sockets before startup so onConnectionClose sees their client ids.
     await transport.start()
 
     const ws = await connectWs(transport)
-    // Why: pausing the underlying TCP socket halts both read (ping in)
-    // and write (pong out) at the kernel level, so the `ws` library's
-    // auto-pong can't actually be flushed back. From the server's
-    // perspective the client looks half-open — exactly the production
-    // failure mode iOS produces when it suspends a backgrounded socket.
+    // Pause TCP to block auto-pong flushing and model iOS background half-opens.
     const underlying = (ws as unknown as { _socket: { pause: () => void } })._socket
     underlying.pause()
 
@@ -610,7 +563,7 @@ describe('WebSocketTransport', () => {
       transport.setClientId(c as never, 'test-client')
     }
 
-    // Wait long enough for two heartbeat ticks (50ms each) plus slack.
+    // Allow two 50ms heartbeat ticks plus slack.
     const start = Date.now()
     while (!serverClosed && Date.now() - start < 2_000) {
       await new Promise((r) => setTimeout(r, 25))
@@ -620,9 +573,7 @@ describe('WebSocketTransport', () => {
     expect(wss.clients.size).toBe(0)
   }, 5_000)
 
-  // Why: paired mobile devices store ws://ip:port endpoints, so the fallback
-  // port must stay stable across restarts or pairings go permanently dead
-  // when the preferred port is held by another instance (STA-1511).
+  // Persist fallback endpoints so paired phones remain reachable across restarts (STA-1511).
   describe('fallback port stability', () => {
     async function reserveFreePort(): Promise<number> {
       const scratch = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
@@ -633,10 +584,7 @@ describe('WebSocketTransport', () => {
     }
 
     it('binds the persisted fallback port even when the preferred port is free', async () => {
-      // Why: regression for the STA-1511 follow-up — devices paired while the
-      // fallback port was active store ws://ip:<fallback>. A later launch that
-      // finds the preferred port free must still bind the fallback, or those
-      // pairings go permanently dead until the user re-pairs.
+      // Fallback pairings must survive even when the preferred port becomes free (STA-1511).
       const preferredPort = await reserveFreePort()
       const fallbackPort = await reserveFreePort()
 
@@ -651,8 +599,7 @@ describe('WebSocketTransport', () => {
     })
 
     it('binds the preferred port first when preferPinnedPort is set and both are free', async () => {
-      // Why: issue #8535 — `orca serve --port <P>` clients dial the pin. A
-      // free but stale mobile-ws-fallback-port.json must not pre-empt it.
+      // An explicit serve --port pin must precede stale persisted fallback (#8535).
       const preferredPort = await reserveFreePort()
       const fallbackPort = await reserveFreePort()
 
@@ -668,8 +615,7 @@ describe('WebSocketTransport', () => {
     })
 
     it('falls back when preferPinnedPort is set but the preferred port is taken', async () => {
-      // Why: explicit pins still degrade to the STA-1511 fallback on
-      // EADDRINUSE so previously-paired mobile devices remain reachable.
+      // Occupied explicit ports still use the paired-device fallback (STA-1511).
       const preferredHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
       transports.push(preferredHolder)
       await preferredHolder.start()
@@ -705,9 +651,7 @@ describe('WebSocketTransport', () => {
     })
 
     it('falls through to the preferred port when the fallback bind fails with a non-EADDRINUSE error', async () => {
-      // Why: a persisted fallback can land in an OS-reserved range on a later
-      // launch (Windows Hyper-V excluded ports → EACCES). That must degrade to
-      // the preferred port instead of disabling the transport for the session.
+      // Persisted ports may enter Windows Hyper-V reserved ranges; EACCES must fall back to preferred, not disable transport.
       const preferredPort = await reserveFreePort()
       const fallbackPort = await reserveFreePort()
       const transport = new WebSocketTransport({
@@ -745,6 +689,28 @@ describe('WebSocketTransport', () => {
         )
 
       await expect(transport.start()).rejects.toThrow('open EACCES')
+    })
+
+    it('tries the deterministic ladder before an OS-assigned port (#15490)', async () => {
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: 6768,
+        fallbackPort: 62944,
+        fallbackLadder: [6769, 6770, 6771]
+      })
+      transports.push(transport)
+      const attempted: number[] = []
+      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
+      withListen.tryListen = async (port: number) => {
+        attempted.push(port)
+        if (port !== 6770) {
+          throw Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' })
+        }
+      }
+
+      await transport.start()
+      expect(attempted).toEqual([62944, 6768, 6769, 6770])
+      expect(transport.persistedFallbackFailed).toBe(true)
     })
 
     it('retries the persisted fallback port before an OS-assigned one', async () => {

@@ -5,12 +5,15 @@ import type {
   GitHubPRFileViewedState
 } from '../../../../../shared/github/pull-request-types'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
 import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
 
-// Why: SWR cache for work-item details so reopening paints instantly instead of paying IPC + `gh` startup; keyed to avoid source/type collisions, LRU-bounded, FRESH_MS refetch on open. See docs/gh-work-item-drawer-cache.md.
+// Bound cached details for instant reopen; refresh stale entries on open. See docs/gh-work-item-drawer-cache.md.
 export const WORK_ITEM_DETAILS_CACHE_MAX = 50
 export const WORK_ITEM_DETAILS_FRESH_MS = 30_000
 export const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for this GitHub item.'
@@ -22,7 +25,18 @@ export type WorkItemDetailsCacheEntry = {
 }
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
-// Why: drawers subscribe via useSyncExternalStore so a cached item paints synchronously; snapshot stability relies on every write replacing entry identity (delete+set).
+export function withWorkItemDetailsItem(
+  details: GitHubWorkItemDetails,
+  item: GitHubWorkItem
+): GitHubWorkItemDetails {
+  return {
+    ...details,
+    item,
+    ...(item.assignees === undefined ? {} : { assignees: item.assignees.map((user) => user.login) })
+  }
+}
+
+// Replace entry identity on every write so useSyncExternalStore snapshots stay stable between notifications.
 const workItemDetailsCacheListeners = new Set<() => void>()
 export function subscribeWorkItemDetailsCache(listener: () => void): () => void {
   workItemDetailsCacheListeners.add(listener)
@@ -45,9 +59,9 @@ export function getWorkItemDetailsCacheKey(args: {
   type: 'issue' | 'pr'
   number: number
   ownerRepo?: GitHubOwnerRepo | null
+  bindingKey?: string
 }): string {
-  // Why: key on every axis that changes which (repo, item) the IPC resolves to; `\0` separator avoids ambiguity with fields containing `:` or `/`.
-  // Why: repoPath is the second part so match-based invalidation can find entries from a cross-window event that carries only the path.
+  // NUL-separate routing axes to prevent key collisions; keep repoPath second for path-only invalidation events.
   const sourceKey =
     args.ownerRepo && !getGitHubSourceRuntimeHost(args.sourceContext)
       ? githubRepoIdentityKey(args.ownerRepo)
@@ -55,11 +69,12 @@ export function getWorkItemDetailsCacheKey(args: {
   const keyParts = args.sourceCacheScope
     ? [args.repoId, args.repoPath, args.sourceCacheScope, sourceKey, args.type]
     : [args.repoId, args.repoPath, sourceKey, args.type]
+  keyParts.splice(2, 0, ...(args.bindingKey ? [args.bindingKey] : []))
   return [...keyParts, args.number].join('\0')
 }
 
 export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
-  // Why: re-insert to move to MRU position; Map insertion order keeps the oldest key first for eviction.
+  // Reinsert as most recent; Map order supplies the eviction order.
   workItemDetailsCache.delete(key)
   workItemDetailsCache.set(key, entry)
   while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
@@ -72,20 +87,14 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
   notifyWorkItemDetailsCache()
 }
 
-// Why: exposed so mutation handlers can drop a stale entry after a local mutation; cross-window invalidation arrives via the gh:workItemMutated listener below.
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  // Why: bump generation so a fetch launched before this invalidation won't write its stale result back.
-  workItemDetailsCacheGeneration += 1
   const existed = workItemDetailsCache.delete(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
 }
 
-// Why: bumped on every invalidation so an in-flight refetch started before a mutation can detect its result is stale and skip writing it back.
-export let workItemDetailsCacheGeneration = 0
-
-// Why: without the exact key (e.g. a cross-window event carries only repoPath+number+type), drop every entry matching that tuple regardless of source preference.
+// Without an exact key, invalidate matching repo/type/number entries across source preferences.
 export function invalidateWorkItemDetailsCacheByMatch(args: {
   repoPath: string
   repoId?: string
@@ -102,7 +111,7 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     if (!key.endsWith(suffix)) {
       continue
     }
-    // Why: repoId identifies the entry exactly; repoPath is the only handle a cross-window event carries, so match either side of the key head.
+    // Prefer repoId when supplied; path-only events match the key’s repository path.
     const [keyRepoId, keyRepoPath] = key.split('\0')
     const matches = args.repoId ? keyRepoId === args.repoId : keyRepoPath === args.repoPath
     if (matches) {
@@ -111,7 +120,6 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     }
   }
   if (removed) {
-    workItemDetailsCacheGeneration += 1
     notifyWorkItemDetailsCache()
   }
 }
@@ -177,6 +185,7 @@ export function patchCachedPRReviewRequests(
   })
 }
 
+// An issue's saved body drops `pending` so a read (Refresh included) started before it settles superseded.
 export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
   const prev = workItemDetailsCache.get(cacheKey)
   if (!prev?.details) {
@@ -186,11 +195,12 @@ export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
     ...prev,
     details: { ...prev.details, body },
     fetchedAt: Date.now(),
+    pending: prev.details.item.type === 'issue' ? undefined : prev.pending,
     error: undefined
   })
 }
 
-// Why: install once — all dialogs share the cache; track unsubscribe so Vite HMR doesn't accumulate listeners across dev reloads.
+// Share event listeners across dialogs and unsubscribe on HMR to avoid accumulating subscriptions.
 let workItemMutatedUnsub: (() => void) | undefined
 let workItemDetailsCacheEventUnsub: (() => void) | undefined
 if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {

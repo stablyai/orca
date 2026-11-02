@@ -1,4 +1,5 @@
 import { vi, type Mock } from 'vitest'
+import type { WebContents } from 'electron'
 import WebSocket from 'ws'
 
 type DebuggerListener = (...args: unknown[]) => void
@@ -18,15 +19,17 @@ type MockDebugger = {
   removeListener: Mock<(event: string, handler: DebuggerListener) => void>
 }
 
-// Why: annotate the return explicitly so the exported inferred type stays nameable under
-// composite declaration emit — otherwise the vi.fn() mocks leak @vitest/spy's Procedure
-// and tsgo reports TS2883.
+// Explicit mock types avoid unnameable @vitest/spy Procedure types during declaration emit (TS2883).
 export type MockWebContents = {
   webContents: {
     debugger: MockDebugger
     isDestroyed: () => boolean
     isCrashed: () => boolean
     focus: Mock<() => void>
+    // Offscreen by default; use 'webview' for guest-direct input.
+    getType: Mock<() => string>
+    sendInputEvent: Mock<(event: Electron.KeyboardInputEvent) => void>
+    setIgnoreMenuShortcuts: Mock<(ignore: boolean) => void>
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
     reloadIgnoringCache: Mock<() => void>
@@ -75,6 +78,9 @@ export function createMockWebContents(): MockWebContents {
       isDestroyed: () => destroyed,
       isCrashed: () => false,
       focus: vi.fn(),
+      getType: vi.fn(() => 'window'),
+      sendInputEvent: vi.fn(),
+      setIgnoreMenuShortcuts: vi.fn(),
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),
       reloadIgnoringCache: vi.fn(),
@@ -91,6 +97,12 @@ export function createMockWebContents(): MockWebContents {
       }
     }
   }
+}
+
+export function mockAsWebContents(mock: MockWebContents, id?: number): WebContents {
+  const contents = id === undefined ? mock.webContents : { ...mock.webContents, id }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the CDP proxy and page-input paths call.
+  return contents as unknown as WebContents
 }
 
 export type SendCommandCall = [string, Record<string, unknown>?, string?]
@@ -112,8 +124,17 @@ export function sendAndReceive(
   })
 }
 
+const PAINT_PROBE_EXPRESSION =
+  "[performance.getEntriesByType('paint').length > 0, performance.timeOrigin]"
+
+// Hides the first-paint probe every embedded-guest input passes; its own test spies on holdPaint.
 export function getSendCommandCalls(mock: MockWebContents): SendCommandCall[] {
-  return mock.webContents.debugger.sendCommand.mock.calls as unknown as SendCommandCall[]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock records the (method, params, sessionId) it was called with.
+  const calls = mock.webContents.debugger.sendCommand.mock.calls as unknown as SendCommandCall[]
+  return calls.filter(
+    ([method, params]) =>
+      method !== 'Runtime.evaluate' || params?.expression !== PAINT_PROBE_EXPRESSION
+  )
 }
 
 export function getSendCommandMethods(mock: MockWebContents): string[] {

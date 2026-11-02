@@ -6,7 +6,7 @@ const { callMock, getTerminalHandleMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../runtime-client', async () => {
-  // Why: re-export the REAL error classes so format.ts `instanceof` narrowing still matches.
+  // Error formatting uses instanceof, so preserve the production error classes.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
   class RuntimeClient {
     readonly isRemote = false
@@ -34,9 +34,9 @@ import { okFixture, queueFixtures } from '../test-fixtures'
 
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
-// Why: a structured-session marker inherited from the runner diverts these cases to the
-// structured refusal, so which branch they exercise would depend on who ran them.
+// Isolate inherited session markers so the runner cannot change the refusal branch.
 const originalStructuredSession = process.env.ORCA_STRUCTURED_SESSION
+const originalCodexThreadId = process.env.CODEX_THREAD_ID
 
 const restoreEnv = (name: string, value: string | undefined): void => {
   if (value === undefined) {
@@ -58,6 +58,7 @@ describe('orchestration gate commands carry caller identity', () => {
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
     delete process.env.ORCA_STRUCTURED_SESSION
+    delete process.env.CODEX_THREAD_ID
     process.exitCode = 0
   })
 
@@ -67,6 +68,7 @@ describe('orchestration gate commands carry caller identity', () => {
     restoreEnv('ORCA_TERMINAL_HANDLE', originalTerminalHandle)
     restoreEnv('ORCA_PANE_KEY', originalPaneKey)
     restoreEnv('ORCA_STRUCTURED_SESSION', originalStructuredSession)
+    restoreEnv('CODEX_THREAD_ID', originalCodexThreadId)
     process.exitCode = 0
   })
 
@@ -164,14 +166,23 @@ describe('orchestration gate commands carry caller identity', () => {
   })
 
   it('inspects a named Run without resolving a caller terminal', async () => {
-    // Why: read-only inspection must stay reachable from a pane with no bound Run.
     getTerminalHandleMock.mockRejectedValue(
       new RuntimeClientError('no_active_terminal', 'no active terminal')
     )
     queueFixtures(
       callMock,
       okFixture('req_list', {
-        gates: [{ id: 'gate_1', task_id: 'task_1', question: 'ship?', status: 'pending' }],
+        gates: [
+          {
+            id: 'gate_1',
+            task_id: 'task_1',
+            question: 'ship?',
+            options: '["yes","no"]',
+            status: 'pending',
+            resolution: null,
+            created_at: '2026-10-31 00:00:00'
+          }
+        ],
         count: 1
       })
     )
@@ -179,6 +190,15 @@ describe('orchestration gate commands carry caller identity', () => {
     await main(['orchestration', 'gate-list', '--run', 'run_adopted', '--json'], '/tmp/repo')
 
     expect(process.exitCode).toBe(0)
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).result.gates).toEqual([
+      {
+        id: 'gate_1',
+        taskId: 'task_1',
+        status: 'pending',
+        question: 'ship?',
+        options: '["yes","no"]'
+      }
+    ])
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
     expect(paramsFor('orchestration.gateList')).toEqual(
       expect.objectContaining({ run: 'run_adopted', from: undefined })

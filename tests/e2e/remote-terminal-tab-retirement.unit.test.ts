@@ -43,6 +43,7 @@ function makeViewerState(): WebSessionTabsSyncState {
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},
@@ -130,15 +131,16 @@ describe('remote terminal tab retirement publication', () => {
   it('removes a permanent host exit from simultaneous viewers without stale resurrection', async () => {
     let session = makePersistedSession()
     const flushOrThrow = vi.fn()
+    const store = withDurableRuntimeStore({
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: (next: WorkspaceSessionState) => {
+        session = next
+      },
+      flushOrThrow
+    })
     const runtime = new OrcaRuntimeService(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This retirement fixture implements the Store session and durability operations used by the runtime.
-      withDurableRuntimeStore({
-        getWorkspaceSession: () => session,
-        setWorkspaceSession: (next) => {
-          session = next
-        },
-        flushOrThrow
-      }) as never
+      store as never
     )
     runtime.attachWindow(1)
     const staleLiveSnapshot = makeHostSnapshot()

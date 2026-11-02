@@ -1,7 +1,7 @@
 import {
   isWatcherProcessFailure,
   type WatcherProcessFailure
-} from './parcel-watcher-process-failure'
+} from './filesystem/watcher-process/parcel-watcher-process-failure'
 
 export function handleRuntimeWatcherSubscriptionFailure(
   error: unknown,

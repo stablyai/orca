@@ -1,4 +1,5 @@
 import { MUSE_USAGE_SCHEMA_VERSION } from './muse-usage-provider'
+import { normalizeMuseUsagePersistedFiles } from './persisted-file-normalization'
 import type { MuseUsagePersistedState } from './types'
 
 export function getDefaultMuseUsageState(): MuseUsagePersistedState {
@@ -18,7 +19,7 @@ export function getDefaultMuseUsageState(): MuseUsagePersistedState {
 }
 
 export function normalizeMuseUsageState(state: MuseUsagePersistedState): MuseUsagePersistedState {
-  // Why: a cache from another schema cannot be trusted; rescan but keep the opt-in.
+  // Rescan incompatible caches while preserving the user's opt-in.
   if (state.schemaVersion !== MUSE_USAGE_SCHEMA_VERSION) {
     const defaults = getDefaultMuseUsageState()
     return {
@@ -28,15 +29,7 @@ export function normalizeMuseUsageState(state: MuseUsagePersistedState): MuseUsa
   }
   return {
     ...state,
-    processedFiles: (state.processedFiles ?? []).map((file) => ({
-      ...file,
-      sessions: file.sessions ?? [],
-      dailyAggregates: file.dailyAggregates ?? [],
-      ownedEventKeys: file.ownedEventKeys ?? [],
-      hasDeferredClaims: file.hasDeferredClaims ?? true,
-      sessionCwd: file.sessionCwd ?? null,
-      inheritedCwd: file.inheritedCwd ?? null
-    })),
+    processedFiles: normalizeMuseUsagePersistedFiles(state.processedFiles),
     sessions: state.sessions ?? [],
     dailyAggregates: state.dailyAggregates ?? []
   }

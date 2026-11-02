@@ -27,7 +27,7 @@ type BranchStartPointActionsInput = Pick<
   | 'setSparseEnabled'
   | 'setSparseSelectedPresetId'
   | 'setStartFromResetHint'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
 >
 
 import { useCallback } from 'react'
@@ -64,7 +64,7 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
     setSparseEnabled,
     setSparseSelectedPresetId,
     setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   } = input
 
   const showProjectRequiredError = useCallback((): void => {
@@ -95,7 +95,7 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
 
   const handleBaseBranchChange = useCallback(
     (next: string | undefined): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      smartSourceSelectionRef.current = null
       setBaseBranch(next)
       setBaseBranchNamesWorkspace(false)
       setCompareBaseRef(undefined)
@@ -125,7 +125,7 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       setReuseEligibleBranch,
       setReuseSelectedBranch,
       setStartFromResetHint,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ]
   )
 
@@ -135,7 +135,8 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       item: GitHubWorkItem,
       nextPushTarget?: GitPushTarget,
       nextBranchNameOverride?: string,
-      nextCompareBaseRef?: string
+      nextCompareBaseRef?: string,
+      options: { sourceAlreadyLinked?: boolean } = {}
     ): void => {
       setBaseBranch(nextBaseBranch)
       setBaseBranchNamesWorkspace(true)
@@ -145,9 +146,12 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       setBranchNameOverridePreservesNameEdits(Boolean(nextBranchNameOverride))
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
-      // Why: a Start-from PR pick is also a linkedWorkItem assignment; reuse applyLinkedWorkItem so auto-name and linkedPR stay one code path.
-      applyLinkedWorkItem(item, { preserveBranchNameOverride: Boolean(nextBranchNameOverride) })
-      // Why: prefill the note from the PR (only when empty or still an auto-fill) so the sidebar surfaces it without clobbering user text.
+      // Reuse linked-item application for PR auto-name/link state; delayed bases must not replay names already applied by provider picks.
+      if (!options.sourceAlreadyLinked) {
+        smartSourceSelectionRef.current = null
+        applyLinkedWorkItem(item, { preserveBranchNameOverride: Boolean(nextBranchNameOverride) })
+      }
+      // Replace notes only while empty or still auto-filled; preserve user instructions.
       const identity = resolveGitHubWorkItemIdentity(item)
       if (identity.type === 'pr') {
         const suggestedNote = `PR #${identity.number} — ${item.title}`
@@ -170,17 +174,19 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       setCompareBaseRef,
       setNote,
       setPushTarget,
-      setStartFromResetHint
+      setStartFromResetHint,
+      smartSourceSelectionRef
     ]
   )
 
-  // Why: GitLab parallel of handleBaseBranchPrSelect; note prefill uses GitLab's `!N` MR convention so the sidebar makes the provider obvious.
+  // Use GitLab !N in auto-prefilled notes to identify the provider.
   const handleBaseBranchMrSelect = useCallback(
     (
       nextBaseBranch: string,
       item: GitLabWorkItem,
       nextPushTarget?: GitPushTarget,
-      nextCompareBaseRef?: string
+      nextCompareBaseRef?: string,
+      options: { sourceAlreadyLinked?: boolean } = {}
     ): void => {
       setBaseBranch(nextBaseBranch)
       setBaseBranchNamesWorkspace(true)
@@ -189,7 +195,10 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
-      applyLinkedGitLabWorkItem(item)
+      if (!options.sourceAlreadyLinked) {
+        smartSourceSelectionRef.current = null
+        applyLinkedGitLabWorkItem(item)
+      }
       if (item.type === 'mr') {
         const suggestedNote = `MR !${item.number} — ${item.title}`
         const currentNote = noteRef.current
@@ -210,7 +219,8 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       setCompareBaseRef,
       setNote,
       setPushTarget,
-      setStartFromResetHint
+      setStartFromResetHint,
+      smartSourceSelectionRef
     ]
   )
 

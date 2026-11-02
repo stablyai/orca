@@ -18,8 +18,11 @@ import {
   getActiveTabDockSide,
   readTabStripSlotIds,
   revealTabStripSlot,
+  updateTabStripDockAvailability,
   type ActiveTabDockSide
 } from './tab-strip-slot-geometry'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { useTabDragActive } from '../tab-group/tab-drag-context'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
@@ -35,7 +38,7 @@ export function scrollTabStripByStep(
   )
   el.scrollBy({
     left: direction === 'start' ? -scrollStep : scrollStep,
-    behavior
+    behavior: motionSafeScrollBehavior(behavior)
   })
 }
 
@@ -68,6 +71,7 @@ export function useTabStripOverflowNavigation({
   scrollTabStrip: (direction: 'start' | 'end', behavior?: ScrollBehavior) => void
   subscribeToStripResize: (listener: () => void) => () => void
 } {
+  const isTabDragActive = useTabDragActive()
   const tabStripRef = useRef<HTMLDivElement>(null)
   const stripResizeListenersRef = useRef<Set<() => void>>(new Set())
   const prevStripRef = useRef<{ worktreeId: string; tabIds: ReadonlySet<string> } | null>(null)
@@ -93,6 +97,7 @@ export function useTabStripOverflowNavigation({
     setTabStripOverflowState((previous) =>
       sameTabStripOverflowState(previous, next) ? previous : next
     )
+    updateTabStripDockAvailability(el)
     setActiveTabDockSide(getActiveTabDockSide(el))
   }, [])
   const scrollTabStrip = useCallback(
@@ -146,8 +151,7 @@ export function useTabStripOverflowNavigation({
 
     const handleStripResize = (): void => {
       updateTabStripOverflowState()
-      // If the user is pinned to the right edge, keep it pinned even as tab
-      // labels (e.g. "Terminal 5" -> branch name) expand and change scrollWidth.
+      // Keep end-pinned strips at the right edge as live labels change scrollWidth.
       if (stickToEndRef.current && !isTabStripPointerGestureActive()) {
         el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
       }
@@ -230,8 +234,7 @@ export function useTabStripOverflowNavigation({
     const recorded = scrollAnchorRef.current
     if (tabOpened && !pointerGestureActive) {
       if (recorded?.activeTabId === activeTabIdRef.current) {
-        // Why: insertions around the viewed tab keep its on-screen x, the way VS Code and Chrome
-        // leave it still; only a tab that lands out of view scrolls, and the active tab docks.
+        // Preserve the viewed tab’s x through insertion; reveal only offscreen destinations while the active tab docks.
         if (recorded.anchor) {
           restoreTabStripScrollAnchor(strip, recorded.anchor)
         }
@@ -279,9 +282,7 @@ export function useTabStripOverflowNavigation({
       recordScrollAnchor()
       return
     }
-    // Why hold still: active-tab preview changes during a tab press must not move the strip under
-    // a stationary pointer before the release decides click/drag. After a close, the next tab can
-    // be far back in recent history; chasing it throws the strip around, and it docks into view.
+    // Hold the strip through tab presses and closes so it cannot slide under the pointer or chase distant MRU targets.
     if (isTabStripPointerGestureActive() || tabClosedThisCommitRef.current) {
       requestAnimationFrame(updateTabStripOverflowState)
       recordScrollAnchor()
@@ -294,10 +295,10 @@ export function useTabStripOverflowNavigation({
     recordScrollAnchor()
   }, [activeVisibleTabId, recordScrollAnchor, updateTabStripOverflowState])
 
-  // Why: moving the dock between slots shifts which edge it is drawn at with no scroll or resize.
+  // Dock ownership and drag transitions change sticky layout without scrolling or resizing.
   useLayoutEffect(() => {
     updateTabStripOverflowState()
-  }, [activeDockSlotId, updateTabStripOverflowState])
+  }, [activeDockSlotId, isTabDragActive, updateTabStripOverflowState])
 
   // Why every render: the close flag belongs to the commit that set it, not a later tab switch.
   useLayoutEffect(() => {

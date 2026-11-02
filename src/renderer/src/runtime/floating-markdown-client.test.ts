@@ -11,7 +11,7 @@ vi.mock('./runtime-rpc-client', async (importOriginal) => ({
 }))
 
 const args = {
-  settings: { activeRuntimeEnvironmentId: 'one' },
+  target: { kind: 'environment' as const, environmentId: 'one' },
   worktreeId: floatingWorkspaceId('one'),
   filePath: '/remote/notes/plan.md',
   relativePath: 'notes/plan.md'
@@ -94,7 +94,7 @@ describe('floating documents on older hosts', () => {
       readFloatingMarkdownTab({ ...args, worktreeId: 'global-floating-terminal' })
     ).resolves.toBeNull()
     await expect(
-      readFloatingMarkdownTab({ ...args, settings: { activeRuntimeEnvironmentId: 'two' } })
+      readFloatingMarkdownTab({ ...args, target: { kind: 'environment', environmentId: 'two' } })
     ).rejects.toThrow('owning runtime')
     expect(rpc).not.toHaveBeenCalled()
   })
@@ -117,7 +117,10 @@ describe('floating documents on older hosts', () => {
     'rejects a scoped file read routed to %s before any fallback',
     async (owner) => {
       await expect(
-        readRuntimeFileContent({ ...args, settings: { activeRuntimeEnvironmentId: owner } })
+        readRuntimeFileContent({
+          ...args,
+          target: owner ? { kind: 'environment', environmentId: owner } : { kind: 'local' }
+        })
       ).rejects.toThrow('owning runtime')
       expect(rpc).not.toHaveBeenCalled()
     }

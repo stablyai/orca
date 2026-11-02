@@ -1,9 +1,9 @@
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { shareClaudeProfileHistory } from './claude-profile-history'
 import {
+  claudeProfileMarkerPath,
   prepareClaudeProfileDirectory,
-  readClaudeProfileObject,
   type ClaudeProfileDescriptor
 } from './claude-profile-paths'
 import { provisionClaudeProfile } from './claude-profile-provisioning'
@@ -14,53 +14,35 @@ import {
   warnClaudeProfile,
   type ClaudeProfileReport
 } from './claude-profile-report'
-import {
-  claudeProfileLedgerPath,
-  readClaudeProfileLedger,
-  writeClaudeProfileLedger
-} from './claude-profile-sharing'
 
-/** Without this the installed `hooks` look like a profile edit, so the user's own hooks never arrive. */
-function recordInstalledHooks(home: string): void {
-  const settings = readClaudeProfileObject(join(home, 'settings.json'))
-  if (settings.kind !== 'present' || !('hooks' in settings.value)) {
-    return
-  }
-  const ledgerPath = claudeProfileLedgerPath(home)
-  const ledger = readClaudeProfileLedger(ledgerPath)
-  const written = (ledger.keys['settings.json'] ??= {})
-  const hooks = JSON.stringify(settings.value.hooks)
-  if (written.hooks !== hooks) {
-    written.hooks = hooks
-    writeClaudeProfileLedger(ledgerPath, ledger)
-  }
-}
-
-/** `refused`: the profile failed its ownership gate and no surface was touched. */
+/** `refused` means ownership validation failed before any writes. */
 export type ClaudeProfileSetupReport = ClaudeProfileReport & { outcome: 'refused' | 'prepared' }
 
-/**
- * The one entry for setting up a managed Claude profile. Runs on the execution host that owns the
- * profile; for WSL that is inside the guest, never across a UNC path.
- */
+/** Run on the execution host; WSL profiles must be set up inside the guest. */
 export async function provisionClaudeAccountProfile(args: {
   dataRoot: string
   profile: ClaudeProfileDescriptor
   userHome: string
-  /** The user's own CLAUDE_CONFIG_DIR (see readUserClaudeConfigDir); `~/.claude` when unset. */
+  /** The user's own CLAUDE_CONFIG_DIR; defaults to `~/.claude`. */
   userConfigDir?: string
-  /** Null when Orca's Claude hooks are turned off. Runs after the settings merge so its entries survive it. */
+  /** Runs after settings are copied so hook entries survive; null disables installation. */
   installHooks: ((target: { configDir: string }) => AgentHookInstallStatus) | null
-  trustKeys?: readonly string[]
   platform?: NodeJS.Platform
 }): Promise<ClaudeProfileSetupReport> {
   const platform = args.platform ?? process.platform
   const report = createClaudeProfileReport()
+  const firstSetup = !existsSync(claudeProfileMarkerPath(args.profile))
+  let markSetUp: () => void
   try {
     if (args.profile.target.runtime === 'wsl' && platform === 'win32') {
       throw new ClaudeProfileSurfaceError('invalid-profile', 'WSL profiles are set up in the guest')
     }
-    prepareClaudeProfileDirectory(args.dataRoot, args.profile, args.userHome, args.userConfigDir)
+    markSetUp = prepareClaudeProfileDirectory(
+      args.dataRoot,
+      args.profile,
+      args.userHome,
+      args.userConfigDir
+    )
   } catch (error) {
     report.surfaces.profile = 'failed'
     warnClaudeProfile(report, 'profile', error)
@@ -70,7 +52,7 @@ export async function provisionClaudeAccountProfile(args: {
   const shared = { profileHome: home, userHome: args.userHome, userConfigDir: args.userConfigDir }
   for (const step of [
     () => shareClaudeProfileHistory({ ...shared, platform }),
-    () => provisionClaudeProfile({ ...shared, platform, trustKeys: args.trustKeys })
+    () => provisionClaudeProfile({ ...shared, platform, firstSetup })
   ]) {
     try {
       const part = await step()
@@ -89,8 +71,9 @@ export async function provisionClaudeAccountProfile(args: {
     if (status.state !== 'installed') {
       throw new Error(status.detail ?? `Claude hooks ${status.state}`)
     }
-    recordInstalledHooks(home)
     return 'merged'
   })
+  // Mark last so interrupted setup is retried before the next launch.
+  markSetUp()
   return { outcome: 'prepared', ...report }
 }

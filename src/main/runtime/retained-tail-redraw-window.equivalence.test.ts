@@ -7,19 +7,13 @@ import {
   type RetainedTailRedrawCursor
 } from './terminal-tail-redraw-buffer'
 
-// Differential guard for the windowed redraw tail path: the public
-// appendNormalizedToTailBuffer routes vertical-control chunks through a
-// suffix-windowed wrapper (findings log 2026-07-03 — the unwindowed path was
-// O(tail) per chunk and dominated main's event loop under agent-TUI floods).
-// This fuzz asserts the windowed result is byte-identical to the reference
-// implementation across randomized tails and redraw chunks.
+// Fuzz the windowed redraw path against the byte-identical full-tail reference to guard hot-path optimization.
 
 function randomTail(rng: () => number, maxLines: number): string[] {
   const count = Math.floor(rng() * maxLines)
   return Array.from({ length: count }, (_, i) => {
     const base = `line ${i} ${'x'.repeat(Math.floor(rng() * 40))}`
-    // Trailing whitespace included deliberately: the reference implementation
-    // trims every row on each call, so the windowed prefix must match.
+    // Include trailing whitespace because the reference trims every row.
     return rng() < 0.3 ? `${base}   ` : base
   })
 }
@@ -58,7 +52,6 @@ function expectMatchesUnwindowed(
   label: string
 ): void {
   const actual = appendNormalizedToTailBuffer(tail, partial, chunk, redrawCursor)
-  // Reference path over the full tail.
   const expected = appendNormalizedToMultilineTailBufferUnwindowed(
     tail,
     partial.slice(-MAX_TAIL_PARTIAL_CHARS),
@@ -77,9 +70,7 @@ describe('windowed redraw tail equivalence', () => {
       const partial = rng() < 0.5 ? `partial ${'z'.repeat(Math.floor(rng() * 30))}` : ''
       const redrawCursor =
         rng() < 0.3 ? { rowFromEnd: Math.floor(rng() * 20), column: Math.floor(rng() * 40) } : null
-      // Why the guaranteed cursor-up: the public function routes to the
-      // multiline (windowed) path only for vertical-control chunks; chunks
-      // without one take the single-line fast path, which is out of scope.
+      // Force cursor-up so this exercises the multiline windowed path, not the single-line fast path.
       const chunk = `\x1b[${1 + Math.floor(rng() * 4)}A${randomRedrawChunk(rng)}`
 
       expectMatchesUnwindowed(tail, partial, chunk, redrawCursor, `round ${round}`)
@@ -94,8 +85,7 @@ describe('windowed redraw tail equivalence', () => {
       const partial = rng() < 0.5 ? `partial ${'z'.repeat(Math.floor(rng() * 30))}` : ''
       const redrawCursor =
         rng() < 0.3 ? { rowFromEnd: Math.floor(rng() * 20), column: Math.floor(rng() * 40) } : null
-      // Why repeated frames: their summed cursor-ups exceed the tail while the net reach does not,
-      // so only the net-reach window keeps these chunks windowed.
+      // Repeated frames have large summed cursor-up but bounded net reach; keep them windowed.
       const panelRows = 1 + Math.floor(rng() * 30)
       const frame = `\x1b[${panelRows}A${Array.from(
         { length: panelRows + Math.floor(rng() * 3) - 1 },

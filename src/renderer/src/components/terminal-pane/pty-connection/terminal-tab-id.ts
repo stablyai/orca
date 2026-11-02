@@ -16,9 +16,7 @@ export function resolveTerminalTabId(state: TerminalTabLookup, tabId: string): s
   return unifiedTab?.contentType === 'terminal' ? unifiedTab.entityId : tabId
 }
 
-// `recovery` rides along because the connect path reads the tab's remount
-// generation and its recovery epoch off the SAME row — both live on it, and
-// resolving the row twice would put a second tabsByWorktree scan on that path.
+// Carry remount/recovery epochs on the same resolved row to avoid a second global tab scan.
 type TerminalTabRecord = {
   id: string
   generation?: number
@@ -32,11 +30,7 @@ type TerminalTabState = {
   getTerminalTabOwnerWorktreeId?: (tabId: string) => string | null | undefined
 }
 
-/**
- * Resolve the live terminal tab (or unified tab) a pane renders for, by either id
- * form. Why the fallbacks: folder/worktree migrations can leave the pane's render
- * key stale for one commit, and a unified id's terminal tab lives under entityId.
- */
+/** Resolve render/entity IDs across one-commit folder/worktree migration gaps; unified tabs store terminal identity under entityId. */
 export function findTerminalTabForPane(
   state: TerminalTabState,
   worktreeId: string,

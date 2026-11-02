@@ -5,8 +5,6 @@ import {
   type PrimaryActionInputs
 } from './source-control-primary-action'
 
-// Why: a shared defaults object keeps each case row terse while making the
-// "this is the one knob that differs from the baseline" intent obvious.
 function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
     stagedCount: 0,
@@ -57,16 +55,11 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
-  // Why: when the user picks an action from the dropdown that doesn't match
-  // the primary's natural label, the primary must mirror the user-triggered
-  // action (label + kind) so the spinner narrates the right thing. Without
-  // this, picking "Sync" from the dropdown while the primary reads "Push"
-  // would spin a "Push" button that is not actually pushing.
+  // Mirror dropdown-started operations so selecting Sync cannot leave a misleading Push spinner.
   it('mirrors the in-flight remote op kind on the primary while a remote op runs', () => {
     const result = resolvePrimaryAction(
       inputs({
         isRemoteOperationActive: true,
-        // Pre-click natural state would resolve to Push (ahead-only).
         upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
         inFlightRemoteOpKind: 'sync'
       })
@@ -94,9 +87,7 @@ describe('resolvePrimaryAction', () => {
   })
 
   it('keeps the natural Publish label and tooltip when an in-flight Publish matches', () => {
-    // Why: when the in-flight kind matches the natural primary kind we
-    // preserve the candidate's full label (the natural state-machine row
-    // owns the wording) rather than overriding to a stripped-down version.
+    // When the operation matches, preserve the natural state-machine label and full tooltip.
     const result = resolvePrimaryAction(
       inputs({
         isRemoteOperationActive: true,
@@ -110,10 +101,7 @@ describe('resolvePrimaryAction', () => {
     expect(result.disabled).toBe(true)
   })
 
-  // Why: Fetch is dropdown-only and never appears as the primary's label.
-  // When fetch is in flight, the primary must keep its natural label and
-  // tooltip so the button doesn't claim "Fetch" is a primary action — and
-  // the CommitArea spinner suppression hangs off the kind mismatch.
+  // Fetch is dropdown-only: preserve the primary label/kind so CommitArea shows its spinner on the chevron.
   it('keeps the natural primary label when an in-flight Fetch is dropdown-only', () => {
     const result = resolvePrimaryAction(
       inputs({
@@ -158,11 +146,7 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
-  // Why: the primary button never compounds ("Commit & Push" etc.) — it
-  // always reads "Commit" whenever there are staged files with a message,
-  // regardless of remote state. Compound flows remain available from the
-  // dropdown; after the commit lands, the primary naturally rotates to
-  // Push / Sync / Publish Branch.
+  // Keep primary Commit independent of remote state; compound flows stay in the dropdown until the next natural action.
   it('returns plain Commit for staged+message regardless of upstream state', () => {
     const upstreams = [
       undefined,
@@ -347,11 +331,7 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
-  // Why: dirty trees (no staged, has unstaged/untracked) must surface a
-  // 'Stage All' primary regardless of upstream state. Pulling/syncing on
-  // a dirty tree fails ("Please commit or stash them"), and pushing skips
-  // the immediate user need (prepare a commit), so the staging rung
-  // intercepts before any remote rung fires.
+  // Stage dirty files before remote actions: Pull/Sync would fail and Push ignores the immediate commit prerequisite.
   it('returns Stage All on a dirty tree that is behind upstream', () => {
     const result = resolvePrimaryAction(
       inputs({

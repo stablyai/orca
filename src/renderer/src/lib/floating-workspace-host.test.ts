@@ -4,7 +4,7 @@ import {
   floatingWorkspaceEnvironmentId
 } from '../../../shared/floating-workspace-id'
 import {
-  getRuntimeEnvironmentIdForWorktree,
+  runtimeEnvironmentIdOrLocalUnlessTwin,
   getExecutionHostIdForWorktree
 } from './worktree-runtime-owner'
 import { resolveTerminalHostOwnership } from './terminal-worktree-route'
@@ -19,9 +19,9 @@ describe('floating workspace host ownership', () => {
   it('keeps Local local and encodes the selected remote owner independently of sidebar focus', () => {
     const remote = floatingWorkspaceId('host:/one')
     expect(floatingWorkspaceEnvironmentId(remote)).toBe('host:/one')
-    expect(getRuntimeEnvironmentIdForWorktree(state, local)).toBeNull()
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, local)).toBeNull()
     expect(getExecutionHostIdForWorktree(state, remote)).toBe('runtime:host%3A%2Fone')
-    expect(getRuntimeEnvironmentIdForWorktree(state, remote)).toBe('host:/one')
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, remote)).toBe('host:/one')
     expect(resolveTerminalHostOwnership(state, remote, 'spawn')).toEqual({
       kind: 'runtime',
       runtimeEnvironmentId: 'host:/one'

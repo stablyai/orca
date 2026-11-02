@@ -13,7 +13,7 @@ export { copyFileWithWindowsRetry, renameFileWithWindowsRetry, renameFileWithWin
 
 export function writeFileAtomically(
   targetPath: string,
-  contents: string,
+  contents: string | Uint8Array,
   options?: { mode?: number }
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
@@ -22,12 +22,7 @@ export function writeFileAtomically(
     renameFileWithWindowsRetry(tmpPath, targetPath)
   } catch (error) {
     rmSync(tmpPath, { force: true })
-    // Why: on Windows, Chromium's renderer initialization calls
-    // SetNamedSecurityInfo on the userData folder with a Protected DACL
-    // that propagates empty inherited ACEs to child directories, causing
-    // EPERM on all writes. Grant an explicit ACL on the parent directory
-    // and retry once so the write succeeds even if Chromium reset the DACL
-    // after our startup fix ran.
+    // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
     if (isPermissionError(error) && process.platform === 'win32') {
       try {
         grantDirAcl(dirname(targetPath))
@@ -40,7 +35,7 @@ export function writeFileAtomically(
           rmSync(retryTmpPath, { force: true })
         }
       } catch {
-        // icacls failure is not actionable; re-throw the original EPERM
+        // Preserve the original write error when ACL repair fails.
       }
     }
     throw error

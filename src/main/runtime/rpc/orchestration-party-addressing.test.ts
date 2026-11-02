@@ -1,8 +1,8 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { ORCHESTRATION_TARGET_PARAM } from '../orchestration/orchestration-party'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -100,20 +100,6 @@ function assignTerminal(runId: string): void {
 }
 
 describe('every target param resolves both spellings of a party to one canonical address', () => {
-  it('covers exactly the target params the contract lists', () => {
-    expect(Object.keys(ORCHESTRATION_TARGET_PARAM).sort()).toEqual(
-      [
-        'orchestration.send',
-        'orchestration.ask',
-        'orchestration.dispatch',
-        'orchestration.inbox',
-        'orchestration.sessionAddress',
-        'orchestration.partyLocation',
-        'orchestration.workerStart'
-      ].sort()
-    )
-  })
-
   it.each(WORKER_SPELLINGS)('send: a worker at %s gets its Dispatch mailbox', async (_l, to) => {
     const dispatchId = assignWorker(await chatRun())
     const { message } = await as(undefined, 'orchestration.send', {

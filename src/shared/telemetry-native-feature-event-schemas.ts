@@ -11,7 +11,6 @@ import {
   optInViaSchema
 } from './telemetry-property-schemas'
 
-// Native chat (terminal⇄chat toggle) adoption; view-mode enum mirrors `Tab.viewMode` in shared/types.ts.
 export const nativeChatViewModeSchema = z.enum(['terminal', 'chat'])
 export const nativeChatToggledSchema = z
   .object({
@@ -20,7 +19,7 @@ export const nativeChatToggledSchema = z
     agent_kind: agentKindSchema
   })
   .strict()
-// `runtime`: local vs SSH/remote agent PTY; `'unknown'` when unresolved at send time.
+// unknown means runtime was unresolved at send time.
 export const nativeChatRuntimeSchema = z.enum(['local', 'remote', 'unknown'])
 export type NativeChatRuntime = z.infer<typeof nativeChatRuntimeSchema>
 export const nativeChatMessageSentSchema = z
@@ -79,6 +78,55 @@ export const cmdJPaletteFeatureTipShownSchema = z
 export const cmdJPaletteFeatureTipAcknowledgedSchema = z
   .object({
     source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
+const chatUiFeatureTipVariantSchema = z.enum(['chat_ui_off', 'chat_ui_on'])
+export const chatUiFeatureTipShownSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const chatUiFeatureTipActionSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    action: z.enum([
+      'use_chat_ui',
+      'stay_in_terminal',
+      'switch_to_terminal',
+      'open_settings',
+      'open_live_switching',
+      'live_switching_shown',
+      'dismissed'
+    ]),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+// Fires in both arms when the tip would open, so control has the same exposure moment as treatment.
+export const chatUiFeatureTipExposureSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    launch_tip_cohort: z.enum([
+      'control',
+      'treatment',
+      'treatment-live-switch',
+      'treatment-swapped-buttons',
+      'treatment-center',
+      'unassigned'
+    ]),
+    shown: z.boolean(),
+    targeting: z.enum(['all', 'eligible-harnesses', 'not-switched']).optional(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const agentDefaultSurfaceChangedSchema = z
+  .object({
+    from_mode: nativeChatViewModeSchema,
+    to_mode: nativeChatViewModeSchema,
+    source: z.enum(['launch_card', 'settings']),
+    launch_tip_shown: z.boolean(),
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()

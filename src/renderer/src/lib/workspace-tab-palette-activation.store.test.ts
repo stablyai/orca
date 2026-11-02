@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
-vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: () => true }))
+vi.mock('./worktree-activation', () => ({ activateAndRevealWorkspace: () => true }))
 
 import { activateWorkspaceTabPaletteResult } from './workspace-tab-palette-activation'
 

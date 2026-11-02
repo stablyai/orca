@@ -1,4 +1,4 @@
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { retryTransientDatabaseStartup } from './database-startup-retry.js'
 
@@ -28,6 +28,7 @@ export async function reconcileCellAdmissionAtStartup(
   // Admission is operator/director state. A new worker must not enable itself
   // before its distinct candidate has passed production preflight.
   if (config.role === 'cell') return
+  // Reconcile upserts/cap-only updates/bound-change deletes converge even after a lost COMMIT, so retry all transient failures.
   await retryTransientDatabaseStartup(
     async () => await assignments.reconcileCellsAtStartup(config.cells),
     STARTUP_RECONCILE_RETRY,

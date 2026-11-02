@@ -21,19 +21,19 @@ import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 import { TerminalHost } from './terminal-host'
-import {
-  CLEAN_DISCONNECT_PROTOCOL_VERSION,
-  NOTIFY_PREFIX,
-  PROTOCOL_VERSION,
-  type DaemonRequest
-} from './types'
-import { encodeNdjson } from './ndjson'
+import { DaemonAutomaticWorkGuard } from './daemon-automatic-work-guard'
+import { answerAutomaticWorkRequest } from './daemon-automatic-work-protocol'
+import { HostTerminalPolicy } from './host-terminal-policy'
+import { answerTerminalLimitRequest } from './daemon-terminal-limit-protocol'
+import { CLEAN_DISCONNECT_PROTOCOL_VERSION, PROTOCOL_VERSION, type DaemonRequest } from './types'
+import { answerDaemonControlRequest } from './daemon-control-request'
 
 export class DaemonServer {
   private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
 
   private readonly log: DaemonFileLog
-  private readonly host: TerminalHost
+  readonly automaticWork: DaemonAutomaticWorkGuard
+  readonly host: TerminalHost
   private readonly transientFactRelay: BackgroundTransientFactRelay
   private readonly streamDataBatcher: DaemonStreamDataBatcher
   private readonly attachments: DaemonSessionAttachments
@@ -45,11 +45,24 @@ export class DaemonServer {
   private readonly admission: DaemonTerminalAdmission
   private readonly requestRouter: DaemonRequestRouter
   private stopStreamBacklogProbe: () => void = () => {}
+  private readonly terminalPolicy: HostTerminalPolicy
+  private terminalPolicyNonce = ''
 
   constructor(options: DaemonServerOptions) {
     this.log = options.log ?? createNoopDaemonFileLog()
+    this.terminalPolicy = options.terminalLimitPolicy ?? new HostTerminalPolicy()
+    this.automaticWork = new DaemonAutomaticWorkGuard({
+      markerPath: options.automaticWorkMarkerPath,
+      hostTerminalLedgerDir: options.hostTerminalLedgerDir,
+      terminalPolicy: this.terminalPolicy,
+      mode: options.spawnAdmission ?? 'observe',
+      log: this.log,
+      listSessions: () => this.host.listSessions(),
+      ownsEndpoint: () => !this.endpoint.lost
+    })
     this.host = new TerminalHost({
       spawnSubprocess: options.spawnSubprocess,
+      spawnGate: this.automaticWork.gate,
       reportReadinessEvent: (event, details) => this.log.log(event, details),
       onSessionReaped: (sessionId) => {
         this.attachments.release(sessionId)
@@ -100,14 +113,11 @@ export class DaemonServer {
     )
 
     const protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION
-    const launchNonce =
-      options.launchNonce ??
-      (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION ? randomUUID() : null)
+    const hasIdentity = protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION
+    const launchNonce = options.launchNonce ?? (hasIdentity ? randomUUID() : null)
     const startedAtMs =
-      options.startedAtMs ??
-      (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION
-        ? Date.now() - process.uptime() * 1000
-        : null)
+      options.startedAtMs ?? (hasIdentity ? Date.now() - process.uptime() * 1000 : null)
+    this.terminalPolicyNonce = launchNonce ?? randomUUID()
     const token = randomUUID()
 
     this.connections = new DaemonClientConnections({
@@ -132,7 +142,7 @@ export class DaemonServer {
       onLastAuthenticatedClientDisconnected: () =>
         this.lifecycle.onLastAuthenticatedClientDisconnected(),
       onControlRequest: (socket, clientId, request) => {
-        // Why: a rejection here would be unhandled, and the daemon treats that as fatal.
+        // Unhandled request rejections are fatal to the daemon.
         this.handleRequest(socket, clientId, request).catch((error: unknown) => {
           this.log.log('client-request-failed', {
             error: error instanceof Error ? error.message : String(error)
@@ -168,11 +178,7 @@ export class DaemonServer {
       onOwnershipLost: () => this.lifecycle.onEndpointOwnershipLost()
     })
     const lifecycleClock = options.initialAdoptionTestConfig?.clock ?? {
-      setTimeout: (callback: () => void, delayMs: number) => {
-        const timer = setTimeout(callback, delayMs)
-        timer.unref()
-        return timer
-      },
+      setTimeout: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs).unref(),
       clearTimeout: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
       now: () => Date.now()
     }
@@ -186,7 +192,8 @@ export class DaemonServer {
       isIdle: () => this.isIdle(),
       disposeResources: () => this.disposeResources(),
       onIdleShutdown: options.onIdleShutdown ?? (() => {}),
-      onRpcShutdown: options.onRpcShutdown ?? (() => {})
+      onRpcShutdown: options.onRpcShutdown ?? (() => {}),
+      onShutdownRequested: options.onShutdownRequested ?? (() => {})
     })
     this.admission = new DaemonTerminalAdmission({
       host: this.host,
@@ -230,8 +237,19 @@ export class DaemonServer {
     }))
   }
 
-  start(): Promise<void> {
-    return this.lifecycle.start((socket) => this.connections.accept(socket))
+  async start(): Promise<void> {
+    await this.terminalPolicy.start((event, details) => this.log.log(event, details))
+    if (!this.lifecycle.isAcceptingWork()) {
+      return
+    }
+    try {
+      await this.lifecycle.start((socket) => this.connections.accept(socket))
+    } catch (error) {
+      this.terminalPolicy.dispose()
+      throw error
+    }
+    // Only the endpoint winner may inspect or rewrite the automatic-work marker.
+    this.automaticWork.start()
   }
 
   shutdown(): Promise<void> {
@@ -249,6 +267,7 @@ export class DaemonServer {
   }
 
   private async disposeResources(): Promise<void> {
+    this.terminalPolicy.dispose()
     this.endpoint.stopOwnershipWatch()
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
@@ -262,6 +281,8 @@ export class DaemonServer {
     }
     this.streamDataBatcher.clear()
     this.historySeedTransfers.dispose()
+    // Clearing earlier could make a crash during PTY teardown look like orderly shutdown.
+    this.automaticWork.stop()
     // Let canceled in-flight RPCs enqueue their protocol errors before transport destruction.
     await waitForImmediate()
     this.connections.dispose()
@@ -272,24 +293,19 @@ export class DaemonServer {
     clientId: string,
     request: DaemonRequest
   ): Promise<void> {
-    const isNotify = request.id.startsWith(NOTIFY_PREFIX)
-    try {
-      const result = await this.requestRouter.route(clientId, request)
-      if (!isNotify) {
-        socket.write(encodeNdjson({ id: request.id, ok: true, payload: result }), () => {
-          this.lifecycle.startPendingShutdownReply(clientId, request.id)
-        })
-      }
-    } catch (error) {
-      if (!isNotify) {
-        socket.write(
-          encodeNdjson({
-            id: request.id,
-            ok: false,
-            error: error instanceof Error ? error.message : String(error)
-          })
-        )
-      }
-    }
+    return answerDaemonControlRequest(
+      socket,
+      request,
+      async () =>
+        answerTerminalLimitRequest(
+          request,
+          this.terminalPolicy,
+          this.terminalPolicyNonce,
+          () => this.lifecycle.isAcceptingWork() && !this.endpoint.hasLostOwnership()
+        ) ??
+        answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
+        this.requestRouter.route(clientId, request),
+      () => this.lifecycle.startPendingShutdownReply(clientId, request.id)
+    )
   }
 }

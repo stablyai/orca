@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import {
   createTestStore,
@@ -10,11 +10,11 @@ import {
   seedStore
 } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -24,7 +24,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -33,7 +32,29 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   }
 })
 
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 const mockApi = createStoreCascadesMockApi()
+
+let main: TabsDrawnFromMain | undefined
+afterEach(() => {
+  main?.close()
+  main = undefined
+})
+
+/** Every change is drawn once this resolves; at once with the switch off. */
+async function settled(): Promise<void> {
+  await main?.settle()
+}
 
 describe('setActiveWorktree', () => {
   beforeEach(() => {
@@ -41,7 +62,7 @@ describe('setActiveWorktree', () => {
     mockApi.worktrees.updateMeta.mockResolvedValue({})
   })
 
-  // Why: a stale unread flag on a closed tab renders a bell the user can never dismiss, since the tab is gone.
+  // Closed tabs cannot receive input to dismiss stranded unread bells.
   it('drops unreadTerminalTabs for a closed tab', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -67,11 +88,10 @@ describe('setActiveWorktree', () => {
 
     const s = store.getState()
     expect(s.unreadTerminalTabs[closing.id]).toBeUndefined()
-    // Siblings untouched.
     expect(s.unreadTerminalTabs[surviving.id]).toBe(true)
   })
 
-  // Why: focus events that normally clear unread never arrive for dead PTYs, so the shutdown path must drop the flags itself.
+  // Dead PTYs receive no focus event to clear unread; shutdown must do it.
   it('drops unread flags for every tab in a shutdown worktree', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -394,7 +414,7 @@ describe('setActiveWorktree', () => {
     expect(s.activeFileId).toBe(fileId)
   })
 
-  it('does not switch the global surface when creating a browser tab for a background worktree', () => {
+  it('does not switch the global surface when creating a browser tab for a background worktree', async () => {
     const store = createTestStore()
     const activeWt = 'repo1::/path/wt1'
     const backgroundWt = 'repo1::/path/wt2'
@@ -413,10 +433,12 @@ describe('setActiveWorktree', () => {
         [backgroundWt]: [makeTab({ id: 'terminal-2', worktreeId: backgroundWt })]
       }
     })
+    main = await drawTabsFromMain(store)
 
     const browserTab = store
       .getState()
       .createBrowserTab(backgroundWt, 'https://example.com', { activate: true })
+    await settled()
 
     const s = store.getState()
     expect(s.activeTabType).toBe('terminal')
@@ -424,7 +446,7 @@ describe('setActiveWorktree', () => {
     expect(s.activeBrowserTabIdByWorktree[backgroundWt]).toBe(browserTab.id)
   })
 
-  it('uses unified MRU selection when closing an active browser tab', () => {
+  it('uses unified MRU selection when closing an active browser tab', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -434,20 +456,27 @@ describe('setActiveWorktree', () => {
       },
       activeWorktreeId: wt
     })
+    main = await drawTabsFromMain(store)
 
     const previous = store.getState().createBrowserTab(wt, 'https://previous.example.com')
+    await settled()
     store.getState().createBrowserTab(wt, 'https://neighbor.example.com')
+    await settled()
     const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com')
+    await settled()
     store.getState().setActiveBrowserTab(previous.id)
+    await settled()
     store.getState().setActiveBrowserTab(closing.id)
+    await settled()
 
     store.getState().closeBrowserTab(closing.id)
+    await settled()
 
     expect(store.getState().activeBrowserTabId).toBe(previous.id)
     expect(store.getState().activeBrowserTabIdByWorktree[wt]).toBe(previous.id)
   })
 
-  it('keeps the unified MRU target when closing the last browser tab', () => {
+  it('keeps the unified MRU target when closing the last browser tab', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -457,18 +486,23 @@ describe('setActiveWorktree', () => {
       },
       activeWorktreeId: wt
     })
+    main = await drawTabsFromMain(store)
 
     store.getState().createTab(wt)
+    await settled()
     const previous = store.getState().createTab(wt)
+    await settled()
     const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com')
+    await settled()
 
     store.getState().closeBrowserTab(closing.id)
+    await settled()
 
     expect(store.getState().activeTabId).toBe(previous.id)
     expect(store.getState().activeTabType).toBe('terminal')
   })
 
-  it('keeps a valid browser target for an inactive worktree after close', () => {
+  it('keeps a valid browser target for an inactive worktree after close', async () => {
     const store = createTestStore()
     const activeWt = 'repo1::/path/active'
     const backgroundWt = 'repo1::/path/background'
@@ -482,23 +516,30 @@ describe('setActiveWorktree', () => {
       },
       activeWorktreeId: activeWt
     })
+    main = await drawTabsFromMain(store)
 
     const previous = store
       .getState()
       .createBrowserTab(backgroundWt, 'https://previous.example.com', {
         activate: false
       })
+    await settled()
     const closing = store.getState().createBrowserTab(backgroundWt, 'https://closing.example.com', {
       activate: false
     })
+    await settled()
     store.setState({ activeBrowserTabIdByWorktree: { [backgroundWt]: closing.id } })
+    // Main loads the window's edited layout, as it would from a saved session.
+    main?.close()
+    main = await drawTabsFromMain(store)
 
     store.getState().closeBrowserTab(closing.id)
+    await settled()
 
     expect(store.getState().activeBrowserTabIdByWorktree[backgroundWt]).toBe(previous.id)
   })
 
-  it('keeps the global browser target when closing a legacy tab without a unified wrapper', () => {
+  it('keeps the global browser target when closing a legacy tab without a unified wrapper', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -508,25 +549,32 @@ describe('setActiveWorktree', () => {
       },
       activeWorktreeId: wt
     })
+    main = await drawTabsFromMain(store)
 
     const previous = store.getState().createBrowserTab(wt, 'https://previous.example.com', {
       activate: false
     })
+    await settled()
     const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com', {
       activate: false
     })
+    await settled()
     store.setState({
       unifiedTabsByWorktree: {},
       activeBrowserTabId: closing.id,
       activeBrowserTabIdByWorktree: { [wt]: closing.id }
     })
+    // Main loads the window's edited layout, as it would from a saved session.
+    main?.close()
+    main = await drawTabsFromMain(store)
 
     store.getState().closeBrowserTab(closing.id)
+    await settled()
 
     expect(store.getState().activeBrowserTabId).toBe(previous.id)
   })
 
-  it('queues and consumes a one-shot address-bar focus request for a fresh blank browser tab', () => {
+  it('queues and consumes a one-shot address-bar focus request for a fresh blank browser tab', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -540,15 +588,17 @@ describe('setActiveWorktree', () => {
         [wt]: [makeTab({ id: 'terminal-1', worktreeId: wt })]
       }
     })
+    main = await drawTabsFromMain(store)
 
     const browserTab = store.getState().createBrowserTab(wt, 'about:blank', { activate: true })
+    await settled()
 
     expect(store.getState().pendingAddressBarFocusByTabId[browserTab.id]).toBe(true)
     expect(store.getState().consumeAddressBarFocusRequest(browserTab.id)).toBe(true)
     expect(store.getState().consumeAddressBarFocusRequest(browserTab.id)).toBe(false)
   })
 
-  it('does not queue address-bar focus for background or already-navigated browser tabs', () => {
+  it('does not queue address-bar focus for background or already-navigated browser tabs', async () => {
     const store = createTestStore()
     const activeWt = 'repo1::/path/wt1'
     const backgroundWt = 'repo1::/path/wt2'
@@ -567,19 +617,22 @@ describe('setActiveWorktree', () => {
         [backgroundWt]: [makeTab({ id: 'terminal-2', worktreeId: backgroundWt })]
       }
     })
+    main = await drawTabsFromMain(store)
 
     const backgroundBlankTab = store
       .getState()
       .createBrowserTab(backgroundWt, 'about:blank', { activate: true })
+    await settled()
     const activeNavigatedTab = store
       .getState()
       .createBrowserTab(activeWt, 'https://example.com', { activate: true })
+    await settled()
 
     expect(store.getState().pendingAddressBarFocusByTabId[backgroundBlankTab.id]).toBeUndefined()
     expect(store.getState().pendingAddressBarFocusByTabId[activeNavigatedTab.id]).toBeUndefined()
   })
 
-  it('drops a pending address-bar focus request when the new browser tab closes before mount', () => {
+  it('drops a pending address-bar focus request when the new browser tab closes before mount', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -593,11 +646,14 @@ describe('setActiveWorktree', () => {
         [wt]: [makeTab({ id: 'terminal-1', worktreeId: wt })]
       }
     })
+    main = await drawTabsFromMain(store)
 
     const browserTab = store.getState().createBrowserTab(wt, 'about:blank', { activate: true })
+    await settled()
     expect(store.getState().pendingAddressBarFocusByTabId[browserTab.id]).toBe(true)
 
     store.getState().closeBrowserTab(browserTab.id)
+    await settled()
 
     expect(store.getState().pendingAddressBarFocusByTabId[browserTab.id]).toBeUndefined()
   })
@@ -617,7 +673,6 @@ describe('setActiveWorktree', () => {
       },
       openFiles: [makeOpenFile({ id: fileId, worktreeId: wt, filePath: fileId })],
       activeFileIdByWorktree: { [wt]: fileId },
-      // User was on the terminal, not the editor
       activeTabTypeByWorktree: { [wt]: 'terminal' },
       refreshGitHubForWorktree: vi.fn(),
       refreshGitHubForWorktreeIfStale: vi.fn()

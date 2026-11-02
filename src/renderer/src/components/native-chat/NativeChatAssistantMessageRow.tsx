@@ -1,11 +1,11 @@
 import { cn } from '@/lib/utils'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from './NativeChatPacedMarkdown'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
 import { NativeChatToolRun } from './NativeChatToolRun'
-import { NativeChatCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatCodeBlock, NativeChatPlainCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatAgentControls, NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 import type { useNativeChatWorkRun } from './use-native-chat-work-run'
 
@@ -50,16 +50,18 @@ export function NativeChatAssistantMessageRow({
   const isSystem = message.role === 'system'
   // A thought heading a run reads inside it, so the row has no words of its own.
   const words = message.role === 'reasoning' ? '' : markdown
-  // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
-  const showControls = !isSystem && words.length > 0 && !continuesTurn
+  // Hide controls on system asides and the still-working frontier, where more content may arrive.
+  const showControls =
+    !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
 
   return (
     <div
       ref={rowRef}
+      // The context menu offers Copy message only where the hover controls offer it.
+      data-native-chat-message-id={showControls ? message.id : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
-        !isSystem && 'native-chat-message-text',
         isSystem && 'text-xs text-chat-foreground-faint'
       )}
     >
@@ -73,15 +75,14 @@ export function NativeChatAssistantMessageRow({
           rowKey={message.id}
           content={words}
           variant="document"
-          className="text-sm native-chat-message-text"
-          renderCodeBlock={NativeChatCodeBlock}
+          className="text-sm"
+          renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
           linkifyFilePaths={onLinkClick !== undefined}
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
-          // Structured text streams in place with no per-row state: only the live turn's frontier
-          // row, still ending in prose, can be mid-sentence.
+          // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
           streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
         />
       ) : null}
@@ -131,6 +132,7 @@ function toolRunProps(
     activeTurnIsWorking: props.activeTurnIsWorking,
     trailing: props.trailingRun,
     disclosureId: props.message.id,
-    asides: run?.asides
+    asides: run?.asides,
+    runtimeContext: props.runtimeContext
   }
 }

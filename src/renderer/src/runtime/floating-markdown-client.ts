@@ -7,17 +7,20 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { RuntimeFileReadArgs } from './runtime-file-client-types'
 
 export function assertFloatingFileOwner(
-  args: Pick<RuntimeFileReadArgs, 'settings' | 'worktreeId'>
+  args: Pick<RuntimeFileReadArgs, 'target' | 'worktreeId'>
 ): void {
   const environmentId = floatingWorkspaceEnvironmentId(args.worktreeId)
-  if (environmentId && args.settings?.activeRuntimeEnvironmentId !== environmentId) {
+  if (
+    environmentId &&
+    (args.target.kind !== 'environment' || args.target.environmentId !== environmentId)
+  ) {
     throw new Error('Floating file host does not match its owning runtime')
   }
 }
 
 // Older hosts expose floating documents through session tabs, but not files.read.
 export async function readFloatingMarkdownTab(
-  args: Pick<RuntimeFileReadArgs, 'settings' | 'worktreeId' | 'filePath'>
+  args: Pick<RuntimeFileReadArgs, 'target' | 'worktreeId' | 'filePath'>
 ): Promise<{
   document: RuntimeMarkdownReadTabResult
   save: (content: string) => Promise<void>

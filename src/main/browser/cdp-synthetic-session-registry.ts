@@ -1,9 +1,5 @@
-/**
- * In-memory model of the synthetic session ids minted for Target.attachToTarget,
- * and resolution of a client sessionId back to a real debugger sessionId.
- */
 export class CdpSyntheticSessionRegistry {
-  // Why: agent-browser filters events by sessionId from Target.attachToTarget.
+  // agent-browser filters events by its Target.attachToTarget session ID.
   private clientSessionId: string | undefined = undefined
   private readonly clientSessionIds = new Set<string>()
   private readonly clientBrowserSessionIds = new Set<string>()
@@ -30,7 +26,7 @@ export class CdpSyntheticSessionRegistry {
   }
 
   attachBrowserSession(): string {
-    // Why: Playwright needs a distinct browser session before it attaches to the selected page.
+    // Playwright attaches a distinct browser session before attaching the page.
     const sessionId = this.nextSyntheticBrowserSessionId()
     this.clientBrowserSessionIds.add(sessionId)
     return sessionId

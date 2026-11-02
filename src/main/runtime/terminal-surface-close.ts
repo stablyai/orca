@@ -17,6 +17,11 @@ import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import {
+  capturePersistedTerminalTabCopy,
+  isSamePersistedTerminalTabCopy,
+  type PersistedTerminalTabCopy
+} from './workspace-session-terminal-tab-retirement-identity'
 
 /** Where a pane close lands: its own removal, its tab's last pane, or a pane the copy lacks. */
 export type PaneCloseResolution = 'pane' | 'last-pane' | 'absent'
@@ -33,10 +38,7 @@ export function collectTerminalLayoutLeafIds(
   return [...collectTerminalLayoutLeafIds(node.first), ...collectTerminalLayoutLeafIds(node.second)]
 }
 
-/**
- * Resolves a pane close against the panes one copy records. Only a copy that positively shows this
- * pane as its tab's one pane widens the close; a copy recording no panes knows nothing about it.
- */
+/** Only positive evidence that this is the last pane widens a close to its tab; empty copies prove nothing. */
 export function resolvePaneClose(
   leafIds: readonly string[] | null,
   leafId: string
@@ -74,11 +76,7 @@ function readLayoutOwnerLeafIds(copies: TerminalCloseLayoutCopies): readonly str
   return ownerCopies.find((leafIds) => leafIds.length > 0) ?? null
 }
 
-/**
- * The only place main turns a pane close into its tab's close: `last-pane` sends callers down
- * the tab path (and its renderer pin guard); anything else closes that pane or nothing.
- * D1 (main as the single layout writer) collapses the owner read to main's session layout alone.
- */
+/** Only last-pane widens to tab close, including renderer pin guard; main-layout builds resolve against saved main layout alone. */
 export function resolveTerminalCloseTarget(
   target: TerminalSurfaceCloseTarget,
   copies: TerminalCloseLayoutCopies
@@ -92,12 +90,7 @@ export type TerminalSurfaceCloseResult = WorkspaceSessionTerminalTabCloseResult 
   resolution: PaneCloseResolution | 'tab'
 }
 
-/**
- * The membership half of every explicit terminal close: removes a tab, or one pane of a split
- * tab, and advances the repo's topology revision so a stale renderer save cannot restore it.
- * A pane close only ever removes that pane; the resolution says why anything else was a no-op.
- * Every tab close is recorded in the session it was removed from, the owning host's partition.
- */
+/** Commit tab/pane removal and advance topology revision so stale saves cannot restore it. Pane closes never remove siblings; tab closes stamp the owning host partition. */
 export function closeTerminalSurfaceInWorkspaceSession(
   session: WorkspaceSessionState,
   worktreeId: string,
@@ -185,10 +178,30 @@ export type TerminalSurfaceCloseCommit = {
   requestedSession: WorkspaceSessionState | null | undefined
   /** The tab's owner identity still matches the one the close was asked against. */
   ownerMatches: () => boolean
-  hostId: () => ExecutionHostId
+  /** The partitions holding the tab, routed partition first; empty when unroutable. */
+  hostIds: () => readonly ExecutionHostId[]
+  /** Fence every holder against new/rebound copies, not just ownerMatches' first holder; capture snapshots because binding writes mutate sessions in place. */
+  requestedHolders?: ReadonlyMap<ExecutionHostId, PersistedTerminalTabCopy>
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
   setSession: (session: WorkspaceSessionState, hostId: ExecutionHostId) => void
   onClosed: (ptyIdsToKill: string[]) => void
+}
+
+/** The first holder's session when the close is asked, plus every holder's copy when fenced. */
+export function captureTerminalCloseRequest(
+  worktreeId: string,
+  target: TerminalSurfaceCloseTarget,
+  hostIds: readonly ExecutionHostId[],
+  store: { getWorkspaceSession: (hostId: ExecutionHostId) => WorkspaceSessionState | undefined },
+  fenced: boolean
+): Pick<TerminalSurfaceCloseCommit, 'requestedSession' | 'requestedHolders'> {
+  const requestedSession = hostIds[0] ? store.getWorkspaceSession(hostIds[0]) : null
+  if (!fenced) {
+    return { requestedSession }
+  }
+  const copyOf = (id: ExecutionHostId) =>
+    capturePersistedTerminalTabCopy(store.getWorkspaceSession(id), worktreeId, target.tabId)
+  return { requestedSession, requestedHolders: new Map(hostIds.map((id) => [id, copyOf(id)])) }
 }
 
 /** Builds the close's durable mutation: a refusal persists nothing and is its value. */
@@ -207,28 +220,56 @@ export function terminalSurfaceCloseMutation(
     if (!commit.ownerMatches()) {
       return { value: new Error('terminal_pane_owner_changed'), persist: false }
     }
-    const hostId = commit.hostId()
-    const session = commit.getSession(hostId)
-    if (!session) {
-      return { value: new Error('workspace_session_unavailable'), persist: false }
+    const results: {
+      hostId: ExecutionHostId
+      session: WorkspaceSessionState
+      result: TerminalSurfaceCloseResult
+    }[] = []
+    for (const hostId of commit.hostIds()) {
+      const session = commit.getSession(hostId)
+      if (!session) {
+        return { value: new Error('workspace_session_unavailable'), persist: false }
+      }
+      const result = closeTerminalSurfaceInWorkspaceSession(session, commit.worktreeId, target, {
+        force: commit.options.force,
+        paneIncarnationId,
+        reason: commit.options.reason ?? 'user'
+      })
+      if (result.pinned) {
+        return { value: new Error('terminal_tab_pinned'), persist: false }
+      }
+      results.push({ hostId, session, result })
     }
-    const result = closeTerminalSurfaceInWorkspaceSession(session, commit.worktreeId, target, {
-      force: commit.options.force,
-      paneIncarnationId,
-      reason: commit.options.reason ?? 'user'
-    })
-    if (result.pinned) {
-      return { value: new Error('terminal_tab_pinned'), persist: false }
+    const { requestedHolders } = commit
+    const changedCopy =
+      requestedHolders !== undefined &&
+      results
+        .slice(1)
+        .some(
+          ({ hostId, session }) =>
+            !requestedHolders.has(hostId) ||
+            !isSamePersistedTerminalTabCopy(
+              requestedHolders.get(hostId) ?? null,
+              capturePersistedTerminalTabCopy(session, commit.worktreeId, target.tabId)
+            )
+        )
+    if (changedCopy) {
+      return { value: new Error('terminal_pane_owner_changed'), persist: false }
     }
-    if (!result.closed) {
-      // Why: a tab this session never listed still records its close, so its late spawn is refused;
-      // an existing record (an echo of that close) needs no second write.
+    const closed = results.filter(({ result }) => result.closed)
+    if (closed.length === 0) {
+      const routed = results[0]
+      if (!routed) {
+        // An unroutable workspace (its folder record is gone) has nothing to close.
+        return { value: undefined, persist: false }
+      }
+      // Stamp missing tabs in the routed partition to reject late spawns; repeated close echoes need no second write.
       if (
         commit.options.allowMissing &&
         target.kind === 'tab' &&
-        !hasClosedTerminalTabRecord(session.closedTerminalTabTombstonesByTabId, target.tabId)
+        !hasClosedTerminalTabRecord(routed.session.closedTerminalTabTombstonesByTabId, target.tabId)
       ) {
-        commit.setSession(result.session, hostId)
+        commit.setSession(routed.result.session, routed.hostId)
         return { value: undefined }
       }
       return {
@@ -236,10 +277,12 @@ export function terminalSurfaceCloseMutation(
         persist: false
       }
     }
-    commit.setSession(result.session, hostId)
-    commit.onClosed(result.ptyIdsToKill)
-    // Why no rollback: bookkeeping must not undo a user's close or skip its kill; a failed write
-    // keeps the removal dirty in memory, so the next write persists it.
+    // Why every holder: a legacy relay reattach can leave one tab in two partitions.
+    for (const { hostId, result } of closed) {
+      commit.setSession(result.session, hostId)
+    }
+    commit.onClosed([...new Set(closed.flatMap(({ result }) => result.ptyIdsToKill))])
+    // Bookkeeping cannot undo user close or skip kill; failed persistence leaves the in-memory removal dirty for the next write.
     return { value: undefined }
   }
 }

@@ -365,9 +365,7 @@ describe('fetchReposForAllHosts', () => {
   })
 
   it('loads local + all configured runtime environments even when a remote env is active', async () => {
-    // Why: a cold start that restored a remote workspace leaves the remote
-    // environment active. The active-host-only fetchRepos would drop local
-    // repos entirely; fetchReposForAllHosts must surface both.
+    // Restored remote focus must not hide local repos at cold start; all-host fetch surfaces both.
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
@@ -437,7 +435,7 @@ describe('fetchReposForAllHosts', () => {
     const store = createTestStore()
 
     await store.getState().fetchReposForAllHosts()
-    await store.getState().fetchRepos()
+    await store.getState().fetchRepos({ runtimeEnvironmentId: null })
 
     expect(
       store

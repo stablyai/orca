@@ -14,10 +14,11 @@ function init(overrides: Record<string, unknown> = {}): Record<string, unknown> 
 }
 
 describe('claude slash command catalog', () => {
-  it('tags reported skills and drops the commands reserved for a terminal UI', () => {
+  it('tags reported skills and keeps the commands Claude marks terminal-only', () => {
     expect(readClaudeSlashCommands(init())).toEqual([
       { name: 'clear', kind: 'command' },
       { name: 'ref-oss', kind: 'skill' },
+      { name: 'doctor', kind: 'skill' },
       { name: 'opsx:apply', kind: 'command' }
     ])
   })
@@ -31,9 +32,8 @@ describe('claude slash command catalog', () => {
   })
 
   it('seeds from the init frame that proved the session', () => {
-    expect(new ClaudeSlashCommandCatalog(init()).commands).toHaveLength(3)
+    expect(new ClaudeSlashCommandCatalog(init()).commands).toHaveLength(4)
     expect(new ClaudeSlashCommandCatalog().commands).toBeUndefined()
-    // A frame of the right subtype but without the array is not a catalog.
     expect(
       new ClaudeSlashCommandCatalog({ type: 'system', subtype: 'init' }).commands
     ).toBeUndefined()
@@ -57,6 +57,24 @@ describe('claude slash command catalog', () => {
     ])
   })
 
+  it('keeps a project skill a skill after the agent cds out of the launch folder', () => {
+    // Captured CLI behavior: cd changes skills while slash_commands retains launch-folder project skills.
+    const catalog = new ClaudeSlashCommandCatalog(
+      init({ cwd: '/repo', slash_commands: ['qa-project'], skills: ['qa-project'] })
+    )
+    catalog.observe(
+      init({
+        cwd: '/scratch',
+        slash_commands: ['qa-project', 'found-here'],
+        skills: ['found-here']
+      })
+    )
+    expect(catalog.commands).toEqual([
+      { name: 'qa-project', kind: 'skill' },
+      { name: 'found-here', kind: 'skill' }
+    ])
+  })
+
   it('notices a name that only changed kind', () => {
     const catalog = new ClaudeSlashCommandCatalog(
       init({ slash_commands: ['review'], skills: [], terminal_slash_commands: [] })
@@ -73,7 +91,7 @@ describe('claude slash command catalog', () => {
   })
 })
 
-it('accepts descriptor reloads, removing old skills while retaining terminal filtering', () => {
+it('accepts descriptor reloads, removing old skills and keeping terminal-only commands', () => {
   const catalog = new ClaudeSlashCommandCatalog(init())
   const reload = {
     type: 'system',
@@ -87,7 +105,8 @@ it('accepts descriptor reloads, removing old skills while retaining terminal fil
   expect(catalog.observe(reload)).toBe(true)
   expect(catalog.commands).toEqual([
     { name: 'clear', kind: 'command', description: 'Clear' },
-    { name: 'new-skill', kind: 'skill', description: 'New' }
+    { name: 'new-skill', kind: 'skill', description: 'New' },
+    { name: 'doctor', kind: 'skill', description: 'Terminal' }
   ])
   expect(catalog.observe(reload)).toBe(false)
   expect(catalog.observe({ ...reload, commands: [] })).toBe(true)
@@ -244,4 +263,62 @@ it('reports a description-only change and lets a later report drop the text', ()
   expect(catalog.observe(changed)).toBe(false)
   expect(catalog.observe({ ...changed, commands: [{ name: 'clear' }] })).toBe(true)
   expect(catalog.commands).toEqual([{ name: 'clear', kind: 'command' }])
+})
+
+// Claude 2.1.310 initialize rows; a user skill named goal replaces the built-in row, unmarked.
+const BUILTIN_GOAL = {
+  name: 'goal',
+  description: 'Set a goal — keep working until the condition is met',
+  argumentHint: '',
+  builtin: true
+}
+const BUILTIN_CLEAR = {
+  name: 'clear',
+  description: 'Start a new session with empty context',
+  argumentHint: '[name]',
+  aliases: ['reset', 'new'],
+  builtin: true
+}
+const SKILL_GOAL = {
+  name: 'goal',
+  description: 'Project goal tracker skill (user)',
+  argumentHint: ''
+}
+
+it('marks only the rows Claude reports as its own built-ins', () => {
+  const marked = (commands: unknown[]) =>
+    new ClaudeSlashCommandCatalog(undefined, { commands }).commands?.map(
+      ({ name, builtin }) => `${name}:${builtin === true}`
+    )
+  expect(marked([BUILTIN_CLEAR, BUILTIN_GOAL])).toEqual(['clear:true', 'goal:true'])
+  expect(marked([SKILL_GOAL, BUILTIN_CLEAR])).toEqual(['goal:false', 'clear:true'])
+  expect(marked([BUILTIN_GOAL, SKILL_GOAL])).toEqual(['goal:false'])
+})
+
+it('keeps the built-in mark through stream classification and re-derives it on replacement', () => {
+  const catalog = new ClaudeSlashCommandCatalog(undefined, {
+    commands: [BUILTIN_CLEAR, BUILTIN_GOAL]
+  })
+  const goal = () => catalog.commands?.find((entry) => entry.name === 'goal')
+  expect(goal()).toMatchObject({ kind: 'command', kindUnspecified: true, builtin: true })
+  catalog.observe(init({ slash_commands: ['clear', 'goal'], skills: [] }))
+  expect(goal()).toEqual({
+    name: 'goal',
+    kind: 'command',
+    description: BUILTIN_GOAL.description,
+    builtin: true
+  })
+  const reload = { type: 'system', subtype: 'commands_changed' }
+  expect(catalog.observe({ ...reload, commands: [BUILTIN_CLEAR, BUILTIN_GOAL] })).toBe(false)
+  expect(catalog.observe({ ...reload, slash_commands: ['clear', 'goal'], skills: ['goal'] })).toBe(
+    true
+  )
+  expect(goal()).toMatchObject({ kind: 'skill' })
+  expect(goal()?.builtin).toBeUndefined()
+  catalog.observe(init({ slash_commands: ['clear', 'goal'], skills: [] }))
+  expect(goal()?.builtin).toBe(true)
+  expect(catalog.observe({ ...reload, commands: [BUILTIN_CLEAR, SKILL_GOAL] })).toBe(true)
+  expect(goal()?.builtin).toBeUndefined()
+  catalog.observe({ ...reload, commands: [BUILTIN_CLEAR] })
+  expect(goal()).toBeUndefined()
 })

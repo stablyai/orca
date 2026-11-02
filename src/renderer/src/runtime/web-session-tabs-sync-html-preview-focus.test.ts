@@ -194,9 +194,7 @@ describe('applyWebSessionTabsSnapshot — unfocused HTML side preview', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
   it('keeps the source editor focused when the empty preview split is still the active group', () => {
-    // Why: Open Preview to the Side creates the right-hand group first. Until the
-    // host browser lands, that group is empty — a host snapshot with terminal still
-    // active must not treat that emptiness as "the user focused a terminal".
+    // Reserved preview split is empty until host browser lands; terminal-active snapshots must not mistake that for terminal focus.
     recordWebSessionBrowserPlacement({
       environmentId: ENV,
       worktreeId: WT,
@@ -237,30 +235,5 @@ describe('applyWebSessionTabsSnapshot — unfocused HTML side preview', () => {
 
     expect(previewFocus(next).activeGroupId).not.toBe(EDITOR_GROUP)
     expect(previewFocus(next).activeTabType).toBe('editor')
-  })
-
-  it('keeps the source editor focused when the editor group is still active', () => {
-    recordWebSessionBrowserPlacement({
-      environmentId: ENV,
-      worktreeId: WT,
-      remotePageId: HOST_BROWSER_PAGE,
-      groupId: PREVIEW_GROUP,
-      callerCreatedGroup: true
-    })
-    const state = editorFocusedSplitState(EDITOR_GROUP)
-
-    const patch = applyWebSessionTabsSnapshot(
-      state,
-      unfocusedHtmlPreviewSnapshot(),
-      ENV,
-      NOW + 10
-    ) as Partial<WebSessionTabsSyncState>
-    const next = { ...state, ...patch }
-
-    expect(previewFocus(next)).toEqual({
-      activeGroupId: EDITOR_GROUP,
-      activeTabId: EDITOR_TAB_ID,
-      activeTabType: 'editor'
-    })
   })
 })

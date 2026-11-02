@@ -288,8 +288,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     }
   })
 
-  // A route-retired lease is a tombstone, not a claim: counting one pinned its worktree's metadata
-  // row for good, so the prune could never make progress on it (#17775).
+  // Route-retired tombstones must not pin metadata forever (#17775).
   it('does not let route-retired SSH leases pin a metadata row', () => {
     const state = makeState()
     const liveIds = Array.from({ length: 3 }, (_, i) => `${REPO_ID}::/workspace/live-${i}`)
@@ -325,8 +324,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(Object.keys(state.worktreeMeta).sort()).toEqual([...liveIds].sort())
   })
 
-  // A plain `expired` lease says only that the CLIENT lost its route, so its pane is still
-  // recoverable and its metadata row is still owned (docs/reference/ssh-execution-boundary.md).
+  // Plain expiry proves only route loss; recoverable panes retain ownership.
   it('keeps a metadata row pinned by an unmarked expired lease', () => {
     const state = makeState()
     const worktreeId = `${REPO_ID}::/workspace/orphaned`

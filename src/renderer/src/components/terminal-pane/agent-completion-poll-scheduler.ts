@@ -90,8 +90,7 @@ export function createAgentCompletionPollScheduler(args: {
         ? Math.min(Math.max(10_000, base), base * 2 ** state.consecutiveInspectionErrors)
         : base
     const now = Date.now()
-    // Only genuinely idle panes share a deadline: a pane with a foreground agent, or one still
-    // inside the post-activity hot window, keeps its exact interval and its own phase.
+    // Align only genuinely idle panes; agent activity retains the exact interval and phase.
     const isIdlePane =
       state.lastForegroundAgent === null &&
       (state.lastPaneActivityAt === null ||

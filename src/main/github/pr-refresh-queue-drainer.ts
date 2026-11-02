@@ -18,12 +18,18 @@ import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { outsideWslUserAct } from '../wsl/wsl-user-act-scope'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
+
+export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
 
 export class PRRefreshQueueDrainer {
   private draining = false
   private timer: ReturnType<typeof setTimeout> | null = null
+  // Why: queued work can outlive its project; re-check on every removal path before Git runs.
+  private registrationCheck: PRRefreshRegistrationCheck | null = null
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -33,13 +39,18 @@ export class PRRefreshQueueDrainer {
     private readonly events: PRRefreshEventPublisher
   ) {}
 
+  setRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
+    this.registrationCheck = check
+  }
+
   schedule(delay = 0): void {
     if (this.timer) {
       clearTimeout(this.timer)
     }
     this.timer = setTimeout(() => {
       this.timer = null
-      void this.drain()
+      // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
+      void outsideWslUserAct(() => this.drain())
     }, delay)
   }
 
@@ -170,7 +181,17 @@ export class PRRefreshQueueDrainer {
           this.events.broadcast({ aliases, reason: next.reason, status: 'skipped', skippedReason })
           continue
         }
-        if (next.reason === 'visible' && !this.visibility.has(next.key)) {
+        if (
+          !(this.registrationCheck?.(next.candidate) ?? true) ||
+          (next.reason === 'visible' && !this.visibility.has(next.key)) ||
+          // E9: gh/Git in a stopped distro's repo boots it; a queued refresh keeps the current status.
+          (isBackground(next.reason) &&
+            wslDistroForPath(next.candidate.repoPath, next.candidate.localGitOptions?.wslDistro) &&
+            (await blockedWslDistroForPath(
+              next.candidate.repoPath,
+              next.candidate.localGitOptions?.wslDistro
+            )))
+        ) {
           this.events.broadcast({
             aliases,
             reason: next.reason,

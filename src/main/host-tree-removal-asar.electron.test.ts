@@ -13,14 +13,7 @@ import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { removeTreeSync } from '../shared/windows-transient-lock-removal'
 
-/**
- * Why the real binary: Electron patches `fs` so a `*.asar` file reports `isDirectory() === true`, so
- * a recursive `rm` descends into the archive, `rmdir`s a real file, and fails the parent with
- * ENOTEMPTY. Plain Node has no such shim, so no in-process unit test can reproduce it — and every
- * worktree that has run `pnpm install` carries a `default_app.asar`, which is what stranded 267
- * trash entries on the reporting machine. This runs the shipped `removeHostTree` against a real
- * archive under the real binary.
- */
+/** Electron’s asar fs shim makes recursive removal fail; plain Node cannot reproduce it. */
 const requireFromTest = createRequire(import.meta.url)
 const electronBinary = requireFromTest('electron') as string
 const electronDist = join(dirname(requireFromTest.resolve('electron/package.json')), 'dist')
@@ -29,7 +22,6 @@ const FIXTURE_ASAR = [
   join(electronDist, 'resources/default_app.asar')
 ].find((candidate) => existsSync(candidate))
 
-// Mirrors the residue reported on the failing machine, down to the depth of the blocking leaf.
 const ENTRY_NAME = 'wt-1700000000000-abcdef01'
 const ASAR_PARENT = 'node_modules/.pnpm/electron/node_modules/electron/dist/App/Contents/Resources'
 
@@ -40,7 +32,7 @@ afterAll(() => {
     try {
       removeTreeSync(root)
     } catch {
-      // A fixture the shim strands is exactly what this file is about; never fail teardown on it.
+      // Failed cases can strand archives; cleanup must not obscure the assertion.
     }
   }
 })
@@ -51,8 +43,7 @@ function buildDriver(bundlePath: string, target: string, resultPath: string): st
   return [
     `const fs = require('node:fs')`,
     `const { removeHostTree } = require(${JSON.stringify(bundlePath)})`,
-    // Why noAsar for the read-back: the shim would report the stranded archive as a directory here
-    // too, so the residue listing has to be taken with real filesystem semantics.
+    // Inspect residue without the shim treating remaining archives as directories.
     `const withoutAsar = (fn) => { const prev = process.noAsar; process.noAsar = true; try { return fn() } finally { process.noAsar = prev } }`,
     `;(async () => {`,
     `  let failure = null`,
@@ -77,11 +68,7 @@ async function bundleHostTreeRemoval(outFile: string): Promise<void> {
       ssr: true,
       rollupOptions: {
         input: 'src/main/host-tree-removal.ts',
-        // Why mirror `isExternalMainModule` from electron.vite.config.ts exactly — CJS, and
-        // `original-fs` deliberately *not* externalized: the shipped bundle does not list it either,
-        // so if the archive-aware `rm` ever became a static import (or the bundler learned to fold
-        // `createRequire(...)('original-fs')`) production would silently degrade to the shimmed `fs`
-        // while a test that pre-externalized it kept passing.
+        // Match production externals: externalizing original-fs here could hide a bundling regression.
         output: { format: 'cjs' },
         external: (id: string) => isBuiltin(id) || id === 'electron' || id.startsWith('electron/')
       }
@@ -123,8 +110,6 @@ describe('removeHostTree against a tree holding an asar archive', () => {
       expect(run.status, run.stderr?.slice(-2000)).toBe(0)
 
       const probe = JSON.parse(readFileSync(resultPath, 'utf8')) as ProbeResult
-      // Without an asar-transparent `rm` this is `ENOTEMPTY` and the residue stops at the archive,
-      // on every attempt, forever — it is not a race a retry can win.
       expect(probe).toEqual({ failure: null, residue: [] })
     },
     120_000

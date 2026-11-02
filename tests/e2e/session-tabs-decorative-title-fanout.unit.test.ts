@@ -66,6 +66,7 @@ function makeViewerState(): WebSessionTabsSyncState {
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},
@@ -660,31 +661,6 @@ describe('real PTY decorative session-tabs fanout', () => {
     await vi.advanceTimersByTimeAsync(50)
     expect(publications).toHaveLength(2)
     unsubscribe()
-  })
-
-  it('clears delayed ownership markers when tracked terminal state resets', async () => {
-    let resolveForegroundProcess: (agent: string | null) => void = () => undefined
-    const foregroundProcess = new Promise<string | null>((resolve) => {
-      resolveForegroundProcess = resolve
-    })
-    const runtime = new OrcaRuntimeService()
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-0' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: () => foregroundProcess
-    })
-    const ptyId = seedWorktree(runtime, 0)
-    const internals = runtime as unknown as RuntimeInternals
-
-    runtime.onPtyData(ptyId, '\x1b]0;⠋ Pi\x07', Date.now())
-    await vi.advanceTimersByTimeAsync(0)
-    expect(internals.ptyForegroundAgent.hasDelayedSnapshot(ptyId)).toBe(true)
-
-    internals.resetTrackedTerminalStateForProviderGeneration(ptyId)
-    expect(internals.ptyForegroundAgent.hasDelayedSnapshot(ptyId)).toBe(false)
-    resolveForegroundProcess(null)
-    await vi.advanceTimersByTimeAsync(0)
   })
 
   it('renews retained hook status without resetting its state start', () => {

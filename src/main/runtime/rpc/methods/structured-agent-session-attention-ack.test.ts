@@ -1,8 +1,9 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAttentionOrigin } from '../../../../shared/agent-session-attention'
+import type { StructuredAttentionOrigin } from '../../../../shared/agent-session/agent-session-attention'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
 import {
@@ -14,12 +15,15 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 
 let directory: string
+let hostController: RuntimeMobileNotificationController | undefined
 beforeEach(() => {
   installStructuredHostStub()
   directory = mkdtempSync(join(tmpdir(), 'orca-attention-ack-'))
 })
-afterEach(() => {
+afterEach(async () => {
   clearStructuredHostStub()
+  await hostController?.closeDismissals()
+  hostController = undefined
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -35,6 +39,7 @@ const scope = (executionHostId: HostId): StructuredAttentionOrigin['scope'] => (
 function hostWithDeliveries() {
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
+  hostController = controller
   const dismissed: string[] = []
   controller.onDispatched((event) => {
     if (event.type === 'dismiss') {

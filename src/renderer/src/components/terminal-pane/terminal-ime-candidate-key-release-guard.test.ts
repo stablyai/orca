@@ -3,7 +3,6 @@ import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
   createTerminalImePendingCandidateKeyReleases,
-  isTerminalImeCandidateDigitKeyEvent,
   isTerminalImeCandidateSelectionKeyEvent,
   shouldApplyTerminalImePendingCandidateKeyRelease
 } from './terminal-ime-candidate-key-release-guard'
@@ -18,12 +17,6 @@ describe('terminal IME candidate key release guard', () => {
     expect(isTerminalImeCandidateSelectionKeyEvent(event({ key: ' ', ctrlKey: true }))).toBe(false)
     // Shift+Space is fcitx's full-/half-width toggle, not a candidate selector.
     expect(isTerminalImeCandidateSelectionKeyEvent(event({ key: ' ', shiftKey: true }))).toBe(false)
-  })
-
-  it('recognizes unmodified digits but not Space as digit candidate selectors', () => {
-    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: '2' }))).toBe(true)
-    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: ' ' }))).toBe(false)
-    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: '2', ctrlKey: true }))).toBe(false)
   })
 
   it('arms a pending release guard from a suppressed candidate keydown', () => {
@@ -98,8 +91,7 @@ describe('terminal IME candidate key release guard', () => {
   it('guards held-key repeat keydowns while the release is pending, even past expiry', () => {
     const releases = createTerminalImePendingCandidateKeyReleases()
     armTerminalImePendingCandidateKeyRelease(releases, event({ key: '2' }), 10)
-    // Linux auto-repeat delay (~500ms) outlives the 250ms guard window; the
-    // held selector's repeats must stay suppressed until its keyup.
+    // Linux auto-repeat starts after the guard window; hold suppression until keyup.
     expect(
       shouldApplyTerminalImePendingCandidateKeyRelease(
         event({ key: '2', repeat: true }),
@@ -133,8 +125,7 @@ describe('terminal IME candidate key release guard', () => {
     armTerminalImePendingCandidateKeyRelease(releases, event({ key: '2' }), 10)
     clearTerminalImePendingCandidateKeyRelease(releases, event({ key: '2', repeat: true }))
     expect(releases.has('2')).toBe(true)
-    // A new physical press means the prior keyup was missed (focus change
-    // mid-hold); its stale entry must not guard the new press's repeats.
+    // A fresh press proves the old keyup was missed; stale ownership must not claim new repeats.
     clearTerminalImePendingCandidateKeyRelease(releases, event({ key: '2' }))
     expect(releases.has('2')).toBe(false)
   })
@@ -164,7 +155,6 @@ describe('terminal IME candidate key release guard', () => {
 
   it('tracks overlapping candidate keys independently so each keyup clears its own guard', () => {
     const releases = createTerminalImePendingCandidateKeyReleases()
-    // Second candidate keydown arrives before the first key's keyup.
     armTerminalImePendingCandidateKeyRelease(releases, event({ key: '2' }), 10)
     armTerminalImePendingCandidateKeyRelease(releases, event({ key: '3' }), 12)
     expect(
@@ -181,7 +171,6 @@ describe('terminal IME candidate key release guard', () => {
         20
       )
     ).toBe(true)
-    // The first key's keyup no longer strands the second key's pending release.
     clearTerminalImePendingCandidateKeyRelease(releases, event({ type: 'keyup', key: '2' }))
     expect(releases.has('3')).toBe(true)
     clearTerminalImePendingCandidateKeyRelease(releases, event({ type: 'keyup', key: '3' }))

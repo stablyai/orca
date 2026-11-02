@@ -5,18 +5,41 @@ import { Input } from '../ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
 import { ScrollArea } from '../ui/scroll-area'
 import { filterFontSuggestions, getRenderedFontSuggestions } from './settings-form-option-filter'
+import { useInstalledFontsUnavailable } from './installed-font-list'
 import { translate } from '@/i18n/i18n'
+import { buildAppFontFamily } from '@/lib/app-font-family'
+
+// Why: these OS-shipped fonts draw pictographs or Greek for Latin letters, so their own name would be unreadable.
+const SYMBOL_FONT_FAMILIES = new Set([
+  'webdings',
+  'wingdings',
+  'wingdings 2',
+  'wingdings 3',
+  'marlett',
+  'symbol',
+  'mt extra',
+  'bookshelf symbol 7',
+  'd050000l',
+  'standard symbols ps'
+])
+
+function fontPreviewStyle(font: string): React.CSSProperties | undefined {
+  return font && !SYMBOL_FONT_FAMILIES.has(font.toLowerCase())
+    ? { fontFamily: buildAppFontFamily(font) }
+    : undefined
+}
 
 type FontAutocompleteProps = {
   value: string
   suggestions: string[]
   onChange: (value: string) => void
   placeholder?: string
+  ariaLabel?: string
+  disabled?: boolean
+  commitMode?: 'change' | 'blur'
+  defaultOptionLabel?: string
   onRequestSuggestions?: () => void
-  /** Fires with whichever option the user is currently highlighting in the
-   *  dropdown (via mouse hover or keyboard arrow), or null when nothing is
-   *  highlighted / the dropdown is closed. Lets a consumer show a live
-   *  preview of the font without committing the selection. */
+  /** Preview the highlighted font without committing; null clears the preview when nothing is highlighted or the menu closes. */
   onPreviewFontFamily?: (font: string | null) => void
 }
 
@@ -25,6 +48,10 @@ export function FontAutocomplete({
   suggestions,
   onChange,
   placeholder = 'SF Mono',
+  ariaLabel,
+  disabled = false,
+  commitMode = 'change',
+  defaultOptionLabel,
   onRequestSuggestions,
   onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
@@ -35,8 +62,10 @@ export function FontAutocomplete({
   const [isFilteringQuery, setIsFilteringQuery] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const lastCommittedValueRef = useRef(value)
   const previewFontFamilyRef = useRef(onPreviewFontFamily)
   const listboxId = useId()
+  const installedFontsUnavailable = useInstalledFontsUnavailable()
 
   useEffect(() => {
     previewFontFamilyRef.current = onPreviewFontFamily
@@ -45,18 +74,23 @@ export function FontAutocomplete({
   const setRootNode = useCallback((element: HTMLDivElement | null): void => {
     rootRef.current = element
     if (!element) {
-      // Why: settings search can unmount this control while a hover preview is
-      // active; the consumer must not keep rendering that transient font.
+      // Search can unmount a previewing control; clear the consumer’s transient font on detach.
       previewFontFamilyRef.current?.(null)
     }
   }, [])
 
   if (value !== prevValue) {
     setPrevValue(value)
+    lastCommittedValueRef.current = value
     setQuery(value)
     if (value !== query) {
       setIsFilteringQuery(false)
     }
+  }
+  if (disabled && open) {
+    setOpen(false)
+    setQuery(value)
+    setIsFilteringQuery(false)
   }
 
   const requestSuggestions = useCallback((): void => {
@@ -75,22 +109,29 @@ export function FontAutocomplete({
 
   const normalizedQuery = query.trim().toLowerCase()
   const normalizedValue = value.trim().toLowerCase()
+  const allSuggestions = useMemo(() => {
+    if (!defaultOptionLabel) {
+      return suggestions
+    }
+    const fonts = suggestions.filter(Boolean)
+    if (value && !fonts.includes(value)) {
+      fonts.push(value)
+    }
+    return ['', ...fonts]
+  }, [defaultOptionLabel, suggestions, value])
   const filteredSuggestions = useMemo(
-    () => filterFontSuggestions(suggestions, query),
-    [suggestions, query]
+    () => filterFontSuggestions(allSuggestions, query, defaultOptionLabel),
+    [allSuggestions, query, defaultOptionLabel]
   )
-  // Why: the committed font fills the input, but opening the chooser should
-  // still reveal every installed font instead of only fonts sharing that name.
+  // Opening with the committed font must still show all fonts rather than filter by its name.
   const visibleSuggestions =
-    !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
+    !isFilteringQuery && normalizedQuery === normalizedValue ? allSuggestions : filteredSuggestions
   const renderedSuggestions = useMemo(
     () => getRenderedFontSuggestions(visibleSuggestions, highlightedIndex),
     [visibleSuggestions, highlightedIndex]
   )
 
-  // Why: sync the highlighted index during render rather than via useEffect so
-  // the correct item is highlighted on the very first paint after open/filter
-  // changes — useEffect would leave one render with the stale index visible.
+  // Reconcile highlights before paint so opening/filter changes cannot flash a stale index.
   const [prevVisibleSuggestions, setPrevVisibleSuggestions] = useState(visibleSuggestions)
   const [prevOpen, setPrevOpen] = useState(open)
   const [prevHighlightedValue, setPrevHighlightedValue] = useState(value)
@@ -110,24 +151,36 @@ export function FontAutocomplete({
     }
   }
 
-  // Why: notify the consumer of the currently-highlighted font so it can
-  // render a live preview. Closing the dropdown or moving past all options
-  // clears the preview back to the committed value.
+  // Preview the highlight; closing or leaving options restores the committed font.
   useEffect(() => {
     if (!onPreviewFontFamily) {
       return
     }
-    if (!open || highlightedIndex < 0) {
+    if (!open || disabled) {
       onPreviewFontFamily(null)
       return
     }
-    onPreviewFontFamily(visibleSuggestions[highlightedIndex] ?? null)
-  }, [visibleSuggestions, highlightedIndex, onPreviewFontFamily, open])
+    onPreviewFontFamily(
+      highlightedIndex >= 0
+        ? (visibleSuggestions[highlightedIndex] ?? null)
+        : commitMode === 'blur'
+          ? query.trim()
+          : null
+    )
+  }, [visibleSuggestions, highlightedIndex, onPreviewFontFamily, open, disabled, commitMode, query])
 
   const commitValue = (nextValue: string): void => {
-    setQuery(nextValue)
+    const trimmed = commitMode === 'blur' ? nextValue.trim() : nextValue
+    const committed =
+      defaultOptionLabel && trimmed.toLowerCase() === defaultOptionLabel.trim().toLowerCase()
+        ? ''
+        : trimmed
+    setQuery(committed)
     setIsFilteringQuery(false)
-    onChange(nextValue)
+    if (commitMode === 'change' || committed !== lastCommittedValueRef.current) {
+      lastCommittedValueRef.current = committed
+      onChange(committed)
+    }
     setOpen(false)
   }
 
@@ -142,18 +195,22 @@ export function FontAutocomplete({
 
   return (
     <div ref={setRootNode} className="relative max-w-sm">
-      <Popover open={open} onOpenChange={handleOpenChange}>
+      <Popover open={open && !disabled} onOpenChange={handleOpenChange}>
         <PopoverAnchor asChild>
           <div className="relative">
             <Input
               ref={inputRef}
               value={query}
+              disabled={disabled}
+              aria-label={ariaLabel}
               onChange={(e) => {
                 const next = e.target.value
                 requestSuggestions()
                 setQuery(next)
                 setIsFilteringQuery(true)
-                onChange(next)
+                if (commitMode === 'change') {
+                  onChange(next)
+                }
                 setOpen(true)
               }}
               onFocus={() => {
@@ -161,8 +218,16 @@ export function FontAutocomplete({
                 setIsFilteringQuery(false)
                 setOpen(true)
               }}
+              onBlur={() => {
+                if (commitMode === 'blur' && !disabled) {
+                  commitValue(query)
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
+                  if (commitMode === 'blur') {
+                    setQuery(lastCommittedValueRef.current)
+                  }
                   if (open) {
                     e.preventDefault()
                     setOpen(false)
@@ -193,12 +258,19 @@ export function FontAutocomplete({
                   return
                 }
 
+                if (e.key === 'Enter' && e.nativeEvent.isComposing) {
+                  return
+                }
+
                 if (e.key === 'Enter' && open && highlightedIndex >= 0) {
                   const highlightedFont = visibleSuggestions[highlightedIndex]
-                  if (highlightedFont) {
+                  if (highlightedFont !== undefined) {
                     e.preventDefault()
                     commitValue(highlightedFont)
                   }
+                } else if (e.key === 'Enter' && commitMode === 'blur') {
+                  e.preventDefault()
+                  commitValue(query)
                 }
               }}
               placeholder={placeholder}
@@ -217,11 +289,10 @@ export function FontAutocomplete({
               {query ? (
                 <button
                   type="button"
+                  disabled={disabled}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    setQuery('')
-                    setIsFilteringQuery(false)
-                    onChange('')
+                    commitValue('')
                     setOpen(true)
                     focusInput()
                   }}
@@ -240,6 +311,7 @@ export function FontAutocomplete({
               ) : null}
               <button
                 type="button"
+                disabled={disabled}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   const nextOpen = !open
@@ -268,17 +340,14 @@ export function FontAutocomplete({
           </div>
         </PopoverAnchor>
 
-        {/* Why: portal the dropdown outside the settings section — an in-flow
-          absolute panel makes the highlighted option's scrollIntoView scroll
-          the whole settings pane, pushing the section content out of view. */}
+        {/* Portal outside Settings so option scrollIntoView cannot scroll the whole pane away. */}
         <PopoverContent
           align="start"
           className="w-[var(--radix-popover-trigger-width)]"
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => {
-            // Why: the input and its clear/toggle buttons are the anchor, not
-            // the content, so Radix would otherwise dismiss on every click there.
+            // The input/buttons are anchors outside content; prevent Radix from dismissing on those clicks.
             if (rootRef.current?.contains(e.target as Node)) {
               e.preventDefault()
             }
@@ -306,13 +375,16 @@ export function FontAutocomplete({
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setHighlightedIndex(sourceIndex)}
                     onClick={() => commitValue(font)}
-                    className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors ${
+                    // Why content-visibility: each row loads its own font, so skip offscreen rows until scrolled to; 20px is the line height inside py-2.
+                    className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors [contain-intrinsic-size:auto_20px] [content-visibility:auto] ${
                       sourceIndex === highlightedIndex
                         ? 'bg-accent text-accent-foreground'
                         : 'hover:bg-muted/60'
                     }`}
                   >
-                    <span className="truncate">{font}</span>
+                    <span className="truncate" style={fontPreviewStyle(font)}>
+                      {font || defaultOptionLabel}
+                    </span>
                     {font === value ? <Check className="ml-3 size-4 shrink-0" /> : null}
                   </button>
                 ))
@@ -326,6 +398,14 @@ export function FontAutocomplete({
               )}
             </div>
           </ScrollArea>
+          {installedFontsUnavailable ? (
+            <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.FontAutocomplete.installedFontsUnavailable',
+                'Couldn’t list installed fonts. Type any installed font name to use it.'
+              )}
+            </p>
+          ) : null}
         </PopoverContent>
       </Popover>
     </div>

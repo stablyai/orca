@@ -6,8 +6,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
-// Group addresses mean the sender's Run. The host-wide meaning they had before let one
-// coordinator's `@all` reach every terminal in every open project on the machine.
+// Groups mean the sender's Run; host-wide discovery previously reached unrelated projects.
 describe('orchestration.send group addresses', () => {
   const h = createOrchestrationRpcHarness()
   const { coordinatorPaneKey } = h
@@ -45,8 +44,7 @@ describe('orchestration.send group addresses', () => {
       writable: opts.writable ?? true,
       lastOutputAt: opts.lastOutputAt ?? null,
       preview: opts.preview ?? '',
-      // Why spread: absent `agentIdentity` means unknown, so the helper must be able to
-      // produce a summary that genuinely lacks the field.
+      // Allow genuinely absent agentIdentity; absence means unknown.
       ...(opts.agentIdentity ? { agentIdentity: opts.agentIdentity } : {})
     }
   }
@@ -86,8 +84,6 @@ describe('orchestration.send group addresses', () => {
   }
 
   it('fans out @all to the live Dispatches of the sender Run and nothing else', async () => {
-    // The defect this pins: a coordinator meaning "my three reviewers" reached 126 agents
-    // across every open project, because @all enumerated every terminal on the host.
     setupWithTerminals([
       makeSummary('term_coord'),
       makeSummary('term_a'),
@@ -134,7 +130,6 @@ describe('orchestration.send group addresses', () => {
   })
 
   it('reaches a Dispatch whose worker terminal is not attached yet', async () => {
-    // Durable delivery: the mailbox exists before the terminal does.
     setupWithTerminals([makeSummary('term_coord')])
     const started = db.createStartingWorkerDispatch({
       taskSpec: 'starting worker',
@@ -170,10 +165,7 @@ describe('orchestration.send group addresses', () => {
   it.each([false, true])(
     'addresses the nested coordinator child Run (explicit scope: %s)',
     async (explicit) => {
-      // A nested coordinator is both a worker of its parent Run and the coordinator of the Run it
-      // created. It typed `@all` while coordinating, so it means the workers it started. Reaching
-      // its siblings instead is the wrong-audience delivery this whole change exists to remove,
-      // and it reports success, so the sender never learns its sub-workers heard nothing.
+      // A nested coordinator's @all must reach its own workers, not siblings in its parent Run.
       const nestedPane = 'tab_nested:11111111-1111-4111-8111-111111111111'
       setupWithTerminals([makeSummary('term_coord'), makeSummary('term_nested')])
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
@@ -221,8 +213,7 @@ describe('orchestration.send group addresses', () => {
       }
     })
 
-    // Without the skip explanation the sender is told "no recipients" while three remote
-    // workers exist and are each individually addressable.
+    // Explain skipped remote workers rather than claim no recipients when individual addresses exist.
     await expect(
       call('orchestration.send', { from: 'term_coord', to: '@all', subject: 'pause' })
     ).rejects.toMatchObject({
@@ -328,8 +319,7 @@ describe('orchestration.send group addresses', () => {
     setupWithTerminals([
       makeSummary('term_coord', { agentIdentity: 'codex' }),
       makeSummary('term_b', { agentIdentity: 'droid' }),
-      // Why kept: "Android build" contains `droid` as a substring. It was excluded before by
-      // whole-token matching and is excluded now because its identity is not droid.
+      // Android build contains droid but has no droid identity; never derive membership from title substrings.
       makeSummary('term_c', { agentIdentity: 'claude', title: 'Android build' })
     ])
     const droid = dispatchWorker('term_b')
@@ -346,8 +336,7 @@ describe('orchestration.send group addresses', () => {
   })
 
   it('fans out @cursor without claiming a Claude pane discussing a text cursor', async () => {
-    // The original hazard: `@cursor` matched any pane whose TITLE contained "cursor", so a
-    // Claude pane titled "Fix the text cursor blink" received Cursor's instructions.
+    // A Claude pane titled Fix the text cursor blink must not join @cursor by title matching.
     setupWithTerminals([
       makeSummary('term_coord', { agentIdentity: 'codex' }),
       makeSummary('term_b', { agentIdentity: 'cursor' }),
@@ -614,7 +603,6 @@ describe('orchestration.send group addresses', () => {
         key === pane ? 'term_snapshot' : null
       )
       vi.mocked(runtime.listTerminals).mockImplementation(async () => {
-        // The captured identity still belongs to this pane after its handle is reissued.
         vi.mocked(runtime.getTerminalHandleForPaneKey).mockImplementation((key) =>
           key === pane ? 'term_new' : null
         )
