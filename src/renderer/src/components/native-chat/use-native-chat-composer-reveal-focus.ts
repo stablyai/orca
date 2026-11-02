@@ -84,8 +84,8 @@ export type NativeChatComposerRevealFocusArgs = {
   isFocusedGroup: boolean
   /** A composer is mounted and enabled — false while a prompt/question card owns the region. */
   composerReady: boolean
-  /** A mounted approval/question can receive the handoff while the composer is replaced. */
-  promptReady?: boolean
+  /** A mounted prompt, install card, or final error can receive the handoff without an editor. */
+  surfaceReady?: boolean
   scheduleFrame?: (callback: () => void) => void
 }
 
@@ -97,19 +97,19 @@ export function useNativeChatComposerRevealFocus({
   isVisible,
   isFocusedGroup,
   composerReady,
-  promptReady = false,
+  surfaceReady = false,
   scheduleFrame = scheduleNextFrame
 }: NativeChatComposerRevealFocusArgs): void {
   const revealed = isVisible && isFocusedGroup
   useLayoutEffect(() => {
-    if (composerReady || promptReady) {
+    if (composerReady || surfaceReady) {
       return registerNativeChatPane(
         tabId,
-        () => promptReady || composerRef.current?.acceptsText() === true
+        () => surfaceReady || composerRef.current?.acceptsText() === true
       )
     }
     return undefined
-  }, [composerReady, composerRef, promptReady, tabId])
+  }, [composerReady, composerRef, surfaceReady, tabId])
   const claimedRef = useRef(false)
   // An explicit tab activation takes focus from inside the pane too, short of a text field.
   const explicitRef = useRef(false)

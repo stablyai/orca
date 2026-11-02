@@ -94,6 +94,7 @@ vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
 }))
 
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 
 const request = {
   repoId: 'repo-1',
@@ -365,6 +366,10 @@ describe('launchStructuredWorktreeSession', () => {
       { text: 'Still typing while the editor mounts' },
       'immediate'
     )
+    expect(requestBackgroundTerminalWorktreeMount).toHaveBeenCalledWith({
+      worktreeId: 'worktree-1',
+      tabIds: [expect.any(String)]
+    })
     mounted.resolve()
     await completion
 

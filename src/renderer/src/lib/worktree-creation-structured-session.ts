@@ -135,7 +135,7 @@ export async function launchStructuredWorktreeSession(
       state.activeView === 'terminal' &&
       state.activePendingCreationId === args.creationId
     ) {
-      requestBackgroundTerminalWorktreeMount({ worktreeId: args.worktreeId })
+      requestBackgroundTerminalWorktreeMount({ worktreeId: args.worktreeId, tabIds: [tab.id] })
       await waitForNativeChatComposerHandoff(sourceScope, tab.id, revealAbandoned.signal)
     }
     if (abandoned.signal.aborted) {
