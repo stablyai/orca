@@ -6,6 +6,7 @@ import type { PluginHookChainOutcome } from '../../../../shared/plugins/workers/
 import { setPluginHookRunner } from '../../../plugins/hooks/plugin-hook-dispatch'
 import { createAgentPromptSubmissionRuntime } from '../../agent-prompt-submission-runtime-test-fixture'
 import { deliverGeneratedTerminalInput } from './generated-terminal-input-delivery'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import { finalReplayFrame, readRuntimeFixture } from '../../agent-transcript-replay-test-harness'
 
 vi.mock('../../../git/worktree', () => ({
@@ -426,7 +427,7 @@ describe('generated input retargeted to a replacement PTY', () => {
 describe('generated input retargeted to a replacement running another agent', () => {
   type Pty = { connected: boolean; launchAgent?: string; ptyId: string }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected PTY table and handle lookups on OrcaRuntimeService.
-  const internals = (runtime: object) =>
+  const internals = (runtime: OrcaRuntimeService) =>
     runtime as unknown as {
       ptysById: Map<string, Pty>
       getLivePtyForHandle: (handle: string) => unknown
