@@ -21128,7 +21128,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Агент [необязательно]",
-      "createDescription": "Выберите проект и название рабочего пространства. При желании выберите агента для запуска."
+      "createDescription": "Выберите проект и название рабочего пространства. При желании выберите агента для запуска.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Выберите, выполнять ли настройку перед созданием этого рабочего пространства.",
+        "cancel": "Отмена",
+        "retry": "Повторить",
+        "setupScript": "Скрипт настройки",
+        "defaultTabCommands": "Команды вкладок по умолчанию",
+        "setupAndDefaultTabs": "Настройка и команды вкладок по умолчанию",
+        "askRunSetup": "Выполнить настройку сейчас?",
+        "askRunDefaultTabs": "Выполнить команды вкладок по умолчанию сейчас?",
+        "askRunSetupAndDefaultTabs": "Выполнить настройку и команды вкладок по умолчанию сейчас?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + локальные",
+        "localSource": "локальные настройки"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Задача уже изменяется другой операцией."
@@ -21874,6 +21890,7 @@
     "scanIssues": {
       "issuesOmitted": "Дополнительные проблемы сканирования не показаны.",
       "sessionMetadataUnreadable": "Не удалось прочитать метаданные сессий при этом сканировании.",
+      "transcriptTooLarge": "Разговор {{label}} слишком большой, чтобы загрузить его в историю сессий. Попробуйте продолжить его прямо в {{label}}.",
       "openCodeScannerUnavailable": "История OpenCode пропущена, так как не удалось запустить фоновый сканер; приложение по-прежнему реагирует на действия.",
       "openCodeScanIncomplete": "Сканирование истории OpenCode не завершено: {{detail}}",
       "openCodeWslReaderPreparing": "Подготовка модуля чтения SQLite в WSL. Обновите Vault после завершения настройки.",

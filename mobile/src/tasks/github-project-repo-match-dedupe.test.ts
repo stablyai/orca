@@ -6,10 +6,10 @@ import {
   type GitHubRepoSlugCacheEntry
 } from './github-project-repo-match'
 
-type Row = { id: number; content: { repository?: string | null } }
+type Row = { id: number; itemType: string; content: { repository?: string | null } }
 
 function rowsFor(repositories: readonly (string | null | undefined)[]): Row[] {
-  return repositories.map((repository, id) => ({ id, content: { repository } }))
+  return repositories.map((repository, id) => ({ id, itemType: 'ISSUE', content: { repository } }))
 }
 
 describe('project repository matching within one row projection', () => {
@@ -57,6 +57,7 @@ describe('project repository matching within one row projection', () => {
       Boolean(findRepoForGitHubProjectRepository(entry.content.repository, repos, slugs))
     )
     expect(filterGitHubProjectRowsForRepos(rows, repos, slugs)).toEqual(expected)
+    expect(filterGitHubProjectRowsForRepos(rowsFor([null]), repos, slugs)).toEqual([])
   })
 
   it('does not retain matches across changed repo evidence or ambiguity', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { contrastRatio, safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
+import { contrastRatio, over, safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
 import { resolvePaintedDark, synthesizeTerminalAppTheme } from './terminal-app-theme'
 
 // Parses #rrggbb and rgb(r g b), which is all the synthesized theme and its inputs use.
@@ -34,6 +34,23 @@ describe('synthesizeTerminalAppTheme', () => {
     expect(Object.keys(safePluginThemeTokens(tokens, 'light', {}, probe))).toEqual(
       Object.keys(tokens)
     )
+  })
+
+  it('keeps the host pill label legible on its accent fill in light and dark', () => {
+    for (const [terminalThemeDark, tint] of [
+      ['GitHub Light', 1],
+      ['Nord', 0.8]
+    ] as const) {
+      const tokens = synthesizeTerminalAppTheme(
+        settingsWith({ terminalThemeDark }),
+        true,
+        probe
+      )?.tokens
+      const color = (token: string) => probe(tokens?.[token] ?? '') ?? [0, 0, 0, 1]
+      const [r, g, b] = color('--accent')
+      const pill = over([r, g, b, tint], color('--sidebar'))
+      expect(contrastRatio(color('--muted-foreground'), pill)).toBeGreaterThanOrEqual(4.5)
+    }
   })
 
   it('keeps a mid-tone background legible by tinting surfaces away from the text', () => {

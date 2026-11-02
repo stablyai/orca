@@ -316,6 +316,7 @@
     "scanIssues": {
       "issuesOmitted": "Outros problemas da verificação foram omitidos.",
       "sessionMetadataUnreadable": "Não foi possível ler os metadados das sessões nesta verificação.",
+      "transcriptTooLarge": "Uma conversa de {{label}} é grande demais para carregar no Histórico de sessões. Tente retomá-la diretamente no {{label}}.",
       "openCodeScannerUnavailable": "O histórico do OpenCode foi ignorado porque seu verificador em segundo plano não pôde ser iniciado; o aplicativo continua respondendo.",
       "openCodeScanIncomplete": "A verificação do histórico do OpenCode não foi concluída: {{detail}}",
       "openCodeWslReaderPreparing": "Preparando o leitor SQLite do WSL. Atualize o Vault após a conclusão da configuração.",
@@ -21409,7 +21410,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Agente [Opcional]",
-      "createDescription": "Escolha o projeto e o nome do espaço de trabalho. Selecione um agente se quiser iniciar um."
+      "createDescription": "Escolha o projeto e o nome do espaço de trabalho. Selecione um agente se quiser iniciar um.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Escolha se deseja executar a configuração antes de criar este espaço de trabalho.",
+        "cancel": "Cancelar",
+        "retry": "Tentar novamente",
+        "setupScript": "Script de configuração",
+        "defaultTabCommands": "Comandos das abas padrão",
+        "setupAndDefaultTabs": "Configuração e comandos das abas padrão",
+        "askRunSetup": "Executar a configuração agora?",
+        "askRunDefaultTabs": "Executar os comandos das abas padrão agora?",
+        "askRunSetupAndDefaultTabs": "Executar a configuração e os comandos das abas padrão agora?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "configurações locais"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Outra alteração de issue está em andamento."
