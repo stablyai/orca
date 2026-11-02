@@ -48,7 +48,6 @@ function TerminalCrewPortal({
   if (!target || !party || !transport) {
     return null
   }
-  const captured = captureTerminalDropTarget(pane, transport)
   const hostKey = target.kind === 'local' ? 'local' : target.environmentId
   return createPortal(
     <OrchestrationCrewPanel
@@ -59,9 +58,11 @@ function TerminalCrewPortal({
         (controller.expandedPaneId === null || controller.expandedPaneId === pane.id) &&
         (controller.isolatedPaneKey === null || controller.isolatedPaneKey === paneKey)
       }
-      canMention={transport.isConnected()}
+      // The transport has no change event, so readiness is checked when the user acts, not latched at render.
+      canMention
       mention={(rows) => {
         const manager = managerRef.current
+        const live = paneTransportsRef.current.get(pane.id)
         const references = rows.flatMap((row) =>
           row.sendAddress ? [{ label: row.label, address: row.sendAddress, hostKey }] : []
         )
@@ -73,7 +74,9 @@ function TerminalCrewPortal({
                 'The terminal did not accept the agent reference. Try again.'
               )
             )
+          const captured = live && captureTerminalDropTarget(pane, live)
           if (
+            !captured ||
             !pane.container.isConnected ||
             !getCurrentTerminalDropTransport(manager, paneTransportsRef.current, captured)
           ) {

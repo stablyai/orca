@@ -73,7 +73,9 @@ afterEach(() => {
 function mount(insertion?: {
   acceptance: boolean | Promise<boolean> | undefined
   split?: boolean
+  restored?: boolean
 }) {
+  const link = { connected: !insertion?.restored }
   currentWorker = insertion
     ? { ...worker, task: { title: 'Inspect', state: 'dispatched' }, sendAddress: 'term_worker' }
     : worker
@@ -105,8 +107,8 @@ function mount(insertion?: {
     disconnect: vi.fn(),
     sendInputImmediate: vi.fn(() => true),
     resize: vi.fn(() => true),
-    getPtyId: () => 'pty-captured',
-    isConnected: () => true,
+    getPtyId: () => (link.connected ? 'pty-captured' : null),
+    isConnected: () => link.connected,
     sendInput,
     ...(insertion?.acceptance === undefined ? {} : { sendInputAccepted: accepted })
   }
@@ -162,6 +164,7 @@ function mount(insertion?: {
     secondInput,
     transport,
     transports,
+    link,
     accepted,
     sendInput,
     update: () => view.rerender(content())
@@ -290,15 +293,31 @@ it('focuses the captured pane before acceptance, preserves caret/no Enter, and u
   }
 })
 
-it.each(['pane', 'transport'] as const)(
-  'refuses an invocation with a stale %s without focusing or writing to a replacement',
+it('mentions into a restored pane whose terminal connects after the panel first rendered', async () => {
+  const test = mount({ acceptance: true, restored: true })
+  fireEvent.click(
+    within(test.first.container).getByRole('button', { name: /^Show orchestration: 1 worker,/ })
+  )
+  // The transport binds without any React update, as a restored pane's reattach does.
+  test.link.connected = true
+  await act(async () =>
+    fireEvent.click(within(test.first.container).getByRole('button', { name: 'Mention all' }))
+  )
+  expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
+    'Worker (Orca agent term_worker) ',
+    'driving'
+  )
+})
+
+it.each(['retired pane', 'disconnected terminal'] as const)(
+  'refuses an invocation into a %s without focusing or writing',
   async (kind) => {
     const test = fixture(true)
-    if (kind === 'pane') {
+    if (kind === 'retired pane') {
       test.manager.createInitialPane({ focus: false })
       test.manager.retirePanePreservingPty(test.pane.id)
     } else {
-      test.transports.set(test.pane.id, { ...test.transport })
+      test.link.connected = false
     }
     vi.mocked(test.manager.setActivePane).mockClear()
     const focus = vi.mocked(test.pane.terminal.focus)
