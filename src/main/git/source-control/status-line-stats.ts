@@ -13,8 +13,8 @@ import { extractExecError } from '../exec-error'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 
-// Windows sharing locks (an app holding its database or log open) make Git abort the whole
-// unstaged pass with "cannot hash <path>"; exclude each such path so the other rows still count.
+// A file Git cannot read (a Windows sharing lock, or a POSIX permission error) makes it abort the
+// whole unstaged pass with "cannot hash <path>"; exclude each such path so the other rows count.
 const UNREADABLE_PATH_PATTERN = /^fatal: cannot hash (.+)$/m
 // One path per failed run; bound the retries when many files are held open.
 const MAX_UNREADABLE_PATH_EXCLUSIONS = 8

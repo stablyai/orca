@@ -1,4 +1,4 @@
-// Windows sharing locks make `git diff --numstat` abort on one file; the other rows must still count.
+// An unreadable file makes `git diff --numstat` abort on it; the other rows must still count.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitStatusEntry } from '../../shared/git-status-types'
 
