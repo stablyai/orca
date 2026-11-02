@@ -19,7 +19,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     const ensure = ctx.result.agentSessionEnsure
     // Why the refusal check: a refused resume starts a plain shell, not the pinned Claude.
     if (ctx.isClaudeLaunch && !ctx.stablePaneOwner && !resumeSpawnRefusal(ctx.resumeAdmission)) {
-      markRuntimeClaudePtySpawned(ctx.result.id, ctx.claudeAuth)
+      markRuntimeClaudePtySpawned(ctx.result, ctx.claudeAuth)
     }
     return commitPtySpawn({
       state: ctx,

@@ -105,10 +105,18 @@ describe('preparePinnableClaudeAuth', () => {
 
 describe('markClaudePtySpawnedForAuth', () => {
   it('labels a pinned PTY with its account and leaves an unpinned one alone', () => {
-    markClaudePtySpawnedForAuth('pty-1', makeAuth({ pinnedAccountId: 'acct-1' }))
-    markClaudePtySpawnedForAuth('pty-2', makeAuth())
-    markClaudePtySpawnedForAuth('pty-3', null)
+    markClaudePtySpawnedForAuth({ id: 'pty-1' }, makeAuth({ pinnedAccountId: 'acct-1' }))
+    markClaudePtySpawnedForAuth({ id: 'pty-2' }, makeAuth())
+    markClaudePtySpawnedForAuth({ id: 'pty-3' }, null)
     expect(mocks.markPinnedClaudePtySpawned).toHaveBeenCalledTimes(1)
     expect(mocks.markPinnedClaudePtySpawned).toHaveBeenCalledWith('pty-1', 'acct-1')
+  })
+
+  it('leaves a reattached PTY on the account it already runs on', () => {
+    markClaudePtySpawnedForAuth(
+      { id: 'pty-1', isReattach: true },
+      makeAuth({ pinnedAccountId: 'acct-2' })
+    )
+    expect(mocks.markPinnedClaudePtySpawned).not.toHaveBeenCalled()
   })
 })

@@ -56,11 +56,12 @@ export async function preparePinnableClaudeAuth(
   return claudeAuth
 }
 
+// Why skip reattaches: the running Claude keeps the account it started on, whatever this launch resolved.
 export function markClaudePtySpawnedForAuth(
-  ptyId: string,
+  pty: { id: string; isReattach?: boolean },
   claudeAuth: ClaudeRuntimeAuthPreparation | null
 ): void {
-  if (claudeAuth?.pinnedAccountId) {
-    markPinnedClaudePtySpawned(ptyId, claudeAuth.pinnedAccountId)
+  if (claudeAuth?.pinnedAccountId && pty.isReattach !== true) {
+    markPinnedClaudePtySpawned(pty.id, claudeAuth.pinnedAccountId)
   }
 }
