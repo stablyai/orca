@@ -507,8 +507,9 @@ describe('Claude Agent SDK contract pins', () => {
         ...extra
       }
     })
-    const isAsk = (frame: object): frame is ReturnType<typeof ask> => 'request' in frame
     const cancel = (id: string) => ({ type: 'control_cancel_request', request_id: id })
+    type WireFrame = ReturnType<typeof status> | ReturnType<typeof ask> | ReturnType<typeof cancel>
+    const isAsk = (frame: WireFrame): frame is ReturnType<typeof ask> => 'request' in frame
     const many = (prefix: string) =>
       Array.from({ length: 300 }, (_, index) => ask(`${prefix}${index}`))
     const asked = (ids: string[], allowed: boolean) =>
