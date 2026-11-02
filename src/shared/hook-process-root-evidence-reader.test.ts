@@ -48,7 +48,7 @@ vi.mock('./libproc-process-table', () => ({
 vi.mock('./agent-process-presence-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof PresenceProbe>()),
   readAgentProcess: () =>
-    occupy((): AgentProcessObservation => ({ verdict: 'live', startTime: START }))
+    occupy((): AgentProcessObservation => ({ verdict: 'live', startTime: START, zombie: false }))
 }))
 
 afterEach(() => {
@@ -61,7 +61,11 @@ function request(pane: number, signal?: AbortSignal): HookRootEvidenceRequest {
     paneKey: `pane-${pane}`,
     worktreeId: 'wt-1',
     agent: 'claude',
-    process: { pid: 1000 + pane * 10 + 2, platform: process.platform, startTime: START },
+    process: {
+      pid: 1000 + pane * 10 + 2,
+      platform: process.platform as 'darwin' | 'linux',
+      startTime: START
+    },
     ...(signal ? { signal } : {})
   }
 }
