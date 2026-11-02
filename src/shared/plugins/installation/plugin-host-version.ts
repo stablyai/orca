@@ -6,6 +6,7 @@ import {
   PLUGIN_PANEL_UI_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
+import { PLUGIN_STATUS_BAR_SINCE } from '../contributions/plugin-status-bar-item-contribution'
 
 /** The newest "since" this build's schemas cite: everything up to it is readable here. */
 export const PLUGIN_SCHEMA_NEWEST_SINCE = [
@@ -13,7 +14,8 @@ export const PLUGIN_SCHEMA_NEWEST_SINCE = [
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_PANEL_UI_SINCE,
-  PLUGIN_COMPONENTS_CATALOG_2_SINCE
+  PLUGIN_COMPONENTS_CATALOG_2_SINCE,
+  PLUGIN_STATUS_BAR_SINCE
 ].reduce((newest, version) => (satisfiesOrcaEngineRange(version, `>=${newest}`) ? version : newest))
 
 /**
