@@ -21,7 +21,11 @@ import {
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
 import { MobileNativeChatPageList } from './MobileNativeChatPageList'
-import { previousMessageTarget } from './mobile-native-chat-previous-message'
+import {
+  PREVIOUS_MESSAGE_ALIGN_PX,
+  previousMessageTarget,
+  trailingStopAboveViewport
+} from './mobile-native-chat-previous-message'
 import {
   mobileNativeChatRowAnchor,
   type MobileNativeChatListHandle,
@@ -194,17 +198,37 @@ function MobileNativeChatNativeRowList({
       },
       hasPreviousMessage: (keys) => previousMessageTarget(measure(keys)) !== null,
       revealPreviousMessage: (keys, animated) => {
-        const target = previousMessageTarget(measure(keys))
+        const measured = measure(keys)
+        const target = previousMessageTarget(measured)
         if (!target) {
           return
         }
-        const key = 'key' in target ? target.key : target.pendingKey
-        const index = jump.rows.findIndex((row) => jump.keyOf(row) === key)
+        const rowIndex = new Map(jump.rows.map((row, index) => [jump.keyOf(row), index]))
+        let visibleAt: number | null = null
+        for (const [index, row] of jump.rows.entries()) {
+          const y = jump.layouts.get(jump.keyOf(row))
+          if (y !== undefined && y - jump.contentOffsetY >= -PREVIOUS_MESSAGE_ALIGN_PX) {
+            visibleAt = index
+            break
+          }
+        }
+        const trailing =
+          visibleAt !== null && 'key' in target
+            ? trailingStopAboveViewport(
+                measured,
+                target.key,
+                (key) => rowIndex.get(key) ?? -1,
+                visibleAt
+              )
+            : null
+        const chosen = trailing === null ? target : { pendingKey: trailing }
+        const key = 'key' in chosen ? chosen.key : chosen.pendingKey
+        const index = rowIndex.get(key) ?? -1
         if (index === -1) {
           return
         }
         const y = jump.layouts.get(key)
-        if (y !== undefined && 'key' in target && (y > 0 || index === 0)) {
+        if (y !== undefined && 'key' in chosen && (y > 0 || index === 0)) {
           jump.retry = null
           flatRef.current?.scrollToOffset({ offset: y, animated })
           return

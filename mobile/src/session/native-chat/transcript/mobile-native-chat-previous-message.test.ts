@@ -4,6 +4,7 @@ import {
   endAnchoredScrollTopForRow,
   isPreviousMessageStop,
   previousMessageTarget,
+  trailingStopAboveViewport,
   type PreviousMessageStop
 } from './mobile-native-chat-previous-message'
 
@@ -71,5 +72,35 @@ describe('previous message target', () => {
   it('moves an end-anchored list toward older rows to bring a top down to the viewport', () => {
     expect(endAnchoredScrollTopForRow(-200, 60, 100)).toBe(-240)
     expect(endAnchoredScrollTopForRow(-200, 100, 100)).toBe(-200)
+  })
+})
+
+describe('trailing stop above the viewport', () => {
+  const at =
+    (indexes: Record<string, number>) =>
+    (key: string): number =>
+      indexes[key] ?? -1
+
+  it('draws the closest unmeasured stop that is still above the first visible row', () => {
+    expect(
+      trailingStopAboveViewport(
+        stops(-180, undefined, undefined),
+        'm0',
+        at({ m0: 2, m1: 6, m2: 9 }),
+        10
+      )
+    ).toBe('m2')
+  })
+
+  it('leaves the measured stop when the undrawn row is already on screen', () => {
+    expect(
+      trailingStopAboveViewport(stops(-20, undefined), 'm0', at({ m0: 2, m1: 8 }), 8)
+    ).toBeNull()
+  })
+
+  it('does not walk stops above the chosen row', () => {
+    expect(
+      trailingStopAboveViewport(stops(undefined, -20), 'm1', at({ m0: 1, m1: 4 }), 8)
+    ).toBeNull()
   })
 })

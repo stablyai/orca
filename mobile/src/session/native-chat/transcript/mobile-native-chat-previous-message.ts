@@ -68,6 +68,40 @@ export function previousMessageTarget(
   return null
 }
 
+/**
+ * Unmounted stop between the last measured above-fold stop and the first visible row.
+ * Its index is still above the viewport, so scrolling to the older offset would skip it.
+ */
+export function trailingStopAboveViewport(
+  stops: readonly PreviousMessageStop[],
+  chosenKey: string,
+  indexOf: (key: string) => number,
+  firstVisibleIndex: number
+): string | null {
+  let passed = false
+  let pending: string | null = null
+  for (const stop of stops) {
+    if (!passed) {
+      if (stop.key === chosenKey) {
+        passed = true
+      }
+      continue
+    }
+    if (stop.top !== undefined) {
+      break
+    }
+    const index = indexOf(stop.key)
+    if (index < 0) {
+      continue
+    }
+    if (index >= firstVisibleIndex) {
+      break
+    }
+    pending = stop.key
+  }
+  return pending
+}
+
 /** End-anchored scrollTop: more negative moves toward older rows. `rowTop` and `viewTop` share a viewport. */
 export function endAnchoredScrollTopForRow(
   scrollTop: number,
