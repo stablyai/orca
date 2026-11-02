@@ -20,42 +20,13 @@ import type {
 import { useAiCommitPrSettings } from '../feature-wall/useAiCommitPrSettings'
 import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
 import { useAppStore } from '../../store'
-import {
-  renderChatSettingsSection,
-  type ChatSettingsRenderContext
-} from './settings-interface-secondary-section-renderers'
-import { getChatNamingSearchEntry } from './chat-naming-search'
 import { useSettingsInteractionController } from './use-settings-interaction-controller'
-import {
-  persist,
-  settingsModel,
-  type SettingsPersistenceModel
-} from './__fixtures__/settings-persistence-test-fixture'
-import { ActiveSettingsSectionProvider } from './SettingsSection'
+import { persist, settingsModel } from './__fixtures__/settings-persistence-test-fixture'
+import { ChatPersistenceHarness } from './__fixtures__/chat-persistence-harness-test-fixture'
 import { renderGlobalCommitCard } from './__fixtures__/global-commit-card-test-fixture'
 import { TooltipProvider } from '../ui/tooltip'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
-
-function ChatPersistenceHarness({ model }: { model: SettingsPersistenceModel }) {
-  const settings = useAppStore((state) => state.settings)
-  const controller = useSettingsInteractionController(model)
-  if (!settings) {
-    throw new Error('Settings fixture is missing')
-  }
-  const context = {
-    model: { ...model, settings, fontSuggestions: [] },
-    interactions: controller,
-    navigation: { getSectionSearchEntries: () => [getChatNamingSearchEntry()] },
-    view: { isSectionMounted: () => true }
-  } satisfies ChatSettingsRenderContext
-  const section = renderChatSettingsSection(context)
-  return (
-    <TooltipProvider>
-      <ActiveSettingsSectionProvider value="chat">{section}</ActiveSettingsSectionProvider>
-    </TooltipProvider>
-  )
-}
 
 it('passes the existing paired-web capability through the actual Chat renderer', () => {
   useAppStore.setState({ settingsSearchQuery: '' })
@@ -408,6 +379,11 @@ it.each(['global', 'repo'] as const)(
     expect(screen.queryByRole('radio', { name: 'High' })).toBeNull()
     expect(screen.getByRole('radio', { name: 'Low' })).toHaveProperty('disabled', false)
     fireEvent.click(screen.getByRole('option', { name: 'Text catalog model' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'High' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    // Reopening to change only Effort keeps the earlier unsaved Model pick.
+    open()
+    fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
     fireEvent.click(screen.getByRole('radio', { name: 'High' }))
     fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     const save = scope === 'repo' ? updateRepo : persist
@@ -792,3 +768,40 @@ it.each([
     expect(saved?.selectedThinkingByModel?.['gpt-5.4']).toBe(copilotEffort.toLowerCase())
   }
 )
+
+it('reopening the Chat name picker to change Effort keeps the earlier unsaved Model pick', async () => {
+  const settings = useAppStore.getState().settings!
+  useAppStore.setState({
+    repos: [],
+    settings: {
+      ...settings,
+      defaultTuiAgent: 'codex',
+      sourceControlAi: normalizeSourceControlAiSettings({
+        ...settings.sourceControlAi,
+        actions: { conversationName: { agentId: 'codex', agentArgs: '' } }
+      })
+    }
+  })
+  render(<ChatPersistenceHarness model={settingsModel()} />)
+  fireEvent.click(
+    within(document.getElementById('chat-names')!).getByRole('button', { name: 'Advanced' })
+  )
+  const open = () => {
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), { button: 0 })
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+  }
+  open()
+  fireEvent.click(screen.getByRole('option', { name: 'GPT-5.4' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  open()
+  fireEvent.click(screen.getByRole('radio', { name: 'High' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(persist).toHaveBeenCalledTimes(1))
+  expect(
+    useAppStore.getState().settings?.sourceControlAi?.modelOverridesByOperation?.conversationName
+  ).toMatchObject({
+    selectedModelByAgent: { codex: 'gpt-5.4' },
+    selectedThinkingByModel: { 'gpt-5.4': 'high' }
+  })
+})

@@ -64,6 +64,7 @@ const SelectedRepositoryActionRows = memo(
   function SelectedRepositoryActionRows({
     repoId,
     repoAi,
+    actionTextDrafts,
     source,
     defaultTuiAgent,
     writeSourceControlAiSettings,
@@ -274,6 +275,7 @@ const SelectedRepositoryActionRows = memo(
                       repoAi={repoAi}
                       draft={{
                         ...readActionRecipeTextDraft(repoAi, actionId),
+                        modelEdits: actionTextDrafts?.[actionId]?.modelEdits,
                         commandInputTemplate: templateValue,
                         agentArgs: override?.agentArgs ?? recipe.agentArgs ?? ''
                       }}

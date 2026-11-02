@@ -298,6 +298,7 @@ export function useRepositorySourceControlAiGlobalUx({
 
   return {
     displayRepoAi,
+    actionTextDrafts,
     saveError,
     actionDirtyById,
     savingActionIds,

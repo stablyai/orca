@@ -50,6 +50,7 @@ export function RepositorySourceControlAiSection({
   )
   const {
     displayRepoAi,
+    actionTextDrafts,
     saveError,
     actionDirtyById,
     savingActionIds,
@@ -105,6 +106,7 @@ export function RepositorySourceControlAiSection({
       <RepositorySourceControlAiActionRows
         repoId={repo.id}
         repoAi={displayRepoAi}
+        actionTextDrafts={actionTextDrafts}
         source={source}
         defaultTuiAgent={settings?.defaultTuiAgent}
         savingActionIds={savingActionIds}

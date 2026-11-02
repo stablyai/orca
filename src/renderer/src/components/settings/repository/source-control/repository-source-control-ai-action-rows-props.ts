@@ -16,6 +16,10 @@ import type {
 export type RepositorySourceControlAiActionRowsProps = {
   repoId: string
   repoAi: RepoSourceControlAiOverrides
+  /** Unsaved menu edits per action, so a reopened picker folds its next Use into them. */
+  actionTextDrafts?: Partial<
+    Record<SourceControlActionId, { modelEdits?: SourceControlAiModelEdits }>
+  >
   source: SourceControlAiSettings
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined
   /** Lets the text pickers save model lists the repository's host reports. */
