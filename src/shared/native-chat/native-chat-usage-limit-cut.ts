@@ -32,9 +32,10 @@ export type NativeChatUsageLimitCut = {
 /** The latest root turn, when a usage limit ended it and nothing was sent since. Null otherwise. */
 export function latestNativeChatUsageLimitCut(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  bodyOf?: Parameters<typeof latestNativeChatTurnSinceRequest>[2]
 ): NativeChatUsageLimitCut | null {
-  const latest = latestNativeChatTurnSinceRequest(items, submissions)
+  const latest = latestNativeChatTurnSinceRequest(items, submissions, bodyOf)
   if (!latest || latest.verdict !== 'failure') {
     return null
   }

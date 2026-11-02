@@ -116,7 +116,11 @@ export class StructuredAgentSessionJournalProjections {
       projection = {
         ...cursor,
         contextId,
-        usageLimitCut: latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions),
+        usageLimitCut: latestNativeChatUsageLimitCut(
+          snapshot.items,
+          snapshot.submissions,
+          journal.itemBody
+        ),
         firstInputSubmissionKey,
         submissionCount: snapshot.submissions.length,
         fence,

@@ -9,18 +9,28 @@ import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { restoreJournal } from '../agent-session-journal/journal-open'
 import { renderJournalState } from '../agent-session-journal/journal-reducer'
-import type {
-  StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession
-} from './structured-agent-session-host-types'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+import type Database from '../../sqlite/sync-database'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 
 type Cut = NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 type Deps = {
-  host: StructuredAgentSessionHostDeps
-  sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
+  host: Pick<StructuredAgentSessionHostDeps, 'usageLimitAutoContinue' | 'logger'> & {
+    store: Pick<
+      AgentSessionRecordStore,
+      | 'listVisibleSessionIds'
+      | 'getRecord'
+      | 'hostId'
+      | 'isSessionTabVisible'
+      | 'cancelUsageLimitContinue'
+    >
+  }
+  sessions: ReadonlyMap<string, unknown>
+  /** Reads an unopened chat's saved cut; history-sized, so the sweep budgets it. */
+  readSavedCut: (id: string) => NativeChatUsageLimitCut | null
   serialize: <T>(id: string, run: () => Promise<T>) => Promise<T>
   send: (
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
@@ -28,6 +38,16 @@ type Deps = {
   readLoadedCut: (id: string) => NativeChatUsageLimitCut | null
   publish: (id: string) => void
   now: () => number
+}
+
+/** Reads a chat's saved conversation without opening it, as main does for unopened chats. */
+export function readSavedUsageLimitCut(
+  db: Database.Database,
+  id: string
+): NativeChatUsageLimitCut | null {
+  const load = restoreJournal(db, id)
+  const snapshot = load && !load.newer && !load.damage ? renderJournalState(load.state) : null
+  return snapshot ? latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions) : null
 }
 
 const identity = (cut: NativeChatUsageLimitCut): string =>
@@ -40,18 +60,57 @@ export class StructuredAgentSessionUsageLimitContinue {
   private running = false
   private disposed = false
   private readonly coldCuts = new Map<string, NativeChatUsageLimitCut | null>()
+  /** Pass of each chat's last failed history read; failed reads wait behind unread chats. */
+  private readonly coldFailures = new Map<string, number>()
   private readonly attempts = new Map<string, Attempt>()
+  private passes = 0
 
   constructor(private readonly deps: Deps) {}
 
   start(): void {
     this.timer = setInterval(() => void this.tick(), 10_000)
     this.timer.unref?.()
+    let enabled = this.enabled()
     this.stopSettings = this.deps.host.usageLimitAutoContinue?.subscribe(() => {
-      for (const id of this.deps.sessions.keys()) {
-        this.deps.publish(id)
+      // Other settings writes change nothing published here.
+      if (this.enabled() !== enabled) {
+        enabled = !enabled
+        this.publishScheduled()
       }
     })
+  }
+
+  private enabled = (): boolean => this.deps.host.usageLimitAutoContinue?.isEnabled() === true
+
+  /** Only a loaded chat with a known reset has a schedule whose state can change. */
+  private publishScheduled(): void {
+    for (const id of this.deps.sessions.keys()) {
+      if (this.deps.readLoadedCut(id)?.resetsAt !== undefined) {
+        this.deps.publish(id)
+      }
+    }
+  }
+
+  /** At most three history reads per pass; a read that throws stays retryable without starving others. */
+  private readColdCuts(visible: readonly string[]): void {
+    const pass = ++this.passes
+    const unread = visible.filter((id) => !this.deps.sessions.has(id) && !this.coldCuts.has(id))
+    unread.sort((a, b) => (this.coldFailures.get(a) ?? 0) - (this.coldFailures.get(b) ?? 0))
+    for (const id of unread.slice(0, 3)) {
+      try {
+        this.readCut(id, true)
+        this.coldFailures.delete(id)
+      } catch (error) {
+        if (!this.coldFailures.has(id)) {
+          this.deps.host.logger.warn('usage-limit continue could not read a chat', {
+            scope: 'usage-limit-continue',
+            sessionId: id,
+            error
+          })
+        }
+        this.coldFailures.set(id, pass)
+      }
+    }
   }
 
   dispose(): void {
@@ -59,26 +118,22 @@ export class StructuredAgentSessionUsageLimitContinue {
     clearInterval(this.timer)
     this.stopSettings?.()
     this.coldCuts.clear()
+    this.coldFailures.clear()
     this.attempts.clear()
   }
 
   forget = (id: string): void => {
     this.coldCuts.delete(id)
+    this.coldFailures.delete(id)
   }
 
   private readCut(id: string, cold = false): NativeChatUsageLimitCut | null {
-    const session = this.deps.sessions.get(id)
-    if (session) {
+    if (this.deps.sessions.has(id)) {
       this.coldCuts.delete(id)
       return this.deps.readLoadedCut(id)
     }
     if (!this.coldCuts.has(id) && cold) {
-      const load = restoreJournal(this.deps.host.journalDatabase.db, id)
-      const snapshot = load && !load.newer && !load.damage ? renderJournalState(load.state) : null
-      this.coldCuts.set(
-        id,
-        snapshot ? latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions) : null
-      )
+      this.coldCuts.set(id, this.deps.readSavedCut(id))
     }
     return this.coldCuts.get(id) ?? null
   }
@@ -140,34 +195,30 @@ export class StructuredAgentSessionUsageLimitContinue {
     })
 
   async tick(): Promise<void> {
-    if (this.running || this.disposed) {
+    // Off, nothing can be scheduled; the settings listener publishes the switch itself.
+    if (this.running || this.disposed || !this.enabled()) {
       return
     }
     this.running = true
     try {
-      const visible = new Set(this.deps.host.store.listVisibleSessionIds())
-      for (const cache of [this.coldCuts, this.attempts]) {
+      const visible = this.deps.host.store.listVisibleSessionIds()
+      const shown = new Set(visible)
+      for (const cache of [this.coldCuts, this.coldFailures, this.attempts]) {
         for (const id of cache.keys()) {
-          if (!visible.has(id)) {
+          if (!shown.has(id)) {
             cache.delete(id)
           }
         }
       }
       // Visibility and workspace sleep can change without a journal or settings commit.
-      for (const id of this.deps.sessions.keys()) {
-        this.deps.publish(id)
-      }
-      if (this.deps.host.usageLimitAutoContinue?.isEnabled() !== true) {
-        return
-      }
-      let coldReads = 0
+      this.publishScheduled()
+      this.readColdCuts(visible)
       const due: { id: string; cut: Cut; at: number }[] = []
       for (const id of visible) {
-        const cold = !this.deps.sessions.has(id) && !this.coldCuts.has(id)
-        if (cold && coldReads++ >= 3) {
+        if (!this.deps.sessions.has(id) && !this.coldCuts.has(id)) {
           continue
         }
-        const cut = this.readCut(id, true)
+        const cut = this.readCut(id)
         const previous = this.attempts.get(id)
         if (!cut || previous?.identity !== identity(cut)) {
           this.attempts.delete(id)
