@@ -6,7 +6,7 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 
 ## Methods per surface
 
-- Worker (`trusted-worker`, `main`): `orca` passed to `activate(orca)`: `workspace.readContext`, `terminal.sendText`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `agents.list`
+- Worker (`trusted-worker`, `main`): `orca` passed to `activate(orca)`: `workspace.readContext`, `terminal.sendText`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `agents.list`, `statusBar.update`
 - Panel: global `orca` in an HTML panel; `host` imported from `orca` in a components panel: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `agents.list`, `events.subscribe`
 - Custom editor: global `orca` in the editor frame: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `agents.list`, `events.subscribe`
 
@@ -15,6 +15,7 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 - `api: HostApiVersion`
 - `commands.register(commandId: string, handler: (args: unknown, context: CommandContext) => unknown)`: A string result is shown as-is in Orca; anything else as JSON.
 - `events.on(event: E, handler: (payload: PluginEvents[E]) => void | Promise<void>)`: Only events listed in the manifest's `contributes.events` arrive.
+- `hooks.on(hook: H, handler: HookHandler<H>)`: Only hooks listed in `contributes.hooks` run. Return `next(event)` to go on (with the fields the hook allows changed), a result such as `{ deny: reason }` to stop, or nothing to pass. Plugins run in turn, then Orca acts; past 2 s, or on a throw, Orca carries on as if this plugin passed and logs it.
 - `host: HostApi<'worker'>`
 - `panels: PanelsApi`: This plugin's panels and custom editors.
 - `storage: StorageApi`: Same store as panels' `storage` (`storage:own`); `onDidChange` hears their writes too.
@@ -35,10 +36,11 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 - `secrets: SecretsApi`: The plugin's encrypted secrets (`secrets:own`).
 - `shell.openExternal(url: string)`: `reason`: the person cancelled, or Orca's window was hidden so nobody could confirm.
 - `files.saveAs(options: SaveAsOptions)`: Desktop isolated frames only; `cancelled` when the person closes the dialog.
-- `document?: EditorDocumentApi`: Custom editors only.
+- `document?: EditorDocumentApi`: Custom editors only. Orca keeps no undo history for them: Cmd/Ctrl+Z reaches the frame.
 - `document.get()`: The latest document, with your accepted edits' content at the same version.
 - `document.onDidChange(handler: (document: EditorDocument) => void)`: Replays the current document, then each one Orca sends when the file changes outside.
 - `document.applyEdit(edit: EditorEdit)`: Rejects with `conflict`, `too_large` or `not_permitted` (read-only).
+- `document.session(options?: EditorSessionOptions<T>)`: Document sync in one call; resolves once theme, locale and the first document are in.
 
 ## Methods
 
@@ -78,6 +80,19 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
   `(params?: {}) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] }`
 - `events.subscribe` (no capability; panel, editor; since 1.2): Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you.
   `(params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }) => { ok: true }`
+- `statusBar.update` (no capability; worker; since 1.2): Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled.
+  `(params: { id: string; text?: string; icon?: "activity" | "bar-chart-3" | "bell" | "blocks" | "book" | "bot" | "bug" | "calendar" | "cloud" | "code" | "database" | "file-text" | "flag" | "folder" | "gauge" | "globe" | "hammer" | "layers" | "lightbulb" | "package" | "plug" | "puzzle" | "rocket" | "star" | "terminal" | "wrench" | "zap" | "add" | "remove" | "delete" | "edit" | "refresh" | "search" | "settings" | "check" | "close" | "info" | "warning" | "error" | "open-external" | "copy" | "download" | "upload" | "play" | "pause" | "stop" | "more" | "expand" | "collapse" | "next" | "filter" | "branch" | "file" | "agent" | "link"; tone?: "neutral" | "accent" | "success" | "warning" | "danger"; tooltip?: string; visible?: boolean }) => { ok: true }`
+
+## Hooks
+
+List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted-worker`) and handle it with `orca.hooks.on(event, (event, next) => ...)`. Return `next(event)` (or nothing) to go on, or the stop result. Plugins run in turn, 2 s each; a throw, timeout or crash passes unless the entry says `"onError": "deny"`. Decide first: an awaited call before you return (a notification, say) can fail or time out and turn your deny into a pass.
+
+- `terminal.send` (since 1.4.248): Text Orca, the CLI or a plugin is about to send to a terminal. A person typing (on the desktop, a phone or a paired client) is never hooked, and prompts Orca submits to an agent are not included (a separate agent prompt hook covers them). Writes to one terminal stay in order while a hook decides. Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send.
+  event `{ terminalId: string; text: string; enter: boolean; inputKind: "driving" | "orchestration" | "launch" }`; `next` may change `text`, `enter`; stop with `{ deny: string }`
+- `workspace.create.before` (since 1.4.248): A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it.
+  event `{ kind: "worktree" | "folder"; projectId: string; name: string; branch?: string; base?: string }`; `next` may change `name`, `branch`, `base`; stop with `{ deny: string }`
+- `workspace.create.after` (since 1.4.248): A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored.
+  event `{ workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }`; `next` may change nothing; stop with nothing (observe only)
 
 ## Capabilities
 
