@@ -799,7 +799,8 @@
     },
     "prSidebar": {
       "loading": "PR を読み込み中…",
-      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。"
+      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。",
+      "retryLoading": "PR の読み込みを再試行"
     },
     "protocolBlockScreen": {
       "backToHosts": "ホストに戻る",

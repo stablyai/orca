@@ -877,7 +877,8 @@
     },
     "prSidebar": {
       "loading": "Загрузка пул-реквеста…",
-      "notPermitted": "Доступ запрещён — ваша учётная запись GitHub не подключена."
+      "notPermitted": "Доступ запрещён — ваша учётная запись GitHub не подключена.",
+      "retryLoading": "Повторить загрузку пул-реквеста"
     },
     "protocolBlockScreen": {
       "backToHosts": "Вернуться к серверам",
