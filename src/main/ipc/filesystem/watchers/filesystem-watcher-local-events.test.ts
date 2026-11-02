@@ -5,6 +5,7 @@ import {
   WATCH_BATCH_INTERVAL_MS,
   WATCH_BATCH_LEADING_MS
 } from '../../../../shared/filesystem-watch-batch-window'
+import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../../../shared/runtime-file-watch-limits'
 
 const { statMock, subscribeMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
@@ -383,5 +384,24 @@ describe('local filesystem watcher flush serialization', () => {
       watcherLifecycleState.pendingTeardowns.clear()
       watcherLifecycleState.watchedRoots.clear()
     }
+  })
+
+  it('bounds the crawl and retires a root that times out or storms', async () => {
+    watcherLifecycleState.unwatchableRoots.clear()
+    await createLocalWatcher('/repo', '/repo')
+
+    expect(subscribeMock).toHaveBeenCalledWith(
+      '/repo',
+      expect.any(Function),
+      expect.anything(),
+      expect.objectContaining({ subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS })
+    )
+
+    watcherCallback?.(new Error('File watcher resource storm detected'), [])
+    expect(watcherLifecycleState.unwatchableRoots.has('/repo')).toBe(true)
+
+    watcherLifecycleState.unwatchableRoots.clear()
+    watcherCallback?.(new Error('File watcher subscription crawl timed out'), [])
+    expect(watcherLifecycleState.unwatchableRoots.has('/repo')).toBe(true)
   })
 })

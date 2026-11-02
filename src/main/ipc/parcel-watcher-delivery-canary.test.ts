@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WatcherCanaryActivity } from './parcel-watcher-delivery-canary'
+import type {
+  WatcherCanaryActivity,
+  WatcherCanarySubscriptionFault
+} from './parcel-watcher-delivery-canary'
 
 const { subscribeMock, watchMock, writeFileSyncMock } = vi.hoisted(() => ({
   subscribeMock: vi.fn(),
@@ -33,7 +36,10 @@ describe('watcher delivery canary', () => {
     Object.defineProperty(process, 'platform', { value: platform, configurable: true })
   }
 
-  const start = async (overrides: Partial<WatcherCanaryActivity> = {}): Promise<void> => {
+  const start = async (
+    overrides: Partial<WatcherCanaryActivity> = {},
+    onSubscriptionFault: (fault: WatcherCanarySubscriptionFault) => void = () => undefined
+  ): Promise<void> => {
     activity = {
       revision: 1,
       liveSubscriptions: 1,
@@ -44,7 +50,8 @@ describe('watcher delivery canary', () => {
     const { startWatcherDeliveryCanary } = await import('./parcel-watcher-delivery-canary')
     await startWatcherDeliveryCanary(
       () => activity,
-      (state) => health.push(state)
+      (state) => health.push(state),
+      onSubscriptionFault
     )
   }
 
@@ -237,18 +244,56 @@ describe('watcher delivery canary', () => {
   })
 
   it.each(['linux', 'win32'] as const)(
-    'stays disarmed for a crawl of any length on %s',
+    'stays disarmed for a short crawl and restarts once it exceeds the limit on %s',
     async (platform) => {
+      const { MAX_CRAWL_DURATION_MS } = await import('./parcel-watcher-delivery-canary')
       setPlatform(platform)
       delivery.independent = true
-      await start({ pendingCrawlStartedAt: 0 })
+      const faults: WatcherCanarySubscriptionFault[] = []
+      await start({ pendingCrawlStartedAt: 0, activeCrawlSubscriptionId: 42 }, (fault) =>
+        faults.push(fault)
+      )
 
-      await vi.advanceTimersByTimeAsync(60 * 60_000)
+      await vi.advanceTimersByTimeAsync(MAX_CRAWL_DURATION_MS)
 
       expect(canaryWrites).toEqual([])
       expect(exitSpy).not.toHaveBeenCalled()
+      expect(faults).toEqual([])
+
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(faults).toEqual([{ kind: 'crawl-wedged', subscriptionId: 42 }])
+      expect(exitSpy).toHaveBeenCalledWith(2)
+      expect(stderr.join('')).toContain('subscription crawl timed out')
     }
   )
+
+  it.each(['cpu', 'overflow'] as const)('restarts after a sustained %s storm', async (kind) => {
+    const { CANARY_OVERFLOW_STORM_THRESHOLD, CANARY_STORM_MAX_STRIKES } =
+      await import('./parcel-watcher-delivery-canary')
+    delivery = { native: true, independent: true }
+    const faults: WatcherCanarySubscriptionFault[] = []
+    vi.spyOn(process, 'cpuUsage').mockImplementation(() =>
+      kind === 'cpu' ? { user: 9_000_000, system: 0 } : { user: 0, system: 0 }
+    )
+    await start({ topSubscriptionId: 7, overflowCount: 0 }, (fault) => faults.push(fault))
+
+    for (let strike = 0; strike < CANARY_STORM_MAX_STRIKES - 1; strike++) {
+      if (kind === 'overflow') {
+        activity.overflowCount = (activity.overflowCount ?? 0) + CANARY_OVERFLOW_STORM_THRESHOLD
+      }
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(exitSpy).not.toHaveBeenCalled()
+    }
+    if (kind === 'overflow') {
+      activity.overflowCount = (activity.overflowCount ?? 0) + CANARY_OVERFLOW_STORM_THRESHOLD
+    }
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(faults).toEqual([{ kind: 'storm', subscriptionId: 7 }])
+    expect(exitSpy).toHaveBeenCalledWith(2)
+    expect(stderr.join('')).toContain('watcher resource storm detected')
+  })
 })
 
 describe('armedCanaryRevision', () => {
@@ -265,11 +310,17 @@ describe('armedCanaryRevision', () => {
     expect(armedCanaryRevision({ ...idle, liveSubscriptions: 2 }, 'win32')).toBe(4)
   })
 
-  it('arms during a pending subscribe only on macOS', async () => {
-    const { armedCanaryRevision } = await import('./parcel-watcher-delivery-canary')
+  it('arms during a pending subscribe only on macOS until the crawl limit', async () => {
+    const { armedCanaryRevision, MAX_CRAWL_DURATION_MS } =
+      await import('./parcel-watcher-delivery-canary')
     const pending = { ...idle, revision: 7, liveSubscriptions: 1, pendingCrawlStartedAt: 1_000 }
-    expect(armedCanaryRevision(pending, 'darwin')).toBe(7)
-    expect(armedCanaryRevision(pending, 'linux')).toBeNull()
-    expect(armedCanaryRevision(pending, 'win32')).toBeNull()
+    const duringCrawl = 1_000 + MAX_CRAWL_DURATION_MS
+    expect(armedCanaryRevision(pending, 'darwin', duringCrawl)).toBe(7)
+    expect(armedCanaryRevision(pending, 'linux', duringCrawl)).toBeNull()
+    expect(armedCanaryRevision(pending, 'win32', duringCrawl)).toBeNull()
+    const expired = duringCrawl + 1
+    expect(armedCanaryRevision(pending, 'linux', expired)).toBe(7)
+    expect(armedCanaryRevision(pending, 'win32', expired)).toBe(7)
+    expect(armedCanaryRevision(pending, 'darwin', expired)).toBe(7)
   })
 })

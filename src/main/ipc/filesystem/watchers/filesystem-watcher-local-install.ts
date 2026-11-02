@@ -1,4 +1,5 @@
 import { stat } from 'node:fs/promises'
+import { parse } from 'node:path'
 import { isWslPath } from '../../../wsl'
 import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
 import { createWslWatcher, type WatchedRoot } from './filesystem-watcher-wsl'
@@ -56,6 +57,12 @@ export async function installLocalWatcher(
     if (blocked) {
       scheduleRetry(cancelToken.listeners, waitForDistro(blocked.distro))
       return 'capacity'
+    }
+    // Watching a filesystem root makes the Windows crawler spin without end.
+    if (parse(rootPath).root === rootPath) {
+      console.warn(`[filesystem-watcher] refusing to watch filesystem root: ${rootKey}`)
+      rememberUnwatchableRoot(rootKey)
+      return 'unavailable'
     }
     try {
       const s = await stat(rootPath)
