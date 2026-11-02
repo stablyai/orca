@@ -60,3 +60,35 @@ List each in `contributes.events` (`{ "on": "<event>" }`) with the capability `r
 shows, then `orca.events.on(event, handler)` in `activate(orca)`. Fire one at the dev plugin with
 `ORCA plugin dev emit . <event> --data '<json>'`, or unit-test it with `mountWorker` (see
 `references/workflow.md`).
+
+## A status bar item a worker updates
+
+Declare it in `contributes.statusBarItems` (`{ "id", "text"?, "icon"?, "tone"?, "tooltip"?,
+"command"? }`, `engines.orca` `>=1.4.248`); a static item needs only `declarative`, and pressing it
+runs `command`, one of the plugin's own `contributes.commands`. From a worker, change it with
+`orca.host.call('statusBar.update', { id, text, tone, tooltip, visible })`; fields you leave out
+keep their value and `visible: false` hides it. Bind a key to the same command with
+`contributes.keybindings` (`{ "command", "key": "Mod+Shift+K" }`).
+
+## Changing or refusing what Orca does (hooks)
+
+`trusted-worker` with `main`; list each hook in `contributes.hooks` (`{ "event": "terminal.send" }`)
+and set `engines.orca` to at least `>=1.4.248`. Events, results and what `next` may change are in
+`references/host-api.md` (Hooks). Start from `ORCA plugin create <dir> --template hook`.
+
+```ts
+export default function activate(orca: OrcaWorkerApi) {
+  orca.hooks.on('terminal.send', (event) => {
+    if (event.text.includes('rm -rf /')) return { deny: 'blocked by my mod' }
+    // Returning nothing passes the event on unchanged; `next({ ...event, text })` rewrites it.
+  })
+}
+```
+
+Return `{ deny }` to stop, nothing (or `next(event)`) to pass. Past 2 s or on a throw Orca carries
+on as if the hook passed and logs it (`ORCA plugin logs`); a guard that must fail closed lists the
+hook as `{ "event": "terminal.send", "onError": "deny" }`. Decide before any other awaited call:
+`await orca.host.call('notifications.show', …)` ahead of `return { deny }` can throw or time out and
+let the action through, so count blocks after deciding (`void orca.host.call(...)`). Unit-test with
+`(await mountWorker(worker)).hooks.fire('terminal.send', event)`, which returns
+`{ kind: 'continue', event }` or `{ kind: 'deny', reason }`.
