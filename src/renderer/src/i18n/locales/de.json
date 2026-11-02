@@ -20548,6 +20548,9 @@
         "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Läuft in WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {

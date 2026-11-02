@@ -20440,6 +20440,9 @@
         "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
         "keepOpen": "Mantener abierto"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Se ejecuta en WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
