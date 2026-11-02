@@ -72,7 +72,7 @@ export function editor(input: PluginTemplateInput): PluginTemplate {
         text.addEventListener('input', () => {
           doc.change(text.value)
           clearTimeout(check)
-          // Once typing pauses, show a refused edit; your text stays either way.
+          // Once typing pauses, show a refused edit; on a conflict the outside change replaces it.
           check = setTimeout(() => {
             doc.flush().then(
               () => (notice.textContent = ''),

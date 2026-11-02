@@ -142,16 +142,20 @@ describe('orca.document.session', () => {
     })
   })
 
-  it('keeps the draft on a conflict without merge, and sends it over the newer document', async () => {
+  it('lets the outside document win a conflict without merge', async () => {
     const { session, fromHost, replaced, edits } = await open({ debounceMs: 0 })
     session.change('mine')
     fromHost(doc(2, 'outside'))
     const flushed = session.flush()
     fromHost(refuse(0, 'conflict'))
     await expect(flushed).rejects.toMatchObject({ code: 'conflict' })
-    expect(session.value).toBe('mine')
-    expect(replaced).not.toHaveBeenCalled()
-    void session.flush()
+    expect(session.value).toBe('outside')
+    expect(replaced).toHaveBeenCalledWith('outside')
+    // The draft is gone, so nothing overwrites the outside write.
+    await expect(session.flush()).resolves.toBeUndefined()
+    expect(edits()).toHaveLength(1)
+    session.change('next')
+    await settle()
     expect(edits().at(-1)).toMatchObject({ params: { baseVersion: 2 } })
   })
 

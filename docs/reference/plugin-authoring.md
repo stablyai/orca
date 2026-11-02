@@ -322,8 +322,9 @@ await doc.flush() // send now; rejects with the refusal's code
 from it. It keeps one edit in flight and coalesces later changes, moves its baseline only when Orca
 accepts an edit, and never hands your own accepted edits back through `onReplace`. A refused edit
 keeps your draft and rejects `flush()`. On `conflict` it calls `merge(base, outside, mine)` once,
-where `base` is the last accepted value, and sends the result; without `merge` it keeps the draft,
-and the next change or flush sends it over the newer document. It answers Orca's `editor.flush`
+where `base` is the last accepted value, and sends the result. Without `merge` the outside
+document wins, since an agent may have written the file: the draft is dropped, `onReplace` gets
+the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. It answers Orca's `editor.flush`
 itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
 orca.document` to support older Orca.
 
