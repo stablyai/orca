@@ -9,6 +9,7 @@ import {
   draftAgentSessionStoreState
 } from './agent-session-store-draft'
 import { writeAgentSessionStoreRows } from './agent-session-record-rows'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
@@ -82,7 +83,7 @@ describe('prepared launch retirement waves', () => {
         now: NOW
       })
     }
-    const ready = []
+    const ready: Parameters<AgentSessionRecordStore['retirePreparedAgentLaunch']>[0][] = []
     for (let index = 0; index < launches; index++) {
       const id = operationId()
       await store.recordPreparedAgentLaunch({
