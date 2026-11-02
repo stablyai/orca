@@ -11,7 +11,7 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostClient } from '../transport/host-client-hooks'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useReachableServerClients } from '../worktree/use-reachable-server-clients'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { AutomationChoice } from './AutomationControls'
 import { AutomationManager } from './AutomationManager'
 import { automationStyles as styles } from './automation-styles'
@@ -34,6 +34,7 @@ export function MobileAutomationsScreen() {
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
         <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
           accessibilityRole="button"
           accessibilityLabel={t('automations.mobile.back', 'Back')}
           onPress={() => router.back()}

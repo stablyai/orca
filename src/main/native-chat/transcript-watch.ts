@@ -1,8 +1,8 @@
 import { UNFLUSHED_SETTLE_MS } from './transcript-watch-contract'
 import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { extname } from 'node:path'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,

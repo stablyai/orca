@@ -96,6 +96,8 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
           worktreeId: event.worktreeId,
           paneKey: event.paneKey,
           executionHost: event.executionHost,
+          source: content.source,
+          ...(content.agentState ? { agentState: content.agentState } : {}),
           channelId
         }
       },

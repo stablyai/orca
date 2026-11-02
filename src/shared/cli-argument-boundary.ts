@@ -8,6 +8,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'allow-failed-archive-hook',
   'annotate',
   'attachments',
+  'check',
   'children',
   'comments',
   'compact',

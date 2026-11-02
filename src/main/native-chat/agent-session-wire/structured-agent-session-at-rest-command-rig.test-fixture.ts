@@ -5,7 +5,7 @@ import type { CommandMenuRendererFixtureModule } from '../../../shared/agent-ses
 
 import { OMP } from '../../acp/acp-command-discovery.test-fixture'
 import { acpStructuredAgentDefinition } from '../../acp/acp-structured-agent-definitions'
-import { CLAUDE_STRUCTURED_AGENT } from '../../claude/claude-structured-agent-definition'
+import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
 import { structuredAgentsDeclaringNothing } from './structured-agent-session-adapter-router-test-support'
@@ -18,14 +18,14 @@ import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps
 } from '../../claude/claude-at-rest-commands'
 
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
@@ -40,7 +40,7 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({

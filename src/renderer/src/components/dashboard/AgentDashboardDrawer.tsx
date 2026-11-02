@@ -72,6 +72,7 @@ function AgentDashboardDrawerBody({
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
+      onBrowserForeground={onFocusHandoff}
       onClose={onClose}
       headerActions={
         <AgentDashboardSettingsMenu

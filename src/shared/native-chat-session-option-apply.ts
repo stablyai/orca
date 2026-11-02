@@ -1,11 +1,13 @@
 import {
   findCatalogModel,
-  findCatalogOption,
-  type AgentSessionOptionCatalog,
-  type CatalogMidSessionApply,
-  type CatalogModel,
-  type CatalogOptionApply
-} from './agent-session-option-catalog'
+  findCatalogOption
+} from './agent-session/options/agent-session-option-catalog'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogMidSessionApply,
+  CatalogModel,
+  CatalogOptionApply
+} from './agent-session/options/agent-session-option-catalog-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionSetResult,

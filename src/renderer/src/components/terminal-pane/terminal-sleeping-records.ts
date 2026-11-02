@@ -3,7 +3,7 @@ import { findLegacyNumericSleepingRecord } from '../../../../shared/sleeping-rec
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export const getSleepingRecordForPane = (
   state: ReturnType<typeof useAppStore.getState>,

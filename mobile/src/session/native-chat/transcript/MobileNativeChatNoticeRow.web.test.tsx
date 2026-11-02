@@ -7,7 +7,7 @@ import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import type * as ReactNative from 'react-native'
 import type * as ReactNativeSvg from 'react-native-svg'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 
 vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 // Use the same SVG web host selected by the page bundler, overriding the native setup stand-in.

@@ -1,12 +1,13 @@
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
 import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
 import {
-  BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS,
+  bridgePendingRequestCap,
   isBridgeFrameWithinCap,
   utf8ByteLength
 } from './bridge-caps'
-import { BridgeConnectionCache } from './bridge-client-connection-cache'
+import { BridgeConnectionCache, type BridgeSnapshotOutcome } from './bridge-client-connection-cache'
+import type { BridgeConnectionPathSource } from './bridge-connection-snapshot'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 import {
   createBridgeClientShellSession,
@@ -37,8 +38,7 @@ import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './brid
 import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
-  type BridgeClientMessage,
-  type BridgeConnectionSnapshot
+  type BridgeClientMessage
 } from './bridge-envelope'
 
 export type { BridgeShellSession } from './bridge-client-session'
@@ -66,6 +66,8 @@ export type BridgeRpcClientOptions = {
 }
 
 export type BridgeRpcClient = RpcClient &
+  BridgeConnectionPathSource &
+  Required<Pick<RpcClient, 'getShellHostStatus'>> &
   BridgeShellSessionListeners & {
     /**
      * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
@@ -149,13 +151,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   }
 
-  function snapshot(): BridgeConnectionSnapshot {
-    const held = cache.read()
-    if (held === null) {
-      throw new BridgeClientNotReadyError()
-    }
-    return held
-  }
+  const snapshot = () => cache.require()
 
   // Repeated init for the same session updates route/insets/cache while preserving exchanges and the original storage snapshot. A different session id invalidates prior work.
   const shellSession = createBridgeClientShellSession({
@@ -169,12 +165,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   })
 
-  function acceptState(snapshotFromShell: BridgeConnectionSnapshot): void {
-    if (cache.apply(snapshotFromShell) !== 'stale') {
-      return
+  function acceptState(outcome: BridgeSnapshotOutcome): void {
+    if (outcome === 'stale') {
+      report({ kind: 'state-out-of-order' })
+      handshake.restart()
     }
-    report({ kind: 'state-out-of-order' })
-    handshake.restart()
   }
 
   const back = createPageBackConsumers({
@@ -196,7 +191,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       back.reassert()
       terminalKeys.reassert()
     },
-    acceptState,
+    acceptState: (connection) => acceptState(cache.apply(connection)),
+    acceptConnectionPath: (connection) => acceptState(cache.applyPath(connection)),
     acceptBack: back.press,
     acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
   })
@@ -220,12 +216,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       // Return a rejected promise: deferred operations hand it back directly, so synchronous throws would bypass callers’ promise catches.
       return Promise.reject(new BridgeClientClosedError())
     }
-    if (requests.size >= BRIDGE_MAX_PENDING_REQUESTS) {
-      return Promise.reject(
-        new BridgeClientCapExceededError(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests in flight`)
-      )
-    }
     const [method, params, requestOptions] = args
+    const cap = bridgePendingRequestCap(isBridgeNativeMethod(method))
+    if (requests.size >= cap) {
+      return Promise.reject(new BridgeClientCapExceededError(`over ${cap} requests in flight`))
+    }
     return new Promise<RpcResponse>((resolve, reject) => {
       const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
       const id = nextId()
@@ -316,6 +311,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     getLastInboundAt: () => snapshot().lastInboundAt,
     // Clients without migration generation use a constant zero; native screen readers still require a number.
     getGeneration: () => snapshot().generation ?? 0,
+    ...cache.pathSource(),
+    getShellHostStatus: () => shellSession.current()?.hostStatus ?? null,
     carriesRpcEnvelope: () => hasGrant(BRIDGE_RPC_ENVELOPE_GRANT),
     // Allow listener registration before init so providers can observe the first state change; it reads no unprimed value.
     onStateChange: (listener) => cache.onStateChange(listener),

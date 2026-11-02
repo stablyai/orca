@@ -13,7 +13,7 @@ import {
   terminalExitError
 } from '../../../../shared/terminal-start-failure'
 import { requireAcceptedSpawn } from '../spawn-outcome'
-import type { AgentSessionClaimedSpawnResult } from '../../../../shared/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../../../shared/agent-session/agent-session-host-authority'
 
 const PTY_ID = 'orca-pty-run-facts'
 const INCARNATION_ID = 'inc-run-facts'

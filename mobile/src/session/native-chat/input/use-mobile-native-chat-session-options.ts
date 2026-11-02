@@ -8,11 +8,11 @@ import {
   useState,
   useSyncExternalStore
 } from 'react'
-import {
-  getAgentSessionOptionCatalog,
-  type CatalogCommandDelivery,
-  type CatalogModel
-} from '../../../../../src/shared/agent-session-option-catalog'
+import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
+import type {
+  CatalogCommandDelivery,
+  CatalogModel
+} from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionsSurface,

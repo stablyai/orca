@@ -1,3 +1,4 @@
+import { selectWslHostsServing } from '@/components/sidebar/use-wsl-hosts-enabled'
 import type { WslHostCapability, WslHostStatus } from '../../../../shared/wsl-host-types'
 import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -8,8 +9,8 @@ import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /**
  * The WSL hosts with visible work: the active workspace's, and those of workspaces focused earlier
- * in this window that still have tabs (their panes stay mounted). Saved tabs alone never count, so
- * a launch boots only the focused host (E9).
+ * in this window that still have tabs (their panes stay mounted). Saved tabs alone never count, and
+ * a launch boots none: the focused host connects only if its distro already runs (E9).
  */
 export function selectWslHostsWithVisibleWork(
   state: AppState,
@@ -84,8 +85,8 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
   let focusEntry = ''
   const focusedThisSession = new Set<string>()
   const report = (state: AppState): void => {
-    if (state.settings?.experimentalWslHosts !== true) {
-      // Focus while WSL hosts are off is not an act on a host; turning them on re-reports.
+    if (!selectWslHostsServing(state)) {
+      // With no host to serve, focus is not an act on one; turning WSL hosts on re-reports.
       inputs = []
       focusEntry = ''
       return

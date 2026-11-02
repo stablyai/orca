@@ -4,6 +4,7 @@ import type { TerminalSemanticResident } from '../terminal-side-effect-facts-han
 import type { createTerminalResidentPolicy } from '../terminal-resident-policy'
 import type { PtyTransport } from '../pty-transport-types'
 import type { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
+import type { TerminalResumeEscapeGap } from '../terminal-resume-escape-gap'
 
 // Extracted installers share the closure’s mutable bindings through this bag without changing call order.
 export type ConnectPanePtySession = {
@@ -17,6 +18,7 @@ export type ConnectPanePtySession = {
   detachSemanticPresentation?: () => void
   hiddenOutputRestoreUnhideSeq: number | null
   idleCursorReset: TerminalIdleCursorReset
+  resumeEscapeGap: TerminalResumeEscapeGap
   // oxlint-disable-next-line typescript/no-explicit-any -- session bag for mechanical extract
   [key: string]: any
 }

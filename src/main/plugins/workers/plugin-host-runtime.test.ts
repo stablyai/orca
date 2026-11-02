@@ -144,3 +144,20 @@ describe('worker orca API parity with frames', () => {
     expect(current).toHaveBeenCalledWith({ workspaceId: 'w1' })
   })
 })
+
+describe('worker module loading', () => {
+  it('prepares module loading for the plugin root before importing a main.ts entry', async () => {
+    const order: string[] = []
+    const runtime = createPluginWorkerRuntime({
+      send: vi.fn(),
+      exit: vi.fn(),
+      prepareModuleLoading: (root) => order.push(`prepare ${root}`),
+      importModule: async (url) => {
+        order.push(`import ${url.slice(url.lastIndexOf('/') + 1)}`)
+        return { default: vi.fn() }
+      }
+    })
+    await runtime.handleMessage(init({ pluginRoot: '/plugin', mainEntry: 'src/main.ts' }))
+    expect(order).toEqual(['prepare /plugin', 'import main.ts'])
+  })
+})

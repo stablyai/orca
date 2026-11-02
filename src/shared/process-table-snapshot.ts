@@ -46,11 +46,35 @@ export function unreadableArgvName(command: string): string | null {
 
 /** Match shell-tier columns exactly: the full parser’s optional tty/start pair eats argv like python 3 app.py and misreads zombies.
  * Drop invalid rows, but reject empty captures so missing data cannot prove the shell exited. */
-export function parseShellForegroundRows(stdout: string): ProcessTableRow[] {
+export function parseShellForegroundRows(
+  stdout: string,
+  options?: { strict?: boolean }
+): ProcessTableRow[] {
   const rows: ProcessTableRow[] = []
   for (const rawLine of stdout.split(/\r?\n/)) {
-    const match = rawLine.trim().match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/)
+    // Strict keeps a blank-argv row: one process outside the foreground cannot void the capture, and readers
+    // treat a blank foreground member as unreadable.
+    const match = rawLine
+      .trim()
+      .match(
+        options?.strict
+          ? /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(.+))?$/
+          : /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/
+      )
     const pid = match ? Number(match[1]) : 0
+    if (
+      options?.strict &&
+      rawLine.trim() &&
+      (!match ||
+        !Number.isSafeInteger(pid) ||
+        pid <= 0 ||
+        ![2, 3, 4].every((i) => Number.isSafeInteger(Number(match[i]))) ||
+        Number(match[2]) < 0 ||
+        Number(match[3]) < 0 ||
+        Number(match[4]) < -1)
+    ) {
+      throw new ProcessTableCaptureError('malformed_row')
+    }
     if (match && Number.isSafeInteger(pid) && pid > 0) {
       rows.push({
         pid,
@@ -58,7 +82,7 @@ export function parseShellForegroundRows(stdout: string): ProcessTableRow[] {
         pgid: Number(match[3]),
         tpgid: Number(match[4]),
         stat: match[5],
-        command: match[6]
+        command: match[6] ?? ''
       })
     }
   }

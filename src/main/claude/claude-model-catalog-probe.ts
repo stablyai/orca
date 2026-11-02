@@ -7,25 +7,31 @@ import {
   buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN
 } from '../../shared/claude-model-list-probe'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
 import {
   isCompleteClaudeModelListing,
   listedModels,
   record,
   type ListedModel
-} from './claude-structured-model-catalog'
-import { claudeFastModeSupport, wireClaudeModels } from './claude-structured-catalog-listing'
-import { readClaudeSettingsApplied } from './claude-structured-session-options'
-import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+} from './structured/launch/claude-structured-model-catalog'
+import {
+  claudeFastModeSupport,
+  wireClaudeModels
+} from './structured/launch/claude-structured-catalog-listing'
+import { readClaudeSettingsApplied } from './structured/launch/claude-structured-session-options'
+import { claudeStructuredLaunchArgs } from './structured/launch/claude-structured-launch-args'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,
   type ClaudeStructuredLaunchPartDeps
-} from './claude-structured-launch-resolution'
-import { resolveClaudeChildEnvSources, type ClaudeEnvDeps } from './claude-structured-child-env'
+} from './structured/launch/claude-structured-launch-resolution'
+import {
+  resolveClaudeChildEnvSources,
+  type ClaudeEnvDeps
+} from './structured/launch/claude-structured-child-env'
 import type {
   AgentModelCatalogProbe,
   AgentModelCatalogSuccess
@@ -224,7 +230,7 @@ export function createClaudeModelCatalogProbe(
         if (models.length === 0) {
           throw new Error('claude listed no models')
         }
-        const fastModeSupport = claudeFastModeSupport(models, undefined)
+        const fastModeSupport = claudeFastModeSupport(models)
         return {
           models: wireClaudeModels(models),
           origin: 'probe',

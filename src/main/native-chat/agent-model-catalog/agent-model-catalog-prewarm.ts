@@ -1,4 +1,4 @@
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   AgentModelCatalogService,
   AgentModelCatalogServiceDeps

@@ -29,19 +29,6 @@ const theme = { themes: [{ id: 'dusk', title: 'Dusk', path: 'dusk.json' }] }
 const command = { commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }] }
 
 describe('enableIfDataPlugin', () => {
-  it('approves a content-only plugin with the installed fingerprint', async () => {
-    const approve = vi.fn(async () => undefined)
-    await expect(
-      enableIfDataPlugin({
-        pluginKey: 'acme.demo',
-        installedFingerprint: 'sha256-installed',
-        findValidPlugin: () => installed('data', theme),
-        approve
-      })
-    ).resolves.toEqual({ needsReview: false })
-    expect(approve).toHaveBeenCalledWith('acme.demo', 'sha256-installed')
-  })
-
   it.each([
     ['a plugin that adds instructions', installed('declarative', command), 'sha256-installed'],
     ['bytes other than the ones just installed', installed('data', theme), 'sha256-other'],

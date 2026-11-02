@@ -22,8 +22,11 @@ import { projectAgentLaunchProfile } from './agent-launch-profile'
 import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
 import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
-import type { AgentSessionModelCatalogResult, AgentSessionModelOption } from './agent-session-wire'
-import type { NewTabAgentMenuRow } from './agent-launch-picker-rows'
+import type {
+  AgentSessionModelCatalogResult,
+  AgentSessionModelOption
+} from './agent-session/agent-session-wire'
+import { orderAgentLaunchPickerAgents, type NewTabAgentMenuRow } from './agent-launch-picker-rows'
 import type { TuiAgent } from './tui-agent'
 
 export type AgentPickerSurface = 'chat' | 'terminal'
@@ -219,25 +222,29 @@ export function agentPickerEntriesFromRows(
   rows: readonly NewTabAgentMenuRow[],
   detected: readonly TuiAgent[],
   seed: (agent: TuiAgent) => Pick<AgentPickerEntry, 'terminal' | 'structured' | 'arguments'>,
-  label: (agent: TuiAgent) => string
+  label: (agent: TuiAgent) => string,
+  defaultAgent: TuiAgent | 'blank' | null | undefined
 ): AgentPickerEntry[] {
-  return [...new Set(rows.map((row) => row.agent))].map((agent) => {
-    const own = rows.filter((row) => row.agent === agent)
-    const chatDefault = own.some((row) => row.kind === 'chat')
-    const chat = chatDefault || own.some((row) => row.kind === 'cli' && row.chat)
-    return {
-      agent,
-      label: label(agent),
-      rows: own,
-      surfaces: [
-        ...(chat ? ['chat' as const] : []),
-        ...(detected.includes(agent) ? ['terminal' as const] : [])
-      ],
-      defaultSurface: chatDefault ? 'chat' : 'terminal',
-      ...seed(agent),
-      catalog: { origin: 'unknown' }
+  // Why: rows are grouped by surface, so first appearance would rank every chat agent above every CLI one.
+  return orderAgentLaunchPickerAgents(defaultAgent, [...new Set(rows.map((row) => row.agent))]).map(
+    (agent) => {
+      const own = rows.filter((row) => row.agent === agent)
+      const chatDefault = own.some((row) => row.kind === 'chat')
+      const chat = chatDefault || own.some((row) => row.kind === 'cli' && row.chat)
+      return {
+        agent,
+        label: label(agent),
+        rows: own,
+        surfaces: [
+          ...(chat ? ['chat' as const] : []),
+          ...(detected.includes(agent) ? ['terminal' as const] : [])
+        ],
+        defaultSurface: chatDefault ? 'chat' : 'terminal',
+        ...seed(agent),
+        catalog: { origin: 'unknown' }
+      }
     }
-  })
+  )
 }
 
 export function agentPickerHydrationQueue(

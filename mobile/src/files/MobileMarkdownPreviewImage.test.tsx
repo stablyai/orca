@@ -14,7 +14,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('../components/MobileLoadErrorState', () => ({ MobileLoadErrorState: 'LoadError' }))
+vi.mock('../components/MobileStateView', () => ({ MobileLoadErrorState: 'LoadError' }))
 vi.mock('../session/native-chat/visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
 }))
@@ -59,7 +59,7 @@ it('retries a refused image without hiding the surrounding document', async () =
   await act(async () => {
     tree = create(createElement(MobileMarkdownPreviewImage, props))
   })
-  expect(tree!.root.find((node) => String(node.type) === 'LoadError').props.message).toContain(
+  expect(tree!.root.find((node) => String(node.type) === 'LoadError').props.error).toContain(
     'Unable to reach'
   )
   await act(async () =>

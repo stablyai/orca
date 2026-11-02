@@ -1,4 +1,4 @@
-import type { AgentJournalFreeTextInput } from './agent-session-journal-types'
+import type { AgentJournalFreeTextInput } from './agent-session/journal/agent-session-journal-types'
 import type { AskQuestion } from './native-chat/input/native-chat-ask-types'
 
 // How a stepped question card picks, labels and confirms; desktop and mobile draw it differently.

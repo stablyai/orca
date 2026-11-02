@@ -8,6 +8,14 @@ import {
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+// Banner and chevron motion run on Reanimated and Animated, which these mocks leave out.
+vi.mock('../components/AutoHeight', () => ({
+  Presence: ({ children }: { children: unknown }) => children || null,
+  AutoHeight: ({ children }: { children: unknown }) => children
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',

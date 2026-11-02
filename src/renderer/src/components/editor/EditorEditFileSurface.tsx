@@ -24,6 +24,7 @@ import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown-render-mode'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import { PluginEditorSourceFallbackNotice } from './PluginEditorNeedsDesktopNotice'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
 import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
 
@@ -49,6 +50,7 @@ export function EditorEditFileSurface({
   monacoLanguage,
   isMarkdown,
   isMermaid,
+  isSvg = false,
   isCsv,
   isNotebook,
   customEditor,
@@ -82,6 +84,7 @@ export function EditorEditFileSurface({
   monacoLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
+  isSvg?: boolean
   isCsv: boolean
   isNotebook: boolean
   customEditor?: ActivePluginCustomEditor | null
@@ -134,6 +137,7 @@ export function EditorEditFileSurface({
         code={fileContent.loadErrorCode}
         worktreeId={activeFile.worktreeId}
         onRetry={() => reloadContent(activeFile, USER_RETRY)}
+        onHostStarted={() => reloadContent(activeFile)}
       />
     )
   }
@@ -181,6 +185,7 @@ export function EditorEditFileSurface({
     }
     return (
       <div className="flex h-full flex-col">
+        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
         <PluginFileTypeSuggestion filePath={activeFile.filePath} />
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {translate(
@@ -310,6 +315,13 @@ export function EditorEditFileSurface({
       handleDirtyStateHint={handleDirtyStateHint}
       monacoEditor={monacoEditor}
     />
+  ) : isSvg && mdViewMode === 'rich' ? (
+    <ImageViewer
+      key={activeFile.id}
+      svgSource={currentContent}
+      filePath={activeFile.filePath}
+      mimeType="image/svg+xml"
+    />
   ) : isMermaid && mdViewMode === 'rich' ? (
     <MermaidViewer
       key={activeFile.id}
@@ -349,6 +361,9 @@ export function EditorEditFileSurface({
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {externalChangeBanner}
+      {customEditor ? null : (
+        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
+      )}
       {customEditor ? null : (
         <PluginFileTypeSuggestion
           filePath={activeFile.filePath}

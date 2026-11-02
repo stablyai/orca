@@ -4,10 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { startJournalRowFold } from './journal-open'
@@ -25,7 +23,7 @@ import {
 import {
   agentSessionJournalProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalStopAndResumeRowsTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

@@ -6,6 +6,7 @@ import {
   type PluginEventName
 } from '../contributions/plugin-event-contribution'
 import type { PluginFileMatch } from '../contributions/plugin-file-match'
+import { validatePluginStatusBarItems } from '../contributions/plugin-status-bar-item-contribution'
 
 type IdentifiedContribution = { id: string }
 type PathContribution = { path: string }
@@ -25,6 +26,8 @@ type ContributionValidationManifest = {
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
     customEditors: (IdentifiedContribution & PluginFileMatch)[]
     newFiles: IdentifiedContribution[]
+    settings: { key: string }[]
+    statusBarItems: { id: string; command?: string }[]
   }
   capabilities: { kind: string }[]
 }
@@ -110,6 +113,23 @@ export function validatePluginManifestContributions(
     ctx
   )
   rejectDuplicateValues(
+    manifest.contributes.settings.map((setting) => setting.key),
+    String,
+    'settings',
+    'setting key',
+    ctx
+  )
+  if (
+    manifest.contributes.settings.length > 0 &&
+    !manifest.capabilities.some((capability) => capability.kind === 'settings:own')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contributes', 'settings'],
+      message: 'needs the "settings:own" capability, which is how the plugin reads them'
+    })
+  }
+  rejectDuplicateValues(
     manifest.contributes.vmRecipes,
     (entry) => (entry as PathContribution).path,
     'vmRecipes',
@@ -131,6 +151,7 @@ export function validatePluginManifestContributions(
     identities.forEach((identity) => keybindingIdentities.add(identity))
   }
 
+  validatePluginStatusBarItems(manifest.contributes, ctx)
   const commands = new Map(manifest.contributes.commands.map((command) => [command.id, command]))
   for (const [index, command] of manifest.contributes.commands.entries()) {
     if (command.action !== undefined && !isPluginCommandAliasActionId(command.action)) {

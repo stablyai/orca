@@ -85,7 +85,7 @@ vi.mock('../star-nag/service', () => ({
     registerIpcHandlers = vi.fn()
   }
 }))
-vi.mock('../browser/agent-browser-bridge', () => ({
+vi.mock('../browser/agent-browser/agent-browser-bridge', () => ({
   AgentBrowserBridge: class {
     sweepOrphanedSessions = vi.fn()
   }
@@ -93,7 +93,7 @@ vi.mock('../browser/agent-browser-bridge', () => ({
 vi.mock('../emulator/emulator-bridge', () => ({ EmulatorBridge: class {} }))
 vi.mock('../runtime/rpc/dispatcher', () => ({ RpcDispatcher: class {} }))
 vi.mock('../browser/browser-manager', () => ({
-  browserManager: { setBrowserGuestStateChangedListener: vi.fn() }
+  browserManager: { setBrowserGuestStateChangedListener: vi.fn(), setOffscreenTabOpener: vi.fn() }
 }))
 vi.mock('../browser/browser-client-page-automation-runtime', () => ({
   configureBrowserClientPageAutomationRuntime: vi.fn()

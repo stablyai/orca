@@ -5,7 +5,7 @@ import {
 } from './prepared-action-launch.test-fixture'
 import { createRuntimeAgentBackgroundTerminal } from '../../src/renderer/src/lib/runtime-agent-background-create'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
-import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_BACKGROUND_SESSION_UUID_RE as UUID_RE,
@@ -230,6 +230,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         tabId: 'reserved-tab',
         leafId: 'reserved-leaf',
         launchToken: 'reserved-token',
+        // A paired window's create can't be told from its pane remounts, so it never stamps Recent.
+        reopensPane: true,
         preAllocatedHandle: 'reserved-handle'
       })
       expect(mockSpawn).not.toHaveBeenCalled()

@@ -1,6 +1,6 @@
 import { normalizeAgentLaunchChoices } from './agent-launch-choices'
 import { agentPermissionHostPlatform, permissionEnvNameMatches } from './agent-permission-env'
-import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type { SleepingAgentLaunchConfig } from './agent-session/lifecycle/agent-session-resume'
 import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'

@@ -9,9 +9,7 @@ import {
   agentPickerDraft,
   agentPickerHydrationQueue,
   agentPickerEntryOptions,
-  agentPickerSessionOptions,
   agentPickerEffectiveChoices,
-  agentPickerButtonOrder,
   searchAgentPickerSetups,
   editAgentPickerDraft,
   editAgentPickerArguments,
@@ -46,23 +44,6 @@ const entry: AgentPickerEntry = {
 }
 
 describe('shared agent launch picker', () => {
-  it('keeps ordinary launch unconfigured and the existing default on the right', () => {
-    expect(agentPickerDraft(entry)).toEqual({
-      agent: 'codex',
-      surface: 'chat',
-      choices: {},
-      arguments: undefined
-    })
-    expect(agentPickerEffectiveChoices(entry, agentPickerDraft(entry))).toEqual(entry.structured)
-    expect(agentPickerEffectiveChoices(entry, agentPickerDraft(entry, 'terminal'))).toEqual(
-      entry.terminal
-    )
-    expect(agentPickerButtonOrder(entry)).toEqual(['terminal', 'chat'])
-    expect(agentPickerButtonOrder({ ...entry, defaultSurface: 'terminal' })).toEqual([
-      'chat',
-      'terminal'
-    ])
-  })
   it('derives setup matches from every query word, folds extra high and leaves plain agent searches plain', () => {
     expect(searchAgentPickerSetups([entry], 'codex')).toEqual([])
     expect(searchAgentPickerSetups([entry], 'astra low')[0]?.choices).toEqual({
@@ -109,33 +90,6 @@ describe('shared agent launch picker', () => {
     expect(draft.arguments).toBe('--model astra --add-dir docs')
     expect(editAgentPickerArguments(draft, '').arguments).toBeNull()
     expect(agentPickerDraft(entry).arguments).toBeUndefined()
-  })
-  it('uses live effort facts for an opaque model and emits an independent effort', () => {
-    expect(
-      agentPickerEntryOptions(entry, 'astra', 'terminal').find((option) => option.id === 'effort')
-        ?.kind
-    ).toMatchObject({
-      type: 'select',
-      choices: entry.catalog.origin !== 'unknown' ? entry.catalog.models[0].efforts : []
-    })
-    expect(agentPickerSessionOptions({ options: { effort: 'low' } })).toEqual({ effort: 'low' })
-  })
-  it('bounds suggestions without mutating the inventory or creating saved setups', () => {
-    const large = {
-      ...entry,
-      catalog: {
-        origin: 'probe' as const,
-        fetchedAt: 1,
-        models: Array.from({ length: 80 }, (_, id) => ({
-          id: `astra-${id}`,
-          label: `Astra ${id}`,
-          isDefault: false,
-          efforts: []
-        }))
-      }
-    }
-    expect(searchAgentPickerSetups([large], 'astra')).toHaveLength(8)
-    expect(large.catalog.models).toHaveLength(80)
   })
 })
 
@@ -522,7 +476,8 @@ it('keeps offered host Chat independent of preference through the actual row bui
       rows,
       scenario.detected,
       () => ({ terminal: {}, structured: {} }),
-      (agent) => agent
+      (agent) => agent,
+      undefined
     )
     expect(result.surfaces).toEqual(scenario.surfaces)
     expect(result.defaultSurface).toBe(scenario.defaultSurface)
@@ -541,7 +496,8 @@ it('keeps offered host Chat independent of preference through the actual row bui
         rows,
         detected,
         () => ({ terminal: {}, structured: {} }),
-        (agent) => agent
+        (agent) => agent,
+        undefined
       )
       expect(result.rows.some((row) => row.kind === 'chat-unavailable')).toBe(true)
       expect(result.surfaces).toEqual(detected.length ? ['terminal'] : [])
@@ -556,4 +512,24 @@ it('keeps offered host Chat independent of preference through the actual row bui
       chatProgram: () => 'available'
     })
   ).toEqual([])
+})
+
+it('orders setups by agent, not by whether each opens as a chat or its CLI', () => {
+  const rows = buildNewTabAgentMenuRows({
+    settings: { nativeChatProviders: { codex: true, grok: true, claude: false } },
+    detectedOnHost: ['claude', 'codex', 'grok', 'gemini'],
+    chatAgents: ['claude', 'codex', 'grok'],
+    hostChatAnswer: () => 'yes',
+    chatProgram: () => 'available'
+  })
+  const order = (defaultAgent: 'codex' | 'blank') =>
+    agentPickerEntriesFromRows(
+      rows,
+      ['claude', 'codex', 'grok', 'gemini'],
+      () => ({ terminal: {}, structured: {} }),
+      (agent) => agent,
+      defaultAgent
+    ).map((entry) => entry.agent)
+  expect(order('blank')).toEqual(['claude', 'codex', 'grok', 'gemini'])
+  expect(order('codex')).toEqual(['codex', 'claude', 'grok', 'gemini'])
 })

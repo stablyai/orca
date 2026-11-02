@@ -22,6 +22,15 @@ const mockTransport = vi.hoisted(
   })
 )
 
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
+
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
@@ -86,11 +95,15 @@ vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight',
+  CircleAlert: 'CircleAlert',
   File: 'File',
   FileText: 'FileText',
   Folder: 'Folder',
+  FolderOpen: 'FolderOpen',
   Image: 'Image',
   Search: 'Search',
+  SearchX: 'SearchX',
+  WifiOff: 'WifiOff',
   X: 'X'
 }))
 
@@ -273,7 +286,7 @@ describe('MobileFileExplorerPanel', () => {
     expect(client.sendRequest).toHaveBeenCalledTimes(1)
     expect(renderedText(renderer)).toContain('src')
     expect(renderedText(renderer)).toContain('README.md')
-    expect(renderedText(renderer)).not.toContain('Waiting for desktop...')
+    expect(renderedText(renderer)).not.toContain('Waiting for desktop')
   })
 
   it('refreshes the root in the background after reconnect without blanking the tree', async () => {
@@ -563,14 +576,14 @@ describe('MobileFileExplorerPanel', () => {
         .filter((node) =>
           node
             .findAll((node) => String(node.type) === 'Text')
-            .some((text) => text.props.children === 'Retry')
+            .some((text) => text.props.children === 'Reconnect')
         )
     }
 
     it('offers no root Retry on the page, where nothing can re-dial', async () => {
       mockTransport.forceReconnect = null
       const renderer = await unreachableAfterRootFailure()
-      expect(renderedText(renderer)).toContain('Waiting for desktop...')
+      expect(renderedText(renderer)).toContain('Waiting for desktop')
       expect(retryButtons(renderer)).toHaveLength(0)
     })
 

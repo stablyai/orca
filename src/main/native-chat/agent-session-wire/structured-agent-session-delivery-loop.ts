@@ -4,7 +4,7 @@ import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-
 // Recover earlier-process queued sends before any handover; running commands block input.
 
 import { beginStructuredAgentSessionInputHandover } from './structured-agent-session-input-handover'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import {

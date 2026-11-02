@@ -31,7 +31,7 @@ function luminance(color: string | boolean | undefined): number {
 function resolvedDarkTheme(): NonNullable<
   ReturnType<typeof mermaid.mermaidAPI.getConfig>['themeVariables']
 > {
-  mermaid.initialize(getMermaidConfig(true, false, darkColors))
+  mermaid.initialize(getMermaidConfig(true, darkColors))
   const variables = mermaid.mermaidAPI.getConfig().themeVariables
   if (!variables) {
     throw new Error('Mermaid did not resolve the theme')

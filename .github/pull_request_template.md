@@ -31,6 +31,12 @@ Fixes #
 - [ ] I manually tested these changes locally
 - [ ] Automated tests added/updated, or explained why not below
 
+## Risk
+
+<!-- What could this break, and for whom? Name the riskiest part of the change and what users would see if it went wrong. Call out anything that crosses a boundary: saved data or settings, older paired phones or SSH servers, other platforms, agents, or performance. Say how to back it out: a plain revert, or what a revert would not undo. -->
+
+**Level:** <!-- Low, Medium, or High -->
+
 ## AI Disclosure
 
 <!-- DO NOT FILL IN IF YOU ARE STABLYAI TEAM MEMBER (INTERNAL CONTRIBUTOR), IGNORE SECTION: -->
@@ -50,6 +56,7 @@ Ensure no issues in: Security, Cross-platform support (Linux, Windows, Mac), Rem
 
 - [ ] This PR is small and focused
 - [ ] I explained what changed and why (ELI5, the user-facing before/after, the mechanism, and why over the alternatives)
+- [ ] I stated the risk: what could break, for whom, and how to back it out
 - [ ] Before/after screenshots or videos attached for UI changes, or `N/A` with reason
 - [ ] Self-reviewed for correctness, security, and performance
 - [ ] Cross-platform, SSH/remote, and path/shortcut impact considered (or N/A)

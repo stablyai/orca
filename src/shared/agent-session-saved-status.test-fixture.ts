@@ -1,11 +1,11 @@
 import type { AgentSessionLastTurn } from './agent-session-last-turn'
-import type { AgentSessionRecord } from './agent-session-record'
-import type { AgentSessionStatusSummary } from './agent-session-wire'
+import type { AgentSessionRecord } from './agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusSummary } from './agent-session/agent-session-wire'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from './agent-session-record.test-fixture'
+} from './agent-session/lifecycle/agent-session-record.test-fixture'
 
 export const SAVED_STATUS_AT = 22_000
 

@@ -1,17 +1,18 @@
 // Command output stays off the reply timeline; only the command's result ends its turn.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { providerDiagnostic, type ProviderDiagnostic } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  providerDiagnostic,
+  type ProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/structured-conversation-command-outcome'
-import { claudeText } from './claude-structured-item-translation'
-import { claudeResultFailure } from './claude-structured-provider-fallback'
+import { claudeText } from './structured/journal/claude-structured-item-translation'
+import { claudeResultFailure } from './structured/launch/claude-structured-provider-fallback'
 import type { ClaudeCurrentTurn, ClaudeTurnEnd } from './claude-turn-lifecycle-item'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'

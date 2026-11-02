@@ -1,10 +1,11 @@
 import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import { ClaudeProfileRouter } from '../../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
@@ -20,6 +21,10 @@ vi.mock('node:fs', async (original) => {
     readFileSync: vi.fn(actual.readFileSync),
     readdirSync: vi.fn(actual.readdirSync)
   }
+})
+vi.mock('node:fs/promises', async (original) => {
+  const actual = await original<typeof fsp>()
+  return { ...actual, stat: vi.fn(actual.stat), readFile: vi.fn(actual.readFile) }
 })
 vi.mock('../../orca-profiles/profile-storage-paths', async () => {
   const { tmpdir } = await import('node:os')
@@ -37,7 +42,12 @@ afterEach(() => {
 })
 
 it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (accounts) => {
-  for (const signedIn of [true, false]) {
+  for (const [signedIn, concurrent] of [
+    [true, false],
+    [false, false],
+    [true, true],
+    [false, true]
+  ]) {
     for (const deliveries of [10, 100]) {
       const root = fs.mkdtempSync(join(tmpdir(), 'orca-account-read-perf-'))
       roots.push(root)
@@ -98,7 +108,45 @@ it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (
           structuredAgentLaunchEnv: () => ({})
         }
       )
-      const reads = vi.spyOn(router, 'routedHome')
+      const reads = vi.spyOn(router, 'selectedProfile')
+      for (const spy of [
+        fs.statSync,
+        fs.lstatSync,
+        fs.existsSync,
+        fs.readFileSync,
+        fs.readdirSync,
+        fsp.stat,
+        fsp.readFile
+      ]) {
+        vi.mocked(spy).mockClear()
+      }
+      accountVisits = 0
+      selectionReads = 0
+      const record = agentSessionRecordFixture()
+      const deliver = () => runtime.resolveStructuredAgentLaunchAccountHome(record)
+      const answers: (AgentSessionAccountHome | null)[] = []
+      const started = performance.now()
+      if (concurrent) {
+        // Many chats reading at once on a cold cache, before any read has finished.
+        answers.push(...(await Promise.all(Array.from({ length: deliveries }, deliver))))
+      } else {
+        for (let delivery = 0; delivery < deliveries; delivery += 1) {
+          answers.push(await deliver())
+        }
+      }
+      const elapsedMs = performance.now() - started
+      expect(answers).toEqual(
+        Array.from({ length: deliveries }, () => ({
+          variable: 'CLAUDE_CONFIG_DIR',
+          path: signedIn ? selectedHome : systemHome
+        }))
+      )
+      const stats = vi.mocked(fsp.stat).mock.calls.length
+      const stateReads = vi.mocked(fsp.readFile).mock.calls.length
+      expect(reads).toHaveBeenCalledTimes(deliveries)
+      expect(selectionReads).toBe(deliveries)
+      expect(accountVisits).toBe(signedIn ? 0 : accounts * deliveries)
+      // Chat reads run on main once per options read and send: nothing here may block it.
       for (const spy of [
         fs.statSync,
         fs.lstatSync,
@@ -106,41 +154,25 @@ it.each([25, 250])('bounds desired-home reads with %i managed accounts', async (
         fs.readFileSync,
         fs.readdirSync
       ]) {
-        vi.mocked(spy).mockClear()
+        expect(spy).not.toHaveBeenCalled()
       }
-      accountVisits = 0
-      selectionReads = 0
-      const record = agentSessionRecordFixture()
-      let answer: AgentSessionAccountHome | null = null
-      const started = performance.now()
-      for (let delivery = 0; delivery < deliveries; delivery += 1) {
-        answer = await runtime.resolveStructuredAgentLaunchAccountHome(record)
+      // Cold first read (shared by concurrent readers), then metadata-validated login cache.
+      expect(stateReads).toBe(1)
+      expect(vi.mocked(fsp.readFile).mock.calls[0][0]).toBe(stateFile)
+      if (concurrent) {
+        // Claude rewrote the file: one more read for the new revision, however many readers.
+        fs.writeFileSync(stateFile, `${state} `)
+        await Promise.all(Array.from({ length: deliveries }, deliver))
+        expect(vi.mocked(fsp.readFile).mock.calls.length).toBe(2)
       }
-      const elapsedMs = performance.now() - started
-      expect(answer).toEqual({
-        variable: 'CLAUDE_CONFIG_DIR',
-        path: signedIn ? selectedHome : systemHome
-      })
-      const stats = vi.mocked(fs.statSync).mock.calls.length
-      const directoryStats = vi.mocked(fs.lstatSync).mock.calls.length
-      const stateReads = vi.mocked(fs.readFileSync).mock.calls.length
-      expect(reads).toHaveBeenCalledTimes(deliveries)
-      expect(selectionReads).toBe(deliveries)
-      expect(accountVisits).toBe(signedIn ? 0 : accounts * deliveries)
-      expect(stats).toBe(signedIn ? deliveries : 2 * deliveries)
-      expect(directoryStats).toBe(signedIn ? deliveries : 0)
-      expect(vi.mocked(fs.existsSync).mock.calls.length).toBeLessThanOrEqual(2 * deliveries)
-      expect(stateReads).toBe(1) // Cold first read, then metadata-validated login cache.
-      expect(vi.mocked(fs.readFileSync).mock.calls[0][0]).toBe(stateFile)
-      expect(fs.readdirSync).not.toHaveBeenCalled()
       console.info('account-home-perf', {
         accounts,
         deliveries,
         signedIn,
+        concurrent,
         selectionReads,
         accountVisits,
         stats,
-        directoryStats,
         stateReads,
         stateBytes: Buffer.byteLength(state),
         elapsedMs

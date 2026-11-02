@@ -5,12 +5,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
@@ -39,11 +39,12 @@ const { listAddressableStructuredWorkers } =
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
   await import('./orchestration/structured-worker-journal-page')
 const { sealedChildEnv } = await import('./structured-session-child-env.test-support')
-const { foundAgentSessionRecord } = await import('./agent-session-record-founding')
+const { foundAgentSessionRecord } =
+  await import('./agent-session/records/agent-session-record-founding')
 const { applyAgentSessionRestartAdjudication } =
   await import('./agent-session/ownership/agent-session-restart-lease-transitions')
 const { openTestAgentSessionRecordStore } =
-  await import('./agent-session-record-store-test-harness')
+  await import('./agent-session/records/agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('./orca-runtime')
 const { OrchestrationDb } = await import('./orchestration/db')
 const { rpcRuntime } = await import('./structured-worker-rpc.test-support')
@@ -205,6 +206,7 @@ function installHost(): void {
       },
       logger: { warn: () => {} }
     },
+    getSessionTabId: (id: string) => (visibleTabs.includes(id) ? `agent-session:${id}` : null),
     hasSession: (id: string) => open.has(id) || children.has(id),
     getPersistedVisibleSessionTabIndex: () => ({
       present: tabIndexPresent,
@@ -333,13 +335,16 @@ function readJournal(identity: ReturnType<typeof registerWorker>, cursor?: strin
   })
 }
 
-function texts(messages: readonly { blocks: readonly unknown[] }[] | undefined): string {
-  return JSON.stringify(messages ?? [])
-}
+const texts = (messages: readonly { blocks: readonly unknown[] }[] | undefined): string =>
+  JSON.stringify(messages ?? [])
 
 let db: Db
 
 beforeEach(() => {
+  // This fixture has no raw layout; visibility and lease proof remain host-owned.
+  const p = OrcaRuntimeService.prototype
+  vi.spyOn(p, 'captureStructuredAgentSessionPresentation').mockReturnValue({ raw: null, saved: [] })
+  vi.spyOn(p, 'currentLocalStructuredSessionPresentation').mockReturnValue(null)
   structuredWorkerIdentities.clear()
   closed.length = 0
   historyAsked.length = 0
@@ -638,11 +643,11 @@ describe('stopping a worker while a /clear commits', () => {
     expect(stop.stopped).toBe(true)
   })
 
-  it('keeps an earlier close on the receipt when a later one fails', async () => {
+  it('keeps provider Stop proved when the successor hide fails', async () => {
     failHideOf = SUCCESSOR
     const stop = await stopStructuredWorker(registerWorker())
-    expect(closed).toEqual([MINTED])
-    expect(stop).toMatchObject({ stopped: false, closeAttempted: true })
+    expect(closed).toEqual([MINTED, SUCCESSOR])
+    expect(stop).toMatchObject({ stopped: true, closeAttempted: true })
   })
 
   it('stops through worker-stop when the old session already reads exited mid-clear', async () => {

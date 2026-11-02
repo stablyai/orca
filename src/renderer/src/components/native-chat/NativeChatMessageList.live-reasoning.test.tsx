@@ -9,9 +9,9 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalStatusItem
-} from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { projectStructuredItemToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'

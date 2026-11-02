@@ -37,6 +37,11 @@ export const SelectAccountParams = z.object({
     .transform((v) => (v === null ? null : v))
 })
 
+export const SelectClaudeAccountParams = SelectAccountParams.extend({
+  // The web client moves running sessions in its own window; older hosts strip this.
+  movesRunningSessions: z.literal(true).optional()
+})
+
 export const SelectCodexAccountForTargetParams = SelectAccountParams.extend({
   target: CodexSelectionTarget
 })

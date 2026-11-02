@@ -16,6 +16,19 @@ it('does not send or consume cooldown while the desktop is active', async () => 
   expect(sends).toHaveLength(1)
 })
 
+it('drops finished-agent alerts for a phone that asked only for agent questions', async () => {
+  const reg = registration()
+  reg.filter = { ...reg.filter, onlyWhenAgentNeedsInput: true }
+  const { dispatcher, sends } = createHarness({
+    devices: [{ deviceId: 'phone', pushRegistration: reg }]
+  })
+  dispatcher.enqueue(notification({ agentState: 'done', emittedAt: 10_000 }))
+  dispatcher.enqueue(notification({ source: 'terminal-bell', worktreeId: 'b', emittedAt: 10_001 }))
+  dispatcher.enqueue(notification({ agentState: 'blocked', worktreeId: 'c', emittedAt: 10_002 }))
+  await flush()
+  expect(sends.map((send) => send.notification.agentState)).toEqual([null, 'needs-input'])
+})
+
 it('expires per phone at the boundary, preserves leases across persistence, and permits renewal', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(50_000)

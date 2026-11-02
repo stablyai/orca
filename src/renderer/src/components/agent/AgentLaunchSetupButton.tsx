@@ -144,7 +144,8 @@ export function AgentLaunchSetupButton({
         aria-label={translate('agentPicker.configure', 'Configure {{agent}}', {
           agent: entry.label
         })}
-        className="flex w-104 min-w-64 max-w-(--radix-popover-content-available-width) max-h-(--radix-popover-content-available-height) flex-col"
+        // Why: base popovers sit below menus (z-60), so this menu-launched panel would render under the menu's shadow; sharing the menu layer stacks it by open order, like a submenu.
+        className="z-[70] flex w-104 min-w-64 max-w-(--radix-popover-content-available-width) max-h-(--radix-popover-content-available-height) flex-col"
         onClick={(event) => event.stopPropagation()}
         // Hovering another menu row moves focus there; only a click outside or Escape closes the panel.
         onFocusOutside={(event) => event.preventDefault()}

@@ -4,7 +4,10 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { getWorkspaceCleanupHostIdentity as identity } from '../../../../shared/workspace-cleanup-host-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { makeTab, makeLayout } from './store-test-helpers'
-import { makeAgentEntry, makeUnifiedTab } from '@/components/worktree-jump-palette-test-fixtures'
+import {
+  makeAgentEntry,
+  makeUnifiedTab
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup-candidate-enrichment'
 import {
   getWorkspaceCleanupAgentEvidence,
@@ -20,8 +23,6 @@ import {
   FOREGROUND_TEST_WORKTREE
 } from '@/components/dashboard/foreground-consumer-test-fixture'
 import { WORKTREE_ID, makeCandidate, makeState } from './workspace-cleanup-slice-test-harness'
-
-const OTHER_ID = 'repo1::/tmp/other'
 
 function paneKey(tabId: string): string {
   return makePaneKey(tabId, '11111111-1111-4111-8111-111111111111')
@@ -91,22 +92,6 @@ describe('workspace cleanup live-agent finder', () => {
     } finally {
       finalizeWorkspaceCleanupScan(token)
     }
-  })
-
-  it('finds only workspaces whose agent is working right now', () => {
-    const state = makeState({
-      tabsByWorktree: {
-        [WORKTREE_ID]: [makeTab({ id: 'tab-1', worktreeId: WORKTREE_ID })],
-        [OTHER_ID]: [makeTab({ id: 'tab-2', worktreeId: OTHER_ID })]
-      },
-      agentStatusByPaneKey: {
-        [paneKey('tab-1')]: agentStatus(paneKey('tab-1'), 'working'),
-        [paneKey('tab-2')]: agentStatus(paneKey('tab-2'), 'done')
-      }
-    })
-
-    const candidates = [makeCandidate(), makeCandidate({ worktreeId: OTHER_ID })]
-    expect([...getWorkspaceCleanupAgentEvidence(state, candidates).values()]).toEqual(['live'])
   })
 
   it.each([

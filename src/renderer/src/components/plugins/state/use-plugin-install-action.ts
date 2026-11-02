@@ -55,13 +55,16 @@ const downloadFailed = (): string =>
 export function usePluginInstallAction({
   fetchPreview,
   onInstalled,
-  isFromInstallLink
+  isFromInstallLink,
+  applyThemes = applyPluginThemesNow
 }: {
   fetchPreview: (listing: PluginMarketplaceHostListing) => Promise<PluginPagePreview>
   /** Reloads the list; opens review on the page for any plugin still waiting for it. */
   onInstalled: (pluginKey: string) => Promise<void>
   /** Whether this install is on the page an install link opened; only labels telemetry. */
   isFromInstallLink?: (pluginKey: string) => boolean
+  /** Shows an installed theme plugin at once; true when it did. Defaults to all of its themes. */
+  applyThemes?: (pluginKey: string) => Promise<boolean>
 }): {
   phaseOf: (pluginKey: string) => PluginInstallPhase | null
   install: (
@@ -170,7 +173,7 @@ export function usePluginInstallAction({
         const { themes, iconThemes, terminalThemes } = preview.manifest.contributes
         const themed = themes.length + iconThemes.length + terminalThemes.length > 0
         // Why: a click to install a theme should show it at once; its toast offers Switch back.
-        if (themed && (await applyPluginThemesNow(pluginKey).catch(() => false))) {
+        if (themed && (await applyThemes(pluginKey).catch(() => false))) {
           return
         }
         // Why: only a plugin that is on by now has anything to try; recipes still wait for review.
@@ -198,7 +201,7 @@ export function usePluginInstallAction({
         setPhase(pluginKey, { kind: 'error', message: catalogInstallErrorMessage(cause) })
       }
     },
-    [dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
+    [applyThemes, dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
   )
 
   const phaseOf = useCallback(
