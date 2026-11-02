@@ -149,7 +149,7 @@ export function summaryContributionSource(
     })),
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
     newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
-    statusBarItems: []
+    statusBarItems: of('statusBarItems').map((item) => item.name)
   }
 }
 

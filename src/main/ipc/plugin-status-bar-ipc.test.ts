@@ -13,7 +13,7 @@ import {
   pluginStatusBarRevision
 } from '../plugins/status-bar/plugin-status-bar-state'
 
-type Install = { rootDir: string; manifest: { version: string } }
+type Install = { rootDir: string; manifest: { version: string }; devRevision?: string }
 
 function setup() {
   const statusBar = new PluginStatusBarState()
@@ -62,6 +62,23 @@ describe('plugin status bar changes', () => {
     installs.delete('acme.other')
     changed()
     expect(statusBar.snapshot()).toEqual({})
+  })
+
+  it('starts over when a dev code edit restarts the worker', () => {
+    const { statusBar, installs, set, changed } = setup()
+    installs.set('acme.guard', {
+      rootDir: '/p/guard',
+      manifest: { version: '1.0.0' },
+      devRevision: 'a'
+    })
+    set('acme.guard', 'hidden')
+    installs.set('acme.guard', {
+      rootDir: '/p/guard',
+      manifest: { version: '1.0.0' },
+      devRevision: 'b'
+    })
+    changed()
+    expect(statusBar.snapshot()['acme.guard']).toBeUndefined()
   })
 
   it('drops older changes when a new install writes first', () => {

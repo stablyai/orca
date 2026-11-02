@@ -3,6 +3,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { PluginDeclarativeIconGlyph } from '@/components/plugins/declarative/plugin-declarative-icons'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { pluginCommandUnavailableReason } from '@/components/plugins/page/plugin-contribution-action-availability'
 import {
   usePluginStatusBarItems,
   type ActivePluginStatusBarItem
@@ -27,6 +29,12 @@ function PluginStatusBarItem({
   item: ActivePluginStatusBarItem
   iconOnly: boolean
 }): React.JSX.Element {
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  // Why: palette and shortcuts skip workspace commands with no workspace; pressing must too.
+  const unavailable = item.command
+    ? pluginCommandUnavailableReason(item.command, activeWorktreeId)
+    : null
+  const tooltip = unavailable ? `${item.tooltip} · ${unavailable}` : item.tooltip
   const showText = item.text !== undefined && (!iconOnly || !item.icon)
   const content = (
     <>
@@ -42,9 +50,14 @@ function PluginStatusBarItem({
             type="button"
             className={ITEM_CLASS}
             data-tone={item.tone}
-            data-pressable="true"
-            aria-label={item.text ? `${item.text}, ${item.tooltip}` : item.tooltip}
-            onClick={() => runItemCommand(item)}
+            data-pressable={unavailable ? 'false' : 'true'}
+            aria-disabled={unavailable ? true : undefined}
+            aria-label={item.text ? `${item.text}, ${tooltip}` : tooltip}
+            onClick={() => {
+              if (!unavailable) {
+                runItemCommand(item)
+              }
+            }}
           >
             {content}
           </button>
@@ -55,7 +68,7 @@ function PluginStatusBarItem({
         )}
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {item.tooltip}
+        {tooltip}
       </TooltipContent>
     </Tooltip>
   )

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { derivePluginExecutionProfile } from './plugin-execution-profile'
 import { pluginStatusBarItemPatchSchema } from './plugin-status-bar-item-contribution'
+import { pluginContributionSummary } from './plugin-contribution-summary'
 
 function manifest(statusBarItems: unknown[], engines = '>=1.4.248') {
   return {
@@ -49,6 +50,20 @@ describe('contributes.statusBarItems', () => {
     )
     expect(issues(manifest([{ id: 'a', icon: 'not-an-icon' }]))).not.toBe('')
     expect(issues(manifest([{ id: 'a', onPress: 'x' }]))).not.toBe('')
+  })
+
+  it('lists items in the catalog summary by text, or id when icon-only', () => {
+    const parsed = parsePluginManifest(
+      manifest([
+        { id: 'tasks', text: '3 open' },
+        { id: 'quiet', icon: 'check' }
+      ])
+    )
+    expect(parsed.ok && pluginContributionSummary(parsed.manifest)).toEqual([
+      { kind: 'commands', name: 'Open tasks' },
+      { kind: 'statusBarItems', name: '3 open' },
+      { kind: 'statusBarItems', name: 'quiet' }
+    ])
   })
 
   it('needs an engines floor that reads the field', () => {

@@ -12,6 +12,10 @@ vi.mock('@/store/plugin-status-bar-items', () => ({ usePluginStatusBarItems: () 
 vi.mock('@/lib/plugin-command-execution', () => ({
   executePluginCommand: (...args: unknown[]) => executePluginCommand(...args)
 }))
+const appState: { activeWorktreeId: string | null } = { activeWorktreeId: 'wt-1' }
+vi.mock('@/store', () => ({
+  useAppStore: (select: (state: typeof appState) => unknown) => select(appState)
+}))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
 import { PluginStatusBarItems } from './PluginStatusBarItems'
@@ -36,6 +40,7 @@ beforeEach(() => {
   root = createRoot(container)
   executePluginCommand.mockReset().mockResolvedValue(undefined)
   items.length = 0
+  appState.activeWorktreeId = 'wt-1'
 })
 
 afterEach(async () => {
@@ -71,6 +76,26 @@ describe('PluginStatusBarItems', () => {
     expect(button?.getAttribute('aria-label')).toBe('2 blocked, Blocked commands')
     await act(async () => button?.click())
     expect(executePluginCommand).toHaveBeenCalledWith(command, 'plugin-palette')
+  })
+
+  it('does not run a workspace command with no open workspace', async () => {
+    appState.activeWorktreeId = null
+    items.push({
+      key: 'acme.guard/blocked',
+      pluginName: 'Guard',
+      text: '2 blocked',
+      tone: 'neutral',
+      tooltip: 'Blocked commands',
+      command: { ...command, context: 'workspace' }
+    })
+    await render()
+    const button = container.querySelector('button')
+    expect(button?.getAttribute('aria-disabled')).toBe('true')
+    expect(button?.getAttribute('aria-label')).toBe(
+      '2 blocked, Blocked commands · Needs an open workspace'
+    )
+    await act(async () => button?.click())
+    expect(executePluginCommand).not.toHaveBeenCalled()
   })
 
   it('draws an item without a command as static text, icon only when the bar is narrow', async () => {

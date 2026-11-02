@@ -1,9 +1,14 @@
 import type { PluginStatusBarItemPatch } from '../../../shared/plugins/contributions/plugin-status-bar-item-contribution'
 import type { PluginStatusBarOverrides } from '../../../shared/plugins/contributions/plugin-status-bar-state'
 
-/** Which install of a plugin set the changes: a new folder or manifest (an update) starts over. */
-export function pluginStatusBarRevision(plugin: { rootDir: string; manifest: unknown }): string {
-  return `${plugin.rootDir}\0${JSON.stringify(plugin.manifest)}`
+/** Which install of a plugin set the changes: a new folder, manifest (an update) or dev code
+ *  edit (a worker restart) starts over. */
+export function pluginStatusBarRevision(plugin: {
+  rootDir: string
+  manifest: unknown
+  devRevision?: string | null
+}): string {
+  return `${plugin.rootDir}\0${JSON.stringify(plugin.manifest)}\0${plugin.devRevision ?? ''}`
 }
 
 /** What workers set on their status bar items, layered over the manifest's values. Session-only. */

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_CONTRIBUTION_SOURCE, describePluginContributions } from './plugin-contributions'
+import {
+  EMPTY_CONTRIBUTION_SOURCE,
+  describePluginContributions,
+  summaryContributionSource
+} from './plugin-contributions'
 import { statusBarItemTitles } from './plugin-contribution-row-labels'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -55,5 +59,10 @@ describe('status bar item rows', () => {
     ])
     // Older hosts list no status bar items.
     expect(statusBarItemTitles(undefined)).toEqual([])
+  })
+
+  it('lists the items a catalog summary names', () => {
+    const source = summaryContributionSource([{ kind: 'statusBarItems', name: '0 blocked' }])
+    expect(source.statusBarItems).toEqual(['0 blocked'])
   })
 })
