@@ -19523,7 +19523,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour continuer dans l'interface de chat.",
-        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse."
+        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
+        "exitUnconfirmed": "{{agent}} exécute cette conversation dans un autre terminal. Quittez-le là-bas ou fermez ce terminal, puis réessayez."
       },
       "state": {
         "loading": {

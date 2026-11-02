@@ -18780,7 +18780,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续。",
-        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。"
+        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
+        "exitUnconfirmed": "{{agent}} 正在另一个终端中运行此对话。请在那里退出它或关闭该终端，然后重试。"
       },
       "state": {
         "loading": {

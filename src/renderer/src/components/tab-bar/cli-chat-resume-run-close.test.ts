@@ -76,6 +76,8 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 import { useAppStore } from '@/store'
+import { i18n } from '@/i18n/i18n'
+import fr from '@/i18n/locales/fr.json'
 import {
   getStructuredAgentSessionLaunchFailure,
   getStructuredAgentSessionLaunchLifecycle
@@ -271,6 +273,19 @@ describe('close terminal then continue on capable hosts', () => {
       [
         'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
       ]
+    ])
+    // The only notice left, so it must not fall back to English in a translated UI.
+    const language = i18n.language
+    mocks.toast.mockClear()
+    i18n.addResourceBundle('fr', 'translation', fr)
+    await i18n.changeLanguage('fr')
+    try {
+      await runCliChatResume(SOURCE)
+    } finally {
+      await i18n.changeLanguage(language)
+    }
+    expect(mocks.toast.mock.calls).toEqual([
+      [fr.components['native-chat'].resumeInNewChat.exitUnconfirmed.replace('{{agent}}', 'Claude')]
     ])
   })
 

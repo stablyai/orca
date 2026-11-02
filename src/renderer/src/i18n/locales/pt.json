@@ -20661,7 +20661,8 @@
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
-        "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder."
+        "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder.",
+        "exitUnconfirmed": "O {{agent}} está executando esta conversa em outro terminal. Saia dele lá ou feche esse terminal e tente novamente."
       },
       "loadingEarlierMessages": "Carregando mensagens anteriores…",
       "prompt": {
