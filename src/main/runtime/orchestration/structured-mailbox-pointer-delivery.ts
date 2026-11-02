@@ -99,11 +99,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
 
   /** Whether a status callback is news to this session's mail; see StructuredMailSettledState. */
   statusChanged(sessionId: string, status: string | null): boolean {
-    return this.settledState.statusChanged(
-      sessionId,
-      status,
-      this.deps.host.currentFence(sessionId)
-    )
+    const fence = this.deps.host.currentFence(sessionId)
+    return this.settledState.statusChanged(sessionId, status, fence)
   }
 
   /** Prune only this recorded session; settlement removes resolver identity and transient nulls also affect siblings. */
@@ -180,6 +177,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     this.inFlight.add(mailboxHandle)
     try {
       await this.pass(mailboxHandle, reservedTypes)
+    } catch (error) {
+      // A send or settle that threw leaves its reservation without a definite answer: the next pass
+      // asks about it, under its own id, before choosing newer mail.
+      this.settledState.forget(mailboxHandle)
+      throw error
     } finally {
       this.inFlight.delete(mailboxHandle)
       const rerun = this.rerun.get(mailboxHandle)

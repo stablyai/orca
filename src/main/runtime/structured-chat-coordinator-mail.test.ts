@@ -429,6 +429,34 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(checked).toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
     await vi.waitFor(async () => expect(await queuedCardTexts()).toEqual([]), WAIT)
   })
+
+  it('hands a report whose send threw over before a later one, under its first id', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId } = await coordinatorRunAndTask()
+    expect(await sendUserMessage(COORDINATOR, 'go')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+    await host.flushStreamedEvents(COORDINATOR)
+    const mailbox = `run:${runId}`
+    const sends = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
+    db.insertMessage({ runId, from: 'term_worker', to: mailbox, subject: 'FIRST report' })
+    runtime.deliverPendingMessagesForHandle(mailbox)
+    await vi.waitFor(() => expect(sends).toHaveBeenCalledTimes(1), WAIT)
+    await observationClock.observe(2_500)
+    // The send in doubt keeps its reservation and lands nothing.
+    expect(await queuedCardTexts()).toEqual([])
+    const first = db.getStructuredMailSends(mailbox)[0]!.operation_id
+
+    db.insertMessage({ runId, from: 'term_worker', to: mailbox, subject: 'SECOND report' })
+    runtime.deliverPendingMessagesForHandle(mailbox)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(2), WAIT)
+    const cards = await queuedCardTexts()
+    expect(cards[0]).toContain('FIRST report')
+    expect(cards[1]).toContain('SECOND report')
+    // Asked again under the id it was reserved with, never a fresh one.
+    const ids = sends.mock.calls.map(([, mutation]) => mutation.envelope.clientOperationId)
+    expect(ids.filter((id) => id === first)).toHaveLength(2)
+  })
 })
 
 describe('a /clear keeps the chat its orchestration address', () => {
