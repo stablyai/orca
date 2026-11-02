@@ -5,7 +5,8 @@ import type {
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { truncateAiVaultListResult } from '../../shared/ai-vault-session-depth'
-import { mergeAiVaultListResults } from './session-list-results'
+import { parseAiVaultListResult } from './session-list-result-validation'
+import { mergeAiVaultListResults, restampAiVaultListResult } from './session-list-results'
 
 function listResult(issues: AiVaultScanIssue[]): AiVaultListResult {
   return { sessions: [], issues, scannedAt: '2026-08-02T00:00:00.000Z' }
@@ -46,10 +47,82 @@ const SCOPE_TRUNCATION: AiVaultScanIssue = {
   message: 'Only the first 64 project paths were scanned.'
 }
 
+describe('restampAiVaultListResult', () => {
+  const catalogs = [
+    { name: 'empty', result: listResult([]) },
+    {
+      name: 'populated',
+      result: { ...listResult([SCOPE_TRUNCATION]), sessions: [session(1)] }
+    },
+    {
+      name: 'unchanged',
+      result: { ...listResult([]), fingerprint: 'a'.repeat(64), unchanged: true as const }
+    }
+  ]
+
+  it.each(catalogs)('preserves confirmed $name catalog coverage through parsing', ({ result }) => {
+    const stamped = restampAiVaultListResult(
+      { ...result, includesStructuredSessions: true },
+      'runtime:server'
+    )
+    const parsed = parseAiVaultListResult(stamped)
+
+    expect(parsed).toEqual(stamped)
+    expect(parsed.includesStructuredSessions).toBe(true)
+    expect(parsed.sessions.every((row) => row.executionHostId === 'runtime:server')).toBe(true)
+    expect(parsed.issues.every((issue) => issue.executionHostId === 'runtime:server')).toBe(true)
+  })
+
+  it.each(catalogs)('does not claim coverage for a legacy $name catalog', ({ result }) => {
+    const parsed = parseAiVaultListResult(restampAiVaultListResult(result, 'runtime:server'))
+
+    expect(parsed).not.toHaveProperty('includesStructuredSessions')
+  })
+
+  it.each([
+    { name: 'full', metadata: { fingerprint: 'a'.repeat(64) } },
+    { name: 'unchanged', metadata: { fingerprint: 'a'.repeat(64), unchanged: true as const } },
+    { name: 'cancelled', metadata: { cancelled: true as const } }
+  ])('omits the local scan id while preserving $name reply metadata', ({ metadata }) => {
+    const expected = { ...listResult([]), ...metadata, includesStructuredSessions: true as const }
+    const original = { ...expected, scanId: 'local-scan' }
+
+    expect(restampAiVaultListResult(original, 'runtime:server')).toEqual(expected)
+    expect(original.scanId).toBe('local-scan')
+  })
+
+  it.each([false, null, 'true', 1, {}])('rejects an invalid coverage marker: %j', (marker) => {
+    expect(() =>
+      parseAiVaultListResult({
+        ...restampAiVaultListResult(listResult([]), 'runtime:server'),
+        includesStructuredSessions: marker
+      })
+    ).toThrow()
+  })
+})
+
 describe('mergeAiVaultListResults', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
+
+  it.each([false, true])(
+    'keeps the selected session beyond the merged cap (remote: %s)',
+    (remote) => {
+      const selected = remote
+        ? { ...session(0), executionHostId: 'runtime:server' as const, id: 'remote-selected' }
+        : session(0)
+      const newest = session(2)
+      const results = [
+        { ...listResult([]), sessions: [newest] },
+        { ...listResult([]), sessions: [session(1), selected] }
+      ]
+      expect(
+        mergeAiVaultListResults(results, 1, false, [], selected.id).sessions.map((row) => row.id)
+      ).toEqual([newest.id, selected.id])
+      expect(mergeAiVaultListResults(results, 1).sessions.map((row) => row.id)).toEqual([newest.id])
+    }
+  )
 
   it('keeps the latest input scannedAt instead of restamping the merge', () => {
     const merged = mergeAiVaultListResults(

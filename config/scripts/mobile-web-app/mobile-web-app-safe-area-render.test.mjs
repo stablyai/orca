@@ -97,8 +97,8 @@ function readEdges(page) {
     if (title !== null) {
       range.selectNodeContents(title)
     }
-    const fab = [...document.querySelectorAll('[role="button"]')].find(
-      (element) => element.getAttribute('aria-label') === 'New workspace'
+    const fab = [...document.querySelectorAll('[role="button"]')].find((element) =>
+      ['New workspace', 'More options'].includes(element.getAttribute('aria-label'))
     )
     return {
       titleTop: title === null ? null : range.getBoundingClientRect().top,
@@ -147,6 +147,8 @@ describeRender('the page pads for the system bars once, by the shell insets', ()
     await sideways.page.close()
     expect([...upright.errors, ...sideways.errors]).toEqual([])
     expect(inset.titleLeft - base.titleLeft).toBe(59)
+    expect(base.fabRight).not.toBeNull()
+    expect(inset.fabRight).not.toBeNull()
     expect(base.fabRight - inset.fabRight).toBe(44)
   }, 60_000)
 

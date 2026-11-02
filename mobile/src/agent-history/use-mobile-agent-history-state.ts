@@ -1,3 +1,4 @@
+import type { MobileAgentHistoryStateParams } from './mobile-agent-history-state-contract'
 import {
   useCallback,
   useEffect,
@@ -18,7 +19,6 @@ import type {
   AiVaultScope,
   AiVaultSession
 } from '../../../src/shared/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
 import {
   deriveMobileAiVaultScopePaths,
   mobileAiVaultScanScopePaths
@@ -28,7 +28,9 @@ import {
   agentHistorySessionScan
 } from './mobile-agent-history-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { AI_VAULT_SELECTED_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/ai-vault-runtime-capabilities'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
+import type { AgentHistoryScreenState } from './agent-history-sections'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
@@ -39,31 +41,15 @@ const EMPTY_NAMES: AgentSessionConversationNames = new Map()
 const noSubscription = () => () => {}
 const noNames = () => EMPTY_NAMES
 
-export type AgentHistoryScreenState =
-  | { kind: 'loading' }
-  | { kind: 'unsupported' }
-  | { kind: 'error'; message: string }
-  | {
-      kind: 'ready'
-      sessions: AiVaultSession[]
-      issues: AiVaultScanIssue[]
-    }
+export type { AgentHistoryScreenState } from './agent-history-sections'
 
 type FetchedHistoryState =
   | Exclude<AgentHistoryScreenState, { kind: 'ready' }>
   | (Extract<AgentHistoryScreenState, { kind: 'ready' }> & { hostId: string; client: RpcClient })
 
-export type MobileAgentHistoryStateParams = {
-  hostId: string
-  worktreeId: string
-  worktrees: readonly Worktree[]
-  // Distinguish unfetched worktree list from fetched-but-missing workspace; only first holds loading.
-  worktreesLoaded: boolean
-}
-
 export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams) {
   const t = useMobileTranslation()
-  const { hostId, worktreeId, worktrees, worktreesLoaded } = params
+  const { hostId, worktreeId, conversationId, worktrees, worktreesLoaded } = params
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const [scope, setScope] = useState<AiVaultScope>('workspace')
@@ -100,8 +86,8 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const activeWorktreePath = activeWorktree?.path ?? null
   // Reuse host hint prefixes for client narrowing: host union only widens; All is not narrowed.
   const scopeFilterPaths = useMemo(
-    () => deriveMobileAiVaultScopePaths(scope, activeWorktree, worktrees),
-    [scope, activeWorktree, worktrees]
+    () => deriveMobileAiVaultScopePaths(conversationId ? 'all' : scope, activeWorktree, worktrees),
+    [conversationId, scope, activeWorktree, worktrees]
   )
 
   const feed = useMemo(() => (client ? mobileStructuredSessionStatusFeed(client) : null), [client])
@@ -117,12 +103,22 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       client,
       clientGeneration,
       connState,
-      worktreeId,
+      conversation: { worktreeId, conversationId },
       worktrees,
       worktreesLoaded,
       scope
     }),
-    [hostId, client, clientGeneration, connState, worktreeId, worktrees, worktreesLoaded, scope]
+    [
+      hostId,
+      client,
+      clientGeneration,
+      connState,
+      worktreeId,
+      conversationId,
+      worktrees,
+      worktreesLoaded,
+      scope
+    ]
   )
   const identityRef = useRef(identity)
   useLayoutEffect(() => {
@@ -135,6 +131,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     async (options: { scope: AiVaultScope; force: boolean }): Promise<void> => {
       const requestIdentity = identityRef.current
       const associationRevision = feed?.getAssociationRevision()
+      const scanScope = conversationId ? 'all' : options.scope
       const generation = generationRef.current + 1
       generationRef.current = generation
       const isCurrent = () =>
@@ -173,19 +170,28 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         }
 
         // Wait for worktree list before scoped fetch to avoid unrelated history flash; once loaded, proceed even if workspace is missing to avoid stuck spinner.
-        if (options.scope !== 'all' && !activeWorktree && !worktreesLoaded) {
+        if (scanScope !== 'all' && !activeWorktree && !worktreesLoaded) {
           if (isCurrent()) {
             setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
           }
           return
         }
 
-        const scopePaths = mobileAiVaultScanScopePaths(
-          deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
-        )
+        const scopePaths = conversationId
+          ? []
+          : mobileAiVaultScanScopePaths(
+              deriveMobileAiVaultScopePaths(scanScope, activeWorktree, worktrees)
+            )
         const reply = await agentHistorySessionScan.request(client, {
           limit: MOBILE_AI_VAULT_SESSION_LIMIT,
           force: options.force,
+          ...(conversationId
+            ? { includeStructuredSessions: true, includeAntigravityIdeSessions: true }
+            : {}),
+          ...(conversationId &&
+          status.capabilities?.includes(AI_VAULT_SELECTED_SESSION_RUNTIME_CAPABILITY)
+            ? { selectedSessionId: conversationId }
+            : {}),
           scopePaths
         })
         if (!isCurrent()) {
@@ -228,6 +234,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       client,
       clientGeneration,
       connState,
+      conversationId,
       feed,
       hostId,
       worktrees,
@@ -264,10 +271,6 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       pendingAssociationLoad.current = null
     }
   }, [feed, loadSessions, scope])
-
-  const onSelectScope = useCallback((nextScope: AiVaultScope) => {
-    setScope(nextScope)
-  }, [])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -318,7 +321,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     hostStatusResult,
     activeWorktreePath,
     scopeFilterPaths,
-    onSelectScope,
+    onSelectScope: setScope,
     onRefresh,
     retry
   }

@@ -96,10 +96,7 @@ import type { AutomationService } from '../../automations/service'
 import type { AgentAwakeService } from '../../agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
-import type {
-  AiVaultPrepareSessionResumeArgs,
-  AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault-resume-preparation'
+import type { AiVaultResumeHandlerOptions } from '../ai-vault-resume'
 import {
   getSavedRuntimeAiVaultHostInfos,
   deleteRuntimeAiVaultSession,
@@ -138,9 +135,7 @@ type CoreHandlerLifecycleOptions = {
   onBeforeOrcaProfileSignOut?: () => void
   onAfterOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
-  prepareAiVaultSessionResume?: (
-    args: AiVaultPrepareSessionResumeArgs
-  ) => Promise<AiVaultPrepareSessionResumeResult>
+  prepareAiVaultSessionResume?: AiVaultResumeHandlerOptions['prepareSessionResume']
 }
 
 export function registerCoreHandlers(

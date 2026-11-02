@@ -62,6 +62,8 @@ function agentDiscoveries(
       contentDependencyPath: source.contentDependencyPath,
       directoryPredicate: source.directoryPredicate,
       keepScopeFiles: scopeWalksAgentFiles(agent, options.scopePaths),
+      selectedSessionId: options.selectedSessionId,
+      executionHostId: options.executionHostId,
       signal: options.signal
     })
   return source.mergeRootDiscoveries
@@ -87,6 +89,7 @@ async function mergedDiscovery(
     agent,
     rootDir: rootDirs.join(delimiter),
     files: files.slice(0, limit),
+    selectedFiles: discoveries.flatMap((discovery) => discovery.selectedFiles ?? []),
     ...(scopeFiles ? { scopeFiles } : {})
   }
 }

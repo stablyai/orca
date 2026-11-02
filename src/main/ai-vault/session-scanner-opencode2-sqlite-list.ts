@@ -7,6 +7,7 @@ import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
+import { selectedSqliteSessionId } from './session-scanner-selection'
 import { scopedSessionRows } from './session-scanner-sqlite-scope-rows'
 
 // V2 uses session_v2/session_message tables; guard evolving schemas in shared and channel databases.
@@ -34,7 +35,12 @@ function canReadOpenCode2Sessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
+function buildSessionListQuery(
+  db: SyncDatabase,
+  limited: boolean,
+  scoped: boolean,
+  selected = false
+): string {
   const parentIdPredicate = columnExists(db, OPENCODE2_SESSION_TABLE, 'parent_id')
     ? 'AND parent_id IS NULL'
     : ''
@@ -46,7 +52,7 @@ function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boole
     scoped && columnExists(db, OPENCODE2_SESSION_TABLE, 'directory') ? ', directory' : ''
   return `SELECT id, time_created, time_updated${directory}
           FROM ${OPENCODE2_SESSION_TABLE}
-          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
+          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate} ${selected ? 'AND id = ?' : ''}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
           ${limited ? 'LIMIT ?' : ''}`
 }
@@ -89,6 +95,7 @@ export async function listOpenCode2SqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  selectedSessionId?: string
   /** Lists only sessions whose directory is in scope, newest `limit` of them. */
   scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
@@ -111,6 +118,27 @@ export async function listOpenCode2SqliteSessions(args: {
         scoped && args.scopePaths
           ? scopedSessionRows(listed, args.scopePaths, args.limit, dbPath)
           : listed
+      const selected = selectedSqliteSessionId(args.selectedSessionId, 'opencode2', dbPath)
+      const selectedRow = selected
+        ? db.prepare(buildSessionListQuery(db, false, false, true)).get(selected)
+        : undefined
+      if (
+        selectedRow &&
+        typeof selectedRow.id === 'string' &&
+        typeof selectedRow.time_created === 'number' &&
+        typeof selectedRow.time_updated === 'number'
+      ) {
+        candidates.push(
+          rowToCandidate(
+            {
+              id: selectedRow.id,
+              time_created: selectedRow.time_created,
+              time_updated: selectedRow.time_updated
+            },
+            dbPath
+          )
+        )
+      }
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath))
       }

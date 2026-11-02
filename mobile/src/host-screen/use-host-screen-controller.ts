@@ -81,6 +81,10 @@ export function useHostScreenController({
   useHostScreenIdentity({ client, hostId, state })
   const fetchRepoMetadataOnly = useHostRepoMetadata({ client, connState, hostId, state })
   const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
+  const projectCatalog =
+    sidebarFeed?.feed.kind === 'ready'
+      ? (sidebarFeed.feed.domains.projectCatalog ?? state.servedProjectSections)
+      : state.servedProjectSections
   // Read through a ref so the metadata refresh keeps its identity across installs.
   const feedRef = useRef(sidebarFeed?.feed)
   useEffect(() => {
@@ -160,6 +164,7 @@ export function useHostScreenController({
     collapsedGroups,
     feed,
     projectOrderBy,
+    projectCatalog,
     client,
     connectionVerdict,
     connState,

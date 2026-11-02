@@ -22,9 +22,10 @@ export function installOwnership(
     handle?: AgentSessionProviderHandle
     accountHome?: AgentSessionRecord['accountHome']
     acquiredAccount?: AgentSessionRecord['acquiredAccount']
+    location?: Partial<AgentSessionRecord['location']>
   } = {}
 ): void {
-  const { handle, accountHome, acquiredAccount, ...ownershipOverrides } = overrides
+  const { handle, accountHome, acquiredAccount, location, ...ownershipOverrides } = overrides
   const ownership: Omit<StructuredProviderSessionOwnership, 'role' | 'key'> = {
     sessionId: 'session-alpha',
     workspaceId: 'workspace-1',
@@ -44,7 +45,8 @@ export function installOwnership(
     location: {
       ...fixture.location,
       workspaceId: ownership.workspaceId,
-      wslDistro: ownership.wslDistro
+      wslDistro: ownership.wslDistro,
+      ...location
     },
     provider: ownership.provider,
     providerHandleChain: [
@@ -64,6 +66,7 @@ export function installOwnership(
   setStructuredAgentSessionHost({
     deps: {
       store: {
+        listRecords: () => [record],
         hostId: record.lease.ownerProcess?.hostId ?? 'local',
         getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
         listConversations: () => [
