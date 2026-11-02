@@ -1352,14 +1352,11 @@
 1 test-timeout-needs-reason:tests/e2e/cross-version-wire/agent-session-stop-event-downgrade.unit.test.ts
 1 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-agent-session-send.unit.test.ts
 2 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
-1 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-registered-agents.unit.test.ts
-5 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
-1 test-timeout-needs-reason:tests/e2e/cross-version-wire/kept-card-downgrade.unit.test.ts
+3 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 4 test-timeout-needs-reason:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 3 test-timeout-needs-reason:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
-2 test-timeout-needs-reason:tests/e2e/cross-version-wire/release-source-cache.unit.test.ts
 1 test-timeout-needs-reason:tests/e2e/cross-version-wire/release-source-retention.unit.test.ts
-4 test-timeout-needs-reason:tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts
+2 test-timeout-needs-reason:tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts
 1 test-timeout-needs-reason:tests/e2e/csv-paged-preview.spec.ts
 1 test-timeout-needs-reason:tests/e2e/csv-url-links.spec.ts
 1 test-timeout-needs-reason:tests/e2e/cursor-quota-transport.unit.test.ts
