@@ -239,7 +239,9 @@ async function switchRequest(
         invocationId,
         // The host's own id for the chat's tab: a paired client's tab saves the host tab it
         // mirrors (`mirroredHostTab`), so the host reads exactly the tab being switched.
-        sourceTabId: args.chatTabId ? hostTabIdOf(args.workspaceId, args.chatTabId) : undefined,
+        sourceTabId: args.chatTabId
+          ? hostLayoutTabIdOf(args.workspaceId, args.chatTabId)
+          : undefined,
         commandOverride: useAppStore.getState().settings?.agentCmdOverrides?.[args.agent]
       }
     }
@@ -256,9 +258,9 @@ async function switchRequest(
   return { sessionId: args.sessionId, execution: { invocationId } }
 }
 
-/** A tab's id as its host names it: a paired client's tab by the host tab it mirrors, the host's
+/** A tab's id in its host's layout: a paired client's tab by the host tab it mirrors, the host's
  *  own window's tab by its own id. */
-function hostTabIdOf(workspaceId: string, tabId: string): string {
+function hostLayoutTabIdOf(workspaceId: string, tabId: string): string {
   return (
     useAppStore.getState().unifiedTabsByWorktree[workspaceId]?.find((tab) => tab.id === tabId)
       ?.mirroredHostTab?.tabId ?? tabId

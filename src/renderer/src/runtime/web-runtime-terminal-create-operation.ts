@@ -21,7 +21,6 @@ import {
   recordWebSessionTerminalPlacement,
   webTerminalPlacementParentTabId
 } from './web-session-terminal-placement'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -45,7 +44,10 @@ import {
   readCreatedAgentTerminalIdentity
 } from './web-runtime-terminal-identity'
 import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
-import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
+import {
+  buildPlainCreateTerminalParams,
+  hostAfterTabId
+} from './web-runtime-plain-terminal-create-params'
 
 export async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
@@ -175,7 +177,7 @@ export async function createWebRuntimeSessionTerminalResult(
             method: 'session.tabs.createTerminal',
             params: {
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
-              afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
+              afterTabId: hostAfterTabId(environmentId, args),
               targetGroupId: args.targetGroupId,
               command: args.command,
               cwd: args.cwd,

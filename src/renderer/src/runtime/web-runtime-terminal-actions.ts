@@ -8,7 +8,7 @@ import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { hostTabIdOf } from './web-session-tabs-sync/host-tab-address'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -225,9 +225,12 @@ export async function updateWebRuntimePaneLayout(args: {
     return true
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
-  const hostTabId = isWebTerminalSurfaceTabId(args.tabId)
-    ? toHostSessionTabId(args.tabId)
-    : args.tabId
+  const hostTabId =
+    hostTabIdOf(useAppStore.getState(), {
+      environmentId,
+      worktreeId: args.worktreeId,
+      tabId: args.tabId
+    }) ?? args.tabId
   try {
     const response = await callEnvironment({
       method: 'session.tabs.updatePaneLayout',
@@ -271,16 +274,15 @@ export function setWebRuntimeTabProps(args: {
     return false
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
-  const state = useAppStore.getState()
-  void import('./web-session-tabs-sync/tracking-mappings')
-    .then(({ resolveHostSessionTabIdForWebSessionTab }) => {
-      const hostTabId =
-        resolveHostSessionTabIdForWebSessionTab(state, {
-          environmentId,
-          worktreeId: args.worktreeId,
-          tabId: args.tabId
-        }) ?? (isWebTerminalSurfaceTabId(args.tabId) ? toHostSessionTabId(args.tabId) : args.tabId)
-      return callEnvironment({
+  const hostTabId =
+    hostTabIdOf(useAppStore.getState(), {
+      environmentId,
+      worktreeId: args.worktreeId,
+      tabId: args.tabId
+    }) ?? args.tabId
+  void Promise.resolve()
+    .then(() =>
+      callEnvironment({
         method: 'session.tabs.setTabProps',
         params: {
           worktree: toRuntimeWorktreeSelector(args.worktreeId),
@@ -292,7 +294,7 @@ export function setWebRuntimeTabProps(args: {
         },
         timeoutMs: 15_000
       })
-    })
+    )
     .then((response) => {
       unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
     })

@@ -25,7 +25,7 @@ import {
   recordWebSessionFocusIntent
 } from './web-session-focus-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { hostTabIdOf } from './web-session-tabs-sync/host-tab-address'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -164,7 +164,13 @@ async function callWebRuntimeSessionTabMethod(
       holdUndeliveredUserClose(
         captureWebSessionIntentOwner(environmentId),
         args.worktreeId,
-        [toHostSessionTabId(args.tabId)],
+        [
+          hostTabIdOf(useAppStore.getState(), {
+            environmentId,
+            worktreeId: args.worktreeId,
+            tabId: args.tabId
+          }) ?? args.tabId
+        ],
         args.force
       )
     }
@@ -175,7 +181,6 @@ async function callWebRuntimeSessionTabMethod(
       ? { environmentId, pairingRevision: args.expectedPairingRevision }
       : captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
-  const closeIntentTabIds = new Set<string>()
   let activationHostTabId: string | null = null
 
   const isClose = method === 'session.tabs.close'
@@ -194,31 +199,20 @@ async function callWebRuntimeSessionTabMethod(
 
   // Switch point: frames draw this workspace's tabs and focus, so the mirror's intent ledgers skip it.
   const frameDrawn = isServerFrameDrawnWorkspace(environmentId, args.worktreeId)
-  const immediateHostTabId = toHostSessionTabId(args.tabId)
   // The host's id for this tab; a frame-drawn close that never arrived is held under it for replay.
-  let closeHostTabId = immediateHostTabId
+  const hostTabId =
+    hostTabIdOf(useAppStore.getState(), {
+      environmentId,
+      worktreeId: args.worktreeId,
+      tabId: args.tabId
+    }) ?? args.tabId
   if (isClose && !frameDrawn) {
-    // Why: record before async id resolution so a stale snapshot cannot flash the closed tab back.
-    closeIntentTabIds.add(immediateHostTabId)
-    recordWebSessionCloseIntent(intentOwner, args.worktreeId, immediateHostTabId, Date.now())
+    // Why: suppress until the host confirms removal, else an in-flight pre-close snapshot flashes the tab back.
+    recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
   }
 
   try {
-    const { resolveHostSessionTabIdForWebSessionTab } =
-      await import('./web-session-tabs-sync/tracking-mappings')
-    const state = useAppStore.getState()
-    const hostTabId =
-      resolveHostSessionTabIdForWebSessionTab(state, {
-        environmentId,
-        worktreeId: args.worktreeId,
-        tabId: args.tabId
-      }) ?? toHostSessionTabId(args.tabId)
-    closeHostTabId = hostTabId
-    if (isClose && !frameDrawn) {
-      // Why: suppress until the host confirms removal, else an in-flight pre-close snapshot flashes the tab back.
-      closeIntentTabIds.add(hostTabId)
-      recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
-    } else if (!isClose && !frameDrawn) {
+    if (!isClose && !frameDrawn) {
       activationHostTabId = hostTabId
       recordWebSessionFocusIntent(
         intentOwner,
@@ -267,7 +261,6 @@ async function callWebRuntimeSessionTabMethod(
       }
       if (result?.refused === true && result.snapshotRepublished === true) {
         // Restore authoritative live PTYs only on republication; keep dead-leaf refusals hidden.
-        clearWebSessionCloseIntent(intentOwner, args.worktreeId, immediateHostTabId)
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
         const { acceptReplayedWebSessionTabsSnapshot } =
           await import('./web-session-tabs-sync/tracking-lifecycle')
@@ -294,20 +287,12 @@ async function callWebRuntimeSessionTabMethod(
     }
     if (undeliveredUserClose) {
       // Why: clearing here let the host's next snapshot bring back a tab the user closed (STA-6224).
-      // The resolved host id was added last and is the one the host knows.
-      holdUndeliveredUserClose(
-        intentOwner,
-        args.worktreeId,
-        frameDrawn ? [closeHostTabId] : [...closeIntentTabIds].toReversed(),
-        args.force
-      )
+      holdUndeliveredUserClose(intentOwner, args.worktreeId, [hostTabId], args.force)
     } else {
-      for (const hostTabId of closeIntentTabIds) {
-        if (hostHasNoSuchTab) {
-          makeWebSessionCloseIntentDurable(intentOwner, args.worktreeId, hostTabId)
-        } else {
-          clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
-        }
+      if (isClose && !frameDrawn && hostHasNoSuchTab) {
+        makeWebSessionCloseIntentDurable(intentOwner, args.worktreeId, hostTabId)
+      } else if (isClose && !frameDrawn) {
+        clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
       }
     }
     if (isLifecycleClose) {

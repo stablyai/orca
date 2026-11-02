@@ -1,5 +1,6 @@
 import { SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { useAppStore } from '../store'
+import { hostTabIdOf } from './web-session-tabs-sync/host-tab-address'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { CreateWebRuntimeSessionTerminalArgs } from './web-runtime-session-types'
@@ -25,13 +26,27 @@ export async function resolveCreateTerminalShellParams(
   return { command: args.command ?? args.shell }
 }
 
+/** The tab a new terminal opens after, as its host names it. */
+export function hostAfterTabId(
+  environmentId: string,
+  args: Pick<CreateWebRuntimeSessionTerminalArgs, 'worktreeId' | 'afterTabId'>
+): string | undefined {
+  return args.afterTabId
+    ? (hostTabIdOf(useAppStore.getState(), {
+        environmentId,
+        worktreeId: args.worktreeId,
+        tabId: args.afterTabId
+      }) ?? args.afterTabId)
+    : undefined
+}
+
 export async function buildPlainCreateTerminalParams(
   environmentId: string,
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<Record<string, unknown>> {
   return {
     worktree: toRuntimeWorktreeSelector(args.worktreeId),
-    afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
+    afterTabId: hostAfterTabId(environmentId, args),
     targetGroupId: args.targetGroupId,
     ...(await resolveCreateTerminalShellParams(environmentId, args)),
     cwd: args.cwd,

@@ -17,9 +17,6 @@ vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
-  toHostSessionTabId: (tabId: string) => tabId
-}))
 
 vi.mock('@/runtime/web-session-tabs-sync/tracking-lifecycle', () => ({
   getLatestWebSessionTabsPublicationEpoch: () => null

@@ -93,9 +93,6 @@ vi.mock('../../runtime/web-runtime-terminal-creation', () => ({
 vi.mock('../../runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
-  toHostSessionTabId: (tabId: string) => tabId
-}))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc,

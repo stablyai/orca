@@ -2,7 +2,7 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
 import { isServerFrameDrawnWorkspace } from './web-session-tabs-sync/frame-drawn-server-workspace-set'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { hostTabIdOf } from './web-session-tabs-sync/host-tab-address'
 import type { OpenFile } from '@/store/slices/editor'
 import type { Tab } from '../../../shared/tab-types'
 
@@ -49,7 +49,8 @@ export function notifyHostOfMirroredEditorClose(
     recordWebSessionCloseIntent(
       { environmentId: runtimeEnvironmentId },
       worktreeId,
-      toHostSessionTabId(tab.id),
+      hostTabIdOf(state, { environmentId: runtimeEnvironmentId, worktreeId, tabId: tab.id }) ??
+        tab.id,
       Date.now()
     )
   }

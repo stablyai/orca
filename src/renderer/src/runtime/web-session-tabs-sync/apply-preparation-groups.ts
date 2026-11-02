@@ -1,6 +1,5 @@
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import {
   isWebSessionBrowserPlacementGroupReserved,
   peekWebSessionBrowserPlacementGroup
@@ -55,8 +54,8 @@ export function prepareWebSessionTabsSnapshotGroups(
     // focus.
     const rekeyedTabIds = new Map<string, string>()
     for (const [provisionalTabId, hostTabId] of provisionalHandoffHostTabIds) {
-      const mirroredId = hostToLocalTabId.get(hostTabId) ?? toWebTerminalSurfaceTabId(hostTabId)
-      if (mirroredId !== provisionalTabId) {
+      const mirroredId = hostToLocalTabId.get(hostTabId)
+      if (mirroredId !== undefined && mirroredId !== provisionalTabId) {
         rekeyedTabIds.set(provisionalTabId, mirroredId)
       }
     }
@@ -89,11 +88,9 @@ export function prepareWebSessionTabsSnapshotGroups(
         worktreeId,
         hostTabId: parentTabId
       })
-      if (recordedGroupId) {
-        placementMoves.push({
-          tabId: hostToLocalTabId.get(parentTabId) ?? toWebTerminalSurfaceTabId(parentTabId),
-          groupId: recordedGroupId
-        })
+      const tabId = hostToLocalTabId.get(parentTabId)
+      if (recordedGroupId && tabId !== undefined) {
+        placementMoves.push({ tabId, groupId: recordedGroupId })
       }
     }
     // A split pane's switch opens its destination right after the tab holding its source

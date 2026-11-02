@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
@@ -7,6 +7,15 @@ import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
+import { setWebRuntimeTabProps } from './web-runtime-terminal-actions'
+import {
+  activateWebRuntimeSessionTab,
+  closeWebRuntimeSessionTab
+} from './web-runtime-session-tab-lifecycle'
+import { moveWebRuntimeSessionTab } from './web-runtime-session-tab-move'
+import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
+import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 import {
   ENV,
   LEAF_ID,
@@ -17,7 +26,10 @@ import {
   resetWebSessionTabsSyncTestState
 } from './web-session-tabs-sync-test-harness'
 
-vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+const store = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
+vi.mock('../store', () => ({
+  useAppStore: { setState: vi.fn(), getState: () => store.state, subscribe: vi.fn() }
+}))
 
 const GROUP = 'host-group-1'
 type Row = RuntimeMobileSessionTabsResult['tabs'][number]
@@ -184,4 +196,69 @@ it('keeps two hosts’ tabs with equal layout ids apart, each addressing its own
       })
     ).toBe(terminal)
   }
+})
+
+// After a restart, before any frame from the host: a command on a host tab first seen as a chat,
+// which a host switch since gave a terminal, and on a second host's tab whose layout id another
+// host took here first, names each host tab as that host does.
+it('names the host tab in every command on a tab it mirrors, before any frame after a restart', async () => {
+  let state = apply(makeState(), [chatRow('chat-1', 'agent-session:chat-1', 'host-T')], 1)
+  state = apply(state, [terminalRow('terminal-E', 'host-T')], 2)
+  state = apply(state, [terminalRow('one', 'same')], 1, 'host-two-a')
+  state = apply(state, [terminalRow('two', 'same')], 1, 'host-two')
+  state = restart(state)
+  const tabs = state.unifiedTabsByWorktree[WT]!
+  const switched = tabs.find((tab) => tab.mirroredHostTab?.tabId === 'host-T')!
+  const suffixed = tabs.find((tab) => tab.mirroredHostTab?.hostId === 'runtime:host-two')!
+  expect(switched).toMatchObject({ id: 'structured-agent-session-chat-1', contentType: 'terminal' })
+  expect(suffixed.id).toBe(`${toWebTerminalSurfaceTabId('same')}-2`)
+  store.state = {
+    ...state,
+    settings: { activeRuntimeEnvironmentId: ENV },
+    groupsByWorktree: { [WT]: [{ id: 'g', tabOrder: tabs.map((tab) => tab.id) }] },
+    repos: [{ id: 'repo', executionHostId: `runtime:${ENV}` }],
+    worktreesByRepo: {
+      repo: [{ id: WT, repoId: 'repo', hostId: `runtime:${ENV}`, runtimeOwnerEnvironmentId: ENV }]
+    }
+  }
+  const call = vi.fn(async (_request: { method: string; params: Record<string, unknown> }) => ({
+    id: 'r',
+    ok: true,
+    result: {}
+  }))
+  stubRuntimeEnvironmentBridge({ call })
+  const sent = (method: string) =>
+    call.mock.calls.filter(([request]) => request.method === method).map(([r]) => r.params)
+
+  for (const [environmentId, tab, hostTabId] of [
+    [ENV, switched, 'terminal-E'],
+    ['host-two', suffixed, 'two']
+  ] as const) {
+    call.mockClear()
+    const named = { worktreeId: WT, tabId: tab.id, environmentId }
+    await activateWebRuntimeSessionTab(named)
+    await closeWebRuntimeSessionTab({ ...named, reason: 'user' })
+    await moveWebRuntimeSessionTab({
+      ...named,
+      kind: 'move-to-group',
+      targetGroupId: 'g',
+      index: 0
+    })
+    expect(sent('session.tabs.activate')[0]).toMatchObject({ tabId: hostTabId })
+    expect(sent('session.tabs.close')[0]).toMatchObject({ tabId: hostTabId })
+    expect(sent('session.tabs.move')[0]).toMatchObject({ tabId: hostTabId })
+    expect(
+      await buildPlainCreateTerminalParams(environmentId, { worktreeId: WT, afterTabId: tab.id })
+    ).toMatchObject({ afterTabId: hostTabId })
+  }
+  call.mockClear()
+  expect(setWebRuntimeTabProps({ worktreeId: WT, tabId: switched.id, isPinned: true })).toBe(true)
+  await vi.waitFor(() =>
+    expect(sent('session.tabs.setTabProps')[0]).toMatchObject({ tabId: 'terminal-E' })
+  )
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  resetWebSessionCloseIntentForTests()
 })

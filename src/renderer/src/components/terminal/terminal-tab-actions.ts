@@ -1,9 +1,8 @@
 import { useAppStore } from '@/store'
 import { closeWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
 import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
-import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
+import { hostTabIdOf } from '@/runtime/web-session-tabs-sync/host-tab-address'
 import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
 import {
   guardPinnedTabClose,
@@ -137,11 +136,11 @@ export function closeTerminalTab(
     }
     // Send closes to the authoritative host even for unmapped/plain-UUID IDs, or its next snapshot resurrects the tab; unknown local IDs safely no-op there.
     const hostBackedTabId =
-      resolveHostSessionTabIdForWebSessionTab(state, {
+      hostTabIdOf(state, {
         environmentId: runtimeEnvironmentId,
         worktreeId: owningWorktreeId,
         tabId: terminalTabId
-      }) ?? toHostSessionTabId(terminalTabId)
+      }) ?? terminalTabId
     const wireReason = options?.reason ?? options?.hostCloseReason ?? 'user'
     const lifecycleTerminalHandle =
       wireReason === 'user'

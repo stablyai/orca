@@ -103,13 +103,21 @@ function makeSplitSourceState(
   const tabs = [
     {
       id: tabId,
+      entityId: tabId,
       worktreeId: SPLIT_WORKTREE_ID,
       contentType: 'terminal',
       ptyId: 'remote:web-env-1@@terminal-1'
     },
     ...(activeTabId === tabId
       ? []
-      : [{ id: activeTabId, worktreeId: SPLIT_WORKTREE_ID, contentType: 'terminal' }])
+      : [
+          {
+            id: activeTabId,
+            entityId: activeTabId,
+            worktreeId: SPLIT_WORKTREE_ID,
+            contentType: 'terminal'
+          }
+        ])
   ]
   return {
     activeWorktreeId: SPLIT_WORKTREE_ID,

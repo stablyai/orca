@@ -24,7 +24,6 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
@@ -370,12 +369,11 @@ describe('web runtime session tab actions', () => {
       reason: 'user'
     })
 
-    const hostTabId = toHostSessionTabId('local-browser-unified')
     expect(
       isWebSessionCloseIntentPending(
         { environmentId: ENVIRONMENT_ID },
         WORKTREE_ID,
-        hostTabId,
+        'host-browser-unified',
         Date.now() + 60_000
       )
     ).toBe(stillPending)
@@ -387,7 +385,7 @@ describe('web runtime session tab actions', () => {
     let clock = startedAt
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => clock)
     const owner = { environmentId: ENVIRONMENT_ID }
-    const hostTabIds = [toHostSessionTabId('local-browser-unified'), 'host-browser-unified']
+    const hostTabIds = ['host-browser-unified']
     let pendingWhileHostRepublished: boolean[] = []
     try {
       const runtimeCall = vi
@@ -414,12 +412,12 @@ describe('web runtime session tab actions', () => {
         })
       ).resolves.toBe('unknown-tab')
 
-      expect(pendingWhileHostRepublished).toEqual([true, true])
+      expect(pendingWhileHostRepublished).toEqual([true])
       expect(
         hostTabIds.map((hostTabId) =>
           isWebSessionCloseIntentPending(owner, WORKTREE_ID, hostTabId, clock + 60_000)
         )
-      ).toEqual([true, true])
+      ).toEqual([true])
     } finally {
       nowSpy.mockRestore()
     }

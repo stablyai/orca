@@ -10,7 +10,7 @@ import {
   clearWebSessionReorderIntent,
   recordWebSessionReorderIntent
 } from './web-session-reorder-intent'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { hostTabIdOf } from './web-session-tabs-sync/host-tab-address'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -129,7 +129,7 @@ async function hostDropResolvers(
   targetHostGroupId: string
   resolveHostBackedTabId: (tabId: string) => string | null
 }> {
-  const { resolveHostSessionGroupIdForWebSessionTab, resolveHostSessionTabIdForWebSessionTab } =
+  const { resolveHostSessionGroupIdForWebSessionTab } =
     await import('./web-session-tabs-sync/tracking-mappings')
   const state = useAppStore.getState()
   const groups = state.groupsByWorktree?.[worktreeId] ?? []
@@ -153,8 +153,7 @@ async function hostDropResolvers(
     // No server-known tab in the target group: the desktop id, unknown to the server, as before.
     targetGroupId
   const resolveHostBackedTabId = (tabId: string): string | null =>
-    resolveHostSessionTabIdForWebSessionTab(state, { environmentId, worktreeId, tabId }) ??
-    (isWebTerminalSurfaceTabId(tabId) ? toHostSessionTabId(tabId) : null)
+    hostTabIdOf(state, { environmentId, worktreeId, tabId })
   return { targetGroup, targetHostGroupId, resolveHostBackedTabId }
 }
 
