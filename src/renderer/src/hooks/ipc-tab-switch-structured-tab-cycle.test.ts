@@ -113,4 +113,93 @@ describe('handleSwitchTerminalTab with a structured chat tab active', () => {
     expect(handleSwitchTerminalTab(1)).toBe(true)
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-1')
   })
+
+  it('cycles through native chat tabs when ordered between terminal tabs (#37462)', () => {
+    const term1 = unifiedTab({ id: 'unified-term-1', entityId: 'term-1', contentType: 'terminal' })
+    const chatTab = unifiedTab({
+      id: CHAT_UNIFIED_ID,
+      entityId: SESSION_ID,
+      contentType: 'agent-session'
+    })
+    const term2 = unifiedTab({ id: 'unified-term-2', entityId: 'term-2', contentType: 'terminal' })
+
+    const setupState = (activeUnifiedTabId: string) => {
+      const activeTab =
+        activeUnifiedTabId === CHAT_UNIFIED_ID
+          ? chatTab
+          : activeUnifiedTabId === 'unified-term-1'
+            ? term1
+            : term2
+      const rawState = {
+        activeBrowserTabIdByWorktree: {},
+        activeFileIdByWorktree: {},
+        activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID },
+        activeTabIdByWorktree: {
+          [WORKTREE_ID]: activeTab.contentType === 'terminal' ? activeTab.entityId : 'term-1'
+        },
+        activeTabTypeByWorktree: { [WORKTREE_ID]: activeTab.contentType },
+        activeWorktreeId: WORKTREE_ID,
+        browserTabsByWorktree: {},
+        groupsByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              id: GROUP_ID,
+              worktreeId: WORKTREE_ID,
+              activeTabId: activeUnifiedTabId,
+              tabOrder: [term1.id, chatTab.id, term2.id]
+            }
+          ]
+        },
+        layoutByWorktree: {},
+        openFiles: [],
+        tabBarOrderByWorktree: {},
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            { id: 'term-1', worktreeId: WORKTREE_ID } as TerminalTab,
+            { id: 'term-2', worktreeId: WORKTREE_ID } as TerminalTab
+          ]
+        },
+        unifiedTabsByWorktree: { [WORKTREE_ID]: [term1, chatTab, term2] },
+        setActiveTab: vi.fn(),
+        setActiveTabType: vi.fn(),
+        activateTab: vi.fn(),
+        setActiveFile: vi.fn(),
+        setActiveBrowserTab: vi.fn()
+      } as unknown as AppState
+      const store = {
+        ...rawState,
+        ...buildActiveSurfacePatch(rawState, WORKTREE_ID)
+      } as AppState
+      const noopSet = (() => {}) as unknown as TabsSliceSet
+      store.getActiveTab = createTabsFocusActions(
+        noopSet,
+        (() => store) as TabsSliceGet
+      ).getActiveTab
+      return store
+    }
+
+    // Step forward from term-1 -> chatTab
+    mocks.store = setupState(term1.id)
+    expect(handleSwitchTerminalTab(1)).toBe(true)
+    expect(mocks.store.activateTab).toHaveBeenCalledWith(CHAT_UNIFIED_ID)
+    expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('agent-session', WORKTREE_ID)
+
+    // Step forward from chatTab -> term-2
+    mocks.store = setupState(CHAT_UNIFIED_ID)
+    expect(handleSwitchTerminalTab(1)).toBe(true)
+    expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-2')
+    expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('terminal', WORKTREE_ID)
+
+    // Step backward from term-2 -> chatTab
+    mocks.store = setupState(term2.id)
+    expect(handleSwitchTerminalTab(-1)).toBe(true)
+    expect(mocks.store.activateTab).toHaveBeenCalledWith(CHAT_UNIFIED_ID)
+    expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('agent-session', WORKTREE_ID)
+
+    // Step backward from chatTab -> term-1
+    mocks.store = setupState(CHAT_UNIFIED_ID)
+    expect(handleSwitchTerminalTab(-1)).toBe(true)
+    expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-1')
+    expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('terminal', WORKTREE_ID)
+  })
 })

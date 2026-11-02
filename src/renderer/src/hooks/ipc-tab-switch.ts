@@ -130,7 +130,7 @@ export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
 function getWorktreeTerminalTabOrder(store: AppStoreState, worktreeId: string): TypeCyclableTab[] {
   const runtimeTabs = store.tabsByWorktree?.[worktreeId] ?? []
   const unifiedTerminalTabs = (store.unifiedTabsByWorktree?.[worktreeId] ?? []).filter(
-    (tab) => tab.contentType === 'terminal'
+    (tab) => tab.contentType === 'terminal' || tab.contentType === 'agent-session'
   )
   const activeGroupId = store.activeGroupIdByWorktree?.[worktreeId]
   const unifiedByEntity = new Map<string, typeof unifiedTerminalTabs>()
@@ -171,7 +171,11 @@ function getWorktreeTerminalTabOrder(store: AppStoreState, worktreeId: string): 
       continue
     }
     seenEntityIds.add(tab.entityId)
-    result.push({ type: 'terminal', id: tab.entityId, tabId: tab.id })
+    result.push({
+      type: tab.contentType === 'agent-session' ? 'agent-session' : 'terminal',
+      id: tab.entityId,
+      tabId: tab.id
+    })
   }
   return result
 }
@@ -198,7 +202,7 @@ function shouldUseWorktreeTerminalFallback(
   }
 
   const unifiedTerminalTabs = (store.unifiedTabsByWorktree?.[worktreeId] ?? []).filter(
-    (tab) => tab.contentType === 'terminal'
+    (tab) => tab.contentType === 'terminal' || tab.contentType === 'agent-session'
   )
   if (unifiedTerminalTabs.length === 0) {
     return true
@@ -212,7 +216,9 @@ function shouldUseWorktreeTerminalFallback(
   }
 
   // Only empty group projection proves hydration gaps; do not cross splits whose populated editor/browser rows intentionally exclude terminals.
-  const hasPopulatedNonterminalRows = activeGroupNavTabs.some((tab) => tab.type !== 'terminal')
+  const hasPopulatedNonterminalRows = activeGroupNavTabs.some(
+    (tab) => tab.type !== 'terminal' && tab.type !== 'agent-session'
+  )
   const groupTerminalTabs = unifiedTerminalTabs.filter((tab) => tab.groupId === activeGroup.id)
   const visibleTerminalEntityIds = new Set(activeGroupTerminalTabs.map((tab) => tab.id))
   if (groupTerminalTabs.some((tab) => !visibleTerminalEntityIds.has(tab.entityId))) {
@@ -265,7 +271,7 @@ export function handleSwitchRecentTab(): boolean {
   return true
 }
 
-/** Ctrl+PageUp/PageDown cycle visible terminal tabs only. */
+/** Ctrl+PageUp/PageDown cycle visible terminal and native chat tabs. */
 export function handleSwitchTerminalTab(direction: number): boolean {
   const store = useAppStore.getState()
   const worktreeId = store.activeWorktreeId
@@ -274,7 +280,9 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   }
   // Reuse visible order so terminal-only cycling follows drag order too.
   const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId)
-  const activeGroupTerminalTabs = activeGroupNavTabs.filter((entry) => entry.type === 'terminal')
+  const isTerminalOrAgentSession = (entry: TypeCyclableTab) =>
+    entry.type === 'terminal' || entry.type === 'agent-session'
+  const activeGroupTerminalTabs = activeGroupNavTabs.filter(isTerminalOrAgentSession)
   const worktreeTerminalTabs = getWorktreeTerminalTabOrder(store, worktreeId)
   const terminalTabs = shouldUseWorktreeTerminalFallback(
     store,
@@ -298,7 +306,9 @@ export function handleSwitchTerminalTab(direction: number): boolean {
     activeTab?.contentType === 'agent-session' ? activeTab.entityId : null
   )
   // From another tab type, forward navigation starts at the first terminal rather than skipping it.
-  const idx = terminalTabs.findIndex((t) => t.id === currentId)
+  const idx = terminalTabs.findIndex(
+    (t) => (t.tabId && t.tabId === activeTab?.id) || t.id === currentId
+  )
   // A sole terminal no-ops only when already focused; other active types must still jump to it.
   if (terminalTabs.length === 1 && idx === 0) {
     return false
@@ -306,11 +316,17 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   const currentIndex = idx === -1 && direction > 0 ? -1 : idx === -1 ? 0 : idx
   const next = terminalTabs[(currentIndex + direction + terminalTabs.length) % terminalTabs.length]
   // Skip redundant activation writes to avoid unnecessary active-tab subscriber work.
-  if (next.id === store.activeTabId && store.activeTabType === 'terminal') {
+  const isCurrentlyActive =
+    (next.type === 'terminal' &&
+      next.id === store.activeTabId &&
+      store.activeTabType === 'terminal' &&
+      (!next.tabId || next.tabId === activeTab?.id)) ||
+    (next.type === 'agent-session' &&
+      store.activeTabType === 'agent-session' &&
+      (!next.tabId || next.tabId === activeTab?.id))
+  if (isCurrentlyActive) {
     return false
   }
-  store.setActiveTab(next.id)
-  store.setActiveTabType('terminal', worktreeId)
-  activateCycledTabOnOwner(worktreeId, next)
+  activateCyclableTab(store, next)
   return true
 }
