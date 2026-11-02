@@ -21,7 +21,8 @@ const workspaceListResult = z.object({
   workspaces: z
     .array(
       z.object({
-        /** What every other workspace method takes. */
+        /** What every other workspace method takes; it names the host too, so a workspace that two
+         *  hosts both have is never ambiguous. */
         id: workspaceId,
         /** `folder`: a plain folder, with no Git branch. */
         kind: z.enum(['worktree', 'folder']),
@@ -70,9 +71,7 @@ const agentLaunchParams = z.strictObject({
 })
 const agentLaunchResult = z.object({
   /** The agent's terminal, as `terminal.read` and `terminal.sendText` take it. */
-  terminalId,
-  /** `chat` when Orca opened the agent as a chat, else `terminal`. */
-  surface: z.enum(['chat', 'terminal'])
+  terminalId
 })
 
 export const PLUGIN_WORKSPACE_ACTIONS_API = {
@@ -117,7 +116,8 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
     result: terminalReadResult
   }),
   'agent.launch': spec({
-    summary: 'Starts an agent in a workspace, optionally with a first prompt, in the background.',
+    summary:
+      "Starts an agent's CLI in a new terminal of a workspace, in the background, and returns as soon as it starts; a `prompt` is sent once the agent is ready.",
     since: 3,
     scope: 'any-workspace',
     capability: 'agent:launch',

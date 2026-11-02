@@ -4,11 +4,22 @@ import {
   PLUGIN_TERMINAL_READ_MAX_LINES,
   PLUGIN_WORKSPACE_LIST_LIMIT
 } from '../../../shared/plugins/workers/plugin-host-api-workspace-methods'
-import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
+import {
+  bind,
+  type BoundPluginHostMethod,
+  type PluginHostMethodContext
+} from './plugin-host-method-bind'
 import type { PluginHostServices } from './plugin-host-method-bindings'
+import { PluginHostCallError } from './plugin-host-call-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 
-/** The runtime RPC the `orca` CLI calls, run in process; rejects with the runtime's error. */
-export type PluginRuntimeRpc = (method: string, params: unknown) => Promise<unknown>
+/** The runtime RPC the `orca` CLI calls, run in process; rejects with the runtime's error.
+ *  `beforeEffect` runs right before the runtime acts, after its own waits; a throw refuses it. */
+export type PluginRuntimeRpc = (
+  method: string,
+  params: unknown,
+  options?: { signal?: AbortSignal; beforeEffect?: () => void }
+) => Promise<unknown>
 
 const api = PLUGIN_HOST_API
 const DEFAULT_READ_LINES = 200
@@ -22,7 +33,8 @@ const worktreeListAnswer = z.object({
       displayName: z.string(),
       path: z.string(),
       branch: z.string().optional(),
-      hostId: z.string().optional()
+      hostId: z.string().optional(),
+      identity: z.object({ key: z.string() }).optional()
     })
   ),
   totalCount: z.number().optional(),
@@ -31,9 +43,23 @@ const worktreeListAnswer = z.object({
 const repoListAnswer = z.object({
   repos: z.array(z.object({ id: z.string(), kind: z.string().optional() }))
 })
+const folderListAnswer = z.object({
+  folderWorkspaces: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      folderPath: z.string(),
+      executionHostId: z.string().nullable().optional()
+    })
+  )
+})
 const terminalCreateAnswer = z.object({ terminal: z.object({ handle: z.string() }) })
 const terminalReadAnswer = z.object({
-  terminal: z.object({ tail: z.array(z.string()), truncated: z.boolean().optional() })
+  terminal: z.object({
+    tail: z.array(z.string()),
+    truncated: z.boolean().optional(),
+    limited: z.boolean().optional()
+  })
 })
 const agentLaunchAnswer = z.object({
   outcome: z.object({ kind: z.enum(['structured', 'terminal']), handle: z.string() })
@@ -41,12 +67,28 @@ const agentLaunchAnswer = z.object({
 
 function rpc(services: PluginHostServices): PluginRuntimeRpc {
   if (!services.runtimeRpc) {
-    throw new Error('this Orca host cannot run workspace actions for plugins')
+    throw new PluginHostCallError('unavailable', 'this Orca host cannot run workspace actions')
   }
   return services.runtimeRpc
 }
 
-const worktreeSelector = (workspaceId: string): string => `id:${workspaceId}`
+/** A runtime call that changes something: refused if the plugin lost approval, or its worker
+ *  cancelled the call, at any point before the runtime acts. */
+function effect(ctx: PluginHostMethodContext, method: string, params: unknown): Promise<unknown> {
+  ctx.scope.assertActive()
+  return rpc(ctx.services)(method, params, {
+    ...(ctx.scope.signal ? { signal: ctx.scope.signal } : {}),
+    beforeEffect: () => ctx.scope.assertActive()
+  })
+}
+
+/**
+ * The selector a listed workspace id names. Ids carry their host (`identity:`, unique across
+ * twins on two hosts) or are folder keys; a bare id from elsewhere is taken as an exact id.
+ */
+function workspaceSelector(workspaceId: string): string {
+  return workspaceId.startsWith('identity:') ? workspaceId : `id:${workspaceId}`
+}
 
 /** `refs/heads/main` reads as `main`; a detached or folder workspace has none. */
 function branchName(branch: string | undefined): string | null {
@@ -57,67 +99,106 @@ function branchName(branch: string | undefined): string | null {
 export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
   'workspace.list': bind(api['workspace.list'], async (_params, { services }) => {
     const call = rpc(services)
-    const [listed, repos] = await Promise.all([
+    const [listed, repos, folderList] = await Promise.all([
       call('worktree.list', { limit: PLUGIN_WORKSPACE_LIST_LIMIT }),
-      call('repo.list', {})
+      call('repo.list', {}),
+      call('folderWorkspace.list', undefined)
     ])
     const { worktrees, totalCount, truncated } = worktreeListAnswer.parse(listed)
-    const folders = new Set(
+    const folderRepos = new Set(
       repoListAnswer
         .parse(repos)
         .repos.filter((repo) => repo.kind === 'folder')
         .map((repo) => repo.id)
     )
-    const shown = worktrees.slice(0, PLUGIN_WORKSPACE_LIST_LIMIT)
+    const worktreeRows = worktrees.slice(0, PLUGIN_WORKSPACE_LIST_LIMIT).map((worktree) => {
+      const folder = folderRepos.has(worktree.repoId)
+      return {
+        id: worktree.identity ? `identity:${worktree.identity.key}` : worktree.id,
+        kind: folder ? ('folder' as const) : ('worktree' as const),
+        name: worktree.displayName,
+        path: worktree.path,
+        branch: folder ? null : branchName(worktree.branch),
+        hostId: worktree.hostId ?? null
+      }
+    })
+    // Project-group folders have no repo row; their key is what selectors take.
+    const projectFolders = folderListAnswer.parse(folderList).folderWorkspaces.map((folder) => ({
+      id: folderWorkspaceKey(folder.id),
+      kind: 'folder' as const,
+      name: folder.name,
+      path: folder.folderPath,
+      branch: null,
+      hostId: folder.executionHostId ?? null
+    }))
+    const room = PLUGIN_WORKSPACE_LIST_LIMIT - worktreeRows.length
     return {
-      workspaces: shown.map((worktree) => {
-        const folder = folders.has(worktree.repoId)
-        return {
-          id: worktree.id,
-          kind: folder ? ('folder' as const) : ('worktree' as const),
-          name: worktree.displayName,
-          path: worktree.path,
-          branch: folder ? null : branchName(worktree.branch),
-          hostId: worktree.hostId ?? null
-        }
-      }),
-      truncated: truncated === true || (totalCount ?? shown.length) > shown.length
+      workspaces: [...worktreeRows, ...projectFolders.slice(0, room)],
+      truncated:
+        truncated === true ||
+        (totalCount ?? worktrees.length) > worktreeRows.length ||
+        projectFolders.length > room
     }
   }),
-  'workspace.open': bind(api['workspace.open'], async ({ workspaceId }, { services, scope }) => {
-    scope.assertActive()
-    await rpc(services)('worktree.activate', { worktree: worktreeSelector(workspaceId) })
+  'workspace.open': bind(api['workspace.open'], async ({ workspaceId }, ctx) => {
+    if (parseWorkspaceKey(workspaceId)?.type === 'folder') {
+      // The runtime activates Git worktrees only; a folder is shown by Orca's window.
+      throw new PluginHostCallError('unavailable', 'this Orca cannot open folder workspaces yet')
+    }
+    await effect(ctx, 'worktree.activate', { worktree: workspaceSelector(workspaceId) })
     return { opened: true as const }
   }),
-  'terminal.create': bind(api['terminal.create'], async (params, { services, scope }) => {
-    scope.assertActive()
-    const answer = await rpc(services)('terminal.create', {
-      worktree: worktreeSelector(params.workspaceId),
+  'terminal.create': bind(api['terminal.create'], async (params, ctx) => {
+    const answer = await effect(ctx, 'terminal.create', {
+      worktree: workspaceSelector(params.workspaceId),
       ...(params.title ? { title: params.title } : {}),
-      ...(params.command ? { command: params.command } : {})
+      ...(params.command ? { command: params.command } : {}),
+      // A mod works beside the person: never reveal or focus the new terminal.
+      presentation: 'background'
     })
     return { terminalId: terminalCreateAnswer.parse(answer).terminal.handle }
   }),
-  'terminal.read': bind(api['terminal.read'], async (params, { services }) => {
+  'terminal.read': bind(api['terminal.read'], async (params, { services, scope }) => {
     const limit = Math.min(params.maxLines ?? DEFAULT_READ_LINES, PLUGIN_TERMINAL_READ_MAX_LINES)
-    const answer = await rpc(services)('terminal.read', { terminal: params.terminalId, limit })
-    const { tail, truncated } = terminalReadAnswer.parse(answer).terminal
-    return { lines: tail.slice(-limit), truncated: truncated === true || tail.length > limit }
+    const answer = await rpc(services)(
+      'terminal.read',
+      { terminal: params.terminalId, limit },
+      scope.signal ? { signal: scope.signal } : {}
+    )
+    const { tail, truncated, limited } = terminalReadAnswer.parse(answer).terminal
+    return {
+      lines: tail.slice(-limit),
+      // `limited`: the runtime itself kept only the newest lines.
+      truncated: truncated === true || limited === true || tail.length > limit
+    }
   }),
-  'agent.launch': bind(api['agent.launch'], async (params, { services, scope }) => {
-    scope.assertActive()
-    const answer = await rpc(services)('agent.launch', {
-      target: { kind: 'existing', worktree: worktreeSelector(params.workspaceId) },
+  'agent.launch': bind(api['agent.launch'], async (params, ctx) => {
+    const worktree = workspaceSelector(params.workspaceId)
+    const answer = await effect(ctx, 'agent.launch', {
+      target: { kind: 'existing', worktree },
       agent: params.agent,
-      ...(params.prompt ? { prompt: { text: params.prompt, delivery: 'submit' } } : {}),
+      // A terminal, so `terminal.read` and `terminal.sendText` reach the agent the call returns.
+      surface: 'terminal',
       // A mod works beside the person: never take their focus.
       presentation: 'background',
       launchSource: 'plugin'
     })
-    const { outcome } = agentLaunchAnswer.parse(answer)
-    return {
-      terminalId: outcome.handle,
-      surface: outcome.kind === 'structured' ? ('chat' as const) : ('terminal' as const)
+    const terminalId = agentLaunchAnswer.parse(answer).outcome.handle
+    if (params.prompt) {
+      // Delivery waits for the agent's composer (up to a minute), longer than a host call may take.
+      void effect(ctx, 'agent.launch', {
+        target: { kind: 'existing', worktree },
+        agent: params.agent,
+        reuseTerminal: { handle: terminalId },
+        prompt: { text: params.prompt, delivery: 'submit' },
+        presentation: 'background',
+        launchSource: 'plugin'
+      }).catch((error: unknown) => {
+        ctx.scope.log?.(
+          `agent.launch: the prompt did not reach ${terminalId}: ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
     }
+    return { terminalId }
   })
 } satisfies Record<string, BoundPluginHostMethod>
