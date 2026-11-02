@@ -10,6 +10,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
 import type { AgentLaunchRequestId } from '../../agent-launch-request-id'
+import type { StructuredAgentSessionCreateGate } from './structured-agent-session-launch-errors'
 
 export type StructuredAgentLaunchOptions = {
   /** The user action this start serves; only a re-delivery of it joins its chat. */
@@ -33,6 +34,8 @@ export type StructuredAgentLaunchOptions = {
   launchOptions?: Readonly<Record<string, string>>
   /** Final admission of a source-bound action, immediately before its first create is sent. */
   beforeCreate?: () => boolean
+  /** The create waits for this (a source that must stop before the chat writes). */
+  createAfter?: Promise<StructuredAgentSessionCreateGate>
   surfaceAddress?: StructuredLaunchSurfaceAddress
 }
 

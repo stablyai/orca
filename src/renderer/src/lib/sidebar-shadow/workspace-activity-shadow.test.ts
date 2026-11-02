@@ -3,7 +3,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
-import { makeWorktree } from '@/components/worktree-jump-palette-test-fixtures'
+import { makeWorktree } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { readWindowWorkspaceActivityFacts, toLocallyOwnedRows } from './workspace-activity-shadow'
 
 const NOW = 1_000_000

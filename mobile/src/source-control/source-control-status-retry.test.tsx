@@ -40,7 +40,7 @@ vi.mock('./use-mobile-source-control-next-step', () => ({
   })
 }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   useOptionPager: () => ({ page: null, open: () => {}, close: () => {}, forget: () => {} }),
   OptionPager: ({ main }: { main: unknown }) => main
 }))

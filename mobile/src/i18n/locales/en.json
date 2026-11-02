@@ -535,7 +535,6 @@
     },
     "bottomBar": {
       "connectFirst": "Connect a desktop to start new work.",
-      "tasks": "Tasks",
       "newWorkspace": "New workspace"
     },
     "desktops": {
@@ -545,6 +544,10 @@
       "heading": "Jump back in",
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
+    },
+    "sections": {
+      "tasks": "Tasks",
+      "tasksSubtitle": "Browse your issues and reviews"
     }
   },
   "hooks": {
@@ -2687,7 +2690,9 @@
       "unknown": "{{agent}}'s chat could not be found on this host. Reconnect to its computer and try again.",
       "unsupported": "{{agent}}'s chat can't be reopened until Orca is updated.",
       "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment.",
-      "paneUnavailable": "Agent's pane is no longer available."
+      "paneUnavailable": "Agent's pane is no longer available.",
+      "worktreeDeleted": "The worktree was deleted.",
+      "folderWorkspaceRemoved": "The folder workspace was removed."
     },
     "nativeChatView": {
       "loading": "Loading conversation…"
