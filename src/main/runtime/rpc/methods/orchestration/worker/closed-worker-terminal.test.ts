@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status-ipc-payload'
 import { useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
 import { chooseWorkerFollowUpPlacement } from './worker-follow-up-choice'
 
@@ -75,12 +76,19 @@ describe('opening a terminal worker Orca closed', () => {
     const { helper, resource, resume } = await closedHelper()
     await open(resource.terminal_handle)
     // The resumed agent's hook row, which names the conversation in its pane.
+    const hookRow: AgentStatusIpcPayload = {
+      state: 'working',
+      prompt: '',
+      agentType: 'claude',
+      paneKey: REOPENED_PANE,
+      providerSession: CONVERSATION,
+      connectionId: null,
+      receivedAt: 1,
+      stateStartedAt: 1
+    }
     Object.defineProperty(h.runtime, 'getAgentStatusSnapshotFn', {
       configurable: true,
-      // SAFETY: placement reads only the agent, pane and conversation of a status row.
-      value: () => [
-        { agentType: 'claude', paneKey: REOPENED_PANE, providerSession: CONVERSATION } as never
-      ]
+      value: () => [hookRow]
     })
     vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockImplementation((paneKey) =>
       paneKey === REOPENED_PANE ? 'term_reopened' : null
