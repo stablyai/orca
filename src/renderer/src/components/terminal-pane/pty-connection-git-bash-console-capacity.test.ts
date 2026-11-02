@@ -126,7 +126,7 @@ async function heldLaunch({
     captured.session = session
   })
   const readiness = await import('@/lib/agent-draft-readiness')
-  vi.spyOn(readiness, 'waitForAgentDraftInputReady').mockReturnValue(new Promise(() => {}))
+  vi.spyOn(readiness, 'waitForPaneAgentToLookReady').mockReturnValue(new Promise(() => {}))
   const cwd = Promise.withResolvers<string>()
   const key = makePaneKey('tab-1', createPane(1).leafId)
   const firstHandle = handoffs.beginDeferredSplitPaneHandoff(key, cwd.promise)
@@ -386,7 +386,7 @@ describe('Git Bash console-capacity pane retention', () => {
 
   it('keeps a pre-connect input attempt with the first process while cwd is pending', async () => {
     const readiness = await import('@/lib/agent-draft-readiness')
-    vi.spyOn(readiness, 'waitForAgentDraftInputReady').mockReturnValue(new Promise(() => {}))
+    vi.spyOn(readiness, 'waitForPaneAgentToLookReady').mockReturnValue(new Promise(() => {}))
     const cwd = Promise.withResolvers<string>()
     const started = await startPane({ startup: null, cwdPromise: cwd.promise })
     expect(started.transport.connect).not.toHaveBeenCalled()

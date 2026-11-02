@@ -9,6 +9,7 @@ import { bindSettlePaneSerializer } from '@/components/terminal-pane/pty-connect
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from '@/components/terminal-pane/pty-connection/pty-connect-limits'
 import { pasteDraftToAgentPtyWhenReady } from './agent-paste-draft'
+import type * as PtyBufferSerializerModule from '@/components/terminal-pane/pty-buffer-serializer'
 
 const { onTimeout, readiness } = vi.hoisted(() => ({
   onTimeout: vi.fn(),
@@ -30,10 +31,23 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('./agent-draft-readiness', () => ({
-  waitForAgentDraftInputReady: async () => readiness.ready,
-  agentInputIsAdmitted: async () => true,
-  forgetLegacyTail: () => {}
+// The agent's own screen and process are the facts; the shared operation decides from them.
+vi.mock('@/components/terminal-pane/pty-buffer-serializer', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyBufferSerializerModule>()),
+  readPtyInputScreen: async () => ({
+    lines: readiness.ready ? ['> '] : ['Waiting for Codex...'],
+    alternateScreen: false
+  }),
+  readPtyBracketedPasteMode: () => true
+}))
+vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+  subscribeToPtyData: () => () => {}
+}))
+vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+  inspectRuntimeTerminalProcess: async () => ({
+    foregroundProcess: readiness.ready ? 'aider' : 'codex',
+    hasChildProcesses: false
+  })
 }))
 
 const DRAFT = 'plan the migration'

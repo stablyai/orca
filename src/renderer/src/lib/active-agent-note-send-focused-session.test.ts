@@ -3,8 +3,6 @@ import { sendNotesToActiveAgentSession } from './active-agent-note-send'
 import {
   createNoteSendAppState,
   LEAF_ID,
-  PASTE_BEGIN,
-  PASTE_END,
   type NoteSendAppState
 } from './active-agent-note-send-test-harness'
 
@@ -35,8 +33,6 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
-// These cases drive the guarded paste and Enter an older host gets; a capable host's own
-// transaction is covered where its outcome is mapped.
 vi.mock('@/runtime/generated-terminal-input-client', () => ({
   sendGeneratedTerminalInputToHandle: testState.sendGenerated
 }))
@@ -49,7 +45,8 @@ describe('active agent note send', () => {
     testState.appState = createNoteSendAppState()
     testState.callRuntimeRpc.mockReset()
     testState.sendGenerated.mockReset()
-    testState.sendGenerated.mockResolvedValue(null)
+    // The local runtime always runs the generated-input operation itself.
+    testState.sendGenerated.mockResolvedValue('delivered')
   })
 
   it('sends notes only after the active terminal is verified as an idle agent', async () => {
@@ -111,27 +108,10 @@ describe('active agent note send', () => {
       { worktree: 'id:wt-1', limit: 200, includeVisualLayouts: false },
       { timeoutMs: 15000 }
     )
-    expect(testState.callRuntimeRpc).toHaveBeenCalledWith(
+    expect(testState.sendGenerated).toHaveBeenCalledExactlyOnceWith(
       { kind: 'local' },
-      'terminal.send',
-      {
-        terminal: 'term-1',
-        text: `${PASTE_BEGIN}File: src/app.ts${PASTE_END}`,
-        requireAgentStatus: 'sendable',
-        client: { id: 'orca-desktop', type: 'desktop' }
-      },
-      { timeoutMs: 15000 }
-    )
-    expect(testState.callRuntimeRpc).toHaveBeenLastCalledWith(
-      { kind: 'local' },
-      'terminal.send',
-      {
-        terminal: 'term-1',
-        enter: true,
-        requireAgentStatus: 'sendable',
-        client: { id: 'orca-desktop', type: 'desktop' }
-      },
-      { timeoutMs: 15000 }
+      'term-1',
+      expect.objectContaining({ text: 'File: src/app.ts', submit: true, intent: 'running' })
     )
   })
 
@@ -195,19 +175,13 @@ describe('active agent note send', () => {
       'terminal.isRunningAgent',
       'terminal.wait',
       'terminal.agentStatus',
-      'terminal.isRunningAgent',
-      'terminal.send'
+      'terminal.isRunningAgent'
     ])
-    expect(testState.callRuntimeRpc).toHaveBeenLastCalledWith(
+    // Even without agentStatus, the notes go through the same generated-input operation.
+    expect(testState.sendGenerated).toHaveBeenCalledExactlyOnceWith(
       { kind: 'local' },
-      'terminal.send',
-      {
-        terminal: 'term-1',
-        text: 'File: src/app.ts',
-        enter: true,
-        client: { id: 'orca-desktop', type: 'desktop' }
-      },
-      { timeoutMs: 15000 }
+      'term-1',
+      expect.objectContaining({ text: 'File: src/app.ts', submit: true })
     )
   })
 

@@ -160,9 +160,13 @@ export function runGeneratedInputOperation(
       let marker = running || request.observedReady === true || observation.signalled()
       let current = false
       if (!marker) {
+        // Blind: nothing can be observed and nothing arrived for a quiet window (not a boot in
+        // progress), so the decided policy applies; never the deadline.
         current =
           gridShowsReadyComposer(evidence, agent, readySignal, quietMs) ||
-          (GENERATED_INPUT_BLIND_POLICY === 'deliver' && isBlindEvidence(evidence, tail))
+          (GENERATED_INPUT_BLIND_POLICY === 'deliver' &&
+            isBlindEvidence(evidence, tail) &&
+            quietMs >= GENERATED_AGENT_INPUT_QUIET_MS)
         marker = current
       }
       const quiet =
@@ -252,13 +256,24 @@ export function runGeneratedInputOperation(
   const body = async (): Promise<void> => {
     let release: (() => void) | undefined
     try {
-      // Observation starts before the queue turn and lasts until the operation ends.
-      await within(observation.start(source)).catch((reason: unknown) => {
+      // Observation starts with the operation, before its queue turn, and lasts until it ends;
+      // the turn is taken in call order.
+      const observing = within(observation.start(source))
+      const turn = source.acquire(life.signal)
+      turn.then(
+        (granted) => {
+          if (life.signal.aborted) {
+            granted()
+          }
+        },
+        () => undefined
+      )
+      await observing.catch((reason: unknown) => {
         if (reason === RETIRED) {
           throw reason
         }
       })
-      release = await within(source.acquire(life.signal))
+      release = await within(turn)
       if (!(await admitted())) {
         return resolveOutcome(settleFromProgress())
       }

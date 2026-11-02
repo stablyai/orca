@@ -582,7 +582,7 @@ describe('pasteDraftWhenAgentReady', () => {
     await expect(promise).resolves.toBe(true)
     expect(testState.subscribeToRuntimeTerminalData).toHaveBeenCalledWith(
       'remote:terminal-handle',
-      'desktop:paste-ready:remote:terminal-handle',
+      expect.stringContaining('remote:terminal-handle'),
       expect.any(Function)
     )
   })
@@ -594,8 +594,9 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL
     })
 
-    await flushMicrotasks()
-    expect(testState.subscribeToPtyData).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(0)
+    // It still observes the pane for the whole write, so a dialog it shows refuses the text.
+    expect(testState.subscribeToPtyData).toHaveBeenCalledOnce()
     expect(testState.subscribeToRuntimeTerminalData).not.toHaveBeenCalled()
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
@@ -619,7 +620,7 @@ describe('pasteDraftWhenAgentReady', () => {
     )
 
     const submit = sendBracketedPasteToRunningAgent({ ptyId: 'pty-1', content: ISSUE_URL })
-    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(0)
     // Competing chunked paste on the same PTY: it must not open a frame the Enter can land in.
     const competing = sendAgentDraftPasteContent(
       'pty-1',

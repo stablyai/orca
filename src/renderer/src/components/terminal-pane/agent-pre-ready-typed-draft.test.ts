@@ -25,13 +25,13 @@ const {
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
-  waitForAgentDraftInputReady,
-  sendAgentDraftPasteContent,
+  waitForPaneAgentToLookReady,
+  deliverGeneratedPaste,
   onPasteTimeout,
   recoveryNotice
 } = vi.hoisted(() => ({
-  waitForAgentDraftInputReady: vi.fn(),
-  sendAgentDraftPasteContent: vi.fn(async (..._args: unknown[]) => true),
+  waitForPaneAgentToLookReady: vi.fn(),
+  deliverGeneratedPaste: vi.fn(async (_paste: unknown): Promise<string> => 'staged'),
   onPasteTimeout: vi.fn(),
   recoveryNotice: vi.fn(),
   notifyCodexPaneBoundForStaleSweep: vi.fn(),
@@ -47,10 +47,6 @@ let storeSubscribers: ((state: StoreState) => void)[] = []
 
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
 
-// These cases drive the legacy adapter: a paired host older than the generated-input transaction.
-vi.mock('@/runtime/generated-terminal-input-client', () => ({
-  sendGeneratedTerminalInput: async () => null
-}))
 vi.mock('../../../../shared/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
@@ -59,11 +55,9 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 
-vi.mock('@/lib/agent-draft-readiness', () => ({
-  waitForAgentDraftInputReady,
-  agentInputIsAdmitted: async () => true,
-  forgetLegacyTail: () => {}
-}))
+vi.mock('@/lib/agent-draft-readiness', () => ({ waitForPaneAgentToLookReady }))
+// The generated-input operation that takes the keys at handoff; its outcome is the test's to set.
+vi.mock('@/lib/agent-paste-draft', () => ({ deliverGeneratedPaste }))
 
 const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => undefined)
@@ -103,12 +97,6 @@ vi.mock('./remote-runtime-pty-transport', () => ({
       return nextTransport
     }
   )
-}))
-
-vi.mock('@/lib/agent-draft-paste-content', () => ({
-  sendAgentDraftPasteContent,
-  sendAgentDraftPasteContentNow: (...args: Parameters<typeof sendAgentDraftPasteContent>) =>
-    sendAgentDraftPasteContent(...args)
 }))
 
 vi.mock('@/lib/launch-agent-paste-timeout-notice', () => ({
@@ -275,7 +263,7 @@ describe('agent pane keys typed before its PTY binds', () => {
   })
 
   it('pastes them as an unsubmitted draft once the agent is ready', async () => {
-    waitForAgentDraftInputReady.mockResolvedValue(true)
+    waitForPaneAgentToLookReady.mockResolvedValue(true)
     const pane = connectAgentPane()
     await flushAsyncTicks(20)
 
@@ -287,24 +275,26 @@ describe('agent pane keys typed before its PTY binds', () => {
     await flushAsyncTicks(20)
 
     // The held keys' observation ends with the pane: it carries the pane's abort signal.
-    expect(waitForAgentDraftInputReady).toHaveBeenCalledWith(
+    expect(waitForPaneAgentToLookReady).toHaveBeenCalledWith(
       'pty-1',
-      expect.any(Number),
-      expect.any(String),
       'claude',
+      expect.any(Number),
       expect.any(AbortSignal)
     )
-    expect(sendAgentDraftPasteContent).toHaveBeenCalledWith(
-      'pty-1',
-      'make the tests pass',
-      'driving',
-      expect.any(Function)
+    expect(deliverGeneratedPaste).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        ptyId: 'pty-1',
+        content: 'make the tests pass',
+        submit: false,
+        inputKind: 'driving',
+        intent: 'startup'
+      })
     )
     pane.dispose()
   })
 
   it('keeps exact held keys in recovery when the agent never reports ready', async () => {
-    waitForAgentDraftInputReady.mockResolvedValue(false)
+    waitForPaneAgentToLookReady.mockResolvedValue(false)
     const pane = connectAgentPane()
     await flushAsyncTicks(20)
 
@@ -312,7 +302,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.bind('pty-1')
     await flushAsyncTicks(20)
 
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     expect(onPasteTimeout).toHaveBeenCalledOnce()
     expect(recoveryNotice).toHaveBeenCalledWith(expect.objectContaining({ content: 'hello' }))
     pane.dispose()
@@ -325,14 +315,14 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.bind('pty-1')
     pane.type('y')
 
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
+    expect(waitForPaneAgentToLookReady).not.toHaveBeenCalled()
     expect(pane.transport.sendInput).toHaveBeenCalledWith('y', 'driving')
     pane.dispose()
   })
 
   it('sends keys typed after the bind live and drops the draft rather than pasting over them', async () => {
     let ready!: (value: boolean) => void
-    waitForAgentDraftInputReady.mockReturnValue(
+    waitForPaneAgentToLookReady.mockReturnValue(
       new Promise<boolean>((resolve) => (ready = resolve))
     )
     const pane = connectAgentPane()
@@ -346,7 +336,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     ready(true)
     await flushAsyncTicks(20)
 
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     expect(onPasteTimeout).toHaveBeenCalledOnce()
     pane.dispose()
   })
@@ -354,7 +344,7 @@ describe('agent pane keys typed before its PTY binds', () => {
   // Why: a trust prompt during startup must take the user's answer, never trap it in the draft.
   it('lets the user answer a startup trust prompt and never pastes the draft into it', async () => {
     let ready!: (value: boolean) => void
-    waitForAgentDraftInputReady.mockReturnValue(
+    waitForPaneAgentToLookReady.mockReturnValue(
       new Promise<boolean>((resolve) => (ready = resolve))
     )
     const pane = connectAgentPane()
@@ -378,12 +368,12 @@ describe('agent pane keys typed before its PTY binds', () => {
     expect(pane.transport.sendInput).toHaveBeenCalledWith('\r', 'driving')
     ready(true)
     await flushAsyncTicks(20)
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     pane.dispose()
   })
 
   it('drops the draft when the agent is blocked on a prompt at ready time', async () => {
-    waitForAgentDraftInputReady.mockResolvedValue(true)
+    waitForPaneAgentToLookReady.mockResolvedValue(true)
     const pane = connectAgentPane()
     await flushAsyncTicks(20)
 
@@ -400,7 +390,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.bind('pty-1')
     await flushAsyncTicks(20)
 
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     expect(onPasteTimeout).toHaveBeenCalledOnce()
     pane.dispose()
   })
@@ -408,8 +398,8 @@ describe('agent pane keys typed before its PTY binds', () => {
   // A held-key wait once outlived its pane with a fresh budget of its own.
   it('ends the readiness wait when the pane closes during it, recovering the exact keys once', async () => {
     let observed: AbortSignal | undefined
-    waitForAgentDraftInputReady.mockImplementation(
-      (_ptyId: string, _timeout: number, _signal: string, _agent: string, abort: AbortSignal) => {
+    waitForPaneAgentToLookReady.mockImplementation(
+      (_ptyId: string, _agent: string, _timeout: number, abort: AbortSignal) => {
         observed = abort
         return new Promise<boolean>((resolve) =>
           abort.addEventListener('abort', () => resolve(false))
@@ -427,11 +417,48 @@ describe('agent pane keys typed before its PTY binds', () => {
     await flushAsyncTicks(20)
 
     expect(observed?.aborted).toBe(true)
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     expect(recoveryNotice).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ content: 'held keys' })
     )
   })
+
+  // H6: after the one handoff the operation owns the keys; closing the pane does not speak for it.
+  it.each([
+    ['staged', 0],
+    ['not-sent', 1],
+    ['unconfirmed', 1]
+  ] as const)(
+    'after handoff, a closed pane leaves the keys to the operation, which ends %s',
+    async (outcome, notices) => {
+      waitForPaneAgentToLookReady.mockResolvedValue(true)
+      let settle!: (value: string) => void
+      deliverGeneratedPaste.mockImplementation(
+        () => new Promise<string>((resolve) => (settle = resolve))
+      )
+      const pane = connectAgentPane()
+      await flushAsyncTicks(20)
+      pane.type('held keys')
+      pane.bind('pty-1')
+      await flushAsyncTicks(20)
+      expect(deliverGeneratedPaste).toHaveBeenCalledOnce()
+
+      pane.dispose()
+      await flushAsyncTicks(20)
+      expect(recoveryNotice).not.toHaveBeenCalled()
+
+      settle(outcome)
+      await flushAsyncTicks(20)
+      expect(recoveryNotice).toHaveBeenCalledTimes(notices)
+      if (notices) {
+        expect(recoveryNotice).toHaveBeenCalledWith(
+          expect.objectContaining({ content: 'held keys', submitted: false })
+        )
+        expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith(outcome)
+      }
+      expect(deliverGeneratedPaste).toHaveBeenCalledOnce()
+    }
+  )
 
   it('drops the held draft when the pane closes before the bind', async () => {
     const pane = connectAgentPane()
@@ -442,12 +469,12 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.bind('pty-1')
     await flushAsyncTicks(20)
 
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(waitForPaneAgentToLookReady).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
   })
 
   it('turns keys handed off to a remounted agent split into the draft', async () => {
-    waitForAgentDraftInputReady.mockResolvedValue(true)
+    waitForPaneAgentToLookReady.mockResolvedValue(true)
     const pane = connectAgentPane({
       cwdPromise: Promise.resolve('/split'),
       preconnectInput: [{ data: 'handed off', kind: 'ordinary', inputKind: 'driving' }]
@@ -459,11 +486,8 @@ describe('agent pane keys typed before its PTY binds', () => {
 
     expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBeUndefined()
     expect(createdTransportOptions[0]?.preconnectInput).toBeUndefined()
-    expect(sendAgentDraftPasteContent).toHaveBeenCalledWith(
-      'pty-1',
-      'handed off',
-      'driving',
-      expect.any(Function)
+    expect(deliverGeneratedPaste).toHaveBeenCalledWith(
+      expect.objectContaining({ ptyId: 'pty-1', content: 'handed off', submit: false })
     )
     pane.dispose()
   })
@@ -480,8 +504,8 @@ describe('agent pane keys typed before its PTY binds', () => {
 
     pane.bind('pty-2')
     await flushAsyncTicks(20)
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(waitForPaneAgentToLookReady).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     pane.dispose()
   })
 
@@ -489,7 +513,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     const pane = connectAgentPane()
     await flushAsyncTicks(20)
 
-    waitForAgentDraftInputReady.mockResolvedValue(true)
+    waitForPaneAgentToLookReady.mockResolvedValue(true)
     pane.type('held')
     pane.resolveConnect({ id: 'pty-1', isReattach: true })
     await flushAsyncTicks(40)
@@ -499,8 +523,8 @@ describe('agent pane keys typed before its PTY binds', () => {
     await flushAsyncTicks(20)
     pane.type('z')
 
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(waitForPaneAgentToLookReady).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     expect(pane.transport.sendInput).toHaveBeenCalledWith('z', 'driving')
     pane.dispose()
   })
@@ -514,8 +538,8 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.bindAttached('pty-1')
     await flushAsyncTicks(20)
 
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(waitForPaneAgentToLookReady).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     expect(onPasteTimeout).toHaveBeenCalledOnce()
     pane.dispose()
   })
@@ -545,8 +569,8 @@ describe('agent pane keys typed before its PTY binds', () => {
     expect(pane.transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'driving')
     pane.bind('pty-1')
     await flushAsyncTicks(20)
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(waitForPaneAgentToLookReady).not.toHaveBeenCalled()
+    expect(deliverGeneratedPaste).not.toHaveBeenCalled()
     pane.dispose()
   })
 

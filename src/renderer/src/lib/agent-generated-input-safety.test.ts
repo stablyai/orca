@@ -8,7 +8,8 @@ const f = vi.hoisted(() => ({
   process: 'claude',
   observe: (_data: string): void => {},
   write: vi.fn(async () => true),
-  notice: vi.fn()
+  notice: vi.fn(),
+  holdProcessRead: null as Promise<void> | null
 }))
 // These cases drive the legacy adapter: a paired host older than the generated-input transaction.
 vi.mock('@/runtime/generated-terminal-input-client', () => ({
@@ -30,10 +31,10 @@ vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
   replayPreHandlerPtyData: () => {}
 }))
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  inspectRuntimeTerminalProcess: async () => ({
-    foregroundProcess: f.process,
-    hasChildProcesses: false
-  })
+  inspectRuntimeTerminalProcess: async () => {
+    await f.holdProcessRead
+    return { foregroundProcess: f.process, hasChildProcesses: false }
+  }
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: f.write
@@ -47,6 +48,7 @@ beforeEach(() => {
   f.process = 'claude'
   f.write.mockReset().mockResolvedValue(true)
   f.notice.mockReset()
+  f.holdProcessRead = null
 })
 afterEach(() => {
   vi.useRealTimers()
@@ -111,20 +113,17 @@ it('never answers a dialog that appears between paste and Enter and reports unce
   })
 })
 
-it('does not type after a caller deadline expires between readiness and writing', async () => {
+it('does not type after the deadline when its last read is still pending, and settles on time', async () => {
   let release = (): void => {}
-  const result = pasteDraftToAgentPtyWhenReady({
-    ...args,
-    // Readiness comes at once from the painted composer; this check is held past the budget.
-    beforePaste: () =>
-      new Promise<boolean>((resolve) => {
-        release = () => resolve(true)
-      })
+  f.holdProcessRead = new Promise<void>((resolve) => {
+    release = resolve
   })
-  await vi.advanceTimersByTimeAsync(3100)
-  release()
-  await vi.advanceTimersByTimeAsync(400)
+  const result = pasteDraftToAgentPtyWhenReady(args)
+  f.observe('\x1b[?2004h\x1b[?2031h❯\u00a0')
+  await vi.advanceTimersByTimeAsync(3001)
   await expect(result).resolves.toBe(false)
+  release()
+  await vi.advanceTimersByTimeAsync(5000)
   expect(f.write).not.toHaveBeenCalled()
   expect(f.notice).toHaveBeenCalledWith(
     expect.objectContaining({ text: args.content, certainty: 'not-sent' })

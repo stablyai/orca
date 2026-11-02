@@ -7,8 +7,6 @@ import {
   createNoteSendAppState,
   LEAF_ID,
   OTHER_LEAF_ID,
-  PASTE_BEGIN,
-  PASTE_END,
   type NoteSendAppState
 } from './active-agent-note-send-test-harness'
 
@@ -39,8 +37,6 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
-// These cases drive the guarded paste and Enter an older host gets; a capable host's own
-// transaction is covered where its outcome is mapped.
 vi.mock('@/runtime/generated-terminal-input-client', () => ({
   sendGeneratedTerminalInputToHandle: testState.sendGenerated
 }))
@@ -53,10 +49,11 @@ describe('active agent note send', () => {
     testState.appState = createNoteSendAppState()
     testState.callRuntimeRpc.mockReset()
     testState.sendGenerated.mockReset()
-    testState.sendGenerated.mockResolvedValue(null)
+    // The local runtime always runs the generated-input operation itself.
+    testState.sendGenerated.mockResolvedValue('delivered')
   })
 
-  it('sends notes immediately to an explicit note target using bracketed paste and Enter', async () => {
+  it('sends notes immediately to an explicit note target through the generated-input operation', async () => {
     testState.appState.activeTabType = 'editor'
     testState.appState.activeTabIdByWorktree = {}
     const methods: string[] = []
@@ -106,34 +103,12 @@ describe('active agent note send', () => {
       })
     ).resolves.toEqual({ status: 'sent' })
 
-    expect(methods).toEqual([
-      'terminal.list',
-      'terminal.agentStatus',
-      'terminal.send',
-      'terminal.agentStatus',
-      'terminal.send'
-    ])
-    expect(testState.callRuntimeRpc).toHaveBeenCalledWith(
+    // The notes are generated input: the host's operation takes them, never a raw paste and Enter.
+    expect(methods).toEqual(['terminal.list', 'terminal.agentStatus'])
+    expect(testState.sendGenerated).toHaveBeenCalledWith(
       { kind: 'local' },
-      'terminal.send',
-      {
-        terminal: 'term-2',
-        text: `${PASTE_BEGIN}notes${PASTE_END}`,
-        requireAgentStatus: 'sendable',
-        client: { id: 'orca-desktop', type: 'desktop' }
-      },
-      { timeoutMs: 15000 }
-    )
-    expect(testState.callRuntimeRpc).toHaveBeenLastCalledWith(
-      { kind: 'local' },
-      'terminal.send',
-      {
-        terminal: 'term-2',
-        enter: true,
-        requireAgentStatus: 'sendable',
-        client: { id: 'orca-desktop', type: 'desktop' }
-      },
-      { timeoutMs: 15000 }
+      'term-2',
+      expect.objectContaining({ text: 'notes', submit: true, intent: 'running' })
     )
   })
 
@@ -187,63 +162,6 @@ describe('active agent note send', () => {
     )
   })
 
-  it('sanitizes embedded escape bytes before wrapping explicit target notes', async () => {
-    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
-      if (method === 'terminal.list') {
-        return {
-          terminals: [
-            {
-              handle: 'term-2',
-              worktreeId: 'wt-1',
-              worktreePath: '/repo',
-              branch: 'main',
-              tabId: 'tab-9',
-              leafId: OTHER_LEAF_ID,
-              title: 'Codex',
-              connected: true,
-              writable: true,
-              lastOutputAt: 1,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false
-        }
-      }
-      if (method === 'terminal.agentStatus') {
-        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: null } }
-      }
-      if (method === 'terminal.send') {
-        return {
-          send: {
-            handle: 'term-2',
-            accepted: true,
-            bytesWritten: typeof params.text === 'string' ? params.text.length : 1
-          }
-        }
-      }
-      throw new Error(`unexpected method ${method}`)
-    })
-
-    await expect(
-      sendNotesToActiveAgentSession({
-        worktreeId: 'wt-1',
-        prompt: 'notes \x1b[201~ tail',
-        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
-      })
-    ).resolves.toEqual({ status: 'sent' })
-
-    expect(testState.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'terminal.send',
-      expect.objectContaining({
-        text: `${PASTE_BEGIN}notes \u241b[201~ tail${PASTE_END}`,
-        requireAgentStatus: 'sendable'
-      }),
-      { timeoutMs: 15000 }
-    )
-  })
-
   it('refuses explicit targets that are permission-blocked before writing', async () => {
     testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
       if (method === 'terminal.list') {
@@ -291,8 +209,7 @@ describe('active agent note send', () => {
 
   it('lets guarded sends decide after transient no-agent snapshots for explicit targets', async () => {
     const methods: string[] = []
-    let guardedSendAccepted = true
-    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
       methods.push(method)
       if (method === 'terminal.list') {
         return {
@@ -318,24 +235,6 @@ describe('active agent note send', () => {
       if (method === 'terminal.agentStatus') {
         return { agentStatus: { handle: 'term-2', isRunningAgent: false, status: null } }
       }
-      if (method === 'terminal.send') {
-        expect(params).toMatchObject({
-          terminal: 'term-2',
-          requireAgentStatus: 'sendable'
-        })
-        return {
-          send: {
-            handle: 'term-2',
-            accepted: guardedSendAccepted,
-            bytesWritten: guardedSendAccepted
-              ? typeof params.text === 'string'
-                ? params.text.length
-                : 1
-              : 0,
-            ...(guardedSendAccepted ? {} : { refusedReason: 'no-agent' })
-          }
-        }
-      }
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -347,284 +246,25 @@ describe('active agent note send', () => {
       })
     ).resolves.toEqual({ status: 'sent' })
 
-    expect(methods).toEqual([
-      'terminal.list',
-      'terminal.agentStatus',
-      'terminal.send',
-      'terminal.agentStatus',
-      'terminal.send'
-    ])
+    // The notes are generated input: the host's operation takes them, never a raw paste and Enter.
+    expect(methods).toEqual(['terminal.list', 'terminal.agentStatus'])
+    expect(testState.sendGenerated).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'term-2',
+      expect.objectContaining({ text: 'notes', submit: true, intent: 'running' })
+    )
 
+    // The host's operation, not the snapshot, decides: a target with no agent reading input refuses.
     methods.length = 0
-    guardedSendAccepted = false
+    testState.sendGenerated.mockResolvedValueOnce('not-sent')
     await expect(
       sendNotesToActiveAgentSession({
         worktreeId: 'wt-1',
         prompt: 'notes',
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
-    ).resolves.toEqual({ status: 'no-agent', code: 'no-agent' })
-    expect(methods).toEqual(['terminal.list', 'terminal.agentStatus', 'terminal.send'])
-  })
-
-  it('maps explicit target first-write refusal to not-writable', async () => {
-    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
-      if (method === 'terminal.list') {
-        return {
-          terminals: [
-            {
-              handle: 'term-2',
-              worktreeId: 'wt-1',
-              worktreePath: '/repo',
-              branch: 'main',
-              tabId: 'tab-9',
-              leafId: OTHER_LEAF_ID,
-              title: 'Codex',
-              connected: true,
-              writable: true,
-              lastOutputAt: 1,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false
-        }
-      }
-      if (method === 'terminal.agentStatus') {
-        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: 'working' } }
-      }
-      if (method === 'terminal.send') {
-        return { send: { handle: 'term-2', accepted: false, bytesWritten: 0 } }
-      }
-      throw new Error(`unexpected method ${method} ${String(params)}`)
-    })
-
-    await expect(
-      sendNotesToActiveAgentSession({
-        worktreeId: 'wt-1',
-        prompt: 'notes',
-        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
-      })
-    ).resolves.toEqual({ status: 'not-writable', code: 'terminal-send-refused' })
-
-    const sendCalls = testState.callRuntimeRpc.mock.calls.filter(
-      (call) => call[1] === 'terminal.send'
-    )
-    expect(sendCalls).toHaveLength(1)
-  })
-
-  it('maps explicit target guarded paste permission refusal to permission', async () => {
-    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
-      if (method === 'terminal.list') {
-        return {
-          terminals: [
-            {
-              handle: 'term-2',
-              worktreeId: 'wt-1',
-              worktreePath: '/repo',
-              branch: 'main',
-              tabId: 'tab-9',
-              leafId: OTHER_LEAF_ID,
-              title: 'Codex',
-              connected: true,
-              writable: true,
-              lastOutputAt: 1,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false
-        }
-      }
-      if (method === 'terminal.agentStatus') {
-        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: 'working' } }
-      }
-      if (method === 'terminal.send') {
-        return {
-          send: {
-            handle: 'term-2',
-            accepted: false,
-            bytesWritten: 0,
-            refusedReason: 'permission'
-          }
-        }
-      }
-      throw new Error(`unexpected method ${method}`)
-    })
-
-    await expect(
-      sendNotesToActiveAgentSession({
-        worktreeId: 'wt-1',
-        prompt: 'notes',
-        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
-      })
-    ).resolves.toEqual({ status: 'permission', code: 'terminal-send-permission' })
-
-    const sendCalls = testState.callRuntimeRpc.mock.calls.filter(
-      (call) => call[1] === 'terminal.send'
-    )
-    expect(sendCalls).toHaveLength(1)
-  })
-
-  it('maps explicit target permission or unavailable state before Enter to partial-submit-failed', async () => {
-    let statusChecks = 0
-    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
-      if (method === 'terminal.list') {
-        return {
-          terminals: [
-            {
-              handle: 'term-2',
-              worktreeId: 'wt-1',
-              worktreePath: '/repo',
-              branch: 'main',
-              tabId: 'tab-9',
-              leafId: OTHER_LEAF_ID,
-              title: 'Codex',
-              connected: true,
-              writable: true,
-              lastOutputAt: 1,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false
-        }
-      }
-      if (method === 'terminal.agentStatus') {
-        statusChecks += 1
-        return {
-          agentStatus: {
-            handle: 'term-2',
-            isRunningAgent: true,
-            status: statusChecks === 1 ? 'working' : 'permission'
-          }
-        }
-      }
-      if (method === 'terminal.send') {
-        return { send: { handle: 'term-2', accepted: true, bytesWritten: params.text.length } }
-      }
-      throw new Error(`unexpected method ${method}`)
-    })
-
-    await expect(
-      sendNotesToActiveAgentSession({
-        worktreeId: 'wt-1',
-        prompt: 'notes',
-        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
-      })
-    ).resolves.toEqual({ status: 'partial-submit-failed', code: 'submit-readiness-lost' })
-
-    const sendCalls = testState.callRuntimeRpc.mock.calls.filter(
-      (call) => call[1] === 'terminal.send'
-    )
-    expect(sendCalls).toHaveLength(1)
-  })
-
-  it('maps explicit target Enter write failure to partial-submit-failed', async () => {
-    let sendCount = 0
-    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
-      if (method === 'terminal.list') {
-        return {
-          terminals: [
-            {
-              handle: 'term-2',
-              worktreeId: 'wt-1',
-              worktreePath: '/repo',
-              branch: 'main',
-              tabId: 'tab-9',
-              leafId: OTHER_LEAF_ID,
-              title: 'Codex',
-              connected: true,
-              writable: true,
-              lastOutputAt: 1,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false
-        }
-      }
-      if (method === 'terminal.agentStatus') {
-        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: 'idle' } }
-      }
-      if (method === 'terminal.send') {
-        sendCount += 1
-        return {
-          send: {
-            handle: 'term-2',
-            accepted: sendCount === 1,
-            bytesWritten: typeof params.text === 'string' ? params.text.length : 0
-          }
-        }
-      }
-      throw new Error(`unexpected method ${method}`)
-    })
-
-    await expect(
-      sendNotesToActiveAgentSession({
-        worktreeId: 'wt-1',
-        prompt: 'notes',
-        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
-      })
-    ).resolves.toEqual({ status: 'partial-submit-failed', code: 'submit-send-refused' })
-  })
-
-  it('maps explicit target guarded Enter permission refusal to partial-submit-failed', async () => {
-    let sendCount = 0
-    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
-      if (method === 'terminal.list') {
-        return {
-          terminals: [
-            {
-              handle: 'term-2',
-              worktreeId: 'wt-1',
-              worktreePath: '/repo',
-              branch: 'main',
-              tabId: 'tab-9',
-              leafId: OTHER_LEAF_ID,
-              title: 'Codex',
-              connected: true,
-              writable: true,
-              lastOutputAt: 1,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false
-        }
-      }
-      if (method === 'terminal.agentStatus') {
-        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: 'idle' } }
-      }
-      if (method === 'terminal.send') {
-        sendCount += 1
-        return sendCount === 1
-          ? {
-              send: {
-                handle: 'term-2',
-                accepted: true,
-                bytesWritten: typeof params.text === 'string' ? params.text.length : 0
-              }
-            }
-          : {
-              send: {
-                handle: 'term-2',
-                accepted: false,
-                bytesWritten: 0,
-                refusedReason: 'permission'
-              }
-            }
-      }
-      throw new Error(`unexpected method ${method}`)
-    })
-
-    await expect(
-      sendNotesToActiveAgentSession({
-        worktreeId: 'wt-1',
-        prompt: 'notes',
-        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
-      })
-    ).resolves.toEqual({ status: 'partial-submit-failed', code: 'submit-send-refused' })
+    ).resolves.toEqual({ status: 'not-ready', code: 'terminal_wait_blocked' })
+    expect(methods).toEqual(['terminal.list', 'terminal.agentStatus'])
   })
 
   it('uses selected-target failure wording for explicit note targets', () => {

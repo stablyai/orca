@@ -230,7 +230,7 @@ describe.each([
         forcePaste: true,
         timeoutMs: 3000
       })
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(2000)
       await expect(result).resolves.toBe(true)
       expect(f.writes.at(-1)).toBe('\r')
     }
