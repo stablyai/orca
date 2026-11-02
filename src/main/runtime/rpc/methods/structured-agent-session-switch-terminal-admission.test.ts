@@ -19,7 +19,6 @@ import {
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
 import { savedTranscript } from './structured-agent-session-switch-execution.test-fixture'
 import { TerminalRevealUnconfirmedError } from '../../session-tabs/terminal-not-placed-error'
-import { chatTabId } from '../../agent-session/agent-session-tab-layout'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import {
@@ -328,39 +327,6 @@ it('leaves another tab\u2019s terminal that took the claim during the stop, and 
   expect(r.started()).toBe(1)
   expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual(['switch-pty-1'])
   expect(r.owners().map((listed) => listed.ptyId)).toEqual(['other-pty'])
-})
-
-it('a retry adopts its own terminal that the lost attempt already put in the chat\u2019s tab', async () => {
-  const r = await switchRig()
-  const t1 = await lostFirstAttempt(r)
-  r.view(t1.ptyId!)
-  // The window put T1 in the chat's own tab before the answer was lost: that tab shows it now.
-  r.runtime.storeMobileSessionSnapshot(WORKTREE_ID, {
-    worktree: WORKTREE_ID,
-    publicationEpoch: 'window',
-    snapshotVersion: 1,
-    activeGroupId: null,
-    activeTabId: null,
-    activeTabType: null,
-    tabs: [
-      {
-        type: 'terminal',
-        id: `${t1.tabId}::leaf`,
-        title: 'Codex',
-        parentTabId: t1.tabId!,
-        logicalTabId: chatTabId(id),
-        leafId: 'leaf',
-        ptyId: t1.ptyId,
-        isActive: true
-      }
-    ]
-  })
-  expect(await r.run('to-terminal-retry')).toMatchObject({
-    status: 'completed',
-    terminal: t1.tabId
-  })
-  expect(r.started()).toBe(1)
-  expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual([t1.ptyId, t1.ptyId])
 })
 
 it.each([

@@ -13,7 +13,6 @@ import type { MobileTerminalCommand } from '../../terminal/launch/mobile-termina
 import { canonicalizeAgentSessionIdentity } from '../../agent-session/ownership/agent-session-claim-identity'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { logicalTabIdOf } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 export type SwitchTerminalSpawn = {
   agent: TuiAgent
@@ -89,7 +88,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
               agentSessionClaim,
               // Checked on the owner the create adopts, before it commits anything to it: a holder
               // that appeared during the stop and that another tab shows stays as it was.
-              admitAdoptedAgentSessionOwner: async (ptyId: string) =>
+              admitAdoptedAgentSessionOwner: (ptyId: string) =>
                 this.isOwnSwitchTerminal(workspace.id, ptyId, args.switchedTabId)
             }
           : {}),
@@ -135,7 +134,10 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       const preparing = claim ? this.ptyController?.prepareAgentSessionOwner?.(claim) : undefined
       // A join waits on another create; the switch's deadline bounds it, as nothing stopped yet.
       const owner = preparing ? await waitForPromiseWithSignal(preparing, args.signal) : null
-      if (owner && !this.isOwnSwitchTerminal(workspace.id, owner.ptyId, args.switchedTabId)) {
+      if (
+        owner &&
+        !(await this.isOwnSwitchTerminal(workspace.id, owner.ptyId, args.switchedTabId))
+      ) {
         return { resumeSupported, unclaimed: true }
       }
     } catch (error) {
@@ -148,27 +150,45 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
   }
 
   /**
-   * Whether the conversation's live terminal is this switch's own: parked (no tab shows it), as an
-   * attempt whose answer was lost leaves it, or already what the switched tab holds. Any other is
-   * another tab's: adopting it would put one terminal in two tabs, and the switch checks only its
-   * own tab (Brennan 11-01), so it opens its own beside it. Derived from what tabs show; nothing is
-   * kept. Temporary under that ruling (STA-13394): a retry whose first terminal opened in an
-   * ordinary tab (the user closed or split the chat's tab first) starts a second CLI.
+   * Whether the conversation's live terminal is this switch's own: parked (nothing views it), as an
+   * attempt whose answer was lost leaves it, or what the switched tab holds now, asked of the
+   * layout owner that holds the tab (never the published tab graph, which can trail that owner).
+   * Any other is another tab's: adopting it would put one terminal in two tabs, and the switch
+   * checks only its own tab (Brennan 11-01), so it opens its own beside it. Derived each time;
+   * nothing is kept. Temporary under that ruling (STA-13394): a retry whose first terminal is no
+   * longer alone in the switched tab (the user moved, split or closed it, or the chat's tab changed
+   * first so it opened in an ordinary tab) starts a second CLI.
    */
-  private isOwnSwitchTerminal(
+  private async isOwnSwitchTerminal(
     workspaceId: string,
     ptyId: string,
     switchedTabId: string | undefined
-  ): boolean {
+  ): Promise<boolean> {
     if (!this.hasTerminalViewer(ptyId)) {
       return true
     }
-    const shown = this.mobileSessionTabsByWorktree
-      .get(workspaceId)
-      ?.tabs.find((row) => row.type === 'terminal' && row.ptyId === ptyId)
-    return (
-      switchedTabId !== undefined && shown !== undefined && logicalTabIdOf(shown) === switchedTabId
+    const pty = this.ptysById.get(ptyId)
+    const { tabId: terminalId, paneKey } = this.paneOfPty(pty)
+    const leafId =
+      terminalId && paneKey?.startsWith(`${terminalId}:`)
+        ? paneKey.slice(terminalId.length + 1)
+        : undefined
+    if (!switchedTabId || !terminalId || !leafId) {
+      return false
+    }
+    // The owner's own answer for that one tab: the switched tab holds just this terminal.
+    const held = await this.setSwitchedTabContent(
+      workspaceId,
+      {
+        tabId: switchedTabId,
+        expectSource: { kind: 'terminal', terminalId },
+        window: { kind: 'terminal', terminalId, leafId, ptyId },
+        layout: { kind: 'terminal', terminalId, leafId, adopt: { ptyId } },
+        focus: false
+      },
+      true
     )
+    return held.retargeted && held.tabId === switchedTabId
   }
 
   private async switchTerminalLaunch(workspaceId: string, args: SwitchTerminalSpawn) {

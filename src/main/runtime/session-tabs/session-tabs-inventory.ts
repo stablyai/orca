@@ -173,22 +173,25 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     worktreeId: string,
     result: AgentSessionSwitchResult
   ): boolean | undefined {
-    if (this.getAuthoritativeSessionTabsInventoryEpoch() === null) {
-      return undefined
+    // A terminal: whether it still runs, by main's own terminal records, never the published graph,
+    // which can trail the window showing it. A retry that runs again reads the switched tab from
+    // its layout owner and adopts the terminal it holds.
+    if ('terminal' in result && result.terminal) {
+      return [...this.ptysById.values()].some(
+        (pty) => pty.connected && this.paneOfPty(pty).tabId === result.terminal
+      )
     }
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (
-      !('terminal' in result && result.terminal) &&
+      this.getAuthoritativeSessionTabsInventoryEpoch() === null ||
       this.structuredAgentSessionInventoryUnverifiable
     ) {
       return undefined
     }
     return (
-      snapshot?.tabs.some((tab) =>
-        'terminal' in result && result.terminal
-          ? tab.type === 'terminal' && tab.id === result.terminal
-          : tab.type === 'agent-session' && tab.sessionId === result.sessionId
-      ) ?? false
+      this.mobileSessionTabsByWorktree
+        .get(worktreeId)
+        ?.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === result.sessionId) ??
+      false
     )
   }
 

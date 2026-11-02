@@ -1,6 +1,6 @@
 import { adoptingAgentOnHost } from '@/components/right-sidebar/ai-vault-session-resume-in-chat-launch'
 import { adoptsCliConversations } from '../../../shared/structured-agent-cli-conversation-adoption'
-import { toHostSessionPaneKey } from '../../../shared/terminal-surface-id'
+import { toHostSessionPaneKey, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -237,7 +237,9 @@ async function switchRequest(
       sessionId: args.sessionId,
       execution: {
         invocationId,
-        sourceTabId: args.chatTabId ?? undefined,
+        // The host's own id for the chat's tab: a paired client's tab holding it is named after
+        // that id (`mirroredTabContainers`), so the host reads exactly the tab being switched.
+        sourceTabId: args.chatTabId ? toHostSessionTabId(args.chatTabId) : undefined,
         commandOverride: useAppStore.getState().settings?.agentCmdOverrides?.[args.agent]
       }
     }

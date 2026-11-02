@@ -11,6 +11,7 @@ import {
 } from '@/runtime/web-session-focus-intent'
 import { useAppStore } from '@/store'
 import { runConversationSwitch } from './conversation-surface-switch'
+import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { pendingNativeChatCliSwitches } from './pending-conversation-surface-switches'
 import { makeTabSessionHistoryRow } from '@/components/tab-bar/tab-session-history-test-fixture'
 const mocks = vi.hoisted(() => {
@@ -139,6 +140,13 @@ it('sends one switch, shows pending only while the host runs it, and settles wit
   })
   expect(mocks.error).not.toHaveBeenCalled()
   expect(mocks.info).not.toHaveBeenCalled()
+})
+
+// A paired client's tab holding a host chat is named after the host's tab (`mirroredTabContainers`):
+// the host is sent its own id, so it reads exactly the tab being switched.
+it('names the chat\u2019s tab by the host\u2019s own id', async () => {
+  await runConversationSwitch({ ...subject, chatTabId: toWebTerminalSurfaceTabId('host-tab-4') })
+  expect(mocks.call.mock.calls[0]![2].execution.sourceTabId).toBe('host-tab-4')
 })
 
 it('reports a refused switch once and leaves nothing pending', async () => {
