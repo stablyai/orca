@@ -1,4 +1,7 @@
-import { parseNativeChatApprovalEnvelope } from './native-chat-approval-envelope'
+import {
+  parseNativeChatApprovalEnvelope,
+  parseNativeChatFolderTrustEnvelope
+} from './native-chat-approval-envelope'
 import type {
   AgentJournalApprovalItem,
   AgentJournalApprovalSubject
@@ -44,7 +47,11 @@ export const NATIVE_CHAT_APPROVAL_COPY = {
   allow: 'Allow',
   deny: 'Deny',
   planReviewTitle: 'Review proposed plan',
-  planRefineHint: 'Refine plan closes the review so you can send what to change.'
+  planRefineHint: 'Refine plan closes the review so you can send what to change.',
+  folderTrustTitle: 'Trust this folder?',
+  folderTrustHint: 'The agent asks before it can read, edit and run files in this folder.',
+  trustFolder: 'Trust folder',
+  exit: 'Exit'
 } as const
 
 export type NativeChatApprovalSay = (
@@ -70,6 +77,17 @@ export function parseApprovalFromStatus(
       description: say('planRefineHint'),
       subject: { kind: 'plan', text: planReview.plan },
       options: planReview.options
+    }
+  }
+  const folderTrust = parseNativeChatFolderTrustEnvelope(interactivePrompt)
+  if (folderTrust) {
+    return {
+      title: say('folderTrustTitle'),
+      description: say('folderTrustHint'),
+      options: [
+        { label: say('trustFolder'), send: folderTrust.trustSend },
+        { label: say('exit'), send: folderTrust.exitSend }
+      ]
     }
   }
   const envelope = parseNativeChatApprovalEnvelope(interactivePrompt, agent)

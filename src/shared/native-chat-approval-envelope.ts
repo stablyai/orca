@@ -10,6 +10,7 @@ export type NativeChatApprovalEnvelope = {
 }
 
 const ESCAPE = String.fromCharCode(27)
+const TRUST_KEYS_RE = new RegExp(`^(?:${ESCAPE}\\[[AB])*\r$`)
 
 /** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
 export function parseNativeChatApprovalEnvelope(
@@ -43,4 +44,36 @@ export function parseNativeChatApprovalEnvelope(
     allowSend: nativeChatApprovalAcceptKey(agent),
     denySend: ESCAPE
   }
+}
+
+/** A folder-trust dialog read off the screen; `trustSend` moves to the trust choice and confirms. */
+export function buildNativeChatFolderTrustPrompt(trustSend: string): string {
+  return JSON.stringify({ folderTrust: { trustSend } })
+}
+
+export function parseNativeChatFolderTrustEnvelope(
+  interactivePrompt: string | undefined | null
+): { trustSend: string; exitSend: string } | null {
+  if (!interactivePrompt) {
+    return null
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(interactivePrompt)
+  } catch {
+    return null
+  }
+  if (typeof parsed !== 'object' || parsed === null || !('folderTrust' in parsed)) {
+    return null
+  }
+  const trust = parsed.folderTrust
+  if (typeof trust !== 'object' || trust === null || !('trustSend' in trust)) {
+    return null
+  }
+  const trustSend = trust.trustSend
+  // Only arrow keys then Return; anything else is not a trust-choice keystroke.
+  if (typeof trustSend !== 'string' || !TRUST_KEYS_RE.test(trustSend)) {
+    return null
+  }
+  return { trustSend, exitSend: ESCAPE }
 }

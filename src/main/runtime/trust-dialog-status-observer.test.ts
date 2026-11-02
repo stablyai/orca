@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { parseInteractivePrompt } from '../../shared/native-chat-interactive-prompt'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
@@ -17,6 +18,7 @@ async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'clau
   const { recording, cols, rows: gridRows } = fixture(name)
   const rows = new Map<string, AgentStatusIpcPayload>()
   const published: string[] = []
+  const prompts: (string | undefined)[] = []
   let receivedAt = 0
   const { runtime } = await createTranscriptPane(
     {
@@ -29,6 +31,7 @@ async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'clau
     {
       onTerminalAgentStatus: ({ paneKey, payload }) => {
         published.push(payload.state)
+        prompts.push(payload.interactivePrompt)
         receivedAt += 1
         rows.set(paneKey, {
           ...payload,
@@ -51,7 +54,7 @@ async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'clau
     }
     await vi.advanceTimersByTimeAsync(100)
   }
-  return { runtime, rows, published, recording, cols, gridRows, write }
+  return { runtime, rows, published, prompts, recording, cols, gridRows, write }
 }
 
 describe('TrustDialogStatusObserver', () => {
@@ -84,6 +87,24 @@ describe('TrustDialogStatusObserver', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     expect(published).toEqual(expected)
   })
+
+  // Keys verified against Claude Code 2.1.316: digits do nothing, Down+Enter trusts, Enter alone exits.
+  it.each([
+    ['claude-dialog-trust-workspace', 'claude', '\x1b[B\r'],
+    ['claude-dialog-trust-workspace-narrow', 'claude', '\x1b[B\r'],
+    ['codex-0-158-0-trustprompt', 'codex', '\r']
+  ] as const)(
+    'offers %s (%s) a trust card that picks the trust choice',
+    async (name, agent, keys) => {
+      const { prompts, recording, write } = await pane(name, agent)
+      await write(recording, 1)
+      const card = parseInteractivePrompt(prompts[0], undefined, agent)
+      expect(card?.kind === 'approval' && card.approval.options).toEqual([
+        { label: 'Trust folder', send: keys },
+        { label: 'Exit', send: '\x1b' }
+      ])
+    }
+  )
 
   it('ignores the dialog wording quoted in ordinary output', async () => {
     const { published, write } = await pane('codex-0-158-0-trustprompt', 'codex')
