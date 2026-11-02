@@ -9,6 +9,15 @@ import {
 } from '../../runtime/terminal/input/terminal-send-plugin-hook'
 import { PluginHookDeniedError, setPluginHookRunner } from './plugin-hook-dispatch'
 
+const { resumeCheck } = vi.hoisted(() => ({
+  resumeCheck: vi.fn<(command: string, ensureHost: () => Promise<void>) => Promise<void>>()
+}))
+vi.mock('../../ai-vault/structured-session-ownership', () => ({
+  assertLegacyAiVaultResumeCommandAllowed: resumeCheck
+}))
+
+const runtime = { ensureStructuredAgentSessionHost: vi.fn(async () => undefined) }
+
 type Decide = (event: PluginHookName, payload: unknown) => PluginHookChainOutcome
 
 function installRunner(decide: Decide, wanted: readonly PluginHookName[]) {
@@ -23,6 +32,8 @@ const rewrite =
 
 afterEach(() => {
   setPluginHookRunner(null)
+  resumeCheck.mockReset()
+  vi.unstubAllGlobals()
 })
 
 describe('agent.launch.before at the spawn', () => {
@@ -39,7 +50,7 @@ describe('agent.launch.before at the spawn', () => {
     const run = installRunner(rewrite({ command: 'claude --verbose', env: { FOO: '1' } }), [
       'agent.launch.before'
     ])
-    await expect(applyAgentLaunchPluginHook(launch)).resolves.toEqual({
+    await expect(applyAgentLaunchPluginHook(launch, runtime)).resolves.toEqual({
       ...launch,
       command: 'claude --verbose',
       env: { ...launch.env, FOO: '1' }
@@ -62,11 +73,28 @@ describe('agent.launch.before at the spawn', () => {
       { ...launch, resumeProviderSession: { id: 's' } },
       { ...launch, launchAgent: undefined }
     ]) {
-      await expect(applyAgentLaunchPluginHook(args)).resolves.toBe(args)
+      await expect(applyAgentLaunchPluginHook(args, runtime)).resolves.toBe(args)
     }
     expect(run).not.toHaveBeenCalled()
     setPluginHookRunner(null)
-    await expect(applyAgentLaunchPluginHook(launch)).resolves.toBe(launch)
+    await expect(applyAgentLaunchPluginHook(launch, runtime)).resolves.toBe(launch)
+  })
+
+  it('rechecks a rewritten command the way the caller checked its own', async () => {
+    installRunner(rewrite({ command: 'codex resume chat-owned' }), ['agent.launch.before'])
+    resumeCheck.mockRejectedValueOnce(new Error('owned by a chat'))
+    await expect(applyAgentLaunchPluginHook(launch, runtime)).rejects.toThrow('owned by a chat')
+    expect(resumeCheck).toHaveBeenCalledWith('codex resume chat-owned', expect.any(Function))
+    installRunner(rewrite({}), ['agent.launch.before'])
+    await applyAgentLaunchPluginHook(launch, runtime)
+    expect(resumeCheck).toHaveBeenCalledOnce()
+  })
+
+  it('names added variables in WSLENV on Windows so WSL agents receive them', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32', env: { WSLENV: 'USERPROFILE/p' } })
+    installRunner(rewrite({ env: { FOO: '1' } }), ['agent.launch.before'])
+    const decided = await applyAgentLaunchPluginHook(launch, runtime)
+    expect(decided.env).toMatchObject({ FOO: '1', WSLENV: 'USERPROFILE/p:FOO' })
   })
 
   it('refuses the spawn on a deny', async () => {
@@ -74,7 +102,9 @@ describe('agent.launch.before at the spawn', () => {
       () => ({ kind: 'deny', pluginKey: 'acme.policy', reason: 'no yolo' }),
       ['agent.launch.before']
     )
-    await expect(applyAgentLaunchPluginHook(launch)).rejects.toBeInstanceOf(PluginHookDeniedError)
+    await expect(applyAgentLaunchPluginHook(launch, runtime)).rejects.toBeInstanceOf(
+      PluginHookDeniedError
+    )
   })
 
   it('keeps Orca’s own variables out of a plugin’s reach', async () => {

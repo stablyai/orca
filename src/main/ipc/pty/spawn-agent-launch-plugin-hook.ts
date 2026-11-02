@@ -3,6 +3,8 @@ import { isRestoreSpawnIntent } from '../../../shared/host-spawn-admission'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
 import { pluginHookWanted, runPluginHook } from '../../plugins/hooks/plugin-hook-dispatch'
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../ai-vault/structured-session-ownership'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 
 type AgentSpawnArgs = {
   launchAgent?: TuiAgent
@@ -21,7 +23,8 @@ type AgentSpawnArgs = {
  * are decided on this Orca. Restores and resumes are not launches. Throws PluginHookDeniedError.
  */
 export async function applyAgentLaunchPluginHook<Args extends AgentSpawnArgs>(
-  args: Args
+  args: Args,
+  runtime: { ensureStructuredAgentSessionHost(): Promise<void> } | undefined
 ): Promise<Args> {
   const { launchAgent, command } = args
   if (
@@ -47,10 +50,18 @@ export async function applyAgentLaunchPluginHook<Args extends AgentSpawnArgs>(
       env: {}
     }
   )
-  const added = Object.keys(decided.env).length > 0
-  return {
-    ...args,
-    command: decided.command,
-    ...(added ? { env: { ...args.env, ...decided.env } } : {})
+  if (decided.command !== command) {
+    // The caller checked its own command; a plugin's must not resume a chat-owned session either.
+    await assertLegacyAiVaultResumeCommandAllowed(
+      decided.command,
+      () => runtime?.ensureStructuredAgentSessionHost() ?? Promise.resolve()
+    )
   }
+  const addedKeys = Object.keys(decided.env)
+  const env = addedKeys.length > 0 ? { ...args.env, ...decided.env } : undefined
+  if (env && process.platform === 'win32') {
+    // wsl.exe imports only the variables WSLENV names.
+    addWslEnvKeys(env, addedKeys)
+  }
+  return { ...args, command: decided.command, ...(env ? { env } : {}) }
 }

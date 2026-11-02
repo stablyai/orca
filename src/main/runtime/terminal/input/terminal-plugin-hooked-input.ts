@@ -47,21 +47,25 @@ export abstract class OrcaRuntimeWithPluginHookedTerminalInput extends OrcaRunti
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
     const hooked = agentPromptHookApplies(options)
-    return this.pluginHookOrder.run(handle, hooked, async () => {
-      const pty = hooked ? this.getLivePtyForHandle(handle)?.pty : undefined
-      const final = hooked
-        ? await runAgentPromptPluginHook(
-            {
-              handle,
-              prompt,
-              inputKind: options.inputKind,
-              agent: pty?.foregroundAgent ?? pty?.launchAgent ?? null
-            },
-            (text) => this.assertRewrittenTerminalTextAllowed(text)
-          )
-        : prompt
-      return this.sendAgentPromptAfterPluginHooks(handle, final, options)
-    })
+    return this.pluginHookOrder.run(
+      handle,
+      terminalHookOrderKind(hooked, {}, options),
+      prompt,
+      (value) => {
+        const pty = this.getLivePtyForHandle(handle)?.pty
+        return runAgentPromptPluginHook(
+          {
+            handle,
+            prompt: value,
+            inputKind: options.inputKind,
+            agent: pty?.foregroundAgent ?? pty?.launchAgent ?? null
+          },
+          (text) => this.assertRewrittenTerminalTextAllowed(text)
+        )
+      },
+      // Why outside the order: a delivery may wait on a permission answer (`onPermission: 'wait'`).
+      (final) => this.sendAgentPromptAfterPluginHooks(handle, final, options)
+    )
   }
 
   /** The checks callers ran on the original text, run again on what a plugin wrote. */
