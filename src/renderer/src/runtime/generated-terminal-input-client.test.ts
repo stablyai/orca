@@ -30,3 +30,29 @@ it("returns the local host's target-gone, and a lost answer as unconfirmed", asy
     expect.anything()
   )
 })
+
+// J8: a local takeover cancels the host's request through the subscription transport's unsubscribe;
+// the lost answer reads as unconfirmed and the text is never sent again.
+it('cancels a local request by unsubscribing, and reads its lost answer as unconfirmed', async () => {
+  const unsubscribe = vi.fn()
+  const subscribe = vi.fn(async () => ({ unsubscribe }))
+  vi.stubGlobal('window', { api: { runtime: { subscribe } } })
+  try {
+    const takeover = new AbortController()
+    const sent = sendGeneratedTerminalInput('pty-1', { text: 'go', submit: false }, takeover.signal)
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledOnce())
+    expect(subscribe).toHaveBeenCalledWith(
+      {
+        method: 'terminal.sendGeneratedInput',
+        params: expect.objectContaining({ ptyId: 'pty-1', text: 'go' })
+      },
+      expect.any(Function)
+    )
+    takeover.abort()
+    await expect(sent).resolves.toBe('unconfirmed')
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})

@@ -424,13 +424,16 @@ describe('agent pane keys typed before its PTY binds', () => {
   })
 
   // H6: after the one handoff the operation owns the keys; closing the pane does not speak for it.
+  // J1: every outcome either hands the keys over or recovers them exactly once.
   it.each([
-    ['staged', 0],
-    ['not-sent', 1],
-    ['unconfirmed', 1]
+    ['staged', 0, null],
+    ['delivered', 0, null],
+    ['not-sent', 1, 'not-sent'],
+    ['target-gone', 1, 'not-sent'],
+    ['unconfirmed', 1, 'unconfirmed']
   ] as const)(
     'after handoff, a closed pane leaves the keys to the operation, which ends %s',
-    async (outcome, notices) => {
+    async (outcome, notices, certainty) => {
       waitForPaneAgentToLookReady.mockResolvedValue(true)
       let settle!: (value: string) => void
       deliverGeneratedPaste.mockImplementation(
@@ -454,11 +457,45 @@ describe('agent pane keys typed before its PTY binds', () => {
         expect(recoveryNotice).toHaveBeenCalledWith(
           expect.objectContaining({ content: 'held keys', submitted: false })
         )
-        expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith(outcome)
+        expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith(certainty)
       }
       expect(deliverGeneratedPaste).toHaveBeenCalledOnce()
     }
   )
+
+  // J8: a person typing after the handoff takes the terminal over: the held keys' request is
+  // cancelled before the key is forwarded, and its outcome recovers the keys once.
+  it('cancels the held keys request when a person types after the handoff', async () => {
+    waitForPaneAgentToLookReady.mockResolvedValue(true)
+    let cancelled: AbortSignal | undefined
+    deliverGeneratedPaste.mockImplementation(
+      (paste: unknown) =>
+        new Promise<string>((resolve) => {
+          cancelled = (paste as { signal: AbortSignal }).signal
+          // A cancelled request whose answer was lost reads as unconfirmed.
+          cancelled.addEventListener('abort', () => resolve('unconfirmed'))
+        })
+    )
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+    pane.type('held keys')
+    pane.bind('pty-1')
+    await flushAsyncTicks(20)
+    expect(cancelled?.aborted).toBe(false)
+
+    pane.type('1')
+    expect(cancelled?.aborted).toBe(true)
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('1', 'driving')
+    await flushAsyncTicks(20)
+    expect(recoveryNotice).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ content: 'held keys', submitted: false })
+    )
+    expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith('unconfirmed')
+    pane.type('2')
+    await flushAsyncTicks(20)
+    expect(recoveryNotice).toHaveBeenCalledOnce()
+    pane.dispose()
+  })
 
   it('drops the held draft when the pane closes before the bind', async () => {
     const pane = connectAgentPane()

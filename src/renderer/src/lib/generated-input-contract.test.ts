@@ -95,14 +95,24 @@ vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
 }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: async () => f.capable,
-  callRuntimeRpc: async (_target: unknown, method: string, params: Record<string, unknown>) => {
+  callRuntimeRpc: async (
+    _target: unknown,
+    method: string,
+    params: Record<string, unknown>,
+    options?: { signal?: AbortSignal }
+  ) => {
     if (method === 'terminal.sendGeneratedInput') {
       const send = eraseRpcMethods(GENERATED_INPUT_METHODS).find(
         (entry): entry is RpcMethod =>
           entry.name === 'terminal.sendGeneratedInput' && !('stream' in entry)
       )!
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only the runtime and connection id.
-      const context = { runtime: f.runtime, connectionId: 'contract' } as unknown as RpcContext
+      const context = {
+        runtime: f.runtime,
+        connectionId: 'contract',
+        // The caller's abort reaches the host's request context, as the transport delivers it.
+        signal: options?.signal
+      } as unknown as RpcContext
       return await send.handler(send.params ? send.params.parse(params) : params, context)
     }
     if (method === 'terminal.read') {
@@ -118,7 +128,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   }
 }))
 
-const { pasteDraftToAgentPtyWhenReady, submitPromptToAgentPty } =
+const { deliverGeneratedPaste, pasteDraftToAgentPtyWhenReady, submitPromptToAgentPty } =
   await import('./agent-paste-draft')
 const { sendPromptWithGuardedPasteAndEnter } = await import('./active-agent-note-send-delivery')
 
@@ -441,6 +451,38 @@ describe.each([
       expect(f.writes).toHaveLength(when === 'before the text' ? 0 : 1)
     }
   )
+
+  // J8: held keys handed to the operation, then the person answers the dialog themselves: the
+  // cancellation reaches the operation, which writes nothing even once the composer is ready.
+  it('writes nothing for held keys whose request was cancelled at a dialog, once it is answered', async () => {
+    const ptyId = await setUp('claude', capable)
+    f.process = 'claude'
+    f.grid = { lines: DIALOG, alternateScreen: false }
+    f.hostReadsScreen = true
+    f.streamTail = DIALOG
+    stream(DIALOG.join('\r\n'))
+    const takeover = new AbortController()
+    const result = deliverGeneratedPaste({
+      ptyId,
+      content: 'held keys',
+      submit: false,
+      agent: 'claude',
+      inputKind: 'driving',
+      intent: 'startup',
+      deadline: Date.now() + 60_000,
+      signal: takeover.signal
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    takeover.abort()
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(result).resolves.toMatch(/^(unconfirmed|not-sent)$/)
+    f.grid = { lines: ['❯ '], alternateScreen: false }
+    f.streamTail = ['❯ ']
+    f.pasteMode = true
+    stream('\x1b[2J\x1b[H\x1b[?2004h\x1b[?2031h❯ ')
+    await vi.advanceTimersByTimeAsync(61_000)
+    expect(f.writes).toEqual([])
+  })
 
   // Controls kept: inline ZCode delivers from its grid; a plain shell never receives the text.
   it('delivers to an inline ZCode composer and refuses a plain shell', async () => {
