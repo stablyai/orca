@@ -3,7 +3,8 @@ import { useEffect, useLayoutEffect } from 'react'
 import { useTaskPageGitHubSearchPagination } from './github/use-task-page-github-search-pagination'
 import { runTaskPageGitHubLandingRefresh } from './github/task-page-github-landing-refresh-run'
 import { taskPageGitHubResumeCache } from './github/task-page-github-resume-cache'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
+import type { AppState } from '@/store/types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { i18n } from '@/i18n/i18n'
@@ -57,7 +58,8 @@ const initialStore = useAppStore.getState()
 const initialApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
 // listWorkItems answers by repo path and query; a missing answer fails the fetch.
 export const listAnswers = new Map<string, WorkItemsCacheSources>()
-export const setIssueSourcePreference = vi.fn()
+export const setIssueSourcePreference: Mock<AppState['setIssueSourcePreference']> =
+  vi.fn<AppState['setIssueSourcePreference']>()
 
 function useMountedSourceDisplay(runRequests = false) {
   const store = useTaskPageStoreBindings()
