@@ -100,7 +100,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
       'orca account token-refresh --agent claude --status',
       'orca account token-refresh --agent claude --now ada@example.com',
       'orca account token-refresh --agent claude --off',
-      'orca account token-refresh --agent claude --on --environment macstudio'
+      'orca account token-refresh --agent claude --on --environment build-box'
     ]
   }
 ]
