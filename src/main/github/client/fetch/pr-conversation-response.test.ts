@@ -20,7 +20,15 @@ const visibleBodies = [
 
 describe.each(['GraphQL', 'REST'] as const)('%s review summaries', (source) => {
   it('omits empty and HTML-comment-only reviews while preserving visible bodies', () => {
-    const bodies = [null, '', ' \n\t ', metadataOnlyBody, ...visibleBodies]
+    const bodies = [
+      null,
+      '',
+      ' \n\t ',
+      metadataOnlyBody,
+      '**<!-- metadata -->**',
+      '[<!-- metadata -->](https://example.com)',
+      ...visibleBodies
+    ]
     const comments = bodies.map((body, id) => ({
       id: `PRR_${id}`,
       databaseId: id,

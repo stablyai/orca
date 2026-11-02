@@ -1,3 +1,4 @@
+import type { Nodes } from 'mdast'
 import { z } from 'zod'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
@@ -101,11 +102,16 @@ function hasVisibleReviewBody(body: string | null | undefined): boolean {
   if (!body.includes('<!--')) {
     return true
   }
-  return reviewMarkdown
-    .parse(body)
-    .children.some(
-      (node) => node.type !== 'html' || Boolean(node.value.replace(/<!--[\s\S]*?-->/g, '').trim())
-    )
+  const hasVisibleNode = (node: Nodes): boolean => {
+    if ('children' in node) {
+      return node.children.some(hasVisibleNode)
+    }
+    if (node.type === 'html') {
+      return Boolean(node.value.replace(/<!--[\s\S]*?-->/g, '').trim())
+    }
+    return node.type !== 'text' || Boolean(node.value.trim())
+  }
+  return reviewMarkdown.parse(body).children.some(hasVisibleNode)
 }
 
 export function parsePRConversationResponse(stdout: string): {
