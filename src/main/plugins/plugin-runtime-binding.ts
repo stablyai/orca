@@ -2,6 +2,8 @@ import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manif
 import type { PluginAgentStatusChangedPayload } from '../../shared/plugins/events/plugin-events'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/plugin-host-api'
 import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
+import type { PluginService } from './plugin-service'
+import { installPluginHookRunner } from './hooks/plugin-hook-participants'
 import {
   pluginTerminalTitle,
   projectPluginWorkspaceContext,
@@ -33,6 +35,18 @@ export function pluginRuntimeDelegate(
     dispatchPluginNotification: (input) => runtime.dispatchPluginNotification(input),
     listAgentStatuses: agentStatuses
   }
+}
+
+/** Binds the plugin host to main's runtime: its delegate, and the hooks Orca's own code runs. */
+export function bindPluginRuntime(
+  service: PluginService,
+  runtime: RuntimeDelegateSource,
+  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] }
+): PluginRuntimeDelegate {
+  const delegate = pluginRuntimeDelegate(runtime, () => hookServer.getStatusSnapshot())
+  service.setRuntimeDelegate(delegate)
+  installPluginHookRunner(service)
+  return delegate
 }
 
 async function listWorkspaceTerminals(

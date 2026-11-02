@@ -94,6 +94,17 @@ const activate: Activate = (orca: OrcaWorkerApi) => {
   orca.events.on('worktree.created', () => {})
   // @ts-expect-error storage values are JSON
   void orca.host.call('storage.set', { key: 'k', value: () => 1 })
+  orca.hooks.on('terminal.send', (event, next) => {
+    if (event.text.includes('rm -rf /')) {
+      return { deny: 'blocked' }
+    }
+    return next({ ...event, text: event.text.trim() })
+  })
+  orca.hooks.on('workspace.create.after', async ({ path }) => orca.log(path))
+  // @ts-expect-error a deny carries its reason
+  orca.hooks.on('terminal.send', () => ({ deny: 1 }))
+  // @ts-expect-error unknown hook
+  orca.hooks.on('terminal.write', () => {})
 }
 export default activate
 `
