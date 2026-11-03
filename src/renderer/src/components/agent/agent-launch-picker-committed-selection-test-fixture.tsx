@@ -5,8 +5,8 @@ import {
   inventoryModel as model,
   inventoryCatalog as catalog
 } from './agent-launch-picker-freshness-test-fixture'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
-import type * as picker from '../../../../shared/agent-launch-picker'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
+import type * as picker from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 

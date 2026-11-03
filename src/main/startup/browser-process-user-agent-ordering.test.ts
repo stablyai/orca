@@ -181,7 +181,7 @@ vi.mock('../stats/collector')
 vi.mock('../claude-usage/store')
 vi.mock('../codex-usage/store')
 vi.mock('../opencode-usage/store')
-vi.mock('../browser/doc-preview-protocol')
+vi.mock('../browser/document-preview/doc-preview-protocol')
 vi.mock('../crash-reporting/crashpad-capture')
 vi.mock('../crash-reporting/crash-report-store')
 vi.mock('../crash-reporting/crash-breadcrumb-store')
@@ -196,7 +196,7 @@ vi.mock('./ensure-virtual-display', () => ({
 vi.mock('./gpu-lifecycle')
 vi.mock('./main-process-state', () => ({ mainProcessState: {} }))
 vi.mock('./synthetic-title-runtime')
-vi.mock('../browser/browser-identity-mode-store', () => ({
+vi.mock('../browser/identity/browser-identity-mode-store', () => ({
   initializeBrowserIdentityModeStore: (path: string) => {
     mocks.events.push(`read-mode:${path}`)
     return {
@@ -274,7 +274,7 @@ describe('browser process user-agent startup ordering', () => {
 
   it('executes after the dev app name and before later preflight work', async () => {
     const { getBrowserProcessUserAgentIdentity } =
-      await import('../browser/browser-process-user-agent')
+      await import('../browser/identity/browser-process-user-agent')
 
     expect(
       runMainProcessPreflight({
@@ -333,7 +333,7 @@ describe('browser process user-agent startup ordering', () => {
 
 it('exits and releases admission after pending profile move recovery fails', async () => {
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   mocks.admission.mockReturnValueOnce({ release })
@@ -351,7 +351,7 @@ it('exits and releases admission after pending profile move recovery fails', asy
 
 it('defers a Linux desktop startup failure until Electron is ready', async () => {
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   let resolveReady: (() => void) | undefined
@@ -395,7 +395,7 @@ it('defers a Linux desktop startup failure until Electron is ready', async () =>
 
 it('exits after a Linux desktop readiness rejection without showing a dialog', async () => {
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   let rejectReady!: (error: Error) => void
@@ -431,7 +431,7 @@ it('exits after a Linux desktop readiness rejection without showing a dialog', a
 
 it('keeps Linux background startup failures console-only and immediate', async () => {
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   mocks.admission.mockReturnValueOnce({ release })
@@ -460,7 +460,7 @@ it('keeps Linux background startup failures console-only and immediate', async (
 
 it('keeps Linux serve startup failures console-only and immediate', async () => {
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   const originalArgv = process.argv

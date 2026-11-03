@@ -12,7 +12,7 @@ import {
 } from '../../codex-notice-terminal-status'
 import { TrustDialogStatusObserver } from '../../trust-dialog-status-observer'
 import type { LaunchedAgentForeground } from '../../launched-agent-foreground'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle

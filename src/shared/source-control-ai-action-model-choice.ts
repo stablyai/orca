@@ -10,7 +10,7 @@ import { toSourceControlAiRepoUpdate } from './source-control-ai-recipe-save'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 import type { AiTextOperation, SourceControlAiModelChoice } from './source-control-ai-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { CommandTemplateBackslash } from './commit-message-prompt'
 
 type ActionModelChoiceInput = {

@@ -3,7 +3,7 @@ import type { BrowserCookieImportSummary } from '../../../../shared/browser-work
 import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
 import type { ImportedCookieFields, ImportWritePlanResult } from '../browser-cookie-import-write'
 import type { SourcePartitionRead } from '../sources/browser-cookie-source-partition'
-import type { ChromiumCookieSnapshot } from '../../chromium-cookie-snapshot'
+import type { ChromiumCookieSnapshot } from './chromium-cookie-snapshot'
 import type { EncryptionKeyResult } from '../sources/browser-cookie-sqlite'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 

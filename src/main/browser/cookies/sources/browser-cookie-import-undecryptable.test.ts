@@ -28,7 +28,7 @@ vi.mock('node:crypto', async (importOriginal) => {
   createDecipherivMock.mockImplementation(original.createDecipheriv)
   return { ...original, createDecipheriv: createDecipherivMock }
 })
-vi.mock('../../browser-session-registry', () => ({
+vi.mock('../../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock

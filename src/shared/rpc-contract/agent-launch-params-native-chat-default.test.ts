@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
-import { computeAgentLaunchFingerprint } from '../agent-launch-operation'
+import { computeAgentLaunchFingerprint } from '../agent-launch/contracts/agent-launch-operation'
 
 const BASE = { agent: 'claude', target: { kind: 'existing', worktree: 'id:wt-1' } }
 const OPERATION_ID = '1760000000000-0123456789abcdef0123456789abcdef'

@@ -12,7 +12,7 @@ import {
   snapshots,
   status
 } from './browser-popup-compatibility-cdp-fixture'
-import { waitForHiddenFrameInput } from '../../hidden-frame-input-readiness-fixture'
+import { waitForHiddenFrameInput } from '../../electron-fixtures/hidden-frame-input-readiness-fixture'
 
 enablePopupAdapterProbe()
 setPopupFixtureEvidenceName('adapter-electron-evidence.json')
@@ -98,7 +98,7 @@ describe('Electron popup adapter API limits (not an admission safety gate)', () 
   it.each(creationPaths)(
     'records same-parent identical URLs with foreground, background and window intent: %s',
     async (path) => {
-      expect(status().electronVersion).toBe('43.8.4')
+      expect(status().electronVersion).toBe('43.8.6')
       const page = guest('probe-one')
       await configure(page, path)
       for (const modifier of [null, 'Shift', 'ControlOrMeta'] as const) {

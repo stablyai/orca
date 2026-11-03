@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../../../transport/types'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
-import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../src/shared/agent-tui-input-clear'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 
 function sendResult(accepted: boolean, id = 'send'): RpcSuccess {
   return { id, ok: true, result: { send: { accepted } }, _meta: { runtimeId: 'r' } }

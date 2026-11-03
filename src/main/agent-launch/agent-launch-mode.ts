@@ -2,10 +2,9 @@
 
 import { requestsCwdOutsideWorkspaceRoot } from '../../shared/terminal-startup-cwd'
 import type {
-  AgentLaunchMode,
   AgentLaunchModeReason,
   AgentLaunchModeReceipt
-} from '../../shared/agent-launch-intent'
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/structured-agent-runtime-metadata'
 import {
@@ -14,18 +13,16 @@ import {
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
 } from '../../shared/structured-native-chat-launch-route'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentCreateSupportReason,
   StructuredAgentCreateSupportReply
 } from '../../shared/agent-session/structured-agent-create-support-reply'
 import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { AgentLaunchSurface } from '../../shared/agent-launch-surface'
+import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
-
-export type { AgentLaunchMode, AgentLaunchModeReason, AgentLaunchModeReceipt }
 
 type AgentLaunchDowngradeReason = Exclude<AgentLaunchModeReason, 'user_default' | 'requested'>
 

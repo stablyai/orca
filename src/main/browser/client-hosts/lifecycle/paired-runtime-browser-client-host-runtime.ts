@@ -26,7 +26,7 @@ import { registerBrowserClientHostEnvironmentRoutes } from './browser-client-hos
 import { BrowserClientPageCommandExecutor } from '../../client-pages/execution/browser-client-page-command-executor'
 import { createBrowserClientPageGuestBinding } from '../../client-pages/lifecycle/browser-client-page-guest-binding'
 import { browserManager } from '../../browser-manager'
-import { browserSessionRegistry } from '../../browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 import { BrowserClientUploadStaging } from '../file-transfers/browser-client-upload-staging'
 import {
   executeBrowserClientPageAutomation,

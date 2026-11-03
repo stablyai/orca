@@ -98,6 +98,8 @@ vi.mock('@/components/ui/dropdown-menu', () => {
       return props.children
     },
     DropdownMenuLabel: Pass,
+    DropdownMenuRadioGroup: Pass,
+    DropdownMenuRadioItem: Pass,
     DropdownMenuSeparator: () => null,
     DropdownMenuShortcut: Pass,
     DropdownMenuSub: Pass,

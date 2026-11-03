@@ -3,7 +3,7 @@ import type {
   CommitMessageAiModelCapability
 } from './commit-message-ai-types'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from './commit-message-host-key'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiModelChoice,

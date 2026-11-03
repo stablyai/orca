@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getTerminalPasteIngestMs } from '../../../../../../shared/agent-prompt-injection'
+import { getTerminalPasteIngestMs } from '../../../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS } from '../../../../../../shared/orchestration-timing-budgets'
 import {
   isWorkerStartTaskSpecTooLarge,

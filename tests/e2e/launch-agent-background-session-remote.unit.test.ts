@@ -1,4 +1,4 @@
-import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import './prepared-action-launch.test-fixture'
 import '../../src/renderer/src/lib/runtime-agent-background-create'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'

@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { translate } from '@/i18n/i18n'
-import type { AgentLaunchSettingsMutation } from '../../../../../../shared/agent-launch-settings'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { AgentLaunchSettingsMutation } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { useAgentLaunchFieldWrite } from '../../../agent/launch-settings/use-agent-launch-field-write'
 
 export function HostAgentEnvironmentEditor({

@@ -9,7 +9,7 @@ import {
   currentBrowserRoutePartitionBindingStore,
   routePartitionDataRoot
 } from './browser-route-partition-binding-runtime'
-import { browserSessionRegistry } from '../../browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 import {
   browserRoutePartitionPendingDeletesPath,
   queueBrowserRoutePartitionDirectoryDelete

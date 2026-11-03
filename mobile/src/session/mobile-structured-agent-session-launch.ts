@@ -10,7 +10,7 @@ import {
   type StructuredAgentSessionCreateParams
 } from '../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentCreateSupportReply } from '../../../src/shared/agent-session/structured-agent-create-support-reply'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
 import {

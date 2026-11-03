@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from 'playwright'
 import { expect } from 'vitest'
-import { waitForHiddenFrameInput } from '../../hidden-frame-input-readiness-fixture'
+import { waitForHiddenFrameInput } from '../../electron-fixtures/hidden-frame-input-readiness-fixture'
 import {
   artifactDir,
   browser,

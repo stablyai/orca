@@ -5,23 +5,23 @@ import { browserManager } from '../../browser-manager'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
-} from '../browser-extension-api-host'
+} from '../api-runtime/browser-extension-api-host'
 import {
   EXECUTE_ACTION_COMMANDS,
   readBrowserExtensionCommands,
   shortcutMatchesInput
-} from '../browser-extension-commands'
-import { grantBrowserExtensionActiveTab } from '../browser-extension-active-tab'
-import { localizeManifestString } from '../browser-extension-manifest'
+} from '../actions/browser-extension-commands'
+import { grantBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
+import { localizeManifestString } from '../installation/browser-extension-manifest'
 import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   describeBrowserExtensionTab,
   resolveBrowserExtensionTab
-} from '../browser-extension-tab-model'
-import { runBrowserExtensionToolbarAction } from '../browser-extension-toolbar'
+} from '../tabs-and-windows/browser-extension-tab-model'
+import { runBrowserExtensionToolbarAction } from '../actions/browser-extension-toolbar'
 import { noteBrowserExtensionUserGesture } from './permissions'
 
 function isOrcaShortcut(input: Electron.Input): boolean {

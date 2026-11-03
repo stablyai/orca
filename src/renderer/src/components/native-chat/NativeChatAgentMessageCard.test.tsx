@@ -39,6 +39,20 @@ import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript
 import { isNoiseMessage } from '../../../../shared/native-chat/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { orchestrationMailFixture } from '../../../../shared/agent-session/orchestration-mail.test-fixture'
+
+it('renders and copies structured mail content without the agent envelope', async () => {
+  const message = orchestrationMailFixture({ body: 'The **result** is ready.' })
+  const writeClipboardText = vi.fn(async () => {})
+  vi.stubGlobal('api', { ui: { writeClipboardText } })
+  render(card(message))
+  expect(screen.getByText('Review complete')).toBeInTheDocument()
+  expect(screen.getByText('result', { selector: 'strong' })).toBeInTheDocument()
+  expect(screen.getByText('Review worker')).toBeInTheDocument()
+  expect(screen.queryByText(/Subject:|──── From:|orchestration reply/)).toBeNull()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
+  expect(writeClipboardText).toHaveBeenCalledWith('Review complete\n\nThe **result** is ready.')
+})
 
 it('reloads a positioned worker start into the shared card with full task, Copy and navigation', async () => {
   const task = `  Task with [a link][target].\n\n${'More task text.\n'.repeat(20)}END  \n\n[target]: https://example.com\n`

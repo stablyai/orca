@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { resolveChromiumCookiesPath } from '../../chromium-cookie-path'
+import { resolveChromiumCookiesPath } from '../chromium/chromium-cookie-path'
 import {
   CHROMIUM_BROWSERS,
   browserRootPath,

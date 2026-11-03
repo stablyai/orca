@@ -1,7 +1,7 @@
 // Replay alt-screen and inline grok startup captures: ~12Hz logo shimmer defeats the 1.5s quiet window, causing 8s timeout delays/dropped drafts. Preserve both marker and quiet-floor paths.
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal } from './agent-launch/catalog/tui-agent-config-types'
 import {
   GROK_STARTUP_PTY_TRACE,
   type GrokStartupTraceChunk
