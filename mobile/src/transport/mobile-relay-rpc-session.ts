@@ -32,18 +32,18 @@ import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
-const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 let relayRpcSessionSequence = 0
 
-export interface MobileRelayRpcSession extends RpcClient, RelayDialStageSource {
-  // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
-  getAttachDeadlineAt(): number | null
-  getResumeExpiresAt(): number | null
-  getResumeConfirmation(): DeviceResumeConfirmed | null
-  getFailure(): Error | null
-}
+export type MobileRelayRpcSession = RpcClient &
+  RelayDialStageSource & {
+    // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
+    getAttachDeadlineAt(): number | null
+    getResumeExpiresAt(): number | null
+    getResumeConfirmation(): DeviceResumeConfirmed | null
+    getFailure(): Error | null
+  }
 
 export function connectMobileRelayRpcSession(args: {
   relay: MobileRelayEndpoint
@@ -180,7 +180,7 @@ export function connectMobileRelayRpcSession(args: {
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
     idleProbeMs: null,
-    probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
+    probeTimeoutMs: 4_000,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
     sendProbe: (_identity, id) => state === 'connected' && sendFrame(livenessProbeFrame(id)),

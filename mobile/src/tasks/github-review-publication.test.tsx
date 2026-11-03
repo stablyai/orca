@@ -118,10 +118,10 @@ it('retires old thread feedback before a queued detail revision commits and comp
     await act(async () => {
       f.read().setDetailPayload({ ...f.details, headSha: 'new-head' })
       f.read().setDetailPayload((value) =>
-        value?.provider === 'github' ? { ...value, body: value.body + 'first' } : value
+        value?.provider === 'github' ? { ...value, body: `${value.body}first` } : value
       )
       f.read().setDetailPayload((value) =>
-        value?.provider === 'github' ? { ...value, body: value.body + '+second' } : value
+        value?.provider === 'github' ? { ...value, body: `${value.body}+second` } : value
       )
       f.client.requests[0].resolve(rpcSuccess('old', true))
       await pending
