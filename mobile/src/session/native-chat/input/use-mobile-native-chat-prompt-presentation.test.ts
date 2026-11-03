@@ -12,13 +12,12 @@ const permission = (holdsComposer?: true): MobileChatPermission => ({
 })
 
 describe('useMobileNativeChatPromptPresentation', () => {
-  let renderer: ReturnType<typeof create> | null = null
+  let renderer = { unmount: () => {}, update: (_element: ReturnType<typeof createElement>) => {} }
   let state: ReturnType<typeof useMobileNativeChatPromptPresentation> | null = null
 
   beforeEach(() => mobileNativeChatPromptDismissals.clearForTests())
   afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
+    act(() => renderer.unmount())
   })
 
   function Harness({ shown }: { shown: MobileChatPermission | null }): null {
@@ -52,7 +51,7 @@ describe('useMobileNativeChatPromptPresentation', () => {
     const shown = permission(true)
     await answer(shown)
     expect(state?.permission).toBe(shown)
-    await act(async () => renderer?.update(createElement(Harness, { shown: null })))
+    await act(async () => renderer.update(createElement(Harness, { shown: null })))
     expect(state?.permission).toBeNull()
   })
 })
