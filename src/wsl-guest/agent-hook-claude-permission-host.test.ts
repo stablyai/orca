@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import { createHookListenerState } from '../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../shared/stable-pane-id'
-import { decideRelayClaudePermission } from './agent-hook-claude-permission-host'
+import type { AgentSubagentSnapshot } from '../shared/agent-status-types'
+import {
+  decideRelayClaudePermission,
+  relayClaudeReplayProjection
+} from './agent-hook-claude-permission-host'
 
 const pane = makePaneKey('permission', '11111111-1111-4111-8111-111111111111')
 const session = '11111111-1111-4111-8111-111111111111'
@@ -34,6 +38,33 @@ function counted<K, V>(map: Map<K, V>, visits: { count: number }): Map<K, V> {
         }
       }
       return value.bind(target)
+    }
+  })
+}
+
+/** Test-side counter of every row and field production reads from a roster; `restore` hands back the plain list. */
+function countedRoster(
+  rows: AgentSubagentSnapshot[] | undefined,
+  visits: { count: number }
+): AgentSubagentSnapshot[] | undefined {
+  if (!rows) {
+    return rows
+  }
+  const elements = rows.map(
+    (row) =>
+      new Proxy(row, {
+        get(target, property) {
+          visits.count++
+          return Reflect.get(target, property, target)
+        }
+      })
+  )
+  return new Proxy(elements, {
+    get(target, property) {
+      if (typeof property === 'string' && /^\d+$/.test(property)) {
+        visits.count++
+      }
+      return Reflect.get(target, property, target)
     }
   })
 }
@@ -83,5 +114,107 @@ describe('relay execution-host permission state', () => {
     })
     expect(measured[0]).toMatchObject({ retained: 1, released: true })
     expect(measured[1]).toEqual(measured[0])
+  })
+
+  it("compares a held request's roster in work linear in the rosters, and keeps no retired roster (N vs 10N)", () => {
+    const id = (i: number) => `c${String(i).padStart(4, '0')}`
+    const measured = [50, 500].map((children) => {
+      const state = createHookListenerState()
+      // Assigned only inside the closures below, so declared without control-flow narrowing.
+      let cached = null as ReturnType<typeof normalizeHookPayload>
+      const normalize = (hook_event_name: string, fields: Record<string, unknown> = {}) =>
+        normalizeHookPayload(
+          state,
+          'claude',
+          { paneKey: pane, payload: { session_id: session, hook_event_name, ...fields } },
+          'production'
+        )
+      const decide = (event: NonNullable<ReturnType<typeof normalize>>) => {
+        const decision = decideRelayClaudePermission(state, cached ?? undefined, event, false)
+        if (decision.kind === 'publish') {
+          cached = decision.event
+        }
+        return decision
+      }
+      const send = (hook_event_name: string, fields: Record<string, unknown> = {}) => {
+        const event = normalize(hook_event_name, fields)
+        return event ? decide(event) : undefined
+      }
+      const request = () => state.claudePermissionRequestByPaneKey.get(pane)
+      // One trigger's comparison work: the roster is materialized and sorted before counting starts.
+      const measure = (hook_event_name: string, fields: Record<string, unknown>) => {
+        const event = normalize(hook_event_name, fields)!
+        const held = request()!
+        const previous = held.payload.subagents
+        const next = event.payload.subagents
+        // Each observation normalizes its own snapshot, so equal content is never a shared list.
+        expect(next !== undefined && next === previous).toBe(false)
+        const visits = { count: 0 }
+        const countedPrevious = countedRoster(previous, visits)
+        const countedNext = countedRoster(next, visits)
+        held.payload.subagents = countedPrevious
+        event.payload.subagents = countedNext
+        const decision = decide(event)
+        // Restore plain rosters wherever the counted ones landed, before any assertion reads them.
+        for (const row of [held, request()!, event, cached!]) {
+          if (row.payload.subagents === countedPrevious) {
+            row.payload.subagents = previous
+          } else if (row.payload.subagents === countedNext) {
+            row.payload.subagents = next
+          }
+        }
+        expect(decision).toMatchObject({
+          kind: 'publish',
+          event: { claudePermission: { held: true } }
+        })
+        expect(request()).toMatchObject({
+          hookEventName: 'PermissionRequest',
+          claudeRequest: held.claudeRequest,
+          payload: { state: 'waiting', toolName: 'Read' }
+        })
+        return { visits: visits.count, population: (previous?.length ?? 0) + (next?.length ?? 0) }
+      }
+      send('SessionStart', { source: 'startup' })
+      send('UserPromptSubmit', { prompt: 'Read the notes' })
+      for (let i = 0; i < children; i++) {
+        send('SubagentStart', { agent_id: id(i), agent_type: 'general-purpose' })
+      }
+      send('PreToolUse', { ...read('/a'), tool_use_id: 'A' })
+      send('PermissionRequest', read('/a'))
+      expect(request()?.payload.subagents).toHaveLength(children)
+      const last = request()!.payload.subagents!.at(-1)!.id
+
+      const equal = measure('SubagentStart', { agent_id: id(0), agent_type: 'general-purpose' })
+      expect(request()?.payload.subagents).toHaveLength(children)
+      const changed = measure('SubagentStart', { agent_id: last, agent_type: 'Explore' })
+      expect(request()?.payload.subagents?.at(-1)).toMatchObject({ id: last, agentType: 'Explore' })
+      const grown = measure('SubagentStart', { agent_id: 'c9999', agent_type: 'Explore' })
+      expect(request()?.payload.subagents).toHaveLength(children + 1)
+
+      for (const child of [...Array(children).keys()].map(id).concat('c9999')) {
+        expect(send('SubagentStop', { agent_id: child })).toMatchObject({
+          event: { claudePermission: { held: true } }
+        })
+      }
+      // Nothing retired stays behind the held request, its forwarded row or its replay.
+      expect(request()?.payload.subagents ?? []).toHaveLength(0)
+      expect(cached?.payload.subagents ?? []).toHaveLength(0)
+      expect(relayClaudeReplayProjection(state, pane)?.row?.payload.subagents ?? []).toHaveLength(0)
+      const retired = measure('SubagentStop', { agent_id: id(0) })
+
+      const released = send('PostToolBatch', { tool_calls: [{ ...read('/a'), tool_use_id: 'A' }] })
+      expect(released).toMatchObject({ kind: 'publish', event: { payload: { state: 'working' } } })
+      expect(request()).toBeNull()
+      return { equal, changed, grown, retired }
+    })
+    for (const { equal, changed, grown, retired } of measured) {
+      // A full comparison reads every row of both rosters; a change on the last row is found there.
+      expect(equal.visits).toBeGreaterThanOrEqual(equal.population)
+      expect(changed.visits).toBeGreaterThanOrEqual(changed.population)
+      for (const { visits, population } of [equal, changed, grown, retired]) {
+        expect(visits).toBeLessThanOrEqual(8 * population + 16)
+      }
+      expect(retired).toEqual(measured[0].retired)
+    }
   })
 })

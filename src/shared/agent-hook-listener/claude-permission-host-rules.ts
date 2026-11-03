@@ -1,4 +1,5 @@
 import { isAskUserQuestionTool } from '../agent-question-answered-intent'
+import { agentSubagentsEqual } from '../agent-status-subagent-snapshot'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { buildClaudeCachedLeadStatusPayload } from './providers/claude-lifecycle-events'
@@ -59,7 +60,7 @@ export function holdClaudeRequest<T extends AgentHookEventPayload>(
 ): T {
   const held = withHeldChildWaitMainAgent(previous, next)
   const roster = next.payload.subagents
-  if (!refreshRoster || JSON.stringify(held.payload.subagents) === JSON.stringify(roster)) {
+  if (!refreshRoster || agentSubagentsEqual(held.payload.subagents, roster)) {
     return held
   }
   return { ...held, payload: { ...held.payload, subagents: roster } }
