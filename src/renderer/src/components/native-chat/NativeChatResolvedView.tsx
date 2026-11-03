@@ -103,7 +103,8 @@ export function NativeChatResolvedView({
   // A coalesced interrupt/restart can stay working; the newer epoch must still clear Stop suppression.
   const workingEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null)
   const turnEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.turnStartedAt ?? null)
-  const sendWorkingEpoch = liveWorking || session.hookAwaitingInput ? turnEpoch : undefined
+  const sendWorkingEpoch =
+    (session.hookWorking ?? liveWorking) || session.hookAwaitingInput ? turnEpoch : undefined
   const canSend = useNativeChatCanSend(targetPtyId)
   // Share verified composer delivery with prompt answers and ESC-based Stop.
   const send = useNativeChatInteractiveSend(paneKey, targetPtyId, agent)
