@@ -23,6 +23,7 @@ import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
 export type FileExplorerRowProps = {
   node: TreeNode
+  fontSize?: number
   displayDepthOffset?: number
   isExpanded: boolean
   isLoading: boolean
@@ -73,6 +74,7 @@ export type FileExplorerRowProps = {
 /** Offsets visual indentation for a scoped tree without changing the node paths passed to file actions. */
 export function FileExplorerRow({
   node,
+  fontSize = 12,
   displayDepthOffset = 0,
   isExpanded,
   isLoading,
@@ -145,12 +147,16 @@ export function FileExplorerRow({
           data-file-explorer-row=""
           data-selected={isSelected ? 'true' : undefined}
           className={cn(
-            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors',
+            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left transition-colors',
             !isSelected && 'hover:bg-accent hover:text-foreground',
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
-          style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}
+          style={{
+            paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px`,
+            fontSize: `${fontSize}px`,
+            minHeight: `${fontSize + 14}px`
+          }}
           ref={setRowDragNode}
           // The OS-drop owner reads the target folder here at drop time.
           data-file-explorer-drop-dir={rowDropDir}

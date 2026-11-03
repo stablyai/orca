@@ -66,6 +66,7 @@ function virtualRowsElement(
   } = {}
 ): React.JSX.Element {
   return FileExplorerVirtualRows({
+    fontSize: 12,
     virtualizer: {
       getTotalSize: () => nodes.length * 26,
       getVirtualItems: () =>

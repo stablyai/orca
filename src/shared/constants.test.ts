@@ -8,4 +8,8 @@ describe('getDefaultSettings', () => {
       'C:\\Users\\alice\\orca\\workspaces'
     )
   })
+
+  it('defaults File Explorer font size to 12px (previous text-xs)', () => {
+    expect(getDefaultSettings('/tmp').fileExplorerFontSize).toBe(12)
+  })
 })
