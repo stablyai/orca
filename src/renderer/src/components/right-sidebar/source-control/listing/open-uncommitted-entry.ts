@@ -2,6 +2,7 @@ import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { AppState } from '@/store/types'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
+import { isSourceControlOpenDiffStaged } from '../../source-control-diff-load'
 
 export function openUncommittedEntry(
   state: Pick<AppState, 'trackConflictPath' | 'openConflictFile' | 'openFile' | 'openDiff'>,
@@ -30,8 +31,15 @@ export function openUncommittedEntry(
     )
     return
   }
-  state.openDiff(worktreeId, filePath, entry.path, language, entry.area === 'staged', {
-    ...options,
-    ...(entry.area === 'staged' && entry.status === 'renamed' ? { oldPath: entry.oldPath } : {})
-  })
+  state.openDiff(
+    worktreeId,
+    filePath,
+    entry.path,
+    language,
+    isSourceControlOpenDiffStaged(entry.area),
+    {
+      ...options,
+      ...(entry.area === 'staged' && entry.status === 'renamed' ? { oldPath: entry.oldPath } : {})
+    }
+  )
 }
