@@ -1,14 +1,22 @@
-import { acquirePiRpcSession } from './rpc-session-acquisition'
 import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
+import { randomUUID } from 'node:crypto'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
+  AgentSessionPreSpawnError,
   AgentSessionAcquisitionRootExitObservedError,
+  AgentSessionAcquisitionExitUnprovenError,
+  launchPreparationFailure,
+  type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput,
   type StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { providerSpawnedProcessIdentity } from '../provider-process/provider-spawned-process-identity'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
+import { piStartExitError } from './rpc-exit-classification'
 import { compactPiRpcSession } from './rpc-compaction'
+import { buildPiRpcLaunch } from './rpc-launch'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
-import type { PiRpcSession, PiRpcSessionDeps, PiRpcConnection } from './rpc-session'
+import { PiRpcSession, type PiRpcSessionDeps, type PiRpcConnection } from './rpc-session'
 import { dispatchPiRpcMessage } from './rpc-message-dispatch'
 import { applyPiRpcSessionOption } from './rpc-options'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
@@ -33,14 +41,82 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     agent
   ) => agent === 'pi' && this.supportsLocation(location)
 
-  acquire = (input: StructuredAgentSessionAcquireInput) =>
-    acquirePiRpcSession(input, {
-      deps: this.deps,
-      sessions: this.sessions,
-      starts: this.starts,
-      acquiring: this.acquiring,
-      acknowledgeSessionRelease: (id) => this.acknowledgeSessionRelease(id)
-    })
+  async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
+    const id = input.identity.sessionId
+    if (this.acquiring.has(id)) {
+      throw new AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
+    }
+    this.acquiring.add(id)
+    const attempt = this.starts.begin(input.signal)
+    let session: PiRpcSession | undefined
+    try {
+      if (attempt.signal.aborted) {
+        throw new AgentSessionPreSpawnError(new Error('Pi closed while starting'))
+      }
+      if (!(await this.starts.stopFailed(id))) {
+        throw new AgentSessionAcquisitionExitUnprovenError(
+          new Error('Previous Pi start has not exited')
+        )
+      }
+      this.acknowledgeSessionRelease(id)
+      if (this.sessions.has(id)) {
+        throw new AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
+      }
+      let launch: PiRpcResolvedLaunch
+      try {
+        launch = await waitForPromiseWithSignal(
+          this.deps.resolveLaunch({ identity: input.identity, spawnToken: input.spawnToken }),
+          attempt.signal
+        )
+      } catch (error) {
+        // A start withdrawn while resolving is a close, not a failed preparation.
+        throw attempt.signal.aborted
+          ? new AgentSessionPreSpawnError(error)
+          : launchPreparationFailure(error)
+      }
+      if (attempt.signal.aborted) {
+        throw new AgentSessionPreSpawnError(new Error('Pi closed while starting'))
+      }
+      const spec = buildPiRpcLaunch(launch)
+      const fresh = !launch.sessionFile && !launch.forkFile
+      session = new PiRpcSession(input, randomUUID(), spec, this.deps, launch, fresh)
+      this.sessions.set(id, session)
+      this.starts.track(attempt, session.connection)
+      const spawned = providerSpawnedProcessIdentity(
+        input,
+        'Pi RPC',
+        this.deps.readProcessStartTime
+      )
+      if (session.connection.pid !== undefined) {
+        await spawned.onSpawned(session.connection.pid)
+      }
+      const process = await spawned.read(session.connection.pid)
+      if (session.connection.closed || attempt.signal.aborted) {
+        throw new Error('Pi exited while starting')
+      }
+      return {
+        process,
+        acquisitionGeneration: session.generation
+      }
+    } catch (error) {
+      if (!session) {
+        throw error instanceof AgentSessionPreSpawnError ||
+          error instanceof AgentSessionAcquisitionExitUnprovenError
+          ? error
+          : new AgentSessionPreSpawnError(error)
+      }
+      const result = await session.close(false).catch(() => null)
+      const exited = piStartExitError(error, session.connection, result)
+      if (exited) {
+        throw exited
+      }
+      this.starts.retainFailed(id, session.connection)
+      throw new AgentSessionAcquisitionExitUnprovenError(error)
+    } finally {
+      this.starts.end(attempt)
+      this.acquiring.delete(id)
+    }
+  }
 
   open: NonNullable<StructuredAgentSessionAdapter['open']> = async (input) => {
     const session = this.sessions.get(input.sessionId)
