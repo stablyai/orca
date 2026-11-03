@@ -43,7 +43,7 @@ vi.mock('../../claude/claude-folder-trust-file', async (importOriginal) => {
 })
 
 import { applyAgentWorkspaceTrust, type AgentTrustLaunchContext } from './agent-workspace-trust'
-import { clearWslHomeCache, rememberWslHome } from '../../wsl-home-cache'
+import { clearWslHomeCache, rememberWslHome } from '../../wsl/discovery/wsl-home-cache'
 import {
   AGENT_TRUST_WRITE_DEADLINE_MS,
   SHORT_AGENT_TRUST_WRITE_DEADLINE_MS

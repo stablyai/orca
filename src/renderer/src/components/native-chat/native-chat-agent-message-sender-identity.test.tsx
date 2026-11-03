@@ -182,6 +182,7 @@ it('uses the recipient host when identical session text is published by two host
 })
 
 it('shows a chat sender by its current rename', () => {
+  const renamed = 'Production Release Scan & Compatibility Review'
   useAppStore.setState({ unifiedTabsByWorktree: { [SENDER]: [tab(ROOT, '')] } })
   const feed = feeds.get('local')!
   const status = feed.snapshot
@@ -190,8 +191,18 @@ it('shows a chat sender by its current rename', () => {
   expect(screen.getByText('Original sender')).toBeInTheDocument()
   act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: null }]))
   expect(screen.getByText('Original sender')).toBeInTheDocument()
-  act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: 'Renamed sender' }]))
-  expect(screen.getByText('Renamed sender')).toBeInTheDocument()
+  act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: renamed }]))
+  const name = screen.getByText(renamed)
+  expect(name).toBeInTheDocument()
+  fireEvent.click(name)
+  expect(openAgentMessageSender).toHaveBeenCalledWith(
+    source(),
+    source().senders[0],
+    RECIPIENT,
+    undefined,
+    undefined,
+    renamed
+  )
   expect(feed.snapshot).toBe(status)
   expect(status.get(ROOT)?.conversationName).toBeUndefined()
 })

@@ -1,6 +1,6 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
+import { buildOpenCodeSqliteCandidatePath } from '../../shared/opencode-sqlite-session-path'
 
 export function isSelectedSessionFile(
   selectedSessionId: string | undefined,
@@ -30,4 +30,18 @@ export function selectedSqliteSessionId(
       `${prefix}${sessionId}:${buildOpenCodeSqliteCandidatePath(dbPath, sessionId)}`
     ? sessionId
     : undefined
+}
+
+export function selectedWslSqliteSessionId(
+  selectedSessionId: string | undefined,
+  agent: AiVaultAgent,
+  paths: ReadonlyMap<string, string>
+): string | undefined {
+  for (const [linuxPath, original] of paths) {
+    const sessionId = selectedSqliteSessionId(selectedSessionId, agent, original)
+    if (sessionId) {
+      return `local:${agent}:${sessionId}:${buildOpenCodeSqliteCandidatePath(linuxPath, sessionId)}`
+    }
+  }
+  return undefined
 }

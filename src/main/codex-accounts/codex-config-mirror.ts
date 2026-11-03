@@ -1,16 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import {
   ensureCodexDaemonSocketGuard,
   syncSystemConfigIntoManagedCodexHome
 } from '../codex/codex-config-mirror'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import type { Store } from '../persistence/loading-store/store'
-import { toWindowsWslPath } from '../wsl'
-import { wasWslDistroLastSeenRunningSettled } from '../wsl-background-distro-gate'
-import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/wsl-unc-access-gate'
+import { wasWslDistroLastSeenRunningSettled } from '../wsl/discovery/wsl-background-distro-gate'
+import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export type CanonicalCodexConfig = {
   contents: string

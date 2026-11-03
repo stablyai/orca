@@ -1,6 +1,6 @@
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import type { SessionSidecarObservation } from './session-sidecar-stat'
+import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
 import type { FileWithMtime } from './session-scanner-types'
 import { scanIssueTextFromError } from './session-scan-issues'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'

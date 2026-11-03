@@ -5,7 +5,7 @@ import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RuntimeAiVaultCommands } from '../../runtime-ai-vault-commands'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultServiceScanOptions } from '../../../ai-vault/session-scanner-service-protocol'
+import type { AiVaultServiceScanOptions } from '../../../ai-vault/scan-service/session-scanner-service-protocol'
 import {
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
@@ -19,7 +19,7 @@ const { scanAiVaultSessionsInService, resolveAiVaultSessionTitlesInService } = v
   resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
-vi.mock('../../../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../../../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService,
   resolveAiVaultSessionTitlesInService

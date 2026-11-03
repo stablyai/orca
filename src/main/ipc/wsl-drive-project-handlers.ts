@@ -10,12 +10,12 @@ import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversio
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { readWorktreeLinks as readWorktreeAdminLinks } from '../git/worktree-prune-guard'
 import { resolveLocalProjectRuntimeForProject } from '../workspaces/execution-host/local-project-runtime-resolution'
-import { wslHostsOptedIn } from '../wsl/wsl-host-gate'
+import { wslHostsOptedIn } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   convertWslDriveProjectToWindowsGit,
   previewWslDriveProjectWindowsGit,
   type WslDriveProjectDeps
-} from '../wsl/wsl-drive-project-windows-git'
+} from '../wsl/filesystem/wsl-drive-project-windows-git'
 
 export const WSL_DRIVE_PROJECT_HANDLER_CHANNELS = [
   'wslDriveProject:preview',

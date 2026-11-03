@@ -1,6 +1,7 @@
 import { win32 as pathWin32 } from 'node:path'
-import { isWindowsGitBashShellPath } from '../git-bash'
-import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
+import { isWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand
@@ -8,11 +9,11 @@ import {
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { getBashWrapperLaunchArgs } from './local-pty/local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty/local-pty-shell-ready-wrapper-generation'
+import { encodePowerShellCommand } from '../../shared/powershell-command-encoding'
 import {
-  encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,
   getPowerShellOsc133StartupCommandMark
-} from '../powershell-osc133-bootstrap'
+} from '../pty/shell-startup/powershell-osc133-bootstrap'
 import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
 import { WSL_GUEST_ROOT_MARKER_COMMAND } from '../../shared/wsl-guest-root-marker'
 

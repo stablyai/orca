@@ -8,7 +8,7 @@ import {
   isAppImageExtractionComplete,
   resolveAppImageExtractedRoot
 } from '../cli/appimage-extracted-root'
-import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
 import type { DurableDaemonScopeCommand } from './daemon-cgroup-scope'
 
 export type AppImageGenerationDaemonLaunch = {

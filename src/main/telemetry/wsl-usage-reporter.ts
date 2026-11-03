@@ -7,20 +7,20 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execu
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { isWslHostRuntimeEnvironment } from '../../shared/runtime-environments'
 import { resolveLocalWorkspaceRuntime } from '../workspaces/execution-host/local-project-runtime-resolution'
-import { getCachedWslAvailability } from '../wsl-availability'
-import { getCachedWslDistros } from '../wsl'
-import { listConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
-import { filterUserWslDistros } from '../wsl-distro-list-output'
-import { peekConfirmedRunningWslDistros } from '../wsl-running-distro-cache'
-import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows-native-registry'
-import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
-import { listWslHostDistros } from '../wsl/wsl-host-distro-list'
+import { getCachedWslAvailability } from '../wsl/discovery/wsl-availability'
+import { getCachedWslDistros } from '../wsl/discovery/distro-catalog'
+import { listConfirmedRunningWslDistros } from '../wsl/discovery/wsl-background-distro-gate'
+import { filterUserWslDistros } from '../wsl/discovery/wsl-distro-list-output'
+import { peekConfirmedRunningWslDistros } from '../wsl/discovery/wsl-running-distro-cache'
+import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows/windows-native-registry'
+import { readWslDistroRegistrations } from '../wsl/discovery/wsl-distro-registry-id'
+import { listWslHostDistros } from '../wsl/host-lifecycle/wsl-host-distro-list'
 import {
   wslHostsAppliedMovedProjects,
   wslHostsAppliedPolicyState,
   wslHostsGateOpen,
   wslHostsGateState
-} from '../wsl/wsl-host-gate'
+} from '../wsl/host-lifecycle/wsl-host-gate'
 import { isForeignLink, readWorktreeLinks } from '../git/worktree-prune-guard'
 import { isTelemetryEnabled, track } from './client'
 import {

@@ -64,13 +64,17 @@ export type RawCommentsResponse = {
   } | null
 }
 
+export type RawChildIssue = RawIssue & {
+  children?: RawChildrenConnection | null
+}
+
+export type RawChildrenConnection = {
+  nodes?: RawChildIssue[]
+  pageInfo?: RawPageInfo
+}
+
 export type RawChildrenResponse = {
-  issue?: {
-    children?: {
-      nodes?: RawIssue[]
-      pageInfo?: RawPageInfo
-    } | null
-  } | null
+  issue?: { children?: RawChildrenConnection | null } | null
 }
 
 export type RawAttachmentsResponse = {
@@ -109,7 +113,7 @@ export type RawRelationsResponse = {
   } | null
 }
 
-export const ISSUE_FIELDS = `
+const ISSUE_CORE_FIELDS = `
   id
   identifier
   title
@@ -119,20 +123,38 @@ export const ISSUE_FIELDS = `
   estimate
   dueDate
   branchName
-  createdAt
   updatedAt
-  state { id name type color }
-  team { id name key color }
+  state { name type color }
+  team { id name key }
   project { id name color }
-  cycle { id name }
   assignee { id displayName avatarUrl }
-  labels(first: 50) { nodes { id name color } pageInfo { hasNextPage } }
+  labels(first: 50) { nodes { id name } }
+`
+
+const ISSUE_AGENT_FIELDS = `
+  createdAt
+  state { id }
+  team { color }
+  cycle { id name }
+  labels(first: 50) { nodes { color } pageInfo { hasNextPage } }
+`
+
+export const ISSUE_FIELDS = `
+  ${ISSUE_CORE_FIELDS}
+  ${ISSUE_AGENT_FIELDS}
 `
 
 export const ISSUE_QUERY = `
-  query OrcaAgentLinearIssue($id: String!) {
+  query OrcaAgentLinearIssue($id: String!, $includeDrawerFields: Boolean = false) {
     issue(id: $id) {
-      ${ISSUE_FIELDS}
+      ${ISSUE_CORE_FIELDS}
+      ... @skip(if: $includeDrawerFields) {
+        ${ISSUE_AGENT_FIELDS}
+      }
+      project @include(if: $includeDrawerFields) { url }
+      children(first: 25) @include(if: $includeDrawerFields) {
+        nodes { id identifier title url }
+      }
     }
   }
 `
@@ -165,18 +187,31 @@ export const COMMENTS_QUERY = `
   }
 `
 
-export const CHILDREN_QUERY = `
-  query OrcaAgentLinearIssueChildren($id: String!, $first: Int, $after: String) {
-    issue(id: $id) {
-      children(first: $first, after: $after) {
-        nodes {
-          ${ISSUE_FIELDS}
-        }
+// Full issue fields include 50 labels; 100 projected issues leave room below the 10,000-point limit.
+export function childrenPageSize(depth: number): number {
+  return Math.min(50, Math.floor(100 / depth))
+}
+
+export function CHILDREN_QUERY(depth: number): string {
+  let fields = ISSUE_FIELDS
+  for (let level = 1; level < depth; level += 1) {
+    fields = `${ISSUE_FIELDS}
+      children(first: 1) {
+        nodes { ${fields} }
         pageInfo { hasNextPage endCursor }
+      }`
+  }
+  return `
+    query OrcaAgentLinearIssueChildren($id: String!, $first: Int!, $after: String) {
+      issue(id: $id) {
+        children(first: $first, after: $after) {
+          nodes { ${fields} }
+          pageInfo { hasNextPage endCursor }
+        }
       }
     }
-  }
-`
+  `
+}
 
 export const ATTACHMENTS_QUERY = `
   query OrcaAgentLinearIssueAttachments($id: String!, $first: Int, $after: String) {

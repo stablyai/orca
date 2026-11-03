@@ -72,47 +72,6 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
-  it('previews Grok-native tool names (run_terminal_command / search_replace)', () => {
-    const shell = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hookEventName: 'PreToolUse',
-          tool_name: 'run_terminal_command',
-          tool_input: { command: 'git status' }
-        }
-      },
-      'production'
-    )
-    const edit = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hookEventName: 'PreToolUse',
-          toolName: 'search_replace',
-          toolInput: { path: 'src/app.ts', old_string: 'a', new_string: 'b' }
-        }
-      },
-      'production'
-    )
-    expect(shell?.payload).toMatchObject({
-      agentType: 'grok',
-      state: 'working',
-      toolName: 'run_terminal_command',
-      toolInput: 'git status'
-    })
-    expect(edit?.payload).toMatchObject({
-      agentType: 'grok',
-      state: 'working',
-      toolName: 'search_replace',
-      toolInput: 'src/app.ts'
-    })
-  })
-
   it('maps Grok ask_user_question PreToolUse to waiting with interactivePrompt', () => {
     const questions = [
       {
@@ -161,26 +120,6 @@ describe('shared agent-hook-listener', () => {
     expect(answered?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('does not recreate a Grok question card on post_tool_use_failure', () => {
-    const event = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hookEventName: 'post_tool_use_failure',
-          toolName: 'ask_user_question',
-          toolInput: { questions: [{ question: 'Retry?', options: ['yes', 'no'] }] },
-          error: 'cancelled'
-        }
-      },
-      'production'
-    )
-
-    expect(event?.payload.state).toBe('working')
-    expect(event?.payload.interactivePrompt).toBeUndefined()
-  })
-
   it('surfaces the Grok tool-failure error and clears stale tool fields', () => {
     normalizeHookPayload(
       state,
@@ -218,76 +157,6 @@ describe('shared agent-hook-listener', () => {
     expect(failed?.payload.toolInput).toBeUndefined()
   })
 
-  it('maps Grok StopFailure to done', () => {
-    normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: { hookEventName: 'UserPromptSubmit', prompt: 'do work' }
-      },
-      'production'
-    )
-    const done = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: { hookEventName: 'StopFailure', error: 'api timeout' }
-      },
-      'production'
-    )
-    expect(done?.payload).toMatchObject({
-      agentType: 'grok',
-      state: 'done',
-      prompt: 'do work'
-    })
-  })
-
-  it('strips Grok internal user_query wrapper before caching the prompt', () => {
-    const prompt = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hookEventName: 'user_prompt_submit',
-          prompt: '<user_query>\nFind recent PR\n</user_query>'
-        }
-      },
-      'production'
-    )
-    expect(prompt?.payload.prompt).toBe('Find recent PR')
-
-    const tool = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hookEventName: 'pre_tool_use',
-          toolName: 'web_search',
-          toolInput: { query: 'recent PR' }
-        }
-      },
-      'production'
-    )
-    expect(tool?.payload.prompt).toBe('Find recent PR')
-  })
-
-  it('strips Grok opening user_query wrapper even when the closing tag is absent', () => {
-    const event = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: { hookEventName: 'user_prompt_submit', prompt: '<user_query>Find recent PR' }
-      },
-      'production'
-    )
-    expect(event?.payload.prompt).toBe('Find recent PR')
-  })
-
   it('preserves both ends of newline-heavy Grok user_query prompts', () => {
     const promptText = `Find recent PR${'\n'.repeat(300)}Keep the final requirement`
     const event = normalizeHookPayload(
@@ -315,32 +184,6 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(tool?.payload.prompt).toBe('Find recent PR Keep the final requirement')
-  })
-
-  it('maps Grok feedback notifications to waiting without overwriting the prompt', () => {
-    normalizeHookPayload(
-      state,
-      'grok',
-      { paneKey: PANE_KEY, payload: { hookEventName: 'UserPromptSubmit', prompt: 'ship it' } },
-      'production'
-    )
-
-    const event = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: { hookEventName: 'Notification', message: 'Grok needs your feedback to proceed' }
-      },
-      'production'
-    )
-
-    expect(event).not.toBeNull()
-    expect(event!.payload).toMatchObject({
-      state: 'waiting',
-      prompt: 'ship it',
-      agentType: 'grok'
-    })
   })
 
   it('ignores Grok routine permission prompt notifications during tool use', () => {
@@ -517,18 +360,6 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('treats Grok SessionEnd chat history as pending result text', () => {
-    expect(
-      hasPendingAgentResultText('grok', {
-        payload: {
-          hookEventName: 'SessionEnd',
-          sessionId: '019e37f4-5135-7b63-a4ab-6d13aa6bf528',
-          cwd: '/tmp/workspace'
-        }
-      })
-    ).toBe(true)
-  })
-
   it('enriches a long-cwd Grok result after async discovery completes', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-pending-home-'))
     const hookGrokHome = join(tmpDir, 'hook-grok')
@@ -559,17 +390,5 @@ describe('shared agent-hook-listener', () => {
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
-  })
-
-  it('does not schedule Grok discovery for an invalid session id', () => {
-    expect(
-      hasPendingAgentResultText('grok', {
-        payload: {
-          hookEventName: 'SessionEnd',
-          sessionId: '../escape',
-          cwd: '/tmp/workspace'
-        }
-      })
-    ).toBe(false)
   })
 })

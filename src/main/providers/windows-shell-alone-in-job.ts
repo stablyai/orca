@@ -1,4 +1,4 @@
-import { isGitForWindowsBashLauncherPath } from '../git-bash'
+import { isGitForWindowsBashLauncherPath } from '../pty/shell-startup/git-bash'
 import type { WindowsProcessIdentityRow } from '../windows/windows-process-table'
 import {
   buildProcessTableIndex,

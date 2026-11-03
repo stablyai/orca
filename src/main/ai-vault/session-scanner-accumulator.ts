@@ -16,7 +16,7 @@ import {
   NO_TRANSCRIPT_MESSAGES,
   type TranscriptMessageSink,
   type TranscriptSessionIdentity
-} from './session-transcript-consumers'
+} from './transcripts/session-transcript-consumers'
 
 export function createAccumulator(args: {
   agent: AiVaultAgent

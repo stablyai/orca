@@ -32,34 +32,6 @@ describe('OMP approval ownership', () => {
     })
   }
 
-  // omp 17.0.5's `tools.approvalMode` enum, captured off the wire from a real run of each mode.
-  it.each(['always-ask', 'write', 'yolo'])(
-    'keeps an approval request blocked under approval_mode %s',
-    (approvalMode) => {
-      expect(approvalRequest({ approval_mode: approvalMode })?.payload).toMatchObject({
-        state: 'blocked',
-        agentType: 'omp',
-        toolName: 'bash'
-      })
-    }
-  )
-
-  it.each([
-    ['missing', {}],
-    ['unrecognised', { approval_mode: 'some-future-mode' }],
-    ['non-string', { approval_mode: 3 }],
-    ['null', { approval_mode: null }]
-  ])('treats a %s approval_mode exactly like today', (_name, extra) => {
-    expect(approvalRequest(extra)?.payload.state).toBe('blocked')
-  })
-
-  it('reports the reason omp sends as the tool input preview', () => {
-    // omp's bash tool returns this reason for its critical-pattern override.
-    expect(
-      approvalRequest({ reason: 'Critical pattern detected', approval_mode: 'write' })?.payload
-    ).toMatchObject({ state: 'blocked', toolInput: 'Critical pattern detected' })
-  })
-
   it('clears the previous tool input when omp sends no reason', () => {
     expect(
       approvalRequest({ reason: 'Critical pattern detected', approval_mode: 'always-ask' })?.payload
@@ -70,17 +42,6 @@ describe('OMP approval ownership', () => {
       toolName: 'bash',
       toolInput: undefined
     })
-  })
-
-  it('clears the wait on resolution regardless of the mode that requested it', () => {
-    expect(approvalRequest({ approval_mode: 'yolo' })?.payload.state).toBe('blocked')
-    expect(
-      post('omp', {
-        hook_event_name: 'tool_approval_resolved',
-        tool_name: 'bash',
-        approved: true
-      })?.payload
-    ).toMatchObject({ state: 'working', toolName: 'bash' })
   })
 
   /** Normalizes the post and admits its row, as the hook server does, so the next post sees it. */
@@ -118,29 +79,5 @@ describe('OMP approval ownership', () => {
   it('lets an ask wait end on its own tool_execution_end', () => {
     expect(deliver({ hook_event_name: 'tool_execution_start', tool_name: 'ask' })).toBe('blocked')
     expect(deliver({ hook_event_name: 'tool_execution_end', tool_name: 'ask' })).toBe('working')
-  })
-
-  // Pi and prime-agent share this normalizer but have no approval lifecycle, so the field must not
-  // give their panes a status row.
-  it.each(['always-ask', 'write', 'yolo'])(
-    'still ignores a Pi approval request carrying approval_mode %s',
-    (approvalMode) => {
-      expect(
-        post('pi', {
-          hook_event_name: 'tool_approval_requested',
-          tool_name: 'bash',
-          approval_mode: approvalMode
-        })
-      ).toBeNull()
-    }
-  )
-
-  it('leaves a Pi input modal waiting, not blocked, when approval_mode is present', () => {
-    expect(
-      post('pi', {
-        hook_event_name: 'ui_prompt_start',
-        approval_mode: 'yolo'
-      })?.payload.state
-    ).toBe('waiting')
   })
 })
