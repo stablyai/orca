@@ -438,7 +438,8 @@ describe('a chat at rest, read by the host', () => {
       false,
       answer.models
     )
-    expect(complete.current.effort).toBe('high')
+    expect(complete.current.effort).toBeUndefined()
+    expect(complete.current.acceptedInputSources).not.toHaveProperty('effort')
   })
 
   it.each([
