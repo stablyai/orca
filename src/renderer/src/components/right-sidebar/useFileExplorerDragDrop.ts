@@ -28,7 +28,11 @@ type UseFileExplorerDragDropResult = {
   dropTargetDir: string | null
   setDropTargetDir: (dir: string | null) => void
   dragSourcePath: string | null
-  setDragSourcePath: (path: string | null) => void
+  setDragSourcePath: (
+    path: string | null,
+    isDirectory?: boolean,
+    selectionDirectoryFlags?: readonly (readonly [string, boolean])[]
+  ) => void
   isRootDragOver: boolean
   isNativeDragOver: boolean
   nativeDropTargetDir: string | null
@@ -61,7 +65,41 @@ export function useFileExplorerDragDrop({
   const [isRootDragOver, setIsRootDragOver] = useState(false)
   const rootDragCounterRef = useRef(0)
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null)
-  const [dragSourcePath, setDragSourcePath] = useState<string | null>(null)
+  const [dragSourcePath, setDragSourcePathState] = useState<string | null>(null)
+  const dragSourceIsDirectoryRef = useRef(false)
+  // Why: document-level capture `drop` clears live drag state before React
+  // onDrop runs handleMoveDrop; keep last primary-source metadata for that race.
+  const lastDragSourceMetaRef = useRef<{ path: string; isDirectory: boolean } | null>(null)
+  // Why: multi-select must know isDirectory for every path, not only the primary (#10379).
+  const dragSourceDirectoryByPathRef = useRef(new Map<string, boolean>())
+  // The capture listener replaces the live map before handleMoveDrop reads it.
+  // This copy survives that clear and is replaced on the next drag start.
+  const lastDragSourceDirectoryByPathRef = useRef(new Map<string, boolean>())
+
+  const setDragSourcePath = useCallback(
+    (
+      path: string | null,
+      isDirectory = false,
+      selectionDirectoryFlags?: readonly (readonly [string, boolean])[]
+    ) => {
+      setDragSourcePathState(path)
+      if (path !== null) {
+        dragSourceIsDirectoryRef.current = isDirectory
+        lastDragSourceMetaRef.current = { path, isDirectory }
+        const nextFlags = new Map(selectionDirectoryFlags ?? [[path, isDirectory]])
+        if (!nextFlags.has(path)) {
+          nextFlags.set(path, isDirectory)
+        }
+        dragSourceDirectoryByPathRef.current = nextFlags
+        lastDragSourceDirectoryByPathRef.current = new Map(nextFlags)
+      } else {
+        dragSourceIsDirectoryRef.current = false
+        // Replace the live map. Do not clear the snapshot the drop handler still reads.
+        dragSourceDirectoryByPathRef.current = new Map()
+      }
+    },
+    []
+  )
 
   const [isNativeDragOver, setIsNativeDragOver] = useState(false)
   const nativeRootDragCounterRef = useRef(0)
@@ -77,7 +115,7 @@ export function useFileExplorerDragDrop({
     setDragSourcePath(null)
     setIsNativeDragOver(false)
     setNativeDropTargetDir(null)
-  }, [])
+  }, [setDragSourcePath])
 
   const stopAndClearDragState = useCallback(() => {
     clearDragState()
@@ -107,7 +145,12 @@ export function useFileExplorerDragDrop({
     activeWorktreeId,
     refreshDir,
     getOperationOwnerForPath,
-    setDropTargetDir
+    setDropTargetDir,
+    dragSourcePath,
+    dragSourceIsDirectoryRef,
+    lastDragSourceMetaRef,
+    dragSourceDirectoryByPathRef,
+    lastDragSourceDirectoryByPathRef
   })
 
   const clearNativeDragState = useCallback(() => {

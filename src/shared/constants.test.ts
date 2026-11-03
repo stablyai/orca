@@ -8,4 +8,8 @@ describe('getDefaultSettings', () => {
       'C:\\Users\\alice\\orca\\workspaces'
     )
   })
+
+  it('keeps file explorer drag-move confirmation off by default', () => {
+    expect(getDefaultSettings('/tmp').confirmFileExplorerMove).toBe('never')
+  })
 })
