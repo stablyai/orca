@@ -610,3 +610,120 @@ describe('generated input retargeted to a replacement running another agent', ()
     }
   })
 })
+
+// Q2: a generated send's current screen is authoritative. Lifecycle status that still says
+// "permission" after the user answered (its text left above the new composer) never refuses it;
+// only a permission event after its own text commit, or a current dialog, does.
+describe('generated input and permission history', () => {
+  const PERMISSION_TITLE = '\x1b]0;Codex waiting for permission\x07'
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sizes the host's headless model to the recording, through its protected members.
+  const sized = (runtime: OrcaRuntimeService) => {
+    const host = runtime as unknown as {
+      ptyController: { getSize?: () => { cols: number; rows: number } }
+      resizeHeadlessTerminal: (ptyId: string, cols: number, rows: number) => void
+    }
+    host.ptyController.getSize = () => ({ cols: 120, rows: 40 })
+    host.resizeHeadlessTerminal('pty-prompt', 120, 40)
+  }
+
+  it.each(['answered, its text left above the composer', 'answered, screen cleared'])(
+    'holds a Codex prompt at its recorded trust screen, then delivers it once %s',
+    async (answer) => {
+      const { ruledScreenLines } = await finalReplayFrame('codex-0-158-0-trustprompt', 120, 40)
+      vi.useFakeTimers()
+      vi.setSystemTime(10_000)
+      try {
+        const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+          () => {},
+          'codex',
+          () => true
+        )
+        sized(runtime)
+        runtime.onPtyData('pty-prompt', readRuntimeFixture('codex-0-158-0-trustprompt'), 0)
+        const result = deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'exact generated context',
+          submit: true,
+          agent: 'codex',
+          composerReady: true,
+          intent: 'startup',
+          timeoutMs: 60_000
+        })
+        await vi.advanceTimersByTimeAsync(8_300)
+        expect(writes).toEqual([])
+        runtime.onPtyData(
+          'pty-prompt',
+          answer.startsWith('answered, its text')
+            ? `\x1b[?2004h\x1b[?1049h\x1b[2J\x1b[H\x1b[?2026h\x1b[?25l${ruledScreenLines.join('\r\n')}` +
+                '\x1b[37;1H› Ask Codex to do anything\x1b[39;3Hgpt-5 high · folder' +
+                '\x1b[40;3H? for shortcuts\x1b[37;3H\x1b[?25h\x1b[?2026l'
+            : readRuntimeFixture('codex-fullscreen-startup'),
+          0
+        )
+        await vi.advanceTimersByTimeAsync(8_000)
+        await expect(result).resolves.toBe('delivered')
+        expect(writes.filter((data) => data.includes('exact generated context'))).toHaveLength(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it('withholds Enter on a permission event after its text, and reports it unconfirmed', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      (current, data) => {
+        if (data.includes('needs approval next')) {
+          current.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
+        }
+      }
+    )
+    runtime.onPtyData('pty-prompt', READY, 0)
+    await expect(
+      deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'needs approval next',
+        submit: true,
+        agent: 'aider',
+        composerReady: true,
+        timeoutMs: 3_000
+      })
+    ).resolves.toBe('unconfirmed')
+    expect(writes.filter((data) => data.includes('needs approval next'))).toHaveLength(1)
+    expect(writes).not.toContain('\r')
+  })
+
+  it.each([false, true])(
+    'stops optional Enter retries on a later permission event (permission %s)',
+    async (permission) => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+          (current, data) => {
+            if (permission && data === '\r') {
+              current.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
+            }
+          },
+          // Codex retries a blind Enter on a ready composer when no turn starts.
+          'codex'
+        )
+        runtime.onPtyData('pty-prompt', READY, 0)
+        const result = deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'retry me',
+          submit: true,
+          agent: 'codex',
+          composerReady: true,
+          timeoutMs: 20_000
+        })
+        await vi.advanceTimersByTimeAsync(20_000)
+        await expect(result).resolves.toBe('delivered')
+        const enters = writes.filter((data) => data === '\r').length
+        // Without a permission event the held prompt is retried; with one, never again.
+        if (permission) {
+          expect(enters).toBe(1)
+        } else {
+          expect(enters).toBeGreaterThan(1)
+        }
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+})

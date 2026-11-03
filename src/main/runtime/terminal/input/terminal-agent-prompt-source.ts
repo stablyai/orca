@@ -100,6 +100,10 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
       waitTextCache: {}
     }
     const submit = options.submit !== false
+    // A generated send's current screen is authoritative: lifecycle status can stay 'permission'
+    // after a dialog was answered (its text still above the composer), so this send counts only
+    // permission events after its own admitted text commit. Other callers keep the status check.
+    const generated = options.generatedIntent !== undefined
     let permissionBaseline: AgentPromptActivity | undefined
     let retargeted = false
     const assertWritable = (): void => {
@@ -178,7 +182,9 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
             // A paused terminal or an agent asking for permission refuses at once, as before.
             assertTerminalInputAdmitted(this, ptyId, options.inputSource)
             permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
-            checkPermission(permissionBaseline)
+            if (!generated) {
+              checkPermission(permissionBaseline)
+            }
             attempt.endOn(this.getPtyLifecycleSignal(ptyId))
           } catch (error) {
             release()
@@ -208,7 +214,12 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
           return false
         }
         const { ptyId, submitWithPaste, pasteIngestMs, payload } = state.target
-        checkPermission(this.getAgentPromptActivity(handle, ptyId))
+        if (generated) {
+          // The admitted text-commit boundary: nothing is awaited from here to the write.
+          permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
+        } else {
+          checkPermission(this.getAgentPromptActivity(handle, ptyId))
+        }
         if (submitWithPaste) {
           state.baseline = this.getAgentPromptActivity(handle, ptyId, state.waitTextCache)
         }
@@ -252,7 +263,15 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
         }
         const { ptyId } = state.target
         state.baseline = this.getAgentPromptActivity(handle, ptyId, state.waitTextCache)
-        this.assertAgentPromptPermissionSafe(permissionBaseline!, state.baseline)
+        // After the text, a new permission event refuses Enter; a current dialog already refused
+        // in the gate above.
+        if (
+          generated
+            ? state.baseline.permissionSequence > permissionBaseline!.permissionSequence
+            : this.isAgentPromptPermissionBlocked(permissionBaseline!, state.baseline)
+        ) {
+          throw new Error('agent_prompt_blocked')
+        }
         writeFrame(gate, 'enter', AGENT_PROMPT_SUBMIT, options.promptForSchedule, -1)
         options.onSubmitWritten?.()
         return true
