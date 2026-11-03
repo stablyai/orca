@@ -1,5 +1,8 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
-import type { AskAnswerSelection } from '../../../src/shared/native-chat/input/native-chat-ask-answer'
+import type {
+  AskAnswerSelection,
+  NativeChatAnswerSource
+} from '../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import type {
@@ -86,6 +89,8 @@ type ChatViewProps = MobileNativeChatSendProps & {
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   structuredComposer?: MobileNativeChatStructuredComposer | null
   ask?: AskPrompt | null
+  askPending?: boolean
+  askSendSource?: NativeChatAnswerSource
   // Keep dismissal identity above chat/terminal toggles.
   askKey?: string | null
   onDismissAsk?: () => void

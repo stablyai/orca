@@ -100,6 +100,8 @@ export function MobileNativeChatView({
   sessionOptions,
   structuredComposer: structured = null,
   ask,
+  askPending,
+  askSendSource,
   askKey,
   onDismissAsk,
   onAnswerAsk,
@@ -308,7 +310,17 @@ export function MobileNativeChatView({
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
         answering={promptOwnsInput && keyboardInset > 0}
-        {...{ ask, askKey, onDismissAsk, onAnswerAsk, onCancelAsk, onCancelPrompt, onCollapseAsk }}
+        {...{
+          ask,
+          askPending,
+          askSendSource,
+          askKey,
+          onDismissAsk,
+          onAnswerAsk,
+          onCancelAsk,
+          onCancelPrompt,
+          onCollapseAsk
+        }}
         requiresTerminal={askRequiresTerminal}
         onAnswerInTerminal={onAnswerInTerminal}
         {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
