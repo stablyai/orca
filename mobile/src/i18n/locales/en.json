@@ -61,7 +61,8 @@
       "voice": "Voice",
       "notifications": "Notifications",
       "troubleshooting": "Troubleshooting",
-      "about": "About"
+      "about": "About",
+      "connections": "Connections"
     },
     "nativeChatSettingsScreen": {
       "title": "Chat UI",
@@ -148,6 +149,13 @@
     },
     "agents": {
       "permissionOwnAll": "Agents' own settings"
+    },
+    "connectionSettingsScreen": {
+      "keepRelayLonger": "Keep Relay connected longer",
+      "title": "Connections",
+      "backgroundDescription": "Keep an existing Relay connection for up to 5 minutes instead of 30 seconds when you switch apps. Your phone may suspend the connection sooner. This can use more battery and mobile data. Applies the next time Orca goes into the background.",
+      "loadError": "Could not load connection preferences",
+      "saveError": "Could not save connection preferences"
     }
   },
   "common": {

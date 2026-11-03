@@ -52,6 +52,7 @@ vi.mock('./mobile-relay-credential-bundle', async (importOriginal) => ({
 
 import { loadHosts, resetHostStoreForTests, updateHostNameAndEndpoint } from './host-store'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
+import { saveRelayBackgroundExtended } from '../storage/relay-background-preference'
 import {
   bundle,
   FakeLogicalClient,
@@ -138,6 +139,20 @@ describe('mobile endpoint lifecycle host edits', () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+  it('applies the saved Relay grace to an existing lifecycle on its next background', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    await saveRelayBackgroundExtended(true)
+
+    lifecycle.setForeground(false)
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(logical.getState()).toBe('connected')
+    lifecycle.setForeground(true)
+    expect(openRelayMock).not.toHaveBeenCalled()
+    lifecycle.stop()
+  })
 
   it('keeps an edit made while relay resolution was pending', async () => {
     const { lifecycle, settle } = await startWithPendingResolution()
