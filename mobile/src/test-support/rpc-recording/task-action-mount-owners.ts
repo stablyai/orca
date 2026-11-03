@@ -26,7 +26,7 @@ function useTaskStateAndSelection(
   const selection = useMobileTasksSelection(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mount adapter stores its actual recording client in this field.
     model.client as RpcClient,
-    state.detailPayload,
+    state.readDetailPayload,
     state.reconcilePrFileConnection
   )
   useLayoutEffect(() => {

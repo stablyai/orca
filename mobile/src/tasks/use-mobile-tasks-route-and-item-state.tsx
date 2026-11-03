@@ -181,7 +181,7 @@ export function useMobileTasksRouteAndItemState() {
   const itemState = useMobileTasksItemState()
   const itemSelection = useMobileTasksSelection(
     client,
-    itemState.detailPayload,
+    itemState.readDetailPayload,
     itemState.reconcilePrFileConnection
   )
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<

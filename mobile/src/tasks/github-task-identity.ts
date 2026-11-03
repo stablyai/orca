@@ -35,7 +35,7 @@ export function requireGitHubTaskTarget(source: GitHubWorkItem) {
 
 export function useMobileTasksSelection(
   client: RpcClient | null,
-  details: DetailPayload | null,
+  readDetails: () => DetailPayload | null,
   // The shared file owner's retire/recover step, run from this listener for each real connection change.
   onConnectionChange: (connected: boolean) => void
 ) {
@@ -45,15 +45,14 @@ export function useMobileTasksSelection(
     setActionItem: publishItem,
     hydrateActionItem: publishHydration
   } = useMobileTasksItemSelection()
-  const owner = useRef({ item: actionItem, visit: {}, client, revision: 0, details, live: true })
+  const owner = useRef({ item: actionItem, visit: {}, client, revision: 0, live: true })
   useLayoutEffect(() => {
     const current = owner.current
     if (current.client !== client) {
       current.revision += 1
       current.client = client
     }
-    current.details = details
-  }, [client, details])
+  }, [client])
   useLayoutEffect(() => {
     owner.current.live = true
     let observed: { state: ConnectionState; generation: number | undefined } | null = null
@@ -106,23 +105,30 @@ export function useMobileTasksSelection(
     },
     [publishHydration]
   )
-  const claimPublication = useCallback((item: TaskItem | null, accepted?: DetailPayload | null) => {
-    const current = owner.current
-    const { visit, client: selected, revision } = current
-    const generation = selected?.getGeneration?.()
-    return () =>
-      current.live &&
-      current.visit === visit &&
-      current.client === selected &&
-      current.revision === revision &&
-      selected?.getState() === 'connected' &&
-      selected.getGeneration?.() === generation &&
-      (item?.provider !== 'github' || sameGitHubTask(current.item, item)) &&
-      (accepted?.provider !== 'github' ||
-        (current.details?.provider === 'github' &&
-          current.details.targetKey === accepted.targetKey &&
-          current.details.headSha === accepted.headSha &&
-          current.details.baseSha === accepted.baseSha))
-  }, [])
+  const claimPublication = useCallback(
+    (item: TaskItem | null, accepted?: DetailPayload | null) => {
+      const current = owner.current
+      const { visit, client: selected, revision } = current
+      const generation = selected?.getGeneration?.()
+      return () => {
+        const details = readDetails()
+        return (
+          current.live &&
+          current.visit === visit &&
+          current.client === selected &&
+          current.revision === revision &&
+          selected?.getState() === 'connected' &&
+          selected.getGeneration?.() === generation &&
+          (item?.provider !== 'github' || sameGitHubTask(current.item, item)) &&
+          (accepted?.provider !== 'github' ||
+            (details?.provider === 'github' &&
+              details.targetKey === accepted.targetKey &&
+              details.headSha === accepted.headSha &&
+              details.baseSha === accepted.baseSha))
+        )
+      }
+    },
+    [readDetails]
+  )
   return { actionItem, detailRequestItem, setActionItem, hydrateActionItem, claimPublication }
 }

@@ -94,8 +94,8 @@ async function mount() {
   let selectProject!: (selected: GitHubProjectRow | null) => void
   function ProbeModel() {
     const itemState = useMobileTasksItemState()
-    const { detailPayload, reconcilePrFileConnection } = itemState
-    const selection = useMobileTasksSelection(logical, detailPayload, reconcilePrFileConnection)
+    const { readDetailPayload, reconcilePrFileConnection } = itemState
+    const selection = useMobileTasksSelection(logical, readDetailPayload, reconcilePrFileConnection)
     const mutation = useMobileTasksMutation()
     const [items, setItems] = useState<TaskItem[]>([a, b])
     const [error, setError] = useState('')

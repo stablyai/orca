@@ -5,9 +5,17 @@ import {
   groupDetailComments
 } from './mobile-tasks-legacy-foundation'
 import { useCallback, useMemo, useRef, useState } from './mobile-tasks-dependencies'
+import type { SetStateAction } from 'react'
 
 export function useMobileTasksItemState() {
-  const [detailPayload, setDetailPayload] = useState<DetailPayload | null>(null)
+  const acceptedDetail = useRef<DetailPayload | null>(null)
+  const [detailPayload, publishDetailPayload] = useState<DetailPayload | null>(null)
+  const setDetailPayload = useCallback((update: SetStateAction<DetailPayload | null>) => {
+    const next = typeof update === 'function' ? update(acceptedDetail.current) : update
+    acceptedDetail.current = next
+    publishDetailPayload(next)
+  }, [])
+  const readDetailPayload = useCallback(() => acceptedDetail.current, [])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
   const [detailRefreshSeq, setDetailRefreshSeq] = useState(0)
@@ -89,6 +97,7 @@ export function useMobileTasksItemState() {
   return {
     detailPayload,
     setDetailPayload,
+    readDetailPayload,
     detailLoading,
     setDetailLoading,
     detailError,

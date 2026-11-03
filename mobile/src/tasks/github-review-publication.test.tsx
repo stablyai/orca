@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useLayoutEffect, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
@@ -10,6 +10,8 @@ import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import { buildGitHubCheckSummary } from './github-check-summary'
 import { useMobileTasksHostedCommentReviewActions } from './use-mobile-tasks-hosted-comment-review-actions'
 import { useMobileTasksMutation } from './use-mobile-tasks-workspace-and-project-state'
+import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
+import { useMobileTasksItemDetailLoading } from './use-mobile-tasks-item-detail-loading'
 
 vi.mock('./mobile-tasks-dependencies', async () => ({
   ...(await import('react')),
@@ -19,15 +21,21 @@ vi.mock('./mobile-tasks-dependencies', async () => ({
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 vi.mock('./mobile-tasks-legacy-foundation', () => ({
   EMPTY_GITHUB_PROJECT_SETTINGS: {},
-  splitReviewerList: () => []
+  splitReviewerList: () => [],
+  groupDetailComments: () => []
 }))
 
-const noop = () => {}
-
-async function mount() {
+async function mount(loadDetails = false) {
   const client = createFakeRpcClient()
   const selected = item('fork')
   const comment = { id: 5, body: 'parent', author: 'me', createdAt: '', threadId: 'thread' }
+  const file = {
+    path: 'same.ts',
+    additions: 1,
+    deletions: 0,
+    status: 'modified',
+    viewerViewedState: 'UNVIEWED' as const
+  }
   const details: Extract<DetailPayload, { provider: 'github' }> = {
     provider: 'github',
     targetKey: githubTaskKey(selected.source),
@@ -37,44 +45,36 @@ async function mount() {
     comments: [comment],
     reviewRequests: [],
     latestReviews: [],
-    files: [],
+    files: [file],
     checks: [],
+    pullRequestId: 'PR_fork',
     headSha: 'old-head',
     baseSha: 'base'
   }
+  const commits: (DetailPayload | null)[] = []
   let current!: ReturnType<typeof useModel>
   function useModel() {
-    const [detailPayload, setDetailPayload] = useState<DetailPayload | null>(null)
-    const selection = useMobileTasksSelection(client, detailPayload, noop)
+    const itemState = useMobileTasksItemState()
+    const selection = useMobileTasksSelection(
+      client,
+      itemState.readDetailPayload,
+      itemState.reconcilePrFileConnection
+    )
     const mutation = useMobileTasksMutation()
     const [items, setItems] = useState<TaskItem[]>([selected])
     const [error, setError] = useState('')
-    const copiedLinkResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    useLayoutEffect(() => {
+      commits.push(itemState.detailPayload)
+    }, [itemState.detailPayload])
     const model = {
       ...selection,
       ...mutation,
+      ...itemState,
       client,
-      detailPayload,
-      expandedPrFilePath: null,
-      prFileCommentDrafts: {},
-      prFileContents: {},
-      setDetailPayload,
-      setDetailRefreshSeq: noop,
+      tasksSupported: true,
       setError,
       items,
-      setItems,
-      copiedLinkResetTimerRef,
-      itemCommentDraft: '',
-      itemReviewersDraft: '',
-      setCopiedLinkKey: noop,
-      setItemCommentDraft: noop,
-      setItemReviewersDraft: noop,
-      setExpandedPrFilePath: noop,
-      setPrFileCommentDrafts: noop,
-      setPrFileContents: noop,
-      beginFileLoad: () => {
-        throw new Error('No file read in this test')
-      }
+      setItems
     }
     const actions = useMobileTasksGithubCheckFileActions(
       useMobileTasksHostedCommentReviewActions(model)
@@ -83,6 +83,10 @@ async function mount() {
   }
   function Probe() {
     current = useModel()
+    return loadDetails ? <LoadDetails /> : null
+  }
+  function LoadDetails() {
+    useMobileTasksItemDetailLoading(current)
     return null
   }
   let renderer!: ReactTestRenderer
@@ -91,12 +95,20 @@ async function mount() {
   })
   await act(async () => {
     current.setActionItem(selected)
-    current.setDetailPayload(details)
+    if (!loadDetails) {
+      current.setDetailPayload(details)
+    }
   })
-  return { client, selected, comment, details, read: () => current, renderer }
+  if (loadDetails) {
+    await act(async () => client.requests[0].resolve(rpcSuccess('status', { capabilities: [] })))
+    await act(async () =>
+      client.requests[1].resolve(rpcSuccess('details', { ...details, item: selected.source }))
+    )
+  }
+  return { client, selected, comment, file, details, read: () => current, renderer, commits }
 }
 
-it('publishes review-thread changes only into the accepted detail revision', async () => {
+it('retires old thread feedback before a queued detail revision commits and composes current updates', async () => {
   const f = await mount()
   try {
     let pending!: Promise<void>
@@ -105,9 +117,13 @@ it('publishes review-thread changes only into the accepted detail revision', asy
     })
     await act(async () => {
       f.read().setDetailPayload({ ...f.details, headSha: 'new-head' })
+      f.read().setDetailPayload((value) => value && { ...value, body: value.body + 'first' })
+      f.read().setDetailPayload((value) => value && { ...value, body: value.body + '+second' })
+      f.client.requests[0].resolve(rpcSuccess('old', true))
+      await pending
+      expect(f.commits.at(-1)).toMatchObject({ headSha: 'old-head' })
     })
-    await act(async () => f.client.requests[0].resolve(rpcSuccess('old', true)))
-    await pending
+    expect(f.read().detailPayload).toMatchObject({ headSha: 'new-head', body: 'first+second' })
     expect(f.read().detailPayload?.comments).toEqual([f.comment])
     expect(f.read().mutatingStatus).toBe(false)
     await act(async () => {
@@ -123,35 +139,35 @@ it('publishes review-thread changes only into the accepted detail revision', asy
 })
 
 it.each(['success', 'error'] as const)(
-  'suppresses old-head checks-refresh %s and admits a fresh refresh',
+  'suppresses queued-revision checks-refresh %s across every feedback output and admits a fresh refresh',
   async (outcome) => {
     const f = await mount()
     const newerChecks = [{ name: 'newer', status: 'completed', conclusion: 'success' }]
     const newerSummary = buildGitHubCheckSummary(newerChecks)
+    const revision = outcome === 'error' ? { baseSha: 'new-base' } : { headSha: 'new-head' }
     try {
       let pending!: Promise<void>
       await act(async () => {
         pending = f.read().refreshGitHubChecks(f.selected)
       })
       await act(async () => {
-        f.read().setDetailPayload({ ...f.details, headSha: 'new-head', checks: newerChecks })
+        f.read().setDetailPayload({ ...f.details, ...revision, checks: newerChecks })
         const newerItem = {
           ...f.selected,
           source: { ...f.selected.source, checksSummary: newerSummary }
         }
         f.read().setActionItem(newerItem)
         f.read().setItems([newerItem])
-      })
-      await act(async () => {
         if (outcome === 'error') {
           f.client.requests[0].reject(new Error('old failure'))
         } else {
           f.client.requests[0].resolve(rpcSuccess('old', [{ name: 'old', status: 'queued' }]))
         }
+        await pending
+        expect(f.commits.at(-1)).toMatchObject({ headSha: 'old-head', baseSha: 'base' })
       })
-      await pending
       expect(f.read()).toMatchObject({
-        detailPayload: { headSha: 'new-head', checks: newerChecks },
+        detailPayload: { ...revision, checks: newerChecks },
         actionItem: { source: { checksSummary: newerSummary } },
         items: [{ source: { checksSummary: newerSummary } }],
         error: '',
@@ -165,7 +181,7 @@ it.each(['success', 'error'] as const)(
       await pending
       const freshSummary = buildGitHubCheckSummary(freshChecks)
       expect(f.read()).toMatchObject({
-        detailPayload: { headSha: 'new-head', checks: freshChecks },
+        detailPayload: { ...revision, checks: freshChecks },
         actionItem: { source: { checksSummary: freshSummary } },
         items: [{ source: { checksSummary: freshSummary } }],
         error: '',
@@ -176,3 +192,133 @@ it.each(['success', 'error'] as const)(
     }
   }
 )
+
+it.each(['viewed', 'comment'] as const)(
+  'keeps queued revision files and drafts after an obsolete %s reply, then accepts fresh success',
+  async (action) => {
+    const f = await mount()
+    const draftKey = `${f.file.path}:1`
+    try {
+      await act(async () => f.read().setPrFileCommentDrafts({ [draftKey]: 'first draft' }))
+      const invoke = () =>
+        action === 'viewed'
+          ? f.read().toggleGitHubFileViewed(f.selected, f.file)
+          : f.read().addGitHubFileReviewComment(f.selected, f.file, 1)
+      const reply = action === 'viewed' ? true : { ok: true, comment: { ...f.comment, id: 6 } }
+      let pending!: Promise<void>
+      await act(async () => {
+        pending = invoke()
+      })
+      await act(async () => {
+        f.read().setDetailPayload({ ...f.details, headSha: 'new-head' })
+        f.read().setPrFileCommentDrafts({ [draftKey]: 'new draft' })
+        f.client.requests[0].resolve(rpcSuccess('old', reply))
+        await pending
+        expect(f.commits.at(-1)).toMatchObject({ headSha: 'old-head' })
+      })
+      expect(f.read()).toMatchObject({
+        detailPayload: { headSha: 'new-head', files: [f.file], comments: [f.comment] },
+        prFileCommentDrafts: { [draftKey]: 'new draft' },
+        error: '',
+        mutatingStatus: false
+      })
+      await act(async () => {
+        pending = invoke()
+      })
+      await act(async () => f.client.requests[1].resolve(rpcSuccess('fresh', reply)))
+      await pending
+      expect(f.read().mutatingStatus).toBe(false)
+      if (action === 'viewed') {
+        expect(f.read().detailPayload).toMatchObject({ files: [{ viewerViewedState: 'VIEWED' }] })
+      } else {
+        expect(f.read().prFileCommentDrafts).toEqual({})
+        expect(f.read().detailPayload?.comments).toHaveLength(2)
+      }
+    } finally {
+      await act(async () => f.renderer.unmount())
+    }
+  }
+)
+
+it.each(['success', 'error'] as const)(
+  'suppresses file %s before a queued revision commits and permits a fresh file read',
+  async (outcome) => {
+    const f = await mount()
+    try {
+      let pending!: Promise<void>
+      await act(async () => {
+        pending = f.read().toggleGitHubFileExpansion(f.selected, f.file)
+      })
+      await act(async () => {
+        f.read().setDetailPayload({ ...f.details, headSha: 'new-head' })
+        if (outcome === 'error') {
+          f.client.requests[0].reject(new Error('obsolete file error'))
+        } else {
+          f.client.requests[0].resolve(rpcSuccess('old', { original: 'old', modified: 'old' }))
+        }
+        await pending
+        expect(f.commits.at(-1)).toMatchObject({ headSha: 'old-head' })
+      })
+      expect(f.read()).toMatchObject({ prFileContents: {}, prFileLoadingPath: null, error: '' })
+      await act(async () => f.read().toggleGitHubFileExpansion(f.selected, f.file))
+      await act(async () => {
+        pending = f.read().toggleGitHubFileExpansion(f.selected, f.file)
+      })
+      await act(async () =>
+        f.client.requests[1].resolve(rpcSuccess('fresh', { original: 'fresh', modified: 'fresh' }))
+      )
+      await pending
+      expect(f.read()).toMatchObject({
+        prFileContents: { [f.file.path]: { original: 'fresh', modified: 'fresh' } },
+        prFileLoadingPath: null
+      })
+    } finally {
+      await act(async () => f.renderer.unmount())
+    }
+  }
+)
+
+it('refreshes through the real loader and records its reset/commit order around a held action', async () => {
+  const f = await mount(true)
+  try {
+    let pending!: Promise<void>
+    await act(async () => {
+      pending = f.read().toggleGitHubReviewThread(f.selected, f.comment)
+    })
+    await act(async () => f.read().requestDetailRefresh())
+    expect(f.read().detailPayload).toBeNull()
+    expect(f.read().readDetailPayload()).toBeNull()
+    await act(async () => f.client.requests[3].resolve(rpcSuccess('status', { capabilities: [] })))
+    expect(f.client.requests.map((request) => request.method)).toEqual([
+      'status.get',
+      'github.workItemDetails',
+      'github.resolveReviewThread',
+      'status.get',
+      'github.workItemDetails'
+    ])
+    await act(async () => {
+      f.client.requests[4].resolve(
+        rpcSuccess('details', { ...f.details, headSha: 'new-head', item: f.selected.source })
+      )
+      f.client.requests[2].resolve(rpcSuccess('old', true))
+      await pending
+    })
+    expect(f.read()).toMatchObject({
+      detailPayload: { headSha: 'new-head', comments: [f.comment] },
+      detailLoading: false,
+      mutatingStatus: false
+    })
+    console.info(
+      'real loader committed revisions',
+      f.commits.map((value) => (value?.provider === 'github' ? value.headSha : null))
+    )
+    await act(async () => {
+      pending = f.read().toggleGitHubReviewThread(f.selected, f.comment)
+    })
+    await act(async () => f.client.requests[5].resolve(rpcSuccess('fresh', true)))
+    await pending
+    expect(f.read().detailPayload?.comments[0].isResolved).toBe(true)
+  } finally {
+    await act(async () => f.renderer.unmount())
+  }
+})
