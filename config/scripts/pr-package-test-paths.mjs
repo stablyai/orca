@@ -5,7 +5,7 @@ export const LINUX_PACKAGE_TESTS = [
   'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   'config/scripts/packaged-repository-input-exclusion.test.mjs',
   'src/main/browser/guest-lifecycle/popups/popup-origin-chrome.electron.test.ts',
-  'src/main/browser/browser-link-materialization.electron.test.ts',
+  'src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts',
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/browser/network/egress/browser-route-webrtc-egress.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
@@ -13,11 +13,11 @@ export const LINUX_PACKAGE_TESTS = [
   'src/main/browser/guest-lifecycle/popups/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/browser-popup-background-compatibility.electron.test.ts',
-  'src/main/browser/extensions/browser-extension-api.electron.test.ts',
-  'src/main/browser/extensions/browser-extension-persistence.electron.test.ts',
-  'src/main/browser/extensions/browser-extension-lifecycle.electron.test.ts',
-  'src/main/browser/extensions/browser-extension-toolbar.electron.test.ts',
-  'src/main/browser/extensions/browser-extension-native-messaging.electron.test.ts'
+  'src/main/browser/extensions/api-runtime/browser-extension-api.electron.test.ts',
+  'src/main/browser/extensions/profile-storage/browser-extension-persistence.electron.test.ts',
+  'src/main/browser/extensions/profile-sessions/browser-extension-lifecycle.electron.test.ts',
+  'src/main/browser/extensions/actions/browser-extension-toolbar.electron.test.ts',
+  'src/main/browser/extensions/native-messaging/browser-extension-native-messaging.electron.test.ts'
 ]
 
 // Cloud-only code must run check-test-file-runners: cloud is neither linted nor format-checked, and any source can register tests.

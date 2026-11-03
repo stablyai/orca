@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import { forgetBrowserPageGuestsGone } from '../extensions/browser-extension-discarded-tabs'
+import { forgetBrowserPageGuestsGone } from '../extensions/tabs-and-windows/browser-extension-discarded-tabs'
 
 /** Sent by the renderer's browser request bridge once its workspaces are restored. */
 const TAB_REQUESTS_READY_CHANNEL = 'browser:tabRequestsReady'

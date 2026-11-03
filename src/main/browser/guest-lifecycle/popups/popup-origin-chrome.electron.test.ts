@@ -11,7 +11,7 @@ import {
 import {
   HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS,
   startHiddenRendererFrameCapture
-} from '../../hidden-renderer-frame-capture-fixture'
+} from '../../electron-fixtures/hidden-renderer-frame-capture-fixture'
 
 type OriginProbeWindow = Window & { originProbeChild?: Window }
 

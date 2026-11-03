@@ -17,7 +17,7 @@ import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { currentBrowserRoutePartitionBindingStore } from '../../routing/partitions/browser-route-partition-binding-runtime'
 import { resolveBrowserRoutePartitionBinding } from '../../routing/partitions/browser-route-partition-migration'
-import { browserSessionRegistry } from '../../browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 
 type ClientRouteCookieImportTarget = {

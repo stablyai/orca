@@ -12,7 +12,7 @@ import {
   snapshots,
   status
 } from './browser-popup-compatibility-cdp-fixture'
-import { waitForHiddenFrameInput } from '../../hidden-frame-input-readiness-fixture'
+import { waitForHiddenFrameInput } from '../../electron-fixtures/hidden-frame-input-readiness-fixture'
 
 enablePopupAdapterProbe()
 setPopupFixtureEvidenceName('adapter-electron-evidence.json')

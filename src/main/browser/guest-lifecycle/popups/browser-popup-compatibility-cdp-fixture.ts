@@ -9,13 +9,13 @@ import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest'
 import { build as buildVite } from 'vite'
-import { waitForBrowserCdpEndpoint } from '../../browser-session-ua-cdp-collector'
+import { waitForBrowserCdpEndpoint } from '../../identity/browser-session-ua-cdp-collector'
 import { popupFixtureHtml } from './browser-popup-compatibility-page-fixture'
-import { resolveElectronProbeLaunch } from '../../electron-probe-display-launch'
+import { resolveElectronProbeLaunch } from '../../electron-fixtures/electron-probe-display-launch'
 import {
   HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS,
   startHiddenRendererFrameCapture
-} from '../../hidden-renderer-frame-capture-fixture'
+} from '../../electron-fixtures/hidden-renderer-frame-capture-fixture'
 
 // Hidden renderer startup and CDP events can exceed the default one-second poll on CI.
 vi.setConfig({ expect: { poll: { timeout: 10_000 } } })

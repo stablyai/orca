@@ -14,7 +14,7 @@ import {
   status,
   setPopupFixtureEvidenceName
 } from './browser-popup-compatibility-cdp-fixture'
-import { waitForHiddenFrameInput } from '../../hidden-frame-input-readiness-fixture'
+import { waitForHiddenFrameInput } from '../../electron-fixtures/hidden-frame-input-readiness-fixture'
 import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
 
 setPopupFixtureEvidenceName('native-electron-evidence.json')
