@@ -1680,6 +1680,9 @@
       "conflictsChecking": "Checking for conflicts",
       "noConflictsWithBase": "No conflicts with {{base}}",
       "noConflicts": "No conflicts"
+    },
+    "checkStatus": {
+      "cancelled": "Cancelled"
     }
   },
   "workspace": {
@@ -4264,7 +4267,8 @@
     },
     "runtimeHydration": {
       "loadFailed": "Failed to load Tasks settings"
-    }
+    },
+    "rerunUnsuccessful": "Retry checks"
   },
   "terminal": {
     "webView": {

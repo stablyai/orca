@@ -57,6 +57,7 @@
   "auto": {
     "components": {
       "GitHubItemDialog": {
+        "e31651a224": "Rerun failed checks",
         "filesViewed_one": "{{viewed}} / {{count}} file viewed",
         "filesViewed_other": "{{viewed}} / {{count}} files viewed",
         "reactionCount_one": "{{count}} {{reaction}} reaction",
@@ -93,6 +94,7 @@
         "resumingCount_other": "Resuming {{count}} chats"
       },
       "PullRequestPage": {
+        "68605516dd": "Rerun failed checks",
         "filesViewed_one": "{{viewed}} / {{count}} file viewed",
         "filesViewed_other": "{{viewed}} / {{count}} files viewed"
       },

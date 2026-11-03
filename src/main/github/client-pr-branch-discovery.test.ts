@@ -41,6 +41,87 @@ describe('getPRForBranch', () => {
     resetPRForBranchMocks(clientMocks)
   })
 
+  it('publishes complete cancellation after REST discovery is replaced by exact hydration', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 7,
+            title: 'Cancelled run',
+            state: 'open',
+            html_url: 'https://github.com/acme/widgets/pull/7',
+            head: { ref: 'feature/test', sha: 'head-oid' },
+            base: { ref: 'main' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 7,
+          title: 'Cancelled run',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/7',
+          headRefOid: 'head-oid',
+          statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'CANCELLED' }]
+        })
+      })
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+    expect(ghExecFileAsyncMock.mock.calls.slice(0, 2).map(([args]) => args.slice(0, 2))).toEqual([
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10'],
+      ['pr', 'view']
+    ])
+    expect(pr).toMatchObject({
+      checksStatus: 'failure',
+      headSha: 'head-oid',
+      checksSummary: {
+        state: 'failure',
+        total: 1,
+        passed: 0,
+        failed: 1,
+        cancelled: 1,
+        pending: 0,
+        neutral: 0
+      }
+    })
+  })
+
+  it('keeps branch-list fallback coarse when exact hydration cannot read a failure beyond page 100', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'acme', repo: 'widgets' }],
+      headRepo: null
+    })
+    const completeChecks = Array.from({ length: 101 }, (_, index) => ({
+      status: 'COMPLETED',
+      conclusion: index === 100 ? 'FAILURE' : 'CANCELLED'
+    }))
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'pr' && args[1] === 'list') {
+        return {
+          stdout: JSON.stringify([
+            {
+              number: 7,
+              title: 'Partial check page',
+              state: 'OPEN',
+              url: 'https://github.com/acme/widgets/pull/7',
+              headRefOid: 'head-oid',
+              statusCheckRollup: completeChecks.slice(0, 100)
+            }
+          ])
+        }
+      }
+      throw new Error('network unavailable')
+    })
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+    expect(ghExecFileAsyncMock.mock.calls.slice(0, 2).map(([args]) => args.slice(0, 2))).toEqual([
+      ['pr', 'list'],
+      ['pr', 'view']
+    ])
+    expect(pr).toMatchObject({ number: 7, checksStatus: 'failure' })
+    expect(pr?.checksSummary).toBeUndefined()
+  })
+
   it.each([
     { restEnabled: false, graphqlEnabled: true },
     { restEnabled: true, graphqlEnabled: false }
@@ -220,6 +301,7 @@ describe('getPRForBranch', () => {
     expect(pr?.mergeable).toBe('MERGEABLE')
     expect(pr?.prRepo).toEqual({ owner: 'acme', repo: 'widgets' })
     expect(pr?.headRepo).toEqual({ owner: 'acme', repo: 'widgets' })
+    expect(pr?.checksSummary).toBeUndefined()
   })
 
   it('resolves fork PRs from the upstream PR repo with the origin head owner', async () => {

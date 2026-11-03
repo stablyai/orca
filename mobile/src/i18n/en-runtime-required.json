@@ -383,7 +383,8 @@
     },
     "itemDetailContent": {
       "pipelineJobs_one": "{{count}} jobs",
-      "pipelineJobs_other": "{{count}} jobs"
+      "pipelineJobs_other": "{{count}} jobs",
+      "rerunFailed": "Rerun failed"
     },
     "pickerProjection": {
       "repos_one": "{{count}} repo",
@@ -394,6 +395,9 @@
     "projectComments": {
       "comments_one": "{{count}} comment",
       "comments_other": "{{count}} comments"
+    },
+    "projectReviewPanels": {
+      "rerunFailed": "Rerun failed"
     },
     "providerViewProjection": {
       "teams_one": "{{count}} team",

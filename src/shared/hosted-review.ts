@@ -4,7 +4,8 @@ import type {
   GitHubRepositoryIdentity,
   PRConflictSummary,
   PRMergeableState,
-  PRReviewDecision
+  PRReviewDecision,
+  ProviderCheckSummary
 } from './github/pull-request-types'
 
 export type HostedReviewProvider =
@@ -34,6 +35,7 @@ export type HostedReviewInfo = {
   state: HostedReviewState
   url: string
   status: CheckStatus
+  checksSummary?: ProviderCheckSummary
   updatedAt: string
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null

@@ -23622,5 +23622,8 @@
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
     }
+  },
+  "checks": {
+    "rerunUnsuccessful": "Rerun unsuccessful"
   }
 }

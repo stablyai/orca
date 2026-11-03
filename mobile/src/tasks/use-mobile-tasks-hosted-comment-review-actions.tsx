@@ -235,6 +235,8 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
+        const requestedHeadSha =
+          detailPayload?.provider === 'github' ? detailPayload.headSha : undefined
         const reply = await githubPullRequestChecksRead.request(
           client,
           {
@@ -247,6 +249,12 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         )
         const checks = githubPullRequestChecksRead.interpret(reply)
         const checksSummary = buildGitHubCheckSummary(checks)
+        const summaryFor = (source: typeof item.source) =>
+          requestedHeadSha !== undefined &&
+          source.headSha === requestedHeadSha &&
+          source.checksSummary?.state === checksSummary.state
+            ? source.checksSummary
+            : checksSummary
         setDetailPayload((current) =>
           current?.provider === 'github' ? { ...current, checks } : current
         )
@@ -254,7 +262,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           current?.provider === 'github' && current.source.id === item.source.id
             ? {
                 ...current,
-                source: { ...current.source, checksSummary }
+                source: { ...current.source, checksSummary: summaryFor(current.source) }
               }
             : current
         )
@@ -263,7 +271,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
             candidate.provider === 'github' && candidate.source.id === item.source.id
               ? {
                   ...candidate,
-                  source: { ...candidate.source, checksSummary }
+                  source: { ...candidate.source, checksSummary: summaryFor(candidate.source) }
                 }
               : candidate
           )

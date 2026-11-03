@@ -121,18 +121,21 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
           sourceContext: getTaskPageRepoSourceContext(repo, 'github')
         }
       ).then((checks) => {
+        const checksSummary = deriveTaskPagePRCheckSummary(checks)
         patchTaskPageWorkItemRows(
           {
             id: item.id,
             repoId: item.repoId
           },
           {
-            checksSummary: deriveTaskPagePRCheckSummary(checks)
+            checksSummary
           },
           (currentItem) =>
             currentItem.type === 'pr' &&
             currentItem.headSha === requestedHeadSha &&
-            sameOptionalGitHubOwnerRepo(currentItem.prRepo, requestedPRRepo)
+            sameOptionalGitHubOwnerRepo(currentItem.prRepo, requestedPRRepo) &&
+            (currentItem.checksSummary?.cancelled === undefined ||
+              currentItem.checksSummary.state !== checksSummary.state)
         )
       })
     },

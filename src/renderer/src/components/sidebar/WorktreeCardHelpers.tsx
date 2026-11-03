@@ -1,6 +1,6 @@
 import React from 'react'
 import type { GitConflictOperation } from '../../../../shared/git-status-types'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationOutcome } from '../../../../shared/provider-check-summary'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { translate } from '@/i18n/i18n'
 
@@ -8,7 +8,7 @@ export function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-export function checksLabel(status: CheckStatus): string {
+export function checksLabel(status: CheckPresentationOutcome): string {
   switch (status) {
     case 'success':
       return translate('auto.components.sidebar.WorktreeCardHelpers.checksPassing', 'Passing')
@@ -16,7 +16,9 @@ export function checksLabel(status: CheckStatus): string {
       return translate('auto.components.sidebar.WorktreeCardHelpers.checksFailing', 'Failing')
     case 'pending':
       return translate('auto.components.sidebar.WorktreeCardHelpers.checksPending', 'Pending')
-    case 'neutral':
+    case 'cancelled':
+      return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+    default:
       return ''
   }
 }

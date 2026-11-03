@@ -128,16 +128,22 @@ export function PrCheckFailureRow({
           accessibilityLabel={check.name}
         >
           <View style={styles.leading}>
-            <CircleX size={20} color={colors.statusRed} strokeWidth={2} />
+            <CircleX
+              size={20}
+              color={check.conclusion === 'cancelled' ? colors.textSecondary : colors.statusRed}
+              strokeWidth={2}
+            />
           </View>
           <View style={styles.titles}>
             <Text style={styles.title} numberOfLines={1}>
               {check.name}
             </Text>
             <Text style={styles.subtitle} numberOfLines={1}>
-              {duration
-                ? t('pullRequest.screens.failedAfter', 'Failed after {{duration}}', { duration })
-                : t('pullRequest.screens.failed', 'Failed')}
+              {check.conclusion === 'cancelled'
+                ? t('pullRequest.checkStatus.cancelled', 'Cancelled')
+                : duration
+                  ? t('pullRequest.screens.failedAfter', 'Failed after {{duration}}', { duration })
+                  : t('pullRequest.screens.failed', 'Failed')}
             </Text>
           </View>
         </Pressable>
