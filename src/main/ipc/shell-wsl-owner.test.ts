@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WindowsPathAccessHost from '../windows-path-access-host'
-import type * as ExternalEditorLaunch from '../external-editor-launch'
+import type * as ExternalEditorLaunch from '../external-editors/external-editor-launch'
 
 const { handleMock, launchMock, showItemInFolderMock, statMock, recordForEnvironmentMock } =
   vi.hoisted(() => ({
@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', () => ({
   stat: statMock
 }))
 
-vi.mock('../codex-cli/command', () => ({
+vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommand: (command: string) => command
 }))
 
@@ -40,7 +40,7 @@ vi.mock('../windows-path-access-host', async (importOriginal) => {
   }
 })
 
-vi.mock('../external-editor-launch', async (importOriginal) => {
+vi.mock('../external-editors/external-editor-launch', async (importOriginal) => {
   const actual = await importOriginal<typeof ExternalEditorLaunch>()
   return {
     ...actual,

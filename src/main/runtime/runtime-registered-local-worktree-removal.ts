@@ -13,7 +13,7 @@ import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from '../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
-import { runHook, getEffectiveHooks } from '../hooks'
+import { runHook, getEffectiveHooks } from '../workspace-hooks/hooks'
 import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths

@@ -100,7 +100,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/sqlite/**/*.test.ts',
   'src/main/orca-profiles/**/*.test.ts',
   'src/main/managed-data-accounts/**/*.test.ts',
-  'src/main/quit-path-durable-write-blocking.test.ts',
+  'src/main/startup/quit/quit-path-durable-write-blocking.test.ts',
   'src/main/automations/automation-worker-durability.test.ts',
   'src/**/*.node-pty.test.ts',
   'src/**/node-pty-*.test.ts',

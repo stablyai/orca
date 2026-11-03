@@ -15,9 +15,9 @@ import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { Store } from '../persistence/loading-store/store'
-import type * as HostTreeRemoval from '../host-tree-removal'
-import { removeHostTree } from '../host-tree-removal'
-import * as nativeFs from '../asar-transparent-fs'
+import type * as HostTreeRemoval from '../filesystem/host-tree-removal'
+import { removeHostTree } from '../filesystem/host-tree-removal'
+import * as nativeFs from '../filesystem/asar-transparent-fs'
 import * as diskFs from 'node:fs/promises'
 import * as nativeRemoval from '../git/windows-worktree-removal'
 import * as graphReader from '../git/worktree-list-reader'
@@ -63,7 +63,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: vi.fn(() => ({}))
 }))
-vi.mock('../host-tree-removal', async (importOriginal) => {
+vi.mock('../filesystem/host-tree-removal', async (importOriginal) => {
   const actual = await importOriginal<typeof HostTreeRemoval>()
   return { ...actual, removeHostTree: vi.fn(actual.removeHostTree) }
 })

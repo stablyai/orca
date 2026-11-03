@@ -48,7 +48,7 @@ describe('the actual terminal smoke dependency graph', () => {
     ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
     'src/main/runtime/orca-runtime.ts',
     'src/main/windows/windows-process-table.ts',
-    'src/main/worker-thread-entry-path.ts',
+    'src/main/worker-threads/worker-thread-entry-path.ts',
     'src/cli/index.ts',
     'config/scripts/runtime-serve-terminal-smoke.mjs',
     'config/scripts/build-orcad-node.mjs',

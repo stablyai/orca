@@ -2,7 +2,7 @@
 
 import { lstat, readdir, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { removeHostTree } from './host-tree-removal'
+import { removeHostTree } from './filesystem/host-tree-removal'
 import { isFolderRepo } from '../shared/repo-kind'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
 import type { GlobalSettings } from '../shared/global-settings-types'

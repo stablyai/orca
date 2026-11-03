@@ -101,19 +101,19 @@ vi.mock('../github/client', () => ({
   createGitHubPullRequest: createGitHubPullRequestMock
 }))
 
-vi.mock('../hooks', () => ({
+vi.mock('../workspace-hooks/hooks', () => ({
   getEffectiveHooks: getEffectiveHooksMock,
   loadHooks: loadHooksMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock
 }))
 
-vi.mock('../worktree-runner-script', () => ({
+vi.mock('../workspace-hooks/worktree-runner-script', () => ({
   createSetupRunnerScript: createSetupRunnerScriptMock,
   resolveSetupRunnerShell: resolveSetupRunnerShellMock
 }))
 
-vi.mock('../effective-hook-config', () => ({
+vi.mock('../workspace-hooks/effective-hook-config', () => ({
   getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
   getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock

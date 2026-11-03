@@ -152,7 +152,7 @@ vi.mock('../updater/electron-updater-proxy-session', () => ({
   applyProxyToElectronUpdaterSession: vi.fn()
 }))
 
-vi.mock('../macos-tcc-prompt-notice', () => ({
+vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
   acknowledgePendingTccPromptNotice: acknowledgePendingTccPromptNoticeMock,
   consumePendingTccPromptNotice: consumePendingTccPromptNoticeMock,
   dismissTccPromptNotice: dismissTccPromptNoticeMock,
