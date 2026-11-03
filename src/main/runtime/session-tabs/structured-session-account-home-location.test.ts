@@ -1,4 +1,4 @@
-import { applyStructuredCodexWorkspaceTrust } from '../../agent-workspace-trust-spawn'
+import { applyStructuredCodexWorkspaceTrust } from '../../agent-launch/trust/agent-workspace-trust-spawn'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,7 +16,7 @@ import { agentDrivesSession } from '../../native-chat/agent-session-wire/structu
 import { claudeAndCodexAgents } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { AgentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 
-vi.mock('../../agent-workspace-trust-spawn', () => ({
+vi.mock('../../agent-launch/trust/agent-workspace-trust-spawn', () => ({
   applyStructuredCodexWorkspaceTrust: vi.fn(async () => {})
 }))
 vi.mock('./structured-session-cli-writer-host', () => ({

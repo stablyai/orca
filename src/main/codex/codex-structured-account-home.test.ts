@@ -133,7 +133,7 @@ describe('native Codex account transitions', () => {
       if (priorTurn) {
         await journal.appendItem(
           { provider: 'codex', threadId: THREAD, turnId: 'prior-turn', ordinal: 0 },
-          { kind: 'turn', turnId: 'prior-turn', state: 'completed', outcome: 'completed' },
+          { kind: 'turn', turnId: 'prior-turn', state: 'completed', outcome: 'success' },
           { fence: 1 }
         )
       }
