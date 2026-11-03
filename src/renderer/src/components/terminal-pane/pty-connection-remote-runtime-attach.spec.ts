@@ -309,7 +309,11 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', freshPtyId)
       expect(window.api.pty.reportRendererSerializerReady).toHaveBeenCalledWith(freshPtyId)
       expect(transport.sendInput).not.toHaveBeenCalled()
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        providerSession: { id: 'codex-session-1' },
+        origin: 'quit',
+        restoreOnTabOpenOnly: true
+      })
     })
 
     it('does not let a restored encoded PTY override the current worktree owner', async () => {

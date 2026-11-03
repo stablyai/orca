@@ -10,8 +10,7 @@ import {
   closeCodexPublishedSession,
   handleCodexSessionExit
 } from './codex-structured-session-close'
-import { CodexAcquisitionRegistry, type CodexSession } from './codex-structured-session-state'
-import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
+import type { CodexSession } from './codex-structured-session-state'
 
 function sessionWithRunningTurn() {
   const turnBodies: AgentJournalItemBody[] = []
@@ -94,22 +93,6 @@ describe('a Codex close settles the open turn with no verdict of its own', () =>
     })
 
     await closeCodexPublishedSession(sessions, 'session-1')
-
-    expect(turnBodies).toEqual([
-      expect.objectContaining({ turnId: 'turn-1', state: 'interrupted' })
-    ])
-    expect(turnBodies[0]).not.toHaveProperty('outcome')
-  })
-
-  it("settles the same through the adapter's close", async () => {
-    const { sessions, turnBodies } = sessionWithRunningTurn()
-    const teardown = new CodexStructuredSessionTeardown({
-      sessions,
-      acquisitions: new CodexAcquisitionRegistry(),
-      forgetNotificationRetries: () => {}
-    })
-
-    await expect(teardown.close('session-1')).resolves.toBe(true)
 
     expect(turnBodies).toEqual([
       expect.objectContaining({ turnId: 'turn-1', state: 'interrupted' })

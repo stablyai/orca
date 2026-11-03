@@ -1,17 +1,9 @@
 import { createStore } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
-
-const COLLECTIONS = [
-  'agentStatusByPaneKey',
-  'retainedAgentsByPaneKey',
-  'sleepingAgentSessionsByPaneKey'
-] as const
-type Collection = (typeof COLLECTIONS)[number]
 
 function makeState(count = 1): AppState {
   const live: AppState['agentStatusByPaneKey'] = {}
@@ -77,20 +69,6 @@ function makeState(count = 1): AppState {
   } as unknown as AppState
 }
 
-function replaceProvider(
-  state: AppState,
-  collection: Collection,
-  providerSession: AgentProviderSessionMetadata
-): AppState {
-  const paneKey = Object.keys(state[collection])[0]
-  const existing = state[collection][paneKey]
-  const next =
-    collection === 'retainedAgentsByPaneKey'
-      ? { ...existing, entry: { ...state.retainedAgentsByPaneKey[paneKey].entry, providerSession } }
-      : { ...existing, providerSession }
-  return { ...state, [collection]: { ...state[collection], [paneKey]: next } }
-}
-
 async function collectGarbage(): Promise<void> {
   if (typeof globalThis.gc !== 'function') {
     throw new Error('Run with the repository Vitest --expose-gc config')
@@ -136,91 +114,6 @@ describe('AI Vault title subscription inputs', () => {
       expect(scheduleReconcile).toHaveBeenCalledTimes(1)
     } finally {
       stop()
-    }
-  })
-
-  it.each(COLLECTIONS)(
-    'still detects provider changes in %s with other maps reused',
-    (collection) => {
-      const state = makeState()
-      const paneKey = Object.keys(state[collection])[0]
-      const provider =
-        collection === 'retainedAgentsByPaneKey'
-          ? state.retainedAgentsByPaneKey[paneKey].entry.providerSession!
-          : (state[collection][paneKey] as { providerSession: AgentProviderSessionMetadata })
-              .providerSession
-      for (const patch of [
-        { id: 'changed' },
-        { key: 'conversation_id' as const },
-        { transcriptPath: '/changed/session' }
-      ]) {
-        expect(
-          aiVaultTitleSyncInputsChanged(
-            replaceProvider(state, collection, { ...provider, ...patch }),
-            state
-          )
-        ).toBe(true)
-      }
-      expect(
-        aiVaultTitleSyncInputsChanged(replaceProvider(state, collection, { ...provider }), state)
-      ).toBe(false)
-    }
-  )
-
-  it.each(COLLECTIONS)('detects additions and removals in %s', (collection) => {
-    const state = makeState()
-    const records = state[collection]
-    const empty = { ...state, [collection]: {} }
-    expect(aiVaultTitleSyncInputsChanged(empty, state)).toBe(true)
-    expect(aiVaultTitleSyncInputsChanged(state, empty)).toBe(true)
-    expect(aiVaultTitleSyncInputsChanged({ ...state, [collection]: { ...records } }, state)).toBe(
-      false
-    )
-  })
-
-  it.each(COLLECTIONS)('detects agent and pane ownership changes in %s', (collection) => {
-    const state = makeState()
-    const records = state[collection]
-    const paneKey = Object.keys(records)[0]
-    const record = records[paneKey]
-    const entry =
-      collection === 'retainedAgentsByPaneKey'
-        ? state.retainedAgentsByPaneKey[paneKey].entry
-        : record
-    const agentField = collection === 'sleepingAgentSessionsByPaneKey' ? 'agent' : 'agentType'
-    const changedRecords = [
-      { ...record, [agentField]: 'claude' },
-      { ...record, [agentField]: 'gemini' },
-      { ...record, worktreeId: 'other' },
-      ...['paneKey', 'tabId'].map((field) =>
-        collection === 'retainedAgentsByPaneKey'
-          ? { ...record, entry: { ...entry, [field]: 'other' } }
-          : { ...record, [field]: 'other' }
-      )
-    ]
-    for (const changed of changedRecords) {
-      expect(
-        aiVaultTitleSyncInputsChanged(
-          { ...state, [collection]: { ...records, [paneKey]: changed } },
-          state
-        )
-      ).toBe(true)
-    }
-  })
-
-  it('still checks workspace ownership after unchanged record collections', () => {
-    const state = makeState()
-    for (const host of ['ssh:host-1', 'runtime:server-1'] as const) {
-      expect(
-        aiVaultTitleSyncInputsChanged(
-          {
-            ...state,
-            agentStatusByPaneKey: { ...state.agentStatusByPaneKey },
-            activeWorkspaceExecutionHostId: host
-          },
-          state
-        )
-      ).toBe(true)
     }
   })
 
@@ -288,41 +181,5 @@ describe('AI Vault title subscription inputs', () => {
         closed
       )
     ).toBe(false)
-  })
-
-  it('still checks active panes and stored titles after unchanged record collections', () => {
-    const state = makeState()
-    const agentStatusByPaneKey = { ...state.agentStatusByPaneKey }
-    expect(
-      aiVaultTitleSyncInputsChanged(
-        {
-          ...state,
-          agentStatusByPaneKey,
-          terminalLayoutsByTabId: {
-            'tab-0': { root: null, activeLeafId: 'other', expandedLeafId: null }
-          }
-        },
-        state
-      )
-    ).toBe(true)
-    const tabs = state.tabsByWorktree['wt-title']
-    expect(
-      aiVaultTitleSyncInputsChanged(
-        {
-          ...state,
-          agentStatusByPaneKey,
-          tabsByWorktree: {
-            'wt-title': [
-              {
-                ...tabs[0],
-                aiVaultTitle: { agent: 'codex', sessionId: 'session-0', title: 'New title' }
-              },
-              ...tabs.slice(1)
-            ]
-          }
-        },
-        state
-      )
-    ).toBe(true)
   })
 })

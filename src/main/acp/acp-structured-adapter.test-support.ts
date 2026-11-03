@@ -19,6 +19,7 @@ import { type AcpScriptedAgent, tick, type FakeFrame } from './acp-scripted-agen
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from './acp-structured-session-adapter'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
+import { AgentSessionStartFailure } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
 
 export const GROK = acpLaunchSpecFor('grok')!
 const RIG_ENV = { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' }
@@ -57,7 +58,10 @@ export type AcpAdapterRig = {
   lifecycle: StructuredAgentSessionLifecycleEvent[]
   readonly ended: Extract<StructuredAgentSessionLifecycleEvent, { type: 'ended' }>[]
   started(): StructuredAgentSessionProviderOpenResult
+  /** The error the adapter's verdict carries, as the agent or connection gave it. */
   openFailure(): unknown
+  /** The adapter's verdict on the failed open. */
+  openVerdict(): AgentSessionStartFailure | undefined
   settled: Parameters<NonNullable<AcpStructuredSessionAdapterDeps['onDispatchSettledLate']>>[0][]
   acquire(options?: {
     fence?: number
@@ -86,7 +90,7 @@ export async function openAcpAdapterRig(
   const spawned: string[] = []
   const lifecycle: StructuredAgentSessionLifecycleEvent[] = []
   const settled: AcpAdapterRig['settled'] = []
-  let openFailure: unknown
+  let openVerdict: AgentSessionStartFailure | undefined
   let opened: StructuredAgentSessionProviderOpenResult | null = null
   const startListeners = new Set<() => void>()
   const spec = options.spec ?? GROK
@@ -185,10 +189,11 @@ export async function openAcpAdapterRig(
       }
       return opened
     },
-    openFailure: () => openFailure,
+    openFailure: () => openVerdict?.cause,
+    openVerdict: () => openVerdict,
     settled,
     acquire: async (acquireOptions = {}) => {
-      openFailure = undefined
+      openVerdict = undefined
       opened = null
       const acquisition = await adapter.acquire({
         identity: {
@@ -218,7 +223,10 @@ export async function openAcpAdapterRig(
             signal: acquireOptions.signal ?? new AbortController().signal
           })
         } catch (error) {
-          openFailure = error
+          if (!(error instanceof AgentSessionStartFailure)) {
+            throw new Error('the ACP adapter must answer a failed open with its verdict')
+          }
+          openVerdict = error
           await adapter.closeSession(SESSION)
         }
       }

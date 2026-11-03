@@ -4,8 +4,8 @@ import type { NativeLocalWorktreeMetadataScanExpectation } from '../persistence/
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
-} from '../local-worktree-scan-generation'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+} from '../workspaces/catalog/local-worktree-scan-generation'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import type { Store } from '../persistence/loading-store/store'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'

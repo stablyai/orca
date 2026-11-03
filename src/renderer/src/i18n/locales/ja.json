@@ -32,6 +32,17 @@
   },
   "settings": {
     "chat": {
+      "launch": {
+        "on": "チャット UI はオンです",
+        "off": "チャット UI はオフです",
+        "agents": "Agent ごとのデフォルト起動モード",
+        "agentsDescription": "各 Agent をチャット UI と CLI のどちらで開くか選択します。",
+        "chatDescription": "新しい Agent はデフォルトでチャットモードで起動します。",
+        "cliDescription": "新しい Agent はデフォルトで CLI として起動します。",
+        "turnOn": "オンにする",
+        "turnOff": "オフにする",
+        "toggle": "デフォルトでチャット UI を使用"
+      },
       "permissionsAgentsLink": "設定 → Agent",
       "permissionsTitle": "新しいチャットの権限",
       "permissionsDescription": "新しいチャットにのみ適用されます。Agentごとのデフォルト設定は、設定 → Agent にあります。",
@@ -2116,8 +2127,6 @@
         "25690a3855": "PR からワークスペースを開始する",
         "a459866967": "PR に紐づくワークスペースを再開",
         "347034903a": "GitHub リンクをコピーする",
-        "5a01ca7253": "表示された状態を GitHub と同期できませんでした。",
-        "996a1897d2": "この PR の表示状態を同期できません。",
         "e0b15c793f": "GitHub リンクのコピーに失敗しました",
         "992e799227": "GitHub リンクがコピーされました",
         "61bfc81ada": "この PR に添付されたワークスペースを開けません。",
@@ -3610,7 +3619,7 @@
             "copyLinkFailed": "リンクのコピーに失敗しました",
             "downloadOpenWithDefaultApp": "ダウンロードしてデフォルトのアプリで開く",
             "downloadOpenFailed": "「{{value0}}」のダウンロードに失敗しました。",
-            "openInThisGroup": "このグループで開く",
+            "openInNewTab": "新しいタブで開く",
             "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -7035,7 +7044,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "コンピュータ操作を開く",
-          "79209b37b9": "Cookie のインポートが適切でない場合、コンピュータ操作はローカルアプリを制御し、該当する場合は既存のログインブラウザセッションを使用することがあります。コンピュータ操作スキルをインストールします。 macOS ではプライバシー許可も必要です。",
+          "79209b37b9": "Cookie のインポートが適切でない場合、コンピュータ操作はローカルアプリを制御し、該当する場合は既存のログインブラウザセッションを使用することがあります。Orca Computer Use スキルをインストールします。 macOS ではプライバシー許可も必要です。",
           "333984cf90": "既存のブラウザセッションを使用する"
         },
         "BrowserUseEnableSwitch": {
@@ -7155,7 +7164,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Agent がローカルデスクトップアプリを検査および操作できるようにします。",
-          "93255aaf18": "パソコン利用スキル",
+          "93255aaf18": "Orca Computer Use スキル",
           "45f8e22c2e": "オープン",
           "d95d1cfab8": "更新",
           "0c29da5805": "準備完了",
@@ -8034,8 +8043,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",
-          "2b2f38652b": "カスタムコマンド",
-          "0ffb081b3a": "デフォルトの Agent を使用する",
           "f4310cf63f": "Agent",
           "1cd88d470a": "カスタマイズ",
           "403876bb48": "グローバルを使用する",
@@ -18465,6 +18472,7 @@
         "attachmentNotAFile": "このメッセージの画像がファイルではないため、メッセージは送信されませんでした。",
         "attachmentNoSource": "このメッセージの画像に送信するファイルがないため、メッセージは送信されませんでした。",
         "attachmentInvalid": "このメッセージの添付ファイルは Agent に送信できません。",
+        "attachmentsExpired": "{{names}} は期限切れです。",
         "attachmentUnreadable": "このメッセージの添付ファイルを読み取れなかったため、メッセージは送信されませんでした。",
         "emptyMessage": "このメッセージは空のため、送信されませんでした。",
         "commandUnavailable": "このコマンドは {{agent}} のチャットでは使用できないため、送信されませんでした。",
@@ -18552,6 +18560,7 @@
         "recordFailed": "Orca はこれをチャットの履歴に保存できませんでした。",
         "attachmentExpired": "この添付ファイルは期限切れです。",
         "reattachFile": "削除してから、もう一度添付してください。",
+        "reattachFiles": "削除してから、もう一度添付してください。",
         "conversationCleared": "この会話はクリアされました。",
         "openCurrentConversation": "続けるには、現在の会話を開いてください。",
         "clearUnfinished": "前回の /clear は完了しませんでした。",
@@ -18813,7 +18822,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "チャット UI で続けるには、このホストの Orca を更新してください。",
-        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。"
+        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
+        "exitUnconfirmed": "{{agent}} は別のターミナルでこの会話を実行しています。そちらで終了するか、そのターミナルを閉じてから、もう一度お試しください。"
       },
       "state": {
         "loading": {
@@ -19312,7 +19322,8 @@
         "cancelled": "Orca はこのチャットを自動的には続けません。",
         "scheduled": "Orca は {{time}} にこのチャットを続けます。",
         "cancel": "続けない"
-      }
+      },
+      "settings": "チャット設定"
     },
     "tab": {
       "bar": {
@@ -21976,6 +21987,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: 読み取れるバックアップがないため、空の状態から始まります。",
+      "sectionKeptCurrent": "{{section}}：現在の実行履歴は保持されます",
       "sectionRestored": "{{section}}: {{time}} に保存されたバックアップから復元されます。",
       "projectsForgotten": "Orca はプロジェクトとそのワークスペースの詳細を忘れます。ディスク上のファイルには影響しません。",
       "newerProjectsRemoved": "そのバックアップ以降に追加したプロジェクトは、ワークスペースの詳細とともに Orca から削除されます。ディスク上のファイルには影響しません。",
@@ -22018,7 +22030,7 @@
       "noneFound": "（見つかりません）",
       "sqlitePath": "SQLite パス: {{path}}",
       "sectionsDamaged": "このプロファイルの保存状態の一部が破損しています: {{sections}}。それ以外はすべて正常です。",
-      "repairCommand": "Orca を終了し、`{{command}}` を実行すると、破損した部分だけをバックアップから置き換え、それ以外をすべて維持できます。Orca は破損したファイルのコピーを保持します。",
+      "repairCommand": "Orca を終了してから `{{command}}` を実行すると、破損した部分だけを修復し、他のデータを保持します。Orca は破損したファイルのコピーを保存します。",
       "restoreWholeBackup": "代わりにバックアップ全体を復元するには、`{{exportsCommand}}`、次に `{{rollbackCommand}}` を実行してください。",
       "sqliteUnreadable": "SQLite の状態を読み取れないため、Orca はアクティブなプロファイルを安全に開けません。",
       "legacyJsonPath": "従来の JSON パス: {{path}}",
@@ -22304,6 +22316,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "このホストでは{{agent}}のモデルを利用できません。現在の選択を保持するか、引数を使用できます。",
+    "catalogFailed": "{{agent}}のモデルを読み込めませんでした。Agent 選択を閉じて開き直してください。",
+    "catalogSignIn": "{{agent}}にサインインしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogInstall": "このホストに{{agent}}をインストールしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogUnresolved": "{{agent}}のモデルは読み込まれていません。Agent 選択を閉じて開き直してください。",
+    "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
     "search": "Agent と設定を検索…",
     "configure": "{{agent}} を設定",
     "arguments": "引数",
@@ -22318,6 +22336,8 @@
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
     "legacyModelCount": "{{total}} 個のモデル",
+    "use": "使用",
+    "select": "Agent を選択",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
     "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
   },

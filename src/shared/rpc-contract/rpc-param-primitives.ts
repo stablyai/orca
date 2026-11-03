@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isAbsoluteBrowserUrl } from '../browser-expected-url'
 import { memoizeStringResult } from '../string-result-cache'
 
 // ~300 declarations repeat ~170 messages; zod schemas are immutable, so equal messages can share one instance.
@@ -57,6 +58,15 @@ export const TriStateLinkedIssue = z
 export const BrowserTarget = z.object({
   worktree: OptionalPlainString,
   page: OptionalString
+})
+
+/** The target of a command that acts on the page, which may name the URL it was meant for. */
+export const ExpectUrlBrowserTarget = BrowserTarget.extend({
+  expectUrl: z
+    .custom<string>((v) => typeof v === 'string' && isAbsoluteBrowserUrl(v), {
+      message: '--expect-url must be an absolute URL, like https://example.com/chat/a'
+    })
+    .optional()
 })
 
 export const requiredString = memoizeStringResult(

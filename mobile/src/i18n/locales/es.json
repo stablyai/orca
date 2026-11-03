@@ -1692,7 +1692,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "La rama actual no está disponible.",
-      "providerUnavailable": "El panel de revisión alojada no está disponible para este proveedor."
+      "githubRemoteRequired": "Esta pestaña necesita un remoto de GitHub para mostrar los detalles de las solicitudes de incorporación. Para otras plataformas compatibles, crea una revisión desde Cambios y ábrela en el navegador."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "No se pudieron cargar las personas",
@@ -1903,6 +1903,7 @@
       "attachmentAtMost": "{{agent}} acepta como máximo {{limit}} imágenes por mensaje, así que este mensaje no se envió.",
       "attachmentEmpty": "Una imagen de este mensaje está vacía, así que el mensaje no se envió.",
       "attachmentInvalid": "Un archivo adjunto de este mensaje no se puede enviar al agente.",
+      "attachmentsExpired": "Caducado: {{names}}.",
       "attachmentLargerThan": "Una imagen de este mensaje supera los {{size}} MB, así que el mensaje no se envió.",
       "attachmentNoSource": "Una imagen de este mensaje no tiene ningún archivo que enviar, así que el mensaje no se envió.",
       "attachmentNotAFile": "Una imagen de este mensaje no es un archivo, así que el mensaje no se envió.",
@@ -2107,8 +2108,7 @@
       "promptUnconfirmed": "El agente se inició, pero no se pudo confirmar el envío del prompt."
     },
     "prActionsEngine": {
-      "mergeFailed": "No se pudo hacer merge de la pull request.",
-      "refreshFailed": "No se pudo actualizar la pull request."
+      "mergeFailed": "No se pudo hacer merge de la pull request."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agente iniciado",
@@ -2490,6 +2490,7 @@
       "queueTooLarge": "Hay demasiado texto esperando en la cola.",
       "quitTerminalAgent": "Cierre ese agente para continuar el chat aquí.",
       "reattachFile": "Quítelo y vuelva a adjuntarlo.",
+      "reattachFiles": "Quítelos y vuelva a adjuntarlos.",
       "recordFailed": "Orca no pudo guardar esto en el historial del chat.",
       "recordUnreadable": "Orca no pudo leer el estado guardado de este chat.",
       "reopenChat": "Vuelva a abrir el chat para comprobarlo de nuevo.",
@@ -2720,6 +2721,9 @@
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
+    },
+    "agents": {
+      "permissionOwnAll": "Configuración propia de los agentes"
     }
   },
   "sourceControl": {

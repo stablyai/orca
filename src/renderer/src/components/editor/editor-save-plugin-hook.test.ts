@@ -56,6 +56,24 @@ describe('editor.save.before on the save path', () => {
   }
   const file = (): OpenFile => store.getState().openFiles.find((tab) => tab.id === 'a')!
   const written = (): string[] => disk.fs.writeFile.mock.calls.map(([args]) => args.content)
+  const openMarkdownViews = (savingView: 'source' | 'rich', survivingView: 'source' | 'rich') => {
+    const path = '/repo/src/a.md'
+    disk.files.set(path, '')
+    store.setState((state) => ({
+      settings: { ...state.settings!, editorInsertFinalNewline: true },
+      openFiles: ['a', 'b'].map((id) => ({
+        ...file(),
+        id,
+        filePath: path,
+        relativePath: 'src/a.md',
+        language: 'markdown'
+      }))
+    }))
+    store.getState().setMarkdownViewMode('a', savingView)
+    store.getState().setMarkdownViewMode('b', survivingView)
+    withLoadedBaselines(store, disk)
+    return path
+  }
 
   beforeEach(() => {
     disk = stubEditorWindowWithDisk(createFakeEditorDisk({ [PATH]: '' }))
@@ -98,6 +116,72 @@ describe('editor.save.before on the save path', () => {
     })
     expect(written()).toEqual(['x\n'])
     expect(file().isDirty).toBe(false)
+  })
+
+  it('inserts the final newline after a plugin transforms the saved text', async () => {
+    store.setState({ settings: { ...store.getState().settings!, editorInsertFinalNewline: true } })
+    hook.mockResolvedValueOnce({ kind: 'continue', text: 'formatted' })
+    edit('before')
+
+    expect(await queue.queueSave(file(), 'before')).toBe('written')
+    expect(written()).toEqual(['formatted\n'])
+    expect(file().isDirty).toBe(false)
+  })
+
+  it('finishes the newline save in the surviving view after the writer closes', async () => {
+    store.setState((state) => ({
+      settings: { ...state.settings!, editorInsertFinalNewline: true },
+      openFiles: [...state.openFiles, { ...file(), id: 'b', isDirty: false }]
+    }))
+    withLoadedBaselines(store, disk)
+    hook.mockImplementationOnce(async ({ text }) => {
+      store.setState((state) => ({ openFiles: state.openFiles.filter((tab) => tab.id !== 'a') }))
+      return { kind: 'continue', text: text.toUpperCase() }
+    })
+    edit('one')
+
+    expect(await queue.queueSave(file(), 'one')).toBe('written')
+    expect(disk.files.get(PATH)).toBe('ONE\n')
+    expect(store.getState().openFiles.find((tab) => tab.id === 'b')?.isDirty).toBe(false)
+  })
+
+  it.each([
+    ['source', 'rich', 'ONE\n'],
+    ['rich', 'source', 'ONE']
+  ] as const)(
+    'keeps the %s save behavior when only a %s view survives the plugin',
+    async (savingView, survivingView, expected) => {
+      const path = openMarkdownViews(savingView, survivingView)
+      hook.mockImplementationOnce(async ({ text }) => {
+        store.setState((state) => ({ openFiles: state.openFiles.filter((tab) => tab.id !== 'a') }))
+        return { kind: 'continue', text: text.toUpperCase() }
+      })
+      edit('one')
+
+      expect(await queue.queueSave(file(), 'one')).toBe('written')
+      expect(disk.files.get(path)).toBe(expected)
+      expect(store.getState().openFiles.find((tab) => tab.id === 'b')?.isDirty).toBe(false)
+    }
+  )
+
+  it('retains a source save when the writer closes before the queued save starts', async () => {
+    const path = openMarkdownViews('source', 'rich')
+    let finish!: (decision: EditorSaveHookDecision) => void
+    hook
+      .mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
+      .mockResolvedValueOnce({ kind: 'continue', text: 'TWO' })
+    edit('one')
+    const first = queue.queueSave(file(), 'one')
+    await vi.waitFor(() => expect(hook).toHaveBeenCalledOnce())
+    edit('two')
+    const second = queue.queueSave(file(), 'two')
+    store.setState((state) => ({ openFiles: state.openFiles.filter((tab) => tab.id !== 'a') }))
+    finish({ kind: 'continue', text: 'ONE' })
+
+    expect(await first).toBe('written')
+    expect(await second).toBe('written')
+    expect(disk.files.get(path)).toBe('TWO\n')
+    expect(store.getState().openFiles.find((tab) => tab.id === 'b')?.isDirty).toBe(false)
   })
 
   it('keeps edits made while the hook ran unsaved and the tab dirty', async () => {

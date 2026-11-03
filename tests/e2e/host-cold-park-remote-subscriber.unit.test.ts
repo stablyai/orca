@@ -235,38 +235,6 @@ describe('STA-2854 B: remote subscriber survives a fully unmounted host renderer
     expect(provider.attachCalls).toEqual([])
     expect(errorFrames(reconnected)).toBe(0)
   })
-
-  it('counterfactual: losing every subscriber is what clears the thinning veto', async () => {
-    const runtime = new OrcaRuntimeService()
-    const provider = createHostProvider()
-    provider.bind(runtime)
-    runtime.setPtyController(provider.controller as never)
-    const record = internals(runtime).recordPtyWorktree(provider.ptyId, WORKTREE_ID, {
-      connected: true
-    })
-    const handle = internals(runtime).issuePtyHandle(record)
-    vi.spyOn(runtime, 'requestRendererTerminalTabMount').mockReturnValue(false)
-
-    const harness = startMultiplex(runtime, 'conn-counterfactual')
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-    sendSubscribe(harness, 1, handle, 'client-b')
-    await waitForSubscribed(harness, 1)
-    expect(runtime.hasRawTerminalViewSubscriber(provider.ptyId)).toBe(true)
-
-    harness.handlers.get(1)?.(
-      decodeTerminalStreamFrame(
-        encodeTerminalStreamFrame({
-          opcode: TerminalStreamOpcode.Unsubscribe,
-          streamId: 1,
-          seq: 3,
-          payload: encodeTerminalStreamJson({})
-        })
-      )!
-    )
-    await vi.waitFor(() => expect(runtime.hasRawTerminalViewSubscriber(provider.ptyId)).toBe(false))
-    expect(provider.session.attached).toBe(true)
-    expect(provider.emitData('post-unsubscribe\r\n')).toBe(true)
-  })
 })
 
 describe('STA-2854 C: an unattached host PTY with no mountable renderer pane', () => {

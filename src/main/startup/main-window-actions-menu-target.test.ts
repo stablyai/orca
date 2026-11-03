@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { quit: vi.fn() } }))
-vi.mock('../updater', () => ({ checkForUpdatesFromMenu: vi.fn(), isQuittingForUpdate: vi.fn() }))
+vi.mock('../updater/updater-service', () => ({
+  checkForUpdatesFromMenu: vi.fn(),
+  isQuittingForUpdate: vi.fn()
+}))
 vi.mock('../tray/system-tray', () => ({
   createSystemTray: vi.fn(),
   setMacMenuBarIconVisible: vi.fn()
@@ -23,7 +26,7 @@ vi.mock('../window/renderer-launch-failure-probe', () => ({ probeRendererLaunchC
 
 import { sendOpenCrashReport, sendOpenFeatureTour, sendOpenSetupGuide } from './main-window-actions'
 import { mainProcessState as state } from './main-process-state'
-import { markNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
+import { markNativeBrowserPopupWindow } from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { getWorkspaceSpaceWindow } from '../window/workspace-space-window'
 import { safelyRevealWindow } from '../window/focus-existing-window'

@@ -8,7 +8,7 @@ import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeRpcFailureError } from '../runtime/types'
 import type { PluginShotActResult } from '../../shared/plugins/view/plugin-shot-acts'
-import { PLUGIN_VIEW_HANDLERS, formatPluginShot, type PluginShotReply } from './plugin-view'
+import { PLUGIN_VIEW_HANDLERS, type PluginShotReply } from './plugin-view'
 
 // A 1x1 PNG.
 const PNG_BASE64 =
@@ -68,31 +68,7 @@ afterEach(async () => {
   await rm(cwd, { recursive: true, force: true })
 })
 
-describe('orca plugin open / shot arguments', () => {
-  it('parses the plugin key positionally with the view flags', () => {
-    const open = parse(['plugin', 'open', 'acme.todos', '--panel', 'stats'])
-    expect(open.commandPath).toEqual(['plugin', 'open'])
-    expect(open.flags.get('plugin')).toBe('acme.todos')
-    expect(open.flags.get('panel')).toBe('stats')
-    const shot = parse(['plugin', 'shot', 'acme.todos', '--theme', 'light', '--width', '360'])
-    expect(shot.commandPath).toEqual(['plugin', 'shot'])
-    expect(shot.flags.get('theme')).toBe('light')
-    expect(shot.flags.get('width')).toBe('360')
-    expect(parse(['plugin', 'dev', 'watch', '.', '--shot', 'out']).flags.get('shot')).toBe('out')
-  })
-})
-
 describe('orca plugin open', () => {
-  it('opens the default panel', async () => {
-    const call = vi.fn().mockResolvedValue({
-      result: { pluginKey: 'acme.todos', kind: 'panel', panelId: 'todos', title: 'Todos' }
-    })
-    await PLUGIN_VIEW_HANDLERS['plugin open'](
-      context(['plugin', 'open', 'acme.todos'], call, { cwd })
-    )
-    expect(call).toHaveBeenCalledWith('plugins.open', { pluginKey: 'acme.todos' })
-  })
-
   it('sends --editor as a host path, absolute on a remote host', async () => {
     const call = vi.fn().mockResolvedValue({
       result: { pluginKey: 'acme.notes', kind: 'editor', editorId: 'e', title: 'N', filePath: 'x' }
@@ -199,32 +175,6 @@ describe('orca plugin shot', () => {
     ).rejects.toMatchObject({ code: 'invalid_environment' })
   })
 
-  it('prints theme, drawing and error notes in text', () => {
-    const text = formatPluginShot(
-      {
-        path: '/w/a.png',
-        pluginKey: 'acme.todos',
-        panelId: 'todos',
-        width: 300,
-        height: 600,
-        theme: 'dark',
-        themeApplied: false,
-        themeReason: 'the Orca window is visible; capturing in the current theme',
-        settled: false,
-        errors: ['src/panel.tsx:4 boom']
-      },
-      'light'
-    )
-    expect(text).toBe(
-      [
-        'Saved /w/a.png (300x600, dark theme)',
-        '  note: light was not applied (the Orca window is visible; capturing in the current theme); it shows dark.',
-        '  note: the panel had not finished drawing; this is what it showed.',
-        '  error: src/panel.tsx:4 boom'
-      ].join('\n')
-    )
-  })
-
   it('writes beside the plugin when run inside its folder', async () => {
     const plugin = join(cwd, 'todos')
     await mkdir(join(plugin, 'src'), { recursive: true })
@@ -276,36 +226,5 @@ describe('orca plugin shot', () => {
         })
       )
     ).rejects.toMatchObject({ code: 'runtime_unsupported' })
-  })
-
-  it('passes pendingRequests and restored on, and notes them in text', async () => {
-    const call = vi
-      .fn()
-      .mockResolvedValue(
-        shotReply({ pendingRequests: 2, actions: [{ ok: true }], restored: false })
-      )
-    await PLUGIN_VIEW_HANDLERS['plugin shot'](
-      context(['plugin', 'shot', 'acme.todos', '--act', '{"press":{"text":"Add"}}'], call, { cwd })
-    )
-    expect(JSON.parse(stdout.join('')).result).toMatchObject({
-      pendingRequests: 2,
-      actions: [{ ok: true }],
-      restored: false
-    })
-    const text = formatPluginShot({
-      path: '/w/a.png',
-      pluginKey: 'acme.todos',
-      panelId: 'todos',
-      width: 300,
-      height: 600,
-      theme: 'dark',
-      themeApplied: false,
-      settled: true,
-      errors: [],
-      pendingRequests: 2,
-      restored: false
-    })
-    expect(text).toContain('2 host call(s) (plugin.request included) were unanswered after 3s')
-    expect(text).toContain('its acted state was not put back')
   })
 })

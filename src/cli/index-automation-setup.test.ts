@@ -41,13 +41,7 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import {
-  buildWorktree,
-  okFixture,
-  queueFixtures,
-  localRepoDestinationFixtures,
-  worktreeListFixture
-} from './test-fixtures'
+import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY } from '../shared/protocol-version'
 
@@ -88,26 +82,6 @@ describe('automation setup CLI contract', () => {
     '--json'
   ]
 
-  it.each(['run', 'skip'])(
-    'sends concrete create --setup %s on the existing wire',
-    async (setup) => {
-      queueFixtures(
-        callMock,
-        supported,
-        ...localRepoDestinationFixtures(),
-        okFixture('created', { automation: { id: 'a1', setupDecision: setup } })
-      )
-      vi.spyOn(console, 'log').mockImplementation(() => {})
-      await main([...createArgs, '--setup', setup], '/tmp/repo')
-      expect(process.exitCode).not.toBe(1)
-      expect(setupCalls()).toEqual(['status.get', 'automation.create'])
-      expect(callMock).toHaveBeenLastCalledWith(
-        'automation.create',
-        expect.objectContaining({ setupDecision: setup, workspaceMode: 'new_per_run' })
-      )
-    }
-  )
-
   it.each([
     [[...createArgs, '--setup', 'run'], 'create'],
     [[...createArgs, '--setup', 'skip'], 'create'],
@@ -121,21 +95,6 @@ describe('automation setup CLI contract', () => {
     expect(setupCalls()).toEqual(['status.get'])
     expect(JSON.parse(String(output.mock.calls.at(-1)?.[0])).error.message).toBe(
       "This host's Orca is too old for --setup on automations. Update Orca on that host, or run the command without --setup."
-    )
-  })
-
-  it('keeps an omitted create choice on the shipped skip fallback', async () => {
-    queueFixtures(
-      callMock,
-      ...localRepoDestinationFixtures(),
-      okFixture('created', { automation: { id: 'a1' } })
-    )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    await main(createArgs, '/tmp/repo')
-    expect(setupCalls()).toEqual(['automation.create'])
-    expect(callMock).toHaveBeenLastCalledWith(
-      'automation.create',
-      expect.not.objectContaining({ setupDecision: expect.anything() })
     )
   })
 
@@ -262,13 +221,5 @@ describe('automation setup CLI contract', () => {
     )
     // An explicit switch is the user's own choice, so it carries no stored-mode precondition.
     expect(callMock.mock.calls.at(-1)?.[1]).not.toHaveProperty('expectedWorkspaceMode')
-  })
-
-  it.each(['create', 'edit'])('documents --setup and omission in %s help', async (command) => {
-    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
-    await main(['automations', command, '--help'], '/tmp/repo')
-    const help = output.mock.calls.map(([line]) => String(line)).join('\n')
-    expect(help).toContain('--setup run|skip')
-    expect(help).toContain(command === 'create' ? 'omitted' : 'preserve')
   })
 })

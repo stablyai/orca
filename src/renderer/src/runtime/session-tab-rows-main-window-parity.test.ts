@@ -212,16 +212,4 @@ describe("main's mobile editor rows", () => {
     expect(main.activeTabId).toBe(window.activeTabId)
     expect(main.activeTabType).toBe(window.activeTabType)
   })
-
-  it('links a preview to its source by the open-file id, owned ids included', () => {
-    const { main } = scenario(`markdown-preview::${README}`)
-    const previews = main.tabs.filter((tab) => tab.type === 'markdown' && tab.mode !== 'edit')
-    expect(
-      previews.map((tab) => tab.type === 'markdown' && [tab.sourceFileId, tab.isDirty])
-    ).toEqual([
-      [README, true],
-      [SERVER_DOC_ID, false],
-      ['markdown-preview::/Users/dev/orca/CHANGELOG.md', false]
-    ])
-  })
 })

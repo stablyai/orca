@@ -17,12 +17,12 @@ import {
   commitProvenRepoKindChange,
   proveRepoKindChange,
   updateProjectHostSetupWithProvenKind
-} from '../../folder-repo-git-conversion'
+} from '../../workspaces/catalog/folder-repo-git-conversion'
 
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
 
@@ -86,6 +86,27 @@ describe('Store', () => {
     expect(updated).not.toBeNull()
     expect(updated!.displayName).toBe('renamed')
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
+  })
+
+  it('persists opt-in editor save settings and the project command across reloads', async () => {
+    const store = createStore()
+    store.addRepo(makeRepo())
+    expect(store.getSettings().editorFormatOnSave).toBe(false)
+    expect(store.getSettings().editorInsertFinalNewline).toBe(false)
+    const editorFormatter = {
+      command: 'prettier --stdin-filepath "${file}"',
+      include: ['**/*.ts']
+    }
+    store.updateSettings({ editorFormatOnSave: true, editorInsertFinalNewline: true })
+    store.updateRepo({ id: 'r1' }, { editorFormatter })
+    await store.flushPendingOrThrowAsync()
+
+    const reloaded = createStore()
+    expect(reloaded.getSettings().editorFormatOnSave).toBe(true)
+    expect(reloaded.getSettings().editorInsertFinalNewline).toBe(true)
+    expect(reloaded.getRepo('r1')?.editorFormatter).toEqual(editorFormatter)
+    reloaded.updateRepo({ id: 'r1' }, { editorFormatter: { command: '', include: [] } })
+    expect(reloaded.getRepo('r1')?.editorFormatter?.command).toBe('')
   })
 
   it('invalidates local worktree scans across a git-folder-git update round trip', async () => {

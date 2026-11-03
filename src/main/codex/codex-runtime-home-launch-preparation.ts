@@ -3,7 +3,7 @@ import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-sele
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { codexHookService } from './hook-service'
-import { getDefaultWslDistro } from '../wsl'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { reconcileCodexHooksForLaunch } from './codex-hook-reconcile'
 import { grantCodexSandboxReadOnManagedHome } from './codex-windows-sandbox-read-grant'

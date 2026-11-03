@@ -13,7 +13,7 @@ import { PtyStartupIngress } from '../../../shared/pty-startup-ingress'
 import type { PtyIngressEmission } from '../../../shared/pty-startup-ingress-contract'
 import { resolvePtyOwnerBackend } from '../../../shared/pty-owner-backend'
 import { resolveProcessExitCause } from '../../../shared/terminal-exit-cause'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/posix-shell-startup-command'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { getAgentForegroundContextPaths } from '../agent-foreground-context-paths'
 import { getSpawnedShellName } from './local-pty-launch-context'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
@@ -38,8 +38,10 @@ import {
   ptyTerminationMode,
   ptyWorktreeId,
   ptyWslDistroById,
+  ptyWslGuestRootById,
   startupIngressByPty
 } from './local-pty-provider-state'
+import { createWslGuestRootObserver } from '../../../shared/wsl-guest-root-marker'
 import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness-session'
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
@@ -132,8 +134,12 @@ export function activateLocalPtySession(args: {
     startupIngress
   })
   const disposables: { dispose: () => void }[] = []
+  const observeGuestRoot = spawnedWslDistro
+    ? createWslGuestRootObserver((root) => ptyWslGuestRootById.set(id, root))
+    : undefined
   const onDataDisposable = proc.onData((rawData) => {
     initialOutput?.observe(rawData)
+    observeGuestRoot?.(rawData)
     readiness.acceptData(rawData)
   })
   if (onDataDisposable) {

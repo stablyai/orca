@@ -1,4 +1,4 @@
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { checkSourceControlAgentActionLaunch } from '@/lib/source-control-agent-action-launch-check'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'

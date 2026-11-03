@@ -5,18 +5,18 @@ import {
   defineBrowserExtensionMethod,
   type BrowserExtensionCaller,
   type BrowserExtensionMethod
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   describeBrowserExtensionTab,
   listBrowserExtensionTabs,
   requireCallerTab,
   resolveCallerWindowId,
   type BrowserExtensionTabEntry
-} from '../browser-extension-tab-model'
+} from '../tabs-and-windows/browser-extension-tab-model'
 import {
   describeBrowserExtensionDiscardedTab,
   findBrowserExtensionDiscardedTab
-} from '../browser-extension-discarded-tab-model'
+} from '../tabs-and-windows/browser-extension-discarded-tab-model'
 
 const tabIdSchema = z.number().int().nonnegative()
 const optionalTabId = z.tuple([tabIdSchema.nullable().optional()])

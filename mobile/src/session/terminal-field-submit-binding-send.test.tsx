@@ -59,6 +59,8 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
   const noop = (): void => {}
   const scope = {
     sendTerminalUserInput: terminalInputSend.request,
+    sendTerminalOrderedInput: terminalInputSend.request,
+    terminalRefs: { current: new Map() },
     client: session.client,
     activeHandle: session.activeHandle,
     activeSessionTab: null,

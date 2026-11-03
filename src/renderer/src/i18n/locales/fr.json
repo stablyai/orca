@@ -2378,8 +2378,6 @@
         "25690a3855": "Démarrer un espace de travail à partir de la PR",
         "a459866967": "Reprendre l'espace de travail attaché à la PR",
         "347034903a": "Copier le lien GitHub",
-        "5a01ca7253": "Échec de la synchronisation de l'état consulté avec GitHub.",
-        "996a1897d2": "Impossible de synchroniser l'état consulté de cette pull request.",
         "e0b15c793f": "Échec de la copie du lien GitHub",
         "992e799227": "Lien GitHub copié",
         "61bfc81ada": "Impossible d'ouvrir l'espace de travail attaché à cette pull request.",
@@ -3739,7 +3737,7 @@
             "copyLinkFailed": "Échec de la copie du lien",
             "downloadOpenWithDefaultApp": "Téléchargez et ouvrez avec l'application par défaut",
             "downloadOpenFailed": "Échec du téléchargement de « {{value0}} ».",
-            "openInThisGroup": "Ouvrir dans ce groupe",
+            "openInNewTab": "Ouvrir dans un nouvel onglet",
             "openInThisGroupRefused": "Impossible d'ouvrir {{value0}} dans ce groupe"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -7552,7 +7550,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Ouvrir Computer Use",
-          "79209b37b9": "Si l'import de cookies ne convient pas, Computer Use peut contrôler des apps locales et, le cas échéant, réutiliser des sessions de navigateur déjà connectées. Installez la skill Computer Use ; macOS exige aussi des autorisations de confidentialité.",
+          "79209b37b9": "Si l'import de cookies ne convient pas, Computer Use peut contrôler des apps locales et, le cas échéant, réutiliser des sessions de navigateur déjà connectées. Installez la skill Orca Computer Use ; macOS exige aussi des autorisations de confidentialité.",
           "333984cf90": "Utiliser une session de navigateur existante"
         },
         "BrowserUseEnableSwitch": {
@@ -7672,7 +7670,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Permet aux agents d'inspecter et de piloter des applications de bureau locales.",
-          "93255aaf18": "Compétence Computer Use",
+          "93255aaf18": "Compétence Orca Computer Use",
           "45f8e22c2e": "Ouvert",
           "d95d1cfab8": "Actualiser",
           "0c29da5805": "Prêt",
@@ -8558,8 +8556,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Modèle de commande",
-          "2b2f38652b": "Commande personnalisée",
-          "0ffb081b3a": "Utiliser l'agent par défaut",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Personnaliser",
           "403876bb48": "Utiliser la valeur globale",
@@ -19128,6 +19124,7 @@
         "attachmentNotAFile": "Une image de ce message n'est pas un fichier, le message n'a donc pas été envoyé.",
         "attachmentNoSource": "Une image de ce message n'a aucun fichier à envoyer, le message n'a donc pas été envoyé.",
         "attachmentInvalid": "Une pièce jointe de ce message ne peut pas être envoyée à l'agent.",
+        "attachmentsExpired": "Expiré : {{names}}.",
         "attachmentUnreadable": "Une pièce jointe de ce message n'a pas pu être lue, le message n'a donc pas été envoyé.",
         "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
         "commandUnavailable": "Cette commande n'est pas disponible dans les chats {{agent}}, elle n'a donc pas été envoyée.",
@@ -19215,6 +19212,7 @@
         "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
         "attachmentExpired": "Cette pièce jointe a expiré.",
         "reattachFile": "Retirez-la et joignez-la à nouveau.",
+        "reattachFiles": "Retirez-les et joignez-les à nouveau.",
         "conversationCleared": "Cette conversation a été effacée.",
         "openCurrentConversation": "Ouvrez la conversation actuelle pour continuer.",
         "clearUnfinished": "Le dernier /clear ne s'est pas terminé.",
@@ -19522,7 +19520,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour continuer dans l'interface de chat.",
-        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse."
+        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
+        "exitUnconfirmed": "{{agent}} exécute cette conversation dans un autre terminal. Quittez-le là-bas ou fermez ce terminal, puis réessayez."
       },
       "state": {
         "loading": {
@@ -19746,7 +19745,7 @@
           "unverifiableCount_other": "{{count}} au statut indisponible",
           "unverifiableCount_many": "{{count}} au statut indisponible"
         },
-        "tokens": "Jetons {{value0}}",
+        "tokens": "{{value0}} tokens",
         "unnamed": "Sous-agent",
         "started_one": "A lancé {{count}} sous-agent",
         "started_other": "A lancé {{count}} sous-agents",
@@ -20066,7 +20065,8 @@
         "cancelled": "Orca ne reprendra pas ce chat automatiquement.",
         "scheduled": "Orca reprendra ce chat à {{time}}.",
         "cancel": "Ne pas reprendre"
-      }
+      },
+      "settings": "Paramètres du chat"
     },
     "tab": {
       "bar": {
@@ -22655,6 +22655,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}} : aucune sauvegarde lisible, la section repartira donc de zéro.",
+      "sectionKeptCurrent": "{{section}} : vos exécutions actuelles seront conservées",
       "sectionRestored": "{{section}} : restauré à partir de la sauvegarde du {{time}}.",
       "projectsForgotten": "Orca oubliera vos projets et les détails de leurs espaces de travail. Les fichiers sur le disque ne sont pas modifiés.",
       "newerProjectsRemoved": "Les projets ajoutés après cette sauvegarde seront retirés d'Orca, avec les détails de leurs espaces de travail. Les fichiers sur le disque ne sont pas modifiés.",
@@ -22697,7 +22698,7 @@
       "noneFound": "(aucun élément trouvé)",
       "sqlitePath": "Chemin SQLite : {{path}}",
       "sectionsDamaged": "Une partie de l'état enregistré de ce profil est endommagée : {{sections}}. Tout le reste est intact.",
-      "repairCommand": "Quittez Orca, puis exécutez `{{command}}` pour remplacer uniquement les parties endommagées à partir des sauvegardes et conserver tout le reste. Orca conserve une copie du fichier endommagé.",
+      "repairCommand": "Arrêtez Orca, puis exécutez `{{command}}` pour réparer uniquement les parties endommagées et conserver le reste. Orca garde une copie du fichier endommagé.",
       "restoreWholeBackup": "Pour restaurer plutôt une sauvegarde complète, exécutez `{{exportsCommand}}`, puis `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca ne peut pas ouvrir le profil actif en toute sécurité, car son état SQLite est illisible.",
       "legacyJsonPath": "Chemin de l'ancien fichier JSON : {{path}}",
@@ -22994,6 +22995,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vous pouvez conserver vos choix ou utiliser les arguments.",
+    "catalogFailed": "Impossible de charger les modèles de {{agent}}. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
+    "catalogSignIn": "Connectez-vous à {{agent}} pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
+    "catalogInstall": "Installez {{agent}} sur cet hôte pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
+    "catalogUnresolved": "Les modèles de {{agent}} ne sont pas chargés. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
+    "catalogEmpty": "{{agent}} n’a aucun modèle disponible.",
     "search": "Rechercher des agents et des configurations…",
     "configure": "Configurer {{agent}}",
     "arguments": "Arguments",
@@ -23008,6 +23015,8 @@
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
     "legacyModelCount": "{{total}} modèles",
+    "use": "Utiliser",
+    "select": "Choisir un agent",
     "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
     "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers"
   },

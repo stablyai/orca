@@ -27,12 +27,12 @@ import {
   _getLocalWorktreeScanGenerationCacheSize,
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   _pendingWslStoppedWorktreeRescanCount,
   holdWslStoppedWorktreeRescan
-} from '../../wsl-stopped-worktree-rescan-registry'
+} from '../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
 const at = (id: string, hostId: ExecutionHostId) => hostWorktreeTarget({ id, hostId })

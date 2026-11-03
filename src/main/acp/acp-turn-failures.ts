@@ -6,14 +6,59 @@ import {
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { BoundedMap } from '../../shared/bounded-map'
 import type { AgentSessionUsageLimit } from '../../shared/agent-session/failures/agent-session-usage-limit'
-import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import type { AcpDialect } from './acp-dialects/acp-dialect'
+import type {
+  ProviderTimelineEvent,
+  ProviderTimelineJoin
+} from '../native-chat/agent-session-timeline/provider-timeline-event'
+import type { AcpDialect, AcpDialectNotification, AcpTurnEnding } from './acp-dialects/acp-dialect'
 import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from './acp-errors'
 
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
 
-function acpStopReasonFailed(stopReason: string): boolean {
+export function acpStopReasonFailed(stopReason: string): boolean {
   return FAILED_STOP_REASONS.includes(stopReason)
+}
+
+export type AcpTurnFailureReport = Pick<
+  AcpTurnEnding,
+  'stopReason' | 'failureDetail' | 'notSignedIn' | 'usageLimit' | 'providerFailure'
+>
+
+export type AcpTurnFailureEvidence = {
+  text: string
+  notSignedIn: boolean
+  usageLimited: boolean
+  providerFailure: boolean
+  usageLimit?: AgentSessionUsageLimit
+}
+
+/** Keep the first diagnostic and established causes when a later RPC error is generic. */
+export function mergeAcpTurnFailureEvidence(
+  previous: AcpTurnFailureEvidence | undefined,
+  {
+    stopReason,
+    failureDetail: text,
+    notSignedIn,
+    usageLimit,
+    providerFailure
+  }: AcpTurnFailureReport
+): AcpTurnFailureEvidence {
+  const authenticationRequired = notSignedIn === true || previous?.notSignedIn === true
+  return {
+    text:
+      previous?.text ||
+      (text === undefined ? '' : (providerDiagnostic(text, 'person')?.text ?? '')),
+    notSignedIn: authenticationRequired,
+    usageLimited:
+      !authenticationRequired && (stopReason === 'rate_limit' || previous?.usageLimited === true),
+    providerFailure: providerFailure === true || previous?.providerFailure === true,
+    usageLimit: usageLimit ?? previous?.usageLimit
+  }
+}
+
+/** Agents report their own refusals as errors too; only these causes make a failure the provider's. */
+export function acpProviderFailed(evidence: AcpTurnFailureEvidence): boolean {
+  return evidence.notSignedIn || evidence.usageLimited || evidence.providerFailure
 }
 
 /** Prefer provider error details over generic messages such as Internal error. */
@@ -53,15 +98,7 @@ export function acpSignInRequiredFailure(
 
 /** Deduplicate failure rows by turn, accepting later reasons when earlier reports lacked one. */
 export class AcpTurnFailures {
-  private readonly rows = new BoundedMap<
-    string,
-    {
-      text: string
-      notSignedIn: boolean
-      usageLimited: boolean
-      usageLimit?: AgentSessionUsageLimit
-    }
-  >({
+  private readonly rows = new BoundedMap<string, AcpTurnFailureEvidence>({
     maxEntries: 128
   })
 
@@ -75,34 +112,40 @@ export class AcpTurnFailures {
     return this.rows.has(turn)
   }
 
-  ended(
-    turn: string,
-    stopReason: string,
-    text: string | undefined,
-    notSignedIn = false,
-    usageLimit?: AgentSessionUsageLimit
+  notification(
+    turn: string | undefined,
+    extension: AcpDialectNotification | undefined
   ): ProviderTimelineEvent[] {
-    return acpStopReasonFailed(stopReason)
-      ? this.row(turn, text, stopReason, notSignedIn, usageLimit)
+    return turn &&
+      extension?.disposition === 'map' &&
+      (extension.failureDetail || extension.failure)
+      ? this.row(turn, {
+          ...extension.failure,
+          stopReason: extension.failure?.stopReason ?? 'error',
+          failureDetail: extension.failureDetail ?? extension.failure?.failureDetail
+        })
       : []
   }
 
-  row(
+  ended(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
+    return acpStopReasonFailed(ending.stopReason) ? this.row(turn, ending) : []
+  }
+
+  row(turn: string, report: AcpTurnFailureReport): ProviderTimelineEvent[] {
+    const evidence = mergeAcpTurnFailureEvidence(this.rows.peek(turn), report)
+    return this.write(turn, evidence, { thread: this.sessionId, turn }, report.stopReason)
+  }
+
+  /** Render already merged evidence; a host command passes its thread-only join. */
+  write(
     turn: string,
-    text: string | undefined,
-    stopReason = 'error',
-    notSignedIn = false,
-    usageLimit?: AgentSessionUsageLimit
+    evidence: AcpTurnFailureEvidence,
+    join: ProviderTimelineJoin,
+    stopReason = 'error'
   ): ProviderTimelineEvent[] {
     const written = this.rows.peek(turn)
-    const detail = text === undefined ? undefined : providerDiagnostic(text, 'person')
-    const diagnostic =
-      (written?.text ? providerDiagnostic(written.text, 'person') : undefined) ?? detail
-    const authenticationRequired = notSignedIn || written?.notSignedIn === true
-    // Preserve rate-limit classification when a later prompt error omits the stop reason.
-    const usageLimited =
-      !authenticationRequired && (stopReason === 'rate_limit' || written?.usageLimited === true)
-    const limit = usageLimit ?? written?.usageLimit
+    const { notSignedIn: authenticationRequired, usageLimited, usageLimit: limit } = evidence
+    const diagnostic = providerDiagnostic(evidence.text, 'person')
     if (
       written &&
       written.text === (diagnostic?.text ?? '') &&
@@ -113,12 +156,7 @@ export class AcpTurnFailures {
     ) {
       return []
     }
-    this.rows.set(turn, {
-      text: diagnostic?.text ?? '',
-      notSignedIn: authenticationRequired,
-      usageLimited,
-      usageLimit: limit
-    })
+    this.rows.set(turn, evidence)
     const failure = authenticationRequired
       ? agentSessionFailureFact('notSignedIn', { detail: diagnostic })
       : usageLimited
@@ -143,7 +181,7 @@ export class AcpTurnFailures {
                   `${this.agentName ?? 'The agent'} ended this turn with an error.`
               })
         },
-        join: { thread: this.sessionId, turn }
+        join
       }
     ]
   }

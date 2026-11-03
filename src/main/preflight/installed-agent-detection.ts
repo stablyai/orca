@@ -5,7 +5,7 @@ import {
   resolveDetectedTuiAgentIds,
   type TuiAgentDetectionCommand
 } from '../../shared/tui-agent-detection-commands'
-import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
+import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-detection-shell-path'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext

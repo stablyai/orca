@@ -101,7 +101,7 @@ vi.mock('../gitlab/gl-utils', () => ({
     connectionId ? {} : { cwd: repoPath }
 }))
 
-vi.mock('../git/upstream', () => ({
+vi.mock('../git/source-control/upstream', () => ({
   getUpstreamStatus: getUpstreamStatusMock
 }))
 

@@ -1,39 +1,39 @@
-import { removeRetiredBrowserExtensionProfileStorage } from './browser-extension-retired-profile-storage'
+import { removeRetiredBrowserExtensionProfileStorage } from './profile-storage/browser-extension-retired-profile-storage'
 import { app, webContents } from 'electron'
-import { isBrowserExtensionNativePage } from './browser-extension-native-page'
+import { isBrowserExtensionNativePage } from './api-runtime/browser-extension-native-page'
 import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser-extension-types'
 import {
   installBrowserExtensionApiHost,
   getBrowserExtensionProfileIdForSession
-} from './browser-extension-api-host'
+} from './api-runtime/browser-extension-api-host'
 import {
   isBrowserExtensionSupportEnabled,
   setBrowserExtensionSupportEnabled
 } from './browser-extension-support'
-import { browserSessionRegistry } from '../browser-session-registry'
+import { browserSessionRegistry } from '../sessions/browser-session-registry'
 import {
   attachBrowserExtensionsToProfileSession,
   detachBrowserExtensionsFromAllProfileSessions
-} from './browser-extension-session-loader'
-import { notifyBrowserExtensionActionsChanged } from './browser-extension-action-registry'
+} from './profile-sessions/browser-extension-session-loader'
+import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
 import { observeBrowserExtensionTabLifecycle } from './api/tabs-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
-import { observeBrowserExtensionDnrContents } from './browser-extension-dnr-contents'
-import { installBrowserExtensionSessionServices } from './browser-extension-session-services'
-import { installBrowserExtensionToolbarNotifications } from './browser-extension-toolbar'
-import { installChromeWebStoreBridgeHost } from './browser-extension-webstore-bridge-host'
-import { startBrowserExtensionUpdateChecks } from './browser-extension-webstore-updater'
+import { observeBrowserExtensionDnrContents } from './declarative-net-request/session/browser-extension-dnr-contents'
+import { installBrowserExtensionSessionServices } from './profile-sessions/browser-extension-session-services'
+import { installBrowserExtensionToolbarNotifications } from './actions/browser-extension-toolbar'
+import { installChromeWebStoreBridgeHost } from './web-store/browser-extension-webstore-bridge-host'
+import { startBrowserExtensionUpdateChecks } from './web-store/browser-extension-webstore-updater'
 import {
   notifyBrowserExtensionListChanged,
   setBrowserExtensionListChangedListener
-} from './browser-extension-list-changes'
-import { getBrowserExtensionMainWindow } from './browser-extension-window-model'
+} from './installation/browser-extension-list-changes'
+import { getBrowserExtensionMainWindow } from './tabs-and-windows/browser-extension-window-model'
 import {
   setSavedBrowserTabsSource,
   type SavedBrowserTabsSource
-} from './browser-extension-discarded-tabs'
+} from './tabs-and-windows/browser-extension-discarded-tabs'
 
 let initialized = false
 let switching = Promise.resolve()

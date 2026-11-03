@@ -11,7 +11,8 @@ import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-de
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 

@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAzureDevOpsPullRequest } from './pull-request-creation'
 import { _resetAzureDevOpsApiVersionCache } from './azure-devops-api-request'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remotes/remote-url-probe'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 

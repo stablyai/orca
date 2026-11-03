@@ -1,5 +1,5 @@
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import { dedupeInFlightRun } from '../in-flight-run-dedupe'
+import { dedupeInFlightRun } from '../runtime/concurrency/in-flight-run-dedupe'
 import { resolveCodexCommand, resolveCodexCommandForSpawn } from '../codex-cli/command'
 import { getManagedCommand, getManagedScriptPath } from './codex-hook-definition'
 import {

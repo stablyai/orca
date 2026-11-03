@@ -124,7 +124,7 @@ describe('terminal file links carry their source tab', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
-  it('reports a refused HTML placement for the internal Open in this group action', async () => {
+  it('reports a refused HTML placement for the internal Open in new tab action', async () => {
     seedSourceTab()
     const stat = createDeferred<{ isDirectory: boolean }>()
     statMock.mockImplementationOnce(() => stat.promise)

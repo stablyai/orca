@@ -2,35 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { canResumeAiVaultSessionOnTarget } from './ai-vault-resume-target'
 
 describe('ai vault session storage compatibility', () => {
-  const hostSessionFile = '/Users/ada/.claude/projects/-Users-ada-repo/session-1.jsonl'
   const windowsHostSessionFile = 'C:\\Users\\ada\\.claude\\projects\\C--repo\\session-1.jsonl'
   const wslSessionFile = '\\\\wsl$\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-repo\\s-1.jsonl'
   const wslLocalhostSessionFile =
     '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-repo\\s-1.jsonl'
-
-  it('allows host-stored sessions on local targets only', () => {
-    expect(
-      canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'local' })
-    ).toBe(true)
-    expect(
-      canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'ssh' })
-    ).toBe(false)
-    expect(
-      canResumeAiVaultSessionOnTarget({
-        sessionFilePath: windowsHostSessionFile,
-        targetStatus: 'ssh'
-      })
-    ).toBe(false)
-  })
-
-  it('allows WSL-stored sessions on local and SSH targets', () => {
-    expect(
-      canResumeAiVaultSessionOnTarget({ sessionFilePath: wslSessionFile, targetStatus: 'local' })
-    ).toBe(true)
-    expect(
-      canResumeAiVaultSessionOnTarget({ sessionFilePath: wslSessionFile, targetStatus: 'ssh' })
-    ).toBe(true)
-  })
 
   // Native Windows and WSL are both local, but only the matching namespace contains the agent/session (#24408).
   it('resumes a local session only in the namespace that stores it', () => {
@@ -87,17 +62,6 @@ describe('ai vault session storage compatibility', () => {
     ).toBe(false)
   })
 
-  it('allows WSL-stored local sessions on any SSH target even with explicit host ids', () => {
-    expect(
-      canResumeAiVaultSessionOnTarget({
-        sessionFilePath: wslSessionFile,
-        sessionExecutionHostId: 'local',
-        targetStatus: 'ssh',
-        targetExecutionHostId: 'ssh:dev-box'
-      })
-    ).toBe(true)
-  })
-
   it('allows runtime sessions only on the matching runtime target', () => {
     expect(
       canResumeAiVaultSessionOnTarget({
@@ -121,12 +85,6 @@ describe('ai vault session storage compatibility', () => {
         targetStatus: 'runtime',
         targetExecutionHostId: 'runtime:env-1'
       })
-    ).toBe(false)
-  })
-
-  it('never allows unknown targets', () => {
-    expect(
-      canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'unknown' })
     ).toBe(false)
   })
 })

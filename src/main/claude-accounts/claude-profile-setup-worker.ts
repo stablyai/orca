@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
 import type { ClaudeProfileDescriptor } from './claude-profile-paths'
 import type { ClaudeProfileSetupReport } from './claude-profile-setup'
 

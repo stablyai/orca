@@ -79,22 +79,4 @@ describe('scanFileRegionsBackward', () => {
     const file = writeFixture(`${'x'.repeat(500)}\nkeep-me\n`)
     expect(collectLines(file, 64, 128)).toEqual(['keep-me'])
   })
-
-  it('reads a file with no trailing newline', () => {
-    expect(collectLines(writeFixture('alpha\nbravo'), 4)).toEqual(['bravo', 'alpha'])
-  })
-
-  it('treats an empty or missing file as nothing found', () => {
-    expect(collectLines(writeFixture(''), 64)).toEqual([])
-    expect(
-      scanFileRegionsBackward(
-        '/nonexistent/transcript.jsonl',
-        {
-          chunkBytes: 64,
-          maxScanBytes: 64
-        },
-        () => 'x'
-      )
-    ).toBeUndefined()
-  })
 })

@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import * as gitRunner from '../main/git/runner'
+import * as gitRunner from '../main/git/command-runner/git-exec-file'
 import { getRemoteFileUrl } from '../main/git/repo'
 import {
   isUnsupportedMergeTreeMergeBaseError,
