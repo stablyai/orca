@@ -7,6 +7,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { NativeChatCrewFrame } from './NativeChatCrewPanel'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
+import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
 import { ExperimentalPane, getExperimentalPaneSearchEntries } from '../settings/ExperimentalPane'
 import { getExperimentalSearchEntry } from '../settings/experimental-search'
 import { getOrchestrationPanelExperimentalSearchEntry } from '../settings/orchestration-panel-experimental-search'
@@ -86,6 +87,57 @@ it('hydrates the preserved opt-in and responds to a live settings change', async
   expect(screen.queryByText('Enabled crew')).not.toBeInTheDocument()
   expect(screen.getByText('Transcript')).toBe(transcript)
   view.unmount()
+})
+
+it.each([2, 20])('isolates %i gate consumers from unrelated store updates', async (count) => {
+  useAppStore.setState({ settings: getDefaultSettings('/home/test') })
+  const renders = Array<number>(count).fill(0)
+  function Gate({ index }: { index: number }) {
+    const enabled = useOrchestrationPanelEnabled()
+    renders[index] += 1
+    return <output data-testid={`gate-${index}`}>{String(enabled)}</output>
+  }
+  render(
+    <>
+      {renders.map((_, index) => (
+        <Gate key={index} index={index} />
+      ))}
+    </>
+  )
+  await act(async () => {})
+  for (const enabled of [true, false]) {
+    renders.fill(0)
+    await act(async () => {
+      useAppStore.setState((state) => ({
+        settings: { ...state.settings!, experimentalOrchestrationPanel: enabled }
+      }))
+    })
+    expect(renders).toEqual(Array<number>(count).fill(1))
+    expect(screen.getByTestId(`gate-${count - 1}`)).toHaveTextContent(String(enabled))
+    renders.fill(0)
+    await act(async () => {
+      useAppStore.setState({ settingsSearchQuery: `unused-${enabled}` })
+    })
+    expect(renders).toEqual(Array<number>(count).fill(0))
+    await act(async () => {
+      useAppStore.setState((state) => ({
+        settings: { ...state.settings!, language: enabled ? 'de' : 'en' }
+      }))
+    })
+    expect(renders).toEqual(Array<number>(count).fill(0))
+    await act(async () => {
+      useAppStore.setState((state) => ({
+        runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set(
+          'other-host',
+          {
+            status: null,
+            checkedAt: enabled ? 1 : 2
+          }
+        )
+      }))
+    })
+    expect(renders).toEqual(Array<number>(count).fill(0))
+  }
 })
 
 it.each(['en', 'de'] as const)(
