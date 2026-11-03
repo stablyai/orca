@@ -22,6 +22,7 @@ import {
   createStructuredAgentSessionOptionsWriteOwner
 } from '../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
+import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
@@ -117,10 +118,13 @@ export function useMobileStructuredAgentOptions(args: {
       }),
     [controller, projectRuntimeReports, hostSupport?.permissionOwn]
   )
-  const shown = structuredAgentSessionShownSnapshot(readOptionState())
-  const optionSnapshot = legacyHostPermissions
-    ? [...shown, legacyHostPermissionDescriptor()]
-    : shown
+  const acceptsPicks = !!client && !!sessionId && enabled && fence !== null
+  const readOptionSnapshot = useCallback(() => {
+    const shown = structuredAgentSessionShownSnapshot(readOptionState())
+    const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
+    return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+  }, [acceptsPicks, legacyHostPermissions, readOptionState])
+  const optionSnapshot = readOptionSnapshot()
 
   const readWriteContext = () => {
     const currentState = projectRuntimeReports({
@@ -132,8 +136,8 @@ export function useMobileStructuredAgentOptions(args: {
       controller,
       record: optionStateRef.current.record,
       view,
-      snapshot: structuredAgentSessionShownSnapshot(view),
-      ready: !!client && !!sessionId,
+      snapshot: readOptionSnapshot(),
+      ready: acceptsPicks,
       providerStarting,
       isCurrentContext,
       flush: (isCurrent: () => boolean) => {
@@ -188,7 +192,7 @@ export function useMobileStructuredAgentOptions(args: {
       optionSnapshot,
       demandModelCatalog,
       setStructuredOption,
-      readOptionState
+      readOptionSnapshot
     })
 
   return {
