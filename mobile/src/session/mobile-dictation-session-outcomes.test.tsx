@@ -129,9 +129,6 @@ function mount(
       client,
       connState: 'connected',
       agentSessionHostSupport: { promptCancel: true, questionAnswers: false },
-      setInput: (update: (current: string) => string) => {
-        seen.inputs.push(update(''))
-      },
       activeHandle: 't1',
       activeSessionTabId: 'tab1',
       activeSessionTab: { id: 'tab1', type: 'terminal', terminal: 't1' },
@@ -147,12 +144,10 @@ function mount(
       setDictationEnabled: () => {},
       deviceTokenRef: useRef('dev'),
       dictationRouteContextRef: useRef(null),
-      commandFieldAnchorRef: useRef(null),
       activeHandleRef: useRef('t1'),
       flushPendingLiveInputBeforeExternalSend: async () => true,
       canSend: true,
       canCompose: true,
-      liveInputEnabled: true,
       showToast: (message: string) => {
         seen.toasts.push(message)
       },

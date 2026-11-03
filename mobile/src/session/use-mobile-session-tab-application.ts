@@ -47,7 +47,6 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
-    reconcileBufferedDraftsRef,
     setTerminalsLoaded,
     setActiveHandle,
     setActiveSessionTabId,
@@ -95,9 +94,6 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       if (orphanedDraftTabs.length > 0) {
         nextTabs = [...orphanedDraftTabs, ...nextTabs]
       }
-      reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
-        retainMissingSurfaces: result.tabs.length === 0
-      })
       const phoneOwnedTabIds = trackPhoneOwnedDraftTabs(
         draftOwnershipRef,
         `${hostId}\0${worktreeId}`,

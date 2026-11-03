@@ -76,8 +76,7 @@ async function mount(retired: number, covered: boolean) {
       activeHandleRef,
       showNativeChatRef,
       unsubscribeTerminal: vi.fn(),
-      nativeChatStream: { notifyListedHandles: vi.fn() },
-      bufferedTerminalDraftState: { pruneDrafts: vi.fn() }
+      nativeChatStream: { notifyListedHandles: vi.fn() }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies all members read by this production inventory hook; unrelated route fields are unused.
     const list = useMobileSessionTerminalList(scope as never)

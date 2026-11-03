@@ -110,13 +110,8 @@
       "tryAgain": "重试"
     },
     "terminalSettings": {
-      "autocomplete": "自动补全与自动纠正",
-      "autocompleteOff": "关闭",
-      "autocompleteOn": "开启",
       "defaultText": "默认（100%）",
       "keepPhoneSize": "保持手机尺寸（默认）",
-      "keyboardInputDescription": "自动补全、自动纠正和拼写建议仅适用于缓冲命令输入。点击键盘上方的双箭头按钮，从实时输入切换到缓冲输入，即可先编辑命令，再点击“发送”。默认关闭，以免改写命令、选项或路径。",
-      "keyboardInputHeading": "键盘输入",
       "largeText": "大（125%）",
       "largerText": "更大（150%）",
       "largestText": "最大（200%）",

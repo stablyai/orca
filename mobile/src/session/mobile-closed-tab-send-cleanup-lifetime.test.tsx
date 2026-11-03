@@ -111,7 +111,6 @@ async function mount(structured: boolean) {
       setFileDocs: vi.fn(),
       setMarkdownDocs: vi.fn(),
       sessionTabsRef: { current: [] },
-      reconcileBufferedDraftsRef: { current: vi.fn() },
       closedTabTombstonesRef: { current: new Map() },
       setActiveHandle: vi.fn(),
       setActiveSessionTabId: setTab,

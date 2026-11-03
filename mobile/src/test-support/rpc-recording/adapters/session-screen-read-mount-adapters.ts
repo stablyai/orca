@@ -121,8 +121,7 @@ export function sessionScreenReadMountAdapters(
             activeHandleRef: { current: HANDLE },
             showNativeChatRef: { current: false },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
-            nativeChatStream: { notifyListedHandles: () => {} },
-            bufferedTerminalDraftState: { pruneDrafts: () => {} }
+            nativeChatStream: { notifyListedHandles: () => {} }
           })
         )
       })

@@ -41,19 +41,15 @@ type Session = {
   readonly client: unknown
   readonly activeHandle: string | null
   readonly canSend: boolean
-  readonly draft: string
   readonly modes?: TerminalModes
 }
 
-const OFFLINE: Session = { client: null, activeHandle: null, canSend: false, draft: '' }
+const OFFLINE: Session = { client: null, activeHandle: null, canSend: false }
 const READY: Session = {
   client: { getState: () => 'connected' },
   activeHandle: 'terminal-a',
-  canSend: true,
-  draft: 'ls -la'
+  canSend: true
 }
-
-let restoredDrafts: string[] = []
 
 function buildScope(session: Session): MobileSessionTerminalWebviewModel {
   const noop = (): void => {}
@@ -74,7 +70,6 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     clientRef: { current: session.client },
     connStateRef: { current: 'connected' },
     liveInputRef: { current: null },
-    commandInputRef: { current: null },
     ptyModesRef: {
       current: new Map(
         session.activeHandle && session.modes ? [[session.activeHandle, session.modes]] : []
@@ -86,17 +81,6 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     sessionTabActionSheetRequestSeqRef: { current: 0 },
     activeHandleRef: { current: session.activeHandle },
     activeSessionTabTypeRef: { current: 'terminal' },
-    sendingRef: { current: false },
-    bufferedTerminalDraftState: {
-      input: session.draft,
-      beginBufferedTerminalDraftSend: (handle: string, draft: string) => ({
-        draft,
-        handle,
-        token: { handle }
-      }),
-      restoreRejectedDraft: (send: { draft: string }) => restoredDrafts.push(send.draft),
-      settleBufferedTerminalDraftSend: () => true
-    },
     getSendCompletionGeneration: () => 0,
     getLiveInteractionGeneration: () => 0,
     handleLiveInputAccessoryBytes: async () => ({ kind: 'allow-raw' }),

@@ -110,13 +110,8 @@
       "tryAgain": "重試"
     },
     "terminalSettings": {
-      "autocomplete": "自動完成與自動修正",
-      "autocompleteOff": "關閉",
-      "autocompleteOn": "開啟",
       "defaultText": "預設（100%）",
       "keepPhoneSize": "保持手機尺寸（預設）",
-      "keyboardInputDescription": "自動完成、自動修正和拼字建議僅適用於緩衝命令輸入模式。點一下鍵盤上方的雙箭頭按鈕，從即時輸入切換至此模式，編輯好命令後再點「傳送」。預設為關閉，以免命令、旗標或路徑遭到改寫。",
-      "keyboardInputHeading": "鍵盤輸入",
       "largeText": "大（125%）",
       "largerText": "較大（150%）",
       "largestText": "最大（200%）",

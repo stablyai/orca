@@ -4,8 +4,7 @@ import type { Terminal } from './mobile-session-route-types'
 import { mergeTerminalListWithKnownRecords, terminalRecordsEqual } from './mobile-terminal-records'
 import {
   createTerminalPrunePredicate,
-  pruneTerminalHandleMap,
-  resolveRetainedTerminalHandles
+  pruneTerminalHandleMap
 } from './mobile-terminal-prune-decision'
 import type { MobileSessionTerminalStreamDisplayModel } from './use-mobile-session-terminal-stream-display'
 import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-request'
@@ -32,8 +31,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     activeHandleRef,
     showNativeChatRef,
     unsubscribeTerminal,
-    nativeChatStream,
-    bufferedTerminalDraftState
+    nativeChatStream
   } = scope
   const lastKnownTerminalCountRef = useRef(0)
   const terminalInventoryRequest = useMemo(
@@ -83,8 +81,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               showNativeChat: showNativeChatRef.current,
               activeHandle: activeHandleRef.current
             }
-            // Sweep drafts against retained subscriptions, not transient list omissions.
-            bufferedTerminalDraftState.pruneDrafts(resolveRetainedTerminalHandles(pruneContext))
             const shouldPrune = createTerminalPrunePredicate(pruneContext)
             for (const handle of Array.from(terminalUnsubsRef.current.keys())) {
               if (!shouldPrune(handle)) {
@@ -149,14 +145,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
         opts.onPhysicalRequestStarted
       )
     },
-    [
-      client,
-      worktreeId,
-      nativeChatStream,
-      bufferedTerminalDraftState.pruneDrafts,
-      terminalInventoryRequest,
-      unsubscribeTerminal
-    ]
+    [client, worktreeId, nativeChatStream, terminalInventoryRequest, unsubscribeTerminal]
   )
   return {
     lastKnownTerminalCountRef,

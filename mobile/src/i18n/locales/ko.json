@@ -110,13 +110,8 @@
       "tryAgain": "다시 시도"
     },
     "terminalSettings": {
-      "autocomplete": "자동 완성 및 자동 수정",
-      "autocompleteOff": "꺼짐",
-      "autocompleteOn": "켜짐",
       "defaultText": "기본 (100%)",
       "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
-      "keyboardInputDescription": "자동 완성, 자동 수정, 맞춤법 제안은 버퍼 방식의 명령어 입력에만 적용됩니다. 키보드 위의 이중 화살표 버튼을 눌러 실시간 입력에서 전환한 다음, 명령어를 수정하고 '보내기'를 누르세요. 명령어, 플래그, 경로가 자동으로 바뀌지 않도록 기본적으로 꺼져 있습니다.",
-      "keyboardInputHeading": "키보드 입력",
       "largeText": "크게 (125%)",
       "largerText": "더 크게 (150%)",
       "largestText": "가장 크게 (200%)",

@@ -87,7 +87,6 @@ function scope(pending: PendingSessionSelection | null) {
       appliedSnapshotMarkerRef: { current: { epoch: null, version: -1 } },
       appliedSessionTabsRevisionRef: { current: 0 },
       closedTabTombstonesRef: { current: new Map() },
-      reconcileBufferedDraftsRef: { current: vi.fn() },
       setTerminalsLoaded: vi.fn(),
       setActiveHandle: vi.fn(),
       setActiveSessionTabId: vi.fn(),

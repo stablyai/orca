@@ -112,13 +112,8 @@
       "tryAgain": "Tentar novamente"
     },
     "terminalSettings": {
-      "autocomplete": "Preenchimento e correção automáticos",
-      "autocompleteOff": "Desativados",
-      "autocompleteOn": "Ativados",
       "defaultText": "Padrão (100%)",
       "keepPhoneSize": "Manter no tamanho do celular (padrão)",
-      "keyboardInputDescription": "O preenchimento automático, a correção automática e as sugestões ortográficas só se aplicam à entrada de comandos em buffer. Use o botão com seta dupla acima do teclado para sair da entrada em tempo real e editar seu comando antes de tocar em Enviar. Desativados por padrão para evitar alterações em comandos, opções ou caminhos.",
-      "keyboardInputHeading": "ENTRADA PELO TECLADO",
       "largeText": "Grande (125%)",
       "largerText": "Maior (150%)",
       "largestText": "Máximo (200%)",
