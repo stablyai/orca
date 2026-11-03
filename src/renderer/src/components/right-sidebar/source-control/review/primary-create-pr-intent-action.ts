@@ -49,8 +49,8 @@ export function resolveProvisionalHostedReviewProvider(input: {
   if (input.linkedAzureDevOpsPR != null) {
     return 'azure-devops'
   }
-  if (input.linkedGiteaPR != null) {
-    return 'gitea'
+  if (input.linkedGiteaPR != null || input.linkedBitbucketPR != null) {
+    return input.linkedGiteaPR != null ? 'gitea' : 'bitbucket'
   }
   if (input.linkedGitHubPR != null || input.fallbackGitHubPR != null) {
     return 'github'
