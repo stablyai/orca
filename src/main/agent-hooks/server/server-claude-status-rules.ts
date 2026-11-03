@@ -109,7 +109,7 @@ function endsBoundClaudePermission(
 /** A live batch only ever settles a held bound request; anything else is main's no-op and never becomes the row. */
 export function isUnusedClaudeSettlement(
   previous: AgentHookEventPayload | undefined,
-  next: ClaudeSettlementEvidence & Pick<AgentHookEventPayload, 'isReplay'>
+  next: ClaudeSettlementEvidence & Pick<AgentHookEventPayload, 'isReplay' | 'payload'>
 ): boolean {
   return (
     next.hookEventName === 'PostToolBatch' &&
@@ -117,6 +117,8 @@ export function isUnusedClaudeSettlement(
     !(
       previous?.claudePermissionBound &&
       previous.payload.state === 'waiting' &&
+      // A producer whose lead now waits on a newer dialog cannot stand in for it; that dialog's own row will.
+      next.payload.state !== 'waiting' &&
       endsBoundClaudePermission(previous, next)
     )
   )

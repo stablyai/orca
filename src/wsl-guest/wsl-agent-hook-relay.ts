@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     preferredPort: windowsPort,
     forwardClaudeAgentView: (body) =>
       dispatcher.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body }, { timeoutMs: 1000 }),
-    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
+    forward: (envelope, options) => publishAgentHookEnvelope(dispatcher, envelope, options)
   })
   dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({
     applied: hookServer.inferInterrupt(params)

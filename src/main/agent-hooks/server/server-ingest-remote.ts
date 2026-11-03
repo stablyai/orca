@@ -122,17 +122,6 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentType,
       providerSession
     } = normalizeRemoteEnvelopeFields(envelope)
-    if (
-      this.dropsClaudeSettlement(paneKey, {
-        hookEventName,
-        ...claudeSettlement,
-        toolAgentId,
-        connectionId: trimmedConnectionId,
-        isReplay: envelope.isReplay
-      })
-    ) {
-      return
-    }
     if (envelope.statusUnavailable === true && envelope.payload === null) {
       this.clearUnavailableRemoteStatus(paneKey, trimmedConnectionId, source, worktreeId, envelope)
       return
@@ -142,7 +131,17 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       return
     }
     const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
-    if (!validatedPayload) {
+    if (
+      !validatedPayload ||
+      this.dropsClaudeSettlement(paneKey, {
+        hookEventName,
+        ...claudeSettlement,
+        toolAgentId,
+        connectionId: trimmedConnectionId,
+        isReplay: envelope.isReplay,
+        payload: validatedPayload
+      })
+    ) {
       return
     }
     if (

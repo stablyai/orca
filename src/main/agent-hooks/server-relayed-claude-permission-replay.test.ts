@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
+import { RelayDispatcher } from '../../wsl-guest/dispatcher'
+import { publishAgentHookEnvelope } from '../../wsl-guest/agent-hook-envelope-publication'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
@@ -295,6 +297,98 @@ describe('a relayed request bound to its single in-flight call (recorded decline
     })
   })
 
+  it.each(['question', 'elicitation'] as const)(
+    'keeps a newer %s waiting through an older request’s batch, child activity and reconnect',
+    async (kind) => {
+      const pair = await startDeclinePair()
+      const [start, submit] = decline
+      const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+      const tool = { tool_name: 'Read', tool_input: { file_path: '/a' } }
+      const question = {
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Which?' }] }
+      }
+      await pair.post(start)
+      await pair.post(submit)
+      await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'A', ...tool })
+      expect(await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })).toBe(
+        'waiting'
+      )
+      if (kind === 'question') {
+        await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'Q', ...question })
+        expect(
+          await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...question })
+        ).toBe('waiting')
+      } else {
+        expect(
+          await pair.post({
+            ...root,
+            hook_event_name: 'Elicitation',
+            mcp_server_name: 'server',
+            message: 'Allow?',
+            mode: 'form'
+          })
+        ).toBe('waiting')
+      }
+      const shown = row(pair.desktop)
+      expect(
+        await pair.post({
+          ...root,
+          hook_event_name: 'PostToolBatch',
+          tool_calls: [{ tool_use_id: 'A' }]
+        })
+      ).toBe('waiting')
+      expect(row(pair.desktop)).toEqual(shown)
+      expect(
+        await pair.post({
+          ...root,
+          hook_event_name: 'SubagentStart',
+          agent_id: 'child-a',
+          agent_type: 'general-purpose'
+        })
+      ).toBe('waiting')
+      pair.connected = false
+      pair.connected = true
+      pair.relay.replayCachedPayloadsForPanes()
+      expect(row(pair.desktop).state).toBe('waiting')
+    }
+  )
+
+  it('keeps a desktop that missed the newer question waiting on A, never retagging the question as A’s settlement', async () => {
+    let dropQuestion = true
+    const pair = await startDeclinePair((envelope) =>
+      dropQuestion && envelope.payload?.toolName === 'AskUserQuestion' ? undefined : envelope
+    )
+    const [start, submit] = decline
+    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+    const tool = { tool_name: 'Read', tool_input: { file_path: '/a' } }
+    const question = {
+      tool_name: 'AskUserQuestion',
+      tool_input: { questions: [{ question: 'Which?' }] }
+    }
+    await pair.post(start)
+    await pair.post(submit)
+    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'A', ...tool })
+    await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })
+    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'Q', ...question })
+    await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...question })
+    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+    // A's proof reaches the desktop, but the producer's current dialog is Q: no Q card under A's batch.
+    await pair.post({
+      ...root,
+      hook_event_name: 'PostToolBatch',
+      tool_calls: [{ tool_use_id: 'A' }]
+    })
+    expect(pair.forwarded.at(-1)).toMatchObject({
+      claudeBatchSettledRequests: [{ toolUseId: 'A' }]
+    })
+    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+    // The relay's cached question stayed intact and arrives with its own identity.
+    dropQuestion = false
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'AskUserQuestion' })
+  })
+
   it('replays a cached question unchanged when a batch settles something else', async () => {
     const pair = await startDeclinePair()
     const [start, submit] = decline
@@ -453,5 +547,92 @@ describe('a relayed request bound to its single in-flight call (recorded decline
         expect({ index, state }).toEqual({ index, state: 'waiting' })
       }
     }
+  })
+})
+
+describe('a live batch through the relay’s real publication sink', () => {
+  it('settles a held call at position 1,501 of a 2,000-call batch split across frames, and leaves the row alone for another owner', async () => {
+    // A 64 KiB stdout sink, as the WSL relay attaches it: producer frames are capped well below the batch.
+    const frames: Buffer[] = []
+    const dispatcher = new RelayDispatcher(
+      (data) => {
+        frames.push(Buffer.from(data))
+        return true
+      },
+      {
+        writableHighWaterMark: () => 65536,
+        writableLength: () => 0,
+        waitWriteDrain: () => () => undefined
+      }
+    )
+    running.push({ stop: () => dispatcher.dispose() })
+    const desktop = new AgentHookServer()
+    running.push(desktop)
+    const endpointDir = mkdtempSync(join(tmpdir(), 'orca-relayed-permission-'))
+    temporaryPaths.push(endpointDir)
+    const relay = new RelayAgentHookServer({
+      endpointDir,
+      token: 'relayed-permission-token',
+      forward: (envelope, options) => publishAgentHookEnvelope(dispatcher, envelope, options)
+    })
+    running.push(relay)
+    await relay.start({ publishEndpoint: false })
+    let read = 0
+    const batchFrames: AgentHookRelayEnvelope[] = []
+    const post = async (raw: Record<string, unknown>) => {
+      const { port, token } = relay.getCoordinates()
+      const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': token },
+        body: JSON.stringify(buildBody(raw))
+      })
+      expect(response.status).toBe(204)
+      for (const frame of frames.slice(read)) {
+        const length = frame.readUInt32BE(9)
+        const message =
+          length > 0 ? JSON.parse(frame.subarray(13, 13 + length).toString('utf-8')) : null
+        if (message?.method === 'agent.hook') {
+          const envelope = message.params as AgentHookRelayEnvelope
+          if (envelope.hookEventName === 'PostToolBatch') {
+            batchFrames.push(envelope)
+          }
+          desktop.ingestRemote(envelope, 'conn-1')
+        }
+      }
+      read = frames.length
+      return row(desktop)
+    }
+    const [start, submit] = decline
+    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+    const ids = Array.from({ length: 2_000 }, (_, i) => String(i).padStart(64, '0'))
+    const held = ids[1_500]
+    const tool = { tool_name: 'Read', tool_input: { file_path: '/held' } }
+    await post(start)
+    await post(submit)
+    await post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: held, ...tool })
+    expect((await post({ ...root, hook_event_name: 'PermissionRequest', ...tool })).state).toBe(
+      'waiting'
+    )
+    const calls = ids.map((tool_use_id) => ({ tool_use_id }))
+    // Another owner's batch naming the same ids is not this request's settlement.
+    const before = row(desktop)
+    expect(
+      await post({
+        ...root,
+        hook_event_name: 'PostToolBatch',
+        agent_id: 'child-a',
+        tool_calls: calls
+      })
+    ).toEqual(before)
+    batchFrames.length = 0
+    expect(
+      (await post({ ...root, hook_event_name: 'PostToolBatch', tool_calls: calls })).state
+    ).toBe('working')
+    expect(batchFrames.length).toBeGreaterThan(1)
+    expect(
+      batchFrames.flatMap((envelope) =>
+        (envelope.claudeBatchSettledRequests ?? []).map((request) => request.toolUseId)
+      )
+    ).toEqual(ids)
   })
 })

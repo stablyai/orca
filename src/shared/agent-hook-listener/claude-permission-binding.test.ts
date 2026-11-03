@@ -240,6 +240,40 @@ describe('Claude permission binding', () => {
     expect(h.ask(read(6), child)?.toolUseId).toBe('C2')
   })
 
+  it('lets an older request’s batch settle it without resuming a lead a newer question or elicitation now owns', () => {
+    const question = {
+      tool_name: 'AskUserQuestion',
+      tool_input: { questions: [{ question: 'Which?' }] }
+    }
+    for (const newer of [
+      (h: ReturnType<typeof harness>) => {
+        h.send('PreToolUse', { ...question, tool_use_id: 'Q' })
+        return h.send('PermissionRequest', question)
+      },
+      (h: ReturnType<typeof harness>) =>
+        h.send('Elicitation', { mcp_server_name: 'server', message: 'Allow?', mode: 'form' })
+    ]) {
+      const h = harness()
+      h.pre('A', read(0))
+      expect(h.ask(read(0))?.toolUseId).toBe('A')
+      expect(newer(h)?.payload).toMatchObject({ state: 'waiting', mainAgent: { state: 'waiting' } })
+      // A's proof still goes out whole, but the lead keeps showing the newer dialog.
+      expect(h.batch(['A'])).toMatchObject({
+        claudeBatchSettledRequests: [{ toolUseId: 'A' }],
+        payload: { state: 'waiting', mainAgent: { state: 'waiting' } }
+      })
+      expect(h.send('SubagentStart', child)?.payload).toMatchObject({ state: 'waiting' })
+    }
+
+    // Outside a turn, too: an idle pane's elicitation is not undone by an older request's batch.
+    const idle = harness()
+    idle.pre('A', read(0))
+    idle.ask(read(0))
+    idle.send('Stop')
+    idle.send('Elicitation', { mcp_server_name: 'server', message: 'Allow?', mode: 'form' })
+    expect(idle.batch(['A'])?.payload).toMatchObject({ state: 'waiting' })
+  })
+
   it('preserves the recorded Codex decline Interrupt and next-turn approval contract', () => {
     const state = createHookListenerState()
     let approvals = 0

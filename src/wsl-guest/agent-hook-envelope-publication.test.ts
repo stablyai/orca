@@ -648,4 +648,41 @@ describe('publishAgentHookEnvelope redelivery', () => {
       dispatcher.dispose()
     }
   })
+
+  it('delivers every id of a batch too large for one frame, past a stalled client and a newer row snapshot', () => {
+    const primary = makeBoundedClient(65536)
+    const secondary = makeBoundedClient(65536)
+    const dispatcher = new RelayDispatcher(primary.write, primary.options)
+    try {
+      dispatcher.attachClient(secondary.write, secondary.options)
+      saturateProducerQueue(dispatcher, secondary)
+      const ids = Array.from({ length: 2_000 }, (_, i) => ({
+        toolUseId: String(i).padStart(64, '0')
+      }))
+      const batch: AgentHookRelayEnvelope = {
+        ...makeEnvelope({}),
+        hookEventName: 'PostToolBatch',
+        claudeBatchSettledRequests: ids
+      }
+      publishAgentHookEnvelope(dispatcher, batch, { evidenceOnly: true })
+      const settledIn = (client: BoundedClient) =>
+        decodeEnvelopes(client)
+          .filter((envelope) => envelope.hookEventName === 'PostToolBatch')
+          .map((envelope) => envelope.claudeBatchSettledRequests ?? [])
+      // More than one frame, together exactly the batch, each standing alone.
+      expect(settledIn(primary).length).toBeGreaterThan(1)
+      expect(settledIn(primary).flat()).toEqual(ids)
+      expect(settledIn(secondary)).toHaveLength(0)
+
+      // A newer row for the pane does not replace the evidence the stalled client is still owed.
+      publishAgentHookEnvelope(dispatcher, makeEnvelope({ lastAssistantMessage: 16 }))
+      secondary.blocked = false
+      secondary.drain()
+      vi.advanceTimersByTime(1_000)
+      expect(settledIn(secondary).flat()).toEqual(ids)
+      expect(settledIn(primary).flat()).toEqual(ids)
+    } finally {
+      dispatcher.dispose()
+    }
+  })
 })

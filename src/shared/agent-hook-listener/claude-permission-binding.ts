@@ -23,7 +23,7 @@ export type ClaudeInFlightCalls = {
   lossy: Set<string>
   /** A named owner's loss that the bounded loss set could not hold: named owners stay unbound until the session/run/pane ends. */
   namedOwnersDegraded: boolean
-  /** The pane's latest ordinary request, when it is bound. */
+  /** The pane's latest ordinary request while it still owns the lead's wait; any newer dialog clears it. */
   bound?: { owner: string; toolUseId: string }
 }
 
@@ -166,6 +166,13 @@ export function observeClaudePermissionBinding(
   }
   const toolUseId = readString(raw, 'tool_use_id')
   const toolName = readString(raw, 'tool_name')
+  if (
+    event === 'Elicitation' ||
+    ((event === 'PreToolUse' || event === 'PermissionRequest') && isAskUserQuestionTool(toolName))
+  ) {
+    // A newer dialog now owns the lead: the older request's batch still settles it, but no longer resumes the lead.
+    table.bound = undefined
+  }
   if (event === 'PreToolUse' && toolUseId) {
     const key = digest(toolName, raw.tool_input)
     const calls = table.owners.get(owner)

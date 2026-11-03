@@ -712,7 +712,7 @@ describe('Claude requests bound to their single in-flight call', () => {
   })
 
   it('keeps a fully observed root request waiting at a sibling’s completion after named owners overflow, as main does', async () => {
-    await withClaudePane(async (post) => {
+    await withClaudePane(async (post, server) => {
       const helper = (i: string) => ({ agent_id: `hook-agent-${i}` })
       const file = (path: string) => ({ tool_name: 'Read', tool_input: { file_path: path } })
       await post(start)
@@ -730,8 +730,18 @@ describe('Claude requests bound to their single in-flight call', () => {
       expect(await post(ask(file('/a')))).toBe('waiting')
       expect(await post(batch(['A']))).toBe('working')
       await post(pre('Z', file('/z')))
-      // A 65th unrecordable helper owner overflows the bounded loss records.
+      // The root has its own budget, so b64 takes the helper slot a0 freed; b65 is then the 65th
+      // unrecordable helper owner and sets the named-owner overflow while the root has lost nothing.
       await post(pre('b64', file('/b64'), helper('b64')))
+      await post(pre('b65', file('/b65'), helper('b65')))
+      const state: unknown = Reflect.get(server, 'state')
+      const tables =
+        typeof state === 'object' && state !== null
+          ? Reflect.get(state, 'claudeInFlightByPaneKey')
+          : undefined
+      expect(tables instanceof Map ? tables.get(PANE) : undefined).toMatchObject({
+        namedOwnersDegraded: true
+      })
       await post(done('Z', file('/z')))
       for (let i = 1; i < 256; i++) {
         await post(done(`a${i}`, file(`/a${i}`), helper(`a${i}`)))

@@ -73,7 +73,9 @@ export function applyRelayHookEvent(
         incoming
       )
     }
-    host.forward(buildRelayHookEnvelope(incoming, source, env, version, options))
+    host.forward(buildRelayHookEnvelope(incoming, source, env, version, options), {
+      evidenceOnly: true
+    })
     // No row changed here, so nothing downstream (retries, polls) may follow it as one.
     return undefined
   }

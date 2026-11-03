@@ -4,7 +4,11 @@ import type {
 } from '../shared/agent-hook-relay'
 import type { TmuxManagedPty } from '../shared/tmux-agent-hook-owner'
 
-export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
+/** `evidenceOnly`: a batch that changes no row here; it must not supersede the pane's pending row snapshot. */
+export type RelayHookForward = (
+  envelope: AgentHookRelayEnvelope,
+  options?: { evidenceOnly?: true }
+) => void
 
 export type RelayHookServerOptions = {
   /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
