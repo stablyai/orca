@@ -54,6 +54,13 @@ export async function createWebRuntimeSessionTerminalResult(
     args.environmentId,
     useAppStore.getState().settings?.activeRuntimeEnvironmentId
   )
+  return createWebRuntimeSessionTerminalResultForHost({ ...args, environmentId })
+}
+
+export async function createWebRuntimeSessionTerminalResultForHost(
+  args: CreateWebRuntimeSessionTerminalArgs & { environmentId: string | null }
+): Promise<CreatedWebRuntimeSessionTerminal> {
+  const environmentId = args.environmentId?.trim()
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return {
       outcome: {

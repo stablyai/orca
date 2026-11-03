@@ -34,7 +34,7 @@ import {
   endWebRuntimeWakeTerminalRespawn,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from '../web-runtime-wake-terminal-respawn'
-import { createWebRuntimeSessionTerminal } from '../web-runtime-terminal-creation'
+import { createWebRuntimeSessionTerminalForHost } from '../web-runtime-terminal-creation'
 import { releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame } from '../web-runtime-initial-terminal-bootstrap'
 import { createInitialTerminalSeeder } from './initial-terminal-seeder'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
@@ -190,7 +190,7 @@ export function installActiveSessionTabsSubscription({
         beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)
       ) {
         requestedRespawnAfterWake = true
-        await createWebRuntimeSessionTerminal({
+        await createWebRuntimeSessionTerminalForHost({
           worktreeId: activeWorktreeId,
           environmentId,
           activate: true,
@@ -235,6 +235,7 @@ export function installActiveSessionTabsSubscription({
                 ended()
                 return
               }
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session.tabs.subscribe returns SessionTabsStreamEvent; the discriminant is checked below.
               const received = response.result as SessionTabsStreamEvent
               if (received.type !== 'snapshot' && received.type !== 'updated') {
                 return

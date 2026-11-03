@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
+import {
+  createWebRuntimeSessionTerminal,
+  createWebRuntimeSessionTerminalForHost
+} from './web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -99,6 +102,21 @@ describe('web-runtime-session terminal workspace routing', () => {
 
   afterEach(() => {
     resetTerminalCreateEnvironment()
+  })
+
+  it('does not fall back to the selected host when background recovery has lost its owner', async () => {
+    const runtimeCall = vi.fn()
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+
+    const outcome = await createWebRuntimeSessionTerminalForHost({
+      worktreeId: WORKTREE_ID,
+      environmentId: ' ',
+      selectWorktree: false
+    })
+
+    expect(outcome.status).toBe('failed')
+    expect(runtimeCall).not.toHaveBeenCalled()
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
   })
 
   it('hands the workspace host selection back when the host never accepted the create', async () => {
