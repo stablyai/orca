@@ -11,7 +11,7 @@ import type {
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
-import { isAgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import { isAgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type {
   StructuredAgentSessionStatusFeedDeps,
   StatusPublication

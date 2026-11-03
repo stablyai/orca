@@ -1,6 +1,9 @@
-import { projectAgentLaunchInputViews } from './agent-launch-profile'
-import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
-import type { AgentDedicatedChoices, AgentLaunchInputViews } from './agent-launch-choices'
+import { projectAgentLaunchInputViews } from './agent-launch/choices/agent-launch-profile'
+import { reconcileAgentChoiceArgsDetailed } from './agent-launch/choices/agent-choice-reconciliation'
+import type {
+  AgentDedicatedChoices,
+  AgentLaunchInputViews
+} from './agent-launch/choices/agent-launch-choices'
 import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
@@ -11,21 +14,21 @@ import {
   lowerActionArgumentChoices
 } from './source-control-action-argument-choices'
 import { actionModelSelectionChoices } from './source-control-action-model-selection'
-import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
+import { normalizeAgentModelOptionChoices } from './agent-launch/choices/agent-launch-choices'
 import type { ExecutionHostId } from './execution-host'
 import {
   resolveTuiAgentLaunchRawArgs,
   type AgentLaunchProfileSettings
-} from './tui-agent-launch-defaults'
+} from './agent-launch/choices/tui-agent-launch-defaults'
 import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import {
   renderSourceControlActionCommandTemplate,
   type SourceControlActionRecipe
 } from './source-control-ai-actions'
-import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
-import { agentPermissionChoices } from './tui-agent-permission-choice'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-launch/permissions/agent-chat-permission-mode'
+import { agentPermissionChoices } from './agent-launch/permissions/tui-agent-permission-choice'
 
 export {
   sourceControlActionAgentPicksModel,

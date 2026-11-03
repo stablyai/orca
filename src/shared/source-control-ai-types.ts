@@ -1,5 +1,5 @@
 import type { CommitMessageAiModelCapability } from './commit-message-ai-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { CustomAgentId } from './commit-message-agent-spec'
 import type {
   SourceControlAiActionDefaults,

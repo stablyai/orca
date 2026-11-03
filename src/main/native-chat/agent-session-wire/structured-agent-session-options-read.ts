@@ -1,7 +1,7 @@
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
-import { independentAgentModelCatalog } from '../agent-model-catalog/agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
   IN_PROCESS_OPTIONS_READER,

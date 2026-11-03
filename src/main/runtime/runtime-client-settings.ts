@@ -1,4 +1,4 @@
-import { publishedLegacyChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import { publishedLegacyChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
@@ -9,7 +9,7 @@ import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
-import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
 import { normalizeSourceControlGroupOrder } from '../../shared/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai-actions'
@@ -29,9 +29,9 @@ import {
   projectAgentLaunchSettings,
   type AgentLaunchSettings,
   type AgentLaunchSettingsMutation
-} from '../../shared/agent-launch-settings'
-import { legacyLaunchTextUpdates } from '../../shared/agent-launch-permission-updates'
-import { composeAgentLaunchProfile } from '../../shared/tui-agent-launch-defaults'
+} from '../../shared/agent-launch/choices/agent-launch-settings'
+import { legacyLaunchTextUpdates } from '../../shared/agent-launch/choices/agent-launch-permission-updates'
+import { composeAgentLaunchProfile } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
 import type {
   RuntimeClientSettings,

@@ -2,7 +2,7 @@ import type {
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import { findTerminalWaitBlockedSignal } from './agent-state-rules/blocked-text-layer'
 import type { LaunchedAgentForeground } from './launched-agent-foreground'

@@ -11,7 +11,7 @@ import {
   searchAgentPickerEntries
 } from '@/lib/agent-picker-search'
 import { cn } from '@/lib/utils'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import * as state from './agent-combobox-command-state'
 import {
   AgentDefaultContextMenu,

@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import recordings from '../../shared/fixtures/source-control-launch-recordings.json'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import type { AgentLaunchIntent } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { executeAgentLaunch } from './agent-launch-executor'
-import { toAgentLaunchPreferences } from '../../shared/agent-launch-preferences'
+import { toAgentLaunchPreferences } from '../../shared/agent-launch/choices/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
-import { agentPermissionChoices } from '../../shared/tui-agent-permission-choice'
+import { agentPermissionChoices } from '../../shared/agent-launch/permissions/tui-agent-permission-choice'
 
 function harness() {
   const readSettings = vi.fn(() => {

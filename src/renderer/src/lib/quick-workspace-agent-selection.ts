@@ -1,10 +1,10 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
 import {
   isTuiAgentEnabled,
   pickTuiAgent,
   TUI_AGENT_AUTO_PICK_ORDER
-} from '../../../shared/tui-agent-selection'
+} from '../../../shared/agent-launch/catalog/tui-agent-selection'
 
 /** `offeredAgentIds`: chosen agents that open as a chat without a CLI; auto-picks stay detected. */
 export function pickQuickWorkspaceAgent(

@@ -1,6 +1,6 @@
 import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control-ai-action-model-edits'
 import type { ActionArgumentChoices } from '../../../../../../shared/source-control-action-argument-choices'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiModelChoice,

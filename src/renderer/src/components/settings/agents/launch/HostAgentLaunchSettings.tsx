@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
-} from '../../../../../../shared/agent-launch-settings'
+} from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   type AgentPermissionsRenderer,
   AgentLaunchSettingsCatalog

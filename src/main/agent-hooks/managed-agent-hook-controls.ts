@@ -3,7 +3,7 @@ import {
   getManagedAgentHookTarget,
   isManagedAgentHookTarget
 } from '../../shared/managed-agent-hook-targets'
-import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   isAgentStatusHooksEnabled,

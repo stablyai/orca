@@ -7,7 +7,7 @@ import {
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { resolvePaneAgentOwnerRecord } from './pane-agent-owner'
 import type { TerminalAgent } from './terminal-agent'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { agentTypeToIconAgent } from './agent-type-icon-agent'
 
 /**

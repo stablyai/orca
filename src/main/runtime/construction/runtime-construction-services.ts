@@ -10,7 +10,7 @@ import type {
 } from '../runtime-terminal-state-records'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import type { AgentStatus } from '../../../shared/agent-detection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TuiIdleHookTurn } from '../tui-idle-hook-lane'
 import type { RuledScreen } from '../screen-input-veto'
 import type {
