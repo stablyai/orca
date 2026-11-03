@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeControlRequestError } from '../claude-agent-sdk-control-requests'
 import { claudeUnwrittenUserMessageError } from '../claude-agent-sdk-user-message-queue'
+import { resultFrame } from '../claude-fold-steer-frame-builders.test-fixture'
 import {
   acquired,
   fakeClaude,
@@ -131,6 +132,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       body: USER_MESSAGE,
       fence: 7
     })
+    claude.connections[0]!.handlers.onMessage?.(
+      resultFrame(0, PROVIDER_SESSION_ID, 'result-T', {
+        userMessageUuids: ['turn-T'],
+        durationMs: 1,
+        numTurns: 1
+      }).frame
+    )
     await adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'client-U',
