@@ -194,7 +194,6 @@ export function useMobileTasksRouteAndItemState() {
   const [pendingHostedStateChange, setPendingHostedStateChange] =
     useState<PendingHostedStateChange | null>(null)
   return {
-    claimPublication: itemSelection.claimPublication,
     hostId,
     taskSource,
     router,

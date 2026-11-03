@@ -73,7 +73,6 @@ export const CHANGED_PRODUCERS: readonly string[] = [
   'tk-project-row-files-merge',
   'matrix-github.pr-read-status.get-1',
   'matrix-tasks.item-detail-github-status.get-1',
-  'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-2',
   'matrix-tasks.item-status-gitlab-status.get-1',
   'matrix-tasks.project-row-files-merge-status.get-1'
 ]

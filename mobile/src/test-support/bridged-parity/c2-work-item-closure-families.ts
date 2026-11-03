@@ -36,7 +36,6 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-item-detail-github-reactions': { verdict: 'bridge-contract' }
   },
   'tasks.item-detail-gitlab': {
-    'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-2': { verdict: 'bridge-contract' },
     'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-1': { verdict: 'bridge-contract' },
     'tk-item-detail-gitlab': { verdict: 'bridge-contract' },
     'tk-item-detail-gitlab-reactions': { verdict: 'bridge-contract' }

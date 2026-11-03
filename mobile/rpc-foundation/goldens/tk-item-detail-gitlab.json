@@ -4,13 +4,6 @@
   "family": "tasks.item-detail-gitlab",
   "namedDeltas": [],
   "values": {
-    "04a3e897b754": {
-      "name": "detailPayload",
-      "ordinal": 16,
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "0b1aa38d91fe": {
       "name": "gitlab.workItemDetails#1",
       "ordinal": 7,
@@ -44,58 +37,6 @@
         "settledAt": 0,
         "value": {
           "id": "frame-1",
-          "ok": true,
-          "result": {
-            "approvalState": {
-              "approvalsLeft": 0,
-              "approvalsRequired": 1
-            },
-            "assignees": [],
-            "body": "body",
-            "comments": [],
-            "item": {
-              "labels": ["bug"],
-              "mergeable": "MERGEABLE"
-            },
-            "pipelineJobs": [],
-            "reviewers": []
-          }
-        }
-      }
-    },
-    "154aa1453631": {
-      "name": "gitlab.workItemDetails#2",
-      "ordinal": 14,
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.workItemDetails"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repo": "id:repo-1",
-            "type": "issue"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
           "ok": true,
           "result": {
             "approvalState": {
@@ -183,18 +124,6 @@
           "url": "https://gitlab.com/group/project/-/issues/4"
         },
         "title": "A GitLab issue"
-      }
-    },
-    "300e4de26871": {
-      "name": "detailPayload",
-      "ordinal": 20,
-      "value": {
-        "assignees": [],
-        "body": "body",
-        "comments": [],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
       }
     },
     "3d683d8ca027": {
@@ -303,57 +232,12 @@
       "ordinal": 2,
       "value": ""
     },
-    "ae9122e2ddc5": {
-      "name": "detailLoading",
-      "ordinal": 19,
-      "value": false
-    },
-    "c7c1211ad34a": {
-      "name": "gitlab.workItemDetails#2",
-      "ordinal": 17,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":4,\"type\":\"issue\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"}}}"
-    },
     "cc2ece9478f0": {
       "name": "actionItem",
       "ordinal": 1,
       "value": {
         "$rpc": "null"
       }
-    },
-    "ce347a333d63": {
-      "name": "items",
-      "ordinal": 18,
-      "value": [
-        {
-          "key": "gitlab:repo-1:issue:4",
-          "provider": "gitlab",
-          "source": {
-            "checksSummary": {
-              "failed": 0,
-              "neutral": 0,
-              "passed": 0,
-              "pending": 0,
-              "state": "none",
-              "total": 0
-            },
-            "id": "gitlab:issue:4",
-            "labels": ["bug"],
-            "mergeable": "MERGEABLE",
-            "number": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repoId": "repo-1",
-            "reviewDecision": "approved",
-            "reviewerCount": 0,
-            "state": "opened",
-            "type": "issue",
-            "url": "https://gitlab.com/group/project/-/issues/4"
-          },
-          "title": "A GitLab issue"
-        }
-      ]
     },
     "d759afce345e": {
       "name": "items",
@@ -390,11 +274,6 @@
         }
       ]
     },
-    "e94f739ab584": {
-      "name": "detailLoading",
-      "ordinal": 15,
-      "value": true
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -410,8 +289,8 @@
       {
         "id": "mounted",
         "observation": {
-          "sender": ["0b1aa38d91fe", "154aa1453631"],
-          "payloads": ["8ac545c58ec2", "c7c1211ad34a"],
+          "sender": ["0b1aa38d91fe"],
+          "payloads": ["8ac545c58ec2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -427,12 +306,7 @@
             "d759afce345e",
             "18a362320fb7",
             "20f8d00e8abe",
-            "3d683d8ca027",
-            "e94f739ab584",
-            "04a3e897b754",
-            "ce347a333d63",
-            "ae9122e2ddc5",
-            "300e4de26871"
+            "3d683d8ca027"
           ]
         }
       }

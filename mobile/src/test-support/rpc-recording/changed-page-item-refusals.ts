@@ -243,12 +243,6 @@ export const ITEM_REFUSALS: Readonly<Record<string, PageRefusal>> = {
       'tk-item-detail-github.result-absent:mounted': ['state.error', 'effects[7].value']
     }
   },
-  'matrix-tasks.item-detail-gitlab-gitlab.workitemdetails-2': {
-    request: 'gitlab.workItemDetails#2',
-    checkpoints: {
-      'tk-item-detail-gitlab.result-absent:mounted': ['state.error', 'effects[13].value']
-    }
-  },
   'matrix-tasks.item-status-gitlab-status.get-1': {
     request: 'status.get#1',
     checkpoints: {
