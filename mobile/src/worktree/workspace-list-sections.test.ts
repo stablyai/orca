@@ -46,17 +46,7 @@ function catalogOf(repos: readonly (readonly [string, string])[]) {
 function withoutSectionListKeys(sections: ReturnType<typeof buildSections>) {
   return sections.map(({ repo: _repo, ...section }) => ({
     ...section,
-    data: section.data.map(
-      ({
-        sectionListKey: _sectionListKey,
-        lineageDepth: _lineageDepth,
-        lineageChildCount: _lineageChildCount,
-        lineageCollapsed: _lineageCollapsed,
-        isLastLineageChild: _isLastLineageChild,
-        showProjectName: _showProjectName,
-        ...item
-      }) => item
-    )
+    data: section.data.map((item) => item.row)
   }))
 }
 
@@ -275,7 +265,7 @@ describe('buildSections', () => {
       'none',
       new Set()
     )
-    const keys = sections[0]?.data.map((item) => item.sectionListKey) ?? []
+    const keys = sections[0]?.data.map((item) => item.view.sectionListKey) ?? []
 
     expect(new Set(keys).size).toBe(2)
     expect(keys).toEqual(
@@ -309,7 +299,7 @@ describe('buildSections', () => {
       DEFAULT_WORKSPACE_STATUSES
     )
 
-    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual([
+    expect(sections[0]?.data.map((worktree) => worktree.row.worktreeId)).toEqual([
       'high',
       'fallback',
       'low'
@@ -355,7 +345,7 @@ describe('buildSections', () => {
       DEFAULT_WORKSPACE_STATUSES
     )
 
-    expect(sections.flatMap((section) => section.data.map((item) => item.worktreeId))).toEqual([
+    expect(sections.flatMap((section) => section.data.map((item) => item.row.worktreeId))).toEqual([
       'desktop-first',
       'mobile-fallback-first'
     ])
@@ -522,8 +512,12 @@ describe('buildSections', () => {
       DEFAULT_WORKSPACE_STATUSES
     )
 
-    expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual(['parent', 'child', 'active'])
-    expect(sections[0]?.data.map((item) => item.lineageDepth)).toEqual([0, 1, 0])
+    expect(sections[0]?.data.map((item) => item.row.worktreeId)).toEqual([
+      'parent',
+      'child',
+      'active'
+    ])
+    expect(sections[0]?.data.map((item) => item.view.lineageDepth)).toEqual([0, 1, 0])
   })
 
   it('keeps the main workspace first inside repo-grouped sections like desktop', () => {
@@ -552,7 +546,7 @@ describe('buildSections', () => {
       catalogOf([['orca', 'repo-1']])
     )
 
-    expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual(['main', 'child'])
+    expect(sections[0]?.data.map((item) => item.row.worktreeId)).toEqual(['main', 'child'])
   })
 
   it('renders empty repo sections from repo placeholders in repo grouping', () => {
@@ -656,7 +650,7 @@ describe('buildSections', () => {
       { key: 'pr:in-review', title: 'In review' },
       { key: 'pr:in-progress', title: 'In progress' }
     ])
-    expect(sections.at(-1)?.data.map((row) => row.worktreeId)).toEqual(['none', 'uncached'])
+    expect(sections.at(-1)?.data.map((row) => row.row.worktreeId)).toEqual(['none', 'uncached'])
   })
 
   it('groups by desktop workspace status labels and order', () => {
@@ -709,7 +703,7 @@ describe('buildSections', () => {
     expect(sections.map((section) => ({ key: section.key, title: section.title }))).toEqual([
       { key: 'workspace-status:in-progress', title: 'In progress' }
     ])
-    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['progress'])
+    expect(sections[0]?.data.map((worktree) => worktree.row.worktreeId)).toEqual(['progress'])
   })
 
   describe.each(['none', 'repo', 'workspace-status', 'pr-status'] as const)(
@@ -739,7 +733,7 @@ describe('buildSections', () => {
         const ids = (keep: (key: string) => boolean) =>
           sections
             .filter((section) => keep(section.key))
-            .flatMap((section) => section.data.map((row) => row.worktreeId))
+            .flatMap((section) => section.data.map((row) => row.row.worktreeId))
             .sort()
         return { pinned: ids((key) => key === 'pinned'), groups: ids((key) => key !== 'pinned') }
       }
@@ -802,7 +796,7 @@ describe('buildSections', () => {
     )
 
     expect(sections.map((section) => section.key)).toEqual(['all'])
-    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual([
+    expect(sections[0]?.data.map((worktree) => worktree.row.worktreeId)).toEqual([
       'inactive-first',
       'active-second'
     ])
@@ -832,8 +826,11 @@ describe('buildSections', () => {
       DEFAULT_WORKSPACE_STATUSES
     )
 
-    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['parent', 'child'])
-    expect(sections[0]?.data.map((worktree) => worktree.lineageDepth)).toEqual([0, 1])
+    expect(sections[0]?.data.map((worktree) => worktree.row.worktreeId)).toEqual([
+      'parent',
+      'child'
+    ])
+    expect(sections[0]?.data.map((worktree) => worktree.view.lineageDepth)).toEqual([0, 1])
   })
 
   it('collapses child workspaces under lineage parent rows', () => {
@@ -861,8 +858,8 @@ describe('buildSections', () => {
       new Set([getMobileWorkspaceLineageGroupKey(parent)])
     )
 
-    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['parent'])
-    expect(sections[0]?.data[0]?.lineageChildCount).toBe(1)
-    expect(sections[0]?.data[0]?.lineageCollapsed).toBe(true)
+    expect(sections[0]?.data.map((worktree) => worktree.row.worktreeId)).toEqual(['parent'])
+    expect(sections[0]?.data[0]?.view.lineageChildCount).toBe(1)
+    expect(sections[0]?.data[0]?.view.lineageCollapsed).toBe(true)
   })
 })
