@@ -117,7 +117,7 @@ describe('the phone picker’s first frame', () => {
     )
     const pick = deferred<void>()
     const send = rpc.sendRequest
-    rpc.sendRequest = vi.fn(async (method, params, config) => {
+    rpc.sendRequest = vi.fn<RpcClient['sendRequest']>(async (method, params, config) => {
       if (method === 'agentSession.setOption') {
         await pick.promise
         return {
