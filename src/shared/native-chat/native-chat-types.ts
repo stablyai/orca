@@ -240,6 +240,9 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   queued?: true
   /** Client-only terminal echo placement relative to the current streaming reply. */
   pendingSend?: 'active' | 'queued'
+  /** Client-derived submission facts; never persisted and independent of transcript placement. */
+  deliveryState?: 'pending' | 'unknown'
+  queuedMessageId?: string
   /** Unsent rows belong to no turn. Draw at journal position, or after the conversation when unplaced. */
   unsent?: true
   /** This client's send, made while the chat read Stopping, that the host has not recorded yet. */

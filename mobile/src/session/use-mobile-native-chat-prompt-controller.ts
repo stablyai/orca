@@ -54,6 +54,8 @@ export function useMobileNativeChatPromptController({
   | 'collapseNativeChatPrompt'
   | 'nativeChatCollapsedPrompt'
   | 'nativeChatAsk'
+  | 'nativeChatAskPending'
+  | 'nativeChatAskSendSource'
   | 'nativeChatAskKey'
   | 'dismissNativeChatAsk'
   | 'collapseNativeChatAsk'
@@ -65,7 +67,8 @@ export function useMobileNativeChatPromptController({
     permission: legacyNativeChatPermission,
     waitStartedAt: nativeChatPromptStartedAt,
     ask: nativeChatAskPrompt,
-    structuredAnswer
+    structuredAnswer,
+    answerPending
   } = useMobileNativeChatPrompts({
     enabled,
     structured,
@@ -87,9 +90,13 @@ export function useMobileNativeChatPromptController({
     observing: visible && (nativeChatAskPrompt != null || nativeChatTranscriptSettled)
   })
   const answerAsk = useNativeChatAcceptedAction(
-    async (prompt: AskPrompt, selections: AskAnswerSelection[]) => {
+    async (
+      prompt: AskPrompt,
+      selections: AskAnswerSelection[],
+      onCreated?: (id: string) => void
+    ) => {
       const hide = asyncHides.capture(prompt.occurrenceIds ?? [])
-      const accepted = await (structuredAnswer ?? terminal.answerAsk)(prompt, selections)
+      const accepted = await (structuredAnswer ?? terminal.answerAsk)(prompt, selections, onCreated)
       // Only terminal writes acknowledge delivery; structured admission leaves retirement to rows.
       if (accepted && prompt.replyAsMessage && !structuredAnswer) {
         hide()
@@ -116,6 +123,10 @@ export function useMobileNativeChatPromptController({
     hasPromptCard: (legacyNativeChatPermission ?? nativeChatAskPrompt) != null,
     ...promptCards,
     nativeChatAsk: askDismissal.showAsk || askDismissal.collapsedAsk ? nativeChatAskPrompt : null,
+    nativeChatAskPending: answerPending,
+    nativeChatAskSendSource: structured
+      ? { messages: session.messages, submissions: structured.submissions }
+      : undefined,
     nativeChatAskKey: askDismissal.askKey,
     dismissNativeChatAsk: askDismissal.dismissAsk,
     collapseNativeChatAsk: askDismissal.collapseAsk,

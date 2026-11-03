@@ -268,6 +268,7 @@ export function useMobileStructuredAgentSession(
     visualSource,
     asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
+    submissions: state.submissions,
     session: {
       messages,
       status,

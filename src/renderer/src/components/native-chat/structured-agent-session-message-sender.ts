@@ -96,7 +96,11 @@ export function sendStructuredAgentSessionMessage(
   input: StructuredAgentSessionSendInput & { target: RuntimeClientTarget }
 ): StructuredAgentSessionSent | null {
   const entry = takeStructuredAgentSessionSendSlot(input)
-  return entry ? dispatch(entry, input.target) : null
+  if (!entry) {
+    return null
+  }
+  input.onCreated?.(entry.clientMessageId)
+  return dispatch(entry, input.target)
 }
 
 export type StructuredAgentSessionReservedSend = {
