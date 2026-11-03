@@ -1,0 +1,671 @@
+import { exerciseCommittedAgentPickerSelection } from './agent-launch-picker-committed-selection-test-fixture'
+// @vitest-environment happy-dom
+import { createElement } from 'react'
+import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import {
+  inventoryModel as model,
+  inventoryCatalog as catalog,
+  exerciseAgentPickerFreshness,
+  exerciseRetainedAgentPickerPublications
+} from './agent-launch-picker-freshness-test-fixture'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import {
+  buildNewTabAgentMenuRows,
+  type HostChatAnswer
+} from '../../../../shared/agent-launch-picker-rows'
+import type * as picker from '../../../../shared/agent-launch-picker'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
+import {
+  useAgentLaunchPickerInventory,
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from './use-agent-launch-picker-inventory'
+import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
+
+vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
+const mocks = vi.hoisted(() => ({
+  settings: vi.fn(),
+  rpc: vi.fn(),
+  session: vi.fn(),
+  store: { repos: [{ id: 'repo-prospective', path: '/host/repo' }] }
+}))
+vi.mock('../settings/agent-launch-settings-transport', () => ({
+  readHostAgentLaunchSettings: mocks.settings
+}))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: unknown) => unknown) =>
+      // The setup panel's prompt composer reads its pane's agent status.
+      select({
+        settings: { agentDefaultArgs: { codex: '--desktop-only' } },
+        agentStatusByPaneKey: {}
+      }),
+    { getState: () => mocks.store }
+  )
+}))
+vi.mock('@/lib/agent-launch-route-input', () => ({
+  buildAgentLaunchRouteInput: () => ({ executionHostId: 'local' }),
+  workspaceKindForWorktreeId: () => 'git-worktree'
+}))
+vi.mock('@/runtime/structured-agent-session-owner', () => ({
+  structuredAgentSessionTargetForHost: (host: string) =>
+    host.startsWith('runtime:')
+      ? { kind: 'environment', environmentId: host.slice(8) }
+      : host === 'local'
+        ? { kind: 'local' }
+        : null
+}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: mocks.session
+}))
+
+beforeEach(() => {
+  mocks.settings.mockReset().mockResolvedValue(
+    projectAgentLaunchSettings({
+      agentPermissionDefault: 'ask',
+      agentDefaultArgs: { codex: '--host-only' }
+    })
+  )
+  mocks.rpc.mockReset()
+  mocks.session
+    .mockReset()
+    .mockImplementation(async (_target, method) =>
+      method === 'agentSession.modelCatalog'
+        ? catalog
+        : { seedOptions: { model: 'host-model', effort: 'low', permissionMode: 'full-access' } }
+    )
+})
+afterEach(cleanup)
+
+it('revalidates completed host Chat defaults behind held siblings through the actual producer, resource and panel', async () => {
+  await exerciseAgentPickerFreshness({
+    menu: model('source-freshness', ['claude']),
+    session: mocks.session,
+    catalog
+  })
+})
+
+it('publishes only committed selection to physical catalog admission after a suspended render', async () => {
+  await exerciseCommittedAgentPickerSelection(mocks)
+})
+
+it('bounds open-time catalog hydration to two agents and discards responses from the previous host', async () => {
+  const old = Promise.withResolvers<AgentSessionModelCatalogResult>()
+  mocks.session.mockImplementation((_target, method) =>
+    method === 'agentSession.modelCatalog' ? old.promise : Promise.resolve({ supported: true })
+  )
+  const hook = renderHook(
+    ({ menu }) =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true)),
+    {
+      initialProps: { menu: model('alpha', ['codex', 'claude', 'gemini']) }
+    }
+  )
+  await act(async () => {})
+  const catalogs = () =>
+    mocks.session.mock.calls.filter((call) => call[1] === 'agentSession.modelCatalog')
+  expect(catalogs()).toHaveLength(2)
+  mocks.session.mockImplementation(async (_target, method) =>
+    method === 'agentSession.modelCatalog' ? catalog : { supported: true }
+  )
+  hook.rerender({ menu: model('beta') })
+  await act(async () => {})
+  expect(mocks.settings.mock.calls[0][1].aborted).toBe(false)
+  await act(async () => old.resolve({ ...catalog, fetchedAt: 2 }))
+  expect(catalogs()).toHaveLength(3)
+  expect(hook.result.current).toHaveLength(1)
+  expect(hook.result.current[0].catalog).toEqual(catalog)
+  expect(hook.result.current[0].rows[0].executionHostId).toBe('runtime:beta')
+})
+
+it('lands catalog reads in subscribers only, replacing just the entry whose catalog changed', async () => {
+  const reads = new Map<string, PromiseWithResolvers<AgentSessionModelCatalogResult>>()
+  mocks.session.mockImplementation((_target, method, params: { agent: string }) => {
+    if (method !== 'agentSession.modelCatalog') {
+      return Promise.resolve({ supported: true })
+    }
+    const read = Promise.withResolvers<AgentSessionModelCatalogResult>()
+    reads.set(params.agent, read)
+    return read.promise
+  })
+  const menu = model('alpha', ['codex', 'claude'])
+  let ownerRenders = 0
+  const owner = renderHook(() => {
+    ownerRenders += 1
+    return useAgentLaunchPickerInventorySource('wt', menu, true)
+  })
+  const subscriber = renderHook(() => useAgentPickerInventoryEntries(owner.result.current))
+  await act(async () => {})
+  const ownerRendersBeforeReads = ownerRenders
+  const before = subscriber.result.current
+
+  await act(async () => reads.get('codex')!.resolve(catalog))
+  const afterCodex = subscriber.result.current
+  expect(afterCodex.find((entry) => entry.agent === 'codex')?.catalog).toEqual(catalog)
+  const beforeClaude = before.find((entry) => entry.agent === 'claude')
+  expect(beforeClaude).toBeDefined()
+  expect(afterCodex.find((entry) => entry.agent === 'claude')).toBe(beforeClaude)
+
+  // A failed read changes only that entry's read state, without re-rendering the owner.
+  await act(async () => reads.get('claude')!.reject(new Error('listing unavailable')))
+  const afterFailure = subscriber.result.current
+  expect(afterFailure).not.toBe(afterCodex)
+  expect(afterFailure.find((entry) => entry.agent === 'codex')).toBe(
+    afterCodex.find((entry) => entry.agent === 'codex')
+  )
+  expect(afterFailure.find((entry) => entry.agent === 'claude')).toEqual({
+    ...beforeClaude,
+    catalogRead: 'failed'
+  })
+  expect(ownerRenders).toBe(ownerRendersBeforeReads)
+})
+
+it.each(['slow', 'failed'] as const)(
+  'publishes known terminal defaults independently of %s optional catalog/support reads',
+  async (kind) => {
+    const listing = Promise.withResolvers<AgentSessionModelCatalogResult>()
+    mocks.session.mockImplementation((_target, method) =>
+      method === 'agentSession.modelCatalog'
+        ? listing.promise
+        : kind === 'failed'
+          ? Promise.reject(new Error('unavailable'))
+          : Promise.resolve({ seedOptions: { model: 'host-model', permissionMode: 'ask' } })
+    )
+    const hook = renderHook(() =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', model(), true))
+    )
+    await act(async () => {})
+    expect(hook.result.current[0]).toMatchObject({
+      defaultsPending: false,
+      structuredDefaultsPending: kind === 'failed',
+      arguments: '--host-only',
+      terminal: { permissionMode: 'ask' },
+      catalog: { origin: 'unknown' }
+    })
+    if (kind === 'slow') {
+      expect(hook.result.current[0].structured.model).toBe('host-model')
+    }
+    await act(async () => listing.resolve(catalog))
+    expect(hook.result.current[0].defaultsPending).toBe(false)
+  }
+)
+
+it('retains legacy remembered values when createSupport does not supply optional seeds', async () => {
+  mocks.settings.mockResolvedValue(null)
+  mocks.rpc.mockResolvedValue({
+    settings: {
+      agentDefaultArgs: { codex: '--host-only' },
+      nativeChatSessionOptions: {
+        codex: { model: 'host-private', valuesByModel: { 'host-private': { effort: 'low' } } }
+      },
+      nativeChatPermissionMode: 'full-access'
+    }
+  })
+  mocks.session.mockImplementation(async (_target, method) =>
+    method === 'agentSession.modelCatalog' ? catalog : { supported: true }
+  )
+  const hook = renderHook(() =>
+    useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', model(), true))
+  )
+  await act(async () => {})
+  expect(hook.result.current[0]).toMatchObject({
+    defaultsPending: false,
+    structured: { model: 'host-private', options: { effort: 'low' }, permissionMode: 'full-access' }
+  })
+})
+
+it('updates terminal availability when detection changes while the Chat rows stay the same', async () => {
+  const menu = model()
+  if (menu.state !== 'settled') {
+    throw new Error('settled fixture')
+  }
+  const initialProps: { value: Extract<NewTabAgentMenuModel, { state: 'settled' }> } = {
+    value: { ...menu, detection: { ...menu.detection, detectedIds: [] } }
+  }
+  const hook = renderHook(
+    ({ value }: { value: Extract<NewTabAgentMenuModel, { state: 'settled' }> }) =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', value, true)),
+    { initialProps }
+  )
+  await act(async () => {})
+  expect(hook.result.current[0].surfaces).toEqual(['chat'])
+  hook.rerender({ value: menu })
+  await act(async () => {})
+  expect(hook.result.current[0].surfaces).toEqual(['chat', 'terminal'])
+})
+
+it.each([3, 30])(
+  'shares actual unresolved reads and current listeners across %i opens and matching controllers',
+  async (count) => {
+    const { agentPickerAcquisitionDiagnostics } = await import('./agent-launch-picker-acquisition')
+    const settings = Promise.withResolvers<ReturnType<typeof projectAgentLaunchSettings>>()
+    mocks.settings.mockReturnValue(settings.promise)
+    const reads: {
+      method: string
+      resolve: (value: unknown) => void
+      reject: (reason: Error) => void
+    }[] = []
+    mocks.session.mockImplementation((_target, method) => {
+      const read = Promise.withResolvers<unknown>()
+      reads.push({ method, resolve: read.resolve, reject: read.reject })
+      return read.promise
+    })
+    const menu = model(`shared-${count}`, ['claude', 'codex', 'gemini'])
+    const mount = (open = true) =>
+      renderHook(
+        ({ open }) =>
+          useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, open)),
+        {
+          initialProps: { open }
+        }
+      )
+    const one = mount(),
+      two = mount()
+    for (let i = 0; i < count; i++) {
+      one.rerender({ open: false })
+      two.rerender({ open: false })
+      one.rerender({ open: true })
+      two.rerender({ open: true })
+    }
+    two.unmount()
+    const successor = mount()
+    expect(mocks.settings).toHaveBeenCalledTimes(1)
+    expect(reads).toHaveLength(4)
+    const stats = () =>
+      agentPickerAcquisitionDiagnostics().find((s) => s.key.includes(`shared-${count}`))!
+    expect(stats()).toMatchObject({ observers: 2, settings: 1, catalog: 2, support: 2 })
+    one.rerender({ open: false })
+    successor.rerender({ open: false })
+    expect(stats().observers).toBe(0)
+    await act(async () =>
+      reads.find((r) => r.method === 'agentSession.modelCatalog')!.resolve(catalog)
+    )
+    expect(reads).toHaveLength(4) // last-close settlement admits no next agent
+    expect(stats().catalog).toBe(1)
+    successor.rerender({ open: true })
+    expect(reads).toHaveLength(5)
+    await act(async () =>
+      reads.find((r) => r.method === 'agentSession.createSupport')!.reject(new Error('unavailable'))
+    )
+    expect(reads).toHaveLength(6) // rejection releases the actual support slot
+    await act(async () =>
+      settings.resolve(
+        projectAgentLaunchSettings({
+          agentPermissionDefault: 'ask',
+          agentDefaultArgs: { claude: '--add-dir docs' }
+        })
+      )
+    )
+    expect(successor.result.current[0]).toMatchObject({
+      defaultsPending: false,
+      arguments: '--add-dir docs',
+      catalog
+    })
+    expect(mocks.settings).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      for (const r of reads) {
+        r.resolve(r.method === 'agentSession.modelCatalog' ? catalog : { supported: true })
+      }
+    })
+    expect(stats()).toMatchObject({ settings: 0, catalog: 0, support: 0, observers: 1 })
+    successor.unmount()
+    expect(stats()).toBeUndefined()
+    one.unmount()
+  }
+)
+
+it.each([
+  undefined,
+  null,
+  [],
+  'bad',
+  { agentDefaultArgs: 'bad' },
+  { agentPermission: { default: 'ask', userArgs: 'bad' } }
+])(
+  'does not turn malformed/missing settings %j into known-empty, and recovers on a legitimate open',
+  async (payload) => {
+    const optional = Promise.withResolvers<unknown>()
+    mocks.session.mockReturnValue(optional.promise)
+    mocks.settings.mockResolvedValue(null)
+    mocks.rpc.mockResolvedValue({ settings: payload })
+    const menu = model(`invalid-${JSON.stringify(payload)}`)
+    const hook = renderHook(
+      ({ open }) =>
+        useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, open)),
+      {
+        initialProps: { open: true }
+      }
+    )
+    await act(async () => {})
+    expect(hook.result.current[0].defaultsPending).toBe(true)
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    hook.rerender({ open: false })
+    mocks.rpc.mockResolvedValue({ settings: {} })
+    hook.rerender({ open: true })
+    expect(hook.result.current[0].defaultsPending).toBe(true)
+    await act(async () => {})
+    expect(hook.result.current[0].defaultsPending).toBe(false)
+    expect(mocks.settings).toHaveBeenCalledTimes(2)
+    expect(mocks.session).toHaveBeenCalledTimes(2) // optional pending work survives settings revalidation
+    await act(async () => optional.resolve(undefined))
+  }
+)
+
+it('revokes same-key read authority synchronously, retains failure as unknown, then accepts a late valid current answer', async () => {
+  const menu = model('authority')
+  const hook = renderHook(
+    ({ open }) =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, open)),
+    {
+      initialProps: { open: true }
+    }
+  )
+  await act(async () => {})
+  expect(hook.result.current[0].defaultsPending).toBe(false)
+  hook.rerender({ open: false })
+  const next = Promise.withResolvers<ReturnType<typeof projectAgentLaunchSettings>>()
+  mocks.settings.mockReturnValue(next.promise)
+  hook.rerender({ open: true })
+  expect(hook.result.current[0].defaultsPending).toBe(true)
+  hook.rerender({ open: false })
+  hook.rerender({ open: true })
+  expect(mocks.settings).toHaveBeenCalledTimes(2) // rejoins same pending read
+  mocks.rpc.mockRejectedValue(new Error('legacy offline'))
+  await act(async () => next.reject(new Error('offline')))
+  expect(hook.result.current[0].defaultsPending).toBe(true)
+  hook.rerender({ open: false })
+  const valid = Promise.withResolvers<ReturnType<typeof projectAgentLaunchSettings>>()
+  mocks.settings.mockReturnValue(valid.promise)
+  hook.rerender({ open: true })
+  await act(async () =>
+    valid.resolve(projectAgentLaunchSettings({ agentPermissionDefault: 'ask' }))
+  )
+  expect(hook.result.current[0]).toMatchObject({
+    defaultsPending: false,
+    terminal: { permissionMode: 'ask' }
+  })
+})
+
+it('lets a re-paired owner progress independently of held local-style calls and fences late old publication', async () => {
+  const oldSettings = Promise.withResolvers<ReturnType<typeof projectAgentLaunchSettings>>()
+  const oldOptional = Promise.withResolvers<unknown>()
+  mocks.settings.mockReturnValueOnce(oldSettings.promise)
+  mocks.session.mockReturnValueOnce(oldOptional.promise).mockReturnValueOnce(oldOptional.promise)
+  const menu = model('re-pair')
+  const hook = renderHook(
+    ({ menu }) =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true)),
+    {
+      initialProps: { menu }
+    }
+  )
+  if (menu.state !== 'settled' || !menu.pickerContext) {
+    throw new Error('fixture')
+  }
+  const successor = {
+    ...menu,
+    pickerContext: { ...menu.pickerContext, pairingRevision: 8, runtimeId: 'new-runtime' }
+  }
+  hook.rerender({ menu: successor })
+  await act(async () => {})
+  expect(mocks.settings).toHaveBeenCalledTimes(2)
+  expect(hook.result.current[0].defaultsPending).toBe(false)
+  const current = hook.result.current[0]
+  await act(async () => {
+    oldSettings.resolve(projectAgentLaunchSettings({ agentPermissionDefault: 'full-access' }))
+    oldOptional.resolve(undefined)
+  })
+  expect(hook.result.current[0]).toEqual(current)
+})
+
+it.each([3, 30])(
+  'shares uncancelable local catalog ownership across %i remounts and rereads after true settlement',
+  async (count) => {
+    const { agentPickerAcquisitionDiagnostics } = await import('./agent-launch-picker-acquisition')
+    const read = Promise.withResolvers<AgentSessionModelCatalogResult>()
+    mocks.session.mockReturnValue(read.promise)
+    const menu = model(`local-${count}`, ['codex', 'claude', 'gemini'])
+    if (menu.state !== 'settled' || !menu.pickerContext) {
+      throw new Error('fixture')
+    }
+    menu.pickerContext.executionHostId = 'local'
+    const mount = () =>
+      renderHook(() =>
+        useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true))
+      )
+    const surviving = mount()
+    for (let i = 0; i < count; i++) {
+      const transient = mount()
+      transient.unmount()
+    }
+    expect(mocks.session).toHaveBeenCalledTimes(2)
+    expect(mocks.settings).not.toHaveBeenCalled()
+    expect(
+      mocks.session.mock.calls.every(
+        (call) => call[0].kind === 'local' && call[1] === 'agentSession.modelCatalog'
+      )
+    ).toBe(true)
+    expect(
+      agentPickerAcquisitionDiagnostics().find((s) => s.key.includes(`local-${count}`))
+    ).toMatchObject({ observers: 1, catalog: 2, support: 0, settings: 0 })
+    await act(async () => read.resolve(catalog))
+    expect(mocks.session).toHaveBeenCalledTimes(3)
+    expect(surviving.result.current.every((entry) => entry.catalog === catalog)).toBe(true)
+    surviving.unmount()
+    expect(agentPickerAcquisitionDiagnostics().some((s) => s.key.includes(`local-${count}`))).toBe(
+      false
+    )
+    const fresh = mount()
+    await act(async () => {})
+    expect(mocks.session).toHaveBeenCalledTimes(6)
+    fresh.unmount()
+  }
+)
+
+it('updates a mounted setup from current host rows without making ordinary actions wait for unknown defaults', async () => {
+  mocks.settings.mockRejectedValue(new Error('offline'))
+  mocks.rpc.mockRejectedValue(new Error('offline'))
+  const optional = Promise.withResolvers<void>()
+  mocks.session.mockImplementation((_target, method) =>
+    optional.promise.then(() => (method === 'agentSession.modelCatalog' ? catalog : {}))
+  )
+  const launch = vi.fn()
+  let current: picker.AgentPickerEntry[] = []
+  function Menu({ answer }: { answer: HostChatAnswer }) {
+    const menu = model('late-offer')
+    menu.rows = buildNewTabAgentMenuRows({
+      settings: { agentDefaultSurface: 'chat', nativeChatProviders: { codex: false } },
+      detectedOnHost: ['codex'],
+      chatAgents: ['codex'],
+      hostChatAnswer: () => answer,
+      chatProgram: () => 'available'
+    }).map((row) => ({ ...row, executionHostId: 'runtime:late-offer' as const }))
+    current = useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true))
+    return createElement(
+      TooltipProvider,
+      null,
+      createElement(
+        DropdownMenu,
+        { defaultOpen: true, modal: false },
+        createElement(DropdownMenuTrigger, null, 'New tab'),
+        createElement(
+          DropdownMenuContent,
+          null,
+          createElement(AgentLaunchPickerMenu, { entries: current, runLaunch: launch })
+        )
+      )
+    )
+  }
+  const view = render(createElement(Menu, { answer: 'not-yet-known' }))
+  await act(async () => {})
+  const configure = document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Configure Codex"]'
+  )!
+  fireEvent.click(configure)
+  expect(document.body.textContent).toContain('Launch terminal')
+  expect(document.body.textContent).not.toContain('Launch chat')
+  for (const answer of ['yes', 'ssh', 'yes'] as const) {
+    view.rerender(createElement(Menu, { answer }))
+    await act(async () => {})
+    expect(current[0].defaultSurface).toBe('terminal')
+    expect(current[0].defaultsPending).toBe(true)
+    expect(current[0].surfaces).toEqual(answer === 'yes' ? ['chat', 'terminal'] : ['terminal'])
+    expect(document.body.textContent?.includes('Launch chat')).toBe(answer === 'yes')
+    expect(document.querySelector('textarea')).toHaveProperty('disabled', true)
+    expect(
+      [...document.querySelectorAll('button')].find(
+        (button) => button.getAttribute('aria-label') === 'Launch terminal'
+      )
+    ).toHaveProperty('disabled', false)
+  }
+  expect(launch).not.toHaveBeenCalled()
+  fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+  fireEvent.keyDown(document.querySelector('[role="menuitem"]')!, { key: 'Enter' })
+  expect(launch).toHaveBeenCalledExactlyOnceWith(
+    { agent: 'codex', kind: 'cli', chat: true, executionHostId: 'runtime:late-offer' },
+    undefined
+  )
+  view.unmount()
+  await act(async () => optional.resolve())
+})
+
+it('acquires setup for a not-yet-created workspace against its existing project directory', async () => {
+  const menu = model('prospective-project')
+  if (menu.state !== 'settled' || !menu.pickerContext) {
+    throw new Error('Expected settled picker context')
+  }
+  menu.pickerContext.workspace = { kind: 'git-worktree', repoId: 'repo-prospective' }
+  const { result } = renderHook(() => useAgentLaunchPickerInventory(undefined, menu, true))
+  await vi.waitFor(() => expect(result.current[0]?.catalog.origin).toBe('probe'))
+  expect(mocks.settings).toHaveBeenCalledOnce()
+  expect(mocks.session).toHaveBeenCalledWith(
+    expect.objectContaining({ environmentId: 'prospective-project' }),
+    'agentSession.modelCatalog',
+    { worktree: 'path:/host/repo', agent: 'codex', waitForListing: true }
+  )
+  expect(mocks.session).toHaveBeenCalledWith(
+    expect.objectContaining({ environmentId: 'prospective-project' }),
+    'agentSession.createSupport',
+    { worktree: 'path:/host/repo', agent: 'codex' }
+  )
+})
+
+it('keeps the active accepted and pending envelope through real same-authority sibling, settings and support publications', async () => {
+  await exerciseRetainedAgentPickerPublications({
+    menu: model('retained-publications', ['codex', 'claude']),
+    settings: mocks.settings,
+    session: mocks.session
+  })
+})
+
+it.each([3, 30])(
+  'requeues a failed catalog on real parent reopen across %i joins while sibling I/O retains the owner',
+  async (count) => {
+    const reads: {
+      host: string
+      method: string
+      agent: string
+      resolve: (value: unknown) => void
+      reject: (error: Error) => void
+    }[] = []
+    mocks.session.mockImplementation((target, method, params) => {
+      const read = Promise.withResolvers<unknown>()
+      reads.push({
+        host: target.environmentId,
+        method,
+        agent: params.agent,
+        resolve: read.resolve,
+        reject: read.reject
+      })
+      return read.promise
+    })
+    const menu = model(`failed-${count}`, ['pi', 'claude', 'codex'])
+    const otherMenu = model(`other-failed-${count}`, ['pi'])
+    let renders = 0,
+      otherRenders = 0
+    const view = renderHook(
+      ({ open }) => {
+        renders++
+        return useAgentLaunchPickerInventory('wt', menu, open, 'pi')
+      },
+      { initialProps: { open: true } }
+    )
+    const other = renderHook(() => {
+      otherRenders++
+      return useAgentLaunchPickerInventory('wt', otherMenu, true, 'pi')
+    })
+    try {
+      await act(async () => {})
+      const catalogs = () =>
+        reads.filter(
+          (r) =>
+            r.host === `failed-${count}` &&
+            r.method === 'agentSession.modelCatalog' &&
+            r.agent === 'pi'
+        )
+      const failed = catalogs()[0]
+      expect(failed).toBeDefined()
+      for (let i = 0; i < count; i++) {
+        view.rerender({ open: false })
+        view.rerender({ open: true })
+      }
+      expect(catalogs()).toHaveLength(1)
+      const beforeFailure = renders,
+        beforeOther = otherRenders
+      await act(async () => failed.reject(new Error('transport failed')))
+      const failedPi = view.result.current.find((entry) => entry.agent === 'pi')
+      expect(failedPi).toBeDefined()
+      expect(failedPi?.catalogRead).toBe('failed')
+      expect(renders - beforeFailure).toBe(1)
+      expect(otherRenders).toBe(beforeOther)
+      view.rerender({ open: false })
+      view.rerender({ open: true })
+      expect(catalogs()).toHaveLength(1) // both physical slots still belong to outstanding sibling reads
+      const pendingPi = view.result.current.find((entry) => entry.agent === 'pi')
+      expect(pendingPi).toBeDefined()
+      expect(pendingPi?.catalogRead).toBe('pending')
+      const sibling = reads.find(
+        (r) =>
+          r.host === `failed-${count}` &&
+          r.method === 'agentSession.modelCatalog' &&
+          r.agent === 'claude'
+      )!
+      await act(async () => sibling.resolve(catalog))
+      expect(catalogs()).toHaveLength(2) // released slot admits the selected failed agent before dormant work
+      const pendingRenders = renders
+      await act(async () => {}) // unrelated turn: no new acquisition or publication
+      expect(renders).toBe(pendingRenders)
+      expect(otherRenders).toBe(beforeOther)
+      const beforeSuccess = renders
+      await act(async () => catalogs()[1].resolve(catalog))
+      const settledPi = view.result.current.find((entry) => entry.agent === 'pi')
+      expect(settledPi).toBeDefined()
+      expect(settledPi).toMatchObject({ catalogRead: 'settled', catalog })
+      expect(renders - beforeSuccess).toBe(1)
+      expect(otherRenders).toBe(beforeOther)
+    } finally {
+      view.unmount()
+      other.unmount()
+      await act(async () => {
+        for (const read of reads) {
+          read.resolve(read.method === 'agentSession.modelCatalog' ? catalog : { seedOptions: {} })
+        }
+      })
+    }
+    expect(
+      agentPickerAcquisitionDiagnostics().filter((resource) =>
+        resource.key.includes(`failed-${count}`)
+      )
+    ).toEqual([])
+  }
+)

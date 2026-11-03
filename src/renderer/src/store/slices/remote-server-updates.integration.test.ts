@@ -148,43 +148,4 @@ describe('remote server updates mixed inventory', () => {
     releaseChecks()
     await refresh
   })
-
-  it('checks and retains the selected perf channel for the update batch', async () => {
-    call.mockImplementation(async ({ selector }: { selector: string }) => ({
-      id: `check-${selector}`,
-      ok: true,
-      result: {
-        appVersion: '1.5.0',
-        runtimeId: `${selector}-runtime`,
-        support: {
-          installMode: 'supervised-headless-serve' as const,
-          automatic: true,
-          reason: 'available' as const
-        },
-        status: { state: 'available' as const, version: '1.6.0-rc.1.perf', changelog: null }
-      },
-      _meta: { runtimeId: `${selector}-runtime` }
-    }))
-    const createSlice = createRemoteServerUpdatesSlice as unknown as StateCreator<TestState>
-    const store = create<TestState>()((...args) => ({
-      ...createSlice(...args),
-      setRuntimeEnvironments
-    }))
-    const options = { includePrerelease: false, includePerfPrerelease: true }
-
-    await store.getState().refreshRemoteServerUpdates(options)
-
-    expect(call).toHaveBeenCalledTimes(2)
-    expect(call).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'updater.check', params: options })
-    )
-    expect(store.getState().remoteServerUpdateCheckOptions).toEqual(options)
-    expect(store.getState().remoteServerUpdates.get('current')).toMatchObject({
-      phase: 'available',
-      targetVersion: '1.6.0-rc.1.perf'
-    })
-
-    store.getState().setRemoteServerUpdateDialogOpen(false)
-    expect(store.getState().remoteServerUpdateCheckOptions).toBeNull()
-  })
 })

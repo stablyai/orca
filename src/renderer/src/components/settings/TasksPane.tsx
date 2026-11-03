@@ -232,7 +232,9 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     canHide={canHide}
                     onToggleVisible={() => toggleProvider(provider)}
                     onOpenIntegrations={() => openIntegrations()}
-                    onRetryConnection={() => void refreshPreflightStatus({ force: true })}
+                    onRetryConnection={() =>
+                      void refreshPreflightStatus({ force: true, wakeWslDistro: true })
+                    }
                   />
                 )}
               </TaskSourceProviderCard>

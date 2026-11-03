@@ -1,11 +1,29 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import ko from '@/i18n/locales/ko.json'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
-import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { getWorktreeCardPrDisplay, type WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { gitlabMrCheckCases } from '../../../../shared/gitlab-mr-checks.test-fixture'
+import { buildParentPrChecksProjection } from '../right-sidebar/parent-pr-checks-rows'
+import { FolderWorkspacePrChecksRow } from '../right-sidebar/FolderWorkspacePrChecksRow'
+import { presentGitLabMRMergeState } from '../right-sidebar/gitlab-mr-merge-state'
+import { getActiveChecksStatus } from '../right-sidebar/active-checks-status'
+import { ReviewChecksBadge, ReviewChecksIndicator } from './WorktreeCardMetadataStatusBadges'
+import { WorktreeReferenceStack } from './WorktreeReferenceStack'
+import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
+import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
+import { formatHostedReviewLabel } from '../status-bar/hosted-review-label'
+import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
 import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
-import { referenceAttachment, referenceReview } from './workspace-reference-fixtures.test-support'
+import {
+  referenceAttachment,
+  referenceReview,
+  referenceRepo,
+  referenceWorkspace
+} from './workspace-reference-fixtures.test-support'
 
 const mocks = vi.hoisted(() => ({
   status: 'active',
@@ -29,6 +47,9 @@ vi.mock('./use-worktree-sleep-state', () => ({
 }))
 
 describe('WorktreeCardStatusSlot', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
   beforeEach(() => {
     mocks.status = 'active'
     mocks.sleeping = false
@@ -48,6 +69,226 @@ describe('WorktreeCardStatusSlot', () => {
     state: 'open',
     status: 'pending'
   }
+
+  it.each(gitlabMrCheckCases)(
+    'presents the normalized $name without claiming passing',
+    ({ review: mapped, cardLabel, tone, rowSummary, mergeLabel, directMergeAvailable }) => {
+      const { status } = mapped
+      const worktree = { ...referenceWorkspace, linkedPR: null, linkedGitLabMR: 7 }
+      const hostedReviewCache = {
+        'local::repo::feature': { data: mapped, fetchedAt: 1, linkedReviewHintKey: 'gitlab:7' }
+      }
+      const context = {
+        worktrees: [worktree],
+        repos: [referenceRepo],
+        settings: null,
+        hostedReviewCache,
+        prCache: {},
+        checksCache: {}
+      }
+      const projection = buildParentPrChecksProjection(context)
+      const card = renderToStaticMarkup(
+        <WorktreeCardStatusSlot
+          worktreeId={worktree.id}
+          showStatus
+          showUnreadAction={false}
+          isUnread={false}
+          unreadTooltip=""
+          onPointerDown={vi.fn()}
+          onToggleUnread={vi.fn()}
+          newCardStyle
+          prDisplay={getWorktreeCardPrDisplay(mapped, null, 7)}
+        />
+      )
+      expect(card).toContain(cardLabel)
+      expect(card).toContain(tone)
+      expect(card).not.toContain('Passing')
+      const row = renderToStaticMarkup(
+        <FolderWorkspacePrChecksRow
+          row={projection.rows[0]}
+          expanded={false}
+          onToggle={vi.fn()}
+          onLoadCheckDetails={async () => null}
+        />
+      )
+      expect(row).toContain(rowSummary)
+      expect(row).not.toMatch(/Checks passing|lucide-circle-check/)
+      expect(projection.summary.passing).toBe(0)
+      expect(presentGitLabMRMergeState(mapped)).toMatchObject({
+        label: mergeLabel,
+        directMergeAvailable
+      })
+      expect(
+        getActiveChecksStatus({
+          ...context,
+          activeWorktreeId: worktree.id,
+          worktreesByRepo: { repo: [worktree] }
+        })
+      ).toBe(status)
+      const item = { provider: 'gitlab', type: 'mr', number: 7 } as const
+      const details = {
+        [getWorkspaceAttachmentKey(item)]: { title: mapped.title, url: mapped.url, review: mapped }
+      } satisfies WorkspaceReferenceDetailsMap
+      expect(summarizeWorkspaceReviewChecks([item], details)).toMatchObject({
+        state: status,
+        passed: 0
+      })
+      expect(
+        renderToStaticMarkup(<WorktreeReferenceStack items={[item]} details={details} />)
+      ).toContain(tone)
+      const checkLabel = { failure: 'Failing', pending: 'Pending', neutral: '' }[status]
+      for (const Badge of [ReviewChecksBadge, ReviewChecksIndicator]) {
+        const badge = renderToStaticMarkup(<Badge status={mapped.status} />)
+        expect(badge).toEqual(checkLabel ? expect.stringContaining(`Checks: ${checkLabel}`) : '')
+      }
+      expect(
+        getFolderWorkspaceCardPrDisplay({
+          ...context,
+          folderWorkspaceId: 'folder',
+          worktreeMap: new Map([[worktree.id, worktree]]),
+          repoMap: new Map([['repo', referenceRepo]]),
+          worktreeLineageById: {},
+          workspaceLineageByChildKey: {
+            child: {
+              childWorkspaceKey: `worktree:${worktree.id}`,
+              parentWorkspaceKey: 'folder:folder',
+              origin: 'cli',
+              capture: { source: 'env-workspace', confidence: 'inferred' },
+              createdAt: 1
+            }
+          }
+        })
+      ).toMatchObject({ state: 'open', status })
+      expect(formatHostedReviewLabel(mapped)).toBe(`MR !7 Open, ${status}`)
+      expect(reviewRefreshIntervalMs({ state: mapped.state, checksStatus: mapped.status })).toBe(
+        120_000
+      )
+      expect(reviewRefreshIntervalMs({ state: 'merged', checksStatus: mapped.status })).toBe(
+        status === 'pending' ? 60_000 : null
+      )
+    }
+  )
+
+  it.each([
+    {
+      state: 'merged',
+      provider: 'github',
+      status: 'success',
+      icon: 'merge',
+      tone: 'text-purple-600/70',
+      label: 'State: Merged',
+      locale: 'en',
+      stale: false
+    },
+    {
+      state: 'merged',
+      provider: 'github',
+      status: 'failure',
+      icon: 'merge',
+      tone: 'text-purple-600/70',
+      label: 'State: Merged',
+      locale: 'en',
+      stale: false
+    },
+    {
+      state: 'draft',
+      provider: 'github',
+      status: 'success',
+      icon: 'pull-request-draft',
+      tone: 'text-muted-foreground/50',
+      label: 'Reviews: Draft',
+      locale: 'en',
+      stale: false
+    },
+    {
+      state: 'closed',
+      provider: 'github',
+      status: 'success',
+      icon: 'pull-request-closed',
+      tone: 'text-muted-foreground/60',
+      label: 'State: Closed',
+      locale: 'en',
+      stale: false
+    },
+    {
+      state: 'merged',
+      provider: 'github',
+      status: undefined,
+      icon: 'merge',
+      tone: 'text-purple-600/70',
+      label: 'State: Merged',
+      locale: 'en',
+      stale: true
+    },
+    {
+      state: 'merged',
+      provider: 'github',
+      status: 'success',
+      icon: 'merge',
+      tone: 'text-purple-600/70',
+      label: ko.auto.components.sidebar.WorktreeCardMetadataStatusBadges.f394b3e86e,
+      locale: 'ko',
+      stale: false
+    },
+    {
+      state: 'draft',
+      provider: 'gitlab',
+      status: 'success',
+      icon: 'pull-request-draft',
+      tone: 'text-muted-foreground/50',
+      label: 'Reviews: Draft',
+      locale: 'en',
+      stale: false
+    }
+  ] as const)(
+    'preserves $provider $state collection lifecycle with $status checks ($locale, stale=$stale)',
+    async ({ state, provider, status, icon, tone, label, locale, stale }) => {
+      await i18n.changeLanguage(locale)
+      const items = [referenceAttachment(1), referenceAttachment(2)].map((item) =>
+        provider === 'gitlab'
+          ? {
+              ...item,
+              provider,
+              type: 'mr' as const,
+              url: `https://gitlab.com/acme/orca/-/merge_requests/${item.number}`
+            }
+          : item
+      )
+      const details = Object.fromEntries(
+        items.map((item) => [
+          getWorkspaceAttachmentKey(item),
+          {
+            stale,
+            review: { ...referenceReview(item.number, { state }), provider, url: item.url, status }
+          }
+        ])
+      )
+      const markup = renderToStaticMarkup(
+        <WorktreeCardStatusSlot
+          worktreeId="wt-1"
+          showStatus
+          showUnreadAction={false}
+          isUnread={false}
+          unreadTooltip=""
+          onPointerDown={vi.fn()}
+          onToggleUnread={vi.fn()}
+          newCardStyle
+          prDisplay={{ ...review, state, status }}
+          reviewChecks={summarizeWorkspaceReviewChecks(items, details)}
+        />
+      )
+      expect(markup).toContain(`lucide-git-${icon}`)
+      expect(markup).toContain(tone)
+      expect(markup).not.toContain('text-emerald-500')
+      expect(markup).toContain(label)
+      expect(markup).not.toContain('Draft PR')
+      if (stale) {
+        expect(markup).toContain('Last known status')
+        expect(markup).toContain('shimmer')
+        expect(markup).toContain('Checks: Unknown')
+      }
+    }
+  )
 
   it('uses checks from every attached review rather than the legacy passing review', () => {
     const items = [referenceAttachment(1), referenceAttachment(2)]
@@ -76,7 +317,8 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
     expect(markup).toContain('Reviews: 2 · Checks: Failed')
-    expect(markup).toContain('text-rose-500/85')
+    expect(markup).toContain('State: Open')
+    expect(markup).toContain('text-emerald-500/80')
     expect(markup).not.toContain('checks: Passing')
   })
   it('keeps incomplete collection checks neutral instead of claiming passing', () => {

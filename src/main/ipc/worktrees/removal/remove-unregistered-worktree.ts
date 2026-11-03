@@ -1,9 +1,11 @@
+import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
+import { usesNativeWindowsRemoval } from '../../../git/worktrees/removal/windows-worktree-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { LocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
@@ -12,18 +14,18 @@ import {
   isDangerousWorktreeRemovalPath,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
-} from '../../../worktree-removal-safety'
-import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
+} from '../../../workspaces/removal/worktree-removal-safety'
+import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePath
-} from '../../../local-worktree-filesystem'
+} from '../../../workspaces/removal/local-worktree-filesystem'
 import {
   cleanupUnusedWorktreePushTargetRemote,
   notifyWorktreesChanged
 } from '../../worktree-remote'
-import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'
@@ -60,22 +62,29 @@ export async function removeUnregisteredWorktree(
         toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
         toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
         removalHome,
-        access.statPath,
-        access.readPath
+        access
       ))
   }
-  if (canCleanOrphanedDirectory) {
+  const native = usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
+  if (canCleanOrphanedDirectory || (native && removedMeta)) {
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
-    if (!args.force) {
+    if (canCleanOrphanedDirectory && !args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
+
     const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
     let removalCompleted = false
     try {
       await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
         allowUnverifiedStop: args.allowUnverifiedPtyStop
       })
-      await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+      await (usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
+        ? removeWorktree(repo.path, worktreePath, args.force ?? false, {
+            ...localWorktreeGitOptions,
+            deleteBranch: false,
+            knownRemovedWorktree: null
+          })
+        : removeLocalWorktreePath(worktreePath, localWorktreeGitOptions))
       removalCompleted = true
     } finally {
       await removalGate.finish(removalCompleted)

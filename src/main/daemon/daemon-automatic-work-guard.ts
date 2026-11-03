@@ -10,12 +10,14 @@ import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
 import { DaemonProcessGrowthMonitor } from './daemon-process-growth-monitor'
 import { HostTerminalLedger, resolveMaxHostTerminals } from './host-terminal-ledger'
 import { LegacyRestoreRecords, legacyRestoreRecordsPathFor } from './legacy-restore-records'
+import type { HostTerminalPolicy } from './host-terminal-policy'
 import { TerminalSpawnGate, type TerminalSpawnAdmissionMode } from './terminal-spawn-gate'
 
 type DaemonAutomaticWorkGuardOptions = {
   markerPath: string | undefined
   /** Where every daemon on this host shares its terminal count; undefined caps this one alone. */
   hostTerminalLedgerDir?: string | undefined
+  terminalPolicy?: HostTerminalPolicy
   mode: TerminalSpawnAdmissionMode
   log: { log: (event: string, details: Record<string, unknown>) => void }
   listSessions: () => readonly { sessionId: string; pid: number | null }[]
@@ -45,6 +47,7 @@ export class DaemonAutomaticWorkGuard {
         onLevelChanged: (level) => this.onPressureChanged(level),
         onTrip: (trips) => this.onTrip(trips)
       })
+    const policy = options.terminalPolicy
     this.gate = new TerminalSpawnGate({
       log: (event, details) => options.log.log(event, details),
       mode: options.mode,
@@ -52,6 +55,7 @@ export class DaemonAutomaticWorkGuard {
       automaticWorkMode: () => this.automaticWorkMode(),
       armAutomaticWork: () => this.marker.arm(),
       legacyRestores: this.legacyRestores,
+      resolveMaximum: policy ? () => policy.admissionMaximum() : undefined,
       hostTerminals: new HostTerminalLedger({
         dir: options.hostTerminalLedgerDir ?? null,
         maxTerminals: resolveMaxHostTerminals(),

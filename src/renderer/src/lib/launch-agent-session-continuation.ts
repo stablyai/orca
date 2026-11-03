@@ -20,6 +20,9 @@ import {
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
+import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { workspaceNavigationToastAction } from '@/lib/workspace-navigation-toast-action'
 
 type LaunchAgentSessionContinuationArgs = {
   agent: TuiAgent
@@ -30,6 +33,9 @@ type LaunchAgentSessionContinuationArgs = {
   launchChoice?: AgentLaunchChoice
   launchSource: LaunchSource
   signal?: AbortSignal
+  sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  agentArgs?: string | null
 }
 
 /** Detected agents, then those that open as a chat on the workspace's host without their CLI. */
@@ -98,7 +104,10 @@ export async function launchAgentSessionContinuation({
   initialCwd,
   launchChoice,
   launchSource,
-  signal
+  signal,
+  sessionOptions,
+  chatSessionOptions,
+  agentArgs
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
   const label = getAgentLabel(agent)
   // Blind PTY writes do not prove prompt delivery; claiming success can hide a lost handoff (#22479).
@@ -106,6 +115,9 @@ export async function launchAgentSessionContinuation({
   const delivery = {
     agent,
     worktreeId,
+    ...(sessionOptions ? { sessionOptions: { ...sessionOptions } } : {}),
+    ...(chatSessionOptions !== undefined ? { chatSessionOptions: { ...chatSessionOptions } } : {}),
+    ...(agentArgs !== undefined ? { agentArgs } : {}),
     ...(groupId ? { groupId } : {}),
     prompt,
     promptDelivery: agent === 'claude' ? ('draft' as const) : ('submit-after-ready' as const),
@@ -124,12 +136,25 @@ export async function launchAgentSessionContinuation({
           'components.agentSessionContinuation.sent',
           'Session context sent to {{agent}} in a new session.',
           { agent: label }
-        )
+        ),
+        {
+          description: workspaceName,
+          duration: Infinity,
+          dismissible: true,
+          action: workspaceNavigationToastAction({
+            workspaceId: worktreeId,
+            executionHostId
+          })
+        }
       )
     }
   }
   const request = {
     ...delivery,
+    ...(delivery.sessionOptions ? { launchOptions: delivery.sessionOptions } : {}),
+    ...(delivery.chatSessionOptions !== undefined
+      ? { chatLaunchOptions: delivery.chatSessionOptions }
+      : {}),
     requestId: newAgentLaunchRequestId(),
     workspace: worktreeLaunchWorkspace(worktreeId),
     tuiCustomization: { cwd: initialCwd }
@@ -141,6 +166,12 @@ export async function launchAgentSessionContinuation({
   if (!(await ensureAgentAvailable(agent, worktreeId, plan.route, signal))) {
     return false
   }
+  const state = useAppStore.getState()
+  const executionHostId =
+    plan.executionHostId ?? getResolvedExecutionHostIdForWorktree(state, worktreeId) ?? undefined
+  const workspace = state.getKnownWorktreeById(worktreeId, executionHostId)
+  const workspaceName =
+    (workspace && resolveWorktreeDisplayName(workspace)) || initialCwd || worktreeId
   const result = launchAgentInNewTab({ ...delivery, agentSessionLaunchPlan: plan })
   if (!result) {
     notifyLaunchFailed(label)

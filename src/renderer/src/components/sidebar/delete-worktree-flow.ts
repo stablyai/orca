@@ -8,6 +8,7 @@ import {
 } from './stale-workspace-list-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
+import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
@@ -60,7 +61,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     state.clearWorktreeDeleteState(worktreeId)
   }
 
-  // Disconnected SSH needs reconnect/forget; paired clients lack desktop SSH metadata, so their RPC must handle deletion instead.
+  // This app's own SSH rows can only be forgotten; paired clients lack desktop SSH metadata, so their RPC must handle deletion instead.
   const matchingRepos = state.repos.filter((entry) => entry.id === target.repoId)
   const repo = target.hostId
     ? findRepoForHost(matchingRepos, target.repoId, { hostId: target.hostId })
@@ -70,15 +71,18 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const sshResolution = isPairedWebClientWindow()
     ? { kind: 'not-ssh' as const }
     : resolveSshWorkspaceForget({
-        repo,
-        sshConnectionStates: state.sshConnectionStates,
+        route: resolveWorktreeOperationRouteForHost(
+          state,
+          worktreeId,
+          getWorktreeExecutionHostId(target, repo ?? undefined)
+        ),
         sshTargetLabels: state.sshTargetLabels
       })
-  if (sshResolution.kind === 'ghost' || sshResolution.kind === 'disconnected') {
+  if (sshResolution.kind !== 'not-ssh') {
     // Metadata-only forgetting cannot fail on registered lineage children, so skip their removal warning.
     state.openModal('forget-ssh-workspace', {
       worktreeId,
-      // Why (STA-11912): the reconnect awaits a connection, so the removal must stay pinned to this incarnation.
+      // Why (STA-11912): a same-id replacement must not inherit this confirmation.
       worktreeDeleteIdentities: toWorktreeDeleteIdentities([target]),
       displayName: target.displayName,
       resolution: sshResolution

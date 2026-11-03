@@ -2,14 +2,15 @@ import { z } from 'zod'
 import {
   MobileWebBundleManifestReadSchema,
   type MobileWebBundleManifestRead
-} from '../transport/mobile-web-bundle-reply-schemas'
+} from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   MobileWebBundleFetchResult,
   MobileWebBundleReusableAssets
-} from '../transport/mobile-web-bundle-fetch'
+} from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
-import { MANIFEST_FILE_NAME, requireStorablePath } from './generation-asset-path'
-import { copyCachedAsset, reusableAssetsOf } from './generation-reuse'
+import { MANIFEST_FILE_NAME } from './generation-asset-path'
+import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
+import { stagingAssetsOf } from './generation-staging-assets'
 import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
 import { isHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
@@ -42,7 +43,12 @@ export type StagedGeneration = {
 export type GenerationStore = {
   readActiveGeneration(hostKey: string): Promise<ActiveGeneration | null>
   openReusableAssets(hostKey: string): Promise<MobileWebBundleReusableAssets>
-  stageGeneration(hostKey: string, result: MobileWebBundleFetchResult): Promise<StagedGeneration>
+  stageGeneration(
+    hostKey: string,
+    result: MobileWebBundleFetchResult,
+    signal?: AbortSignal,
+    reusable?: MobileWebBundleReusableAssets
+  ): Promise<StagedGeneration>
   commitGeneration(staged: StagedGeneration): Promise<ActiveGeneration>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   sweepStagedGenerations(): Promise<void>
@@ -64,6 +70,10 @@ export function createGenerationStore(options: {
   const fs = options.fileSystem
   // Accept only handles minted here; structural lookalikes must not authorize renaming or deleting caller-selected directories.
   const issuedHandles = new WeakSet<StagedGeneration>()
+  const reuseSources = new WeakMap<
+    MobileWebBundleReusableAssets,
+    ReturnType<typeof reusableAssetsOf>
+  >()
 
   const hostRoot = (hostKey: string): string => joinUri(fs.rootUri, requireHostKey(hostKey))
   const generationsRoot = (hostKey: string): string =>
@@ -128,7 +138,10 @@ export function createGenerationStore(options: {
     await writeHostOrder(order.filter((key) => hosts.includes(key) && !evicted.has(key)))
   }
 
-  async function readActive(hostKey: string): Promise<ActiveGeneration | null> {
+  async function readActive(
+    hostKey: string,
+    discardInvalid = true
+  ): Promise<ActiveGeneration | null> {
     const generations = generationsRoot(hostKey)
     const directories = (await fs.list(generations)).filter((entry) => entry.isDirectory)
     if (directories.length === 0) {
@@ -151,29 +164,44 @@ export function createGenerationStore(options: {
         return { buildId: manifest.buildId, directory, manifest }
       }
     }
-    await dropHostTree(hostKey)
+    if (discardInvalid) {
+      await dropHostTree(hostKey)
+    }
     return null
   }
 
   async function stage(
     hostKey: string,
-    result: MobileWebBundleFetchResult
+    result: MobileWebBundleFetchResult,
+    signal?: AbortSignal,
+    offered?: MobileWebBundleReusableAssets
   ): Promise<StagedGeneration> {
+    if (signal?.aborted) {
+      throw new Error('generation staging was aborted')
+    }
     const manifest = result.manifest
     const directory = joinUri(stagingRoot(hostKey), manifest.buildId)
-    const reused = new Set(result.reused)
-    const assets = manifest.assets.map((asset) => ({
-      asset,
-      uri: joinUri(directory, requireStorablePath(asset.path)),
-      bytes: reused.has(asset.path) ? null : requireExactBytes(result.assets.get(asset.path), asset)
-    }))
+    const assets = stagingAssetsOf(directory, result)
     // Copy reused assets on the stage queue so sweeps and concurrent downloads cannot remove their source mid-copy.
-    const active = reused.size > 0 ? await readActive(hostKey) : null
+    let reusable =
+      result.reused.length > 0
+        ? reuseSources.get(offered ?? (await openReusable(hostKey)))
+        : reusableAssetsOf(fs, [])
+    if (reusable === undefined) {
+      throw new Error('generation store was handed reusable assets it did not issue')
+    }
+    if (result.reused.length > 0) {
+      const current = await readActive(hostKey, false).catch(() => null)
+      // A faster same-build download may already have retired the offer's source.
+      if (current?.buildId === manifest.buildId) {
+        reusable = reusableAssetsOf(fs, [current])
+      }
+    }
     // Discard prior residue; fresh writes over a partial tree would not form a verified generation.
     await fs.delete(directory)
     try {
       for (const { asset, uri, bytes } of assets) {
-        await (bytes === null ? copyCachedAsset(fs, active, asset, uri) : fs.writeBytes(uri, bytes))
+        await (bytes === null ? reusable.copyTo(asset, uri) : fs.writeBytes(uri, bytes))
       }
       // Write the manifest last so interrupted trees cannot appear activated.
       await fs.writeText(joinUri(directory, MANIFEST_FILE_NAME), JSON.stringify(manifest))
@@ -243,7 +271,14 @@ export function createGenerationStore(options: {
   }
 
   async function openReusable(hostKey: string): Promise<MobileWebBundleReusableAssets> {
-    return reusableAssetsOf(fs, await readActive(hostKey))
+    const hosts = [
+      hostKey,
+      ...(await listHostDirectories()).map((host) => host.name).filter((key) => key !== hostKey)
+    ]
+    // Reuse discovery must not clean up another shell's active or staged files.
+    const reusable = await reusableAssetsOfHosts(fs, hosts, (key) => readActive(key, false))
+    reuseSources.set(reusable, reusable)
+    return reusable
   }
 
   async function sweep(): Promise<void> {
@@ -272,7 +307,8 @@ export function createGenerationStore(options: {
   return {
     readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
     openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
-    stageGeneration: (hostKey, result) => serialize(() => stage(hostKey, result)),
+    stageGeneration: (hostKey, result, signal, reusable) =>
+      serialize(() => stage(hostKey, result, signal, reusable)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
@@ -309,17 +345,4 @@ function requireHostKey(hostKey: string): string {
     throw new Error('generation store was handed something that is not a host cache key')
   }
   return hostKey
-}
-
-function requireExactBytes(
-  bytes: Uint8Array | undefined,
-  asset: { path: string; byteLength: number }
-): Uint8Array {
-  // Validate all downloaded assets before any write so absent/wrong-length bytes never enter staging.
-  if (bytes === undefined || bytes.byteLength !== asset.byteLength) {
-    throw new Error(
-      `bundle asset ${asset.path} is ${bytes?.byteLength ?? 'absent'}, not the manifest's ${asset.byteLength}`
-    )
-  }
-  return bytes
 }

@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { track } from '@/lib/telemetry'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
@@ -13,7 +12,13 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  wslHostWindowsDriveRefusalForLinuxPath,
+  type WslHostWindowsDriveRefusal
+} from '../../../../shared/wsl-host-windows-drive-refusal'
+import { getWindowsPathAccess } from '@/lib/windows-path-access'
+import type { AddRepoPathOptions } from '@/store/repos/repo-state'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 
 type ShowNestedRepoReview = (args: {
@@ -29,6 +34,7 @@ type ShowNestedRepoReview = (args: {
 
 export function useAddRepoServerPathFlow({
   addRepoPath,
+  addNonGitFolder,
   activeRuntimeEnvironmentId,
   closeModal,
   fetchWorktrees,
@@ -38,13 +44,15 @@ export function useAddRepoServerPathFlow({
   setNestedScanInProgress,
   showNestedRepoReview,
   onGitRepoReady,
-  setAddProjectBusyLabel
+  setAddProjectBusyLabel,
+  onWindowsDriveRefusal
 }: {
   addRepoPath: (
     path: string,
     kind?: 'git' | 'folder',
-    options?: { runtimeEnvironmentId?: string | null }
+    options?: AddRepoPathOptions
   ) => Promise<Repo | null>
+  addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>
   activeRuntimeEnvironmentId: string | null
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
@@ -67,6 +75,8 @@ export function useAddRepoServerPathFlow({
     executionHostId?: ExecutionHostId
   ) => Promise<void>
   setAddProjectBusyLabel: (label: string | null) => void
+  /** Shown inline by the dialog, whether this client or the host refused. */
+  onWindowsDriveRefusal: (refusal: WslHostWindowsDriveRefusal) => void
 }): {
   serverPath: string
   isAddingServerPath: boolean
@@ -88,6 +98,16 @@ export function useAddRepoServerPathFlow({
     async (kind: 'git' | 'folder'): Promise<void> => {
       const path = serverPath.trim()
       if (!path) {
+        return
+      }
+      // A WSL host refuses /mnt/<drive> up front, before a slow drvfs scan; the host re-checks by mount.
+      const driveRefusal =
+        activeRuntimeEnvironmentId &&
+        getWindowsPathAccess(toRuntimeExecutionHostId(activeRuntimeEnvironmentId))
+          ? wslHostWindowsDriveRefusalForLinuxPath(path)
+          : null
+      if (driveRefusal) {
+        onWindowsDriveRefusal(driveRefusal)
         return
       }
       const gen = ++serverAddGenRef.current
@@ -165,9 +185,14 @@ export function useAddRepoServerPathFlow({
         setAddProjectBusyLabel(
           kind === 'git' ? addRepoBusyLabels.openingProject() : addRepoBusyLabels.openingFolder()
         )
-        const repo = await addRepoPath(path, kind, {
-          runtimeEnvironmentId: activeRuntimeEnvironmentId
-        })
+        const options = {
+          runtimeEnvironmentId: activeRuntimeEnvironmentId,
+          onWindowsDriveRefusal
+        }
+        const repo =
+          kind === 'folder'
+            ? await addNonGitFolder(path, options)
+            : await addRepoPath(path, kind, options)
         if (gen !== serverAddGenRef.current) {
           return
         }
@@ -180,8 +205,6 @@ export function useAddRepoServerPathFlow({
           }
           await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
         } else if (repo) {
-          // Folder projects open their synthetic root through the add flow instead of Git checkout completion.
-          await markOnboardingProjectAdded('addedFolder')
           closeModal()
         }
       } finally {
@@ -195,11 +218,13 @@ export function useAddRepoServerPathFlow({
     },
     [
       addRepoPath,
+      addNonGitFolder,
       activeRuntimeEnvironmentId,
       closeModal,
       fetchWorktrees,
       getNestedRepoRuntimeKind,
       onGitRepoReady,
+      onWindowsDriveRefusal,
       scanNestedRepos,
       serverPath,
       setActiveNestedScanId,

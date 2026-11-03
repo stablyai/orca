@@ -1,60 +1,23 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { mocks, request, detection } from './AgentSessionContinuationDialog.test-fixture'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/protocol-version'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
+import { useNativeChatHandOff } from '../native-chat/use-native-chat-hand-off'
 import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog'
-
-const mocks = vi.hoisted(() => ({
-  detection: vi.fn<() => UseDetectedAgentsResult>(),
-  launch: vi.fn()
-}))
-vi.mock('@/hooks/useDetectedAgents', () => ({ useDetectedAgents: mocks.detection }))
-vi.mock('@/hooks/useAgentDetectionTarget', () => ({
-  useAgentDetectionTargetForWorktree: () => ({ kind: 'local' })
-}))
-vi.mock('@/lib/launch-agent-session-continuation', () => ({
-  launchAgentSessionContinuation: mocks.launch
-}))
-const initial = useAppStore.getState()
-const request = {
-  source: { capturedText: 'previous session', sourceAgent: 'codex' as const },
-  worktreeId: 'wt-1',
-  workspacePath: '/repo',
-  groupId: 'group-1',
-  initialCwd: '/repo/.',
-  launchSource: 'sidebar' as const
-}
-const detection: UseDetectedAgentsResult = {
-  detectedIds: ['codex'],
-  isLoading: false,
-  detectionFailed: false,
-  isRefreshing: false,
-  needsServerUpdate: false,
-  refresh: async () => ['codex']
-}
-beforeEach(() => {
-  vi.clearAllMocks()
-  mocks.detection.mockReturnValue(detection)
-  mocks.launch.mockResolvedValue(true)
-  setLocalRuntimeCapabilitiesForTests([CHAT])
-  useAppStore.setState({
-    settings: { ...getDefaultSettings('/test'), experimentalNativeChat: true },
-    repos: [{ id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }],
-    worktreesByRepo: {
-      'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
-    }
-  })
-})
-afterEach(() => {
-  cleanup()
-  useAppStore.setState(initial, true)
-})
+import * as rpc from '@/runtime/runtime-rpc-subscribe'
+import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 it('clears failed detection, gates unresolved Start, and submits the displayed root/subfolder choice', async () => {
   const props = { open: true, request, onOpenChange: vi.fn() }
@@ -69,20 +32,31 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
   expect(mocks.launch).not.toHaveBeenCalled()
   mocks.detection.mockReturnValue(detection)
   view.rerender(<AgentSessionContinuationDialog {...props} />)
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('option', { name: /Codex/ }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls[0][0]).toMatchObject({
     initialCwd: '/repo/.',
     groupId: 'group-1',
-    launchChoice: { route: 'structured-native-chat', requestedSurface: 'chat' }
+    launchChoice: { route: 'structured-native-chat' }
   })
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('button', { name: 'Start Codex in a terminal' }))
-  expect(screen.getAllByRole('combobox')[0].textContent).toContain('Codex (CLI)')
+  expect(mocks.launch.mock.calls[0][0].launchChoice.requestedSurface).toBeUndefined()
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch.mock.calls.at(-1)?.[0].launchChoice).toMatchObject({
+    route: 'terminal-tui',
+    requestedSurface: 'terminal'
+  })
   view.rerender(<AgentSessionContinuationDialog {...props} open={false} />)
   view.rerender(<AgentSessionContinuationDialog {...props} />)
-  expect(screen.getAllByRole('combobox')[0].textContent).not.toContain('(CLI)')
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0].launchChoice.requestedSurface).toBeUndefined()
   view.rerender(
@@ -91,13 +65,611 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
       request={{ ...request, initialCwd: '/repo/packages/app' }}
     />
   )
-  expect(screen.getAllByRole('combobox')[0].textContent).toContain('Codex (CLI)')
-  fireEvent.click(screen.getAllByRole('combobox')[0])
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
   expect(screen.getAllByText('No chat in a subfolder').length).toBeGreaterThan(0)
-  fireEvent.click(screen.getByRole('option', { name: 'Codex (CLI)' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0]).toMatchObject({
     initialCwd: '/repo/packages/app',
-    launchChoice: { route: 'terminal-tui', requestedSurface: 'terminal' }
+    launchChoice: { route: 'terminal-tui' }
   })
+})
+
+it.each(['chat', undefined] as const)(
+  'labels useful %s fallback without promising older history',
+  (sourceKind) => {
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{ ...request, source: { ...request.source, sourceKind } }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    expect(
+      screen.getByText(
+        sourceKind === 'chat'
+          ? 'Uses recent messages currently loaded in this chat and the current workspace.'
+          : 'Uses captured text and the current workspace.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/reading older transcript details/)).toBeNull()
+    expect(screen.getByText('/repo/.')).toBeTruthy()
+  }
+)
+
+it('keeps the replacement chooser open when an earlier accepted launch completes', async () => {
+  const cwd = `/repo/${'long-workspace-directory/'.repeat(12)}project`
+  function Chat({ epoch }: { epoch: string }) {
+    const handOff = useNativeChatHandOff({
+      pane: {
+        tabId: 'tab',
+        sessionId: 'chat',
+        agent: 'codex',
+        isVisible: true,
+        target: { kind: 'local' }
+      },
+      directory: { worktreeId: 'wt-1', worktreePath: cwd, runtimeEnvironmentId: null },
+      epoch,
+      messages: [
+        {
+          id: '1',
+          source: 'transcript',
+          role: 'user',
+          timestamp: 1,
+          blocks: [{ type: 'text', text: 'Saved task' }]
+        }
+      ],
+      focusComposer: () => {}
+    })
+    return (
+      <>
+        <button onClick={() => handOff.open()}>Open hand-off</button>
+        {handOff.dialog}
+      </>
+    )
+  }
+  const capability = Promise.withResolvers<boolean>()
+  mocks.capability.mockReturnValueOnce(capability.promise)
+  const launchA = Promise.withResolvers<boolean>()
+  mocks.launch.mockReturnValueOnce(launchA.promise).mockResolvedValueOnce(true)
+  const view = render(<Chat epoch="a" />, { wrapper: TooltipProvider })
+  await act(async () => fireEvent.click(screen.getByText('Open hand-off')))
+  expect(screen.getByText('Preparing saved chat context…')).toBeTruthy()
+  expect(screen.getByText(cwd)).toBeTruthy()
+  expect(
+    screen.queryByText(/Detecting Agents|Uses captured|recent messages currently loaded/)
+  ).toBeNull()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(true)
+  expect(screen.getAllByRole<HTMLButtonElement>('combobox').every((item) => item.disabled)).toBe(
+    true
+  )
+  fireEvent.click(screen.getByText('Cancel'))
+  await act(async () => capability.resolve(false))
+  expect(screen.queryByRole('dialog')).toBeNull()
+  await act(async () => fireEvent.click(screen.getByText('Open hand-off')))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch).toHaveBeenCalledOnce()
+  view.rerender(<Chat epoch="b" />)
+  await act(async () => fireEvent.click(screen.getByText('Open hand-off')))
+  await act(async () => launchA.resolve(true))
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(false)
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch).toHaveBeenCalledTimes(2)
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+it.each([
+  ['claude', true],
+  ['claude-agent-teams', true],
+  ['claude', false]
+] as const)(
+  'renders destination rows from %s with family exclusion=%s and starts the clicked agent',
+  async (sourceAgent, avoidSourceAgent) => {
+    const available: TuiAgent[] = ['claude', 'claude-agent-teams', 'codex', 'gemini']
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        defaultTuiAgent: 'codex',
+        disabledTuiAgents: getAgentCatalog()
+          .filter((agent) => !available.includes(agent.id))
+          .map((agent) => agent.id)
+      }
+    })
+    mocks.detection.mockReturnValue({ ...detection, detectedIds: null, isLoading: true })
+    const props = {
+      open: true,
+      request: { ...request, source: { ...request.source, sourceAgent }, avoidSourceAgent },
+      onOpenChange: vi.fn()
+    }
+    const view = render(<AgentSessionContinuationDialog {...props} />, { wrapper: TooltipProvider })
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+    ).toBe(true)
+    mocks.detection.mockReturnValue({ ...detection, detectedIds: available })
+    view.rerender(<AgentSessionContinuationDialog {...props} />)
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    expect(screen.queryAllByRole('menuitem', { name: /Claude/ }).length === 0).toBe(
+      avoidSourceAgent
+    )
+    expect(screen.queryByRole('button', { name: 'Configure Claude' }) === null).toBe(
+      avoidSourceAgent
+    )
+    const search = screen.getByPlaceholderText('Search agents and setups…')
+    fireEvent.change(search, { target: { value: 'Claude' } })
+    fireEvent.keyDown(search, { key: 'ArrowRight' })
+    expect(screen.queryAllByRole('menuitem', { name: /Claude/ }).length === 0).toBe(
+      avoidSourceAgent
+    )
+    fireEvent.change(search, { target: { value: '' } })
+    fireEvent.click(screen.getByRole('menuitem', { name: /Gemini/ }))
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Start New Session' }))
+    )
+    expect(mocks.launch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        agent: 'gemini',
+        launchChoice: expect.objectContaining({ route: 'terminal-tui' })
+      })
+    )
+    expect(mocks.launch.mock.calls[0][0].launchChoice.requestedSurface).toBeUndefined()
+  }
+)
+
+it.each([
+  ['codex', true, false],
+  ['claude', true, true],
+  ['claude-agent-teams', true, false],
+  ['claude', true, false],
+  ['claude', false, false]
+] as const)(
+  'hands off from %s with family exclusion=%s and alternative=%s',
+  async (sourceAgent, avoidSourceAgent, hasAlternative) => {
+    const available: TuiAgent[] = hasAlternative
+      ? ['claude', 'claude-agent-teams', 'codex']
+      : sourceAgent === 'codex'
+        ? ['codex']
+        : ['claude', 'claude-agent-teams']
+    const settings = useAppStore.getState().settings!
+    useAppStore.setState({
+      settings: {
+        ...settings,
+        defaultTuiAgent: sourceAgent,
+        disabledTuiAgents: getAgentCatalog()
+          .filter((agent) => !available.includes(agent.id))
+          .map((agent) => agent.id)
+      }
+    })
+    mocks.detection.mockReturnValue({ ...detection, detectedIds: available })
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{ ...request, source: { ...request.source, sourceAgent }, avoidSourceAgent }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    const selected = avoidSourceAgent ? (hasAlternative ? 'codex' : null) : sourceAgent
+    const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' })
+    expect(start.disabled).toBe(selected === null)
+    if (selected === null) {
+      expect(
+        screen.getByText(
+          `Only Agents sharing the usage limit with ${getAgentLabel(sourceAgent)} are available on this workspace host. Enable or install a different Agent.`
+        )
+      ).toBeTruthy()
+      expect(
+        screen.queryByText('No enabled Agents were detected on this workspace host.')
+      ).toBeNull()
+    }
+    const picker = screen.getByRole('button', { name: 'Select agent' })
+    fireEvent.pointerDown(picker, { button: 0, ctrlKey: false })
+    const familyRows = screen.queryAllByRole('menuitem', {
+      name: sourceAgent === 'codex' ? /Codex/ : /Claude/
+    })
+    expect(familyRows.length === 0).toBe(avoidSourceAgent)
+    fireEvent.pointerDown(picker, { button: 0, ctrlKey: false })
+    await act(async () => fireEvent.click(start))
+    if (selected) {
+      expect(mocks.launch).toHaveBeenCalledWith(expect.objectContaining({ agent: selected }))
+    } else {
+      expect(mocks.launch).not.toHaveBeenCalled()
+    }
+  }
+)
+
+it('retires the old pick when source and launch context change before Start', async () => {
+  mocks.detection.mockReturnValue({
+    ...detection,
+    detectedIds: ['claude', 'claude-agent-teams', 'codex', 'gemini']
+  })
+  const props = {
+    open: true,
+    request: {
+      ...request,
+      source: { ...request.source, sourceAgent: 'claude' as const },
+      avoidSourceAgent: true
+    },
+    onOpenChange: vi.fn()
+  }
+  const view = render(<AgentSessionContinuationDialog {...props} />, { wrapper: TooltipProvider })
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: /Gemini/ }))
+  view.rerender(
+    <AgentSessionContinuationDialog
+      {...props}
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'gemini' },
+        avoidSourceAgent: true,
+        initialCwd: '/repo/subfolder',
+        groupId: 'replacement-group'
+      }}
+    />
+  )
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  expect(screen.queryAllByRole('menuitem', { name: /Gemini/ })).toHaveLength(0)
+  fireEvent.click(screen.getByRole('menuitem', { name: /^Claude / }))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      agent: 'claude',
+      initialCwd: '/repo/subfolder',
+      groupId: 'replacement-group',
+      launchChoice: expect.objectContaining({ route: 'terminal-tui' })
+    })
+  )
+  expect(mocks.launch.mock.calls[0][0].launchChoice.requestedSurface).toBeUndefined()
+})
+
+it('explains an empty host inventory when the enabled agent has no chat preference', async () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      defaultTuiAgent: 'grok',
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'grok')
+        .map((agent) => agent.id),
+      nativeChatProviders: { grok: false }
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: [] })
+  render(<AgentSessionContinuationDialog open request={request} onOpenChange={vi.fn()} />, {
+    wrapper: TooltipProvider
+  })
+  await act(async () => {})
+  expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
+  const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' })
+  expect(start.disabled).toBe(true)
+  fireEvent.click(start)
+  expect(mocks.launch).not.toHaveBeenCalled()
+})
+
+it('explains the excluded source family in Spanish', async () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude' && agent.id !== 'claude-agent-teams')
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude', 'claude-agent-teams'] })
+  try {
+    await i18n.changeLanguage(await loadRendererUiLanguage('es'))
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{
+          ...request,
+          source: { ...request.source, sourceAgent: 'claude' },
+          avoidSourceAgent: true
+        }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    expect(
+      screen.getByText(
+        'En el host de este espacio de trabajo solo hay disponibles agentes que comparten el límite de uso con Claude. Activa o instala un agente diferente.'
+      )
+    ).toBeTruthy()
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Iniciar sesión nueva' }).disabled
+    ).toBe(true)
+  } finally {
+    await i18n.changeLanguage('en')
+  }
+})
+
+it('keeps an unavailable alternative and its explanation when the source family is excluded', () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => !['claude', 'claude-agent-teams', 'codex'].includes(agent.id))
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude', 'claude-agent-teams'] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  expect(screen.queryByText(/Only Agents sharing|No enabled Agents were detected/)).toBeNull()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(true)
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  expect(screen.getByRole('menuitem', { name: /Codex/ }).getAttribute('aria-disabled')).toBe('true')
+  expect(screen.getByText('Not installed')).toBeTruthy()
+  expect(screen.queryAllByRole('menuitem', { name: /Claude/ })).toHaveLength(0)
+})
+
+it('ignores a detected agent this build does not know when explaining the excluded family', () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    }
+  })
+  // A newer paired host can report an agent id this build has no config for; parse it as the
+  // wire data it arrives as, since no TuiAgent literal can name it.
+  const detectedIds: TuiAgent[] = JSON.parse('["claude", "future-agent"]')
+  mocks.detection.mockReturnValue({ ...detection, detectedIds })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  expect(
+    screen.getByText(
+      'Only Agents sharing the usage limit with Claude are available on this workspace host. Enable or install a different Agent.'
+    )
+  ).toBeTruthy()
+})
+
+it('keeps the no-agents explanation when host preferences disable the desktop-enabled source', async () => {
+  const supports = vi.spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability')
+  const call = vi.spyOn(runtimeRpc, 'callRuntimeRpc')
+  supports.mockResolvedValue(true)
+  call.mockResolvedValue({
+    settings: projectAgentLaunchSettings({
+      disabledTuiAgents: getAgentCatalog().map((agent) => agent.id)
+    })
+  })
+  replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    },
+    runtimeStatusByEnvironmentId: new Map([
+      [
+        'alpha',
+        {
+          status: {
+            runtimeId: 'runtime-1',
+            capabilities: [CHAT],
+            rendererGraphEpoch: 0,
+            graphStatus: 'ready',
+            authoritativeWindowId: null,
+            liveTabCount: 0,
+            liveLeafCount: 0
+          },
+          checkedAt: 1
+        }
+      ]
+    ]),
+    worktreesByRepo: {
+      'repo-1': [
+        makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'runtime:alpha' })
+      ]
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude'] })
+  try {
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{
+          ...request,
+          source: { ...request.source, sourceAgent: 'claude' },
+          avoidSourceAgent: true
+        }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    await act(async () => {})
+    expect(call).toHaveBeenCalled()
+    expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
+    expect(screen.queryByText(/Only Agents sharing/)).toBeNull()
+  } finally {
+    supports.mockRestore()
+    call.mockRestore()
+    clearHostAgentMenuSettingsForTests()
+    replaceRuntimeEnvironmentRevisions([])
+  }
+})
+
+// Last: the host's published chat availability outlives these tests.
+it('explains the excluded family when the source agent is offered only as a chat', async () => {
+  setLocalRuntimeCapabilitiesForTests([CHAT, AVAILABILITY])
+  vi.spyOn(rpc, 'subscribeRuntimeRpc').mockImplementation(
+    async (_target, _method, _params, handlers) => {
+      queueMicrotask(() =>
+        handlers.onEvent({
+          type: 'availability',
+          agents: [{ agent: 'codex', state: 'available', chatProgram: 'available' }]
+        })
+      )
+      return { unsubscribe: () => {} }
+    }
+  )
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'codex')
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: [] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'codex' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  await act(async () => {})
+  expect(
+    screen.getByText(
+      'Only Agents sharing the usage limit with Codex are available on this workspace host. Enable or install a different Agent.'
+    )
+  ).toBeTruthy()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(true)
+})
+
+it('keeps the no-agents explanation when the source agent only has a chat that cannot open here', async () => {
+  setLocalRuntimeCapabilitiesForTests([CHAT, AVAILABILITY])
+  vi.spyOn(rpc, 'subscribeRuntimeRpc').mockImplementation(
+    async (_target, _method, _params, handlers) => {
+      queueMicrotask(() =>
+        handlers.onEvent({
+          type: 'availability',
+          agents: [{ agent: 'claude', state: 'available', chatProgram: 'available' }]
+        })
+      )
+      return { unsubscribe: () => {} }
+    }
+  )
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    }
+  })
+  // The root offers Claude's chat, but its row here is unavailable (subfolder) and no CLI exists.
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: [] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true,
+        initialCwd: '/repo/packages/app'
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  await act(async () => {})
+  expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
+  expect(screen.queryByText(/Only Agents sharing/)).toBeNull()
+})
+
+const settingsDialogOriginalApi = window.api
+afterEach(() =>
+  Object.defineProperty(window, 'api', { configurable: true, value: settingsDialogOriginalApi })
+)
+
+it('retains continuation context and accepted options through actual Agents settings', async () => {
+  useAppStore.setState(({ settings }) => ({
+    settings: { ...settings!, agentPermissionDefault: 'own' }
+  }))
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...window.api,
+      platform: {
+        get: () => ({
+          platform: 'darwin',
+          osRelease: '',
+          arch: 'arm64',
+          shell: '/bin/sh',
+          displayServer: null,
+          windowMaterial: 'off'
+        })
+      }
+    }
+  })
+  render(<AgentSessionContinuationDialog open request={request} onOpenChange={vi.fn()} />, {
+    wrapper: TooltipProvider
+  })
+  const picker = screen.getByRole('button', { name: 'Select agent' })
+  fireEvent.pointerDown(picker, { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Toggle Arguments' }))
+  const args = await screen.findByRole('textbox', { name: 'Arguments' })
+  await waitFor(() => expect(args).toHaveProperty('disabled', false))
+  fireEvent.change(args, { target: { value: '--search' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
+  fireEvent.pointerDown(picker, { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
+  const agents = await screen.findByRole('dialog', { name: 'Agents' })
+  expect(within(agents).getAllByRole('switch').length).toBeGreaterThan(0)
+  fireEvent.click(within(agents).getByRole('button', { name: 'Close' }))
+  expect(mocks.launch).not.toHaveBeenCalled()
+  expect(screen.getByText('/repo/.')).toBeTruthy()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      agent: 'codex',
+      initialCwd: '/repo/.',
+      groupId: 'group-1',
+      agentArgs: '--search',
+      launchChoice: expect.objectContaining({ route: 'terminal-tui', requestedSurface: 'terminal' })
+    })
+  )
 })

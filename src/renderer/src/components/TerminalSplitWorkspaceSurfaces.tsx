@@ -19,6 +19,7 @@ export function TerminalSplitWorkspaceSurfaces({
     effectiveParkedTerminalWorktreeIds,
     forceParkedTerminalWorktreeIds,
     getEffectiveLayoutForWorktree,
+    prewarmLeasesRef,
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
@@ -63,6 +64,11 @@ export function TerminalSplitWorkspaceSurfaces({
               focusedGroupId={activeGroupIdByWorktree[workspace.id]}
               isVisible={isVisible}
               shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+              prewarmStage={
+                shouldMeasureHiddenWorktree
+                  ? (prewarmLeasesRef.current.get(workspace.id) ?? null)
+                  : null
+              }
               shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
               isForceParked={forceParkedTerminalWorktreeIds.has(workspace.id)}
               activityTerminalPortals={activityTerminalPortals}

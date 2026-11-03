@@ -1,3 +1,4 @@
+import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { getDefaultSettings } from '../../../shared/constants'
 import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { describe, expect, it, vi } from 'vitest'
@@ -10,23 +11,26 @@ vi.mock('@/lib/new-workspace', () => ({
 const RECORDED_HOME = '/tmp/orca/codex-accounts/aaaa/home'
 const SELECTED_HOME = '/tmp/orca/codex-accounts/bbbb/home'
 
-type DropRepinState = Parameters<typeof buildAiVaultDropRepinStartup>[0]['state']
+type DropRepinState = AiVaultResumePlatformState
 
 function makeState(): DropRepinState {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     repos: [{ ...TEST_REPO, id: 'repo-1', path: '/Users/ada/repo' }],
-    endpointProjectHostSetups: [],
-    endpointProjects: [
+    projects: [
       {
-        id: 'repo-1',
         displayName: 'repo',
         badgeColor: '',
         createdAt: 0,
         updatedAt: 0,
+        id: 'repo-1',
         sourceRepoIds: ['repo-1']
       }
     ],
@@ -57,20 +61,6 @@ function payload(overrides: {
 }
 
 describe('buildAiVaultDropRepinStartup', () => {
-  it('repins a payload with a cwd to the substituted home', () => {
-    const startup = buildAiVaultDropRepinStartup({
-      state: makeState(),
-      payload: payload({ sessionCwd: '/Users/ada/repo' }),
-      substituteCodexHome: SELECTED_HOME,
-      worktreeId: 'repo-1::worktree-1'
-    })
-
-    expect(startup).not.toBeNull()
-    expect(startup?.command).toContain(`CODEX_HOME='${SELECTED_HOME}'`)
-    expect(startup?.command).not.toContain(RECORDED_HOME)
-    expect(startup).toMatchObject({ cwd: '/Users/ada/repo' })
-  })
-
   it('repins a payload whose session has no cwd instead of keeping the wrong-account command', () => {
     const startup = buildAiVaultDropRepinStartup({
       state: makeState(),

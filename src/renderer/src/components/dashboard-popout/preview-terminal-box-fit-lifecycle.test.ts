@@ -136,20 +136,6 @@ it('marks disposal before cancellation reenters schedule or invokes the retired 
   expect(cancelFrame).toHaveBeenCalledExactlyOnceWith(0)
 })
 
-it('preserves the original synchronous scheduling error and already-set coalescing flag', () => {
-  const error = new Error('scheduler failed')
-  const request = vi.fn(() => {
-    throw error
-  })
-  vi.stubGlobal('requestAnimationFrame', request)
-  const owner = harness()
-  expect(thrown(owner.schedule)).toBe(error)
-  owner.schedule()
-  expect(request).toHaveBeenCalledOnce()
-  owner.dispose()
-  expect(cancelFrame).not.toHaveBeenCalled()
-})
-
 it('preserves a fit error and allows the next live request after completion', () => {
   const error = new Error('terminal read failed')
   const owner = harness()

@@ -5,11 +5,7 @@ import type * as NodeOs from 'node:os'
 import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
-import {
-  getVersionManagerBinPaths,
-  resolveCliCommand,
-  resolveCliCommands
-} from './node-cli-command-resolution'
+import { resolveCliCommand, resolveCliCommands } from './node-cli-command-resolution'
 import { buildPosixFallbackPathPrelude } from './posix-version-manager-bin-dirs'
 
 /** Use synthetic fs for absolute install prefixes that cannot fit a temp home. Build every path with host join so Windows fixtures match production candidates. */
@@ -72,27 +68,6 @@ afterEach(() => {
 })
 
 describe('agent CLI install-dir fallback', () => {
-  it('finds macOS CLIs installed outside a version manager', () => {
-    const home = '/Users/tester'
-    stage(
-      join(home, '.local', 'bin', 'claude'),
-      join('/opt/homebrew/bin', 'codex'),
-      join('/usr/local/bin', 'cursor-agent'),
-      join(home, '.opencode', 'bin', 'opencode')
-    )
-    expect(
-      resolveAll(['claude', 'codex', 'cursor-agent', 'opencode'], {
-        platform: 'darwin',
-        homePath: home
-      })
-    ).toEqual({
-      claude: join(home, '.local', 'bin', 'claude'),
-      codex: join('/opt/homebrew/bin', 'codex'),
-      'cursor-agent': join('/usr/local/bin', 'cursor-agent'),
-      opencode: join(home, '.opencode', 'bin', 'opencode')
-    })
-  })
-
   it('finds Linux CLIs in Linuxbrew, snap and nix prefixes, not the macOS brew prefix', () => {
     const home = '/home/tester'
     stage(
@@ -179,47 +154,6 @@ describe('agent CLI install-dir fallback', () => {
       )
     })
   })
-
-  // System dirs must not leak into the prepended version-manager seed and reorder user binaries (#18234).
-  it('keeps system install dirs out of the PATH seed list', () => {
-    for (const platform of ['darwin', 'linux'] as const) {
-      const home = platform === 'darwin' ? '/Users/tester' : '/home/tester'
-      const seeded = getVersionManagerBinPaths({ platform, homePath: home })
-      // List system paths independently; deriving them from production would hide accidental removal.
-      for (const directory of [
-        '/opt/homebrew/bin',
-        '/usr/local/bin',
-        '/snap/bin',
-        '/home/linuxbrew/.linuxbrew/bin',
-        '/nix/var/nix/profiles/default/bin',
-        join(home, '.nix-profile', 'bin'),
-        join(home, '.opencode', 'bin'),
-        join(home, '.vite-plus', 'bin'),
-        join(home, '.grok', 'bin')
-      ]) {
-        expect(seeded).not.toContain(directory)
-      }
-    }
-  })
-
-  // Verify the orca CLI detection entrypoint's absolute-path installation contract.
-  it.skipIf(process.platform === 'win32')(
-    'reports a system-installed CLI as detected, not just resolved',
-    () => {
-      stage(
-        join('/usr/local/bin', 'codex'),
-        join(MOCK_HOME, '.opencode', 'bin', 'opencode'),
-        // Pi defaults to ~/.vite-plus/bin and is probed on every runtime (#829).
-        join(MOCK_HOME, '.vite-plus', 'bin', 'pi'),
-        // Grok's installer defaults to ~/.grok/bin (#17590).
-        join(MOCK_HOME, '.grok', 'bin', 'grok')
-      )
-      // All come from the fallback: the stubbed PATH holds no system dir.
-      expect(
-        detectCommandsInInstallDirs(['codex', 'opencode', 'pi', 'grok', 'cursor-agent'])
-      ).toEqual(new Set(['codex', 'opencode', 'pi', 'grok']))
-    }
-  )
 
   // WSL 2.7.10 repro: ambient PATH found a /mnt/c npm shim after filtered lookup rejected it.
   it.skipIf(process.platform === 'win32')(

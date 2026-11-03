@@ -126,6 +126,8 @@ type SettingsSegmentedControlProps<T extends string | number> = {
   onChange: (value: T) => void
   options: readonly SegmentedOption<T>[]
   ariaLabel?: string
+  ariaLabelledBy?: string
+  ariaDescribedBy?: string
   size?: 'sm' | 'md'
   equalWidth?: boolean
   wrap?: boolean
@@ -136,6 +138,8 @@ export function SettingsSegmentedControl<T extends string | number>({
   onChange,
   options,
   ariaLabel,
+  ariaLabelledBy,
+  ariaDescribedBy,
   size = 'md',
   equalWidth = false,
   wrap = false
@@ -144,6 +148,8 @@ export function SettingsSegmentedControl<T extends string | number>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
       className={cn(
         'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
         equalWidth && 'w-full',
@@ -267,6 +273,8 @@ type NumberFieldProps = {
   onChange: (value: number) => void
   /** When set, emptying the field clears the setting instead of snapping back to the current value. */
   onClear?: () => void
+  /** With `onClear`, a typed 0 clears the setting like an empty field (0 means "automatic"). */
+  clearOnZero?: boolean
   placeholder?: string
   suffix?: string
   className?: string
@@ -318,6 +326,7 @@ export function NumberField({
   integer = false,
   onChange,
   onClear,
+  clearOnZero = false,
   placeholder,
   suffix,
   className,
@@ -336,23 +345,30 @@ export function NumberField({
     if (disabled) {
       return
     }
+    const revert = (): void => setDraft(Number.isFinite(value) ? String(value) : '')
     const trimmed = draft.trim()
-    if (trimmed === '') {
-      if (onClear) {
-        onClear()
+    const next = Number(trimmed)
+    if (trimmed === '' || (clearOnZero && next === 0)) {
+      if (!onClear) {
+        // Empty input resets rather than committing zero.
+        revert()
         return
       }
-      // Empty input resets rather than committing zero.
-      setDraft(Number.isFinite(value) ? String(value) : '')
+      setDraft('')
+      // Re-blurring an already-empty field must not write the setting again.
+      if (value !== undefined) {
+        onClear()
+      }
       return
     }
-    const next = Number(trimmed)
     if (Number.isFinite(next) && (!integer || Number.isSafeInteger(next))) {
       const clamped = max === undefined ? Math.max(min, next) : Math.min(max, Math.max(min, next))
-      onChange(clamped)
+      if (clamped !== value) {
+        onChange(clamped)
+      }
       setDraft(String(clamped))
     } else {
-      setDraft(Number.isFinite(value) ? String(value) : '')
+      revert()
     }
   }
 

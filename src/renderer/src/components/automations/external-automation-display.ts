@@ -1,9 +1,13 @@
 import type { ExternalAutomationManager } from '../../../../shared/automations-types'
-import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import { translate } from '@/i18n/i18n'
+import {
+  formatAutomationDateTime,
+  formatAutomationDateTimeWithRelative
+} from './automation-page-parts'
 
 export function formatExternalDate(value: string | null, now: number): string {
   if (!value) {
-    return 'Never'
+    return formatAutomationDateTime(null)
   }
   const parsed = Date.parse(value)
   if (!Number.isFinite(parsed)) {
@@ -17,5 +21,7 @@ export function getExternalProviderLabel(_manager: ExternalAutomationManager): s
 }
 
 export function getExternalTargetKindLabel(manager: ExternalAutomationManager): string {
-  return manager.target.type === 'ssh' ? 'SSH host' : 'Local'
+  return manager.target.type === 'ssh'
+    ? translate('auto.components.automations.externalDisplay.sshHost', 'SSH host')
+    : translate('auto.components.automations.externalDisplay.local', 'Local')
 }

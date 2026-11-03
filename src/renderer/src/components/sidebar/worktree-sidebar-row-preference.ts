@@ -1,4 +1,7 @@
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import {
+  getFolderWorkspaceHostIdentity,
+  folderWorkspaceToWorktree
+} from '../../../../shared/folder-workspace-worktree'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
@@ -46,7 +49,7 @@ export function getPreferredWorktreeRows(
   return preferredRows
 }
 
-export type RenderedWorkspaceRow = Pick<WorktreeRow, 'worktree' | 'repo'>
+export type RenderedWorkspaceRow = Pick<WorktreeRow, 'worktree' | 'repo' | 'rowKey'>
 
 export function getRenderedWorkspaceRowsInSidebarOrder(
   rows: readonly HostSectionRow[],
@@ -60,11 +63,12 @@ export function getRenderedWorkspaceRowsInSidebarOrder(
 
   for (const row of rows) {
     if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
-      renderedRows.push({ worktree: row.worktree, repo: row.repo })
+      renderedRows.push({ worktree: row.worktree, repo: row.repo, rowKey: row.rowKey })
     } else if (row.type === 'folder-workspace') {
       renderedRows.push({
         worktree: folderWorkspaceToWorktree(row.folderWorkspace),
-        repo: undefined
+        repo: undefined,
+        rowKey: getFolderWorkspaceHostIdentity(row.folderWorkspace)
       })
     }
   }

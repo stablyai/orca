@@ -1,10 +1,10 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { RpcClient } from '../../../transport/rpc-client'
-import { MobileNativeChatItemSourceContext } from '../../mobile-native-chat-item-read'
+import { MobileNativeChatItemSourceContext } from '../mobile-native-chat-item-read'
 import { useMobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
 
 vi.mock('react-native', async () => {
@@ -54,14 +54,17 @@ vi.mock('lucide-react-native', () => ({
   Wrench: 'Wrench'
 }))
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+vi.mock('../../../components/MobileSourceCopyButton', () => ({
+  MobileSourceCopyButton: 'CopyButton'
+}))
 vi.mock('../../../components/inline-text-selection', () => ({ INLINE_TEXT_SELECTION: false }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
 
-import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat-reasoning-row'
+import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { MobileNativeChatRowOverlaysContext } from '../../mobile-native-chat-row-overlays'
+import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 
 const thought: NativeChatMessage = {
   id: 'r1',

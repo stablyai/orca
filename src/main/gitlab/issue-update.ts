@@ -14,6 +14,8 @@ import {
   type ProjectRef
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { codeHostFailure, combinedClassifiedFailure } from '../../shared/code-host-failure-copy'
+import type { ClassifiedError } from '../../shared/classified-error'
 
 /** Mutate the preference-selected project so equal origin/upstream issue numbers cannot retarget edits. */
 export async function updateIssue(
@@ -37,14 +39,11 @@ export async function updateIssue(
       )
     ).source
   if (!projectRef) {
-    return {
-      ok: false,
-      error: 'Could not resolve GitLab project for this repository'
-    }
+    return codeHostFailure('gitlab.projectUnresolved')
   }
 
   const repoFlag = projectRef.path
-  const errors: string[] = []
+  const errors: ClassifiedError[] = []
 
   if (updates.state) {
     await acquire()
@@ -57,7 +56,7 @@ export async function updateIssue(
     } catch (err) {
       // glab already-state transitions exit 0; any rejected command remains a real failure.
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGlabError(stderr).message)
+      errors.push(classifyGlabError(stderr))
     } finally {
       release()
     }
@@ -80,7 +79,7 @@ export async function updateIssue(
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGlabError(stderr).message)
+      errors.push(classifyGlabError(stderr))
     } finally {
       release()
     }
@@ -120,14 +119,14 @@ export async function updateIssue(
       })
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGlabError(stderr).message)
+      errors.push(classifyGlabError(stderr))
     } finally {
       release()
     }
   }
 
   if (errors.length > 0) {
-    return { ok: false, error: errors.join('; ') }
+    return combinedClassifiedFailure(errors)
   }
   return { ok: true }
 }

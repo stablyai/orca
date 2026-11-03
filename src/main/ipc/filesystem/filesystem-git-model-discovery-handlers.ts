@@ -6,7 +6,7 @@ import {
   type DiscoverCommitMessageModelsResult
 } from '../../text-generation/commit-message-text-generation'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import {
   resolveModelDiscoveryLocalPath,
   getLocalAgentRuntimeTarget

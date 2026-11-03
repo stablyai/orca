@@ -1,9 +1,9 @@
 // Run: ORCA_BACKGROUND_LAUNCH=1 node --import tsx config/scripts/codex-capacity-status-benchmark.ts
 import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
-import { CodexCapacityNoticeTracker } from '../../src/shared/codex-capacity-notice'
+import { createCodexCapacityNoticeTracker } from '../../src/shared/codex-native-notice'
 import { HeadlessEmulator } from '../../src/main/daemon/headless-emulator'
-import { observeCodexCapacityTerminalStatus } from '../../src/main/runtime/codex-capacity-terminal-status'
+import { observeCodexCapacityTerminalStatus } from '../../src/main/runtime/codex-notice-terminal-status'
 
 const fixture = readFileSync(
   new URL(
@@ -44,7 +44,7 @@ function measure(iterations: number, observe: () => void): number {
 
 for (const scenario of scenarios) {
   const run = () => {
-    const tracker = new CodexCapacityNoticeTracker()
+    const tracker = createCodexCapacityNoticeTracker()
     let screenReads = 0
     const readScreen = () => {
       screenReads++
@@ -103,7 +103,7 @@ async function measureScreenRead(): Promise<void> {
         if (name === 'screen-only') {
           emulator.getVisibleLines()
         } else if (
-          !new CodexCapacityNoticeTracker().observe(fixture, () => emulator.getVisibleLines())
+          !createCodexCapacityNoticeTracker().observe(fixture, () => emulator.getVisibleLines())
         ) {
           throw new Error('Captured capacity notice was not detected')
         }

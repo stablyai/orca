@@ -47,6 +47,25 @@ describe('setup hook trust', () => {
     expect(isSetupHookTrusted(next, [{ id: 'repo-1' }], 'repo-1', 'setup-hash')).toBe(true)
   })
 
+  it('keeps the approved hash with Always trust so a repo on two hosts stops prompting', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: persisting only calls sendRequest.
+    const client = {
+      sendRequest: async () => ({ ok: true, result: null })
+    } as unknown as RpcClient
+    const repos = [{ id: 'repo-1' }, { id: 'repo-1' }]
+
+    const next = await persistSetupHookTrustApproval({
+      client,
+      trust: {},
+      repoId: 'repo-1',
+      contentHash: 'setup-hash',
+      alwaysTrust: true
+    })
+
+    expect(isSetupHookTrusted(next, repos, 'repo-1', 'setup-hash')).toBe(true)
+    expect(isSetupHookTrusted(next, repos, 'repo-1', 'edited-hash')).toBe(false)
+  })
+
   it('detects previous setup approval and ignores incomplete trust payloads', () => {
     expect(
       wasSetupHookPreviouslyApproved(

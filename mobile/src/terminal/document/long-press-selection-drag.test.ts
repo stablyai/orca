@@ -99,7 +99,13 @@ async function startTuiDocument() {
     surface.dispatchEvent(event)
   }
   const ofType = (type: string) => posted.filter((message) => message.type === type)
-  return { touch, ofType, selections, clears: () => clears }
+  return {
+    touch,
+    ofType,
+    selections,
+    clears: () => clears,
+    setActive: (active: boolean) => started.send({ type: 'set-interaction-active', active })
+  }
 }
 
 describe('long press then drag on the terminal surface', () => {
@@ -146,4 +152,19 @@ describe('long press then drag on the terminal surface', () => {
     expect(doc.ofType('set-select-mode')).toEqual([])
     expect(doc.selections).toEqual([])
   })
+})
+
+it('requires a new touch after a hide/show interruption before scrolling resumes', async () => {
+  const doc = await startTuiDocument()
+  doc.touch('touchstart', cellPoint(7, ROW))
+  doc.setActive(false)
+  doc.setActive(true)
+  doc.touch('touchmove', cellPoint(7, ROW + 3))
+  doc.touch('touchend')
+  vi.advanceTimersByTime(600)
+  expect(doc.ofType('terminal-input')).toEqual([])
+  expect(doc.ofType('set-select-mode')).toEqual([])
+  doc.touch('touchstart', cellPoint(7, ROW))
+  doc.touch('touchmove', cellPoint(7, ROW + 3))
+  expect(doc.ofType('terminal-input').length).toBeGreaterThan(0)
 })

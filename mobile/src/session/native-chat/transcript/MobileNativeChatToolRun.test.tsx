@@ -1,14 +1,14 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalToolCallItem } from '../../../../../src/shared/agent-session-journal-types'
+import type { AgentJournalToolCallItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../../../src/shared/native-chat/tools/native-chat-tool-summary'
-import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { colors } from '../../../theme/mobile-theme'
 
 const scrolls = vi.hoisted(() => ({ toEnd: vi.fn(), to: vi.fn() }))
@@ -78,7 +78,7 @@ import { ToolRun } from './MobileNativeChatToolRun'
 import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
-} from '../../mobile-native-chat-disclosure-store'
+} from './mobile-native-chat-disclosure-store'
 
 describe('ToolRun', () => {
   let renderer: ReactTestRenderer | null = null
@@ -204,6 +204,21 @@ describe('ToolRun', () => {
       open(tree, 'Read')
       expect(textIn(tree.root)).toContain('a')
       expect(onOpenFile).toHaveBeenCalledTimes(1)
+    })
+
+    it('copies exactly the command a shell row ran, and offers no copy on other rows', () => {
+      const tree = render([
+        { type: 'tool-call', name: 'Read', input: { file_path: 'src/a.ts' } },
+        { type: 'tool-result', output: 'a' },
+        {
+          type: 'tool-call',
+          name: 'exec_command',
+          input: { cmd: "/bin/zsh -lc 'cd mobile &&\n  pnpm test'", workdir: '/repo' }
+        },
+        { type: 'tool-result', output: 'ok' }
+      ])
+      const copies = tree.root.findAll((node) => String(node.type) === 'CopyButton')
+      expect(copies.map((node) => node.props.text)).toEqual(['cd mobile &&\n  pnpm test'])
     })
 
     it('offers no caret on a row with nothing to show', () => {

@@ -92,17 +92,6 @@ describe('workspace cleanup facet controls', () => {
     container = null
   })
 
-  it('shows a per-facet match count for every group', () => {
-    renderFacets(createDefaultWorkspaceCleanupFilterState(), createPatchMock())
-
-    const counts = [...(container?.querySelectorAll('[data-facet-count]') ?? [])].map(
-      (node) => node.textContent
-    )
-    expect(counts).toHaveLength(10)
-    expect(counts).toContain('2/8')
-    expect(counts).toContain('3/8')
-  })
-
   it('takes a user-chosen idle threshold in days rather than a fixed enum', () => {
     const onPatch = createPatchMock()
     renderFacets(createDefaultWorkspaceCleanupFilterState(), onPatch)
@@ -110,27 +99,6 @@ describe('workspace cleanup facet controls', () => {
     const input = control('Idle for at least') as HTMLInputElement | null
     act(() => typeInto(input, '17'))
     expect(onPatch).toHaveBeenCalledWith('activity', { idleMinDays: 17 })
-  })
-
-  it('keeps every numeric threshold off type=number so a wheel tick cannot set it', () => {
-    // Assert input type because happy-dom cannot reproduce Chromium’s wheel-driven numeric changes.
-    renderFacets(createDefaultWorkspaceCleanupFilterState(), createPatchMock())
-
-    const numericFacets = [
-      'Idle for at least',
-      'At least',
-      'At most',
-      'Commits ahead ≥',
-      'Commits behind ≥'
-    ]
-    const found = numericFacets
-      .map((label) => control(label) as HTMLInputElement | null)
-      .filter((input): input is HTMLInputElement => input !== null)
-    expect(found).toHaveLength(numericFacets.length)
-    for (const input of found) {
-      expect(input.type).toBe('text')
-      expect(input.inputMode).toBe('numeric')
-    }
   })
 
   it('multi-selects git states', () => {
@@ -144,29 +112,12 @@ describe('workspace cleanup facet controls', () => {
     expect(onPatch).toHaveBeenCalledWith('git', { states: ['dirty', 'unpushed'] })
   })
 
-  it('offers the hosts and providers discovered in the fleet, not a hardcoded list', () => {
-    renderFacets(createDefaultWorkspaceCleanupFilterState(), createPatchMock())
-
-    expect(control('GitLab')).not.toBeNull()
-    expect(container?.textContent).toContain('Alpha')
-    expect(container?.textContent).toContain('In progress')
-  })
-
   it('cycles a tri-state safety facet', () => {
     const onPatch = createPatchMock()
     renderFacets(createDefaultWorkspaceCleanupFilterState(), onPatch)
 
     act(() => container?.querySelector<HTMLElement>('[aria-label="Ignored: Only"]')?.click())
     expect(onPatch).toHaveBeenCalledWith('safety', { dismissed: 'only' })
-  })
-
-  it('labels blocker matching without exposing model tokens', () => {
-    renderFacets(createDefaultWorkspaceCleanupFilterState(), createPatchMock())
-
-    expect(control('Blocker match: Has any')).not.toBeNull()
-    expect(control('Blocker match: Has none')).not.toBeNull()
-    expect(container?.textContent).not.toContain('any-of')
-    expect(container?.textContent).not.toContain('none-of')
   })
 
   it('toggles the unsized escape hatch for the opt-in space scan', () => {

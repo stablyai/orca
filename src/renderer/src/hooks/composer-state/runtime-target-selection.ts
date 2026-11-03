@@ -167,7 +167,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
           {
             activeRepoId,
             activeWorktreeId: null,
-            projectHostSetupProjection: { projects, setups: projectHostSetups },
+            projects,
             repos,
             settings,
             worktreesByRepo
@@ -178,7 +178,6 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     )
   }, [
     activeRepoId,
-    projectHostSetups,
     projects,
     repos,
     runtimeStatusByEnvironmentId,
@@ -215,9 +214,11 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         projectId: selectedRepoProjectId,
         projectHostSetups,
         eligibleRepos,
-        hosts: hostOptions
+        hosts: hostOptions,
+        selectedSetup:
+          selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target : null
       }),
-    [eligibleRepos, hostOptions, projectHostSetups, selectedRepoProjectId]
+    [eligibleRepos, hostOptions, projectHostSetups, selectedRepoProjectId, selectedWorkspaceTarget]
   )
 
   const projectOptions = useMemo(

@@ -25,10 +25,10 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       request.webContentsId === undefined
         ? undefined
         : this.pendingNavigationByGuestId.get(request.webContentsId)
-    // Keep Firefox auth overrides in clean mode to avoid mixing them with native worker identity.
-    const googleAuthEnabled = processIdentity.mode === 'clean'
+    // Only a UA distinct from the process UA can mark a request as part of sign-in.
+    const authUaIsDistinct = googleAuth.userAgent !== processIdentity.userAgent
     if (
-      googleAuthEnabled &&
+      authUaIsDistinct &&
       request.currentUserAgent === googleAuth.userAgent &&
       (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
     ) {
@@ -39,14 +39,14 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         ? undefined
         : this.standingCdpUserAgentOverride(request.webContentsId)
     if (
-      googleAuthEnabled &&
+      authUaIsDistinct &&
       !standingOverride &&
       request.effectiveUserAgent === googleAuth.userAgent &&
       (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
     ) {
       return googleAuth
     }
-    if (googleAuthEnabled && standingOverride?.userAgent === googleAuth.userAgent) {
+    if (authUaIsDistinct && standingOverride?.userAgent === googleAuth.userAgent) {
       return googleAuth
     }
     // Shared/service workers lack a guest ID and retain the process identity.
@@ -231,6 +231,13 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     return true
   }
 
+  /** A same-document or abandoned start stays recorded, so only a loading main frame counts. */
+  getInFlightNavigationUrl(guest: Electron.WebContents): string | null {
+    return guest.isLoadingMainFrame()
+      ? (this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? null)
+      : null
+  }
+
   // Resolve in-flight targets before getURL(), which still names the outgoing document.
   protected resolveTabNavigationUrl(guest: Electron.WebContents): string {
     return this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? guest.getURL()
@@ -259,10 +266,19 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       this.attachGuestPolicies(contents, owner)
       return true
     })
+    const opened = Boolean(options.webContents || options.nativeWindow)
     this.forwardOrQueuePopupEvent(openerGuest.id, {
       origin: safeOrigin(targetUrl),
-      action: options.webContents || options.nativeWindow ? 'opened-in-orca' : 'blocked'
+      action: opened ? 'opened-in-orca' : 'blocked'
     })
+    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(openerGuest.id)
+    if (opened && ownerTabId) {
+      this.pageEvents.emit(ownerTabId, {
+        kind: 'popup',
+        action: 'window',
+        origin: safeOrigin(targetUrl)
+      })
+    }
     // Close session-bearing popups with their owning guest to avoid orphan windows.
     const closePopupWithOpener = (): void => popup.close()
     openerGuest.once('destroyed', closePopupWithOpener)

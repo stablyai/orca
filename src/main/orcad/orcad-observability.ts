@@ -1,14 +1,18 @@
 import process from 'node:process'
-import { flushObservability, initObservability, shutdownObservability } from '../observability'
+import {
+  closeObservabilityOnExit,
+  initObservability,
+  shutdownObservability
+} from '../observability'
 import { getOrcadTraceFilePath } from '../observability/logs-directory'
 
 /** Install before runtime startup; close after quit handlers so their spans reach disk. */
-export function installOrcadObservability(): () => void {
+export function installOrcadObservability(): () => Promise<void> {
   initObservability({ traceFilePath: getOrcadTraceFilePath() })
-  // Exit handlers flush synchronously even when normal cleanup cannot run.
-  process.once('exit', flushObservability)
+  // Exits that skip normal cleanup still get the queued tail.
+  process.once('exit', closeObservabilityOnExit)
   return () => {
-    process.off('exit', flushObservability)
-    void shutdownObservability()
+    // An exit during the bounded shutdown flush still writes the queued tail.
+    return shutdownObservability().finally(() => process.off('exit', closeObservabilityOnExit))
   }
 }

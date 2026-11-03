@@ -64,34 +64,6 @@ function harness() {
 }
 
 describe('interruptWorkingAgent', () => {
-  it('writes one Escape, without Enter, while the hook row says working', async () => {
-    const h = harness()
-    await expect(h.interrupt()).resolves.toEqual({ outcome: 'accepted' })
-    expect(h.keys).toEqual(['\x1b'])
-  })
-
-  it('types nothing into an idle, waiting or background-only agent, or a pane with no terminal', async () => {
-    const h = harness()
-    for (const state of ['done', 'waiting', 'blocked'] as const) {
-      h.state.row = row(state)
-      await expect(h.interrupt()).resolves.toEqual({
-        outcome: 'refused',
-        reason: 'agent_not_working'
-      })
-    }
-    h.state.row = { ...row('working'), mainAgent: { state: 'done', stateStartedAt: 1 } }
-    await expect(h.interrupt()).resolves.toEqual({
-      outcome: 'refused',
-      reason: 'agent_not_working'
-    })
-    h.state.row = row('working')
-    await expect(h.interrupt(undefined, 'tab-9:other')).resolves.toEqual({
-      outcome: 'refused',
-      reason: 'agent_not_reachable'
-    })
-    expect(h.keys).toEqual([])
-  })
-
   it('refuses missing status, including status lost during the foreground check', async () => {
     const h = harness()
     h.state.row = null

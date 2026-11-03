@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import { mkdir } from 'node:fs/promises'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
@@ -13,15 +14,15 @@ import {
 } from '../git/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../git/runner'
 import { reuseSavedCloneTarget } from '../git/saved-clone-target'
-import { runWithGitReadCacheInvalidation } from '../git/status'
-import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
-import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
+import { runWithGitReadCacheInvalidation } from '../git/source-control/git-read-cache-invalidation'
+import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
+import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
 import { getRepoName } from '../git/repo'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
-import { resolveClonedFolderConversion } from '../folder-repo-git-conversion'
-import { findExtraFolderWorkspaceIds } from '../folder-workspace-meta-presence'
+import { resolveClonedFolderConversion } from '../workspaces/catalog/folder-repo-git-conversion'
+import { findExtraFolderWorkspaceIds } from '../workspaces/catalog/folder-workspace-meta-presence'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null
@@ -49,6 +50,7 @@ export class RuntimeRepositoryCloneController {
       throw new Error('Clone destination is required')
     }
     const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
+    await refuseWslHostWindowsDrivePath(trimmedDestination)
     const clonePathKey = getClonePathComparisonKey(clonePath)
     const previous = this.inFlightByPath.get(clonePathKey) ?? Promise.resolve()
     let release!: () => void
@@ -111,6 +113,8 @@ export class RuntimeRepositoryCloneController {
         ['clone', '--progress', '--', trimmedUrl, clonePath],
         {
           cwd: trimmedDestination,
+          // Host Git on purpose: the clone makes a new repo no project owns, even inside one.
+          hostGit: true,
           admissionTier: 'interactive',
           env: promptGuardGitEnv(),
           stdio: ['ignore', 'ignore', 'pipe']

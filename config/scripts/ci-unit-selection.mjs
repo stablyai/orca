@@ -1,6 +1,9 @@
 import { unitConsumers } from './ci-unit-dependency-graph.mjs'
 import { balanceFiles } from './ci-shard-assignment.mjs'
 import { UNIT_SETUP_FILES } from './ci-unit-files.mjs'
+import { FULL_SHARD_COUNT } from './ci-unit-matrix.mjs'
+
+export { FULL_SHARD_COUNT } from './ci-unit-matrix.mjs'
 
 const RUNTIME_ENTRY_POINTS = new Set([
   'config/vitest.config.ts',
@@ -51,10 +54,6 @@ export function selectUnitFiles(files, changed, graphInput) {
     checkedInputOwners: graph.checkedInputOwners ?? []
   }
 }
-
-// Job slots, not cores, drive queueing: eight shards consumed 68% of daily slots. Five budget ~8.8min/shard versus 10.5min p95 queue.
-// Full PR/daily callers use five; selected drafts may use fewer.
-export const FULL_SHARD_COUNT = 5
 
 export function planUnitSelection({
   files,

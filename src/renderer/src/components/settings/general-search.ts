@@ -5,6 +5,7 @@ import { searchKeywords, translateSearchKeyword } from './settings-search-keywor
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
+import { getUpdateDelayDescription, getUpdateDelayTitle } from './update-delay-copy'
 
 export { getGeneralEditorSearchEntries } from './general-editor-search'
 export { getGeneralSupportSearchEntries } from './general-support-search'
@@ -103,6 +104,12 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.8fb00fcd05', 'launcher'),
       ...translateSearchKeyword('auto.components.settings.general.search.0cb3d94f00', 'cursor'),
       ...translateSearchKeyword('auto.components.settings.general.search.ebf8f056b5', 'zed'),
+      ...translateSearchKeyword('settings.general.openInMenu.keyword.windsurf', 'windsurf'),
+      ...translateSearchKeyword('settings.general.openInMenu.keyword.devin', 'devin'),
+      ...translateSearchKeyword(
+        'settings.general.openInMenu.keyword.devinDesktop',
+        'devin desktop'
+      ),
       ...translateSearchKeyword('auto.components.settings.general.search.dbeb1f348e', 'command'),
       ...translateSearchKeyword('auto.components.settings.general.search.68d03d9980', 'vscode'),
       ...translateSearchKeyword('auto.components.settings.general.search.c9d9636f24', 'finder'),
@@ -173,18 +180,19 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.GeneralPane.confirm_running_terminal_close',
-      'Confirm before closing running terminals'
+      'auto.components.settings.GeneralPane.confirm_running_work_close',
+      'Confirm before closing active chats or terminals'
     ),
     description: translate(
-      'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
-      'Ask before stopping a running agent or command when closing a terminal.'
+      'auto.components.settings.GeneralPane.confirm_running_work_close_description',
+      'Ask before stopping an active agent or command when closing its chat or terminal.'
     ),
     keywords: [
       ...translateSearchKeyword(
         'auto.components.settings.general.search.running_terminal',
         'running'
       ),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.chat', 'chat'),
       ...translateSearchKeyword('auto.components.settings.general.search.terminal', 'terminal'),
       ...translateSearchKeyword('auto.components.settings.general.search.agent', 'agent'),
       ...translateSearchKeyword('auto.components.settings.general.search.command', 'command'),
@@ -248,6 +256,15 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
         'release notes'
       ),
       ...translateSearchKeyword('auto.components.settings.general.search.e49e739a59', 'download')
+    ]
+  },
+  {
+    title: getUpdateDelayTitle(),
+    description: getUpdateDelayDescription(),
+    keywords: [
+      ...translateSearchKeyword('settings.updateDelay.keywordDelay', 'delay'),
+      ...translateSearchKeyword('settings.updateDelay.keywordCooldown', 'cooldown'),
+      ...translateSearchKeyword('settings.updateDelay.keywordSecurity', 'security')
     ]
   }
 ])

@@ -18,7 +18,7 @@ import {
   getProfileTerminalScrollbackSnapshotRoot,
   getTerminalScrollbackSnapshotPath,
   makeTerminalScrollbackSnapshotRef
-} from '../../src/main/terminal-scrollback-snapshots'
+} from '../../src/main/pty/scrollback/terminal-scrollback-snapshots'
 import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../src/shared/terminal-scrollback-limits'
 import { getOrcaProfileDataFile } from '../../src/shared/profile-state-storage-paths'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
@@ -218,7 +218,6 @@ async function verifyRunningRelayUpgrade(
         .toMatchObject({ kind: 'relay', reason: 'refused', canLeaveBehind: true })
       // The refusal toast offers it too; this is the pane's own button.
       const move = page
-        .locator('[data-terminal-ssh-reconnect-banner]')
         .getByRole('button', { name: 'Move anyway…', exact: true })
         .and(page.locator(':not([data-sonner-toast] button)'))
       await expect(move).toBeVisible()

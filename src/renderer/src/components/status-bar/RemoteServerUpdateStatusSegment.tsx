@@ -41,17 +41,11 @@ export function RemoteServerUpdateStatusSegment({
     : failed > 0
       ? {
           icon: <AlertCircle className="size-3 text-destructive" />,
-          label:
-            failed === 1
-              ? translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedOne',
-                  '1 server update failed'
-                )
-              : translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.failed',
-                  '{{value0}} server updates failed',
-                  { value0: failed }
-                ),
+          label: translate(
+            'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedCount',
+            '{{count}} server updates failed',
+            { count: failed, defaultValue_one: '{{count}} server update failed' }
+          ),
           tooltip: translate(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedTooltip',
             'Open Remote Orca Server updates to review and retry'
@@ -59,17 +53,11 @@ export function RemoteServerUpdateStatusSegment({
         }
       : {
           icon: <CheckCircle2 className="size-3 text-muted-foreground" />,
-          label:
-            updated === 1
-              ? translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedOne',
-                  '1 server updated'
-                )
-              : translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.updated',
-                  '{{value0}} servers updated',
-                  { value0: updated }
-                ),
+          label: translate(
+            'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedCount',
+            '{{count}} servers updated',
+            { count: updated, defaultValue_one: '{{count}} server updated' }
+          ),
           tooltip: translate(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedTooltip',
             'Remote Orca Server updates completed'

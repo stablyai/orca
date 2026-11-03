@@ -20,6 +20,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { StepBadge } from './SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 type BrowserUseCookieImportStepProps = {
   cookiesImported: boolean
@@ -61,7 +62,7 @@ export function BrowserUseCookieImportStep({
         result
       )
     } else {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -78,7 +79,7 @@ export function BrowserUseCookieImportStep({
         result
       )
     } else if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 

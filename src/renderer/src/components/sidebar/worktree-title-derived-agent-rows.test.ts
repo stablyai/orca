@@ -4,7 +4,14 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
-import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
+import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
+import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
+import {
+  resolveTitleDerivedAgentType,
+  type TitleDerivedPaneForeground
+} from './title-derived-pane-agent-identity'
+
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
@@ -49,6 +56,139 @@ function processRead(agent: TuiAgent): TitleDerivedPaneForeground {
 }
 
 describe('buildTitleDerivedAgentRows', () => {
+  it.each([
+    ['. | Droid', null, null, 'claude', 'claude', 'Claude'],
+    [`${'x | '.repeat(200)}* | Grok`, null, null, 'claude', 'claude', 'Claude'],
+    ['tmux | Grok', null, 'grok', 'grok', 'grok', 'Grok'],
+    ['OC | . | Droid', null, 'opencode', 'claude', 'opencode', 'OpenCode'],
+    ['⠋ fix the gemini launcher', '⠋ fix the gemini launcher', null, 'claude', 'claude', 'Claude'],
+    ['⠋ add ✦ icon to header', '⠋ add ✦ icon to header', null, 'claude', 'claude', 'Claude'],
+    [
+      '⠋ Codex: fix Gemini terminal behavior',
+      '⠋ Codex: fix Gemini terminal behavior',
+      'codex',
+      'codex',
+      'codex',
+      'Codex'
+    ],
+    [
+      'Fix Codex terminal behavior… - grok',
+      'Fix Codex terminal behavior… - grok',
+      'grok',
+      'grok',
+      'grok',
+      'Grok'
+    ],
+    ['✦ Analyze Codex', '✦ Gemini CLI', 'gemini', 'gemini', 'gemini', 'Gemini CLI'],
+    ['✦ Claude Code', '✦ Gemini CLI', 'gemini', 'gemini', 'gemini', 'Gemini CLI'],
+    [
+      `${'x | '.repeat(200)}OC | a | b | c | d | e | f | g | h | Codex`,
+      null,
+      'opencode',
+      'opencode',
+      'opencode',
+      'OpenCode'
+    ],
+    [
+      `${'x | '.repeat(200)}🐋 a | b | c | d | e | f | g | h | Codex`,
+      null,
+      'dsh',
+      'dsh',
+      'unknown',
+      'Codex'
+    ],
+    [
+      'Wrapper | OC | Review Codex - DeepSeek Build',
+      null,
+      'opencode',
+      'claude',
+      'opencode',
+      'OpenCode'
+    ],
+    ['user@host: ~/code | ⠋ OC | ses_123', null, 'opencode', 'claude', 'opencode', 'OpenCode'],
+    [
+      `${'x | '.repeat(9)}Codex: fix | a | b | c | d | e | f | g | Claude Code`,
+      null,
+      'codex',
+      'codex',
+      'codex',
+      'Codex'
+    ],
+    [
+      `${'x | '.repeat(8)}⠋ fix | a | b | c | d | e | f | g | Codex`,
+      null,
+      null,
+      'claude',
+      'claude',
+      'Claude'
+    ],
+    ['✦ session | Thinking - grok', null, null, 'claude', 'claude', 'Claude'],
+    ['▲ session | Action Required - grok', null, null, 'claude', 'claude', 'Claude'],
+    ['✦ session | Thinking', '✦ Qoder CLI', 'qoder', 'qoder', 'unknown', 'Qoder CLI'],
+    [
+      '◇ Qoder CLI CN (Codex | Claude Code)',
+      '◇ Qoder CLI CN',
+      'qoder-cn',
+      'qoder-cn',
+      'unknown',
+      'Qoder CLI CN'
+    ],
+    ['⠋ - Codex: fix parser - grok', '⠋ Grok', 'grok', 'grok', 'grok', 'Grok']
+  ])(
+    'projects actual untruncated OSC %s into the shared icon and visible row',
+    (raw, normalized, strict, agent, rowAgent, label) => {
+      let title = ''
+      let observed = ''
+      const tracker = createTerminalTitleTracker({
+        onTitle: (emitted, actualRaw) => {
+          title = emitted
+          observed = actualRaw
+        }
+      })
+      try {
+        expect(raw.length).toBeLessThanOrEqual(1024)
+        tracker.handleChunk(`\x1b]0;${raw}\x07`)
+        expect(observed).toBe(raw)
+        expect(title).toBe(normalized ?? raw)
+        expect(resolveExplicitTerminalTitleAgentType(title)).toBe(strict)
+        expect(
+          resolveTabAgentFromSignalSnapshot({
+            title,
+            hookAgent: null,
+            focusedCompletedHookAgent: 'claude',
+            launchAgent: 'claude'
+          })
+        ).toBe(agent)
+        if (raw === '. | Droid' || raw.endsWith('* | Grok')) {
+          expect(resolveTabAgentFromSignalSnapshot({ title, hookAgent: null })).toBeNull()
+          expect(
+            resolveTabAgentFromSignalSnapshot({ title, hookAgent: null, launchAgent: 'claude' })
+          ).toBe('claude')
+        }
+        if (strict === 'opencode') {
+          expect(resolveTabAgentFromSignalSnapshot({ title, hookAgent: null })).toBe('opencode')
+          expect(
+            resolveTabAgentFromSignalSnapshot({ title, hookAgent: null, launchAgent: 'claude' })
+          ).toBe(raw.startsWith('x | ') ? 'claude' : 'opencode')
+        }
+        expect(
+          resolveTabAgentFromSignalSnapshot({ title, hookAgent: 'claude', launchAgent: 'claude' })
+        ).toBe('claude')
+        const rows = buildWorktreeAgentRows({
+          tabs: [makeTab('tab-1', { title, launchAgent: 'claude' })],
+          entries: [],
+          retained: [],
+          runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
+          ptyIdsByTabId: { 'tab-1': ['pty'] },
+          terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+          now: 2000
+        })
+        expect(rows.map((row) => [row.agentType, row.entry.prompt])).toEqual([[rowAgent, label]])
+      } finally {
+        tracker.dispose()
+      }
+    }
+  )
   it('labels a working DeepSeek Build title as dsb and does not claim a Claude mention', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
@@ -415,8 +555,8 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(
       rowsFor('✳ Claude Code', 'opencode', processRead('claude')).map((row) => row.agentType)
     ).toEqual(['claude'])
-    // No owner to defend the pane: naming Claude stays the only available identity.
-    expect(rowsFor('⠋ use Claude Sonnet').map((row) => row.agentType)).toEqual(['claude'])
+    // Task mentions cannot establish identity even when the pane has no owner.
+    expect(rowsFor('⠋ use Claude Sonnet')).toHaveLength(0)
     expect(rowsFor('zsh', 'opencode')).toHaveLength(0)
   })
 
@@ -723,5 +863,29 @@ describe('split-pane runtime title attribution', () => {
       [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'idle'],
       [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'working']
     ])
+  })
+})
+
+describe('owner identity with foreign task names', () => {
+  it('preserves the unknown-label fallback for an admitted identity', () => {
+    expect(resolveTitleDerivedAgentType('MiMo Code', 'MiMo Code')).toBe('unknown')
+  })
+
+  it.each([
+    '⠋ Fix the codex plugin launcher',
+    '⠋ fix the grok launcher',
+    '⠋ port the gemini status parser',
+    '⠋ fix the mimo launcher'
+  ])('keeps the existing Claude row for %j', (title) => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'claude' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
+      ptyIdsByTabId: { 'tab-1': ['pty-claude'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+    expect(rows.map((row) => [row.agentType, row.entry.prompt])).toEqual([['claude', 'Claude']])
   })
 })

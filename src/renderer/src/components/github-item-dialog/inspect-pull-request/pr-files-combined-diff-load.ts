@@ -21,6 +21,7 @@ import type {
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { loadPRFileContents } from '../load-item-details/pr-file-content-cache'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type LoadSectionArgs = {
   index: number
@@ -277,7 +278,7 @@ export async function addPRFilesCombinedDiffLineComment({
   })
   if (!result.ok) {
     toast.error(
-      result.error ||
+      codeHostErrorText(result) ||
         translate('auto.components.GitHubItemDialog.b0b09778c8', 'Failed to add review comment.')
     )
     return false

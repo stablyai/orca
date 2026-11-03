@@ -231,6 +231,25 @@ describe('useSetupScriptPromptRevalidation', () => {
     expect(requestRevalidation).toHaveBeenCalledTimes(1)
   })
 
+  it('re-inspects on window focus while the repo distro was stopped, so the card returns once it runs', async () => {
+    const requestRevalidation = vi.fn()
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: {
+        status: 'distro-stopped',
+        repoId: 'repo-1',
+        repoHostIdentity: getRepoHostIdentityForParts('repo-1', 'local')
+      },
+      requestRevalidation
+    })
+
+    await dispatchWindowFocus()
+
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+  })
+
   it('replays a worktree activation that landed while the prompt state was unsettled', async () => {
     const requestRevalidation = vi.fn()
     const rerender = await render({

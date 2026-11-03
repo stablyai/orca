@@ -1,10 +1,48 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { FULL_SHARD_COUNT } from './ci-unit-selection.mjs'
+
+it('emits the full matrix from a sparse checkout without dependencies or test discovery', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-unit-matrix-')))
+  try {
+    const script = join(root, 'matrix.mjs')
+    copyFileSync(new URL('./ci-unit-matrix.mjs', import.meta.url), script)
+    const output = join(root, 'outputs')
+    const run = (count) =>
+      runProcessSync({
+        program: process.execPath,
+        args: [script],
+        cwd: root,
+        env: {
+          ...process.env,
+          ORCA_UNIT_FULL_SHARD_COUNT: count,
+          GITHUB_OUTPUT: output
+        }
+      })
+    const result = run('16')
+    expect(result.code, result.stderr).toBe(0)
+    const shards = JSON.parse(readFileSync(output, 'utf8').trim().slice('shards='.length))
+    expect(shards).toEqual(
+      Array.from({ length: 16 }, (_, index) => ({ index: index + 1, count: 16 }))
+    )
+    expect(run('2; echo unsafe').code).not.toBe(0)
+    expect(readFileSync(output, 'utf8').trim()).toBe(`shards=${JSON.stringify(shards)}`)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 it.each([
   { withParent: true, unresolvedPackage: false },
@@ -86,7 +124,7 @@ it.each([
   }
 )
 
-it.each(['5', '6', '10', 'invalid', '11'])(
+it.each(['5', '6', '16', 'invalid', '17'])(
   'validates the requested full shard count and keeps fallback coverage: %s',
   (requestedCount) => {
     const root = mkdtempSync(join(tmpdir(), 'orca-unit-count-'))
@@ -105,10 +143,10 @@ it.each(['5', '6', '10', 'invalid', '11'])(
           ORCA_SHARD_SOURCE_SHA: 'full-count-fixture'
         }
       })
-      if (['invalid', '11'].includes(requestedCount)) {
+      if (['invalid', '17'].includes(requestedCount)) {
         expect(result.code).not.toBe(0)
         expect(result.stderr).toContain(
-          'ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 10'
+          'ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 16'
         )
         return
       }

@@ -1,4 +1,4 @@
-import { preserveFolderUpgradeWorktreePath } from '../../../folder-upgrade-worktree-path'
+import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { parseWorktreeId } from '../../worktree-logic'
 import { mergeWorktree } from '../../worktree-metadata-merge'
@@ -12,19 +12,22 @@ import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
+import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import {
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../../../shared/worktree/ownership'
-import { areWorktreePathsEqual, dedupeWorktreesByPath } from '../../../git/worktree-path-comparison'
+import {
+  areWorktreePathsEqual,
+  dedupeWorktreesByPath
+} from '../../../git/worktrees/catalog/worktree-path-comparison'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
 } from '../../../../shared/worktree/visibility-sources'
 import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { loggedMalformedWorktreeMetaKeys, warnOnce } from './worktree-listing-diagnostics'
 import {
   getProjectHostSetupMetaUpdates,
@@ -141,10 +144,10 @@ export function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
-  // Prunable registrations lack working directories; omit from display while keeping cleanup discovery intact (#8389).
+  // Keep failed removals retryable; other prunable registrations stay hidden (#8389).
   const liveWorktrees = dedupeWorktreesByPath(
     preserveFolderUpgradeWorktreePath(repo, gitWorktrees).filter(
-      (gitWorktree) => !gitWorktree.prunable
+      (gitWorktree) => !gitWorktree.prunable || !!gitWorktree.removalError
     )
   )
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(

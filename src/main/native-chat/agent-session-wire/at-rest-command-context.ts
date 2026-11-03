@@ -1,8 +1,16 @@
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 
 const listeners = new Set<(workspaceId?: string) => void>()
+let revision = 0
 let readiness: Promise<void> | undefined
 const launchSettings = new Set([
+  'claudeManagedAccounts',
+  'activeClaudeManagedAccountId',
+  'activeClaudeManagedAccountIdsByRuntime',
+  'codexManagedAccounts',
+  'activeCodexManagedAccountId',
+  'activeCodexManagedAccountIdsByRuntime',
+  'floatingTerminalCwd',
   'agentCmdOverrides',
   'agentDefaultArgs',
   'agentDefaultEnv',
@@ -21,6 +29,7 @@ export function retireAtRestCommandSettings(keys: Iterable<string>): void {
 }
 
 export function retireAtRestCommandContext(workspaceId?: string): void {
+  revision += 1
   listeners.forEach((listener) => listener(workspaceId))
 }
 
@@ -51,5 +60,16 @@ export async function refreshAtRestCommandContext<T>(operation: () => Promise<T>
       readiness = undefined
     }
     completion.resolve()
+  }
+}
+
+export const atRestCommandContextRevision = (): number => revision
+
+export function onAtRestCommandContextRetired(
+  listener: (workspaceId?: string) => void
+): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
   }
 }

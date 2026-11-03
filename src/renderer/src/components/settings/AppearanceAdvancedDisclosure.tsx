@@ -8,6 +8,7 @@ import { translate } from '@/i18n/i18n'
 
 type AppearanceAdvancedDisclosureProps = {
   label?: string
+  forceOpen?: boolean
   showTopBorder?: boolean
   className?: string
   contentClassName?: string
@@ -17,6 +18,7 @@ type AppearanceAdvancedDisclosureProps = {
 /** Search force-opens advanced controls so matches remain reachable. */
 export function AppearanceAdvancedDisclosure({
   label,
+  forceOpen = false,
   showTopBorder = true,
   className,
   contentClassName,
@@ -25,7 +27,8 @@ export function AppearanceAdvancedDisclosure({
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const [open, setOpen] = useState(false)
-  const expanded = open || isSearching
+  const forced = isSearching || forceOpen
+  const expanded = open || forced
 
   return (
     <div className={cn('mt-3 pt-2', showTopBorder && 'border-t border-border/50', className)}>
@@ -33,8 +36,8 @@ export function AppearanceAdvancedDisclosure({
         type="button"
         aria-expanded={expanded}
         onClick={() => setOpen((prev) => !prev)}
-        // Search forces expansion; disable collapse instead of fighting the search state.
-        disabled={isSearching}
+        // Search matches and unsaved edits must remain reachable.
+        disabled={forced}
         className="flex w-full items-center gap-2 py-1 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default"
       >
         <ChevronRight

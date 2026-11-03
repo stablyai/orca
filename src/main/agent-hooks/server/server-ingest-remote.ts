@@ -19,7 +19,7 @@ import {
 } from '../../../shared/claude-compact-completion'
 import { launchTokenHash } from '../../../shared/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import type { IncomingAgentHookEvent } from './server-types'
 import {
   AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
   canAdmitLegacyAgentStatus,
@@ -33,6 +33,11 @@ import {
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
+  /** Call as each relay link starts, before its first envelope. */
+  beginRemoteRelaySession(connectionId: string): void {
+    this.relaySessions.begin(connectionId)
+  }
+
   /** Relay payloads cross the SSH trust boundary and require canonical validation here. */
   ingestRemote(envelope: RemoteAgentStatusEnvelope, connectionId: string | null): void {
     if (
@@ -247,9 +252,10 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       env: envelope.env,
       expectedEnv: this.env
     })
-    const event: AgentHookEventPayload & { authorityRestartId?: string } = {
+    const event: IncomingAgentHookEvent = {
       paneKey,
       agentPresence: readAgentProcessPresence(envelope.agentPresence),
+      ...this.relaySessions.rootProof(trimmedConnectionId, physicalPaneKey, envelope.agentPresence),
       source: effectiveSource,
       ...(restartedAuthority?.authorityRestartId
         ? { authorityRestartId: restartedAuthority.authorityRestartId }
@@ -281,6 +287,11 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
         typeof envelope.claudeRunningNonAgentTask === 'boolean'
           ? envelope.claudeRunningNonAgentTask
           : undefined,
+      codexRosterAuthority: this.relaySessions.codexRosterAuthority(
+        trimmedConnectionId,
+        normalizedPayload,
+        envelope.shedFields
+      ),
       payload: normalizedPayload
     }
     this.recordCurrentAuthorityObservation(event)

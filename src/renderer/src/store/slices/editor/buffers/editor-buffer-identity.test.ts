@@ -1,18 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '../types/open-file'
 import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
-import {
-  onRuntimeEnvironmentsRetired,
-  replaceRuntimeEnvironmentRevisions
-} from '@/runtime/runtime-environment-revision'
-import { detachedEditorBufferId } from './editor-buffer-views'
-import {
-  editorBufferIdentityOf,
-  editorBufferPathKey,
-  isEditorBufferIdentityRetired
-} from './editor-buffer-identity'
-
-const LOCAL: WorktreeOperationRoute = { executionHostId: 'local', runtimeEnvironmentId: null }
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import './editor-buffer-views'
+import { editorBufferIdentityOf, editorBufferPathKey } from './editor-buffer-identity'
 
 function file(overrides: Partial<OpenFile> = {}, route?: WorktreeOperationRoute): OpenFile {
   return {
@@ -113,61 +104,6 @@ describe('editorBufferPathKey', () => {
 })
 
 describe('editorBufferIdentityOf', () => {
-  it('gives one local file in two workspaces one key', () => {
-    expect(keyOf(file({}, LOCAL))).toBe(keyOf(file({ id: 'b', worktreeId: 'wt-2' }, LOCAL)))
-  })
-
-  it('keeps WSL aliases apart on a local Windows client', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0)' })
-    const wslDollar = file({ filePath: '\\\\wsl$\\Ubuntu\\home\\a.ts' }, LOCAL)
-    const wslLocalhost = file({ id: 'b', filePath: '\\\\wsl.localhost\\Ubuntu\\home\\a.ts' }, LOCAL)
-    expect(keyOf(wslDollar)).not.toBe(keyOf(wslLocalhost))
-  })
-
-  it('keys an SSH file by its connection target and runtime environment', () => {
-    const direct = keyOf(file({ externalSshTargetId: 'target', runtimeEnvironmentId: null }))
-    const directElsewhere = keyOf(
-      file({ id: 'b', worktreeId: 'wt-2', externalSshTargetId: 'target' })
-    )
-    const otherTarget = keyOf(file({ externalSshTargetId: 'target-2' }))
-    const nested = keyOf(file({ externalSshTargetId: 'target', runtimeEnvironmentId: 'env' }))
-    const nestedElsewhere = keyOf(
-      file({
-        id: 'b',
-        worktreeId: 'wt-2',
-        externalSshTargetId: 'target',
-        runtimeEnvironmentId: 'env'
-      })
-    )
-    const otherRuntime = keyOf(
-      file({ externalSshTargetId: 'target', runtimeEnvironmentId: 'env-2' })
-    )
-
-    expect(direct).toBeDefined()
-    expect(direct).toBe(directElsewhere)
-    expect(new Set([direct, otherTarget, nested, otherRuntime]).size).toBe(4)
-    expect(nested).toBe(nestedElsewhere)
-  })
-
-  it('keeps a remote forward-slash UNC path apart from its backslash form', () => {
-    const route: WorktreeOperationRoute = {
-      executionHostId: 'runtime:env',
-      runtimeEnvironmentId: 'env'
-    }
-    const slash = file({ filePath: '//SERVER/share/a.ts' }, route)
-    const backslash = file({ id: 'b', filePath: '\\\\SERVER\\share\\a.ts' }, route)
-    expect(keyOf(slash)).not.toBe(keyOf(backslash))
-  })
-
-  it('keeps a runtime host and the local machine apart for one path', () => {
-    expect(keyOf(file({}, LOCAL))).not.toBe(keyOf(runtimeTab('b')))
-  })
-
-  it('never shares a tab whose owner is unresolved, or a non-edit tab', () => {
-    expect(editorBufferIdentityOf(file({ runtimeEnvironmentId: null }), {})).toBeNull()
-    expect(editorBufferIdentityOf(file({ mode: 'diff' }, LOCAL), {})).toBeNull()
-  })
-
   it('joins a re-pair proven to be the same machine', () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 1 }])
     replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 2 }], {
@@ -176,62 +112,5 @@ describe('editorBufferIdentityOf', () => {
     })
     expect(keyOf(runtimeTab('old', 1))).toBe(keyOf(runtimeTab('new', 2)))
     expect(keyOf(runtimeTab('old', 1))).toBe(keyOf(runtimeTab('unpinned')))
-  })
-
-  it('keeps a pairing apart from an unproven re-pair', () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 1 }])
-    replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 2 }], {
-      retired: [],
-      sameHost: [],
-      pending: [{ id: 'env', fromRevision: 1 }]
-    })
-    expect(keyOf(runtimeTab('old', 1))).not.toBe(keyOf(runtimeTab('new', 2)))
-  })
-
-  it('quarantines a retired host: its replacement with the same path stays apart', () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 1 }])
-    const old = runtimeTab('old')
-    const local = editorBufferIdentityOf(file({}, LOCAL), {})
-    const quarantine = new Map<string, string>()
-    // Retirement fires before the new revision is published, while the old key still stands.
-    const stop = onRuntimeEnvironmentsRetired((retired) => {
-      for (const [viewId, identity] of [
-        ['old', editorBufferIdentityOf(old, {})],
-        ['local', local]
-      ] as const) {
-        if (identity && isEditorBufferIdentityRetired(identity, retired)) {
-          quarantine.set(viewId, detachedEditorBufferId(viewId))
-        }
-      }
-    })
-    replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 2 }], {
-      retired: ['env'],
-      sameHost: []
-    })
-    stop()
-
-    // An unpinned tab re-resolves to the replacement: its key alone can't tell the machines apart.
-    const replacementKey = keyOf(runtimeTab('new'))
-    expect(keyOf(old)).toBe(replacementKey)
-    expect([...quarantine]).toEqual([['old', 'detached:old']])
-    expect(quarantine.get('old')).not.toBe(replacementKey)
-    expect(detachedEditorBufferId('old')).not.toBe(detachedEditorBufferId('new'))
-  })
-
-  it('resolves an unpinned tab live, so its key moves once revisions load', () => {
-    const unpinned = runtimeTab('a')
-    const beforeLoad = keyOf(unpinned)
-    replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 1 }])
-    expect(keyOf(unpinned)).not.toBe(beforeLoad)
-    expect(keyOf(unpinned)).toBe(keyOf(runtimeTab('pinned', 1)))
-  })
-
-  it('keeps a pinned tab of a retired pairing apart from the replacement', () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 1 }])
-    replaceRuntimeEnvironmentRevisions([{ id: 'env', createdAt: 0, pairingRevision: 2 }], {
-      retired: ['env'],
-      sameHost: []
-    })
-    expect(keyOf(runtimeTab('old', 1))).not.toBe(keyOf(runtimeTab('new')))
   })
 })

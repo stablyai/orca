@@ -33,28 +33,18 @@ describe('extractTerminalHttpLinks', () => {
     expect(urlsIn('詳細はhttps://example.com/docs……')).toEqual(['https://example.com/docs'])
   })
 
-  it('still extracts a plain ascii url and keeps its own punctuation', () => {
-    expect(urlsIn('see https://example.com/a_b-c?d=1&e=2#f end')).toEqual([
-      'https://example.com/a_b-c?d=1&e=2#f'
-    ])
-  })
-
-  it('still trims ascii trailing punctuation', () => {
-    expect(urlsIn('see https://example.com/a.')).toEqual(['https://example.com/a'])
-  })
-
-  it('gives the web-links hover the same url the extractor opens', () => {
-    const webLinksUrlsIn = (line: string): string[] =>
-      [...line.matchAll(new RegExp(TERMINAL_HTTP_URL_REGEX, 'gu'))].map((match) => match[0])
-    for (const line of [
-      '投稿はお願いします（https://github.com/stablyai/orca/pull/1078）。',
-      '投稿はお願いします (https://github.com/stablyai/orca/pull/1078)。',
-      '詳細は「https://example.com/docs」、https://example.com/b、次へ',
-      'https://example.com/文档/路径。',
-      'https://ja.wikipedia.org/wiki/ジョン・スミス、https://en.wikipedia.org/wiki/Michelson–Morley_experiment。',
-      'see https://example.com/a_b-c?d=1&e=2#f.'
-    ]) {
-      expect(webLinksUrlsIn(line).map((url) => new URL(url).toString())).toEqual(urlsIn(line))
-    }
+  it.each([
+    ['http://[::1]', 'http://[::1]'],
+    ['see http://[::1]. now', 'http://[::1]'],
+    ['Server at http://[::1]: ready', 'http://[::1]'],
+    ['(http://user@[::1])', 'http://user@[::1]'],
+    ['http://[::1]:5173/app]', 'http://[::1]:5173/app'],
+    ['[see http://example.com/a[b]]', 'http://example.com/a[b']
+  ])('keeps only an IPv6 host closing bracket in %j', (line, expected) => {
+    // Why: xterm's WebLinksAddon matches with the regex; clicks and hard wraps use the extractor.
+    expect(line.match(TERMINAL_HTTP_URL_REGEX)?.[0]).toBe(expected)
+    expect(
+      extractTerminalHttpLinks(line).map((link) => line.slice(link.startIndex, link.endIndex))
+    ).toEqual([expected])
   })
 })

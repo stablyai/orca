@@ -42,7 +42,14 @@ export async function addIssueCommentBySlug(
     return { ok: false, error: number.error }
   }
   if (typeof args.body !== 'string' || !args.body.trim()) {
-    return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
+    return {
+      ok: false,
+      error: {
+        type: 'validation_error',
+        message: 'Comment body required.',
+        reason: 'comment_body_required'
+      }
+    }
   }
   const result = await runRest<RawIssueCommentResponse>(
     [
@@ -73,7 +80,14 @@ export async function updateIssueCommentBySlug(
     return { ok: false, error: number.error }
   }
   if (typeof args.body !== 'string' || !args.body.trim()) {
-    return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
+    return {
+      ok: false,
+      error: {
+        type: 'validation_error',
+        message: 'Comment body required.',
+        reason: 'comment_body_required'
+      }
+    }
   }
   const result = await runRest<unknown>(
     [

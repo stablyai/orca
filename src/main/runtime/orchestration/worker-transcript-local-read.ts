@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises'
-import type { NativeChatMessage } from '../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   readNativeChatTranscriptTailFile,

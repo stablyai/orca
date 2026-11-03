@@ -82,7 +82,7 @@ describe('selectHostWorkspaceListState', () => {
       selectHostWorkspaceListState(
         input({
           connState: 'disconnected',
-          connectionVerdict: { kind: 'normal', label: 'Connecting via Relay…' },
+          connectionVerdict: { kind: 'normal', label: 'Connecting via Relay…', dialing: true },
           worktreesLoaded: false
         })
       )

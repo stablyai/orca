@@ -66,6 +66,7 @@ type TerminalFileOpenDeps = {
   browserDestination?: HttpLinkDestination
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
+  hostFileOnly?: boolean
   /** Reports a path that could not be verified before opening; skipped once a later open supersedes it. */
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
@@ -151,11 +152,7 @@ export function openDetectedFilePath(
     }
 
     try {
-      const linkOwner = await resolveHostWorkspaceFile(
-        fileContext,
-        mappedFilePath,
-        deps.terminalHandle
-      )
+      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, deps)
       if (linkOwner?.kind === 'grant') {
         hostGrant = hostGrantedEditorFields(linkOwner)
         mappedFilePath = linkOwner.absolutePath
@@ -239,7 +236,8 @@ export function openDetectedFilePath(
     }
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
-    if (isHtmlFilePath(mappedFilePath) && hostGrant === null) {
+    // Why: a read-only grant comes from a host that re-grants only to the printing terminal, so preview reads would fail.
+    if (isHtmlFilePath(mappedFilePath) && !hostGrant?.readOnly) {
       if (deps.openInSourceGroup) {
         refuseExplicitNonEditorRoute()
         return

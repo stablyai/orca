@@ -1,6 +1,14 @@
+import { applyAgentStatusBatchUpdate } from './agent-status-batch-update'
+import { projectAgentPaneConversation } from '../agent-pane-conversation'
+import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { AgentStatusBatchTransaction, AgentStatusBatchUpdate } from './agent-status-contract'
+import type {
+  AgentStatusBatchTransaction,
+  AgentStatusBatchUpdate,
+  AgentStatusChange,
+  AgentStatusChangeListener
+} from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { GeneratedTabTitleUpdate } from '../terminal-tab-title-batch'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
@@ -8,10 +16,12 @@ import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 export type AgentStatusStateUpdate =
   | AppState
   | Partial<AppState>
-  | ((state: AppState) => AppState | Partial<AppState>)
+  | ((state: AppState, changedPaneKeys: Set<string>) => AppState | Partial<AppState>)
 
 export type AgentStatusRuntime = {
+  projectConversation: typeof projectAgentPaneConversation
   get: () => AppState
+  subscribeAgentStatusChanges: (listener: AgentStatusChangeListener) => () => void
   set: (update: AgentStatusStateUpdate) => void
   runAfterCommit: (effect: () => void) => void
   applyGeneratedTabTitleUpdate: (update: GeneratedTabTitleUpdate) => void
@@ -31,6 +41,73 @@ export function createAgentStatusRuntime(
     'setAgentStatus' | 'recordAgentProviderSession' | 'setAgentProgramStatus'
   >
 ): AgentStatusRuntime {
+  const listeners = new Set<AgentStatusChangeListener>()
+  const pendingChanges: AgentStatusChange[][] = []
+  let committing = 0
+  let notifying = false
+  let batchedPaneKeys: Set<string> | null = null
+  const subscribeAgentStatusChanges = (listener: AgentStatusChangeListener): (() => void) => {
+    listeners.add(listener)
+    return () => listeners.delete(listener)
+  }
+  const flushChanges = (): void => {
+    if (committing || notifying) {
+      return
+    }
+    notifying = true
+    try {
+      for (const accepted of pendingChanges) {
+        if (!accepted?.length) {
+          continue
+        }
+        const currentListeners = [...listeners]
+        for (const listener of currentListeners) {
+          if (!listeners.has(listener)) {
+            continue
+          }
+          try {
+            listener(accepted)
+          } catch (error) {
+            console.error('Agent status observer failed', error)
+          }
+        }
+      }
+    } finally {
+      pendingChanges.length = 0
+      notifying = false
+    }
+  }
+  const commit = (
+    patch: AppState | Partial<AppState>,
+    before: AppState,
+    paneKeys: ReadonlySet<string>
+  ): void => {
+    if (!listeners.size) {
+      storeSet(patch, false)
+      return
+    }
+    const changes: AgentStatusChange[] = []
+    const rows = patch.agentStatusByPaneKey ?? before.agentStatusByPaneKey
+    for (const paneKey of paneKeys) {
+      const previous = before.agentStatusByPaneKey[paneKey]
+      const current = rows[paneKey]
+      if (!structuralValuesEqualIgnoringUndefined(previous, current)) {
+        changes.push({ paneKey, previous, current })
+      }
+    }
+    committing++
+    pendingChanges.push(changes)
+    try {
+      storeSet(patch, false)
+    } finally {
+      // A middleware rejection before commit must never advertise accepted rows.
+      if (storeGet() === before) {
+        changes.length = 0
+      }
+      committing--
+      flushChanges()
+    }
+  }
   let batchedAgentStatusState: AppState | null = null
   let batchedAgentStatusTouchedKeys: Set<keyof AppState> | null = null
   // Staged in-place mutations cannot signal changes by identity; count every accepted write.
@@ -40,14 +117,30 @@ export function createAgentStatusRuntime(
   let batchedAgentStatusFreshnessRequested = false
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
 
+  let conversationDraft: AppState['agentConversationsByPaneKey'] | null = null
+  const projectConversation: typeof projectAgentPaneConversation = (state, entry) =>
+    projectAgentPaneConversation(state, entry, (entries) => {
+      if (!batchedAgentStatusState) {
+        return { ...entries }
+      }
+      const next =
+        entries === conversationDraft
+          ? entries
+          : Object.setPrototypeOf(Object.assign(Object.create(null), entries), Object.prototype)
+      conversationDraft = next
+      return next
+    })
+
   // Omit replace from this write type so no slice call can request replacement the batch cannot express.
   const set = (update: AgentStatusStateUpdate): void => {
     const staged = batchedAgentStatusState
+    const before = staged ?? storeGet()
+    const paneKeys = batchedPaneKeys ?? new Set<string>()
+    const nextState = typeof update === 'function' ? update(before, paneKeys) : update
     if (staged === null) {
-      storeSet(update, false)
+      commit(nextState, before, paneKeys)
       return
     }
-    const nextState = typeof update === 'function' ? update(staged) : update
     if (Object.is(nextState, staged)) {
       return
     }
@@ -95,28 +188,7 @@ export function createAgentStatusRuntime(
       return false
     }
     const revisionBeforeUpdate = batchedAgentStatusRevision
-    const actions = getActions()
-    if (update.kind === 'providerSession') {
-      actions.recordAgentProviderSession(
-        update.paneKey,
-        update.agent,
-        update.providerSession,
-        update.timing,
-        update.routing,
-        update.metadata
-      )
-    } else if (update.kind === 'programStatus') {
-      actions.setAgentProgramStatus(update.paneKey, update.programStatus)
-    } else {
-      actions.setAgentStatus(
-        update.paneKey,
-        update.payload,
-        update.terminalTitle,
-        update.timing,
-        update.routing,
-        update.metadata
-      )
-    }
+    applyAgentStatusBatchUpdate(getActions(), update)
     return batchedAgentStatusRevision !== revisionBeforeUpdate
   }
 
@@ -134,6 +206,8 @@ export function createAgentStatusRuntime(
     }
     const initialState = storeGet()
     const touchedKeys = new Set<keyof AppState>()
+    const paneKeys = new Set<string>()
+    batchedPaneKeys = paneKeys
     const revisionAtStart = batchedAgentStatusRevision
     batchedAgentStatusState = { ...initialState }
     batchedAgentStatusTouchedKeys = touchedKeys
@@ -146,13 +220,19 @@ export function createAgentStatusRuntime(
       const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
       const freshnessRequested = batchedAgentStatusFreshnessRequested
       const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
+      conversationDraft = null
+      batchedPaneKeys = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
       batchedAgentStatusEffects = null
       batchedGeneratedTabTitleUpdates = null
       batchedAgentStatusFreshnessRequested = false
       if (hasStagedWrites) {
-        storeSet(buildAgentStatusBatchPatch(initialState, nextState, touchedKeys), false)
+        commit(
+          buildAgentStatusBatchPatch(initialState, nextState, touchedKeys),
+          initialState,
+          paneKeys
+        )
       }
       if (generatedTabTitleUpdates.length > 0) {
         storeGet().setGeneratedTabTitlesFromAgentPrompts(generatedTabTitleUpdates)
@@ -165,6 +245,8 @@ export function createAgentStatusRuntime(
       }
       return result
     } finally {
+      conversationDraft = null
+      batchedPaneKeys = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
       batchedAgentStatusEffects = null
@@ -208,6 +290,8 @@ export function createAgentStatusRuntime(
   }
 
   return {
+    projectConversation,
+    subscribeAgentStatusChanges,
     get,
     set,
     runAfterCommit,

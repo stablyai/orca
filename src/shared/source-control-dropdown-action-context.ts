@@ -5,7 +5,6 @@ import { canSubmitCommit, resolveCommitDisabledReason } from './source-control-c
 import type { GitConflictOperation } from './git-status-types'
 import { shouldForcePushWithLeaseForUpstream } from './git-upstream-status'
 import type { DropdownActionInputs } from './source-control-dropdown-item-types'
-import { formatForcePushTitle } from './source-control-dropdown-labels'
 
 export type DropdownActionContext = {
   upstreamStatus: SourceControlPrimaryActionDecisionInputs['upstreamStatus']
@@ -29,7 +28,6 @@ export type DropdownActionContext = {
   behind: number
   shouldForcePushWithLease: boolean
   pushLabelCount: number
-  forcePushTitle: string
   globalBusy: boolean
   commitDisabledReason: ReturnType<typeof resolveCommitDisabledReason>
   canCommit: boolean
@@ -84,7 +82,6 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     (shouldForcePushWithLease || !hasUpstream)
       ? branchCommitsAhead
       : ahead
-  const forcePushTitle = formatForcePushTitle(branchCommitsAhead, upstreamStatus?.upstreamName)
 
   // Lock all rows during in-flight work to prevent queued actions against stale snapshots.
   const globalBusy = isCommitting || isRemoteOperationActive || isPullRequestOperationActive
@@ -129,7 +126,6 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     behind,
     shouldForcePushWithLease,
     pushLabelCount,
-    forcePushTitle,
     globalBusy,
     commitDisabledReason,
     canCommit

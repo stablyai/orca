@@ -24,13 +24,15 @@ vi.mock('../managed-server/install/remote-versioned-install', async (importOrigi
 }))
 vi.mock('../managed-server/install/orcad-remote-install', () => ({ installOrcadBundle: vi.fn() }))
 vi.mock('../managed-server/install/orcad-remote-preflight', () => ({
-  preflightInstalledOrcad: vi.fn()
+  preflightInstalledOrcad: vi.fn(async () => ({}))
 }))
 vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
 
 import { execCommand } from './remote-exec/remote-exec-command'
+import { preflightInstalledOrcad } from '../managed-server/install/orcad-remote-preflight'
+import { PROTOCOL_VERSION } from '../daemon/daemon-protocol-version'
 import { acquireInstallLock } from '../managed-server/install/remote-install-lock'
 import { writeAtomicOrcadRemoteRecord } from '../managed-server/install/orcad-remote-record-file'
 import { deployOrcad } from './orcad-remote-deploy'
@@ -58,7 +60,11 @@ const IDLE = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion
 const LIVE = { liveSessions: 1, startedSinceActivation: 1, daemonProtocolVersion: 3 }
 const UNREAD = { liveSessions: null, startedSinceActivation: null, daemonProtocolVersion: null }
 
-function deploy(recount: OrcadTerminalCensus | Error = IDLE, force?: boolean) {
+function deploy(
+  recount: OrcadTerminalCensus | Error = IDLE,
+  force?: boolean,
+  census: OrcadTerminalCensus = IDLE
+) {
   const recountCensus = vi.fn(async () => {
     admission.close(ORCAD_UPDATE_ADMISSION_FENCE_MS)
     if (recount instanceof Error) {
@@ -82,7 +88,7 @@ function deploy(recount: OrcadTerminalCensus | Error = IDLE, force?: boolean) {
     now: () => new Date(clockMs),
     localOrcadDir: '/local/out/orcad',
     target: 'linux-x64-glibc217',
-    census: IDLE,
+    census,
     recountCensus,
     releaseIncumbentAdmission,
     ...(force !== undefined ? { force } : {})
@@ -188,5 +194,44 @@ describe("an update's terminal admission fence", () => {
     expect(host.commands.some((command) => command.includes('kill -TERM'))).toBe(false)
     expect([...host.alive]).toEqual([OLD])
     expect(admission.isClosed()).toBe(false)
+  })
+
+  describe('on a host whose census cannot name mixed daemon generations', () => {
+    const MIXED = { liveSessions: 2, startedSinceActivation: null, daemonProtocolVersion: null }
+    const answer = (liveDaemonProtocols: number[]) => ({
+      type: 'orca_profile_state_ready' as const,
+      nonce: '00000000-0000-4000-8000-000000000000',
+      runtime: 'node' as const,
+      runtimeVersion: process.versions.node,
+      artifactVersion: '0.2.0+abc123def456',
+      sqliteVersion: '3.50.0',
+      revision: 1,
+      liveDaemonProtocols
+    })
+
+    it('asks the candidate about the served data root and updates when it attaches every generation', async () => {
+      vi.mocked(preflightInstalledOrcad).mockResolvedValueOnce(
+        answer([PROTOCOL_VERSION - 1, PROTOCOL_VERSION])
+      )
+      const { result } = deploy(MIXED, true, MIXED)
+
+      await expect(result).resolves.toMatchObject({ outcome: 'installed-and-activated' })
+      expect(preflightInstalledOrcad).toHaveBeenCalledWith(
+        expect.objectContaining({ probeDaemonsUnder: '/home/work/.orca' })
+      )
+    })
+
+    it('stops nothing when the candidate sees a generation it cannot attach', async () => {
+      vi.mocked(preflightInstalledOrcad).mockResolvedValueOnce(
+        answer([PROTOCOL_VERSION, PROTOCOL_VERSION + 1])
+      )
+      const { result } = deploy(MIXED, true, MIXED)
+
+      await expect(result).resolves.toMatchObject({
+        outcome: 'installed-not-activated',
+        code: 'orcad_update_strands_live_terminals'
+      })
+      expect([...host.alive]).toEqual([OLD])
+    })
   })
 })

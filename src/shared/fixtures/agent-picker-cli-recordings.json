@@ -1,0 +1,68 @@
+{
+  "capture": "codex-cli 0.149.0, 2026-08-21; model/list first row and thread/start policy fields; workspace paths omitted",
+  "modelList": {
+    "data": [
+      {
+        "id": "gpt-5.6-sol",
+        "model": "gpt-5.6-sol",
+        "upgrade": null,
+        "upgradeInfo": null,
+        "availabilityNux": {
+          "message": "Our most capable model yet. GPT-5.6 Sol can tackle complex code changes, dig into research, produce polished documents, and take on your most ambitious work. Sol is highly capable at lower reasoning efforts\u2014try starting lower, then turn it up for harder jobs."
+        },
+        "displayName": "GPT-5.6-Sol",
+        "description": "Latest frontier agentic coding model.",
+        "modelSpecialty": null,
+        "hidden": false,
+        "supportedReasoningEfforts": [
+          {
+            "reasoningEffort": "low",
+            "description": "Fast responses with lighter reasoning"
+          },
+          {
+            "reasoningEffort": "medium",
+            "description": "Balances speed and reasoning depth for everyday tasks"
+          },
+          {
+            "reasoningEffort": "high",
+            "description": "Greater reasoning depth for complex problems"
+          },
+          {
+            "reasoningEffort": "xhigh",
+            "description": "Extra high reasoning depth for complex problems"
+          },
+          {
+            "reasoningEffort": "max",
+            "description": "Maximum reasoning depth for the hardest problems"
+          },
+          {
+            "reasoningEffort": "ultra",
+            "description": "Maximum reasoning with automatic task delegation"
+          }
+        ],
+        "defaultReasoningEffort": "low",
+        "inputModalities": ["text", "image"],
+        "supportsPersonality": false,
+        "multiAgentVersion": "v2",
+        "additionalSpeedTiers": ["fast"],
+        "serviceTiers": [
+          {
+            "id": "priority",
+            "name": "Fast",
+            "description": "1.5x speed, increased usage"
+          }
+        ],
+        "defaultServiceTier": null,
+        "isDefault": true
+      }
+    ],
+    "nextCursor": null
+  },
+  "policy": {
+    "approvalPolicy": "on-request",
+    "approvalsReviewer": "user",
+    "sandbox": {
+      "type": "workspaceWrite"
+    }
+  }
+}

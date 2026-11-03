@@ -292,25 +292,37 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(1000)
   })
 
-  it('keeps a floating browser to chords from its own overlay even when its group holds focus', () => {
-    const floating = FLOATING_TERMINAL_WORKTREE_ID
-    const state = createState()
-    mocks.state = {
-      ...state,
-      browserTabsByWorktree: { [floating]: state.browserTabsByWorktree['wt-1'] },
-      unifiedTabsByWorktree: { [floating]: state.unifiedTabsByWorktree['wt-1'] },
-      groupsByWorktree: { [floating]: state.groupsByWorktree['wt-1'] },
-      activeGroupIdByWorktree: { [floating]: 'group-1' }
+  // Why '-focused' only in the focused split: that pane takes the keyboard when the panel opens (#36351).
+  it.each([
+    ['group-1', 'owned-target-focused'],
+    ['group-2', 'owned-target']
+  ])(
+    'keeps a floating browser to chords from its own overlay when %s holds focus',
+    (focusedGroupId, scope) => {
+      const floating = FLOATING_TERMINAL_WORKTREE_ID
+      const state = createState()
+      mocks.state = {
+        ...state,
+        browserTabsByWorktree: { [floating]: state.browserTabsByWorktree['wt-1'] },
+        unifiedTabsByWorktree: { [floating]: state.unifiedTabsByWorktree['wt-1'] },
+        groupsByWorktree: {
+          [floating]: [
+            ...state.groupsByWorktree['wt-1'],
+            { id: 'group-2', worktreeId: floating, activeTabId: null, tabOrder: [] }
+          ]
+        },
+        activeGroupIdByWorktree: { [floating]: focusedGroupId }
+      }
+
+      const markup = renderToStaticMarkup(
+        <BrowserPaneOverlayLayer worktreeId={floating} isWorktreeActive />
+      )
+
+      expect(markup).toContain(
+        `data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="${scope}"`
+      )
     }
-
-    const markup = renderToStaticMarkup(
-      <BrowserPaneOverlayLayer worktreeId={floating} isWorktreeActive />
-    )
-
-    expect(markup).toContain(
-      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
-    )
-  })
+  )
 
   it('keeps an active browser pane unfocused when another split holds focus (#11348)', () => {
     mocks.state = createState()

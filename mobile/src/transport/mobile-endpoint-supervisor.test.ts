@@ -780,13 +780,15 @@ describe('mobile endpoint supervisor', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(openRelay).toHaveBeenCalledTimes(2)
 
-    // A network nudge inside the cooldown must not dial early and must not tear
-    // down the healthy session; the queued intent runs at the 250 ms boundary.
+    // Ambiguous network hints leave the healthy session and the lease retry cadence intact.
     supervisor.nudge('network-change')
     expect(logical.suspendActiveSession).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(249)
     expect(openRelay).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(4_750)
     expect(openRelay).toHaveBeenCalledTimes(3)
     supervisor.stop()
   })

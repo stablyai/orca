@@ -1,7 +1,12 @@
 import {
+  selectSourceControlActionRecipe,
+  type CurrentActionSelection
+} from '../../../../shared/source-control-action-selection'
+import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
 } from '@/lib/host-chat-program-acquisition'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
 import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import {
   buildAgentLaunchRouteInput,
@@ -13,7 +18,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { projectSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
+import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
 import { sourceControlLaunchAppliesAgentArgs } from './source-control-launch-agent-args-applicability'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
 import {
@@ -24,8 +29,9 @@ import {
 /** Primary events own saved starts; opening an editor never authorizes execution. */
 type SavedStartArgs = Omit<
   RunSourceControlAgentActionStartArgs,
-  'selectedAgent' | 'trimmedCommandInput' | 'saveTargetValue'
+  'selectedAgent' | 'trimmedCommandInput' | 'saveTargetValue' | 'recipe'
 > & {
+  selection: CurrentActionSelection
   basePrompt: string
   connectionId?: string | null
   onFallback: () => void
@@ -52,13 +58,14 @@ export function useSavedSourceControlActionStart() {
       }
       signal?.throwIfAborted()
       const store = useAppStore.getState()
-      const { recipe, worktreeId } = args
+      const { worktreeId } = args
+      const recipe = structuredClone(selectSourceControlActionRecipe(args.selection))
       const agent = recipe.agentId
       if (!isTuiAgent(agent) || !worktreeId) {
         onFallback()
         return
       }
-      const projection = projectSourceControlActionLaunch(recipe, agent, {
+      const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
         basePrompt: args.basePrompt,
         settings: args.settings
       })
@@ -86,9 +93,17 @@ export function useSavedSourceControlActionStart() {
         sourceControlLaunchAppliesAgentArgs({
           agent: isTuiAgent(agent) ? agent : null,
           worktreeId,
-          repoId: args.repoId
+          repoId: args.repoId,
+          preferredSurface: projection.preferredSurface
         })
-      const detectedAgents = appliesArgs ? [...(choices.detected ?? [])] : choices.offered
+      const detectedAgents = appliesArgs
+        ? [...(choices.detected ?? [])]
+        : agentsOfferedForLaunch(
+            useAppStore.getState(),
+            workspace,
+            choices.detected,
+            projection.preferredSurface ? agent : undefined
+          )
       const plan = buildSourceControlAgentDeliveryPlan({
         settings: args.settings,
         agentLaunchPreferences,
@@ -107,6 +122,7 @@ export function useSavedSourceControlActionStart() {
       }
       const launched = await runSourceControlAgentActionStart({
         ...args,
+        recipe,
         agentLaunchPreferences,
         selectedAgent: agent,
         trimmedCommandInput: projection.commandInput,

@@ -9,11 +9,12 @@ import {
 } from '../../shared/claude-profile-routing'
 import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../shared/remote-bundle-artifacts'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import { getWslHomeAsync, listRunningWslDistrosAsync } from '../wsl'
-import { ensureWslPinnedRuntime } from '../wsl/wsl-pinned-runtime'
+import { getWslHomeAsync, listRunningWslDistrosAsync } from '../wsl/discovery/distro-catalog'
+import { ensureWslPinnedRuntime } from '../wsl/execution/wsl-pinned-runtime'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
-import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
-import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
+import { runWslProcess, type WslSpec } from '../wsl/execution/wsl-runner'
+import { describeWslProcessFailure } from '../wsl/execution/wsl-process-failure'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { claudeProfileMarkerPath, type ClaudeProfileDescriptor } from './claude-profile-paths'
 import type { ClaudeProfileRouterSettings } from './claude-profile-router'
 import { claudeProfileMissing, claudeProfileSetupFailed } from './claude-profile-launch-errors'
@@ -55,10 +56,16 @@ export class ClaudeWslProfileRouter {
       )
   }
 
-  /** Startup must not boot stopped distros. */
+  /** Startup must not boot stopped distros, nor one a list still names while it stops (E9). */
   async runningDistros(): Promise<string[]> {
     const running = await listRunningWslDistrosAsync({ requireConfirmed: true })
-    return running.filter((distro) => this.accountIn(distro))
+    const withAccounts = running.filter((distro) => this.accountIn(distro))
+    const settled = await Promise.all(
+      withAccounts.map(async (distro) =>
+        (await blockedWslDistroForPath('', distro)) ? null : distro
+      )
+    )
+    return settled.filter((distro): distro is string => distro !== null)
   }
 
   private async resolve(distro: string) {

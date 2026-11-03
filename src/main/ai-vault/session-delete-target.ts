@@ -19,7 +19,7 @@ import {
   isDiscoverableSessionFile,
   sessionRowRootDirs
 } from './session-scanner-agent-sources'
-import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcripts'
+import { subagentTranscriptsDirFor } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
 // These sessions own their containing directory, including companion files.

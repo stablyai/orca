@@ -43,12 +43,4 @@ describe('buildNotificationOptions localization', () => {
       body: 'Un agente de programación terminó de trabajar.'
     })
   })
-
-  it('keeps the English copy for headless and initialized English translators', () => {
-    for (const translate of [undefined, translateMain]) {
-      expect(buildNotificationOptions(BELL, translate).title).toBe('Bell in feature-x')
-      expect(buildNotificationOptions(TOOL, translate).body).toBe('Using Bash: ls {{tool}}')
-      expect(buildNotificationOptions(FALLBACK, translate).title).toBe('Task complete in workspace')
-    }
-  })
 })

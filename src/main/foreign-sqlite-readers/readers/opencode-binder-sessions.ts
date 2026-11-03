@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { readOpenCodeDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-open'
+import { readOpenCodeDatabase } from '../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
 import { columnExists, tableExists } from '../../opencode-usage/schema-helpers'
 import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 import type { BinderSessionRow, OpenCodeSessionCursor } from '../opencode-binder-sessions-result'

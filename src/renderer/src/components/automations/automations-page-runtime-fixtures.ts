@@ -1,3 +1,4 @@
+import type { AutomationsPageFixtureState } from './automations-page-fixtures'
 import type { Automation } from '../../../../shared/automations-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -19,7 +20,7 @@ export function selfScopedList(automations: Automation[]): Record<string, unknow
 }
 
 type RuntimeFixtureMocks = {
-  state: Record<string, unknown> & { endpointProjectHostSetups: ProjectHostSetup[] }
+  state: AutomationsPageFixtureState
   repoMap: Map<string, unknown>
   worktreeMap: Map<string, unknown>
 }
@@ -55,10 +56,10 @@ export function addRuntimeProject(mocks: RuntimeFixtureMocks, runtimeId: string)
     updatedAt: 1
   }
   const repos = mocks.state.repos as Repo[]
-  const setups = mocks.state.endpointProjectHostSetups
+  const setups = mocks.state.projectHostSetups
   const worktreesByRepo = mocks.state.worktreesByRepo as Record<string, Worktree[]>
   mocks.state.repos = [...repos, repo]
-  mocks.state.endpointProjectHostSetups = [...setups, setup]
+  mocks.state.projectHostSetups = [...setups, setup]
   mocks.state.worktreesByRepo = { ...worktreesByRepo, [RUNTIME_REPO_ID]: [worktree] }
   mocks.repoMap.set(RUNTIME_REPO_ID, repo)
   mocks.worktreeMap.set(RUNTIME_WORKSPACE_ID, worktree)

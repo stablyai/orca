@@ -41,4 +41,18 @@ describe('electron debugger lease', () => {
     expect(webContents.debugger.attach).not.toHaveBeenCalled()
     expect(webContents.debugger.detach).not.toHaveBeenCalled()
   })
+
+  it('releases a destroyed guest without querying its native debugger', () => {
+    const webContents = createWebContents()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the debugger lease's entire WebContents boundary.
+    const lease = acquireElectronDebugger(webContents as never)
+    webContents.isDestroyed.mockReturnValue(true)
+    webContents.debugger.isAttached.mockImplementation(() => {
+      throw new Error('Object has been destroyed')
+    })
+
+    expect(() => lease.release()).not.toThrow()
+    expect(() => lease.release()).not.toThrow()
+    expect(webContents.debugger.detach).not.toHaveBeenCalled()
+  })
 })

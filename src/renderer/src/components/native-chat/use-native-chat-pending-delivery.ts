@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import {
+  pendingSendsAsMessages,
+  prunePendingSends,
+  releaseEmptyTranscriptClaims,
+  type NativeChatPendingSend
+} from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
   appendPendingSendCache,
   nextNativeChatPendingSendId,
-  pendingSendsAsMessages,
-  prunePendingSends,
   readPendingSendCache,
-  releaseEmptyTranscriptClaims,
-  writePendingSendCache,
-  type NativeChatPendingSend
+  writePendingSendCache
 } from './native-chat-pending'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { ReadState } from './native-chat-live-session-contract'
@@ -23,6 +27,7 @@ const NO_NOTICES: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
 export function useNativeChatPendingDelivery(args: {
   paneKey: string
   agent: AgentType
+  workingEpoch?: number | null
   /** `readPhase` 'ready' with a `sessionId` means an empty `messages` was a real read. */
   session: {
     messages: NativeChatMessage[]
@@ -30,7 +35,8 @@ export function useNativeChatPendingDelivery(args: {
     sessionId?: string | null
   }
 }) {
-  const { paneKey, agent } = args
+  const languageRevision = useUiLanguageRevision()
+  const { paneKey, agent, workingEpoch } = args
   const { messages } = args.session
   const sessionId = args.session.sessionId ?? null
   // Without a sessionId, ready is an unread placeholder.
@@ -65,6 +71,7 @@ export function useNativeChatPendingDelivery(args: {
         id: nextNativeChatPendingSendId(sentAt),
         text,
         sentAt,
+        ...(workingEpoch !== undefined ? { queuedDuringWorkingEpoch: workingEpoch } : {}),
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
         ...(readEmptySessionId ? { afterEmptyTranscriptSessionId: readEmptySessionId } : {}),
@@ -73,7 +80,7 @@ export function useNativeChatPendingDelivery(args: {
       setPending(appendPendingSendCache(scope, entry))
       return entry.id
     },
-    [messages, readEmptySessionId, scope]
+    [messages, readEmptySessionId, scope, workingEpoch]
   )
   const cancel = useCallback(
     (id: string) => save((entries) => entries.filter((entry) => entry.id !== id)),
@@ -170,6 +177,7 @@ export function useNativeChatPendingDelivery(args: {
       })
     }
     return result
-  }, [pending, cancel])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [pending, cancel, languageRevision])
   return { pending, record, cancel, reject, holdUnconfirmed, clear, notices }
 }

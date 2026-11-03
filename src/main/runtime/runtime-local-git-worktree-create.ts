@@ -5,26 +5,26 @@ import type { Repo } from '../../shared/repo-types'
 import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import { configureCreatedWorktreePushTarget } from '../ipc/worktree-remote'
-import {
-  addSparseWorktree,
-  addWorktree,
-  type AddWorktreeOptions,
-  type AddWorktreeResult
-} from '../git/worktree'
+import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../git/worktrees/creation/worktree-add'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../git/worktrees/worktree-operation-options'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeLocalWorktreeCreateBase } from './runtime-local-worktree-create-base'
-import { isGeneratedWorktreeCreateName } from '../worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
-} from '../worktree-create-preparation'
+} from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   failedWorktreeCreationNeedsRetirement,
   retireGeneratedWorktreeName
-} from '../worktree-name-retirement'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
+import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
 
 export type RuntimeLocalBaseRefRefresh = {
   /** Awaits the deferred refresh started before naming, if any. */
@@ -121,7 +121,10 @@ export async function createRuntimeLocalGitWorktree(args: {
   }
   const addOptions: AddWorktreeOptions = {
     ...preparedWorktreeOptions,
-    ...(args.checkoutExistingBranch ? { checkoutExistingBranch: true } : {})
+    ...(args.checkoutExistingBranch ? { checkoutExistingBranch: true } : {}),
+    ...(args.request.branchIntent === 'open-existing-v2' && !args.checkoutExistingBranch
+      ? { trackRemoteBranch: true }
+      : {})
   }
   const shouldRetireGeneratedName =
     args.request.nameWasGenerated === true &&
@@ -130,7 +133,11 @@ export async function createRuntimeLocalGitWorktree(args: {
   let addResult: AddWorktreeResult
   try {
     addResult = await args.timing.time('git_worktree_add', async () => {
-      if (sparseDirectories.length > 0 || args.checkoutExistingBranch) {
+      if (
+        sparseDirectories.length > 0 ||
+        args.checkoutExistingBranch ||
+        args.request.branchIntent === 'open-existing-v2'
+      ) {
         args.timing.recordPreparedCheckout({
           status: 'miss',
           reason: sparseDirectories.length > 0 ? 'sparse_checkout' : 'checkout_existing_branch'

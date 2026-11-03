@@ -1,4 +1,5 @@
 // Parse fake-client host frames with the page’s real reader so both halves meet in these tests.
+import type { HostStatusReply } from '../transport/host-status-reply-schema'
 import { afterEach } from 'vitest'
 import {
   bridgeId,
@@ -73,10 +74,11 @@ export function harness(
     client?: FakeRpcClient
     post?: (json: string) => Promise<void>
     route?: BridgeInitRoute
-    onNavigate?: (href: string) => void
+    onNavigate?: (href: string, replace: boolean) => void
     onNavigateBack?: () => BridgeNavigateBackOutcome
     storage?: Readonly<Record<string, string>>
     readStorage?: () => PageStorageForInit
+    readHostStatus?: () => HostStatusReply | null
     onPageFault?: (error: BridgeErrorCapture) => void
     /** What the mounted route declared; everything this shell implements unless a case narrows it. */
     routeGrants?: readonly string[]
@@ -127,11 +129,13 @@ export function harness(
     host: HOST,
     readStorage:
       options.readStorage ?? (() => ({ storage: options.storage ?? {}, storageOversize: [] })),
+    ...(options.readHostStatus === undefined ? {} : { readHostStatus: options.readHostStatus }),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),
     onPageReady: () => {
       pageReadies += 1
     },
     onPageBackClaim: (claimed) => backClaims.push(claimed),
+    onPageLocation: () => {},
     onPagePainted: () => {
       pagePaints += 1
     },

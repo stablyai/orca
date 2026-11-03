@@ -47,22 +47,67 @@ export type MockPtyProcess = {
   _simulateExit: (code: number) => void
 }
 
-const CONPTY_MOCK_PRELUDE = '\x1b[c'
-
-/** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
-export function createConptyPreludeSender(): (cb: (data: string) => void) => void {
-  let sent = false
-  return (cb) => {
-    if (process.platform === 'win32' && !sent) {
-      sent = true
-      queueMicrotask(() => cb(CONPTY_MOCK_PRELUDE))
+export function createPtyProcessEventEmitter(): Pick<
+  MockPtyProcess,
+  'onData' | 'onExit' | '_simulateData' | '_simulateExit'
+> {
+  const dataListeners = new Set<(data: string) => void>()
+  const exitListeners = new Set<(event: { exitCode: number }) => void>()
+  return {
+    onData: vi.fn((callback: (data: string) => void) => {
+      dataListeners.add(callback)
+      return {
+        dispose: vi.fn(() => {
+          dataListeners.delete(callback)
+        })
+      }
+    }),
+    onExit: vi.fn((callback: (event: { exitCode: number }) => void) => {
+      exitListeners.add(callback)
+      return {
+        dispose: vi.fn(() => {
+          exitListeners.delete(callback)
+        })
+      }
+    }),
+    _simulateData: (data: string) => {
+      const listeners = [...dataListeners]
+      for (const listener of listeners) {
+        listener(data)
+      }
+    },
+    _simulateExit: (exitCode: number) => {
+      const listeners = [...exitListeners]
+      for (const listener of listeners) {
+        listener({ exitCode })
+      }
     }
   }
 }
 
-/** What a mocked pane printed before the test's own output; the replayed prelude on Windows. */
-export function mockConptyStartupOutput(): string[] {
-  return process.platform === 'win32' ? [CONPTY_MOCK_PRELUDE] : []
+const CONPTY_MOCK_PRELUDE = '\x1b[c'
+// Captured before tests fake timers; spawn awaits the prelude, so it must always fire.
+const realSetImmediate = globalThis.setImmediate
+
+/** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
+export function createConptyPreludeSender(): (cb: (data: string) => void) => void {
+  let sent = false
+  const listeners = new Set<(data: string) => void>()
+  return (cb) => {
+    if (process.platform === 'win32' && !sent) {
+      listeners.add(cb)
+      if (listeners.size === 1) {
+        // A macrotask, like real ConPTY output, reaches every listener subscribed during spawn.
+        realSetImmediate(() => {
+          sent = true
+          for (const listener of listeners) {
+            listener(CONPTY_MOCK_PRELUDE)
+          }
+          listeners.clear()
+        })
+      }
+    }
+  }
 }
 
 export function mockPtyProcess(pid = 12345): MockPtyProcess {

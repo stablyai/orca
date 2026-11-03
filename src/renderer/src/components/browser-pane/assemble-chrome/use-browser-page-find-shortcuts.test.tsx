@@ -40,7 +40,7 @@ function renderFloatingOverSplit() {
     <>
       <FindHarness id="a" scope="focused" setFindOpen={split} />
       <div data-floating-terminal-panel>
-        <FindHarness id="floating" scope="owned-target" setFindOpen={floating} />
+        <FindHarness id="floating" scope="owned-target-focused" setFindOpen={floating} />
       </div>
     </>
   )

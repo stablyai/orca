@@ -112,8 +112,9 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
                 ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
                 : {})
             })
-      const sleepCwd = opts.teardown ? this.sleepShellCwds.get(sessionId) : undefined
-      const snapshot = sleepCwd ? { ...durable, cwd: sleepCwd } : durable
+      // Set only inside an exclusive final pass (Sleep or quit), so no other checkpoint sees it.
+      const probedCwd = this.probedShellCwds.get(sessionId)
+      const snapshot = probedCwd ? { ...durable, cwd: probedCwd } : durable
       const checkpoint = await this.historyManager.checkpoint(sessionId, snapshot, {
         pendingOutputSeq: take.seq
       })

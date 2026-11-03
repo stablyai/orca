@@ -1,12 +1,12 @@
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   refuse,
-  type AgentSessionCancelResult,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 

@@ -30,6 +30,7 @@ import { isWindowsUserAgent } from '../terminal-pane/pane-helpers'
 import { McpConfigFileRow, type LoadedMcpConfigInspection } from './McpConfigFileRow'
 import { McpMissingConfigList } from './McpMissingConfigList'
 import { loadMcpConfigInspections } from './mcp-config-inspection'
+import { formatMcpConfigSummary } from './mcp-config-summary'
 import { translate } from '@/i18n/i18n'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
@@ -46,10 +47,6 @@ type McpConfigSectionProps = {
 }
 
 const EMPTY_WORKTREES: Worktree[] = []
-
-function countServers(configs: LoadedMcpConfigInspection[]): number {
-  return configs.reduce((sum, config) => sum + config.servers.length, 0)
-}
 
 export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Element {
   const openFile = useAppStore((state) => state.openFile)
@@ -140,7 +137,6 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       })),
     [targetRootPath]
   )
-  const serverCount = useMemo(() => countServers(configs), [configs])
   const canCreateStarter = detectedCount === 0 && !inspectionUnavailable
 
   const loadConfigs = useCallback(async (): Promise<void> => {
@@ -359,13 +355,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
       <div className="rounded-md border border-border/50 bg-muted/20">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>
-            {detectedCount}{' '}
-            {translate('auto.components.settings.McpConfigSection.251b96564a', 'detected ·')}{' '}
-            {serverCount}{' '}
-            {translate('auto.components.settings.McpConfigSection.3b224167ff', 'server')}
-            {serverCount === 1 ? '' : 's'}
-          </span>
+          <span>{formatMcpConfigSummary(configs)}</span>
           {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
         </div>
         <div>

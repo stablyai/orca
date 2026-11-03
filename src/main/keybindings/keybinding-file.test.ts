@@ -74,7 +74,17 @@ describe('keybinding-file', () => {
         'win32',
         readKeybindingFile(filePath, 'win32').overrides
       )
-    ).toEqual(['Mod+Shift+J'])
+    ).toEqual(['Mod+Shift+F11', 'Mod+Shift+J'])
+  })
+
+  it('keeps a saved chat toggle alias when the worktree palette is reset', () => {
+    const toggle = 'terminal.toggleNativeChat'
+    writeKeybindingOverride(filePath, 'win32', 'worktree.palette', ['Mod+Alt+Y'])
+    writeKeybindingOverride(filePath, 'win32', toggle, ['Mod+Alt+K', 'Mod+Shift+J'])
+    writeKeybindingOverride(filePath, 'win32', 'worktree.palette', null)
+    expect(readKeybindingFile(filePath, 'win32').overrides).toEqual({
+      [toggle]: ['Mod+Alt+K', 'Mod+Shift+J']
+    })
   })
 
   it('resolves the user-facing keybindings path under ~/.orca', () => {
@@ -150,7 +160,7 @@ describe('keybinding-file', () => {
       filePath,
       JSON.stringify({
         keybindings: {
-          'plugin:orca-samples.tasks/open': 'Mod+Shift+T',
+          'plugin:samples.tasks/open': 'Mod+Shift+T',
           'plugin:tasks/open': 'Mod+Alt+T'
         }
       }),
@@ -159,15 +169,15 @@ describe('keybinding-file', () => {
 
     const snapshot = readKeybindingFile(filePath, 'linux')
     expect(snapshot.overrides).toEqual({
-      'plugin:orca-samples.tasks/open': ['Mod+Shift+T']
+      'plugin:samples.tasks/open': ['Mod+Shift+T']
     })
     expect(snapshot.diagnostics).toMatchObject([
       { severity: 'warning', actionId: 'plugin:tasks/open' }
     ])
 
-    writeKeybindingOverride(filePath, 'linux', 'plugin:orca-samples.tasks/open', [])
+    writeKeybindingOverride(filePath, 'linux', 'plugin:samples.tasks/open', [])
     expect(readKeybindingFile(filePath, 'linux').overrides).toEqual({
-      'plugin:orca-samples.tasks/open': []
+      'plugin:samples.tasks/open': []
     })
   })
 
@@ -191,6 +201,26 @@ describe('keybinding-file', () => {
       'warning',
       'error',
       'error'
+    ])
+    expect(snapshot.diagnostics[1]).toMatchObject({
+      message:
+        'Shortcut for "terminal.search" was ignored: Use a shortcut like Ctrl+Shift+P or Cmd+K.',
+      code: 'shortcutIgnored',
+      params: { actionId: 'terminal.search' },
+      reasonCode: 'invalidFormat'
+    })
+  })
+
+  it('keeps the English read failure and codes its nested reason', () => {
+    writeFileSync(filePath, '[]', 'utf8')
+    expect(readKeybindingFile(filePath, 'linux').diagnostics).toEqual([
+      {
+        severity: 'error',
+        message: 'Could not read keybindings file: Keybindings file must contain a JSON object.',
+        code: 'readFailed',
+        params: { reason: 'Keybindings file must contain a JSON object.' },
+        reasonCode: 'fileNotObject'
+      }
     ])
   })
 

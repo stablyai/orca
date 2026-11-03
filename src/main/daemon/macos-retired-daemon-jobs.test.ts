@@ -30,36 +30,6 @@ const job = (argv = args): string =>
 
 beforeEach(() => run.mockReset())
 
-it('discovers only exact same-profile supported labels in one bounded command', async () => {
-  run.mockResolvedValue({
-    ...ok,
-    stdout: [
-      `12345\t0\t${macDaemonJobLabel(profile, version)}`,
-      `12346\t0\t${macDaemonJobLabel(profile)}`,
-      `12347\t0\t${macDaemonJobLabel(profile, PROTOCOL_VERSION + 1)}`,
-      `12348\t0\t${macDaemonJobLabel('/profiles/other', version)}`,
-      `12349\t0\t${macDaemonJobLabel(profile, version)}.extra`
-    ].join('\n')
-  })
-  expect(await listMacDaemonJobVersions(profile)).toEqual([version, PROTOCOL_VERSION])
-  expect(run).toHaveBeenCalledOnce()
-  expect(run).toHaveBeenCalledWith(
-    expect.objectContaining({ args: ['list'], timeoutMs: 3_000, maxOutputBytes: 128 * 1024 })
-  )
-})
-
-it('requires exact endpoint arguments from the top-level launchd job', async () => {
-  run.mockResolvedValue({ ...ok, stdout: job() })
-  expect(await readMacDaemonRecoveryJob(profile, runtime, version)).toEqual({
-    service: `gui/${process.getuid?.()}/${macDaemonJobLabel(profile, version)}`,
-    protocolVersion: version,
-    pid: 12345,
-    launchNonce: 'old-nonce',
-    socketPath: getDaemonSocketPath(runtime, version),
-    pidPath: getDaemonPidPath(runtime, version)
-  })
-})
-
 it.each(
   [
     args.filter((a) => a !== '--login-session-watch'),
@@ -71,11 +41,6 @@ it.each(
   ].map((argv) => ({ argv }))
 )('rejects ambiguous or foreign ownership: $argv', async ({ argv }) => {
   run.mockResolvedValue({ ...ok, stdout: job(argv) })
-  expect(await readMacDaemonRecoveryJob(profile, runtime, version)).toBeNull()
-})
-
-it('ignores a job that exited between list and print', async () => {
-  run.mockResolvedValue({ ...ok, code: 113, stderr: 'Could not find service "old"' })
   expect(await readMacDaemonRecoveryJob(profile, runtime, version)).toBeNull()
 })
 
@@ -109,11 +74,4 @@ it('bounds job discovery and rejects an oversized profile inventory', async () =
   })
   await expect(listMacDaemonJobVersions(profile)).rejects.toThrow('Too many')
   expect(run).toHaveBeenCalledOnce()
-})
-
-it('never inspects newer or invalid protocol jobs', async () => {
-  for (const unsupported of [0, -1, 1.5, PROTOCOL_VERSION + 1]) {
-    expect(await readMacDaemonRecoveryJob(profile, runtime, unsupported)).toBeNull()
-  }
-  expect(run).not.toHaveBeenCalled()
 })

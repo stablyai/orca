@@ -153,6 +153,23 @@ export function markCodexSessionBackfillMarkerPending(
   return pending.needsFullScan
 }
 
+/** Owe a full walk for launches whose rollout dates could not be recorded. */
+export function markCodexSessionBackfillMarkerNeedsFullScan(markerPath: string): void {
+  // Prevent older in-flight passes from clearing this demand.
+  markerInvalidationGeneration += 1
+  const record = readMarkerRecord(markerPath)
+  // No marker already means no baseline, so the next pass walks everything.
+  if (!record || record.needsFullScan) {
+    return
+  }
+  try {
+    writeMarkerRecord(markerPath, { ...record.raw, pendingScanDates: [], needsFullScan: true })
+  } catch (error) {
+    console.warn('[codex-session-backfill] Failed to record full-scan demand:', error)
+    rmSync(markerPath, { force: true })
+  }
+}
+
 type CodexSessionBackfillMarkerRecord = {
   raw: Record<string, unknown>
   systemSessionsRoot: string

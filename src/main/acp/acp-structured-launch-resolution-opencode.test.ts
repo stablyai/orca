@@ -1,7 +1,7 @@
 import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { ManagedDataAccountsState } from '../../shared/managed-account-types'
 import { restoreManagedDataAccountEnvironment } from '../../shared/managed-data-account-environment'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
@@ -249,7 +249,9 @@ describe('OpenCode ACP launch resolution', () => {
     const launch = await resolver(openCodeRecord(UNMANAGED), {
       probeVersion: async (input) => (asked.push(input), { version: '1.18.31' })
     })({ identity })
-    expect(asked).toEqual([{ program: launch.command, cwd: launch.cwd, env: launch.env }])
+    expect(asked).toEqual([
+      { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env }
+    ])
   })
 })
 

@@ -12,8 +12,8 @@ import type {
 import {
   _resetPendingWorktreeRemovalsForTests,
   startBackgroundWorktreeRemoval
-} from '../../worktree-background-removal'
-import { snapshotPendingWorktreeRemovals } from '../../worktree-removal-listing'
+} from '../../workspaces/removal/worktree-background-removal'
+import { snapshotPendingWorktreeRemovals } from '../../workspaces/removal/worktree-removal-listing'
 import {
   projectWorktreeListRemovals,
   projectWorktreePsRemovals

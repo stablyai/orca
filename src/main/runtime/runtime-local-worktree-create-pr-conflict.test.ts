@@ -20,8 +20,11 @@ vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: async () => ({ ok: true })
 }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.git }))
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: mocks.git
+}))
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectGitExecOptions: () => ({ cwd: '/repo', ...mocks.routing() }),
   getLocalProjectWorktreeGitOptions: mocks.routing,
   getWorktreeMirrorDistro: () => undefined
@@ -32,8 +35,10 @@ vi.mock('../git/repo', () => ({
   getBranchConflictKind: mocks.branchConflict
 }))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: async () => '' }))
-vi.mock('../hooks', () => ({ getEffectiveHooks: mocks.effectiveHooks }))
-vi.mock('../git/worktree-base-ref-probe', () => ({ hasLocalWorktreeBaseRef: mocks.hasBase }))
+vi.mock('../workspace-hooks/hooks', () => ({ getEffectiveHooks: mocks.effectiveHooks }))
+vi.mock('../git/worktrees/creation/worktree-base-ref-probe', () => ({
+  hasLocalWorktreeBaseRef: mocks.hasBase
+}))
 vi.mock('./runtime-worktree-create-git', () => ({
   resolveCreateBranchName: mocks.branchName,
   canCheckoutExistingLocalBranch: mocks.canCheckout,
@@ -41,18 +46,26 @@ vi.mock('./runtime-worktree-create-git', () => ({
   getSelectedHostedReviewForBranch: vi.fn()
 }))
 vi.mock('./runtime-worktree-filesystem', () => ({ runtimePathExists: mocks.pathExists }))
-vi.mock('../worktree-create-preparation', () => ({ consumePreparedWorktreeCreate: mocks.consume }))
-vi.mock('../git/worktree', () => ({ addWorktree: mocks.add, addSparseWorktree: mocks.addSparse }))
+vi.mock('../workspaces/creation/preparation/worktree-create-preparation', () => ({
+  consumePreparedWorktreeCreate: mocks.consume
+}))
+vi.mock('../git/worktrees/creation/worktree-add', () => ({
+  addWorktree: mocks.add
+}))
+
+vi.mock('../git/worktrees/creation/worktree-sparse-add', () => ({
+  addSparseWorktree: mocks.addSparse
+}))
 vi.mock('../ipc/worktree-remote', () => ({ configureCreatedWorktreePushTarget: mocks.pushTarget }))
 vi.mock('../ipc/created-worktree-reconciliation', () => ({ resolveCreatedWorktree: mocks.listing }))
-vi.mock('../worktree-name-retirement', () => ({
+vi.mock('../workspaces/removal/retirement/worktree-name-retirement', () => ({
   failedWorktreeCreationNeedsRetirement: vi.fn(),
   retireGeneratedWorktreeName: vi.fn()
 }))
-vi.mock('../git/worktree-shared-directories', () => ({
+vi.mock('../git/worktrees/content-paths/worktree-shared-directories', () => ({
   resolveWorktreeSharedDirectories: mocks.resolveShared
 }))
-vi.mock('../git/worktree-include-file', () => ({
+vi.mock('../git/worktrees/content-paths/worktree-include-file', () => ({
   resolveWorktreeIncludePaths: mocks.resolveInclude
 }))
 vi.mock('../ipc/worktree-symlinks', () => ({
@@ -89,7 +102,9 @@ describe('runtime create PR conflict probe', () => {
 
       expect(mocks.remoteBase.mock.calls).toEqual([['/repo', 'origin/main', options]])
       expect(mocks.branchName).toHaveBeenCalledOnce()
-      expect(mocks.branchConflict.mock.calls).toEqual([['/repo', 'main', 'origin/main', options]])
+      expect(mocks.branchConflict.mock.calls).toEqual([
+        ['/repo', 'main', remoteTrackingBase.ref, options]
+      ])
       expect(mocks.pathExists).toHaveBeenCalledTimes(occupied + 1)
       expect(mocks.githubPr).not.toHaveBeenCalled()
       expect(mocks.consume).not.toHaveBeenCalled()
@@ -100,7 +115,7 @@ describe('runtime create PR conflict probe', () => {
         ['src'],
         remoteTrackingBase.base,
         false,
-        expect.objectContaining({ remoteTrackingBase, ...options })
+        expect.objectContaining({ remoteTrackingBase, trackRemoteBranch: true, ...options })
       )
     }
   )
@@ -117,21 +132,23 @@ describe('runtime create PR conflict probe', () => {
       mocks.pathExists.mockImplementation(async (path) => path === worktreePath)
       mocks.consume.mockResolvedValue({ status: 'miss', reason: 'not_prepared' })
 
+      if (!reusable) {
+        await expect(createWorktree(pickedBranch)).rejects.toThrow('was not found locally')
+        expect(mocks.add).not.toHaveBeenCalled()
+        expect(mocks.consume).not.toHaveBeenCalled()
+        return
+      }
       await createWorktree(pickedBranch)
-
       expect(mocks.add).toHaveBeenCalledWith(
         '/repo',
         resolve('/worktrees', 'app-2'),
-        reusable ? 'main' : 'main-2',
+        'main',
         'origin/main',
         false,
         false,
-        expect.objectContaining(reusable ? { checkoutExistingBranch: true } : {})
+        expect.objectContaining({ checkoutExistingBranch: true })
       )
-      expect(mocks.githubPr.mock.calls.map(([, branch]) => branch)).toEqual(
-        reusable ? [] : ['main-2']
-      )
-      expect(mocks.add.mock.calls[0][6].checkoutExistingBranch ?? false).toBe(reusable)
+      expect(mocks.githubPr).not.toHaveBeenCalled()
     }
   )
 

@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildAgentPromptPasteBytes,
@@ -17,26 +19,46 @@ function useHostPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
 }
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/prompt-verification',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/prompt-verification',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ])
-}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/prompt-verification',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/prompt-verification',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 // aider uses open-loop submission, exposing the delay under test.
 async function createPromptRuntime(): Promise<{

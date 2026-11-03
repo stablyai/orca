@@ -1,9 +1,9 @@
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice,
-  AgentSessionOptionsResult,
   AgentSessionSlashCommand
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import {
@@ -16,6 +16,7 @@ import {
   SessionConfigSelectGroupSchema,
   SessionConfigSelectOptionSchema,
   type AvailableCommand,
+  type InitializeResponse,
   type SessionConfigOption,
   type SessionConfigSelectOption,
   type SessionModelState
@@ -51,22 +52,37 @@ export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
       AcpDialect,
-      'modelEfforts' | 'clampsUnlistedEffort' | 'withheldCommands'
+      | 'modelEfforts'
+      | 'withheldCommands'
+      | 'effortChangesModel'
+      | 'clampsUnlistedEffort'
+      | 'builtinCommands'
     > = {}
   ) {}
 
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
+  private reportedCommands: readonly AvailableCommand[] | undefined
+  private isBuiltin: (command: AvailableCommand) => boolean = () => false
   // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
   readonly picked = new Set<string>()
-  /** Installed Orca policy and successful writes, distinct from native agent reports. */
+  readonly appliedInput = new Map<string, string>()
   readonly applied = new Map<string, string>()
-  private initialChoice: Readonly<Record<string, string>> = {}
-  currentProof = new Set<string>()
   writeRevision = 0
 
+  invalidateInput(key: string): void {
+    this.appliedInput.delete(key)
+    if (key === 'model') {
+      this.appliedInput.delete('effort')
+    }
+    if (key === 'effort' && this.dialect.effortChangesModel) {
+      this.appliedInput.delete('model')
+    }
+  }
+
+  /** The session state a new, load or resume response reported. */
   adoptSession(
     response: {
       configOptions?: SessionConfigOption[] | null
@@ -77,13 +93,7 @@ export class AcpStructuredOptions {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
-    this.initialChoice = this.reported()
-    this.currentProof = new Set(Object.keys(this.initialChoice))
-  }
-
-  /** Native selection before any message changed this child. */
-  messageDefault(): Readonly<Record<string, string>> {
-    return this.initialChoice
+    this.appliedInput.clear()
   }
 
   notePick(key: string): void {
@@ -93,30 +103,7 @@ export class AcpStructuredOptions {
   adoptConfigOptions(configOptions: SessionConfigOption[] | null | undefined): void {
     if (configOptions) {
       this.configOptions = configOptions
-      this.adoptOwnChoice()
     }
-  }
-
-  /** Until Orca writes a key, a later report is still the agent's own (OpenCode's start answers
-   *  before its catalog loads); an effort belongs to its model, so it stops with either write. */
-  private adoptOwnChoice(): void {
-    if (this.picked.has('model')) {
-      return
-    }
-    const reported = this.reported()
-    const own = this.picked.has('effort') ? ['model'] : ['model', 'effort']
-    const choice: Record<string, string> = { ...this.initialChoice }
-    for (const key of own) {
-      const value = reported[key]
-      if (value === undefined) {
-        delete choice[key]
-        this.currentProof.delete(key)
-      } else {
-        choice[key] = value
-        this.currentProof.add(key)
-      }
-    }
-    this.initialChoice = choice
   }
 
   adoptModel(modelId: string): void {
@@ -125,15 +112,25 @@ export class AcpStructuredOptions {
     }
   }
 
+  /** Each process proves its own built-ins; session rows alone cannot. */
+  adoptInitialize(initialized: InitializeResponse): void {
+    this.isBuiltin = this.dialect.builtinCommands?.(initialized) ?? (() => false)
+    if (this.reportedCommands) {
+      this.adoptCommands(this.reportedCommands)
+    }
+  }
+
   adoptCommands(commands: readonly AvailableCommand[]): void {
     const withheld = this.dialect.withheldCommands ?? []
+    this.reportedCommands = commands
     this.commands = commands
       .filter((command) => !withheld.includes(command.name))
       .map((command) => ({
         name: command.name,
         kind: 'command',
         ...(command.description ? { description: command.description } : {}),
-        ...(command.input?.hint ? { argumentHint: command.input.hint } : {})
+        ...(command.input?.hint ? { argumentHint: command.input.hint } : {}),
+        ...(this.isBuiltin(command) ? { builtin: true as const } : {})
       }))
   }
 
@@ -156,7 +153,7 @@ export class AcpStructuredOptions {
     return null
   }
 
-  /** Effort menus describe models; current session values never establish catalog defaults. */
+  /** Native choices never establish an unobserved model's capability or configured default. */
   read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
@@ -182,18 +179,26 @@ export class AcpStructuredOptions {
     const models: AgentSessionModelOption[] = listed.map((model) => {
       const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
       const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
-      // A clamping agent's session menu says nothing about another model's menu: unknown, not none.
+      // A current-session menu supplies no negative evidence about an unobserved model.
       const sessionMenu =
         model.id === currentModel
           ? { efforts: sessionEfforts }
-          : this.dialect.clampsUnlistedEffort && effortOption && !advertised
-            ? { efforts: [], effortsKnown: false as const }
+          : (modelOption || effortOption) && !advertised
+            ? {
+                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
+                effortsKnown: false as const
+              }
             : { efforts: [] }
       return {
         ...model,
         isDefault: false,
         // Fall back to the running session's menu when the advertised menu is empty.
-        ...(advertised && advertised.efforts.length > 0 ? advertised : sessionMenu)
+        ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
+          ? advertised
+          : sessionMenu),
+        ...(advertised?.declaredDefaultEffort !== undefined
+          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
+          : {})
       }
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]

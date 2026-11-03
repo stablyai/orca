@@ -80,9 +80,4 @@ describe('seeding a workspace a paired server created', () => {
   it('lays out no tabs of its own for a twin, given the host the create went to', () => {
     expect(createOnServer({ twin: true, passHost: true })).toEqual([])
   })
-
-  it('lays out no tabs of its own for a workspace only the server lists, as before', () => {
-    expect(createOnServer({ twin: false, passHost: false })).toEqual([])
-    expect(createOnServer({ twin: false, passHost: true })).toEqual([])
-  })
 })

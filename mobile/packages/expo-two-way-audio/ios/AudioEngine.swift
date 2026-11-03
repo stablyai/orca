@@ -63,7 +63,13 @@ class AudioEngine {
             }
 
         self.setupAudioSession()
-        self.setup()
+        do {
+            try self.setup()
+        } catch {
+            // Hand the session back so a failed initialize leaves no other app's audio ducked.
+            tearDown()
+            throw error
+        }
         self.start()
     }
 
@@ -88,6 +94,13 @@ class AudioEngine {
             print("Could not set the audio category: \(error.localizedDescription)")
         }
 
+        // iOS mutes haptics while input runs by default; dictation taps the user on start and stop.
+        do {
+            try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+        } catch {
+            print("Could not allow haptics during recording: \(error.localizedDescription)")
+        }
+
         do {
             try session.setPreferredSampleRate(voiceIOFormat.sampleRate)
         } catch {
@@ -101,14 +114,10 @@ class AudioEngine {
         }
     }
 
-    func setup() {
+    func setup() throws {
         let input = avAudioEngine.inputNode
-        do {
-            try input.setVoiceProcessingEnabled(true)
-        } catch {
-            print("Could not enable voice processing \(error)")
-            return
-        }
+        // Throw rather than return: an engine with no mic tap would report recording and capture nothing.
+        try input.setVoiceProcessingEnabled(true)
 
         avAudioEngine.inputNode.isVoiceProcessingInputMuted = !isRecording
 
@@ -269,7 +278,7 @@ class AudioEngine {
 
     func stopRecordingAndPlayer(clearInterruptionResume: Bool = true){
         do {
-            try AVAudioSession.sharedInstance().setActive(false)
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
             print("Could not set the audio session to inactive: \(error)")
         }
@@ -288,8 +297,9 @@ class AudioEngine {
     func tearDown() {
         guard !isTornDown else { return }
         isTornDown = true
-        stopRecordingAndPlayer()
+        // Stop I/O first; deactivating a session with running I/O returns a busy error.
         avAudioEngine.stop()
+        stopRecordingAndPlayer()
     }
 
     var isPlaying: Bool {
@@ -355,7 +365,14 @@ class AudioEngine {
     private func handleMediaServicesWereReset() {
         guard !isTornDown else { return }
         self.avAudioEngine.stop()
-        self.setup()
+        do {
+            try self.setup()
+        } catch {
+            print("Could not rebuild the audio engine: \(error)")
+            tearDown()
+            onAudioInterruptionCallback?("blocked")
+            return
+        }
         self.start()
     }
 

@@ -1,34 +1,33 @@
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
-import { listSystemFontFamilies } from '../system-fonts'
-import { previewGhosttyImport } from '../ghostty/index'
-import { previewWarpThemeImport } from '../warp-themes'
+import { listSystemFontFamilies } from '../window/desktop-integration/system-fonts'
+import { registerSettingsImportHandlers } from './settings-import-handlers'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
-import type { AgentAwakeService } from '../agent-awake-service'
+import type { AgentAwakeService } from '../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
-import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
+import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
-import { applyAppIcon } from '../app-icon'
+import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
-import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
-import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
+import { prepareLocalWorktreeRootsForRepos } from '../workspaces/creation/worktree-root-preparation'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktrees/creation/worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
@@ -43,8 +42,10 @@ import {
 } from '../../shared/computer-awake-mode'
 import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
+const registryRoot = getRuntimeEnvironmentRegistryRoot
 
 type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
   terminalScrollbackBytes?: unknown
@@ -57,6 +58,7 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // Plugin consent and enablement require main's reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  delete sanitizedArgs.pluginExternalHostGrants
   return sanitizedArgs
 }
 
@@ -95,7 +97,7 @@ export function registerSettingsHandlers(
   })
 
   ipcMain.handle('settings:get', () =>
-    readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+    readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   )
 
   ipcMain.handle(
@@ -113,7 +115,7 @@ export function registerSettingsHandlers(
 
   // PTYs can bind before hydration; transport authority selection needs persisted settings synchronously.
   ipcMain.on('settings:get-sync', (event) => {
-    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
@@ -295,7 +297,7 @@ export function registerSettingsHandlers(
       }
       const requestedId = requestedEnvironmentId?.trim() || null
       const environmentId =
-        requestedId === null ? null : resolveEnvironment(app.getPath('userData'), requestedId).id
+        requestedId === null ? null : resolveEnvironment(registryRoot(), requestedId).id
       return store.updateSettings(
         { activeRuntimeEnvironmentId: environmentId },
         { notifyListeners: true, originWebContentsId: event.sender.id }
@@ -305,14 +307,7 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
-  ipcMain.handle('settings:previewGhosttyImport', () => {
-    return previewGhosttyImport(store)
-  })
-
-  ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {
-    const source = args === undefined ? { kind: 'auto' } : args
-    return previewWarpThemeImport(store, source, event.sender)
-  })
+  registerSettingsImportHandlers(store)
 
   ipcMain.handle('cache:getGitHub', () => {
     return store.getGitHubCache()

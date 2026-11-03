@@ -6,13 +6,13 @@ import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader,
   subagentStateLabel
-} from '../../../../shared/native-chat-subagent-group-header'
-import { normalizeSubagentState } from '../../../../shared/native-chat-subagent-summary'
+} from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
+import { normalizeSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import { formatNativeChatDuration } from './NativeChatWorkingStatus'
 import { nativeChatSubagentEntryRuns } from './native-chat-subagent-sections'
 import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'

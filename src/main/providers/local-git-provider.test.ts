@@ -40,8 +40,70 @@ const { git } = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('../git/status', () => git)
-vi.mock('../git/check-ignored-paths', () => ({ checkIgnoredPaths: git.checkIgnoredPaths }))
+vi.mock('../git/source-control/status-read', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getStatus: git.getStatus
+}))
+
+vi.mock('../git/source-control/submodule-status', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getSubmoduleStatus: git.getSubmoduleStatus
+}))
+
+vi.mock('../git/source-control/commit-changes', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  commitChanges: git.commitChanges
+}))
+
+vi.mock('../git/source-control/staged-commit-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getStagedCommitContext: git.getStagedCommitContext
+}))
+
+vi.mock('../git/source-control/file-diff', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDiff: git.getDiff
+}))
+
+vi.mock('../git/source-control/staging', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  stageFile: git.stageFile,
+  unstageFile: git.unstageFile,
+  bulkStageFiles: git.bulkStageFiles,
+  stageWorktreeChanges: git.stageWorktreeChanges,
+  bulkUnstageFiles: git.bulkUnstageFiles
+}))
+
+vi.mock('../git/source-control/discard-changes', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  discardChanges: git.discardChanges,
+  bulkDiscardChanges: git.bulkDiscardChanges
+}))
+
+vi.mock('../git/source-control/git-conflict-operation', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  detectConflictOperation: git.detectConflictOperation,
+  abortMerge: git.abortMerge,
+  abortRebase: git.abortRebase
+}))
+
+vi.mock('../git/source-control/branch-compare', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchCompare: git.getBranchCompare
+}))
+
+vi.mock('../git/source-control/commit-compare', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getCommitCompare: git.getCommitCompare
+}))
+
+vi.mock('../git/source-control/commit-diff', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getCommitDiff: git.getCommitDiff
+}))
+vi.mock('../git/source-control/check-ignored-paths', () => ({
+  checkIgnoredPaths: git.checkIgnoredPaths
+}))
 vi.mock('../git/checkout', () => ({
   checkoutBranch: git.checkoutBranch,
   listLocalBranches: git.listLocalBranches
@@ -49,10 +111,20 @@ vi.mock('../git/checkout', () => ({
 vi.mock('../git/history', () => ({ getHistory: git.getHistory }))
 vi.mock('../git/remote', () => git)
 vi.mock('../git/fork-sync', () => ({ gitSyncForkDefaultBranch: git.gitSyncForkDefaultBranch }))
-vi.mock('../git/upstream', () => ({ getUpstreamStatus: git.getUpstreamStatus }))
-vi.mock('../git/worktree', () => ({ listWorktrees: git.listWorktrees }))
+vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: git.getUpstreamStatus }))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', () => ({
+  listWorktrees: git.listWorktrees
+}))
 vi.mock('../git/repo', () => git)
-vi.mock('../git/runner', () => git)
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: git.gitExecFileAsync
+}))
+
+vi.mock('../git/command-runner/windows-host-git-environment', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  awaitWindowsHostGitEnvironmentReady: git.awaitWindowsHostGitEnvironmentReady
+}))
 
 import { createLocalGitProvider, type LocalGitProvider } from './local-git-provider'
 
@@ -208,7 +280,12 @@ const cases: ParityCase[] = [
     'gitExecFileAsync',
     [['status'], { cwd: WT, timeout: 5 }]
   ],
-  ['getRemoteFileUrl', (p) => p.getRemoteFileUrl(WT, 'a', 3), 'getRemoteFileUrl', [WT, 'a', 3]],
+  [
+    'getRemoteFileUrl',
+    (p) => p.getRemoteFileUrl(WT, 'a', 3, 8),
+    'getRemoteFileUrl',
+    [WT, 'a', 3, 8, {}]
+  ],
   ['getRemoteCommitUrl', (p) => p.getRemoteCommitUrl(WT, 'abc'), 'getRemoteCommitUrl', [WT, 'abc']]
 ]
 
@@ -231,7 +308,7 @@ describe('createLocalGitProvider', () => {
     await call(createLocalGitProvider({ wslDistro: 'Ubuntu' }))
     const args = git[fnName].mock.calls[0]
     const options = args.at(-1)
-    if (fnName === 'getRemoteFileUrl' || fnName === 'getRemoteCommitUrl') {
+    if (fnName === 'getRemoteCommitUrl') {
       // URL reads require Windows-hosted Git readiness, matching local execution.
       expect(git.awaitWindowsHostGitEnvironmentReady).toHaveBeenCalledWith({ cwd: WT })
       return

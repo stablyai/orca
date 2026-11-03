@@ -1,11 +1,14 @@
 // Record each store only after durable rewrite so crashes retry the unfinished stores.
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
+import { WSL_MOVE_RENDERER_REWRITE_STORE_IDS } from '../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 import type { OrcadMigrationPathRewriter } from '../../ssh/orcad-migration-path-rewrite'
 
 export type WslMoveDesktopRewriteContext = {
   cutover: Readonly<WslMoveCutover>
   rewritePath: OrcadMigrationPathRewriter
   destinationHostId: `runtime:${string}`
+  /** Durable before it returns; `cutover.seededHostWorkspaceIds` holds what earlier runs recorded. */
+  recordSeededHostWorkspaceIds: (workspaceIds: readonly string[]) => void
 }
 
 export type WslMoveMainRewriteStore = {
@@ -28,8 +31,8 @@ export type WslMoveDesktopRewriteStore = WslMoveMainRewriteStore | WslMoveRender
 const STORE_ID_PATTERN = /^[A-Za-z0-9:._-]{1,128}$/
 const MAX_STORES = 256
 
-// Keep moves at destination-committed until all desktop stores are registered.
-export const WSL_MOVE_DESKTOP_REWRITE_REGISTRY_COMPLETE: boolean = false
+// Every desktop-rewrite disposition has its store (wsl-move-rewrite-store-coverage.test.ts proves it).
+export const WSL_MOVE_DESKTOP_REWRITE_REGISTRY_COMPLETE: boolean = true
 
 let registryComplete = WSL_MOVE_DESKTOP_REWRITE_REGISTRY_COMPLETE
 
@@ -57,6 +60,13 @@ export function registerWslMoveDesktopRewriteStore(store: WslMoveDesktopRewriteS
     throw new Error('wsl_move_rewrite_store_limit')
   }
   stores.push(store)
+}
+
+/** The renderer's localStorage stores; the renderer rewrites and records each. */
+export function registerWslMoveRendererRewriteStores(): void {
+  for (const id of WSL_MOVE_RENDERER_REWRITE_STORE_IDS) {
+    registerWslMoveDesktopRewriteStore({ id, side: 'renderer' })
+  }
 }
 
 export function listWslMoveDesktopRewriteStores(): readonly WslMoveDesktopRewriteStore[] {

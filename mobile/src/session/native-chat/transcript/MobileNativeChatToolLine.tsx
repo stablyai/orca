@@ -1,42 +1,65 @@
 import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
-import { agentJournalToolCallLifecycle } from '../../../../../src/shared/agent-journal-tool-call-lifecycle'
 import {
   diffFromText,
   diffFromToolCall
 } from '../../../../../src/shared/native-chat/tools/native-chat-diff'
 import type { NativeChatDiffLine } from '../../../../../src/shared/native-chat/tools/native-chat-diff'
 import {
-  formatToolDuration,
   mcpToolIdentity,
-  toolWebSearchResults,
   type NativeChatWebSearchResult
 } from '../../../../../src/shared/native-chat/tools/native-chat-tool-identity'
 import { nativeChatToolIconName } from '../../../../../src/shared/native-chat/tools/native-chat-tool-icon'
-import {
-  NATIVE_CHAT_TOOL_ROW_VERB_COPY,
-  nativeChatToolLineLabel
-} from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-label'
-import {
-  isToolCallBlock,
-  type NativeChatToolCallBlock,
-  type NativeChatToolResultBlock
-} from '../../../../../src/shared/native-chat-types'
+import { nativeChatToolRowVerbCopy } from './native-chat-tool-row-verb-copy'
+import { nativeChatToolLineView } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-view'
+import type {
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
+} from '../../../../../src/shared/native-chat/native-chat-types'
+import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { openExternalLink } from '../../../platform/external-link'
-import { colors } from '../../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { highlightMobileCode } from '../../mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
-import { MobileNativeChatToolOutput } from '../../MobileNativeChatFullContent'
+import { MobileNativeChatToolOutput } from '../MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
-import { useMobileNativeChatDisclosure } from '../../mobile-native-chat-disclosure-store'
+import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
-const RESULT_LABEL = 'Result'
-const NO_SEARCH_RESULTS: NativeChatWebSearchResult[] = []
+function toolDuration(durationMs: unknown, t: Translate): string | null {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
+    return null
+  }
+  if (durationMs < 1000) {
+    return t('chat.nativeChatToolLine.durationMilliseconds', '{{milliseconds}}ms', {
+      milliseconds: Math.round(durationMs)
+    })
+  }
+  const totalSeconds = Math.floor(durationMs / 1000)
+  const seconds = totalSeconds % 60
+  const minutes = Math.floor(totalSeconds / 60)
+  if (totalSeconds < 60) {
+    return t('chat.nativeChatToolLine.durationSeconds', '{{seconds}}s', { seconds })
+  }
+  if (minutes < 60) {
+    return t('chat.nativeChatToolLine.durationMinutes', '{{minutes}}m {{seconds}}s', {
+      minutes,
+      seconds
+    })
+  }
+  return t('chat.nativeChatToolLine.durationHours', '{{hours}}h {{minutes}}m {{seconds}}s', {
+    hours: Math.floor(minutes / 60),
+    minutes: minutes % 60,
+    seconds
+  })
+}
 
 function SearchResults({
   results,
@@ -45,6 +68,7 @@ function SearchResults({
   results: NativeChatWebSearchResult[]
   fontScale: number
 }): React.JSX.Element {
+  useMobileColorScheme()
   const type = toolType(fontScale).meta
   return (
     <View style={[styles.codeBox, styles.searchResults]}>
@@ -65,6 +89,7 @@ function SearchResults({
 }
 
 function DiffView({ lines, fontScale }: { lines: NativeChatDiffLine[]; fontScale: number }) {
+  useMobileColorScheme()
   const type = toolType(fontScale).code
   return (
     <View style={styles.codeBox}>
@@ -107,6 +132,7 @@ function ToolLineDetail({
   disclosureKey?: string
   memberId?: string
 }): React.JSX.Element {
+  useMobileColorScheme()
   const diff = call
     ? diffFromToolCall(call.name, call.input)
     : body
@@ -165,91 +191,94 @@ export function MobileNativeChatToolLine({
   fontScale: number
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
-  const call = isToolCallBlock(block) ? block : undefined
-  const label = call ? nativeChatToolLineLabel(call, result) : null
-  const body = call ? result : block.type === 'tool-result' ? block : undefined
-  const fullCommand = label?.commandDetail ?? null
-  // User interruption is not tool failure.
-  const lifecycle = call ? agentJournalToolCallLifecycle(call) : null
-  const failed = lifecycle === 'failed' || (lifecycle !== 'interrupted' && result?.isError === true)
-  const verb = label?.verb ? NATIVE_CHAT_TOOL_ROW_VERB_COPY[label.verb] : null
+  const { call, label, body, resultPreview, failed, results, hasDetail } = useMemo(
+    () => nativeChatToolLineView(block, result),
+    [block, result]
+  )
+  const commandDetail = label?.commandDetail ?? null
+  const fullCommand = label?.fullCommand ?? null
+  const verb = label?.verb ? nativeChatToolRowVerbCopy(t)[label.verb] : null
   const commandAlone = label?.command === true && verb !== null && label.target.length > 0
   const mcp = call ? mcpToolIdentity(call.name, call.mcpIdentity) : null
-  const name = call ? (mcp ? `${mcp.server} / ${mcp.tool}` : call.name) : RESULT_LABEL
-  const target = label ? label.target : (body?.output.split('\n')[0]?.slice(0, 80) ?? '')
-  const results = useMemo(
-    () => (call ? toolWebSearchResults(call.webSearchResults) : NO_SEARCH_RESULTS),
-    [call]
-  )
-  // An edit that has not landed has no output yet, but the change it proposes is worth opening.
-  const hasDetail =
-    body !== undefined ||
-    fullCommand !== null ||
-    results.length > 0 ||
-    (call !== undefined && diffFromToolCall(call.name, call.input) !== null)
+  const name = call
+    ? mcp
+      ? `${mcp.server} / ${mcp.tool}`
+      : call.name
+    : t('chat.nativeChatToolLine.result', 'Result')
+  const target = label ? label.target : resultPreview
   const filePath = label?.filePath ?? null
   const type = toolType(fontScale)
   const iconSize = 15 * fontScale
   const exitCode = call && Number.isSafeInteger(call.exitCode) ? call.exitCode : undefined
-  const duration = call ? formatToolDuration(call.durationMs) : null
+  const duration = call ? toolDuration(call.durationMs, t) : null
 
   return (
     <View testID={memberId}>
-      <Pressable
-        style={styles.line}
-        onPress={() => hasDetail && setExpanded(!expanded)}
-        disabled={!hasDetail}
-        accessibilityRole="button"
-        accessibilityState={hasDetail ? { expanded } : undefined}
-      >
-        <View style={[styles.iconSlot, { width: iconSize }]}>
-          {call ? (
-            <MobileNativeChatToolGlyph
-              name={nativeChatToolIconName(call.name, call.mcpIdentity, call.input)}
-              size={iconSize}
-              color={failed ? colors.statusRed : colors.textMuted}
-            />
-          ) : null}
-        </View>
-        {commandAlone ? null : (
-          <Text style={[styles.lineWord, type.row, !verb && styles.lineName]} numberOfLines={1}>
-            {verb ?? name}
-          </Text>
-        )}
-        {target ? (
-          <Text
-            style={[styles.lineTarget, type.row, filePath && onOpenFile && styles.lineLink]}
-            numberOfLines={1}
-            onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : undefined}
-            suppressHighlighting={!(filePath && onOpenFile)}
-            accessibilityRole={filePath && onOpenFile ? 'link' : undefined}
-          >
-            {target}
-          </Text>
-        ) : null}
-        {/* Held at the row's right edge, so the carets of a run line up in one column. */}
-        <View style={styles.lineTrailing}>
-          {exitCode !== undefined ? (
-            <Text style={[styles.lineMeta, type.meta, exitCode !== 0 && styles.errorText]}>
-              {`exit ${exitCode}`}
+      <View style={styles.line}>
+        <Pressable
+          style={({ pressed }) => [styles.line, styles.cardToggle, pressed && pressedStyle]}
+          onPress={() => hasDetail && setExpanded(!expanded)}
+          disabled={!hasDetail}
+          accessibilityRole="button"
+          accessibilityState={hasDetail ? { expanded } : undefined}
+        >
+          <View style={[styles.iconSlot, { width: iconSize }]}>
+            {call ? (
+              <MobileNativeChatToolGlyph
+                name={nativeChatToolIconName(call.name, call.mcpIdentity, call.input)}
+                size={iconSize}
+                color={failed ? colors.statusRed : colors.textMuted}
+              />
+            ) : null}
+          </View>
+          {commandAlone ? null : (
+            <Text style={[styles.lineWord, type.row, !verb && styles.lineName]} numberOfLines={1}>
+              {verb ?? name}
+            </Text>
+          )}
+          {target ? (
+            <Text
+              style={[styles.lineTarget, type.row, filePath && onOpenFile && styles.lineLink]}
+              numberOfLines={1}
+              onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : undefined}
+              suppressHighlighting={!(filePath && onOpenFile)}
+              accessibilityRole={filePath && onOpenFile ? 'link' : undefined}
+            >
+              {target}
             </Text>
           ) : null}
-          {duration ? <Text style={[styles.lineMeta, type.meta]}>{duration}</Text> : null}
-          {hasDetail ? (
-            <View style={expanded ? styles.caretOpen : undefined}>
-              <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
-            </View>
-          ) : null}
-        </View>
-      </Pressable>
+          {/* Held at the row's right edge, so the carets of a run line up in one column. */}
+          <View style={styles.lineTrailing}>
+            {exitCode !== undefined ? (
+              <Text style={[styles.lineMeta, type.meta, exitCode !== 0 && styles.errorText]}>
+                {t('chat.nativeChatToolLine.exitCode', 'exit {{exitCode}}', { exitCode })}
+              </Text>
+            ) : null}
+            {duration ? <Text style={[styles.lineMeta, type.meta]}>{duration}</Text> : null}
+            {hasDetail ? (
+              <View style={expanded ? styles.caretOpen : undefined}>
+                <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+              </View>
+            ) : null}
+          </View>
+        </Pressable>
+        {fullCommand ? (
+          <MobileSourceCopyButton
+            text={fullCommand}
+            accessibilityLabel={t('chat.nativeChatToolLine.copyCommand', 'Copy command')}
+          />
+        ) : null}
+      </View>
       {hasDetail && expanded ? (
         <ToolLineDetail
           memberId={memberId}
           disclosureKey={disclosureKey}
           call={call}
           body={body}
-          fullCommand={fullCommand}
+          fullCommand={commandDetail}
           commandLanguage={label?.commandLanguage ?? null}
           results={results}
           fontScale={fontScale}

@@ -83,8 +83,8 @@ function seedRepos(repos: readonly Repo[] = [localRepo, executionRepo], configur
   useAppStore.setState({
     settings: null,
     repos,
-    endpointProjects: [...projection.projects],
-    endpointProjectHostSetups: [...projection.setups],
+    projects: [...projection.projects],
+    projectHostSetups: [...projection.setups],
     projectGroups: [],
     newWorkspaceDraft: null,
     worktreesByRepo: {},

@@ -1,16 +1,16 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   createNativeChatReplyRevealTracker,
   trackNativeChatReplyRows
-} from '../../../../../src/shared/native-chat-reply-reveals'
-import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../../src/shared/native-chat-text-reveal'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-reply-reveals'
+import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../../src/shared/native-chat/transcript/native-chat-text-reveal'
 import {
   MobileNativeChatReplyRevealsContext,
   type MobileNativeChatReplyReveals
-} from '../../mobile-native-chat-reply-reveals'
+} from './mobile-native-chat-reply-reveals'
 import {
   createMobileNativeChatGrowthHold,
   MobileNativeChatGrowthHoldContext
@@ -32,8 +32,8 @@ vi.mock('../../../platform/clipboard', () => ({
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
-vi.mock('../../MobileNativeChatReasoningRow', () => ({ MobileNativeChatReasoningRow: 'Reasoning' }))
-vi.mock('../../MobileNativeChatTurnStatus', () => ({ MobileNativeChatTurnStatus: 'TurnStatus' }))
+vi.mock('./MobileNativeChatReasoningRow', () => ({ MobileNativeChatReasoningRow: 'Reasoning' }))
+vi.mock('./MobileNativeChatTurnStatus', () => ({ MobileNativeChatTurnStatus: 'TurnStatus' }))
 vi.mock('./MobileNativeChatToolRun', () => ({ ToolRun: 'ToolRun' }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'

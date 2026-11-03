@@ -5,9 +5,10 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 /** Apply deltas at the owning runtime so desktop/mobile choices cannot replace each other’s records. */
 export function enqueueSessionOptionSettingsWrite(
   target: RuntimeClientTarget,
-  mutation: NativeChatSessionOptionSettingsMutation
+  mutation: NativeChatSessionOptionSettingsMutation,
+  options: { expectedEnvironmentPairingRevision?: number } = {}
 ): Promise<void> {
-  return callRuntimeRpc(target, 'settings.mutateNativeChatSessionOptions', mutation)
+  return callRuntimeRpc(target, 'settings.mutateNativeChatSessionOptions', mutation, options)
     .then(() => undefined)
     .catch(() => undefined)
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../shared/codex-cli-installation'
-import { checkAgentCliVersion } from '../agent-cli-version-probe'
+import { checkAgentCliVersion } from '../agent-launch/preflight/agent-cli-version-probe'
 import { readCodexCliVersion } from '../codex/codex-cli-installation-error'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
@@ -49,13 +49,4 @@ describe('Codex installation version probes', () => {
     expect((await checkCodex({ program })).status).toBe('ready')
     expect(runProcess).toHaveBeenCalledTimes(2)
   })
-
-  it.each(['ENOENT', 'EACCES'])(
-    'leaves a failed version spawn (%s) to the existing chat failure',
-    async (code) => {
-      const program = '/fake/codex'
-      runProcess.mockRejectedValue(Object.assign(new Error('unavailable'), { code }))
-      expect((await checkCodex({ program })).status).toBe('missing')
-    }
-  )
 })

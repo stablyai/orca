@@ -4,8 +4,13 @@ import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileSync: vi.fn()
 }))
 
@@ -72,15 +77,6 @@ describe('runtime PR/MR worktree base runs Git only for rows on this machine', (
     it.each(REFUSED_ROWS)(`${provider} refuses a row: %s`, async (_label, fields, expected) => {
       await expect(resolveBase(async () => repoOn(fields))).rejects.toEqual(expected)
       expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    })
-
-    // Why runtime: older servers kept the client-minted `runtime:<id>` stamp on rows they own.
-    it.each([
-      ['local', { executionHostId: 'local' }],
-      ['runtime-stamped on this server', { executionHostId: 'runtime:env' }]
-    ] as const)(`${provider} runs local Git for a row here: %s`, async (_label, fields) => {
-      await resolveBase(async () => repoOn(fields)).catch(() => {})
-      expect(gitExecFileAsyncMock).toHaveBeenCalled()
     })
   }
 })

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { PtySpawnIpcDeps } from './spawn-types'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
 
