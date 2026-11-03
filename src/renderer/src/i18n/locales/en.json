@@ -17424,6 +17424,8 @@
               "25349b66fc": "New Markdown File",
               "784812ca24": "Open a browser tab in the active workspace.",
               "892bfa9339": "New Browser Tab",
+              "moveToStatus": "Move to Status",
+              "moveToStatusDescription": "Set the status of the current workspace.",
               "verbs": {
                 "newBrowser": "new browser",
                 "newBrowserTab": "new browser tab",
@@ -17447,6 +17449,10 @@
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
                 "newQuickCommand": "new quick command",
+                "moveToStatus": "move to status",
+                "setStatus": "set status",
+                "changeStatus": "change status",
+                "workspaceStatus": "workspace status",
                 "splitChatRight": "split chat right",
                 "newChatRight": "new chat right",
                 "chatPaneRight": "chat pane right",
@@ -17477,6 +17483,17 @@
             "description": "{{value0}} plugin command",
             "keyword": "plugin command",
             "newFileDescription": "Create an untitled {{value0}} file in the active workspace."
+          },
+          "workspaceStatusPicker": {
+            "title": "Move to Status",
+            "description": "Choose a status for the current workspace.",
+            "placeholder": "Search statuses...",
+            "empty": "No matching statuses.",
+            "enterKey": "Enter",
+            "select": "Select",
+            "escKey": "Esc",
+            "close": "Close",
+            "move": "Move"
           }
         }
       },

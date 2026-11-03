@@ -42,6 +42,7 @@ const StatusBar = lazy(() =>
 const SetupGuideModal = lazy(() => import('../components/setup-guide/SetupGuideModal'))
 const FeatureWallModal = lazy(() => import('../components/feature-wall/FeatureWallModal'))
 const FeatureTipsModal = lazy(() => import('../components/feature-tips/FeatureTipsModal'))
+const WorkspaceStatusPicker = lazy(() => import('../components/cmd-j/WorkspaceStatusPicker'))
 const AddRepoDialog = lazy(() => import('../components/sidebar/AddRepoDialog'))
 const NonGitFolderDialog = lazy(() => import('../components/sidebar/NonGitFolderDialog'))
 const AddProjectFromFolderDialog = lazy(
@@ -242,6 +243,14 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             resetKey={activeModal === 'worktree-palette'}
           >
             <WorktreeJumpPalette />
+          </ModalBoundary>
+        ) : null}
+        {mountedLazyModalIds.has('workspace-status-picker') ? (
+          <ModalBoundary
+            boundaryId="modal.workspace-status-picker"
+            resetKey={activeModal === 'workspace-status-picker'}
+          >
+            <WorkspaceStatusPicker />
           </ModalBoundary>
         ) : null}
         {mountedLazyModalIds.has('setup-guide') ? (

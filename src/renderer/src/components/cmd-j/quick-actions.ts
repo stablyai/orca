@@ -2,6 +2,7 @@ import {
   FileText,
   FolderPlus,
   Globe,
+  Kanban,
   PanelRightClose,
   Play,
   SquareTerminal,
@@ -200,6 +201,31 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
         return { status: 'unavailable', reason: availability.reason }
       }
       ctx.deleteActiveWorkspace()
+      return { status: 'ok' }
+    }
+  },
+  {
+    id: 'move-to-status',
+    kind: 'action',
+    title: translate('auto.components.cmd.j.quick.actions.moveToStatus', 'Move to Status'),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.moveToStatusDescription',
+      'Set the status of the current workspace.'
+    ),
+    icon: Kanban,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.moveToStatus', 'move to status'),
+      translate('auto.components.cmd.j.quick.actions.verbs.setStatus', 'set status'),
+      translate('auto.components.cmd.j.quick.actions.verbs.changeStatus', 'change status'),
+      translate('auto.components.cmd.j.quick.actions.verbs.workspaceStatus', 'workspace status')
+    ],
+    isAvailable: currentWorkspaceActionAvailability,
+    run: async (ctx) => {
+      const availability = currentWorkspaceActionAvailability(ctx)
+      if (!availability.available) {
+        return { status: 'unavailable', reason: availability.reason }
+      }
+      ctx.openWorkspaceStatusPicker()
       return { status: 'ok' }
     }
   },

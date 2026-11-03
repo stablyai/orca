@@ -55,6 +55,7 @@ export type UISliceContextual = {
     | 'diagram-viewer'
     | 'agent-session-history'
     | 'node-dist-mirror'
+    | 'workspace-status-picker'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildCmdJQuickActionContext,
   getCurrentWorkspaceActionAvailability,
@@ -6,6 +6,7 @@ import {
   resolveCmdJActiveGroupId,
   type CmdJQuickActionContext
 } from './quick-action-context'
+import { buildCmdJActionResults, rankCmdJMiddleResults } from './palette-results'
 import { getCmdJQuickActions } from './quick-actions'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -110,7 +111,8 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {}
     } satisfies CmdJQuickActionContext
 
     expect(
@@ -132,7 +134,7 @@ describe('Cmd+J quick action context', () => {
 
   it('applies the availability matrix across curated actions', () => {
     const workspaceActions = ['new-browser-tab', 'new-markdown-file', 'new-terminal-tab']
-    const currentWorkspaceActions = ['delete-workspace']
+    const currentWorkspaceActions = ['delete-workspace', 'move-to-status']
     const workspaceAgnosticActions = ['create-workspace', 'add-quick-command']
     const actionById = new Map(getCmdJQuickActions().map((action) => [action.id, action]))
     const baseContext = {
@@ -145,7 +147,8 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {}
     } satisfies CmdJQuickActionContext
 
     for (const actionId of workspaceActions) {
@@ -226,7 +229,8 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {}
     })
 
     expect(context.activeGroupId).toBe('first-group')
@@ -253,7 +257,8 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {}
     })
 
     expect(context.isLoading).toBe(true)
@@ -311,7 +316,8 @@ describe('Cmd+J quick action context', () => {
         openNewTerminalTab: async () => {},
         openCreateWorkspace: () => {},
         deleteActiveWorkspace: () => {},
-        openAddQuickCommand: () => {}
+        openAddQuickCommand: () => {},
+        openWorkspaceStatusPicker: () => {}
       })
 
     expect(buildContext('terminal').canSplitActiveChat).toBe(true)
@@ -333,7 +339,8 @@ describe('Cmd+J quick action context', () => {
       },
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {}
     } satisfies CmdJQuickActionContext
 
     await expect(action?.run(context)).resolves.toEqual({
@@ -365,7 +372,8 @@ describe('Cmd+J quick action context', () => {
       },
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {}
     } satisfies CmdJQuickActionContext
 
     expect(actions.get('new-browser-tab')?.isAvailable(context)).toEqual({
@@ -398,7 +406,8 @@ describe('Cmd+J quick action context', () => {
       deleteActiveWorkspace: () => {
         calls.push('delete')
       },
-      openAddQuickCommand: () => {}
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {}
     } satisfies CmdJQuickActionContext
 
     await expect(action?.run(context)).resolves.toEqual({ status: 'ok' })
@@ -419,6 +428,7 @@ describe('Cmd+J quick action context', () => {
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
       openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {},
       canSplitActiveChat: true,
       splitActiveChat: (direction: string) => {
         calls.push(direction)
@@ -433,5 +443,42 @@ describe('Cmd+J quick action context', () => {
       available: false,
       reason: 'no-active-chat'
     })
+  })
+})
+
+describe('Move to Status quick action', () => {
+  const action = getCmdJQuickActions().find((item) => item.id === 'move-to-status')!
+  const results = buildCmdJActionResults(getCmdJQuickActions())
+  const topResult = (query: string) =>
+    rankCmdJMiddleResults({ query, settingsResults: [], actionResults: results })[0]?.id
+
+  it('is found by the words people use for it', () => {
+    for (const query of ['move to status', 'move status', 'set status', 'change status']) {
+      expect(topResult(query)).toBe('move-to-status')
+    }
+  })
+
+  it('opens the status picker', async () => {
+    const openWorkspaceStatusPicker = vi.fn()
+    const context = {
+      ...ctx({}),
+      activeWorktree: null,
+      runtimeMode: 'local-desktop' as const,
+      openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
+      openNewMarkdownFile: async () => {},
+      openNewTerminalTab: async () => {},
+      openCreateWorkspace: () => {},
+      deleteActiveWorkspace: () => {},
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker
+    } satisfies CmdJQuickActionContext
+    await expect(action.run(context)).resolves.toEqual({ status: 'ok' })
+    expect(openWorkspaceStatusPicker).toHaveBeenCalledOnce()
+    await expect(action.run({ ...context, activeWorktreeId: null })).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'no-active-workspace'
+    })
+    expect(openWorkspaceStatusPicker).toHaveBeenCalledOnce()
   })
 })
