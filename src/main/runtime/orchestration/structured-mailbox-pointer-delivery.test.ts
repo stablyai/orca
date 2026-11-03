@@ -277,7 +277,7 @@ describe('structured mailbox delivery: each message whole', () => {
     for (let index = 1; index <= 51; index += 1) {
       h.receive(`m${index}`)
     }
-    h.host.send.mockImplementation(async (input) => {
+    vi.mocked(h.host.send).mockImplementation(async (input) => {
       if (!input.stillOwed()) {
         return { kind: 'obsolete' }
       }
