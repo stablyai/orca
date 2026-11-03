@@ -205,7 +205,7 @@ export function TerminalPaneView({
 
 const styles = themedStyleSheet(() => ({
   terminalPane: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   paneViewport: { flex: 1, overflow: 'hidden' },
   paneHeading: {

@@ -1,14 +1,14 @@
 import { useCallback, useLayoutEffect, useReducer, useRef, useState, type RefObject } from 'react'
-import { useWindowDimensions, type LayoutChangeEvent, type View } from 'react-native'
+import { useWindowDimensions, type LayoutChangeEvent, type HostInstance } from 'react-native'
 import type { DetailCardAnchor } from './AnchoredDetailCard'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 
 export type DetailCardSource = {
   key: string
-  anchorRef: RefObject<Pick<View, 'measureInWindow'> | null>
-  barRef: RefObject<View | null>
-  openerRef: RefObject<View | null>
+  anchorRef: RefObject<Pick<HostInstance, 'measureInWindow'> | null>
+  barRef: RefObject<HostInstance | null>
+  openerRef: RefObject<HostInstance | null>
   geometry: 'dismiss' | 'refresh'
 }
 type Request = { id: number; source: DetailCardSource }
@@ -95,9 +95,9 @@ function reduce(state: State, action: Action): State {
 }
 
 export function useAnchoredDetailCard(placement: string, obscured: boolean) {
-  const layerRef = useRef<View>(null)
-  const contentRef = useRef<View>(null)
-  const backRef = useRef<View>(null)
+  const layerRef = useRef<HostInstance>(null)
+  const contentRef = useRef<HostInstance>(null)
+  const backRef = useRef<HostInstance>(null)
   const boundaryRefs = useRef<unknown[]>([])
   const sources = useRef(new Map<string, DetailCardSource>())
   const [state, dispatch] = useReducer(reduce, { serial: 0, request: null, visual: null })

@@ -156,6 +156,32 @@ export const lucideBarrelPlugin = {
   }
 }
 
+// react-native-svg 15.16 reaches two native-only modules from its web build: the asset registry RN 0.88
+// folded into react-native (react-native-web keeps its own), and an Android touch-sound TurboModule
+// it requires only when Platform.OS is android. Shared with the render checks so they bundle alike.
+export const reactNativeSvgWebPlugin = {
+  name: 'react-native-svg-web',
+  setup(build) {
+    build.onResolve({ filter: /^@react-native\/assets-registry\/registry$/ }, () =>
+      build.resolve('react-native-web/dist/modules/AssetRegistry', {
+        kind: 'import-statement',
+        resolveDir: mobileDir
+      })
+    )
+    build.onResolve({ filter: /[\\/]fabric[\\/]NativeSvgSoundModule$/ }, (args) => ({
+      path: args.path,
+      namespace: 'react-native-svg-web-stub'
+    }))
+    build.onLoad({ filter: /.*/, namespace: 'react-native-svg-web-stub' }, () => ({
+      contents: 'export default { playTouchSound() {} };',
+      loader: 'js'
+    }))
+  }
+}
+
+// Render checks bundle components on their own; share the page's module shims so they resolve alike.
+export const mobileWebRenderCheckPlugins = [lucideBarrelPlugin, reactNativeSvgWebPlugin]
+
 // react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
 const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
 // Round native hairline upward to 1/64 CSS px: WebKit floors exact 1/3 to 21/64 and paints nothing at 3×; 22/64 minimizes spill across rows.
@@ -220,6 +246,7 @@ export function mobileWebAppBuildOptions(routes) {
     plugins: [
       routeManifestPlugin(renderMobileWebAppRouteManifest(routes)),
       lucideBarrelPlugin,
+      reactNativeSvgWebPlugin,
       hairlineDevicePixelPlugin
     ],
     resolveExtensions: [

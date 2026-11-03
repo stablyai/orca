@@ -1,5 +1,5 @@
 import { useMemo, useRef, type RefObject } from 'react'
-import { View, Text, Pressable, type LayoutChangeEvent } from 'react-native'
+import { View, Text, Pressable, type LayoutChangeEvent, type HostInstance } from 'react-native'
 import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
 import { DetailCardFocusBoundary } from '../components/detail-card-host'
 import { useDetailCardSource, type DetailCardSource } from '../components/use-anchored-detail-card'
@@ -32,13 +32,13 @@ export function MobileSessionTab({
   tabState?: AgentDotState
   agentId: string | null
   details: SessionTitleCard['tabDetails']
-  barRef: RefObject<View | null>
+  barRef: RefObject<HostInstance | null>
   onLayout: (event: LayoutChangeEvent) => void
   onPress: (source: DetailCardSource) => void
   onLongPress: () => void
 }) {
   const t = useMobileTranslation()
-  const openerRef = useRef<View>(null)
+  const openerRef = useRef<HostInstance>(null)
   const source = useMemo<DetailCardSource>(
     () => ({ key: `tab:${tab.id}`, anchorRef: openerRef, openerRef, barRef, geometry: 'refresh' }),
     [tab.id, barRef]

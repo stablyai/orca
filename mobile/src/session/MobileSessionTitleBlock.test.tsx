@@ -1,5 +1,5 @@
 import { createContext, useMemo, useRef } from 'react'
-import { Animated, Pressable, View } from 'react-native'
+import { Animated, Pressable, View, type HostInstance } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { assert, expect, it, vi } from 'vitest'
 import { MobileSessionHeader } from './MobileSessionHeader'
@@ -123,7 +123,7 @@ const header = headerFields as MobileSessionController
 
 function Fixture() {
   const details = useSessionTitleCard(true, false, [{ id: 'back' }])
-  const tabRef = useRef<View>(null)
+  const tabRef = useRef<HostInstance>(null)
   const source = useMemo<DetailCardSource>(
     () => ({
       key: 'tab:back',

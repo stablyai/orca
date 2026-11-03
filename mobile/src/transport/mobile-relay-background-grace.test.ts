@@ -14,7 +14,7 @@ describe('MobileRelayBackgroundGraceTimer', () => {
       {
         now: Date.now,
         setTimer: (handler, ms) => setTimeout(handler, ms),
-        clearTimer: (handle) => clearTimeout(handle)
+        clearTimer: (handle) => handle != null && clearTimeout(handle)
       },
       onExpired
     )
@@ -59,7 +59,7 @@ describe('MobileRelayBackgroundGraceTimer', () => {
           callbacks.push(next)
           return setTimeout(() => {}, 0)
         }),
-        clearTimer: vi.fn((handle) => clearTimeout(handle))
+        clearTimer: vi.fn((handle) => handle != null && clearTimeout(handle))
       },
       onExpired
     )

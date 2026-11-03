@@ -16,7 +16,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   StyleSheet: {
-    absoluteFillObject: {
+    absoluteFill: {
       bottom: 0,
       left: 0,
       position: 'absolute',

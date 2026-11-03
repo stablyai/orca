@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import type { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 import { ChevronLeft, ExternalLink, MoreHorizontal, RefreshCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
@@ -37,7 +37,7 @@ export function MobileSourceControlHeader({
   menuGroups = null
 }: Props) {
   const t = useMobileTranslation()
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const actions: ActionSheetAction[] = [
     {

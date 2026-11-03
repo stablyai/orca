@@ -1,6 +1,6 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AppState, type View } from 'react-native'
+import { AppState, type HostInstance } from 'react-native'
 import type { MobileBrowserTab } from '../session/mobile-session-route-types'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -114,7 +114,7 @@ export function MobileBrowserPane({
   }, [])
 
   const setRootViewRef = useCallback(
-    (node: View | null) => {
+    (node: HostInstance | null) => {
       // Clear surface-owned long-press timers at ref cleanup to preserve unmount boundary.
       if (node === null) {
         clearLongPressTimer()

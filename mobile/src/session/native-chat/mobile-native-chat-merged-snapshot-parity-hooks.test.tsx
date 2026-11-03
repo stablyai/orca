@@ -37,7 +37,7 @@ vi.mock('react-native', async () => {
     }),
     Platform: { OS: 'ios' },
     Pressable: 'Pressable',
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1, absoluteFillObject: {} },
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1, absoluteFill: {} },
     Text: 'Text',
     View: 'View'
   }

@@ -225,7 +225,7 @@ function dependencies(
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),
     setTimer: (handler, ms) => setTimeout(handler, ms),
-    clearTimer: (handle) => clearTimeout(handle),
+    clearTimer: (handle) => handle != null && clearTimeout(handle),
     ...overrides
   }
 }

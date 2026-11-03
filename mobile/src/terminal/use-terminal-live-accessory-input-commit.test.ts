@@ -1,6 +1,6 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSelection } from './terminal-live-text-commit'
@@ -76,7 +76,7 @@ function createAccessoryInputCommitHarness({
     : null
   const liveInputRef = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RN-Web hands the hook the DOM input as its TextInput ref; this models its caret fields.
-    current: webField as unknown as TextInput | null
+    current: webField as unknown as TextInputInstance | null
   }
   const liveInputTerminalHandles = new Set([activeHandle])
   const applyLiveInputMirror = vi.fn(

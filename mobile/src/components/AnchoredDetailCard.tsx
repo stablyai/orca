@@ -6,7 +6,8 @@ import {
   ScrollView,
   Text,
   View,
-  type LayoutRectangle
+  type LayoutRectangle,
+  type HostInstance
 } from 'react-native'
 import { DetailCardFocusBoundary, commitDetailCardExit } from './detail-card-host'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
@@ -44,7 +45,7 @@ export function AnchoredDetailCard({
   target: 0 | 1
   motion: number
   bounds: { left: number; top: number; right: number; bottom: number }
-  contentRef: RefObject<View | null>
+  contentRef: RefObject<HostInstance | null>
   boundaryRefs: RefObject<unknown[]>
   active: boolean
   obscured: boolean

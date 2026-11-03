@@ -39,7 +39,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'android', select: (options: { android?: unknown }) => options.android },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFill: {} },
   View: 'View',
   useWindowDimensions: () => ({ width: 412, height: 900 })
 }))

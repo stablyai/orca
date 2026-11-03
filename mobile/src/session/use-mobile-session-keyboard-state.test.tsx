@@ -40,6 +40,7 @@ import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-sta
 
 const router: RouteHandoff = {
   back: () => {},
+  setTransitionMode: () => {},
   canDismiss: () => false,
   canGoBack: () => false,
   dismiss: () => {},

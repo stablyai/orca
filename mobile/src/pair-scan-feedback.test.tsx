@@ -46,7 +46,7 @@ vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   ActivityIndicator: 'ActivityIndicator',
   Linking: { openSettings: vi.fn() },
-  StyleSheet: { create: (value: unknown) => value, absoluteFillObject: {} },
+  StyleSheet: { create: (value: unknown) => value, absoluteFill: {} },
   AppState: {
     addEventListener: (_event: string, callback: (state: string) => void) => {
       mocks.appState = callback

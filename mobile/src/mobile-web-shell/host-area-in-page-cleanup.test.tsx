@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
   View: 'View',
-  StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
   Keyboard: { dismiss: () => {} },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'ios' }

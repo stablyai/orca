@@ -8,7 +8,7 @@ import type { MobileImageSource } from '../../platform/media-picker-contract'
 import { findByHostType } from '../../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
-  StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
   View: 'View'
 }))
 

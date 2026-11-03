@@ -153,7 +153,7 @@ const styles = themedStyleSheet(() => ({
     overflow: 'hidden'
   },
   screen: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.bgBase
   },
   transparent: {

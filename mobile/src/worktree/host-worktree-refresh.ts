@@ -9,7 +9,7 @@ type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
 
 // Keep lifecycle callers independent of RN types.
 type HostAppState = {
-  currentState: string
+  currentState: string | null | undefined
   addEventListener: (type: 'change', listener: (state: string) => void) => { remove: () => void }
 }
 

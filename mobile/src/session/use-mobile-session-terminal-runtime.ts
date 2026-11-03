@@ -6,7 +6,7 @@ import {
 import type { PendingSessionSelection } from './pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
-import { Alert, type Keyboard, type TextInput } from 'react-native'
+import { Alert, type Keyboard } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -31,6 +31,7 @@ import type {
 } from './mobile-session-route-types'
 import type { MobileSessionScreenStateModel } from './use-mobile-session-screen-state'
 import type { MobileDictationAnchor } from '../dictation/mobile-dictation-text-insertion'
+import type { MobileTextInputHandle } from '../platform/text-input-handle'
 
 export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateModel) {
   const {
@@ -79,8 +80,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // The controller publishes the committed list, once native chat has had its say.
   const visibleTerminalHandlesRef = useRef<readonly string[]>(visibleTerminalHandles)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
-  const liveInputRef = useRef<TextInput>(null)
-  const commandInputRef = useRef<TextInput>(null)
+  const liveInputRef = useRef<MobileTextInputHandle>(null)
+  const commandInputRef = useRef<MobileTextInputHandle>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
   const onLiveInputSendFailureRef = useRef<(failure: TerminalLiveInputFailure) => void>(() => {})

@@ -25,8 +25,7 @@ vi.mock('react-native', async () => {
     TextInput: () => null,
     FlatList: () => null,
     ActivityIndicator: () => null,
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
-    InteractionManager: { runAfterInteractions: () => ({ cancel: () => {} }) }
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
 })
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({

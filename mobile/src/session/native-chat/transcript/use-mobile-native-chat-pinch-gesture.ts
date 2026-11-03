@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
 import { Gesture } from 'react-native-gesture-handler'
-import type { ComposedGesture } from 'react-native-gesture-handler'
+import type { LegacyComposedGesture } from 'react-native-gesture-handler'
 import { quantizeFontScale } from './mobile-native-chat-message-text'
 
 // Anchor each pinch on the committed scale so successive gestures compound.
 export function useMobileNativeChatPinchGesture(): {
   fontScale: number
-  pinchGesture: ComposedGesture
+  pinchGesture: LegacyComposedGesture
 } {
   const [fontScale, setFontScale] = useState(1)
   const fontScaleRef = useRef(1)

@@ -178,8 +178,8 @@ export function HostWorkspaceList({
       {sections.length > 0 && (
         <Animated.SectionList
           ref={activeWorktreeScroll.sectionListRef}
-          ListHeaderComponent={pageTitle?.element}
-          ListFooterComponent={listState}
+          ListHeaderComponent={pageTitle?.element ?? undefined}
+          ListFooterComponent={listState ?? undefined}
           onScroll={pageTitle?.collapsing.onScroll}
           {...pageTitle?.collapsing.touchHandlers}
           scrollEventThrottle={16}

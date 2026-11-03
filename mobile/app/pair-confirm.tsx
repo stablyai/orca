@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, Pressable, BackHandler } from 'react-native'
+import { View, Text, Pressable, BackHandler, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -85,7 +85,7 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
     }, [cancel])
   )
 
-  const setPairConfirmRootRef = useCallback((node: View | null): void => {
+  const setPairConfirmRootRef = useCallback((node: HostInstance | null): void => {
     if (node !== null) {
       mountedRef.current = true
       return

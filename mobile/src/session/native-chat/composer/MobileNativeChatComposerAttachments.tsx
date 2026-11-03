@@ -205,7 +205,7 @@ const styles = themedStyleSheet(() => ({
     marginTop: 1
   },
   uploading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: ITEM_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',

@@ -15,7 +15,7 @@ vi.mock('react-native', async () => {
     Platform: { OS: 'web', select: (options: { web?: unknown }) => options.web },
     Pressable: 'Pressable',
     ScrollView: 'ScrollView',
-    StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
+    StyleSheet: { create: <T,>(styles: T) => styles, absoluteFill: {} },
     View: 'View',
     // Subscribed, as react-native-web's is: the shell shortening the WebView is a resize.
     useWindowDimensions: () => {

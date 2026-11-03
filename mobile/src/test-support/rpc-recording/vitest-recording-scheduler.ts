@@ -98,11 +98,18 @@ function trackTimers(): Map<unknown, TrackedTimer> {
     })
     return handle
   }) as typeof setInterval
+  // RN 0.88's global timer types reject null handles; clearing a missing handle is a no-op anyway.
   globalThis.clearTimeout = (handle) => {
+    if (handle == null) {
+      return
+    }
     live.delete(handle)
     fakeClearTimeout(handle)
   }
   globalThis.clearInterval = (handle) => {
+    if (handle == null) {
+      return
+    }
     live.delete(handle)
     fakeClearInterval(handle)
   }

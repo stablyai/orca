@@ -25,7 +25,7 @@ describe('the document frame registry', () => {
 
   it('takes back every pending frame and then refuses to schedule', () => {
     const scope = createTerminalDocumentScope()
-    const cancelled: number[] = []
+    const cancelled: (number | null | undefined)[] = []
     let next = 0
     vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(() => {
       next += 1

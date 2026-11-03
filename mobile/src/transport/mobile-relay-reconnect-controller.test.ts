@@ -416,7 +416,7 @@ function createController(
       now: Date.now,
       randomBytes: () => new Uint8Array([128, 0]),
       setTimer: (handler, ms) => setTimeout(handler, ms),
-      clearTimer: (handle) => clearTimeout(handle)
+      clearTimer: (handle) => handle != null && clearTimeout(handle)
     },
     onRetry
   )

@@ -44,18 +44,20 @@ vi.mock('react-native', () => ({
           'Section',
           { key: section.key },
           props.renderSectionHeader?.({ section }),
-          section.data.slice(0, 20).map((item, index) =>
-            createElement(
-              'Row',
-              { key: item.path },
-              props.renderItem?.({
-                item,
-                index,
-                section,
-                separators: { highlight: noop, unhighlight: noop, updateProps: noop }
-              })
+          section.data
+            .slice(0, 20)
+            .map((item: MobileBranchEntryView | MobileGitStatusEntryView, index: number) =>
+              createElement(
+                'Row',
+                { key: item.path },
+                props.renderItem?.({
+                  item,
+                  index,
+                  section,
+                  separators: { highlight: noop, unhighlight: noop, updateProps: noop }
+                })
+              )
             )
-          )
         )
       )
     ),
@@ -146,6 +148,7 @@ function initialState(): MobileSourceControlContentState {
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     router: {
       back: noop,
+      setTransitionMode: noop,
       push: noop,
       replace: noop,
       navigate: noop,

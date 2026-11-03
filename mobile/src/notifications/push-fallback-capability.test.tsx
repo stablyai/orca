@@ -32,7 +32,7 @@ vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   Text: 'Text',
   View: 'View',
-  StyleSheet: { create: (value: unknown) => value, absoluteFillObject: {} }
+  StyleSheet: { create: (value: unknown) => value, absoluteFill: {} }
 }))
 vi.mock('expo-notifications', () => ({ scheduleNotificationAsync: native.schedule }))
 vi.mock('./push-token', () => ({ getDevicePushToken: native.token }))

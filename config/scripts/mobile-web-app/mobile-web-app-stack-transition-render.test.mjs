@@ -324,11 +324,15 @@ describeRender('the host stack transition on the page', () => {
         })
         expect(between(frames[5].session)).toBe(true)
         // Exit must start where interrupted entry stopped, rather than restarting at zero.
-        const exitFrom = frames.slice(6).find((frame) => frame.from?.startsWith('matrix'))?.from
-        const startX = Number(exitFrom?.match(/matrix\(1, 0, 0, 1, ([\d.]+), 0\)/)?.[1])
+        // Expo Router 58 queues back() and drains it after a commit, so entry may run a frame or two on.
+        const exitAt = frames.findIndex(
+          (frame, index) => index >= 6 && frame.from?.startsWith('matrix')
+        )
+        expect(exitAt - 6).toBeLessThanOrEqual(3)
+        const startX = Number(frames[exitAt]?.from?.match(/matrix\(1, 0, 0, 1, ([\d.]+), 0\)/)?.[1])
         expect(between(startX)).toBe(true)
         const leaving = frames
-          .slice(6)
+          .slice(exitAt)
           .map((frame) => frame.session)
           .filter((left) => left !== null)
         expect(leaving).toEqual(leaving.toSorted((a, b) => a - b))

@@ -1,4 +1,4 @@
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import { createTerminalKeyChordInput } from './terminal-key-chord-input'
 import { getTerminalLiveSpecialKeyId } from './terminal-live-input'
@@ -10,7 +10,7 @@ const FIELD_CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
 // RN Web skips composing Enter keydowns; beforeinput line breaks recover those submits.
 // Submitted keydowns are cancelled, preventing duplicates; candidate acceptance emits insertCompositionText and remains untouched.
 export function bindTerminalTextFieldSubmit(
-  node: TextInput | null,
+  node: TextInputInstance | null,
   onSubmit: () => void,
   onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
 ): () => void {

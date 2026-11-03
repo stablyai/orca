@@ -41,7 +41,7 @@ function fileFactory(
 ) {
   const close = vi.fn()
   const chunks = [bytes]
-  const readBytes = vi.fn(() => {
+  const readBytesSync = vi.fn(() => {
     if (options?.readError) {
       throw options.readError
     }
@@ -49,7 +49,7 @@ function fileFactory(
   })
   const open = vi.fn(() => ({
     size: options?.handleSize ?? options?.fileSize ?? bytes.length,
-    readBytes,
+    readBytesSync,
     close
   }))
   const createFile = vi.fn(() => ({ size: options?.fileSize ?? bytes.length, open }))
@@ -99,7 +99,7 @@ describe('pickMobileImage', () => {
         size: bytes.length,
         open: () => ({
           size: bytes.length,
-          readBytes: () => {
+          readBytesSync: () => {
             if (read) {
               return new Uint8Array()
             }

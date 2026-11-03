@@ -1,5 +1,12 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type HostInstance
+} from 'react-native'
 import {
   ArrowRight,
   CircleCheck,
@@ -331,7 +338,7 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
       }
     ]
   ]
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const close = () => setScreen(null)
   // The dock's drawer would otherwise take Back and close the whole PR panel from a pushed screen.

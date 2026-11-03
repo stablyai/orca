@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type HostInstance
+} from 'react-native'
 import { ChevronLeft, Copy, ExternalLink, MoreHorizontal } from 'lucide-react-native'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
@@ -65,7 +72,7 @@ export function MobileCommitDetailPage({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [files, setFiles] = useState<FilesState>({ files: null, error: null })
   const [filesReload, setFilesReload] = useState(0)
