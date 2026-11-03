@@ -1,3 +1,26 @@
+diff --git a/src/CellColorResolver.ts b/src/CellColorResolver.ts
+index 49fdf5b1bb4d6c1f602e36470248a10a690a3479..d1ee0f9f8465139497a6a1a0b8e1a841d02c2506 100644
+--- a/src/CellColorResolver.ts
++++ b/src/CellColorResolver.ts
+@@ -59,6 +59,18 @@ export class CellColorResolver {
+     $colors = this._themeService.colors;
+     $variantOffset = 0;
+ 
++    // Normalize only the rendered color; keep explicit colors in the terminal buffer.
++    if (!(cell.fg & FgFlags.INVERSE) && this._optionService.rawOptions.allowTransparency && ($colors.background.rgba & 0xFF) < 0xFF) {
++      const bgMode = this.result.bg & Attributes.CM_MASK;
++      const defaultRgb = $colors.background.rgba >>> 8;
++      if (
++        (bgMode === Attributes.CM_RGB && (this.result.bg & Attributes.RGB_MASK) === defaultRgb) ||
++        ((bgMode === Attributes.CM_P16 || bgMode === Attributes.CM_P256) && $colors.ansi[this.result.bg & Attributes.PCOLOR_MASK].rgba >>> 8 === defaultRgb)
++      ) {
++        this.result.bg &= ~(Attributes.CM_MASK | Attributes.RGB_MASK);
++      }
++    }
++
+     const code = cell.getCode();
+     if (code !== NULL_CELL_CODE && cell.extended.underlineStyle === UnderlineStyle.DOTTED) {
+       const lineWidth = Math.max(1, Math.floor(this._optionService.rawOptions.fontSize * this._coreBrowserService.dpr / 15));
 diff --git a/src/GlyphRenderer.ts b/src/GlyphRenderer.ts
 index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf935dd0eca 100644
 --- a/src/GlyphRenderer.ts
@@ -20,6 +43,28 @@ index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf9
  }`);
  }
  
+diff --git a/src/RectangleRenderer.ts b/src/RectangleRenderer.ts
+index eebfda3b3df9b4c8cefcc6a64692053ed5eaeefa..45dde1be61cdb02a7a0bd879dac17a523e388a55 100644
+--- a/src/RectangleRenderer.ts
++++ b/src/RectangleRenderer.ts
+@@ -226,7 +226,7 @@ export class RectangleRenderer extends Disposable {
+         inverse = !!(fg & FgFlags.INVERSE);
+         if (bg !== currentBg || (fg !== currentFg && (currentInverse || inverse))) {
+           // A rectangle needs to be drawn if going from non-default to another color
+-          if (currentBg !== 0 || (currentInverse && currentFg !== 0)) {
++          if ((currentBg & Attributes.CM_MASK) !== Attributes.CM_DEFAULT || (currentInverse && currentFg !== 0)) {
+             offset = rectangleCount++ * INDICES_PER_RECTANGLE;
+             this._updateRectangle(vertices, offset, currentFg, currentBg, currentStartX, x, y);
+           }
+@@ -237,7 +237,7 @@ export class RectangleRenderer extends Disposable {
+         }
+       }
+       // Finish rectangle if it's still going
+-      if (currentBg !== 0 || (currentInverse && currentFg !== 0)) {
++      if ((currentBg & Attributes.CM_MASK) !== Attributes.CM_DEFAULT || (currentInverse && currentFg !== 0)) {
+         offset = rectangleCount++ * INDICES_PER_RECTANGLE;
+         this._updateRectangle(vertices, offset, currentFg, currentBg, currentStartX, terminal.cols, y);
+       }
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
 index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..b4fcff8c6be49b1868a17bcabfa3bb54689fb8b1 100644
 --- a/src/TextureAtlas.ts
