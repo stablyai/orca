@@ -33,7 +33,10 @@ vi.mock('@/lib/telemetry', async (importOriginal) => ({
   track: vi.fn()
 }))
 
-beforeAll(loadWebRuntimeSessionTabsApplyModulesForTests)
+beforeAll(async () => {
+  await loadWebRuntimeSessionTabsApplyModulesForTests()
+  await import('./onboarding-folder-agent-launch')
+})
 afterEach(() => {
   clearHostAgentMenuSettingsForTests()
   resetWebSessionTabsSnapshotFreshnessForTests()

@@ -17,7 +17,7 @@ function featureRoute(id, specs, prefixes) {
 export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   featureRoute(
     'feature.automations-ui',
-    ['automation-prompt-disclosure', 'automation-runs-dashboard'],
+    ['automation-prompt-disclosure'],
     [`${COMPONENTS}automations/`]
   ),
   featureRoute(
