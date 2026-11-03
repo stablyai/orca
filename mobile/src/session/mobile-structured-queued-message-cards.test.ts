@@ -5,6 +5,7 @@ import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
 } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import { activateMobileUiLocale } from '../i18n/mobile-i18n'
 import { mobileQueuedMessageCards } from './mobile-structured-queued-message-cards'
 
 function returnedAs(fact: Parameters<typeof agentSessionFailureWords>[0]) {
@@ -26,6 +27,40 @@ function draft(overrides: Partial<AgentSessionQueuedMessage> & { messageId: stri
 }
 
 describe('mobileQueuedMessageCards', () => {
+  it('names command sources alongside agents in English and translated queued cards', async () => {
+    const source = {
+      kind: 'agent' as const,
+      senders: [
+        {
+          name: null,
+          party: { address: 'ci-notifier', terminalHandle: 'ci-notifier', orcaSessionId: null }
+        },
+        {
+          name: 'Coder',
+          party: { address: 'term_coder', terminalHandle: 'term_coder', orcaSessionId: null }
+        }
+      ],
+      orchestration: null
+    }
+    const queued = draft({
+      messageId: 'command-mail',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Background command completed' }],
+        from: source
+      }
+    })
+    expect(mobileQueuedMessageCards([queued], [])[0]?.attribution).toBe('From ci-notifier, Coder')
+    try {
+      await activateMobileUiLocale('fr')
+      expect(mobileQueuedMessageCards([queued], [])[0]?.attribution).toBe(
+        'De la part de ci-notifier, Coder'
+      )
+    } finally {
+      await activateMobileUiLocale('en')
+    }
+  })
   it("a send-failed command card's caption names Send only when Send is there", () => {
     const failed = draft({
       messageId: 'c',

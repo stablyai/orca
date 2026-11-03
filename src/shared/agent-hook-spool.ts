@@ -40,6 +40,7 @@ export function buildSpoolHookBody(record: SpoolRecord): Record<string, unknown>
     launchToken: record.launchToken,
     hookEventName: record.hookEventName,
     agentProcess: record.agentProcess,
+    tmuxPane: record.tmuxPane,
     opencodeMajor: record.opencodeMajor,
     opencodeTui: record.opencodeTui,
     opencodeSharedServer: record.opencodeSharedServer,

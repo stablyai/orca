@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat/input/native-chat-question-auto-advance'
 
 /** Mirrors desktop's useNativeChatQuestionAutoAdvance; shared code cannot import this app's React. */
-export function useMobileNativeChatAskAutoAdvance(): {
+export function useMobileNativeChatAskAutoAdvance(disabled = false): {
   schedule: (step: () => void) => void
   cancel: () => void
 } {
@@ -12,6 +12,6 @@ export function useMobileNativeChatAskAutoAdvance(): {
     cancel()
     timerRef.current = setTimeout(step, NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS)
   }
-  useEffect(() => () => clearTimeout(timerRef.current), [])
+  useEffect(() => () => clearTimeout(timerRef.current), [disabled])
   return { schedule, cancel }
 }

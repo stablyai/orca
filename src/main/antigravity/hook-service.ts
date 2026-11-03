@@ -28,6 +28,7 @@ import {
   type AntigravityEvent
 } from './hook-events'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { HOOK_PARENT_CAPTURE } from '../agent-hooks/hook-process-capture'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
 import {
   buildInstalledConfig,
@@ -62,7 +63,7 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
     event.eventName === 'PreToolUse' ? { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION } : {}
   )
   // ACP hosts tokenize the command into argv; the shell must be the executable, not `if`.
-  return `/bin/sh -c ${quotePosixShell(command)}`
+  return `/bin/sh -c ${quotePosixShell(`${HOOK_PARENT_CAPTURE}${command}`)}`
 }
 
 function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {

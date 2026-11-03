@@ -258,6 +258,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     expect(catalogListing).toBeUndefined()
     expect(options.current).toEqual({
       model: 'claude-sonnet-5',
+      reportedModel: 'claude-sonnet-5',
       effort: 'high',
       reportedPermissionMode: undefined,
       confirmed: ['model', 'effort']
@@ -293,6 +294,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     ])
     expect(result.current).toEqual({
       model: 'custom-model',
+      reportedModel: 'custom-model',
       effort: 'high',
       reportedPermissionMode: undefined,
       confirmed: ['model', 'effort']
