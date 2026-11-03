@@ -11,11 +11,13 @@ import {
   XCircle,
   AlertTriangle
 } from 'lucide-react-native'
-import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -66,20 +68,17 @@ export function TroubleshootView({
     []
   )
   return (
-    <View ref={rootRef} style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-          style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
-          onPress={onBack}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>
-          {t('diagnostics.troubleshootView.title', 'Troubleshooting')}
-        </Text>
-      </View>
+    <View ref={rootRef} style={[styles.container, { paddingTop: insets.top }]}>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            accessibilityLabel={t('common.back', 'Back')}
+            onPress={onBack}
+          />
+        }
+        title={t('diagnostics.troubleshootView.title', 'Troubleshooting')}
+      />
 
       <ScrollView
         style={styles.scroll}
