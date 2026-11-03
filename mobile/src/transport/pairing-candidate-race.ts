@@ -5,6 +5,28 @@ import {
 } from './host-status-probe-operations'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import type { HostStatusReply } from './host-status-reply-schema'
+import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
+import { AUTH_REJECTED } from './rpc-client-authentication-retry'
+import type { RpcResponse } from './types'
+
+/** The desktop refused the scanned code: it expired or a newer code replaced it. */
+export class PairingCodeRejectedError extends Error {
+  constructor() {
+    super('desktop rejected the pairing code')
+  }
+}
+
+// Relay and direct report a refused credential differently; old desktops use the same signals.
+function isCodeRejection(outcome: unknown): boolean {
+  if (outcome instanceof MobileE2EEAuthenticationError) {
+    return true
+  }
+  if (outcome instanceof Error) {
+    return outcome.message === AUTH_REJECTED
+  }
+  const reply = outcome as RpcResponse
+  return reply.ok === false && reply.error.code === 'unauthorized'
+}
 
 export type PairingCandidatePath = 'direct' | 'relay'
 
@@ -23,6 +45,7 @@ export function racePairingCandidates(
   return new Promise((resolve, reject) => {
     const successes: PairingCandidateWinner[] = []
     let failures = 0
+    let codeRejected = false
     let settled = false
     let selectionQueued = false
     for (const candidate of candidates) {
@@ -30,6 +53,7 @@ export function racePairingCandidates(
         (reply) => {
           if (!hostAnsweredStatusProbe(reply)) {
             failures++
+            codeRejected ||= isCodeRejection(reply)
             rejectIfFinished()
             return
           }
@@ -54,8 +78,9 @@ export function racePairingCandidates(
             resolve(winner)
           })
         },
-        () => {
+        (error: unknown) => {
           failures++
+          codeRejected ||= isCodeRejection(error)
           rejectIfFinished()
         }
       )
@@ -64,7 +89,11 @@ export function racePairingCandidates(
     function rejectIfFinished(): void {
       if (!settled && failures === candidates.length && successes.length === 0) {
         settled = true
-        reject(new Error('direct and relay pairing paths both failed'))
+        reject(
+          codeRejected
+            ? new PairingCodeRejectedError()
+            : new Error('direct and relay pairing paths both failed')
+        )
       }
     }
   })
