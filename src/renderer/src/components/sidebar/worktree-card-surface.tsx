@@ -7,8 +7,8 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from './use-worktree-card-controller'
-import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from './workspace-card/default-workspace-card'
-import { renderWorkspaceCardTemplate } from './workspace-card/render-workspace-card-template'
+import { useSelectedPluginCardTemplate } from '@/store/plugin-sidebar-cards'
+import { renderWorkspaceCardWithFallback } from './workspace-card/render-workspace-card-template'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const {
@@ -45,11 +45,12 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     contentIndent
   } = card
   const isSleeping = useIsSleepingWorktree(worktree.id)
+  const pluginTemplate = useSelectedPluginCardTemplate()
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
-  const { content: parentCardContent, frame } = renderWorkspaceCardTemplate(
+  const { content: parentCardContent, frame } = renderWorkspaceCardWithFallback(
     card,
-    DEFAULT_WORKSPACE_CARD_TEMPLATE,
+    pluginTemplate,
     (templateFrame) => {
       const { parentContentMarginLeft } = geometryFor(templateFrame.statusLane)
       return parentContentMarginLeft < 0

@@ -5,6 +5,7 @@ export const PLUGIN_TEMPLATE_NAMES = [
   'icon-theme',
   'syntax',
   'language-pack',
+  'card',
   'editor',
   'panel',
   'components',

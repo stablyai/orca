@@ -1,3 +1,4 @@
+import { PLUGIN_SIDEBAR_CARDS_SINCE } from '../../shared/plugins/contributions/plugin-sidebar-card-contribution'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,7 +33,7 @@ describe('orca plugin create templates', () => {
     expect(report.errors).toEqual([])
     expect(report.valid).toBe(true)
     expect(report.contentHash).toMatch(/^[0-9a-f]{64}$/)
-    const contentOnly = ['theme', 'terminal-theme', 'icon-theme', 'syntax', 'language-pack']
+    const contentOnly = ['theme', 'terminal-theme', 'icon-theme', 'syntax', 'language-pack', 'card']
     expect(report.plugin?.needsApproval).toBe(!contentOnly.includes(template))
     const readme = await readFile(join(dir, 'README.md'), 'utf8')
     expect(readme).toContain('orca plugin dev watch .')
@@ -47,13 +48,15 @@ describe('orca plugin create templates', () => {
       expect(created.pluginKey).toBe(`local.bare-${template}`)
       const manifest = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
       expect(manifest.publisher).toBeUndefined()
-      // Hooks and isolated-only editors arrived later than build-less sources.
+      // Hooks, isolated-only editors and cards arrived later than build-less sources.
       const floor =
         template === 'hook'
           ? PLUGIN_HOOKS_SINCE
           : template === 'editor'
             ? PLUGIN_EDITOR_FRAME_SINCE
-            : PLUGIN_SOURCE_MODULES_SINCE
+            : template === 'card'
+              ? PLUGIN_SIDEBAR_CARDS_SINCE
+              : PLUGIN_SOURCE_MODULES_SINCE
       expect(manifest.engines.orca).toBe(`>=${floor}`)
       const report = await validatePluginTarget(dir)
       expect(report.errors).toEqual([])

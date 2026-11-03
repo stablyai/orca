@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  EMPTY_CONTRIBUTION_SOURCE,
-  describePluginContributions,
-  summaryContributionSource
-} from './plugin-contributions'
+import { EMPTY_CONTRIBUTION_SOURCE, describePluginContributions } from './plugin-contributions'
+import { summaryContributionSource } from './plugin-summary-contribution-source'
 import { statusBarItemTitles } from './plugin-contribution-row-labels'
 
 vi.mock('@/i18n/i18n', () => ({

@@ -568,7 +568,8 @@
             "customEditors",
             "newFiles",
             "settings",
-            "statusBarItems"
+            "statusBarItems",
+            "sidebarCards"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

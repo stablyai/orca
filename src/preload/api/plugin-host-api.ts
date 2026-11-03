@@ -1,3 +1,4 @@
+import type { PluginSidebarCardRegistration } from '../../shared/plugins/artifacts/plugin-sidebar-card-artifact'
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
 import type { EditorSaveHookDecision } from '../../shared/plugins/events/plugin-editor-save-hook'
 import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
@@ -152,6 +153,7 @@ export type PluginsApi = {
   listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
   listThemes: () => Promise<PluginThemeRegistration[]>
   listTerminalThemes: () => Promise<PluginTerminalThemeRegistration[]>
+  listSidebarCards: () => Promise<PluginSidebarCardRegistration[]>
   listIconThemes: () => Promise<PluginIconThemeMetadata[]>
   /** One icon theme's images, read only once it is selected. */
   loadIconTheme: (id: string) => Promise<PluginIconThemeRegistration | null>

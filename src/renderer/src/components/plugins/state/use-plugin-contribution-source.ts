@@ -1,3 +1,4 @@
+import { usePluginSidebarCards } from '@/store/plugin-sidebar-cards'
 import { useEffect, useMemo, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
@@ -26,6 +27,7 @@ function useInstalledPluginContributionSource(
   const appThemes = usePluginThemes()
   const terminalThemes = usePluginTerminalThemes()
   const iconThemes = usePluginIconThemes()
+  const sidebarCards = usePluginSidebarCards()
   const syntaxes = usePluginSyntaxes()
   // Why the raw store: usable-only filtering would hide the incomplete packs this page explains.
   const languagePacks = usePluginLanguagePackStore((state) => state.entries)
@@ -42,6 +44,7 @@ function useInstalledPluginContributionSource(
       themes: ours(appThemes),
       terminalThemes: ours(terminalThemes),
       iconThemes: ours(iconThemes),
+      sidebarCards: ours(sidebarCards),
       syntaxes: ours(syntaxes).map((syntax) => ({
         ...syntax,
         failed: Boolean(failures[pluginSyntaxRevisionKey(syntax)])
@@ -53,7 +56,16 @@ function useInstalledPluginContributionSource(
       newFiles: plugin.newFiles ?? [],
       statusBarItems: statusBarItemTitles(plugin.statusBarItems)
     }
-  }, [plugin, appThemes, terminalThemes, iconThemes, syntaxes, languagePacks, failures])
+  }, [
+    plugin,
+    appThemes,
+    terminalThemes,
+    iconThemes,
+    sidebarCards,
+    syntaxes,
+    languagePacks,
+    failures
+  ])
 }
 
 /** An installed plugin's declared manifest, read when its page opens; undefined until read, null if
