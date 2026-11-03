@@ -19651,7 +19651,10 @@
         "cancelled": "Cancelled",
         "resolved": "Resolved",
         "resolver": "Answered on {{device}}",
-        "cancelledBy": "Cancelled on {{device}}"
+        "cancelledBy": "Cancelled on {{device}}",
+        "thisComputer": "this computer",
+        "computer": "the computer",
+        "otherDevice": "another device"
       },
       "notices": {
         "contextCleared": "Context cleared",
