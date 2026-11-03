@@ -40,9 +40,23 @@ function setup() {
   const guest = contents(2)
   guest.hostWebContents = host
   const handler = (channel: string) => ipc.on.mock.calls.findLast(([name]) => name === channel)![1]
-  const event = (sender = guest, senderFrame = sender.mainFrame) =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture provides every IPC event member consumed by the handler.
-    ({ sender, senderFrame, returnValue: undefined }) as unknown as IpcMainEvent
+  const event = (sender = guest, senderFrame = sender.mainFrame) => {
+    let replied = false
+    let reply: unknown
+    const fixture = { sender, senderFrame }
+    Object.defineProperty(fixture, 'returnValue', {
+      get: () => reply,
+      set: (value: unknown) => {
+        // Electron consumes the reply channel on its first returnValue assignment.
+        if (!replied) {
+          replied = true
+          reply = value
+        }
+      }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture models the consumed Electron event fields and first-reply semantics.
+    return fixture as unknown as IpcMainEvent
+  }
   return { host, guest, event, publish: handler(PUBLISH), read: handler(READ) }
 }
 const dark = { colorScheme: 'dark', tokens: { '--background': '#111' } }
@@ -92,11 +106,19 @@ describe('visual guest theme handoff', () => {
     expect(guest.send).toHaveBeenCalledTimes(2)
     guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
     publish(event(host), light)
-    expect(guest.send).toHaveBeenCalledTimes(2)
+    expect(guest.send).toHaveBeenCalledTimes(3)
+    guest.emit('did-navigate', {}, guest.mainFrame.url)
+    publish(event(host), dark)
+    expect(guest.send).toHaveBeenCalledTimes(4)
+    classify.mockReturnValue(false)
+    guest.emit('did-navigate', {}, 'file:///workspace/ordinary.html')
+    publish(event(host), light)
+    expect(guest.send).toHaveBeenCalledTimes(4)
+    classify.mockReturnValue(true)
     read(event())
     guest.emit('destroyed')
     publish(event(host), dark)
-    expect(guest.send).toHaveBeenCalledTimes(2)
+    expect(guest.send).toHaveBeenCalledTimes(4)
     host.emit('destroyed')
     expect(ipc.removeListener).toHaveBeenCalledTimes(2)
   })

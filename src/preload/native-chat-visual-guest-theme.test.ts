@@ -54,7 +54,7 @@ describe('visual guest preload', () => {
     })
     module.exports.installNativeChatVisualGuestTheme(ipc, frame)
     expect(ipc.sendSync).toHaveBeenCalledExactlyOnceWith(READ)
-    expect(frame.insertCSS).toHaveBeenCalledExactlyOnceWith(theme.css, { cssOrigin: 'user' })
+    expect(frame.insertCSS).toHaveBeenCalledExactlyOnceWith(theme.css, { cssOrigin: 'author' })
     document.documentElement = root
     onRoot()
     expect(root.classList.toggle).toHaveBeenCalledWith('dark', true)

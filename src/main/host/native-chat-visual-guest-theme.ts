@@ -48,7 +48,6 @@ export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
     if (guest.hostWebContents !== window.webContents) {
       return
     }
-    event.returnValue = null
     if (
       !theme ||
       guest.isDestroyed() ||
@@ -59,13 +58,16 @@ export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
         nativeChatScratchRootFor(getProfileUserDataPath())
       )
     ) {
+      event.returnValue = null
       return
     }
     guests.set(guest.id, guest)
     if (!watched.has(guest)) {
       watched.add(guest)
-      guest.on('did-start-navigation', (details) => {
-        if (details.isMainFrame && !details.isSameDocument) {
+      guest.on('did-navigate', (_event, url) => {
+        if (
+          !isNativeChatVisualGuestLocation(url, nativeChatScratchRootFor(getProfileUserDataPath()))
+        ) {
           guests.delete(guest.id)
         }
       })

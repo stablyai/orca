@@ -19,7 +19,7 @@ export function installNativeChatVisualGuestTheme(
     return
   }
   let theme = initial
-  let key = frame.insertCSS(theme.css, { cssOrigin: 'user' })
+  let key = frame.insertCSS(theme.css, { cssOrigin: 'author' })
   const updateRoot = (): boolean => {
     if (!document.documentElement) {
       return false
@@ -38,7 +38,7 @@ export function installNativeChatVisualGuestTheme(
   ipc.on(NATIVE_CHAT_VISUAL_GUEST_THEME_UPDATE, (_event, next: NativeChatVisualGuestTheme) => {
     theme = next
     frame.removeInsertedCSS(key)
-    key = frame.insertCSS(theme.css, { cssOrigin: 'user' })
+    key = frame.insertCSS(theme.css, { cssOrigin: 'author' })
     updateRoot()
   })
 }
