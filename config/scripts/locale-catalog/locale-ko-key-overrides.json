@@ -5114,9 +5114,6 @@
   "auto.components.settings.RepositoryPane.nestedHostLabel": {
     "ko": "{{value0}} ({{value1}} 경유)"
   },
-  "auto.components.settings.RepositorySourceControlAiActionRows.0ffb081b3a": {
-    "ko": "기본 에이전트 사용"
-  },
   "auto.components.settings.RepositorySourceControlAiCustomCommand.0704dd55cd": {
     "ko": "저장소 명령"
   },
@@ -5517,9 +5514,6 @@
     "ko": "실패"
   },
   "auto.components.settings.CommitMessageAiPane.47e45cbd5a": {
-    "ko": "사용자 지정 명령"
-  },
-  "auto.components.settings.RepositorySourceControlAiActionRows.2b2f38652b": {
     "ko": "사용자 지정 명령"
   },
   "auto.components.settings.RepositorySourceControlAiCustomCommand.ebffc5a28c": {

@@ -1,3 +1,7 @@
+import {
+  TEXT_ACTION_DEFAULT_MODEL,
+  textActionArgumentsOwnEffort
+} from '../../../../shared/source-control-text-action-picker'
 import { translate } from '@/i18n/i18n'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type {
@@ -20,6 +24,44 @@ type AgentLaunchSetupOptionRowsInput = {
   argumentsKnown: boolean
 }
 
+function argumentsOwnedRow(
+  id: string,
+  label: string,
+  category: SessionOptionDescriptor['category']
+): SessionOptionDescriptor {
+  return {
+    id,
+    label,
+    category,
+    kind: {
+      type: 'select',
+      choices: [
+        {
+          value: 'arguments',
+          label: translate('agentPicker.setByArguments', 'Set by your Arguments')
+        }
+      ],
+      currentValue: 'arguments'
+    },
+    valueSource: 'default',
+    transport: 'agent-session',
+    settable: false
+  }
+}
+
+/** Clearing Effort keeps the selected model, so its default is that model's inherited effort. */
+function textEffortDefaultLabel(kind: {
+  choices: readonly { value: string; label: string }[]
+  defaultValue: string
+}): string {
+  const effort = kind.choices.find((choice) => choice.value === kind.defaultValue)?.label
+  return effort
+    ? translate('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', {
+        value0: effort
+      })
+    : translate('settings.sourceControl.actionModel.effortDefault', 'Default')
+}
+
 export function agentLaunchSetupOptionRows({
   options,
   models,
@@ -31,7 +73,14 @@ export function agentLaunchSetupOptionRows({
   disabled,
   argumentsKnown
 }: AgentLaunchSetupOptionRowsInput): SessionOptionDescriptor[] {
+  // Shown even when the menu's model has no levels, so Effort explains where it is set.
+  if (textActionArgumentsOwnEffort(entry, draft)) {
+    return [argumentsOwnedRow('effort', options[0]?.label ?? 'Reasoning effort', 'thought_level')]
+  }
   return options.map((option) => {
+    const effortInArguments =
+      entry.textGeneration?.effortInArguments &&
+      (!draft.textChanges?.includes('effort') || entry.textGeneration.effortArgumentsUnrecognized)
     const liveModel = models.find((model) => model.id === currentModel)
     const current =
       argumentsView.choices.options?.[option.id] ??
@@ -45,24 +94,7 @@ export function agentLaunchSetupOptionRows({
               : undefined
         : undefined)
     if (argumentsView.context.analysis.opaqueKeys.has(option.id)) {
-      return {
-        id: option.id,
-        label: option.label,
-        category: option.category,
-        kind: {
-          type: 'select',
-          choices: [
-            {
-              value: 'arguments',
-              label: translate('agentPicker.setByArguments', 'Set by your Arguments')
-            }
-          ],
-          currentValue: 'arguments'
-        },
-        valueSource: 'default',
-        transport: 'agent-session',
-        settable: false
-      }
+      return argumentsOwnedRow(option.id, option.label, option.category)
     }
     const valueKnown =
       current !== undefined ||
@@ -78,11 +110,26 @@ export function agentLaunchSetupOptionRows({
           ? { type: 'boolean', currentValue: current === 'true' }
           : {
               type: 'select',
-              choices:
-                current && !option.kind.choices.some((choice) => choice.value === current)
+              choices: entry.textGeneration
+                ? [
+                    ...(effortInArguments
+                      ? [
+                          {
+                            value: 'arguments',
+                            label: translate('agentPicker.setByArguments', 'Set by your Arguments')
+                          }
+                        ]
+                      : []),
+                    {
+                      value: TEXT_ACTION_DEFAULT_MODEL,
+                      label: textEffortDefaultLabel(option.kind)
+                    },
+                    ...option.kind.choices
+                  ]
+                : current && !option.kind.choices.some((choice) => choice.value === current)
                   ? [...option.kind.choices, { value: current, label: current }]
                   : option.kind.choices,
-              currentValue: current
+              currentValue: effortInArguments ? 'arguments' : current
             },
       valueSource: valueKnown ? 'default' : 'unknown',
       transport: 'agent-session',
