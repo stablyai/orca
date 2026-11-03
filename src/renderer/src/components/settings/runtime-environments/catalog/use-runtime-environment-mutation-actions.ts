@@ -1,7 +1,7 @@
 import type {
   RuntimeEdgeAuthHeader,
   RuntimeEdgeAuthMutation
-} from '../../../../shared/runtime-edge-auth-types'
+} from '../../../../../../shared/runtime-edge-auth-types'
 import { useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

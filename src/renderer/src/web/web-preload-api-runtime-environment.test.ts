@@ -34,7 +34,6 @@ describe('web runtime environment identity', () => {
     expect(globals.window.api.runtimeEnvironments.getEdgeAuthStatus).toBeUndefined()
   })
 
-
   it('does not resolve an old server selector through a differently keyed server', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')

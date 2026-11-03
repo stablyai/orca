@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../../../shared/pairing'
-import { RuntimeAddServerDialog } from './runtime-add-server-dialog'
+import { RuntimeAddServerDialog } from './runtime-environments/pairing/runtime-add-server-dialog'
 vi.mock('@/store', () => ({ useAppStore: () => [] }))
 afterEach(() => cleanup())
 function link(endpoint: string, publicKeyB64 = 'synthetic-key') {

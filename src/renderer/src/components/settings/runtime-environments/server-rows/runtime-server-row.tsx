@@ -1,4 +1,4 @@
-import { RuntimeServerEdgeAuthAction } from './runtime-server-edge-auth-action'
+import { RuntimeServerEdgeAuthAction } from '../../runtime-server-edge-auth-action'
 import { useState } from 'react'
 import { Link2 } from 'lucide-react'
 import {

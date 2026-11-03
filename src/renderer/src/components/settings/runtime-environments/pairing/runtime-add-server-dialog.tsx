@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import type { RuntimeEdgeAuthHeader } from '../../../../shared/runtime-edge-auth-types'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import type { RuntimeEdgeAuthHeader } from '../../../../../../shared/runtime-edge-auth-types'
+import { parseHostAccessLink } from '../../../../../../shared/remote-pairing-address'
 import {
   endpointAuthOrigin,
   normalizeEndpointAuthHeaders
-} from '../../../../shared/network/endpoint-auth-headers'
-import { RuntimeEdgeAuthFields, newRuntimeEdgeAuthRow } from './runtime-edge-auth-fields'
+} from '../../../../../../shared/network/endpoint-auth-headers'
+import { RuntimeEdgeAuthFields, newRuntimeEdgeAuthRow } from '../../runtime-edge-auth-fields'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import {
