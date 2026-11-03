@@ -3679,7 +3679,7 @@
             "copyLinkFailed": "No se pudo copiar el enlace",
             "downloadOpenWithDefaultApp": "Descargar y abrir con la aplicación predeterminada",
             "downloadOpenFailed": "No se pudo descargar '{{value0}}'.",
-            "openInThisGroup": "Abrir en este grupo",
+            "openInNewTab": "Abrir en una pestaña nueva",
             "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -19845,7 +19845,8 @@
         "cancelled": "Orca no continuará este chat automáticamente.",
         "scheduled": "Orca continuará este chat a las {{time}}.",
         "cancel": "No continuar"
-      }
+      },
+      "settings": "Configuración del chat"
     },
     "tab": {
       "bar": {

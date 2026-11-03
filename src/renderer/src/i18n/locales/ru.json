@@ -4082,7 +4082,7 @@
             "copyLinkFailed": "Не удалось скопировать ссылку",
             "downloadOpenWithDefaultApp": "Скачать и открыть приложением по умолчанию",
             "downloadOpenFailed": "Не удалось скачать «{{value0}}».",
-            "openInThisGroup": "Открыть в этой группе",
+            "openInNewTab": "Открыть в новой вкладке",
             "openInThisGroupRefused": "Не удалось открыть {{value0}} в этой группе"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -20682,7 +20682,8 @@
         "effortPickerFailed": "Не удалось открыть меню выбора глубины рассуждений.",
         "modelApplyFailed": "Не удалось применить модель {{value}}.",
         "effortApplyFailed": "Не удалось применить глубину рассуждений {{value}}."
-      }
+      },
+      "settings": "Настройки чата"
     },
     "tab": {
       "bar": {

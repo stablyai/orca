@@ -3619,7 +3619,7 @@
             "copyLinkFailed": "リンクのコピーに失敗しました",
             "downloadOpenWithDefaultApp": "ダウンロードしてデフォルトのアプリで開く",
             "downloadOpenFailed": "「{{value0}}」のダウンロードに失敗しました。",
-            "openInThisGroup": "このグループで開く",
+            "openInNewTab": "新しいタブで開く",
             "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -19322,7 +19322,8 @@
         "cancelled": "Orca はこのチャットを自動的には続けません。",
         "scheduled": "Orca は {{time}} にこのチャットを続けます。",
         "cancel": "続けない"
-      }
+      },
+      "settings": "チャット設定"
     },
     "tab": {
       "bar": {
