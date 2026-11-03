@@ -53,28 +53,39 @@ describe('PR workflow parallelism', () => {
     expect(job['continue-on-error']).toBe(true)
   })
 
-  it('runs the advisory CLI without an action credential and preserves failures', async () => {
-    const steps = evidenceWorkflow.jobs.selection_evidence.steps
-    expect(steps.some((step) => step.uses?.startsWith('actions/setup-node@'))).toBe(false)
-    const comparison = steps.find((step) => step.name === 'Compare selection with full results')
-    expect(comparison.uses).toBe('actions/github-script@v8')
-    expect(comparison.with['github-token']).toBe('unused')
-    const env = { 'INPUT_GITHUB-TOKEN': 'test-token', GITHUB_STEP_SUMMARY: '/tmp/summary' }
-    const failure = new Error('comparison failed')
-    const result = runInNewContext(`(async () => { ${comparison.with.script} })()`, {
-      process: { env, execPath: '/bundled/node24' },
-      exec: {
-        exec: async (command, args, options) => {
-          expect(command).toBe('/bundled/node24')
-          expect(args).toEqual(['config/scripts/ci-unit-selection-review.mjs', 'unit-evidence'])
-          expect(options.env).toEqual({ GITHUB_STEP_SUMMARY: '/tmp/summary' })
-          throw failure
-        }
+  it.each([undefined, 'false', 'true'])(
+    'runs the advisory CLI without an action credential and preserves failures (deferred %s)',
+    async (rebuild) => {
+      const steps = evidenceWorkflow.jobs.selection_evidence.steps
+      expect(steps.some((step) => step.uses?.startsWith('actions/setup-node@'))).toBe(false)
+      const comparison = steps.find((step) => step.name === 'Compare selection with full results')
+      expect(comparison.uses).toBe('actions/github-script@v8')
+      expect(comparison.with['github-token']).toBe('unused')
+      const publicEnv = {
+        GITHUB_STEP_SUMMARY: '/tmp/summary',
+        ...(rebuild === undefined ? {} : { REBUILD_SELECTION_PLAN: rebuild })
       }
-    })
-    await expect(result).rejects.toBe(failure)
-    expect(env['INPUT_GITHUB-TOKEN']).toBe('test-token')
-  })
+      const env = { ...publicEnv, 'INPUT_GITHUB-TOKEN': 'test-token' }
+      const failure = new Error('comparison failed')
+      const result = runInNewContext(`(async () => { ${comparison.with.script} })()`, {
+        process: { env, execPath: '/bundled/node24' },
+        exec: {
+          exec: async (command, args, options) => {
+            expect(command).toBe('/bundled/node24')
+            expect(args).toEqual([
+              'config/scripts/ci-unit-selection-review.mjs',
+              'unit-evidence',
+              ...(rebuild === 'true' ? ['ci-shards/unit-selection.json'] : [])
+            ])
+            expect(options.env).toEqual(publicEnv)
+            throw failure
+          }
+        }
+      })
+      await expect(result).rejects.toBe(failure)
+      expect(env['INPUT_GITHUB-TOKEN']).toBe('test-token')
+    }
+  )
 })
 
 it('keeps the costly layout-owner experiment manual and limits it to one active suite', () => {

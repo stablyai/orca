@@ -92,7 +92,7 @@ export function reviewUnitSelection(records) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const directory = process.argv[2]
   if (!directory) {
-    throw new Error('Usage: ci-unit-selection-review.mjs ARTIFACT_DIRECTORY')
+    throw new Error('Usage: ci-unit-selection-review.mjs ARTIFACT_DIRECTORY [FALLBACK_PLAN]')
   }
   const records = readUnitSelectionRecords(directory, process.argv[3])
   if (!records.length) {

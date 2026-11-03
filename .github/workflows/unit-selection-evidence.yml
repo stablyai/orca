@@ -40,6 +40,8 @@ jobs:
       - name: Compare selection with full results
         continue-on-error: true
         uses: actions/github-script@v8
+        env:
+          REBUILD_SELECTION_PLAN: ${{ inputs.rebuild_plan }}
         with:
           github-token: unused
           script: |
@@ -49,7 +51,7 @@ jobs:
               'config/scripts/ci-unit-selection-review.mjs',
               'unit-evidence'
             ]
-            if (${{ inputs.rebuild_plan }}) args.push('ci-shards/unit-selection.json')
+            if (env.REBUILD_SELECTION_PLAN === 'true') args.push('ci-shards/unit-selection.json')
             await exec.exec(process.execPath, args, { env })
       - uses: actions/upload-artifact@v7
         if: always()
