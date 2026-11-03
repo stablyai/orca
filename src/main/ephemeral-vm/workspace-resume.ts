@@ -15,8 +15,26 @@ import { connectRuntimeOwnedSshTarget } from './runtime-ssh'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 
+const inFlightResumes = new Map<string, Promise<EphemeralVmRuntimeRecord | null>>()
+
+/** Concurrent callers for one workspace (window IPC and host wake) share one resume. */
+export function resumeEphemeralVmWorkspace(
+  store: Store,
+  workspaceId: string
+): Promise<EphemeralVmRuntimeRecord | null> {
+  const existing = inFlightResumes.get(workspaceId)
+  if (existing) {
+    return existing
+  }
+  const pending = resumeEphemeralVmWorkspaceOnce(store, workspaceId).finally(() => {
+    inFlightResumes.delete(workspaceId)
+  })
+  inFlightResumes.set(workspaceId, pending)
+  return pending
+}
+
 /** Wakes one workspace's suspended recipe VM on this host, with the window path's integrity checks. */
-export async function resumeEphemeralVmWorkspace(
+async function resumeEphemeralVmWorkspaceOnce(
   store: Store,
   workspaceId: string
 ): Promise<EphemeralVmRuntimeRecord | null> {
