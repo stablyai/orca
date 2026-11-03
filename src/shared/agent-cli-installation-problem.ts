@@ -1,11 +1,10 @@
 import { isValidAppVersion } from './app-version'
 import type { CodexInstallationProblem } from './codex-cli-installation'
-import type { TuiAgent } from './tui-agent'
-import { isTuiAgent } from './tui-agent-config'
+import { isStructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 /** Name the agent in installation refusals so replays/mobile can identify it without chat context. */
 export type AgentCliInstallationProblem = {
-  agent: TuiAgent
+  agent: string
   installedVersion: string
   minimumVersion: string
 }
@@ -19,7 +18,7 @@ export function readAgentCliInstallationProblem(
     !('agent' in value) ||
     !('installedVersion' in value) ||
     !('minimumVersion' in value) ||
-    !isTuiAgent(value.agent) ||
+    !isStructuredAgentId(value.agent) ||
     typeof value.installedVersion !== 'string' ||
     !isValidAppVersion(value.installedVersion) ||
     typeof value.minimumVersion !== 'string' ||

@@ -1,3 +1,4 @@
+import { launchCustomAgentChatFromMenu } from '@/lib/launch-custom-agent-chat'
 import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 export type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 import { useAgentLaunchPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
@@ -155,8 +156,11 @@ export function useTabBarCreateMenuController({
     windowsTerminalCapabilities.wslAvailable
   ])
   const createMenuOptions = useMemo(
-    () =>
-      buildTabCreateMenuOptions({
+    () => [
+      ...(showAgentLaunchItems && !terminalOnly && agentMenu.state === 'settled'
+        ? (agentMenu.customChats ?? [])
+        : []),
+      ...buildTabCreateMenuOptions({
         terminalOnly,
         windowsShellEntries,
         hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
@@ -168,8 +172,11 @@ export function useTabBarCreateMenuController({
           mobileEmulatorCreationEnabled &&
           Boolean(onNewSimulatorTab),
         simulatorIsGoTo: workspaceHasSimulatorTab
-      }),
+      })
+    ],
     [
+      agentMenu,
+      showAgentLaunchItems,
       mobileEmulatorEnabled,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
@@ -183,6 +190,9 @@ export function useTabBarCreateMenuController({
   )
   const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
     switch (option.kind) {
+      case 'custom-chat':
+        launchCustomAgentChatFromMenu(option.customChat, worktreeId, resolvedGroupId)
+        break
       case 'new-terminal':
         queueNewActiveTerminalFocusAfterNewTabMenuClose()
         onNewTerminalTab()

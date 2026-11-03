@@ -40,6 +40,7 @@ import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/host-chat-program'
 import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import { hostCustomChatMenuOptions } from './custom-chat-menu-options'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 
@@ -249,6 +250,11 @@ export function useAgentMenuObservation(
       }
     : {
         state: 'settled',
+        customChats: hostCustomChatMenuOptions(
+          answerContext ?? input,
+          unresolvedTarget ? null : availability,
+          state.runtimeStatusByEnvironmentId
+        ),
         rows,
         detection,
         defaultTuiAgent: settings?.defaultTuiAgent,

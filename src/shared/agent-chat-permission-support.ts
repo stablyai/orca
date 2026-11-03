@@ -1,3 +1,4 @@
+import { isCustomAcpAgentId } from './custom-acp-agent'
 import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
 /** The modes one agent's chats offer. */
 export type AgentChatPermissionModeSupport = {
@@ -34,5 +35,8 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermission
 
 /** The one table of which agents' chats offer which modes; null keeps following Agent Permissions. */
 export function agentChatPermissionModes(agent: string): AgentChatPermissionModeSupport | null {
-  return AGENT_CHAT_PERMISSION_MODES_BY_AGENT.get(agent) ?? null
+  return (
+    AGENT_CHAT_PERMISSION_MODES_BY_AGENT.get(agent) ??
+    (isCustomAcpAgentId(agent) ? ACP_CHAT_PERMISSION_MODES : null)
+  )
 }

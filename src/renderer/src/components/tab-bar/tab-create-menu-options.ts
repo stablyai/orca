@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
@@ -12,6 +13,7 @@ export type TabCreateMenuOptionKind =
   | 'new-terminal-shell'
   | 'open-markdown'
   | 'new-plugin-file'
+  | 'custom-chat'
 
 /** A plugin's new-file type, as the + menu offers it. */
 export type TabCreateMenuPluginNewFile = {
@@ -30,6 +32,7 @@ export type TabCreateMenuOption = {
   keywords: readonly string[]
   label: string
   shell?: BuiltInWindowsTerminalShell
+  customChat?: { agent: string; executionHostId: ExecutionHostId }
   pluginNewFile?: TabCreateMenuPluginNewFile
 }
 

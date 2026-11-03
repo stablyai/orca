@@ -9,6 +9,7 @@
     "cursor-cli",
     "codex-hot-swap",
     "native-chat",
+    "custom-adapters",
     "session-history",
     "hibernation",
     "usage-tracking",

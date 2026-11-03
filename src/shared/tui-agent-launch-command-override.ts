@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { TuiAgent } from './tui-agent'
+import { isTuiAgent } from './tui-agent-config'
 import { parseAgentCommand } from './agent-command-plan'
 
 /** Literal program and prefix; chat never evaluates shell syntax. */
@@ -28,7 +28,7 @@ export function structuredAgentCommandPlan(command: string, platform?: NodeJS.Pl
 /** Terminal-backed chat skips the structured catalog when its launch command is customized. */
 export function hasExplicitTuiLaunchCommand(
   settings: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined,
-  agent: TuiAgent
+  agent: string
 ): boolean {
-  return Boolean(settings?.agentCmdOverrides?.[agent]?.trim())
+  return isTuiAgent(agent) && Boolean(settings?.agentCmdOverrides?.[agent]?.trim())
 }

@@ -5,6 +5,7 @@ import type { AgentSessionStoredAgent } from '../../../shared/agent-session/life
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
+  displayName?: string
   capabilities: AgentSessionCapabilities
   /** Absent means Orca never supplies this agent’s managed runtime. */
   managedRuntime?: () => boolean
