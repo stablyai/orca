@@ -28,6 +28,7 @@ import { MobileNativeChatPromptStrip } from './MobileNativeChatPromptStrip'
 // Keep dismissal in the controller across chat/terminal toggles; the shared resolver already chose the terminal card.
 export function MobileNativeChatPromptCard({
   ask,
+  askPending,
   answering = false,
   askKey,
   onDismissAsk,
@@ -45,6 +46,7 @@ export function MobileNativeChatPromptCard({
   onAnswerQuestion
 }: {
   ask?: AskPrompt | null
+  askPending?: boolean
   // The keyboard is up for this card's reply, so it may take the whole conversation area.
   answering?: boolean
   askKey?: string | null
@@ -87,6 +89,7 @@ export function MobileNativeChatPromptCard({
       <MobileNativeChatAsk
         key={askKey ?? 'ask'}
         prompt={ask}
+        answerPending={askPending}
         onAnswer={async (selections) => {
           const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
           if (accepted && !ask.replyAsMessage) {

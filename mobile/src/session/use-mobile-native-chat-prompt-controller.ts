@@ -54,6 +54,7 @@ export function useMobileNativeChatPromptController({
   | 'collapseNativeChatPrompt'
   | 'nativeChatCollapsedPrompt'
   | 'nativeChatAsk'
+  | 'nativeChatAskPending'
   | 'nativeChatAskKey'
   | 'dismissNativeChatAsk'
   | 'collapseNativeChatAsk'
@@ -65,7 +66,8 @@ export function useMobileNativeChatPromptController({
     permission: legacyNativeChatPermission,
     waitStartedAt: nativeChatPromptStartedAt,
     ask: nativeChatAskPrompt,
-    structuredAnswer
+    structuredAnswer,
+    answerPending
   } = useMobileNativeChatPrompts({
     enabled,
     structured,
@@ -116,6 +118,7 @@ export function useMobileNativeChatPromptController({
     hasPromptCard: (legacyNativeChatPermission ?? nativeChatAskPrompt) != null,
     ...promptCards,
     nativeChatAsk: askDismissal.showAsk || askDismissal.collapsedAsk ? nativeChatAskPrompt : null,
+    nativeChatAskPending: answerPending,
     nativeChatAskKey: askDismissal.askKey,
     dismissNativeChatAsk: askDismissal.dismissAsk,
     collapseNativeChatAsk: askDismissal.collapseAsk,

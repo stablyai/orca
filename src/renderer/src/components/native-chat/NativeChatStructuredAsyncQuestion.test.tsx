@@ -9,6 +9,12 @@ import { projectStructuredItemToNativeChat } from '../../../../shared/agent-sess
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
@@ -40,7 +46,164 @@ const asked: NativeChatMessage = {
   source: 'transcript'
 }
 
+const askedItem: AgentJournalRenderItem = {
+  itemId: asked.id,
+  sequence: 1,
+  revision: 0,
+  observedAt: 1,
+  body: { kind: 'message', role: 'assistant', blocks: asked.blocks }
+}
+const answerItem = {
+  ...askedItem,
+  itemId: agentJournalSubmissionKey('answer'),
+  sequence: 2,
+  body: {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: '> Which color?\n\nBlue' }]
+  }
+} satisfies AgentJournalRenderItem
+const pendingAnswer: AgentJournalSubmission = {
+  clientMessageId: 'answer',
+  fence: 1,
+  payloadFingerprint: 'answer',
+  dispatchState: 'pending',
+  providerItemId: null,
+  reason: null,
+  submittedAt: 2,
+  resolvedAt: null,
+  handoverRecorded: true
+}
+
 describe('NativeChatStructuredAsyncQuestion', () => {
+  it('keeps the selected answer mounted through echo, recording, handover and retry until delivery', () => {
+    let settle = (_outcome: 'recorded' | 'returned' | 'unconfirmed') => {}
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      settle = (outcome) => request?.onSettled?.(outcome)
+      return true
+    })
+    const render = (messages: NativeChatMessage[]) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab:structured"
+            sourceKey="host/session/epoch"
+            sourceScope="journal/session/epoch"
+            session={{ messages, readPhase: 'ready' }}
+            send={send}
+          />
+        )
+      )
+    const echo = {
+      clientMessageId: 'answer',
+      queuedAt: 2,
+      body: answerItem.body
+    }
+    render(projectStructuredAgentSessionMessages([askedItem], [], []))
+    const input = container.querySelector<HTMLInputElement>('input[data-native-chat-answer-field]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        input,
+        'Green'
+      )
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      ;[...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    act(() => vi.runAllTimers())
+    const selected = container.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')!
+    const sameCard = (disabled: boolean) => {
+      expect(container.querySelector('button[aria-pressed="true"]')).toBe(selected)
+      expect(container.querySelector('input[data-native-chat-answer-field]')).toBe(input)
+      expect(input.value).toBe('Green')
+      expect(selected.disabled).toBe(disabled)
+    }
+    // These are the separately published states visible in the recording and dispatch fixture.
+    render(projectStructuredAgentSessionMessages([askedItem], [echo], []))
+    sameCard(true)
+    act(() => settle('recorded'))
+    render(projectStructuredAgentSessionMessages([askedItem], [echo], [pendingAnswer]))
+    sameCard(true)
+    for (const submission of [pendingAnswer, { ...pendingAnswer, handedOverAt: 3 }]) {
+      render(projectStructuredAgentSessionMessages([askedItem, answerItem], [echo], [submission]))
+      sameCard(true)
+    }
+    render(
+      projectStructuredAgentSessionMessages(
+        [askedItem, answerItem],
+        [],
+        [{ ...pendingAnswer, handedOverAt: 3, dispatchState: 'unknown' }]
+      )
+    )
+    sameCard(false)
+    render(
+      projectStructuredAgentSessionMessages(
+        [askedItem, answerItem],
+        [],
+        [{ ...pendingAnswer, dispatchState: 'rejected', resolvedAt: 4, reason: 'Not sent.' }]
+      )
+    )
+    sameCard(false)
+    act(() =>
+      [...container.querySelectorAll('button')]
+        .find((node) => node.textContent === 'Submit')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    expect(send).toHaveBeenCalledTimes(2)
+    act(() => settle('returned'))
+    sameCard(false)
+    render(
+      projectStructuredAgentSessionMessages(
+        [askedItem, answerItem],
+        [],
+        [
+          {
+            ...pendingAnswer,
+            dispatchState: 'accepted',
+            providerItemId: 'provider-answer',
+            resolvedAt: 5
+          }
+        ]
+      )
+    )
+    expect(container.querySelector('input[data-native-chat-answer-field]')).toBeNull()
+  })
+
+  it('keeps a queued answer hidden through handoff, releasing only uncertainty or delivery', () => {
+    const render = (submissions: AgentJournalSubmission[], queuedCards: { text: string }[] = []) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="tab:structured"
+            sourceKey="host/session/epoch"
+            sourceScope="journal/session/epoch"
+            session={{
+              messages: projectStructuredAgentSessionMessages(
+                submissions.length ? [askedItem, answerItem] : [askedItem],
+                [],
+                submissions
+              ),
+              readPhase: 'ready'
+            }}
+            send={() => true}
+            queuedCards={queuedCards}
+          />
+        )
+      )
+    render([], [{ text: '> Which color?\n\nBlue' }])
+    expect(container.textContent).toBe('')
+    const handoff = { ...pendingAnswer, queuedMessageId: 'queue-answer', handedOverAt: 3 }
+    render([handoff])
+    expect(container.textContent).toBe('')
+    render([{ ...handoff, dispatchState: 'unknown' }])
+    expect(container.textContent).toContain('Which color?')
+    render([handoff])
+    expect(container.textContent).toBe('')
+    render([{ ...handoff, dispatchState: 'accepted', resolvedAt: 4 }])
+    expect(container.textContent).toBe('')
+  })
+
   it.each([true, false])(
     'keeps an async answer through agent mail (send accepted: %s)',
     (accepted) => {

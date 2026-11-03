@@ -1,6 +1,58 @@
 // Deliver answers as pasted messages or Claude/Codex selector keystrokes.
 
 import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
+import type { NativeChatMessage } from '../native-chat-types'
+import type { AsyncQuestionContributor } from './native-chat-ask'
+
+function isHumanSend(message: NativeChatMessage): boolean {
+  return (
+    message.role === 'user' &&
+    message.from?.kind !== 'agent' &&
+    !message.unsent &&
+    !message.stoppedBeforeStart &&
+    !message.awaitsRetry &&
+    !message.sentWhileStopping
+  )
+}
+
+/** Delivered human input only; notices and undelivered sends answer no question. */
+export function isDeliveredNativeChatUserMessage(message: NativeChatMessage): boolean {
+  return isHumanSend(message) && !message.queued && !message.pendingSend && !message.deliveryState
+}
+
+export function isPendingNativeChatUserMessage(message: NativeChatMessage): boolean {
+  return (
+    isHumanSend(message) &&
+    (message.deliveryState === 'pending' ||
+      message.pendingSend !== undefined ||
+      message.queued === true)
+  )
+}
+
+export function quotedByQueuedAnswer(
+  question: AskQuestion,
+  queuedTexts: readonly string[]
+): boolean {
+  const quote = askAnswerQuote(question)
+  return queuedTexts.some((text) => text.startsWith(quote) || text.includes(`\n\n${quote}`))
+}
+
+/** A handed-off queue answer keeps its questions held until delivery settles. */
+export function withoutPendingQueuedAnswers(
+  contributors: AsyncQuestionContributor[],
+  message: NativeChatMessage
+): AsyncQuestionContributor[] {
+  if (!message.queuedMessageId || message.deliveryState !== 'pending') {
+    return contributors
+  }
+  const texts = [
+    message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('')
+  ]
+  return contributors.filter(
+    (contributor) =>
+      !contributor.questions.some((question) => quotedByQueuedAnswer(question, texts))
+  )
+}
 
 /** Option indices in display order plus free text; selectors address stable numbers rather than labels. */
 export type AskAnswerSelection = { indices: number[]; other?: string }

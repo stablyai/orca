@@ -215,6 +215,25 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
         undefined,
         { alternate: true }
       )
+      if (accepted) {
+        for (const deliveryState of ['pending', 'unknown'] as const) {
+          messages = [
+            message,
+            notice,
+            {
+              id: 'sending-answer',
+              role: 'user',
+              source: 'transcript',
+              timestamp: 3,
+              blocks: [{ type: 'text', text: 'Blue' }],
+              deliveryState
+            }
+          ]
+          TestRenderer.act(() => renderer.update(createElement(Probe)))
+          expect(captured?.ask).toEqual(initialAsk)
+          expect(captured?.answerPending).toBe(deliveryState === 'pending')
+        }
+      }
       messages = [
         ...messages,
         {

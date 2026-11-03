@@ -9,7 +9,13 @@ import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
 } from '../../codex-async-question-input'
-import { askAnswerQuote } from './native-chat-ask-answer'
+import {
+  isDeliveredNativeChatUserMessage,
+  isPendingNativeChatUserMessage,
+  quotedByQueuedAnswer,
+  withoutPendingQueuedAnswers
+} from './native-chat-ask-answer'
+export { isDeliveredNativeChatUserMessage } from './native-chat-ask-answer'
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
 
@@ -142,19 +148,6 @@ export function extractPendingMessageReplyAsk(
   return aggregateAsyncQuestions(scanPendingAsks(messages).contributors)
 }
 
-/** Delivered human input only; agent notices and pending sends answer no question. */
-export function isDeliveredNativeChatUserMessage(message: NativeChatMessage): boolean {
-  return (
-    message.role === 'user' &&
-    message.from?.kind !== 'agent' &&
-    message.queued !== true &&
-    message.unsent !== true &&
-    message.stoppedBeforeStart !== true &&
-    message.awaitsRetry !== true &&
-    message.sentWhileStopping !== true
-  )
-}
-
 export type AsyncQuestionContributor = {
   sourceRowId: string
   /** Parsed async-call slot before dedupe, independent of unrelated blocks and question text. */
@@ -193,12 +186,6 @@ export function asyncQuestionOccurrenceId(
   ])
 }
 
-/** Filter addressed calls before grouping; one call's complete definition stays together. */
-function quotedByQueuedAnswer(question: AskQuestion, queuedTexts: readonly string[]): boolean {
-  const quote = askAnswerQuote(question)
-  return queuedTexts.some((text) => text.startsWith(quote) || text.includes(`\n\n${quote}`))
-}
-
 /** Queued texts hide questions an answer waiting in the queue already quotes; deleting that card brings them back. */
 export function aggregateAsyncQuestions(
   contributors: readonly AsyncQuestionContributor[],
@@ -232,6 +219,7 @@ export function aggregateAsyncQuestions(
 export type PendingAskScan = {
   blocking: AskPrompt | null
   contributors: AsyncQuestionContributor[]
+  answerPending?: true
 }
 
 export function scanPendingAsks(messages: readonly NativeChatMessage[]): PendingAskScan {
@@ -254,6 +242,7 @@ export function createPendingAskScanner(): {
   let pendingDepth = -1
   // Async questions await the person's message, not an orchestration notice from another agent.
   let contributors: AsyncQuestionContributor[] = []
+  let answerPending = false
   const asyncSlots = new Map<string, number>()
   const asyncCallIds = new Set<string>()
   const resetBlocking = (): void => {
@@ -264,6 +253,7 @@ export function createPendingAskScanner(): {
   const interrupt = (): void => {
     resetBlocking()
     contributors = []
+    answerPending = false
     asyncCallIds.clear()
   }
   const append = (message: NativeChatMessage): readonly AsyncQuestionContributor[] => {
@@ -271,6 +261,10 @@ export function createPendingAskScanner(): {
     // Delivered human turns/interrupts abandon the uncorrelated FIFO, or orphan calls strand later asks (#11761).
     if (isDeliveredNativeChatUserMessage(message) || isInterruptedStatusMessage(message)) {
       interrupt()
+    }
+    if (isPendingNativeChatUserMessage(message)) {
+      contributors = withoutPendingQueuedAnswers(contributors, message)
+      answerPending = contributors.length > 0
     }
     for (const block of message.blocks) {
       if (block.type === 'tool-call') {
@@ -290,6 +284,7 @@ export function createPendingAskScanner(): {
               responseMode: 'message'
             }
             contributors.push(contributor)
+            answerPending = false
             accepted.push(contributor)
           }
           if (block.callId !== undefined) {
@@ -312,7 +307,11 @@ export function createPendingAskScanner(): {
     }
     return accepted
   }
-  return { append, interrupt, current: () => ({ blocking: pending, contributors }) }
+  return {
+    append,
+    interrupt,
+    current: () => ({ blocking: pending, contributors, answerPending: answerPending || undefined })
+  }
 }
 
 /** Prefers live status and consults transcript history only after its read settles. */

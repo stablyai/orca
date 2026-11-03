@@ -35,7 +35,7 @@ export function NativeChatStructuredAsyncQuestion({
 }): React.JSX.Element | null {
   const [submitting, setSubmitting] = useState(false)
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
-  const { prompt, dismiss, ownerKey } = useNativeChatAsyncQuestions({
+  const { prompt, dismiss, ownerKey, answerPending } = useNativeChatAsyncQuestions({
     paneKey,
     sourceKey,
     sourceScope,
@@ -51,7 +51,7 @@ export function NativeChatStructuredAsyncQuestion({
     <NativeChatQuestionCard
       key={JSON.stringify([ownerKey, nativeChatAskDismissKey(prompt)])}
       prompt={prompt}
-      isSubmitting={submitting}
+      isSubmitting={submitting || answerPending}
       onAnswer={(selections) => {
         // Delivered rows retire questions, and a queued answer holds them; this only blocks resubmits until settled.
         // The card keeps a returned answer's question, so the text never lands in the composer draft.

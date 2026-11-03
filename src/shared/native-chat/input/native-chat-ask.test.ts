@@ -454,21 +454,44 @@ describe('async questions', () => {
     ).toEqual(pending)
   })
 
-  it.each(['queued', 'unsent', 'stoppedBeforeStart', 'awaitsRetry', 'sentWhileStopping'] as const)(
-    'stays open while a human row is marked %s',
-    (flag) => {
-      const asked = message('a', [asyncCall('call-a', 'A?'), result()])
-      const waiting = userRow('waiting', { [flag]: true })
-      expect(extractPendingAsk([asked, waiting])?.questions.map((q) => q.question)).toEqual(['A?'])
-      const scanner = createPendingAskScanner()
-      scanner.append(asked)
-      const pending = scanner.current().contributors
-      scanner.append(waiting)
-      expect(scanner.current().contributors).toBe(pending)
-      expect(isDeliveredNativeChatUserMessage(waiting)).toBe(false)
-      expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
-    }
-  )
+  it.each([
+    { queued: true },
+    { unsent: true },
+    { stoppedBeforeStart: true },
+    { awaitsRetry: true },
+    { sentWhileStopping: true },
+    { pendingSend: 'active' },
+    { pendingSend: 'queued' },
+    { deliveryState: 'pending' },
+    { deliveryState: 'unknown' }
+  ] as const)('stays open while a human row is marked %s', (flag) => {
+    const asked = message('a', [asyncCall('call-a', 'A?'), result()])
+    const waiting = userRow('waiting', flag)
+    expect(extractPendingAsk([asked, waiting])?.questions.map((q) => q.question)).toEqual(['A?'])
+    const scanner = createPendingAskScanner()
+    scanner.append(asked)
+    const pending = scanner.current().contributors
+    scanner.append(waiting)
+    expect(scanner.current().contributors).toBe(pending)
+    expect(isDeliveredNativeChatUserMessage(waiting)).toBe(false)
+    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+  })
+
+  it('does not make an earlier pending answer disable or hide a later question', () => {
+    const asked = message('first', [asyncCall('first-call', 'A?')])
+    const waiting = userRow('pending-answer', {
+      deliveryState: 'pending',
+      queuedMessageId: 'queue-answer',
+      blocks: [{ type: 'text', text: '> A?\n\nBlue' }]
+    })
+    const later = message('later', [asyncCall('later-call', 'A?')])
+    const scan = scanPendingAsks([asked, waiting, later])
+    expect(scan.contributors.map((contributor) => contributor.sourceRowId)).toEqual(['later'])
+    expect(scan.answerPending).toBeUndefined()
+    expect(scanPendingAsks([asked, { ...waiting, queuedMessageId: undefined }]).answerPending).toBe(
+      true
+    )
+  })
 
   it('keeps async controls across agent notices and replay until human input or interruption', () => {
     const asked = message('a', [asyncCall('call-a', 'A?'), result()])

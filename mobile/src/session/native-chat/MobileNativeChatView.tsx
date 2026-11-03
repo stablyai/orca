@@ -123,6 +123,7 @@ type ChatViewProps = MobileNativeChatSendProps & {
   askKey?: string | null
   onDismissAsk?: () => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  askPending?: boolean
   askRequiresTerminal?: boolean
   onAnswerInTerminal?: () => void
   onCancelAsk?: () => Promise<boolean>
@@ -196,6 +197,7 @@ export function MobileNativeChatView({
   askKey,
   onDismissAsk,
   onAnswerAsk,
+  askPending,
   askRequiresTerminal = false,
   onAnswerInTerminal,
   onCancelAsk,
@@ -367,6 +369,7 @@ export function MobileNativeChatView({
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
         answering={promptOwnsInput && keyboardInset > 0}
+        askPending={askPending}
         {...{ ask, askKey, onDismissAsk, onAnswerAsk, onCancelAsk, onCancelPrompt, onCollapseAsk }}
         requiresTerminal={askRequiresTerminal}
         onAnswerInTerminal={onAnswerInTerminal}

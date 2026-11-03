@@ -24,6 +24,7 @@ import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-s
 
 type Props = {
   prompt: AskPrompt
+  answerPending?: boolean
   // Use option indices so Claude’s selector can navigate without pasting labels.
   onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
   onCancel?: () => Promise<boolean>
@@ -47,6 +48,7 @@ const OTHER = -1
 
 export function MobileNativeChatAsk({
   prompt,
+  answerPending = false,
   onAnswer,
   onCancel,
   onCollapse,
@@ -61,7 +63,8 @@ export function MobileNativeChatAsk({
   const [otherText, setOtherText] = useState<string[]>(() =>
     prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
   )
-  const [submitting, setSubmitting] = useState(false)
+  const [sending, setSubmitting] = useState(false)
+  const submitting = sending || answerPending
   const submittingRef = useRef(false)
   const autoAdvance = useMobileNativeChatAskAutoAdvance()
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
@@ -80,7 +83,7 @@ export function MobileNativeChatAsk({
   // Delay single-select advance to show the choice; Other still needs text.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
     // Block same-frame taps before disabled state renders.
-    if (submittingRef.current) {
+    if (submittingRef.current || answerPending) {
       return
     }
     const cur = selections[qi] ?? []
@@ -120,7 +123,7 @@ export function MobileNativeChatAsk({
     prompt.questions.some((_, i) => isAnswered(i, sel))
 
   const submit = async (sel: number[][]): Promise<void> => {
-    if (!anyAnswered(sel) || submittingRef.current) {
+    if (!anyAnswered(sel) || submittingRef.current || answerPending) {
       return
     }
     submittingRef.current = true
@@ -223,7 +226,7 @@ export function MobileNativeChatAsk({
                 onCollapse()
               })
             }
-            disabled={submitting}
+            disabled={sending}
           />
         </View>
         {q.options.map((opt, optIndex) => (
@@ -267,7 +270,7 @@ export function MobileNativeChatAsk({
         <Pressable
           style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
           onPress={() => void cancel()}
-          disabled={submitting}
+          disabled={sending}
           hitSlop={8}
         >
           <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>

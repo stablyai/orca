@@ -75,6 +75,33 @@ afterEach(() => {
 })
 
 describe('MobileNativeChatAsk single-select auto-advance', () => {
+  it('keeps the picked answer disabled after admission and retryable when delivery is unconfirmed', async () => {
+    const prompt = { questions: [indent], replyAsMessage: true }
+    const onAnswer = render(prompt)
+    press('Spaces')
+    await passAutoAdvanceBeat()
+    act(() =>
+      tree.update(createElement(MobileNativeChatAsk, { prompt, onAnswer, answerPending: true }))
+    )
+    expect(tree.root.find((node) => node.props.label === 'Spaces').props.selected).toBe(true)
+    const button = (label: string) =>
+      tree.root.find(
+        (node) =>
+          isHost(node, 'Pressable') && node.findAll((n) => n.props.children === label).length > 0
+      )
+    expect(button('Submit').props.disabled).toBe(true)
+    expect(button('Cancel').props.disabled).toBe(false)
+    press('Tabs')
+    expect(tree.root.find((node) => node.props.label === 'Spaces').props.selected).toBe(true)
+    expect(onAnswer).toHaveBeenCalledTimes(1)
+    act(() =>
+      tree.update(createElement(MobileNativeChatAsk, { prompt, onAnswer, answerPending: false }))
+    )
+    await submit()
+    expect(onAnswer).toHaveBeenCalledTimes(2)
+    expect(onAnswer).toHaveBeenLastCalledWith([{ indices: [1] }])
+  })
+
   it('moves to the next question after a pick and sends after the last one', async () => {
     const onAnswer = render({ questions: [indent, fruit] })
 
