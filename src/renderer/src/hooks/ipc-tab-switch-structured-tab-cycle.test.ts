@@ -13,6 +13,10 @@ vi.mock('../store', () => ({
 }))
 
 import { handleSwitchTerminalTab } from './ipc-tab-switch'
+import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-actions'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+
+vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 
 const WORKTREE_ID = 'wt-1'
 const GROUP_ID = 'group-1'
@@ -112,5 +116,49 @@ describe('handleSwitchTerminalTab with a structured chat tab active', () => {
     // The stale id matched the only terminal, so the single-terminal guard swallowed the chord.
     expect(handleSwitchTerminalTab(1)).toBe(true)
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-1')
+  })
+})
+
+describe.each(['main', 'floating'] as const)('%s terminal shortcut chat order', (surface) => {
+  it('cycles terminal, chat, terminal in both directions using exact tab selection', () => {
+    const worktreeId = surface === 'floating' ? FLOATING_TERMINAL_WORKTREE_ID : WORKTREE_ID
+    const store = storeWithStructuredTabActive({
+      terminalIds: ['term-1', 'term-2'],
+      lastFocusedTerminalId: 'term-1',
+      activeGroupTabId: 'unified-term-1'
+    })
+    store.activeWorktreeId = worktreeId
+    store.activeGroupIdByWorktree = { [worktreeId]: GROUP_ID }
+    store.groupsByWorktree = {
+      [worktreeId]: store.groupsByWorktree[WORKTREE_ID].map((group) => ({ ...group, worktreeId }))
+    }
+    store.tabsByWorktree = {
+      [worktreeId]: store.tabsByWorktree[WORKTREE_ID].map((tab) => ({ ...tab, worktreeId }))
+    }
+    store.unifiedTabsByWorktree = {
+      [worktreeId]: store.unifiedTabsByWorktree[WORKTREE_ID].map((tab) => ({ ...tab, worktreeId }))
+    }
+    mocks.store = store
+    const group = store.groupsByWorktree[worktreeId][0]
+    group.tabOrder = ['unified-term-1', CHAT_UNIFIED_ID, 'unified-term-2']
+    vi.mocked(store.activateTab).mockImplementation((tabId) => {
+      group.activeTabId = tabId
+      Object.assign(store, buildActiveSurfacePatch(store, worktreeId))
+    })
+    const switchTab = (direction: number): boolean =>
+      surface === 'floating'
+        ? switchFloatingWorkspaceTab(store, direction, 'terminal')
+        : handleSwitchTerminalTab(direction)
+    for (const [direction, expectedTabId] of [
+      [1, CHAT_UNIFIED_ID],
+      [1, 'unified-term-2'],
+      [1, 'unified-term-1'],
+      [-1, 'unified-term-2'],
+      [-1, CHAT_UNIFIED_ID],
+      [-1, 'unified-term-1']
+    ] as const) {
+      expect(switchTab(direction)).toBe(true)
+      expect(group.activeTabId).toBe(expectedTabId)
+    }
   })
 })
