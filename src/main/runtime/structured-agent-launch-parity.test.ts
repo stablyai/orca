@@ -166,7 +166,8 @@ const AGENTS = [
   'omp',
   'pi',
   'antigravity',
-  'opencode2'
+  'opencode2',
+  'devin'
 ] as const
 type Agent = (typeof AGENTS)[number]
 
@@ -179,7 +180,8 @@ const VERSIONS: Record<Agent, string> = {
   omp: '17.1.0',
   pi: '1.1.0',
   antigravity: '1.3.0',
-  opencode2: '2.0.20'
+  opencode2: '2.0.20',
+  devin: 'devin 3000.11.205 (6dea39440ae3)'
 }
 /** An agent whose binary is not named after it. */
 const BINARIES: Partial<Record<Agent, string>> = { antigravity: 'agy_acp_server.par' }
@@ -295,7 +297,8 @@ function configuredSettings(): Partial<GlobalSettings> {
       omp: '',
       pi: '',
       antigravity: '',
-      opencode2: ''
+      opencode2: '',
+      devin: ''
     },
     agentDefaultEnv: Object.fromEntries(
       AGENTS.map((agent) => [
@@ -369,6 +372,8 @@ function accountHomeFor(agent: Agent): AgentSessionAccountHome {
       return { variable: 'PI_CODING_AGENT_DIR', path: directory('pi') }
     case 'antigravity':
       return { variable: 'GEMINI_HOME', path: directory('antigravity') }
+    case 'devin':
+      return { variable: 'XDG_DATA_HOME', path: directory('devin') }
   }
 }
 
@@ -393,6 +398,7 @@ async function resumedHandleFor(
     case 'opencode2':
     case 'omp':
     case 'antigravity':
+    case 'devin':
       return { transport: 'acp', agent, nativeId: `acp-session-${sessionId}` }
   }
 }
