@@ -8,7 +8,7 @@ import type { Repo } from '../../shared/repo-types'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 
-vi.mock('../repo-icon-autodetect', () => ({
+vi.mock('../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
 }))
 vi.mock('../worktree-root-preparation', () => ({
