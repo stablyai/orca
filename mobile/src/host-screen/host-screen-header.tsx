@@ -44,7 +44,9 @@ export function HostConnectionStatus({ controller }: { controller: HostScreenCon
   const statusText = isErrorVerdict(connectionVerdict)
     ? verdictDisplayLabel(connectionVerdict)
     : presentedConnState === 'connected'
-      ? (hostDisplay.descriptorLine ?? t('connection.connectionHealth.connected', 'Connected'))
+      ? (hostDisplay.machineLine ??
+        hostDisplay.descriptorLine ??
+        t('connection.connectionHealth.connected', 'Connected'))
       : connectionVerdict.label
   return (
     <>
