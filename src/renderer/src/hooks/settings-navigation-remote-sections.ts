@@ -1,13 +1,13 @@
-import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
-import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
-import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
+import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced/advanced-search'
+import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions/developer-permissions-search'
+import { getExperimentalPaneSearchEntries } from '@/components/settings/advanced/experimental-search'
 import {
   getPluginsPaneSearchEntries,
   getPluginsSectionPresentation
-} from '@/components/settings/plugins-search'
-import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
+} from '@/components/settings/plugins/plugins-search'
+import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy/privacy-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
-import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
+import { buildSettingsProjectList } from '@/components/settings/navigation/settings-project-list'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'

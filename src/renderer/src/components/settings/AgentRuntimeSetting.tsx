@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { GlobalWindowsRuntimeDefault } from '../../../../shared/project-execution-runtime'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../shared/project-execution-runtime'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl } from './form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
 type AgentRuntimeSegment = GlobalWindowsRuntimeDefault['kind']
