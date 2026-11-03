@@ -134,19 +134,23 @@ export function NativeChatTextAttachmentPreview({
       }}
     >
       <DialogContent className="flex h-[88vh] max-h-[calc(100vh-2rem)] min-h-0 w-[calc(100vw-2rem)] max-w-6xl flex-col overflow-hidden sm:max-w-6xl">
-        <DialogHeader className="min-w-0 shrink-0 pr-8 text-left">
-          <DialogTitle className="truncate">{name}</DialogTitle>
-          <DialogDescription className="truncate">
-            {source.size === null
-              ? translate(
-                  'components.native-chat.textAttachmentPreview.textAttachment',
-                  'Text attachment'
-                )
-              : translate(
-                  'components.native-chat.textAttachmentPreview.byteSize',
-                  '{{size}} bytes',
-                  { size: source.size.toLocaleString(getIntlLocale()) }
-                )}
+        <DialogHeader className="mr-8 min-w-0 shrink-0 text-left">
+          <DialogTitle>
+            <span className="block truncate">{name}</span>
+          </DialogTitle>
+          <DialogDescription>
+            <span className="block truncate">
+              {source.size === null
+                ? translate(
+                    'components.native-chat.textAttachmentPreview.textAttachment',
+                    'Text attachment'
+                  )
+                : translate(
+                    'components.native-chat.textAttachmentPreview.byteSize',
+                    '{{size}} bytes',
+                    { size: source.size.toLocaleString(getIntlLocale()) }
+                  )}
+            </span>
           </DialogDescription>
         </DialogHeader>
         <div className="flex shrink-0 flex-wrap gap-2">
