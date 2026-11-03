@@ -65,7 +65,7 @@ vi.mock('../../src/main/github/gh-utils', async (original) => ({
     repo: 'widgets'
   })
 }))
-vi.mock('../../src/main/git/remote-name-listing', () => ({
+vi.mock('../../src/main/git/remotes/remote-name-listing', () => ({
   shouldProbeGitRemote: async () => true
 }))
 

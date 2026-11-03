@@ -1,4 +1,4 @@
-import type * as WorktreeListingModule from '../git/worktree-listing'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 /** Translate WSL POSIX selectors to stored UNC paths using the caller's distro. Delete shares this resolver, so matching only the path tail could remove another distro's copy (#16628). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -15,7 +15,7 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
-vi.mock('../git/worktree-listing', async (importOriginal) => {
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
     listWorktreesStrict: listWorktreesStrictMock
@@ -25,10 +25,6 @@ vi.mock('../git/worktree-listing', async (importOriginal) => {
 vi.mock('electron', () => electronMocks)
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
-vi.mock('../git/worktree', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesStrictMock
-}))
 
 import { isWslUncPathForCallerLinuxPath } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'

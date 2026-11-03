@@ -1,5 +1,5 @@
 import { type Mock, vi } from 'vitest'
-import type { describeCreatedWorktree } from '../git/worktree'
+import type { describeCreatedWorktree } from '../git/worktrees/catalog/worktree-listing'
 import type { computeWorktreePath } from './worktree-logic'
 import type { HandlerMap } from './worktrees-test-ipc-surface'
 

@@ -15,7 +15,10 @@ vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) =>
     (await mocks.isWslDistroRunning()) ? 'running' : 'stopped'
 }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.gitExec }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: mocks.gitExec
+}))
 vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRegisteredPath
 }))

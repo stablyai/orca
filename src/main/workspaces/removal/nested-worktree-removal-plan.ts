@@ -1,7 +1,7 @@
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/nested-removal'
 import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import {
   containsPath,
   getPathOps,

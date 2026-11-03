@@ -12,7 +12,7 @@ import {
   type GenerateCommitMessageResult
 } from '../../text-generation/commit-message-text-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/commit-message-host-key'
-import { getStagedCommitContext } from '../../git/status'
+import { getStagedCommitContext } from '../../git/source-control/staged-commit-context'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'

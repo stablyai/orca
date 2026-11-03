@@ -9,7 +9,7 @@ import {
   WorkspaceCleanupScanCancelledError,
   withWorkspaceCleanupTimeout
 } from './workspace-cleanup-scan-primitives'
-import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
+import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import {
   resolveWorkspaceCleanupWorktreeGitRoute,
   type WorkspaceCleanupGitRoute
