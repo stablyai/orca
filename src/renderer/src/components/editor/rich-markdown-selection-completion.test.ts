@@ -619,6 +619,7 @@ it.each(['up', 'outside', 'no-buttons', 'multiple-click'] as const)(
 it('keeps a handled rich click and a later foreign-owned release authoritative', () => {
   vi.useFakeTimers()
   const editor = surface(true, '<p>lower caret</p><hr><p>after</p>')
+  const documentBefore = editor.state.doc.toJSON()
   const input = document.createElement('input')
   document.body.append(input)
   try {
@@ -662,7 +663,7 @@ it('keeps a handled rich click and a later foreign-owned release authoritative',
     expect(editor.state.selection.eq(current)).toBe(true)
     expect(document.activeElement).toBe(input)
     expect(publications).not.toHaveBeenCalled()
-    expect(editor.getText()).toBe('lower caret\n\nafter')
+    expect(editor.state.doc.toJSON()).toEqual(documentBefore)
   } finally {
     editor.destroy()
   }
