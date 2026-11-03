@@ -97,12 +97,20 @@ it.each([10, 100])('extracts %i immutable rows once and invalidates changed sour
   try {
     for (let pass = 0; pass < 2; pass++) {
       for (const message of messages) {
-        agentMessageTranscriptText(message.blocks, message.from)
+        agentMessageTranscriptText(message.blocks, readAgentMessageSource(message.from))
       }
     }
     expect(extract).toHaveBeenCalledTimes(count)
     const message = messages[0]
-    const changed = readAgentMessageSource(JSON.parse(JSON.stringify(message.from)))
+    const changed = readAgentMessageSource({
+      ...message.from,
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'run:run_review',
+        dispatchId: null,
+        messages: [{ messageId: 'other-message', runId: 'run_review', from: 'term_worker' }]
+      }
+    })
     agentMessageTranscriptText(message.blocks, changed)
     expect(extract).toHaveBeenCalledTimes(count + 1)
   } finally {
