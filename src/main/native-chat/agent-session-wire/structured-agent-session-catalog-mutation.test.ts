@@ -146,6 +146,9 @@ describe('installed catalog through Codex delivery and report settlement', () =>
         const acquire = f.rig.adapter.acquire.getMockImplementation()!
         f.rig.adapter.acquire.mockImplementation(async (...args) => {
           const result = await acquire(...args)
+          if (!result.link) {
+            throw new Error('test acquisition did not provide a provider link')
+          }
           return {
             ...result,
             link: { ...result.link, handle: claudeProviderHandle('claude-provider', null) }
