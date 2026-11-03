@@ -511,6 +511,14 @@
   },
   "settings": {
     "chat": {
+      "launch": {
+        "on": "Chat UI is on by default",
+        "off": "Chat UI is off by default",
+        "description": "Choose Chat UI or CLI for new agents. Each agent can have its own choice below.",
+        "toggle": "Use Chat UI by default",
+        "agents": "Default launch mode per agent",
+        "agentsDescription": "Choose whether each agent opens in Chat UI or its CLI."
+      },
       "permissionsAgentsLink": "Settings → Agents",
       "permissionsTitle": "Permissions for new chats",
       "permissionsDescription": "New chats only. Agent-specific defaults are in Settings → Agents.",
