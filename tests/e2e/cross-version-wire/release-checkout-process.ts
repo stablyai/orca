@@ -1,5 +1,3 @@
-import { checkoutFetchTrace } from './release-checkout-diagnostic.ts'
-
 export const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
 const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 
@@ -21,22 +19,17 @@ export async function runCheckoutProcess(
   }
   // Kept lazy so plain Node 24 contention children never load Vite's TS graph.
   const { runProcess } = await import('@orca/process-host')
-  const trace = program === 'git' ? await checkoutFetchTrace() : undefined
-  const phase =
-    operation === 'fetch' || operation === 'rev-list' || operation === 'config'
-      ? `prepare-${operation}`
-      : `consumer-${operation}`
   const result = await runProcess({
     program,
     args,
     cwd: repoRoot,
-    env: { ...process.env, ...trace?.env, ...LOCAL_RELEASE_GIT_ENV },
+    env: { ...process.env, ...LOCAL_RELEASE_GIT_ENV },
     timeoutMs: Math.max(1, deadline - Date.now()),
     maxOutputBytes: options.maxOutputBytes ?? CHECKOUT_MAX_OUTPUT_BYTES,
     killOnOutputLimit: true,
     input: options.input,
     terminationBarrier: true
-  }).finally(() => trace?.finish('', phase))
+  })
   if (result.code === 0 && !result.timedOut && !result.outputTruncated) {
     return result.stdout
   }

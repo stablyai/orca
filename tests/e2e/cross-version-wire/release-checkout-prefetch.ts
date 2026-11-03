@@ -1,5 +1,4 @@
 import { runCheckoutProcess } from './release-checkout-process.ts'
-import { checkoutDiagnostic } from './release-checkout-diagnostic.ts'
 
 const PREPARATION_TIMEOUT_MS = 60_000
 
@@ -9,7 +8,6 @@ export async function prepareReleaseSnapshotSource(
   { timeoutMs = PREPARATION_TIMEOUT_MS } = {}
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
-  checkoutDiagnostic('prepare-start', commit, deadline)
   const git = (args: string[], input?: string): Promise<string> =>
     runCheckoutProcess(repoRoot, 'git', args, deadline, {
       input,
@@ -61,7 +59,6 @@ export async function prepareReleaseSnapshotSource(
         throw new Error('Requested snapshot objects remain unavailable')
       }
     }
-    checkoutDiagnostic('prepare-end', commit, deadline)
   } catch (error) {
     throw new Error(`Historical source preparation: ${String(error)}`)
   }

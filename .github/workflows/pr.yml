@@ -994,11 +994,6 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - name: Measure historical source checkout storage
-        run: |
-          git count-objects -v
-          df -k .
-
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -1019,15 +1014,7 @@ jobs:
 
       # Run the entire directory; zero matches fail so new contracts cannot be omitted silently.
       - name: Old/new client and server compatibility journeys
-        env:
-          ORCA_RELEASE_CHECKOUT_DIAGNOSTIC: '1'
         run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
-
-      - name: Measure prepared historical source storage
-        if: always()
-        run: |
-          git count-objects -v
-          df -k .
 
   managed_hook_node18:
     name: managed hooks on Node 18

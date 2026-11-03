@@ -1,7 +1,7 @@
 import '../../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { execFileSync } from 'node:child_process'
 import { stripTypeScriptTypes } from 'node:module'
-import { afterAll, beforeAll, expect, it, vi } from 'vitest'
+import { beforeAll, expect, it, vi } from 'vitest'
 import {
   call,
   hostStub,
@@ -18,20 +18,16 @@ import { createClaudeModelCatalogProbe } from '../../../src/main/claude/claude-m
 
 import { prepareReleaseCheckoutSnapshot, REPO_ROOT } from './release-checkout'
 import { LOCAL_RELEASE_GIT_ENV } from './release-checkout-process'
-import { checkoutFetchTrace } from './release-checkout-diagnostic'
 
-let directReadTrace: Awaited<ReturnType<typeof checkoutFetchTrace>>
 beforeAll(async () => {
   await prepareReleaseCheckoutSnapshot('v1.4.229')
-  directReadTrace = await checkoutFetchTrace()
 }, 180_000)
-afterAll(() => directReadTrace?.finish('v1.4.229', 'consumer-direct-show'))
 
 // Local acceptance rig: execute the pinned source, with only React's effect scheduler and transport replaced.
 function released(path: string, names: string[], dependencies: Record<string, unknown> = {}) {
   const source = execFileSync('git', ['show', `v1.4.229:${path}`], {
     cwd: REPO_ROOT,
-    env: { ...process.env, ...directReadTrace?.env, ...LOCAL_RELEASE_GIT_ENV },
+    env: { ...process.env, ...LOCAL_RELEASE_GIT_ENV },
     encoding: 'utf8'
   })
     .replace(
