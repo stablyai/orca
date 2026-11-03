@@ -80,6 +80,9 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
         setupDecision: args.setupDecision,
+        ...(args.approvedSetupHash !== undefined
+          ? { approvedSetupHash: args.approvedSetupHash }
+          : {}),
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         ...(args.startup

@@ -1,4 +1,5 @@
 import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
+import { reviewSetupTrustMismatch } from './created-worktree-setup-trust'
 import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
@@ -261,6 +262,7 @@ export function createCreateWorktree(
           }
           const { result } = outcome
           showWorktreeCreateWarningToast(result.warning)
+          reviewSetupTrustMismatch(get, repoId, creationHostId, result)
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
             executionHostId: creationHostId
