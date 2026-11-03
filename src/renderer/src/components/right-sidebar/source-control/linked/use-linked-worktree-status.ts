@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { getConnectionId } from '@/lib/connection-context'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
@@ -41,7 +42,7 @@ export function linkedWorktreeGitContext(worktree: Worktree, repo: Repo): Runtim
 }
 
 function useLinkedWorktreeTargets(linkedIds: readonly string[]) {
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const repos = useAppStore((s) => s.repos)
   return useMemo(() => {
     const repoMap = getRepoMapFromState({ repos })

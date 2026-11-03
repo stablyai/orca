@@ -16,6 +16,7 @@ import { joinPath } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import {
   bulkDiscardRuntimeGitPaths,
@@ -61,7 +62,7 @@ export function SourceControlLinkedRepoSections({
   useUiLanguageRevision()
   const manualIds = useLinkedWorktreeIds(activeWorktreeId)
   const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const groupIds = useMemo(
     () =>
       findGroupLinkedWorktreeIds(
@@ -351,7 +352,7 @@ function AddLinkedRepoMenu({
   activeRepoId: string | null
   linkedIds: readonly string[]
 }): React.JSX.Element {
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const repos = useAppStore((s) => s.repos)
   const options = useMemo(() => {
     const repoMap = getRepoMapFromState({ repos })
