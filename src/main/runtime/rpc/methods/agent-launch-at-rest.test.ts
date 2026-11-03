@@ -11,6 +11,8 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import type { RpcContext } from '../core'
 import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { CodexAppServerRequestError } from '../../../codex/app-server/codex-app-server-request-error'
+import { CodexAppServerExitError } from '../../../codex/app-server/codex-app-server-exit-error'
+import { codexStartFailure } from '../../../codex/app-server/codex-startup-outcome'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import * as structuredCreate from './structured-agent-session-create'
@@ -144,8 +146,10 @@ async function endChild(sessionId = SESSION) {
     reason: 'exited during initialize',
     cause: 'unexpected-exit'
   })
-  // A real connection rejects its outstanding open once the child exits.
-  openEnded.get(current.acquisitionGeneration)?.(new Error('codex app-server connection ended'))
+  // The real adapter answers its outstanding open with the drained exit once the child exits.
+  openEnded.get(current.acquisitionGeneration)?.(
+    codexStartFailure(new CodexAppServerExitError('codex app-server connection ended'))
+  )
   openEnded.delete(current.acquisitionGeneration)
   await vi.waitFor(() =>
     expect(rig.host.collaboratorsForTests().sessions.get(sessionId)?.child).toBeNull()
@@ -249,11 +253,13 @@ it.each(['spawn', 'open'] as const)(
       )
     } else {
       vi.spyOn(rig.host.deps.adapter, 'open').mockRejectedValueOnce(
-        new CodexAppServerRequestError(
-          'initialize',
-          -32001,
-          'Server overloaded; retry later.',
-          'Server overloaded; retry later.'
+        codexStartFailure(
+          new CodexAppServerRequestError(
+            'initialize',
+            -32001,
+            'Server overloaded; retry later.',
+            'Server overloaded; retry later.'
+          )
         )
       )
     }

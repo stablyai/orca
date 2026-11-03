@@ -1,5 +1,12 @@
 import { findInErrorChain } from '../provider-process/provider-error-chain'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
+import {
+  agentSessionAcquireFailure,
+  agentSessionStartFailure,
+  providerResourcePressure,
+  type AgentSessionStartAnswer,
+  type AgentSessionStartFailure
+} from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
 
 /** SDK runtime tags are not in its public Error declaration. */
 export function claudeStartupErrorClass(error: Error): string | undefined {
@@ -8,39 +15,30 @@ export function claudeStartupErrorClass(error: Error): string | undefined {
     : undefined
 }
 
-export function claudeStartupAnswer(error: Error): 'temporary' | 'final' | undefined {
-  const tag = claudeStartupErrorClass(error)
+/** The SDK's tag says whether Claude's process ended unanswered; every other tag is its answer.
+ *  A launch the host could not run for want of resources is left to the shared rule. */
+export const claudeStartupAnswer: AgentSessionStartAnswer = (error) => {
+  const tag =
+    claudeStartupErrorClass(error) ??
+    (error instanceof ClaudeControlRequestError
+      ? (findInErrorChain(error.cause, (cause) => claudeStartupErrorClass(cause)) ?? 'answered')
+      : undefined)
+  if (tag === undefined) {
+    return undefined
+  }
   if (tag === 'process_exited_nonzero' || tag === 'process_killed_by_signal') {
-    return 'temporary'
+    return 'exited'
   }
   if (tag === 'executable_launch_failed' || tag === 'spawn_failed' || tag === 'process_error') {
-    return resourcePressure(error) ? 'temporary' : 'final'
+    return providerResourcePressure(error) ? undefined : 'final'
   }
-  if (tag !== undefined) {
-    return 'final'
-  }
-  if (error instanceof ClaudeControlRequestError) {
-    const origin = findInErrorChain(error.cause, (cause) => claudeStartupErrorClass(cause))
-    if (
-      origin === 'executable_launch_failed' ||
-      origin === 'spawn_failed' ||
-      origin === 'process_error'
-    ) {
-      return resourcePressure(error) ? 'temporary' : 'final'
-    }
-    return origin === 'process_exited_nonzero' || origin === 'process_killed_by_signal'
-      ? 'temporary'
-      : 'final'
-  }
-  return undefined
+  return 'final'
 }
 
-function resourcePressure(error: Error): boolean {
-  return (
-    findInErrorChain(error, (cause) =>
-      'code' in cause && ['EAGAIN', 'EMFILE', 'ENFILE'].some((code) => cause.code === code)
-        ? true
-        : undefined
-    ) === true
-  )
+export function claudeStartFailure(error: unknown): AgentSessionStartFailure {
+  return agentSessionStartFailure(error, claudeStartupAnswer)
+}
+
+export function claudeAcquireFailure(error: unknown): unknown {
+  return agentSessionAcquireFailure(error, claudeStartupAnswer)
 }

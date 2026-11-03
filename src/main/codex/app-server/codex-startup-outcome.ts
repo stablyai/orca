@@ -1,4 +1,39 @@
-import type { CodexAppServerRequestError } from './codex-app-server-request-error'
+import {
+  agentSessionAcquireFailure,
+  agentSessionStartFailure,
+  type AgentSessionStartAnswer,
+  type AgentSessionStartFailure
+} from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerUnsupportedError } from './codex-app-server-session'
+import { CodexAppServerExitError } from './codex-app-server-exit-error'
+import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
+
+/** Codex's answer to a start request is final unless Codex declared it temporary; its transport
+ *  ending with no answer once output drained is an unanswered start. */
+export const codexStartupAnswer: AgentSessionStartAnswer = (cause) => {
+  if (cause instanceof CodexAppServerRequestError) {
+    return temporaryCodexStartupAnswer(cause) ? 'temporary' : 'final'
+  }
+  if (
+    cause instanceof CodexAppServerUnsupportedError ||
+    cause instanceof CodexAppServerFrameSizeError
+  ) {
+    return 'final'
+  }
+  if (cause instanceof CodexAppServerExitError) {
+    return cause.protocolFailure ? 'final' : 'exited'
+  }
+  return undefined
+}
+
+export function codexStartFailure(error: unknown, exited = false): AgentSessionStartFailure {
+  return agentSessionStartFailure(error, codexStartupAnswer, exited)
+}
+
+export function codexAcquireFailure(error: unknown): unknown {
+  return agentSessionAcquireFailure(error, codexStartupAnswer)
+}
 
 /** Only declarations whose provider contract permits replay of a start. */
 export function temporaryCodexStartupAnswer(error: CodexAppServerRequestError): boolean {

@@ -12,6 +12,11 @@ import {
   hostTestState
 } from './structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
+import canonicalRefusal from '../../codex/app-server/fixtures/start-resume-canonical-filename-refusal.json'
+import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
+import { codexStartFailure } from '../../codex/app-server/codex-startup-outcome'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 
 const OPENED: StructuredAgentSessionProviderOpenResult = {
   reportedOptions: { model: 'gpt-test' }
@@ -76,5 +81,33 @@ it('journals a typed writer refusal and cleans up the real starting child', asyn
     ).toBe(true)
   })
   expect(close).toHaveBeenCalledOnce()
+  expect(dispatch).not.toHaveBeenCalled()
+})
+
+it("records one standalone row in the start's words when a direct attach fails with nothing queued", async () => {
+  const { host, open, close, dispatch, pending } = awaitOpen()
+  await attach()
+  await vi.waitFor(() => expect(open).toHaveBeenCalledOnce())
+  pending.reject(
+    codexStartFailure(
+      new CodexAppServerRequestError(
+        'thread/resume',
+        canonicalRefusal.code,
+        canonicalRefusal.message
+      )
+    )
+  )
+  await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+  const snapshot = await host.journalSnapshot(HOST_TEST_SESSION)
+  expect(snapshot.items.filter((item) => item.body.kind === 'status')).toEqual([
+    expect.objectContaining({
+      itemId: agentJournalItemKey(structuredAgentSessionStartFailureRowIdentity('awaited-open')),
+      body: expect.objectContaining({
+        tone: 'error',
+        failure: expect.objectContaining({ kind: 'startFailed' })
+      })
+    })
+  ])
+  expect(snapshot.submissions).toEqual([])
   expect(dispatch).not.toHaveBeenCalled()
 })

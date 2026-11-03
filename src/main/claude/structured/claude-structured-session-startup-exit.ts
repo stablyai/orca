@@ -6,6 +6,7 @@ import {
   withObservedProviderExit
 } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 /** A physical exit waits briefly for initialize's answer; a delivered answer outranks the exit. */
 export async function claudeStartupAnswerAfterExit(
@@ -38,11 +39,14 @@ export async function claudeStartupError(
     : (connection.startupFailure?.() ?? error)
 }
 
-/** An unexpected exit, and when it ends the start: a delivered initialize answer outranks it. */
+/** An unexpected exit, and when it ends the start: a delivered initialize answer outranks it. The
+ *  start's root-exit receipt is taken now, before the answer join can delay it. */
 export function claudeStartupExit(
   error: Error,
-  connection: ClaudeStreamJsonConnection | null
+  connection: ClaudeStreamJsonConnection | null,
+  events?: Pick<StructuredAgentSessionEventSink, 'observeRootExit'>
 ): [exited: Error, ended: Promise<unknown>] {
+  events?.observeRootExit?.()
   // Mark in place because the fault report may retain this error object.
   const exited = withObservedProviderExit(error)
   return [exited, claudeStartupError(exited, connection)]

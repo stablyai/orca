@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
+import { codexStartFailure } from '../../codex/app-server/codex-startup-outcome'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import {
   AgentSessionAcquisitionRefusal,
@@ -15,14 +16,12 @@ import { projectStructuredAgentSessionMessages } from '../../../shared/agent-ses
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
-  hostTestAttachParams,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
-import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
 import {
-  providerStartupFailureFact,
-  withObservedProviderExit
-} from './structured-agent-session-failure-text'
+  STRUCTURED_AGENT_SESSION_STARTUP_EXIT_GRACE_MS,
+  type StructuredAgentSessionStartupLimits
+} from './structured-agent-session-startup-attempt-contract'
 import {
   CALLER,
   accept,
@@ -41,7 +40,10 @@ import {
   stop,
   store,
   submission,
-  registerStartupAttemptHostTests
+  registerStartupAttemptHostTests,
+  failOpen,
+  observeRootExit,
+  recordStartupEnding
 } from './structured-agent-session-startup-attempt-host-test-support'
 
 let startupLimits: Partial<StructuredAgentSessionStartupLimits> | undefined
@@ -357,55 +359,39 @@ describe('one logical start across physical attempts', () => {
     }
   )
 
-  it.each([
-    agentSessionFailureFact('fullAccessAsRoot'),
-    agentSessionFailureFact('historyTooLarge'),
-    // A refusal whose reason has no failure kind of its own keeps only its refusal marker.
-    providerStartupFailureFact(
-      withObservedProviderExit(new AgentSessionAcquisitionRefusal('typed startup refusal'))
-    )
-  ])(
-    'keeps the typed $kind exit-only refusal final even when raw open never settles',
-    async (failure) => {
-      await restartWith(publishFirst)
-      let signal: AbortSignal | undefined
-      providerOpen.mockImplementationOnce((input) => {
-        signal = input.signal
-        return new Promise(() => {})
-      })
-      const id = await heldBehindStart('one request')
-      const child = host.collaboratorsForTests().sessions.get(SESSION)!.child!
-      await host.handleAdapterEvent({
-        type: 'ended',
-        sessionId: SESSION,
-        fence: child.fence,
-        acquisitionGeneration: child.generation!,
-        reason: 'root refusal',
-        cause: 'unexpected-exit',
-        failure
-      })
-      await vi.advanceTimersByTimeAsync(2_100)
-      await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
-      expect((await submission(id))?.rejection).toMatchObject({ kind: failure.kind })
-      expect(acquire).toHaveBeenCalledTimes(1)
-      expect(dispatch).not.toHaveBeenCalled()
-      expect(signal?.aborted).toBe(true)
-    }
-  )
-
-  it('retires a direct attach open, which has no start flight, when its child exits', async () => {
+  it('fails a start whose adapter never answers after its own exit, before the ceiling and without a replacement', async () => {
     await restartWith(publishFirst)
     let signal: AbortSignal | undefined
     providerOpen.mockImplementationOnce((input) => {
       signal = input.signal
       return new Promise(() => {})
     })
-    const fence = store.getRecord(SESSION)!.lease.runtimeFence
-    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({ ok: true })
-    await eventually(() => expect(signal).toBeDefined())
-    expect(host.collaboratorsForTests().runtimeState.startFlights.has(SESSION)).toBe(false)
-    await endAttempt()
+    const id = await heldBehindStart('one request')
+    // The adapter saw its process exit, but neither its open nor its exit report ever settles.
+    observeRootExit()
+    await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_STARTUP_EXIT_GRACE_MS)
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    expect(await submission(id)).toMatchObject(
+      agentSessionFailureWords(agentSessionFailureFact('providerStartFailed'), {
+        agentName: 'Codex',
+        surface: 'rejection'
+      })
+    )
     expect(signal?.aborted).toBe(true)
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('recovers when the child dies after its open answered but before the start was ready', async () => {
+    await restartWith(publishFirst)
+    const id = await heldBehindStart('one request')
+    // The adapter's own record of this acquisition ending lands before the host commits ready.
+    recordStartupEnding()
+    await proveOpen()
+    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
+    await proveOpen()
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
+    expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
   it('keeps an initialize deadline that rejects after the exit it raced', async () => {
@@ -421,26 +407,16 @@ describe('one logical start across physical attempts', () => {
     expect(acquire).toHaveBeenCalledTimes(1)
   })
 
-  it('bounds an unanswered open after exit and recovers without waiting for the startup ceiling', async () => {
-    await restartWith(publishFirst)
-    providerOpen.mockImplementationOnce(() => new Promise(() => {}))
-    const id = await heldBehindStart('one request')
-    await endAttempt()
-    await vi.advanceTimersByTimeAsync(2_200)
-    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
-    await proveOpen()
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
-    expect(dispatch).toHaveBeenCalledTimes(1)
-  })
-
   it('reconnects after a declared-temporary open answer and delivers the held message once', async () => {
     await restartWith(publishFirst)
     providerOpen.mockRejectedValueOnce(
-      new CodexAppServerRequestError(
-        'initialize',
-        -32001,
-        'Server overloaded; retry later.',
-        'Server overloaded; retry later.'
+      codexStartFailure(
+        new CodexAppServerRequestError(
+          'initialize',
+          -32001,
+          'Server overloaded; retry later.',
+          'Server overloaded; retry later.'
+        )
       )
     )
     const id = await heldBehindStart('recover')
@@ -542,15 +518,7 @@ describe('one logical start across physical attempts', () => {
     closeSession.mockResolvedValue(false)
     const second = await heldBehindStart('unproven process')
     const child = host.collaboratorsForTests().sessions.get(SESSION)!.child!
-    const { lifetime } = host.collaboratorsForTests()
-    await expect(
-      lifetime.failStartingChild(
-        SESSION,
-        child,
-        new CodexAppServerRequestError('thread/start', -1, 'refused'),
-        1
-      )
-    ).rejects.toThrow('eviction failed')
+    failOpen(codexStartFailure(new CodexAppServerRequestError('thread/start', -1, 'refused')))
     await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
     expect(host.collaboratorsForTests().sessions.get(SESSION)?.child).toBe(child)
     expect(acquire).toHaveBeenCalledTimes(1)
@@ -633,17 +601,15 @@ describe('one logical start across physical attempts', () => {
   it('keeps an elapsed provider-step deadline final and preserves its words', async () => {
     await restartWith(publishFirst)
     const first = await heldBehindStart('initialize deadline')
-    const { sessions, lifetime } = host.collaboratorsForTests()
     const requestTimeout = { method: 'initialize', timeoutMs: 60_000 }
     await vi.advanceTimersByTimeAsync(60_000)
-    await lifetime.failStartingChild(
-      SESSION,
-      sessions.get(SESSION)!.child!,
-      withProviderRequestTimeout(
-        new CodexAppServerRequestError('initialize', -1, 'deadline'),
-        requestTimeout
-      ),
-      60_000
+    failOpen(
+      codexStartFailure(
+        withProviderRequestTimeout(
+          new CodexAppServerRequestError('initialize', -1, 'deadline'),
+          requestTimeout
+        )
+      )
     )
     await eventually(async () => expect((await submission(first))?.dispatchState).toBe('rejected'))
     expect(await submission(first)).toMatchObject(

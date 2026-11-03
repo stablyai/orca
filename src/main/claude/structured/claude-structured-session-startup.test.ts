@@ -288,7 +288,7 @@ describe('Claude host-awaited open', () => {
       connection.handlers.onFault?.(fault)
       claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
       release.resolve({ ok: true })
-      expect(await open).toBe(fault)
+      expect(await open).toMatchObject({ cause: fault })
       expect(errorRows(appendItem)).toHaveLength(rows)
     }
   )

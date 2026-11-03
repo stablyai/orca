@@ -1,11 +1,8 @@
 import sdkExit from '../fixtures/startup-sdk-process-exit.json'
 import { afterEach, expect, it, vi } from 'vitest'
+import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { claudeStartupAnswerObservation } from '../claude-startup-answer-observation'
 import { runClaudeControl } from '../claude-agent-sdk-control-requests'
-import {
-  retryableStructuredAgentSessionAcquisition,
-  retryableStructuredAgentSessionStart
-} from '../../native-chat/agent-session-wire/structured-agent-session-start-retry'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   PROVIDER_SESSION_ID,
@@ -19,6 +16,13 @@ import {
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import { NDJSON_MAX_LINE_BYTES } from '../../../shared/main-process-ndjson-framer'
+import { claudeAcquireFailure, claudeStartFailure } from '../claude-startup-failure'
+import { retryableAgentSessionAcquisition } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+
+const retryableStructuredAgentSessionStart = (error: unknown): boolean =>
+  claudeStartFailure(error).retry === 'safe'
+const retryableStructuredAgentSessionAcquisition = (error: unknown): boolean =>
+  retryableAgentSessionAcquisition(claudeAcquireFailure(error))
 
 afterEach(() => vi.useRealTimers())
 
@@ -64,7 +68,7 @@ it.each(['control_request_failed', 'process_exited_nonzero'])(
     )
     await vi.advanceTimersByTimeAsync(2_000)
     const error = await result
-    expect(error.cause).toMatchObject({ errorClass, exitCode: 1 })
+    expect(error.cause.cause).toMatchObject({ errorClass, exitCode: 1 })
     expect(retryableStructuredAgentSessionStart(error)).toBe(
       errorClass === 'process_exited_nonzero'
     )
@@ -106,7 +110,7 @@ it('retains a failed result before a stalled SDK transcript flush and never wait
   connection.handlers.onExit?.(withObservedProviderExit(new Error('exited')), { expected: false })
   await vi.advanceTimersByTimeAsync(2_100)
   const error = await result
-  expect(error.errorClass).toBe('error_result')
+  expect(error.cause.errorClass).toBe('error_result')
   expect(retryableStructuredAgentSessionStart(error)).toBe(false)
   expect(persist).not.toHaveBeenCalled()
   expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
@@ -174,7 +178,7 @@ it('settles an unanswered Claude startup exit with the same bounded recovery eli
   connection.exitVerdict = { root: 'exited', tree: 'exited' }
   connection.handlers.onExit?.(error, { expected: false })
   await vi.advanceTimersByTimeAsync(2_100)
-  expect(await result).toBe(error)
+  expect((await result).cause).toBe(error)
   expect(retryableStructuredAgentSessionStart(await result)).toBe(true)
   claude.dispose()
   await adapter.closeAll()
@@ -225,7 +229,9 @@ it('keeps a rejected initialize final when the child exits before acquisition pu
   })
   startTime.resolve(1_700_000_000_000)
   const error = await result
-  expect(error.cause.cause).toMatchObject({ errorClass: 'control_request_failed' })
+  expect(
+    findInErrorChain(error, (cause) => ('errorClass' in cause ? cause.errorClass : undefined))
+  ).toBe('control_request_failed')
   expect(retryableStructuredAgentSessionAcquisition(error)).toBe(false)
   claude.dispose()
   connection.close = async () => true

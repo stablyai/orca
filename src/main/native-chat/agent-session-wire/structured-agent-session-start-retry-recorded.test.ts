@@ -22,10 +22,30 @@ import {
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter-errors'
 import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import {
-  retryableStructuredAgentSessionAcquisition,
-  retryableStructuredAgentSessionStart
-} from './structured-agent-session-start-retry'
+  agentSessionAcquireFailure,
+  agentSessionStartFailure,
+  retryableAgentSessionAcquisition,
+  type AgentSessionStartAnswer
+} from './structured-agent-session-start-failure'
+import { codexStartupAnswer } from '../../codex/app-server/codex-startup-outcome'
+import { acpStartupAnswer } from '../../acp/acp-startup-outcome'
+import { piStartupAnswer } from '../../pi/rpc-startup-outcome'
+import { claudeStartupAnswer } from '../../claude/claude-startup-failure'
 import captures from './__fixtures__/startup-protocol-rejections.json'
+
+// Each adapter reads only its own answers; the shared rule then gives the generic verdict.
+const adapterAnswer: AgentSessionStartAnswer = (cause) =>
+  [codexStartupAnswer, acpStartupAnswer, piStartupAnswer, claudeStartupAnswer]
+    .map((answer) => answer(cause))
+    .find((verdict) => verdict !== undefined)
+
+function retryableStructuredAgentSessionStart(error: unknown): boolean {
+  return agentSessionStartFailure(error, adapterAnswer).retry === 'safe'
+}
+
+function retryableStructuredAgentSessionAcquisition(error: unknown): boolean {
+  return retryableAgentSessionAcquisition(agentSessionAcquireFailure(error, adapterAnswer))
+}
 
 function expectExitEvidenceRequired(error: unknown) {
   expect(retryableStructuredAgentSessionStart(error)).toBe(true)

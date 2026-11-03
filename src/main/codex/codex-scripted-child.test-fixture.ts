@@ -6,6 +6,7 @@ import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-ch
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import { CodexAppServerExitError } from './app-server/codex-app-server-exit-error'
 import { CodexAppServerTimeoutError } from './app-server/codex-app-server-session'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
@@ -160,7 +161,11 @@ export const codexScriptedChild = (
     }
     exitNewest = (message) => {
       ended = true
-      const error = withProviderDiagnostic(new Error(message), providerDiagnostic(message, 'log'))
+      // As the real connection: an exit fails the pending calls with its own exit error.
+      const error = withProviderDiagnostic(
+        new CodexAppServerExitError(message),
+        providerDiagnostic(message, 'log')
+      )
       gate.reject(error)
       handlers.onExit?.(error, { expected: false })
     }

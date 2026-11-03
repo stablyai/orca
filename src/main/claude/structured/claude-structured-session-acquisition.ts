@@ -222,7 +222,7 @@ export async function acquireClaudeSession({
               callbacks.finishClose(sessionId, attempt)
               return
             }
-            childFailed(...claudeStartupExit(error, attempt.connection))
+            childFailed(...claudeStartupExit(error, attempt.connection, input.events))
             callbacks.handleExit(sessionId, attempt, error)
           })
         }

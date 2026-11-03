@@ -1,5 +1,3 @@
-import { retryableStructuredAgentSessionStart } from './structured-agent-session-start-retry'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -7,30 +5,28 @@ import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/
 import { refuseUnclassified } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
-import {
-  agentSessionFailureFact,
-  type SubmissionRejectionFact
-} from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
-import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChildIdentity
+} from './structured-agent-session-host-types'
 import { structuredAgentSessionStartFlightLock } from './structured-agent-session-start-flight'
-import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt-contract'
+import {
+  isStructuredAgentSessionStartupContractBreach,
+  isStructuredAgentSessionStartupExpired
+} from './structured-agent-session-startup-attempt-contract'
+import type { AgentSessionStartFailure } from './structured-agent-session-start-failure'
 import { refusedStructuredAgentSessionStart } from './structured-agent-session-start-eligibility'
 import {
   refusedStructuredAgentSessionStart as failedStart,
   recordStructuredAgentSessionStartFailure
 } from './structured-agent-session-start-failure-row'
-import {
-  providerStartupFailureFact,
-  withObservedProviderExit,
-  structuredAgentSessionStartFailure,
-  structuredAgentSessionStartFailureFact
-} from './structured-agent-session-failure-text'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { sameProviderChild } from './structured-agent-session-provider-child'
-import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 
 export function registerStructuredAgentSessionStart(
   context: StructuredAgentSessionAttachContext,
@@ -80,87 +76,16 @@ export function registerStructuredAgentSessionStart(
           }
           result = await run(lock, attemptId)
           if (result.ok) {
+            // The child's open owns its outcome; readiness ends once that open gave it.
             const ready = await lock.wait(handle.ended)
             throwIfSignalAborted(acquire.signal)
             if (ready === 'ready') {
               return result
             }
-            const opening = handle.result.opening
-            const join =
-              opening !== undefined &&
-              handle.result.retry !== false &&
-              !finalStartupExitFailure(context.sessions.get(sessionId)?.lastEndedChild?.failure)
-            if (join) {
-              // The ended child disarmed the ceiling timer; the join must not outlast it.
-              await lock.wait(
-                waitForPromiseWithSignal(
-                  withTimeout(
-                    opening,
-                    Math.max(0, Math.min(2_000, attempts.untilCeiling(registeredAt))),
-                    undefined
-                  ),
-                  acquire.signal
-                )
-              )
-            }
-            // The flight owns this open after exit, whether or not its answer was awaited.
-            handle.result.cancelOpen?.()
-            throwIfSignalAborted(acquire.signal)
-            if (join && attempts.pastCeiling(registeredAt)) {
-              result = { ...failedStructuredAgentSessionStart(), expired: true }
-              break
-            }
-            result = await lock.commit(async () => {
-              const session = context.sessions.get(sessionId)
-              const ended = session?.lastEndedChild
-              const child = handle.result.child
-              if (
-                !child ||
-                !ended ||
-                !sameProviderChild(ended, child) ||
-                !ended.rootGone ||
-                (session?.child && sameProviderChild(session.child, child))
-              ) {
-                return refusedStructuredAgentSessionStart(
-                  'agent_session_ownership_unknown',
-                  { reason: 'ownerUnproven' },
-                  'The previous agent process could not be verified as stopped.'
-                )
-              }
-              const finalExit = finalStartupExitFailure(ended.failure)
-              const openError = handle.result.openError
-              // An elapsed provider deadline keeps its words; the later exit doesn't explain it.
-              const openFailure =
-                ended.cause === 'exit' &&
-                openError instanceof Error &&
-                !providerRequestTimeoutOf(openError)
-                  ? providerStartupFailureFact(withObservedProviderExit(openError))
-                  : handle.result.failure
-              const failure = structuredAgentSessionStartFailureFact({
-                exit: finalExit
-                  ? ended.failure
-                  : openFailure
-                    ? { ...openFailure, detail: openFailure.detail ?? ended.failure?.detail }
-                    : ended.failure
-              })
-              return {
-                ...failedStructuredAgentSessionStart(),
-                startKey: ended.generation,
-                failure,
-                retry:
-                  !finalExit &&
-                  ('openError' in handle.result
-                    ? retryableStructuredAgentSessionStart(
-                        handle.result.openError,
-                        ended.cause === 'exit'
-                      )
-                    : (handle.result.retry ??
-                      (ended.cause === 'exit' &&
-                        failure.kind === 'providerStartFailed' &&
-                        !failure.refusal &&
-                        !failure.requestTimeout)))
-              }
-            })
+            const owned = handle.result
+            result = await lock.commit(async () =>
+              structuredAgentSessionOpenFailure(context.sessions.get(sessionId), owned)
+            )
           }
           if (result.ok || result.aborted || result.expired || !result.retry || number === 4) {
             break
@@ -194,12 +119,7 @@ export function registerStructuredAgentSessionStart(
         }
         return context.serialize(sessionId, async () => {
           const settled = acquire.signal.aborted
-            ? {
-                ...failedStructuredAgentSessionStart(),
-                ...(isStructuredAgentSessionStartupExpired(acquire.signal.reason)
-                  ? { expired: true as const }
-                  : { aborted: true as const })
-              }
+            ? stoppedStructuredAgentSessionStart(acquire.signal.reason)
             : result
           if (!settled.aborted && (startedFor !== undefined || children.length > 0)) {
             const session = context.sessions.get(sessionId)
@@ -264,11 +184,51 @@ export function structuredAgentSessionStartStillQueued(
   )
 }
 
-function finalStartupExitFailure(failure: SubmissionRejectionFact | undefined): boolean {
-  return (
-    !!failure &&
-    (!['providerExited', 'providerStartFailed', 'startFailed'].includes(failure.kind) ||
-      !!failure.refusal ||
-      !!failure.requestTimeout)
-  )
+/** A safe verdict replays only once this child's exit is proven; no verdict replays nothing. */
+function structuredAgentSessionOpenFailure(
+  session: Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedChild'> | undefined,
+  {
+    child,
+    failure
+  }: {
+    child: StructuredAgentSessionProviderChildIdentity | null
+    failure?: AgentSessionStartFailure
+  }
+): StructuredAgentSessionResumeOutcome {
+  const ended = session?.lastEndedChild
+  const exitProven =
+    !!child &&
+    !!ended?.rootGone &&
+    sameProviderChild(ended, child) &&
+    !(session?.child && sameProviderChild(session.child, child))
+  if (!child || !failure || (failure.retry === 'safe' && !exitProven)) {
+    return refusedStructuredAgentSessionStart(
+      'agent_session_ownership_unknown',
+      { reason: 'ownerUnproven' },
+      'The previous agent process could not be verified as stopped.'
+    )
+  }
+  return {
+    ...failedStructuredAgentSessionStart(),
+    startKey: child.generation,
+    failure: failure.fact,
+    retry: failure.retry === 'safe'
+  }
+}
+
+/** The deadline keeps its own outcome; a broken adapter contract fails the start; anything else
+ *  stopping it is cancellation. */
+function stoppedStructuredAgentSessionStart(
+  reason: unknown
+): Extract<StructuredAgentSessionResumeOutcome, { ok: false }> {
+  if (isStructuredAgentSessionStartupExpired(reason)) {
+    return { ...failedStructuredAgentSessionStart(), expired: true }
+  }
+  if (isStructuredAgentSessionStartupContractBreach(reason)) {
+    return {
+      ...failedStructuredAgentSessionStart(),
+      failure: agentSessionFailureFact('providerStartFailed')
+    }
+  }
+  return { ...failedStructuredAgentSessionStart(), aborted: true }
 }

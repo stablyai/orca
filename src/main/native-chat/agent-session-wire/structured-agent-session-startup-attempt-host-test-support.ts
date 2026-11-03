@@ -33,6 +33,8 @@ import {
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
+import type { AgentSessionStartFailure } from './structured-agent-session-start-failure'
+import { testAdapterStartupEnding } from './structured-agent-session-held-start.test-support'
 
 export const CALLER = { callerKey: 'client-1' }
 
@@ -50,6 +52,8 @@ export const providerOpen = vi.fn<NonNullable<StructuredAgentSessionAdapter['ope
 export const providerStarted: Mock = vi.fn()
 export const recordLiveListing: Mock = vi.fn()
 const openFailures = new Map<string, (error: Error) => void>()
+const endings = new Map<string, AgentSessionStartFailure>()
+
 const openGates = new Map<string, (model: string) => void>()
 
 export async function proveOpen(model = 'default'): Promise<void> {
@@ -57,6 +61,23 @@ export async function proveOpen(model = 'default'): Promise<void> {
   await eventually(() => expect(openGates.has(generation)).toBe(true))
   openGates.get(generation)!(model)
   openGates.delete(generation)
+}
+
+/** As an adapter whose open rejects with its own verdict for the current acquisition. */
+export function failOpen(error: Error): void {
+  const generation = `generation-${acquire.mock.calls.length}`
+  openFailures.get(generation)?.(error)
+  openFailures.delete(generation)
+}
+
+/** As an adapter seeing the current acquisition's own root exit. */
+export function observeRootExit(): void {
+  acquire.mock.calls.at(-1)?.[0].events?.observeRootExit?.()
+}
+
+/** As an adapter recording the current acquisition's unanswered death before it was ready. */
+export function recordStartupEnding(): void {
+  endings.set(`generation-${acquire.mock.calls.length}`, testAdapterStartupEnding())
 }
 
 export function acquisition(input: StructuredAgentSessionAcquireInput): AgentSessionAcquisition {
@@ -97,6 +118,7 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
       dispatch,
       closeSession,
       releaseAcquisition: vi.fn(async () => true),
+      startupEnding: (_sessionId, generation) => endings.get(generation),
       cancelTurn: vi.fn(async () => ({ cancelled: false })),
       answerPrompt: vi.fn(async () => undefined),
       setOption
@@ -125,10 +147,18 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
   })
   const handleEvent = host.handleAdapterEvent.bind(host)
   host.handleAdapterEvent = async (event) => {
+    // As an adapter: its own ending of this exact acquisition answers the open and the start.
+    const ending =
+      event.type === 'ended' && event.cause === 'unexpected-exit' && event.acquisitionGeneration
+        ? testAdapterStartupEnding(event.failure)
+        : undefined
+    if (ending && event.type === 'ended') {
+      endings.set(event.acquisitionGeneration, ending)
+    }
     const result = await handleEvent(event)
     if (event.type === 'ended' && event.acquisitionGeneration) {
       openFailures.get(event.acquisitionGeneration)?.(
-        new Error('provider exited before open answered')
+        ending ?? new Error('provider exited before open answered')
       )
       openFailures.delete(event.acquisitionGeneration)
     }
@@ -160,6 +190,7 @@ export function registerStartupAttemptHostTests(): void {
     recordLiveListing.mockReset()
     openFailures.clear()
     openGates.clear()
+    endings.clear()
     providerOpen.mockReset().mockImplementation(
       ({ acquisitionGeneration }) =>
         new Promise((resolve, reject) => {

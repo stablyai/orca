@@ -1,11 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { withProviderDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError,
-  AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
   type AgentSessionAcquisition,
@@ -39,6 +37,8 @@ import { AcpStructuredChildren } from './acp-structured-child-lifecycle'
 import { AcpConversationCopies } from './acp-conversation-copies'
 import { AcpTextTasks } from './acp-text-task'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
+import { acpAcquireFailure } from './acp-startup-outcome'
+import { openAcpStart } from './acp-structured-start-open'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
@@ -65,6 +65,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
     const sessionId = input.identity.sessionId
+    this.children.endings.forget(sessionId)
     const gate = this.deps.spec.launchGate?.enter(input.signal)
     const attempt = this.children.starts.begin(gate?.signal ?? input.signal)
     try {
@@ -76,6 +77,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         )
       }
       return await this.start({ ...input, signal: attempt.signal }, attempt)
+    } catch (error) {
+      throw acpAcquireFailure(error)
     } finally {
       this.children.starts.end(attempt)
       gate?.leave()
@@ -95,6 +98,12 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         generation,
         abandoned: () => attempt.signal.aborted,
         track: (connection) => {
+          connection.onExit((_exit, requested) => {
+            if (!requested) {
+              input.events?.observeRootExit?.()
+              this.children.recordExit(sessionId, generation, connection)
+            }
+          })
           this.children.starts.track(attempt, connection)
           this.deps.spec.launchGate?.retain(connection)
         },
@@ -151,30 +160,10 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     }
   }
 
-  open: NonNullable<SessionAdapter['open']> = async (input) => {
-    const child = this.children.sessions.get(input.sessionId)
-    if (
-      !child ||
-      child.fence !== input.fence ||
-      child.acquisitionGeneration !== input.acquisitionGeneration ||
-      child.ended
-    ) {
-      throw new Error('ACP child changed before it opened')
-    }
-    try {
-      return await child.open(input.signal)
-    } catch (error) {
-      const failure = childState.acpStartupFailure(child, error)
-      if (failure) {
-        const refusal = new AgentSessionAcquisitionRefusal(
-          `${acpAgentName(child.spec.agent)} requires sign-in`,
-          'notSignedIn'
-        )
-        throw failure.detail ? withProviderDiagnostic(refusal, failure.detail) : refusal
-      }
-      throw error
-    }
-  }
+  open: NonNullable<SessionAdapter['open']> = (input) => openAcpStart(this.children, input)
+
+  startupEnding: NonNullable<SessionAdapter['startupEnding']> = (sessionId, generation) =>
+    this.children.endings.get(sessionId, generation)
 
   async dispatch(input: Parameters<SessionAdapter['dispatch']>[0]): Promise<DispatchOutcome> {
     const lost = this.children.sessions.get(input.sessionId)
@@ -318,6 +307,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   forceCloseSession = (sessionId: string): Promise<boolean> => this.children.close(sessionId, false)
 
   async closeAll(): Promise<void> {
+    this.children.endings.clear()
     await this.children.closeAll([
       this.atRestCommands?.closeAll?.(),
       this.copies.closeAll(),

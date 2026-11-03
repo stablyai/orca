@@ -10,6 +10,10 @@ import {
   type ProviderProcessExit
 } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import {
+  afterProviderOutputDrains,
+  PROVIDER_EXIT_OUTPUT_DRAIN_MS
+} from '../provider-process/provider-exit-output-drain'
 import type { ProviderProcessCloseResult } from '../provider-process/provider-process-close'
 import {
   withProviderSpawnAbsence,
@@ -29,6 +33,14 @@ export type JsonlRpcAgentConnectionOptions = JsonlRpcPeerHandlers & {
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
 }
 
+/** The agent process ended; pending calls fail with it only once its output drained. */
+export class JsonlRpcAgentExitError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'JsonlRpcAgentExitError'
+  }
+}
+
 /** The owning runtime keeps process exit evidence separate from transport closure. */
 export class JsonlRpcAgentConnection {
   private readonly managed: ManagedProviderProcess
@@ -36,6 +48,8 @@ export class JsonlRpcAgentConnection {
   private closing = false
   private finishObservedExit?: () => void
   private streamExitTimer?: ReturnType<typeof setTimeout>
+  private inputEndTimer?: ReturnType<typeof setTimeout>
+  private inputEnded = false
 
   constructor(
     launch: ProviderProcessLaunch,
@@ -53,6 +67,16 @@ export class JsonlRpcAgentConnection {
       managed.child.stdin,
       {
         ...options,
+        // Output often ends just before the exit whose report says how the agent ended.
+        onInputEnd: (finish) => {
+          this.inputEnded = true
+          if (this.closing || managed.rootVerdict === 'exited') {
+            finish()
+          } else {
+            this.inputEndTimer = setTimeout(finish, PROVIDER_EXIT_OUTPUT_DRAIN_MS)
+            this.inputEndTimer.unref()
+          }
+        },
         onClose: (error) => {
           const fail = (): void => {
             if (this.closing || managed.rootVerdict === 'exited') {
@@ -87,9 +111,10 @@ export class JsonlRpcAgentConnection {
     managed.child.stderr.on('error', this.onError)
     managed.onExit((exit) => {
       clearTimeout(this.streamExitTimer)
+      clearTimeout(this.inputEndTimer)
       const error = withProviderSpawnAbsence(
         withProviderDiagnostic(
-          new Error(
+          new JsonlRpcAgentExitError(
             exit.processless
               ? 'Agent process could not start'
               : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
@@ -99,17 +124,7 @@ export class JsonlRpcAgentConnection {
         managed.spawnAbsence
       )
       this.peer.finishOnInputEnd(error)
-      const stdout = managed.child.stdout
-      let finished = false
-      let timer: ReturnType<typeof setTimeout> | undefined
       const finish = (): void => {
-        if (finished) {
-          return
-        }
-        finished = true
-        clearTimeout(timer)
-        stdout.removeListener('end', finish)
-        stdout.removeListener('close', finish)
         this.finishObservedExit = undefined
         this.peer.close(error)
         managed.child.removeListener('error', this.onError)
@@ -119,21 +134,15 @@ export class JsonlRpcAgentConnection {
           this.diagnose('Agent exit observer failed')
         }
       }
-      this.finishObservedExit = finish
-      if (
-        this.closing ||
-        exit.processless ||
-        this.peer.closed ||
-        stdout.destroyed ||
-        stdout.readableEnded
-      ) {
+      if (this.closing || exit.processless || this.peer.closed || this.inputEnded) {
         finish()
       } else {
-        stdout.once('end', finish)
-        stdout.once('close', finish)
         // A descendant can inherit stdout after the provider root exits.
-        timer = setTimeout(finish, 1_000)
-        timer.unref()
+        this.finishObservedExit = afterProviderOutputDrains(
+          managed.child.stdout,
+          finish,
+          managed.child
+        )
       }
     })
   }
@@ -158,8 +167,9 @@ export class JsonlRpcAgentConnection {
     return this.managed.lastCloseResult
   }
 
-  onExit(listener: () => void): void {
-    this.managed.onExit(listener)
+  /** `requested`: Orca was closing the agent when it exited. */
+  onExit(listener: (requested?: boolean) => void): void {
+    this.managed.onExit(() => listener(this.closing))
   }
 
   request(
@@ -186,6 +196,7 @@ export class JsonlRpcAgentConnection {
   close(error?: Error): Promise<ProviderProcessCloseResult> {
     this.closing = true
     clearTimeout(this.streamExitTimer)
+    clearTimeout(this.inputEndTimer)
     this.finishObservedExit?.()
     this.peer.close(error)
     return this.managed.close()

@@ -14,6 +14,8 @@ import {
   settledClaudeTurnEndLeaf
 } from './claude-structured-resume-point'
 import { claudeHeldSends } from '../claude-command-lifecycle'
+import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { claudeExitEnding } from './claude-structured-start-ending'
 import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
 import {
   AgentSessionAcquisitionExitUnprovenError,
@@ -32,6 +34,8 @@ export type ClaudeExitLifecycle = {
   exits: Map<string, ClaudeSessionExit>
   /** Preserve diagnostics for sends admitted before the host learns of the exit. */
   settledExitErrors: Map<string, Error>
+  /** Taken when the exit is first seen, so a start settling meanwhile cannot miss it. */
+  endings: AgentSessionStartEndings
   deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle' | 'now'>
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
 }
@@ -48,6 +52,7 @@ export function observeClaudeSessionExit(
   }
   const observedAt = lifecycle.deps.now?.() ?? Date.now()
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
+  lifecycle.endings.record(sessionId, session.acquisitionGeneration, claudeExitEnding(error))
   lifecycle.sessions.delete(sessionId)
   // Run tree cleanup before recovery; an exit callback proves only root exit.
   const cleanup = session.connection.close().catch(() => false)

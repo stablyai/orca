@@ -5,7 +5,10 @@ import {
   claudeStreamJsonExitError
 } from './claude-stream-json-exit-error'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { retryableStructuredAgentSessionStart } from '../native-chat/agent-session-wire/structured-agent-session-start-retry'
+import { claudeStartFailure } from './claude-startup-failure'
+
+const retryableStructuredAgentSessionStart = (error: unknown): boolean =>
+  claudeStartFailure(error).retry === 'safe'
 
 const frame = JSON.parse(
   readFileSync(new URL('./__fixtures__/claude-missing-conversation.jsonl', import.meta.url), 'utf8')

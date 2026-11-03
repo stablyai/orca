@@ -43,6 +43,8 @@ it('propagates a temporary load envelope before takeover or a dead-child asserti
       )
   })
   await rig.acquire()
+  // The adapter answers for its own declared-temporary answer, which it keeps as the cause.
+  expect(rig.openVerdict()).toMatchObject({ retry: 'safe' })
   expect(rig.openFailure()).toBeInstanceOf(AcpAgentError)
   expect(rig.openFailure()).toMatchObject({ data: { errorName: 'ServerUnavailable' } })
   expect(rig.sent('session/new')).toEqual([])

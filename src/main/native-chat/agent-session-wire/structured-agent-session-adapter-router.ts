@@ -156,6 +156,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
     false
 
+  // An ended child's route may already be stopped; its adapter still holds the ending.
+  startupEnding = (sessionId: string, acquisitionGeneration: string) =>
+    this.routes
+      .get(sessionId)
+      ?.registration.adapter.startupEnding?.(sessionId, acquisitionGeneration)
+
   awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number) =>
     this.liveOwnerOrNull(sessionId)?.awaitStoppedRequestEnd?.(sessionId, stoppedAt)
 

@@ -26,12 +26,15 @@ import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 import { findInErrorChain } from '../provider-process/provider-error-chain'
 import { providerExitObserved } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { retryableStructuredAgentSessionStart } from '../native-chat/agent-session-wire/structured-agent-session-start-retry'
 import {
   adapterAtPublishFor,
   fakeClaude,
   identityFor
 } from './structured/claude-structured-session-test-support'
+import { claudeStartFailure } from './claude-startup-failure'
+
+const retryableStructuredAgentSessionStart = (error: unknown): boolean =>
+  claudeStartFailure(error).retry === 'safe'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')

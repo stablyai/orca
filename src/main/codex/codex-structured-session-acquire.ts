@@ -40,6 +40,7 @@ import type { CodexStructuredSessionTeardown } from './codex-structured-session-
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
+import { codexStartFailure } from './app-server/codex-startup-outcome'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -163,6 +164,15 @@ export async function acquireCodexStructuredSession(input: {
         onExit: (error, exit) => {
           acquisition.appliedSettings.end()
           try {
+            // Orca's own close or cancel ends no start; Codex ending on its own does.
+            if (attempt.acquisitionGeneration && !exit?.expected && !attempt.cancelled) {
+              acquireInput.events?.observeRootExit?.()
+              acquisitions.endings.record(
+                sessionId,
+                attempt.acquisitionGeneration,
+                codexStartFailure(error)
+              )
+            }
             if (attempt.acquisitionGeneration && !sessions.has(sessionId)) {
               attempt.exitProven = true
               attempt.exitError = error
