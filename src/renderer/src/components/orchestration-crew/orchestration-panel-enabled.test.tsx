@@ -8,8 +8,12 @@ import { useAppStore } from '@/store'
 import { NativeChatCrewFrame } from './NativeChatCrewPanel'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
 import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
-import { ExperimentalPane, getExperimentalPaneSearchEntries } from '../settings/ExperimentalPane'
-import { getExperimentalSearchEntry } from '../settings/experimental-search'
+import { ExperimentalPane } from '../settings/advanced/ExperimentalPane'
+import {
+  getExperimentalPaneSearchEntries,
+  getExperimentalSearchEntry
+} from '../settings/advanced/experimental-search'
+
 import { getOrchestrationPanelExperimentalSearchEntry } from '../settings/orchestration-panel-experimental-search'
 import { TooltipProvider } from '../ui/tooltip'
 import { i18n, loadRendererUiLanguage, translate } from '@/i18n/i18n'

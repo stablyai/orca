@@ -12,8 +12,8 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch } from './settings-search'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { matchesSettingsSearch } from './search/settings-search'
 import { useAppStore } from '../../store'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
@@ -23,7 +23,7 @@ import { translate } from '@/i18n/i18n'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { NumberField } from './SettingsFormControls'
+import { NumberField } from './form-controls/SettingsFormControls'
 import {
   getNestedWorkerDepthDescription,
   getNestedWorkerDepthTitle

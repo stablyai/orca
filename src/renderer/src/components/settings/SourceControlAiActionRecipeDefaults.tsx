@@ -24,9 +24,9 @@ import {
   summarizeReposOverridingActionRecipe,
   type SourceControlActionRecipeOverrideSummary
 } from '../../../../shared/source-control-launch-agent-selection'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { getRepositorySourceControlAiActionRecipeSectionId } from './repository/repository-settings-targets'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch } from './search/settings-search'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
 import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOverrideNote'
 import { retireActionLaunchPreferences } from './source-control-ai-action-recipe-draft'

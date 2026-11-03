@@ -17,8 +17,8 @@ import { Label } from '../ui/label'
 import { Textarea } from '../ui/textarea'
 import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
 import { NodeDistMirrorSettingField } from './NodeDistMirrorSettingField'
-import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './search/settings-search'
 import { translate } from '@/i18n/i18n'
 
 export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
