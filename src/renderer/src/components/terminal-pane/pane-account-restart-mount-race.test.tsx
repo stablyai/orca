@@ -66,6 +66,7 @@ it('restarts a working Claude queued before its unchanged PTY reattach finishes'
   let attachedPtyId: string | null = null
   const transport = { getPtyId: () => attachedPtyId, detach: vi.fn(), destroy: vi.fn() }
   const pane = { id: 1, leafId: LEAF, container: { dataset: { ptyId: 'pty-old' } } }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only the fields stubbed here; the rest are filled with vi.fn() below
   const controller = {
     tabId: 'tab-1',
     worktreeId: 'wt-1',
@@ -99,6 +100,7 @@ it('restarts a working Claude queued before its unchanged PTY reattach finishes'
     Object.assign(controller, { [key]: vi.fn() })
   }
   renderHook(() => useTerminalPaneProcessExitActions(controller))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bind path reads only tabId, the refs and setTabLayout; the rest are inert stubs
   const layoutController = {
     tabId: 'tab-1',
     managerRef: controller.managerRef,
