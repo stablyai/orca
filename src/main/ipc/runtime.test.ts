@@ -84,6 +84,7 @@ describe('registerRuntimeHandlers', () => {
             ]
           }
         })
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this IPC read uses only identity/name methods; the installed host supplies journal reads.
         registerRuntimeHandlers({
           getRuntimeId: () => 'runtime-1',
           readMachineName: () => 'Work Mac',

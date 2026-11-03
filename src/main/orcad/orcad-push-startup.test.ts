@@ -12,12 +12,16 @@ import { createPushHostKeypair } from '../runtime/push/push-host-challenge-fixtu
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
 import { profileStateAccessPaths } from '../persistence/profile-state/profile-state-access-owner'
 
+const pairingReader = vi.hoisted(() => {
+  const reader: { current?: RuntimeConstructionDependencies['getPairedDeviceName'] } = {}
+  return reader
+})
+
 const state = vi.hoisted(() => ({
   root: '',
   controller: null as RuntimeMobileNotificationController | null,
   registry: null as DeviceRegistry | null,
   rpcStarted: false,
-  pairedDeviceName: null as RuntimeConstructionDependencies['getPairedDeviceName'] | null,
   profileStartupErrors: new Array<Error>(),
   onSettingsChanged: vi.fn<ProfilePreferences['onSettingsChanged']>(),
   removeSettingsListener: vi.fn(),
@@ -150,7 +154,7 @@ vi.mock('../server/serve-readiness', () => ({
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
     constructor(_store: unknown, _stats: unknown, deps: RuntimeConstructionDependencies) {
-      state.pairedDeviceName = deps.getPairedDeviceName
+      pairingReader.current = deps.getPairedDeviceName
     }
     readonly sidebarFacts = null
     readonly agentTransitions = { seedRestoredRows() {} }
@@ -260,13 +264,13 @@ it('reads live pairing names from the standalone RPC registry', async () => {
     const [phone] = state.registry.upsertDelegatedMobileDevices(desktop, [
       { phoneKey: 'phone-1', name: 'My iPhone' }
     ])
-    expect(state.pairedDeviceName?.(desktop.deviceId)).toBe('Work Mac')
-    expect(state.pairedDeviceName?.(phone!.deviceId)).toBe('My iPhone')
+    expect(pairingReader.current?.(desktop.deviceId)).toBe('Work Mac')
+    expect(pairingReader.current?.(phone!.deviceId)).toBe('My iPhone')
     state.registry.upsertDelegatedMobileDevices(desktop, [
       { phoneKey: 'phone-1', name: 'Renamed iPhone' }
     ])
-    expect(state.pairedDeviceName?.(phone!.deviceId)).toBe('Renamed iPhone')
-    expect(state.pairedDeviceName?.('unpaired')).toBeNull()
+    expect(pairingReader.current?.(phone!.deviceId)).toBe('Renamed iPhone')
+    expect(pairingReader.current?.('unpaired')).toBeNull()
   } finally {
     await host.stop()
   }
