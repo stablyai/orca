@@ -116,6 +116,7 @@ import {
   createWorktreeSharedPaths
 } from './worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
+import { buildWorktreeShareSkipReport } from '../git/worktree-configured-path-skips'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
@@ -1651,26 +1652,33 @@ async function performLocalWorktreeCreate(
       resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
     )
   ])
-  if (sharedDirectories.length > 0) {
+  if (sharedDirectories.paths.length > 0) {
     await timing.time('create_shared_directories', async () => {
-      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories.paths)
     })
   }
 
-  // Repo .worktreeinclude promises private copies; skip paths already linked by user settings.
-  let includeCopyWarning: string | undefined
-  if (includePaths.length > 0) {
+  // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
+  // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
+  let skippedIncludePaths: Awaited<ReturnType<typeof createWorktreeCopiedPaths>> = []
+  if (includePaths.paths.length > 0) {
     await timing.time('copy_worktreeinclude', async () => {
-      const skippedIncludePaths = await createWorktreeCopiedPaths(
+      skippedIncludePaths = await createWorktreeCopiedPaths(
         repo.path,
         created.path,
-        includePaths
+        includePaths.paths
       )
-      includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
-      if (includeCopyWarning) {
-        console.warn(`[worktree-include] ${includeCopyWarning}`)
-      }
     })
+  }
+  const skipReport = buildWorktreeShareSkipReport({
+    shareSkips: sharedDirectories.skipped,
+    includeSkips: includePaths.skipped,
+    copySkips: skippedIncludePaths,
+    copyWarning: formatWorktreeIncludeCopyWarning(skippedIncludePaths)
+  })
+  const includeCopyWarning = skipReport.warning
+  if (includeCopyWarning) {
+    console.warn(`[worktree-include] ${includeCopyWarning}`)
   }
 
   // Created branch hooks are authoritative; benign divergence from primary must not disable setup (#1280).
@@ -1784,6 +1792,7 @@ async function performLocalWorktreeCreate(
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
     ...(baseFallback ? { baseFallback } : {}),
     ...(createWarning ? { warning: createWarning } : {}),
+    ...(skipReport.warnings.length > 0 ? { warnings: skipReport.warnings } : {}),
     timing: timing.finish()
   }
 }
