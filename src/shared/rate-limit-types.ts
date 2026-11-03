@@ -85,6 +85,12 @@ export type UsageRateLimitMetadata = {
   ownerNotSetUp?: OwnerNotSetUpPlaceholder
 }
 
+/** Ollama's own usage data (30d request/USD totals); not a quota window, so renderer renders labels, not percent bars. */
+export type OllamaUsageTotals = {
+  spentUsd: number | null
+  requestCount: number | null
+}
+
 export type ProviderRateLimits = {
   provider:
     | 'claude'
@@ -97,6 +103,7 @@ export type ProviderRateLimits = {
     | 'antigravity'
     | 'cursor'
     | 'zcode'
+    | 'ollama'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -130,6 +137,8 @@ export type ProviderRateLimits = {
   error: string | null
   status: ProviderRateLimitStatus
   usageMetadata?: UsageRateLimitMetadata
+  /** Ollama's 30-day cloud totals (request/USD); other providers leave it absent. */
+  ollamaUsageTotals?: OllamaUsageTotals
 }
 
 export type CodexRateLimitResetOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'
@@ -181,6 +190,7 @@ export type RateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
+  ollama: ProviderRateLimits | null
   /** Cookie is stored outside GlobalSettings; this durable flag keeps MiniMax visible across reloads/snapshot refreshes. */
   minimaxCookieConfigured: boolean
   /** Expose API-key presence only; main retains the secret. Combined with cookie presence, keeps MiniMax visible across reloads. */
@@ -193,6 +203,8 @@ export type RateLimitState = {
   cursorAuthConfigured: boolean
   /** Expose GLM Coding Plan key presence only; retain secret in main and keep ZCode visible across reloads/refreshes. */
   zcodePlanApiKeyConfigured?: boolean
+  /** Expose Ollama cloud key presence only; retain the secret in main. */
+  ollamaApiKeyConfigured?: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

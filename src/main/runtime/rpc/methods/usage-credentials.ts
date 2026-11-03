@@ -17,6 +17,12 @@ import {
   getZcodePlanCredentialsStatus,
   saveZcodePlanApiKeyCredential
 } from '../../../zcode/zcode-plan-credential-commands'
+import {
+  assertOllamaCloudApiKeyOpensHere,
+  clearOllamaCloudApiKeyCredential,
+  getOllamaCloudCredentialsStatus,
+  saveOllamaCloudApiKeyCredential
+} from '../../../ollama/ollama-cloud-credential-commands'
 
 // Host pollers own these keys; replies expose presence/protection only. Hosts without pollers refuse calls (including WSL).
 // Never overwrite keys sealed by another Orca app; forgetting them is allowed.
@@ -94,6 +100,34 @@ export const USAGE_CREDENTIAL_METHODS = [
     handler: async (_, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
       return clearZcodePlanApiKeyCredential(rateLimits)
+    }
+  }),
+  defineMethod({
+    name: 'accounts.ollamaCloudCredentialsStatus',
+    permission: 'workspace',
+    params: null,
+    handler: async (_, { runtime }) => {
+      runtime.requireUsageRateLimits()
+      return getOllamaCloudCredentialsStatus()
+    }
+  }),
+  defineMethod({
+    name: 'accounts.ollamaCloudSaveApiKey',
+    permission: 'accounts-admin',
+    params: UsageCredentialApiKeyParams,
+    handler: async ({ apiKey }, { runtime }) => {
+      const rateLimits = runtime.requireUsageRateLimits()
+      assertOllamaCloudApiKeyOpensHere()
+      return saveOllamaCloudApiKeyCredential(rateLimits, apiKey)
+    }
+  }),
+  defineMethod({
+    name: 'accounts.ollamaCloudClearApiKey',
+    permission: 'accounts-admin',
+    params: null,
+    handler: async (_, { runtime }) => {
+      const rateLimits = runtime.requireUsageRateLimits()
+      return clearOllamaCloudApiKeyCredential(rateLimits)
     }
   })
 ] as const

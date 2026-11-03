@@ -276,6 +276,35 @@ export const getAccountsZcodePlanSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsOllamaSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.ollama.title', 'Ollama Cloud'),
+    description: translate(
+      'auto.components.settings.accounts.search.ollama.description',
+      'Track Ollama cloud subscription usage. Save the API key from ollama.com.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.ollama.kw.ollama',
+        'ollama'
+      ),
+      // rateLimit exceeds the line cap with its key; split is required.
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.ollama.kw.cloud',
+        'cloud'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.ollama.kw.usage',
+        'usage'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.ollama.kw.rateLimit',
+        'rate limit'
+      )
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -286,5 +315,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGrokSearchEntries(),
   ...getAccountsAntigravitySearchEntries(),
   ...getAccountsCursorSearchEntries(),
-  ...getAccountsZcodePlanSearchEntries()
+  ...getAccountsZcodePlanSearchEntries(),
+  ...getAccountsOllamaSearchEntries()
 ])

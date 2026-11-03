@@ -24,7 +24,9 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
-  getAccountsZcodePlanSearchEntries
+  getAccountsPaneSearchEntries,
+  getAccountsZcodePlanSearchEntries,
+  getAccountsOllamaSearchEntries
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
@@ -41,8 +43,10 @@ import { GrokAccountsSection } from './providers/GrokAccountsSection'
 import { AntigravityAccountsSection } from './providers/AntigravityAccountsSection'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+// Resolve imports to new layout paths + add Ollama section (needs its own module path matching new dir structure)
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
+import { OllamaCloudAccountsSection } from './OllamaCloudAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -379,6 +383,9 @@ export function AccountsPane({
         host={usageCredentialHost}
         usageSettings={usageHostSettings}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsOllamaSearchEntries()) ? (
+      <OllamaCloudAccountsSection key={`ollama:${accountOwnerKey}`} host={usageCredentialHost} />
     ) : null
   ]
 

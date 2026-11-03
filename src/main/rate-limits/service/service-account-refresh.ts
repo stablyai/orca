@@ -69,6 +69,15 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
   }
 
+  invalidateOllamaCredentialState(): void {
+    this.ollamaFetchGeneration += 1
+    // Clear before an old-key fetch can return.
+    this.updateState({
+      ...this.state,
+      ollama: this.withFetchingStatus(null, 'ollama')
+    })
+  }
+
   async refreshForCodexAccountChange(
     outgoingAccountId?: string | null,
     target?: CodexAccountSelectionTarget
