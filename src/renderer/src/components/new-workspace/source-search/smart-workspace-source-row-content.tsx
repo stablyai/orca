@@ -18,6 +18,7 @@ import type {
   RowEntry,
   SmartWorkspaceNameSelection
 } from '../name-field/smart-workspace-name-field-model'
+import { getJiraSiteLabel } from '../../../../../shared/jira/jira-site-label'
 
 export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'use-name') {
@@ -142,7 +143,7 @@ export function RowLabel({
   }
   if (row.kind === 'jira') {
     const siteLabel = jiraSite
-      ? `${jiraSite.displayName} — ${jiraSite.email || jiraSite.siteUrl}`
+      ? `${getJiraSiteLabel(jiraSite)}${jiraSite.email ? ` — ${jiraSite.email}` : ''}`
       : row.issue.siteName
     return (
       <span className="min-w-0 truncate">
@@ -156,7 +157,7 @@ export function RowLabel({
   if (row.kind === 'jira-account') {
     return (
       <span className="min-w-0 truncate">
-        <span className="font-medium text-foreground">{row.site.displayName}</span>
+        <span className="font-medium text-foreground">{getJiraSiteLabel(row.site)}</span>
         {row.site.email ? ` — ${row.site.email}` : ''}
       </span>
     )
