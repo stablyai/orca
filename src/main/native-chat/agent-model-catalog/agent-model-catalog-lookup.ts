@@ -45,7 +45,8 @@ export function createAgentModelCatalogLookup(
   claims: Map<string, AgentModelCatalogClaim>,
   requestKey: (params: AgentModelCatalogReadParams) => string,
   capture: (params: AgentModelCatalogReadParams) => string,
-  captureRead: (params: AgentModelCatalogReadParams) => AgentModelCatalogReadOperation
+  captureRead: (params: AgentModelCatalogReadParams) => AgentModelCatalogReadOperation,
+  tasks: Set<Promise<unknown>>
 ) {
   return (params: AgentModelCatalogReadParams): Promise<void> => {
     const operation = params.operation ?? captureRead(params)
@@ -216,7 +217,18 @@ export function createAgentModelCatalogLookup(
         probeHome &&
         (params.requireConfiguredDefault || deps.store.probeDue(fingerprint))
       ) {
-        const listing = deps.store.refresh(fingerprint, params.agent, list, current, signal)
+        const listing = deps.store.refresh(
+          fingerprint,
+          params.agent,
+          () => {
+            const task = list()
+            tasks.add(task)
+            void task.finally(() => tasks.delete(task)).catch(() => {})
+            return task
+          },
+          current,
+          signal
+        )
         if (params.requireConfiguredDefault) {
           await listing
         }
@@ -237,6 +249,8 @@ export function createAgentModelCatalogLookup(
         claims.delete(key)
       }
     })
+    tasks.add(promise)
+    void promise.finally(() => tasks.delete(promise)).catch(() => {})
     claims.set(key, { identity, controller, promise, ready: ready.promise, params, current })
     return promise
   }

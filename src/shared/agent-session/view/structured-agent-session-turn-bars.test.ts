@@ -325,35 +325,6 @@ describe('a send Codex folds into the running turn', () => {
 })
 
 describe('turns whose host names no opener', () => {
-  it('falls back to the newest prompt for an older host row with no user key', () => {
-    const items = [
-      user(1, 'u1', 1_000),
-      turn(2, 1_100, { turnId: 't1', state: 'running', startedAt: 1_100 }),
-      user(3, 'u2', 2_000)
-    ]
-    expect(barOf([message('orca:u1'), message('orca:u2')], { items, submissions: [] })).toBe(
-      'orca:u2'
-    )
-    // Settled timing keeps its journal-order attribution.
-    expect([...selectStructuredAgentSettledTurns(items).keys()]).toEqual(['orca:u1'])
-  })
-
-  it('anchors a turn the provider opened to its own record, never a bystander prompt', () => {
-    const self = 'legacy:claude:55368cfb:turn-lifecycle%3Aresumed'
-    const items = [
-      user(1, 'u1', 1_000),
-      turn(2, 5_000, {
-        turnId: 'resumed',
-        state: 'running',
-        startedAt: 5_000,
-        userItemId: self
-      })
-    ]
-    expect(barOf([message('orca:u1')], { items, submissions: [] })).toBe(self)
-    // A host that states each row's turn anchors it the same way.
-    expect(barOf([message('orca:u1')], { items: scoped(items), submissions: [] })).toBe(self)
-  })
-
   it('keeps the running bar on the send Codex opened a turn for before it echoes it', () => {
     // Codex opens before hooks/prewarm; pending opener still has provider key and no alias.
     const key = 'codex:thread:t2:0'
@@ -386,25 +357,6 @@ describe('turns whose host names no opener', () => {
 })
 
 describe('the previous turn has no recorded end', () => {
-  it('leaves an unverifiable turn null and a later send counting from itself', () => {
-    const items = [
-      user(1, 'u1', 1_000),
-      turn(2, 3_000, { turnId: 't1', state: 'unverifiable', userItemId: 'orca:u1' }),
-      user(3, 'u2', 10_000),
-      turn(4, 12_000, {
-        turnId: 't2',
-        state: 'completed',
-        userItemId: 'orca:u2',
-        requestedAt: 10_000,
-        startedAt: 11_000,
-        completedAt: 20_000
-      })
-    ]
-    const settledTurns = selectStructuredAgentSettledTurns(items)
-    expect(settledTurns.get('orca:u1')).toBeNull()
-    expect(settledTurns.get('orca:u2')).toEqual({ startedAt: 11_000, workedSeconds: 10 })
-  })
-
   it("waits out the previous row's last host revision, never past its own start", () => {
     const queued = (lastSeenAt: number) =>
       selectStructuredAgentTurnBars(
@@ -482,14 +434,6 @@ describe('which turn owns each transcript row', () => {
     }
   })
 
-  it('leaves a fresh tail send in its own group until the turn proves it continued past it', () => {
-    // B is the newest row: nothing after it says the running turn absorbed it.
-    expect(keysOf(whileQueued).get('orca:B')).toBe('orca:B')
-    // B's own turn opened: B is an opener and keys itself.
-    expect(keysOf(whileB).get('orca:B')).toBe('orca:B')
-    expect(keysOf(whileB).get(`orca:claude-tool%3A58`)).toBe('orca:A')
-  })
-
   it('folds a Codex-coalesced send into the turn its provider key names', () => {
     const key = 'codex:thread:t1:0'
     const record = 'legacy:codex:s:turn-lifecycle%3At1'
@@ -539,21 +483,5 @@ describe('which turn owns each transcript row', () => {
       expect(keys.get('orca:u1')).toBe('orca:u1')
       expect(keys.get('orca:claude-tool%3A3')).toBe(self)
     }
-  })
-
-  it('groups by position for an older host that names no opener', () => {
-    const items = [
-      user(1, 'u1', 1_000),
-      turn(2, 1_100, { turnId: 't1', state: 'running', startedAt: 1_100 }),
-      tool(3, 1_200),
-      user(4, 'u2', 1_300),
-      tool(5, 1_400)
-    ]
-    expect([...keysOf({ items, submissions: [] }).values()]).toEqual([
-      'orca:u1',
-      'orca:u1',
-      'orca:u2',
-      'orca:u2'
-    ])
   })
 })

@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../git/repo-default-base-ref', () => ({ getBaseRefDefault: mocks.getBaseRefDefault }))
-vi.mock('../../git/runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
+vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: mocks.gitExecFileAsync
+}))
 
 import { prefetchWorktreeCreateBase } from './worktree-create-base-prefetch'
 

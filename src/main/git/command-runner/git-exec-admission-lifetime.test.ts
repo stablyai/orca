@@ -46,7 +46,7 @@ vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
 import { RuntimeRemoteFetchController } from '../../runtime/runtime-remote-fetch-controller'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
 import { execFileCapture } from './exec-file-capture'
-import { isGitWorktreeMutationInFlight } from '../git-worktree-mutation-state'
+import { isGitWorktreeMutationInFlight } from './git-worktree-mutation-state'
 import {
   acquireGitAdmission,
   GitAdmissionScheduler,

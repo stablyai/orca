@@ -102,3 +102,24 @@ export function settingsModel(): SettingsPersistenceModel {
   } satisfies SettingsPersistenceModel
   return model
 }
+
+export async function pickerLocaleFixture() {
+  const { i18n } = await import('@/i18n/i18n')
+  const { default: spanish } = await import('@/i18n/locales/es.json')
+  const previous = i18n.hasResourceBundle('es', 'translation')
+    ? structuredClone(i18n.getResourceBundle('es', 'translation'))
+    : undefined
+  const language = i18n.language
+  i18n.addResourceBundle('es', 'translation', spanish, true, true)
+  await i18n.changeLanguage('en')
+  return {
+    i18n,
+    async restore() {
+      i18n.removeResourceBundle('es', 'translation')
+      if (previous) {
+        i18n.addResourceBundle('es', 'translation', previous)
+      }
+      await i18n.changeLanguage(language)
+    }
+  }
+}
