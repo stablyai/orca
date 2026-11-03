@@ -1,4 +1,3 @@
-import { discoveryFileCandidates } from './session-scanner-candidates'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -12,7 +11,10 @@ import {
   createAntigravityWorkspaceResolver,
   readLocalAntigravityHistory
 } from './scanners/antigravity/session-scanner-antigravity-history'
-import { sessionCandidatesFromDiscoveries } from './session-scanner-candidates'
+import {
+  discoveryFileCandidates,
+  sessionCandidatesFromDiscoveries
+} from './session-scanner-candidates'
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import { createSessionParseStats } from './parse-cache/session-scanner-parse-cache'
 import { recordSessionScanIssue } from './session-scan-issues'
