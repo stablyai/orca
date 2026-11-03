@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type * as WorktreePathComparison from '../git/worktree-path-comparison'
+import type * as WorktreePathComparison from '../git/worktrees/catalog/worktree-path-comparison'
 
 const { getPathMock, homedirMock, worktreePathComparisons } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -25,7 +25,7 @@ vi.mock('node:os', async () => {
   }
 })
 
-vi.mock('../git/worktree-path-comparison', async (importOriginal) => {
+vi.mock('../git/worktrees/catalog/worktree-path-comparison', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreePathComparison>()
   return {
     ...actual,

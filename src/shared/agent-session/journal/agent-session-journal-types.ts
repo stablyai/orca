@@ -128,6 +128,8 @@ export type AgentJournalResolution = {
   answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
+  /** Read-time device description; never written back into the journal. */
+  resolvedByDevice?: { kind: 'current' } | { kind: 'named'; name: string }
   resolvedAt: number | null
 }
 

@@ -8,14 +8,15 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
   app: { getPath: () => '/tmp/orca-test' }
 }))
-vi.mock('../../../git/runner', async (importOriginal) => ({
+vi.mock('../../../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
 const { __resetDetectedWorktreeScanCacheForTests } = await import('./detected-worktree-scan-cache')
-const { _resetWorktreeScanCacheForTests } = await import('../../../git/worktree-scan-cache')
+const { _resetWorktreeScanCacheForTests } =
+  await import('../../../git/worktrees/catalog/worktree-scan-cache')
 const { isRegisteredWorktreePath, invalidateAuthorizedRootsCache } =
   await import('../removal/registered-worktree-roots-cache')
 

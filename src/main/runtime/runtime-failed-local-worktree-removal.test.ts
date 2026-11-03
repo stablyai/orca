@@ -14,8 +14,9 @@ import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence/loading-store/store'
 import type * as HostTreeRemoval from '../filesystem/host-tree-removal'
 import { removeHostTree } from '../filesystem/host-tree-removal'
-import { listWorktreesStrict, removeWorktree } from '../git/worktree'
-import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
+import { removeWorktree } from '../git/worktrees/removal/worktree-removal'
+import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
 import { acquireWatcherRemovalGate, beginTerminalInstall } from '../ipc/watcher-removal-gate'
 import {
   _resetPendingWorktreeRemovalsForTests,

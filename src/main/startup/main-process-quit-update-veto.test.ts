@@ -31,7 +31,7 @@ const dependencyExports: [string, string[]][] = [
   ['../browser/browser-session-registry', ['browserSessionRegistry']],
   ['../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
   ['../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
-  ['../git/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],
+  ['../git/refs/maintenance/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],
   ['../worktree-background-removal', ['stopBackgroundWorktreeRemovals']],
   ['./quit/quit-teardown-deadline', ['settleTeardownWithinDeadline', 'settleWithinMs']],
   ['./quit/quit-teardown-start-gate', ['quitTeardownStartGate']],

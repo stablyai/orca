@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   },
   app: { getPath: () => '/test' }
 }))
-vi.mock('../git/runner', async (original) => ({
+vi.mock('../git/command-runner/git-exec-file', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   gitExecFileAsync: mocks.git
 }))

@@ -22,7 +22,10 @@ import {
   readSourceControlLaunchRecipeAgentId
 } from '../../../../../../shared/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../../shared/tui-agent-selection'
-import { projectSelectedSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
+import {
+  projectSelectedSourceControlActionLaunch,
+  resolveSourceControlActionPreferredSurface
+} from '../../../../../../shared/source-control-action-launch-preferences'
 import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control-ai-actions'
 import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control-recovery-agent-command'
 import { translate } from '@/i18n/i18n'
@@ -117,7 +120,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  const savedRecipe = getLaunchActionRecipe(actionId)
+  const savedRecipe = structuredClone(getLaunchActionRecipe(actionId))
   const workspace = worktreeLaunchWorkspace(activeWorktreeId)
   const inventory = await Promise.all([
     acquireAgentLaunchChoices(workspace, () =>
@@ -156,7 +159,13 @@ export async function launchSourceControlRecoveryAgentWithDefault({
 
   // A saved or default agent may open as a chat without its CLI.
   const opensAsChat = (agent: TuiAgent): boolean =>
-    agentChoiceMayOpenAsChat(useAppStore.getState(), agent, workspace, choices.detected)
+    agentChoiceMayOpenAsChat(
+      useAppStore.getState(),
+      agent,
+      workspace,
+      choices.detected,
+      resolveSourceControlActionPreferredSurface(savedRecipe, agent)
+    )
   const savedAgent = readSourceControlLaunchRecipeAgentId(savedRecipe)
   if (
     savedAgent &&

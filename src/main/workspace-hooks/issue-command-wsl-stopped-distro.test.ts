@@ -23,7 +23,7 @@ vi.mock('node:fs', async (importOriginal) => ({
   mkdirSync: mocks.mkdirSync,
   rmSync: mocks.rmSync
 }))
-vi.mock('../git/check-ignored-paths', () => ({
+vi.mock('../git/source-control/check-ignored-paths', () => ({
   checkIgnoredPaths: vi.fn(async () => new Set(['']))
 }))
 vi.mock('./hooks', () => ({ loadHooks: mocks.loadHooks }))

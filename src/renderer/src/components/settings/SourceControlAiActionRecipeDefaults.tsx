@@ -225,6 +225,7 @@ export function SourceControlAiActionRecipeDefaults({
           const overrideSummary = overrideSummaries[actionId]
           return (
             <SourceControlActionRecipeRow
+              setupDiscardSignal={customPromptDiscardSignal}
               key={actionId}
               actionId={actionId}
               selectedAgent={selectedAgent as TuiAgent | CustomAgentId | null}

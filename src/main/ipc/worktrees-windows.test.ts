@@ -1,4 +1,4 @@
-import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 
@@ -62,12 +62,13 @@ const {
   deleteWorktreeHistoryDirMock: vi.fn()
 }))
 
-vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
     listWorktrees: facade.listWorktrees,
-    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty,
+    listWorktreesSharedStrict: (await getWorktreeOwnerMocks()).listWorktreesSharedStrict
   }
 })
 
@@ -78,24 +79,51 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: listWorktreesMock,
-  listWorktreesStrict: listWorktreesMock,
-  listWorktreesSharedStrict: listWorktreesMock,
-  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
-  describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
-  assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
-  addWorktree: addWorktreeMock,
-  removeWorktree: removeWorktreeMock
-}))
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (() => ({
+      listWorktrees: listWorktreesMock,
+      listWorktreesStrict: listWorktreesMock,
+      listWorktreesSharedStrict: listWorktreesMock,
+      listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
+      describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
+      assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
+      addWorktree: addWorktreeMock,
+      removeWorktree: removeWorktreeMock
+    }))()
+  }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
+})
 
-vi.mock('../git/worktree-listing', async (importOriginal) => ({
+vi.mock('../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesMock
+  assertWorktreeCleanForRemoval: (await getWorktreeOwnerMocks()).assertWorktreeCleanForRemoval
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+vi.mock('../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await getWorktreeOwnerMocks()).addWorktree
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await getWorktreeOwnerMocks()).removeWorktree
+}))
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesMock,
+  describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
+}))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileSync: vi.fn()
 }))
 
