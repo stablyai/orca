@@ -29,6 +29,9 @@ export function getExtraUsageLabel(provider: ProviderRateLimits['provider']): st
   if (provider === 'codex') {
     return translate('auto.components.status.bar.tooltip.f21b2ba897', 'Credits')
   }
+  if (provider === 'kiro') {
+    return translate('auto.components.status.bar.tooltip.kiro.overage', 'Overage')
+  }
   return translate('auto.components.status.bar.tooltip.c03c61f53f', 'Balance')
 }
 

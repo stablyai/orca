@@ -54,6 +54,7 @@ describe('resolveOwnerUsageRateLimits', () => {
     const {
       cursor: _cursor,
       zcode: _zcode,
+      kiro: _kiro,
       cursorAuthConfigured: _flag,
       ...older
     } = createEmptyRateLimitState({ claude: provider('claude', 5) })
@@ -65,6 +66,7 @@ describe('resolveOwnerUsageRateLimits', () => {
     )
     expect(resolved.cursor).toBeNull()
     expect(resolved.zcode).toBeNull()
+    expect(resolved.kiro).toBeNull()
     expect(resolved.cursorAuthConfigured).toBe(false)
     expect(resolved.claude?.session?.usedPercent).toBe(5)
   })

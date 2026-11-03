@@ -1,5 +1,7 @@
 import { RateLimitServiceFetchTargets } from './service-fetch-targets'
 import { withoutResetWindows } from './service-result-policy'
+import type { SettledProviderResult } from './service-sibling-provider-result'
+import { fetchKiroRateLimits } from '../kiro-usage-fetcher'
 import {
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
   MIN_REFETCH_MS,
@@ -18,6 +20,13 @@ import {
 } from '../claude-usage-window'
 import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
 import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+
+export type KiroUsageFetch = {
+  /** False when the Kiro meter is hidden, so this cycle leaves its slot alone. */
+  enabled: boolean
+  pending: ProviderRateLimits
+  result: Promise<SettledProviderResult>
+}
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
@@ -42,6 +51,40 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       error: message,
       status: 'error',
       usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
+    }
+  }
+
+  /**
+   * Start this cycle's Kiro read. A hidden meter skips kiro-cli's service and settles on its last
+   * reading, because a null slot means "loading" to readers.
+   */
+  protected startKiroUsageFetch(
+    signal: AbortSignal,
+    previous: ProviderRateLimits | null
+  ): KiroUsageFetch {
+    const enabled = this.kiroUsageEnabledResolver?.() ?? true
+    if (!enabled) {
+      const settled: ProviderRateLimits = previous ?? {
+        provider: 'kiro',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: null,
+        status: 'unavailable'
+      }
+      return {
+        enabled,
+        pending: settled,
+        result: Promise.resolve({ status: 'fulfilled', value: settled })
+      }
+    }
+    return {
+      enabled,
+      pending: this.withFetchingStatus(previous, 'kiro'),
+      result: fetchKiroRateLimits({ signal }).then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
     }
   }
 

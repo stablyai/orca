@@ -495,6 +495,15 @@ describe('isUsageEmptyState', () => {
     expect(isUsageEmptyState(settledProviders, usageSettings())).toBe(true)
     expect(isUsageEmptyState({ ...settledProviders, zcode: undefined }, usageSettings())).toBe(true)
     expect(isUsageEmptyState({ ...settledProviders, zcode: null }, usageSettings())).toBe(false)
+    // Kiro follows the same rule: a host that omits the slot is settled, a null slot is loading.
+    expect(isUsageEmptyState({ ...settledProviders, kiro: undefined }, usageSettings())).toBe(true)
+    expect(isUsageEmptyState({ ...settledProviders, kiro: null }, usageSettings())).toBe(false)
+    expect(
+      isUsageEmptyState(
+        { ...settledProviders, kiro: provider('unavailable', { provider: 'kiro' }) },
+        usageSettings()
+      )
+    ).toBe(true)
   })
 
   it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {

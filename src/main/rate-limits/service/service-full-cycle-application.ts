@@ -41,7 +41,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise
+      antigravityResultPromise,
+      kiroFetch
     } = prepared
     if (signal.aborted) {
       return
@@ -192,17 +193,20 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled, kiroSettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise,
+        kiroFetch.result
+      ])
     if (signal.aborted) {
       return
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
+    const kiro = settleSiblingProviderResult('kiro', kiroSettled)
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const zcode = isZcodeUsageCredentialCurrent(settledZcode)
       ? settledZcode
@@ -230,8 +234,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount !== undefined &&
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
+    // Like Cursor: a different kiro-cli profile must not inherit the old account's reading.
+    const previousKiroAccount = previousState.kiro?.usageMetadata?.authProvenance
+    const kiroAccount = kiro.usageMetadata?.authProvenance
+    const kiroAccountChanged =
+      previousKiroAccount !== undefined &&
+      kiroAccount !== undefined &&
+      previousKiroAccount !== kiroAccount
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
+    if (kiroFetch.enabled) {
+      this.trackActiveFailureStreak('kiro', kiro)
+    }
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
@@ -251,7 +265,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             : this.applyStalePolicy(zcode, previousState.zcode),
       antigravity: shouldApplyAntigravity
         ? this.applyStalePolicy(antigravity, previousState.antigravity)
-        : this.state.antigravity
+        : this.state.antigravity,
+      kiro:
+        !kiroFetch.enabled || kiroAccountChanged
+          ? kiro
+          : this.applyStalePolicy(kiro, previousState.kiro)
     })
   }
 }

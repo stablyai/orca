@@ -5,6 +5,7 @@ import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-
 import type { CursorDesktopProfileReadResult } from './cursor-profile-result'
 import { ForeignSqliteReaderClient } from './foreign-sqlite-reader-client'
 import { resolveForeignSqliteReaderEntryPath } from './foreign-sqlite-reader-entry-path'
+import type { KiroCliCredentialsReadResult } from './kiro-cli-credentials-result'
 import type { BinderSessionRow, OpenCodeSessionCursor } from './opencode-binder-sessions-result'
 import type {
   OpenCodePromptFailureQuery,
@@ -28,6 +29,21 @@ function getSharedClient(): ForeignSqliteReaderClient {
 
 export function readCursorDesktopProfile(dbPath: string): Promise<CursorDesktopProfileReadResult> {
   return getSharedClient().readCursorProfile(dbPath)
+}
+
+/**
+ * Read kiro-cli's stored login on the foreign SQLite reader worker.
+ * @param dbPath - kiro-cli's data.sqlite3.
+ * @returns `missing` without waking the worker when the database is absent, else the worker's answer.
+ */
+export async function readKiroCliCredentials(
+  dbPath: string
+): Promise<KiroCliCredentialsReadResult> {
+  // Most hosts never ran kiro-cli; skip the worker on every poll for them.
+  if (!existsSync(dbPath)) {
+    return { status: 'missing' }
+  }
+  return getSharedClient().readKiroCliCredentials(dbPath)
 }
 
 export function readOpenCodePromptFailure(

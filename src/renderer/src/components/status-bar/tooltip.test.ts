@@ -57,7 +57,8 @@ const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
   'kimi',
   'minimax',
   'grok',
-  'zcode'
+  'zcode',
+  'kiro'
 ]
 
 afterEach(() => {

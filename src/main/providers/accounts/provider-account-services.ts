@@ -134,6 +134,8 @@ export function createProviderAccountServices(
   rateLimits.setAntigravityUsageEnabledResolver(() =>
     store.getUI().statusBarItems.includes('antigravity')
   )
+  // Same switch for Kiro: a hidden meter does not call kiro-cli's usage service.
+  rateLimits.setKiroUsageEnabledResolver(() => store.getUI().statusBarItems.includes('kiro'))
   setAntigravityNativeCredentialChangeListener(() =>
     rateLimits.invalidateAntigravityCredentialState()
   )

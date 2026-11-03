@@ -191,6 +191,9 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'U'
     case 'zcode':
       return 'Z'
+    case 'kiro':
+      // Kimi already uses K.
+      return 'I'
     case 'codex':
       return 'X'
   }
