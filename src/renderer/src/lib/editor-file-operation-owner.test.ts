@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
   assertEditorFileOperationCurrent,
+  acquireEditorFileOperation,
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from './editor-file-operation-owner'
@@ -33,6 +34,7 @@ import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation
 import type { OpenFile } from '@/store/slices/editor'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { FileWriteResult } from '../../../shared/file-write-disk-precondition'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const { writeRuntimeFile } = vi.hoisted(() => ({ writeRuntimeFile: vi.fn() }))
 vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => ({
@@ -61,6 +63,27 @@ beforeEach(() => {
 })
 
 describe('editor file operation owner', () => {
+  it('keeps a floating file current when its workspace directory hydrates', () => {
+    const file: OpenFile = {
+      id: '/tmp/code.ts',
+      filePath: '/tmp/code.ts',
+      relativePath: 'code.ts',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      language: 'typescript',
+      mode: 'edit',
+      runtimeEnvironmentId: null,
+      isDirty: false
+    }
+    useAppStore.setState({ openFiles: [file], floatingWorkspacePath: null })
+    const operation = acquireEditorFileOperation(useAppStore.getState, file)
+    useAppStore.setState({ floatingWorkspacePath: '/tmp/floating' })
+    expect(() => operation.assertCurrent()).not.toThrow()
+    useAppStore.setState({ floatingWorkspacePath: '/tmp/another-cwd' })
+    expect(() => operation.assertCurrent()).not.toThrow()
+    useAppStore.setState({ openFiles: [{ ...operation.file, filePath: '/tmp/other.ts' }] })
+    expect(() => operation.assertCurrent()).toThrow()
+  })
+
   it.each([true, false])(
     'does not settle an issued write onto a reused view (ok=%s)',
     async (ok) => {

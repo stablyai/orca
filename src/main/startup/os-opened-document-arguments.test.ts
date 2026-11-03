@@ -46,7 +46,7 @@ describe('documentPathsFromArguments', () => {
     ).toEqual(['/notes/query result.csv', '/notes/export.tsv'])
   })
 
-  it('keeps absolute markdown paths and drops other extensions', () => {
+  it('accepts code, configuration, plaintext and extensionless paths on macOS', () => {
     expect(
       documentPathsFromArguments(
         [
@@ -59,7 +59,23 @@ describe('documentPathsFromArguments', () => {
         ],
         'darwin'
       )
-    ).toEqual(['/Users/dev/notes/a.md', '/Users/dev/notes/b.markdown', '/Users/dev/notes/c.mdx'])
+    ).toEqual([
+      '/Users/dev/notes/a.md',
+      '/Users/dev/notes/b.markdown',
+      '/Users/dev/notes/c.mdx',
+      '/Users/dev/notes/d.txt',
+      '/Users/dev/src/e.tsx',
+      '/Users/dev/notes/README'
+    ])
+  })
+
+  it('accepts an explicitly requested unknown suffix or dotfile on macOS', () => {
+    expect(
+      documentPathsFromArguments(
+        ['file:///notes/%E4%BB%A3%E7%A0%81%20notes.custom', '/notes/Dockerfile', '/notes/.env'],
+        'darwin'
+      )
+    ).toEqual(['/notes/代码 notes.custom', '/notes/Dockerfile', '/notes/.env'])
   })
 
   it('drops switches, including Chromium-style ones that would otherwise look like values', () => {
@@ -71,7 +87,7 @@ describe('documentPathsFromArguments', () => {
     ).toEqual(['/Users/dev/notes/a.md'])
   })
 
-  it('drops the executable and dev entries because none of them end in a markdown extension', () => {
+  it('retains the existing Linux extension filtering', () => {
     const nonDocumentEntries = [
       '/Applications/Orca.app/Contents/MacOS/Orca',
       '/Users/dev/orca/out/main/index.js',
@@ -81,7 +97,7 @@ describe('documentPathsFromArguments', () => {
       expect(isMarkdownDocumentName(entry), entry).toBe(false)
     }
     expect(
-      documentPathsFromArguments([...nonDocumentEntries, '/Users/dev/notes/a.md'], 'darwin')
+      documentPathsFromArguments([...nonDocumentEntries, '/Users/dev/notes/a.md'], 'linux')
     ).toEqual(['/Users/dev/notes/a.md'])
   })
 

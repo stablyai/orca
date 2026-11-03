@@ -1,6 +1,8 @@
 const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
+const editorLanguageExtensions = require('../src/shared/editor-language/editor-language-extensions.json')
+const monacoLanguageAssociations = require('../src/shared/editor-language/monaco-language-associations.json')
 const {
   MACOS_FOLDER_USAGE_DESCRIPTIONS,
   applyMacHelperFolderUsageDescriptions
@@ -190,9 +192,24 @@ const rpmElectronRuntimeDependencies = [
   'alsa-lib'
 ]
 
-// Mirror OS document extensions: CJS packager cannot import TS; keep startup/os-opened-documents.ts and NSIS hooks aligned.
+// Legacy document types stay aligned with the Windows/Linux handlers and NSIS hooks.
 const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
 const TABULAR_FILE_EXTENSIONS = ['csv', 'tsv']
+const EDITOR_FILE_EXTENSIONS = [
+  ...new Set([
+    ...Object.keys(editorLanguageExtensions),
+    ...monacoLanguageAssociations.flatMap((language) => language.extensions),
+    '.txt',
+    '.text',
+    '.log',
+    '.lock'
+  ])
+]
+  .map((extension) => extension.slice(1))
+  .filter(
+    (extension) => ![...MARKDOWN_FILE_EXTENSIONS, ...TABULAR_FILE_EXTENSIONS].includes(extension)
+  )
+  .sort()
 
 // Config loads without unused Windows addons; beforePack enforces target natives. Only @vscode/windows-process-tree has os:win32; workspace links prove no binary exists.
 const windowsRuntimeResources = existsSync(
@@ -579,6 +596,12 @@ module.exports = {
         ext,
         name: `${ext.toUpperCase()} Document`,
         description: `${ext.toUpperCase()} Document`,
+        role: 'Editor',
+        rank: 'Alternate'
+      })),
+      ...EDITOR_FILE_EXTENSIONS.map((ext) => ({
+        ext,
+        name: 'Code and Text Document',
         role: 'Editor',
         rank: 'Alternate'
       }))

@@ -11,7 +11,13 @@ function readRootEntries(sha) {
 }
 
 // These reviewed additions stay listed until the base tree carries them.
-const REVIEWED_ROOT_ENTRIES = new Set(['.claude', '.mcp.json', 'cloud', 'opencode.json'])
+const REVIEWED_ROOT_ENTRIES = new Set([
+  '.claude',
+  '.mcp.json',
+  'cloud',
+  'opencode.json',
+  'openspec'
+])
 
 function checkRootDirectoryEntries(argv) {
   if (argv.length !== 2) {

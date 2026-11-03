@@ -12,6 +12,7 @@ export {
 } from './editor-file-operation-provenance'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
@@ -222,7 +223,11 @@ export function acquireEditorFileOperation(
       { ...captured, filePath: resource?.filePath ?? captured.filePath },
       provenance
     )
-    if (resolveOwnerDirectory(current) !== ownerDirectory) {
+    // Floating files retain their absolute paths when the panel's working directory changes.
+    if (
+      !isFloatingWorkspaceId(captured.worktreeId) &&
+      resolveOwnerDirectory(current) !== ownerDirectory
+    ) {
       throw new Error(OWNER_CHANGED_MESSAGE)
     }
   }

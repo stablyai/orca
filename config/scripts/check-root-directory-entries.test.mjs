@@ -104,9 +104,12 @@ describe('root directory guard', () => {
     expect(output).toContain('new-root.md')
   })
 
-  it('allows the reviewed cloud workspace directory', () => {
+  it.each([
+    ['cloud', 'cloud/package.json'],
+    ['openspec', 'openspec/config.yaml']
+  ])('allows the reviewed %s directory', (_name, filePath) => {
     const fixture = makeFixture()
-    const head = commitFiles(fixture.root, [['cloud/package.json', '{}\n']])
+    const head = commitFiles(fixture.root, [[filePath, '{}\n']])
 
     const result = runGuard({ ...fixture, head })
 

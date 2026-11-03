@@ -1,11 +1,36 @@
 import { resolve, sep } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MAX_PENDING_OS_OPENED_DOCUMENTS, OsOpenedDocumentState } from './os-opened-documents'
 
 // Normalize fixture paths with host rules, including Windows drive/separators.
 const hostPath = (name: string): string => resolve(sep, 'notes', name)
 
+afterEach(() => vi.unstubAllGlobals())
+
 describe('OsOpenedDocumentState', () => {
+  it.each([false, true])('separates launch arguments from files, defaultApp=%s', (defaultApp) => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin', defaultApp })
+    const state = new OsOpenedDocumentState()
+    const launch = [
+      '/Applications/Orca.app/Contents/MacOS/Orca',
+      ...(defaultApp ? ['/repo/out/main/index.js'] : []),
+      '--user-data-dir=/tmp/test-profile'
+    ]
+
+    expect(state.capture(launch)).toBe(false)
+    expect(state.capture([...launch, '/notes/package.json'])).toBe(true)
+    expect(state.consume()).toEqual(['/notes/package.json'])
+  })
+
+  it('keeps the first path from an OS file selection', () => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin', defaultApp: true })
+    const state = new OsOpenedDocumentState()
+
+    state.captureFilePaths(['/notes/source.ts', '/notes/Dockerfile'])
+
+    expect(state.consume()).toEqual(['/notes/source.ts', '/notes/Dockerfile'])
+  })
+
   it('does not duplicate a path captured twice', () => {
     const state = new OsOpenedDocumentState()
     const filePath = hostPath('a.csv')
