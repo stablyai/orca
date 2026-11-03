@@ -301,7 +301,15 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   )
   const next = getNextTerminalCycleTab(
     cycleTabs,
-    { type: store.activeTabType, id: currentId ?? '', tabId: activeTab?.id },
+    {
+      type: store.activeTabType,
+      id: currentId ?? '',
+      // A runtime-only selection leaves the previous unified group selection behind.
+      tabId:
+        activeTab?.contentType === store.activeTabType && activeTab.entityId === currentId
+          ? activeTab.id
+          : undefined
+    },
     direction
   )
   if (!next) {

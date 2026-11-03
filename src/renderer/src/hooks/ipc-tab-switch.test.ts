@@ -234,10 +234,31 @@ describe('handleSwitchTerminalTab', () => {
       { type: 'terminal', id: 'term-1', tabId: 'tab-1' },
       { type: 'agent-session', id: 'chat', tabId: 'chat-tab' }
     ])
-    expect(handleSwitchTerminalTab(1)).toBe(true)
-    expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
-    expect(handleSwitchTerminalTab(-1)).toBe(true)
-    expect(store.activateTab).toHaveBeenLastCalledWith('tab-1')
+    store.setActiveTab.mockImplementation((id: string) => {
+      store.activeTabId = id
+    })
+    store.setActiveTabType.mockImplementation((type: ActiveTabType) => {
+      store.activeTabType = type
+    })
+    store.activateTab.mockImplementation((tabId: string) => {
+      store.groupsByWorktree['wt-1'][0].activeTabId = tabId
+    })
+    for (const [direction, expectedId, expectedType] of [
+      [1, 'term-2', 'terminal'],
+      [1, 'term-1', 'terminal'],
+      [1, 'chat-tab', 'agent-session'],
+      [-1, 'term-1', 'terminal'],
+      [-1, 'term-2', 'terminal'],
+      [-1, 'chat-tab', 'agent-session']
+    ] as const) {
+      expect(handleSwitchTerminalTab(direction)).toBe(true)
+      if (expectedType === 'agent-session') {
+        expect(store.activateTab).toHaveBeenLastCalledWith(expectedId)
+      } else {
+        expect(store.setActiveTab).toHaveBeenLastCalledWith(expectedId)
+      }
+      expect(store.activeTabType).toBe(expectedType)
+    }
   })
 
   it('keeps a genuine one-terminal split group a no-op', () => {
