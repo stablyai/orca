@@ -31,6 +31,7 @@ import {
   resolveWindowsShellLaunchArgs
 } from '../../providers/windows-shell-args'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
+import { resolvePosixPaneShellPath } from '../../pty/shell-startup/posix-pwsh'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { addWslEnvKeys } from '../../../shared/wsl-env'
@@ -193,7 +194,9 @@ export function createPtyShellLaunchPlan(
     }
   } else {
     rescrubDaemonPtyEnvironment(env, opts)
-    const preferredShellPath = shellPath
+    // Resolving a bare pwsh is not a fallback: no warning, and SHELL stays the user's login shell.
+    const preferredShellPath = resolvePosixPaneShellPath(shellPath, env.PATH)
+    shellPath = preferredShellPath
     shellPath = resolveUnixShellPath(shellPath)
     if (shellPath !== preferredShellPath) {
       env.SHELL = shellPath
