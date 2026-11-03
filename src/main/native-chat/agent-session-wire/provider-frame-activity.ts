@@ -1,4 +1,5 @@
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
+import { formatNativeChatDuration } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 
 export const MAX_PROVIDER_ACTIVITY_LENGTH = 160
 
@@ -71,7 +72,6 @@ const CODEX_ITEM_ACTIVITY: Readonly<Record<string, string>> = {
   enteredReviewMode: 'Reviewing changes',
   exitedReviewMode: 'Reviewing changes',
   contextCompaction: 'Compacting the conversation',
-  sleep: 'Waiting briefly',
   hookPrompt: 'Processing workspace guidance'
 }
 
@@ -91,11 +91,22 @@ export function codexProviderFrameActivity(
   if (method === 'item/reasoning/summaryPartAdded') {
     return null
   }
+  const item = record(source?.item)
+  const itemType = stringField(item, 'type')
+  if (itemType === 'sleep') {
+    if (method === 'item/completed') {
+      return null
+    }
+    if (method === 'item/started') {
+      const durationMs = item?.durationMs
+      return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
+        ? `Waiting for ${formatNativeChatDuration(Math.ceil(durationMs / 1000))}`
+        : 'Waiting'
+    }
+  }
   if (method !== 'item/started') {
     return undefined
   }
-  const item = record(source?.item)
-  const itemType = stringField(item, 'type')
   return itemType ? (CODEX_ITEM_ACTIVITY[itemType] ?? null) : null
 }
 

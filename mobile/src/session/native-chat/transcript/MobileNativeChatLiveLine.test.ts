@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatLiveReasoning } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
+import { codexProviderFrameActivity } from '../../../../../src/main/native-chat/agent-session-wire/provider-frame-activity'
 
 const pressableMounts = vi.hoisted(() => ({ count: 0 }))
 
@@ -110,6 +111,24 @@ describe('MobileNativeChatLiveLine', () => {
 
   it('lets provider activity text beat both fallbacks', () => {
     expect(labels(render({ activityText: 'Running pnpm test' }))).toEqual(['Running pnpm test'])
+  })
+
+  it('shows a long requested sleep and returns to working on completion', () => {
+    const item = { type: 'sleep', id: 'sleep-1', durationMs: 600_000 }
+    const root = render({
+      thinking: false,
+      activityText: codexProviderFrameActivity('item/started', { item })
+    })
+    expect(labels(root)).toEqual(['Waiting for 10m 0s'])
+    act(() => {
+      renderer!.update(
+        element({
+          thinking: false,
+          activityText: codexProviderFrameActivity('item/completed', { item })
+        })
+      )
+    })
+    expect(labels(root)).toEqual(['Working…'])
   })
 
   it("reads Stopping over provider activity once a person's Stop is ending the turn", () => {
