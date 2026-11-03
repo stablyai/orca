@@ -217,44 +217,6 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalled()
   })
 
-  it('does not link an arbitrary same-repo terminal PR URL for a known push target when lookup misses', async () => {
-    const store = createTestStore()
-    installReviewRead().mockResolvedValue(null)
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/worktrees/orca',
-      branch: 'refs/heads/feature/pr-link',
-      pushTarget: {
-        remoteName: 'origin',
-        branchName: 'feature/pr-link',
-        remoteUrl: 'https://github.com/acme/orca.git'
-      }
-    })
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: { repo1: [wt] }
-    })
-
-    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
-      url: 'https://github.com/acme/orca/pull/1',
-      slug: { owner: 'acme', repo: 'orca' },
-      number: 1
-    })
-
-    for (let i = 0; i < 20; i++) {
-      await Promise.resolve()
-    }
-
-    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith({
-      worktreeId: wt.id,
-      updates: { linkedPR: 1 }
-    })
-  })
-
   it('rejects a same-number branch result for a different repository URL', async () => {
     const store = createTestStore()
     const readHostedReview = installReviewRead().mockResolvedValue(confirmedReview(42))

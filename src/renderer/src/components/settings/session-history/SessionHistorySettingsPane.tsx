@@ -32,7 +32,7 @@ import {
   sessionSearchStatusMessage
 } from './session-history-status-copy'
 import { useSessionSearchStatus } from './use-session-search-status'
-import { useRuntimeEnvironmentCatalog } from '../use-runtime-environment-catalog'
+import { useRuntimeEnvironmentCatalog } from '../runtime-environments/catalog/use-runtime-environment-catalog'
 
 export function SessionHistorySettingsPane({
   settings,

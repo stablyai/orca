@@ -219,8 +219,10 @@ const fixtures: WebLaunchFixture[] = [
 
 it.each(fixtures)('conserves $name through the actual web create adapter', async (fixture) => {
   stubTerminalCreateEnvironment(mocks)
-  const capabilities = await import('@/components/settings/agent-launch-settings-transport')
-  const preferences = await import('@/components/settings/use-host-agent-launch-preferences')
+  const capabilities =
+    await import('@/runtime/agent-launch-settings/agent-launch-settings-transport')
+  const preferences =
+    await import('@/runtime/agent-launch-settings/use-host-agent-launch-preferences')
   const { RUNTIME_CAPABILITIES } = await import('../../../shared/protocol-version')
   const { resolveAgentStartupPlanInputs } =
     await import('../../../shared/agent-startup-plan-inputs')

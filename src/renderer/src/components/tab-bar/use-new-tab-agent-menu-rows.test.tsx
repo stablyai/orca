@@ -15,7 +15,7 @@ import type * as RouteInput from '@/lib/agent-launch-route-input'
 import type * as ChatProgram from '@/lib/host-chat-program'
 import type * as MenuRows from '@/lib/new-tab-agent-menu-rows'
 import type * as ZustandShallow from 'zustand/react/shallow'
-import type * as HostAgentSettingsTransport from '@/components/settings/agent-launch-settings-transport'
+import type * as HostAgentSettingsTransport from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import {
@@ -90,10 +90,13 @@ vi.mock('@/lib/new-tab-agent-menu-rows', async (importOriginal) => {
     }
   }
 })
-vi.mock('@/components/settings/agent-launch-settings-transport', async (importOriginal) => {
-  const actual = await importOriginal<typeof HostAgentSettingsTransport>()
-  return { ...actual, readHostAgentLaunchSettings: vi.fn().mockResolvedValue(null) }
-})
+vi.mock(
+  '@/runtime/agent-launch-settings/agent-launch-settings-transport',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof HostAgentSettingsTransport>()
+    return { ...actual, readHostAgentLaunchSettings: vi.fn().mockResolvedValue(null) }
+  }
+)
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: mocks.subscribe }))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.support

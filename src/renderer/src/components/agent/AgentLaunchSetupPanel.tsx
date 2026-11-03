@@ -15,14 +15,14 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
-import { agentModelChoiceChips } from '../settings/agent-model-choice-chips'
+import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chips'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
-import { AgentDefaultArgsInput } from '../settings/AgentLaunchDefaultsEditor'
+import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { AgentPermissionMenu } from '../settings/AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from './launch-settings/AgentPermissionChoiceControls'
 import {
   AgentLaunchSetupFooter,
   agentLaunchSetupArgumentsNote,

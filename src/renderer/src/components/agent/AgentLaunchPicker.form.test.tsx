@@ -17,7 +17,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   sourceControlPickerDraft,
   applySourceControlPickerDraft
-} from '../settings/source-control-agent-launch-picker'
+} from '../../lib/source-control-agent-launch-picker'
 import { canonicalSourceControlActionSelection } from '../../../../shared/source-control-action-selection'
 import { AgentLaunchSetupButton, useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'

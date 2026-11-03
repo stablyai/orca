@@ -14,7 +14,7 @@ import {
   getExperimentalSearchEntry
 } from '../settings/advanced/experimental-search'
 
-import { getOrchestrationPanelExperimentalSearchEntry } from '../settings/orchestration-panel-experimental-search'
+import { getOrchestrationPanelExperimentalSearchEntry } from '../settings/orchestration/orchestration-panel-experimental-search'
 import { TooltipProvider } from '../ui/tooltip'
 import { i18n, loadRendererUiLanguage, translate } from '@/i18n/i18n'
 

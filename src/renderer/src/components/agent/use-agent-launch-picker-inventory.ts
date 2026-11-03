@@ -6,7 +6,7 @@ import {
   selectFolderWorkspaces
 } from '@/store/workspace-record-selectors'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { readHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
+import { readHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store'
 import {
