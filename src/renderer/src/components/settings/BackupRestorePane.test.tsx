@@ -14,6 +14,7 @@ const api = vi.hoisted(() => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, options?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? ''))
 }))

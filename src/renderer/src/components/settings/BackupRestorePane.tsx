@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Download, History, Upload } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import {
   DEFAULT_SETTINGS_BACKUP_SECTIONS,
   SETTINGS_BACKUP_SECTIONS,
@@ -299,7 +299,9 @@ export function BackupRestorePane(): React.JSX.Element {
               <li key={point.id} className="flex items-center gap-3 px-3 py-2">
                 <History className="size-4 text-muted-foreground" />
                 <div className="min-w-0 flex-1 text-xs">
-                  <span className="block">{new Date(point.createdAt).toLocaleString()}</span>
+                  <span className="block">
+                    {new Date(point.createdAt).toLocaleString(getIntlLocale())}
+                  </span>
                   <span className="block text-muted-foreground">
                     {point.reason === 'before-import'
                       ? translate(

@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type {
   SettingsBackupDiffEntry,
   SettingsBackupImportPreview
@@ -74,7 +74,7 @@ export function SettingsBackupImportDialog({
               '{{value0}} · created {{value1}} with Orca {{value2}} on {{value3}}',
               {
                 value0: preview.fileName,
-                value1: new Date(preview.createdAt).toLocaleString(),
+                value1: new Date(preview.createdAt).toLocaleString(getIntlLocale()),
                 value2: preview.appVersion,
                 value3: preview.sourcePlatform
               }
