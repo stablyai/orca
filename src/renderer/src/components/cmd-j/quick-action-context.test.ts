@@ -139,7 +139,7 @@ describe('Cmd+J quick action context', () => {
     const actionById = new Map(getCmdJQuickActions().map((action) => [action.id, action]))
     const baseContext = {
       ...ctx({}),
-      activeWorktree: null,
+      activeWorktree: makeWorktree({ id: 'wt-1', repoId: 'repo-1' }),
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
       openBrowserUrl: async () => {},
@@ -462,7 +462,7 @@ describe('Move to Status quick action', () => {
     const openWorkspaceStatusPicker = vi.fn()
     const context = {
       ...ctx({}),
-      activeWorktree: null,
+      activeWorktree: makeWorktree({ id: 'wt-1', repoId: 'repo-1' }),
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
       openBrowserUrl: async () => {},
@@ -476,6 +476,10 @@ describe('Move to Status quick action', () => {
     await expect(action.run(context)).resolves.toEqual({ status: 'ok' })
     expect(openWorkspaceStatusPicker).toHaveBeenCalledOnce()
     await expect(action.run({ ...context, activeWorktreeId: null })).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'no-active-workspace'
+    })
+    await expect(action.run({ ...context, activeWorktree: null })).resolves.toEqual({
       status: 'unavailable',
       reason: 'no-active-workspace'
     })

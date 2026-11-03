@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
@@ -74,6 +75,33 @@ describe('active workspace SSH status', () => {
       makeWorktree({ id: 'wt', repoId: TEST_REPO.id, hostId: 'local' })
     )
     expect(status).toBeNull()
+  })
+
+  describe('a worktree with no host of its own and repo ids repeated across hosts', () => {
+    const repos: Repo[] = [
+      { ...TEST_REPO, executionHostId: 'ssh:box' },
+      { ...TEST_REPO, executionHostId: 'local' }
+    ]
+    const read = (selectedHostId?: ExecutionHostId) =>
+      getActiveWorktreeSshStatus(
+        {
+          repos,
+          sshConnectionStates: new Map([['box', connection('disconnected')]]),
+          sshStateByEnvironment: new Map(),
+          worktreesByRepo: {},
+          ...(selectedHostId ? { activeWorkspaceExecutionHostId: selectedHostId } : {})
+        },
+        makeWorktree({ id: 'wt', repoId: TEST_REPO.id })
+      )
+
+    it('follows the host the user selected', () => {
+      expect(read('local')).toBeNull()
+      expect(read('ssh:box')).toBe('disconnected')
+    })
+
+    it('does not guess a row when no host is selected', () => {
+      expect(read()).toBeNull()
+    })
   })
 
   describe('a workspace owned by a paired server', () => {

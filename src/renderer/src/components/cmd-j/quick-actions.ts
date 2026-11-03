@@ -51,6 +51,14 @@ function currentWorkspaceActionAvailability(
   return getCurrentWorkspaceActionAvailability(ctx)
 }
 
+function moveToStatusAvailability(ctx: CmdJQuickActionContext): CmdJQuickActionAvailability {
+  const availability = currentWorkspaceActionAvailability(ctx)
+  // Why: the picker writes to the resolved workspace, so a stale active id must not open it empty.
+  return availability.available && !ctx.activeWorktree
+    ? { available: false, reason: 'no-active-workspace' }
+    : availability
+}
+
 export async function runWorkspaceAction(
   ctx: CmdJQuickActionContext,
   run: (groupId: string) => Promise<void>
@@ -219,9 +227,9 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
       translate('auto.components.cmd.j.quick.actions.verbs.changeStatus', 'change status'),
       translate('auto.components.cmd.j.quick.actions.verbs.workspaceStatus', 'workspace status')
     ],
-    isAvailable: currentWorkspaceActionAvailability,
+    isAvailable: moveToStatusAvailability,
     run: async (ctx) => {
-      const availability = currentWorkspaceActionAvailability(ctx)
+      const availability = moveToStatusAvailability(ctx)
       if (!availability.available) {
         return { status: 'unavailable', reason: availability.reason }
       }

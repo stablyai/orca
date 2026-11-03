@@ -101,17 +101,21 @@ export function captureCmdJActiveGroupSnapshot(
 }
 
 export function getActiveWorktreeSshStatus(
-  state: RuntimeAwareSshStatusState & Pick<AppState, 'repos' | 'worktreesByRepo'>,
+  state: RuntimeAwareSshStatusState &
+    Pick<AppState, 'repos' | 'worktreesByRepo'> &
+    Partial<Pick<AppState, 'activeWorkspaceExecutionHostId'>>,
   activeWorktree: Worktree | null
 ): SshConnectionStatus | null {
   if (!activeWorktree) {
     return null
   }
-  // Why: repo ids repeat across hosts, so prefer the repo on the workspace's own host.
+  // Why: repo ids repeat across hosts; with no host to tell the rows apart, don't guess one.
+  const hostId = activeWorktree.hostId ?? state.activeWorkspaceExecutionHostId
   const sameIdRepos = state.repos.filter((entry) => entry.id === activeWorktree.repoId)
   const repo =
-    sameIdRepos.find((entry) => getRepoExecutionHostId(entry) === activeWorktree.hostId) ??
-    sameIdRepos[0]
+    sameIdRepos.length === 1
+      ? sameIdRepos[0]
+      : sameIdRepos.find((entry) => getRepoExecutionHostId(entry) === hostId)
   // Why: folder workspaces have no repo row, and SSH-only repos have no connectionId; the host id covers both.
   const connectionId =
     getSshTargetIdForExecutionHost(activeWorktree.hostId) ??
