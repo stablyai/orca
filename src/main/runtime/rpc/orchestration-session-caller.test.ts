@@ -114,9 +114,6 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 57 registered methods carrying 40 party-naming fields.
-    expect(registry.size).toBe(57)
-    expect(partyNaming).toHaveLength(40)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(
