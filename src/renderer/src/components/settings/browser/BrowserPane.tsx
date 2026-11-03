@@ -13,7 +13,10 @@ import { BrowserUseSetup } from './use/BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './routing/BrowserLinkRoutingModifierSetting'
-import { BrowserLinkRoutingBackgroundSetting } from './routing/BrowserLinkRoutingBackgroundSetting'
+import {
+  BrowserLinkRoutingBackgroundSetting,
+  BrowserLinkRoutingExistingTabSetting
+} from './routing/BrowserLinkRoutingBackgroundSetting'
 import { BrowserTerminalLinkActionsSetting } from './routing/BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './routing/BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './routing/BrowserClientHostedRemoteSetting'
@@ -132,6 +135,7 @@ export function BrowserPane({
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
+  const showLinkRoutingExistingTab = matchesSettingsSearch(searchQuery, [browserSearchEntries[14]])
   const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry(t)])
   // Browser tabs run in this desktop app; the web client has none to free.
   const showMemorySaver =
@@ -274,7 +278,8 @@ export function BrowserPane({
       showSitePermissions ||
       showLinkRouting ||
       showLinkRoutingModifier ||
-      showLinkRoutingBackground ? (
+      showLinkRoutingBackground ||
+      showLinkRoutingExistingTab ? (
         <SettingsGroup>
           {showHomePage ? (
             <BrowserHomePageSetting
@@ -330,6 +335,13 @@ export function BrowserPane({
 
           {showLinkRoutingBackground ? (
             <BrowserLinkRoutingBackgroundSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
+          ) : null}
+
+          {showLinkRoutingExistingTab ? (
+            <BrowserLinkRoutingExistingTabSetting
               settings={settings}
               updateSettings={updateSettings}
             />
