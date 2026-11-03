@@ -18,8 +18,13 @@ vi.mock('../../runtime/client-hosted-browser-row-close', () => ({
   closeClientHostedBrowserRow: vi.fn()
 }))
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: { focusGroup: () => void }) => unknown) =>
-    selector({ focusGroup: () => {} })
+  useAppStore: (
+    selector: (state: {
+      focusGroup: () => void
+      tabWidthsById: Record<string, number>
+      setTabWidth: () => void
+    }) => unknown
+  ) => selector({ focusGroup: () => {}, tabWidthsById: {}, setTabWidth: () => {} })
 }))
 
 const ROW: ClientHostedBrowserRow = {

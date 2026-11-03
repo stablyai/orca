@@ -85,6 +85,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'rightSidebarWidth',
   'markdownTocPanelWidth',
   'combinedDiffFileTreeWidth',
+  'tabWidthsById',
   'groupBy',
   'sortBy',
   'projectOrderBy',

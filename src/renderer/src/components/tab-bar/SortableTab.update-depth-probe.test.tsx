@@ -20,6 +20,8 @@ type ProbeState = {
   ptyIdsByTabId: Record<string, string[]>
   terminalLayoutsByTabId: Record<string, unknown>
   keybindings: Record<string, unknown>
+  tabWidthsById: Record<string, number>
+  setTabWidth: () => void
 }
 
 type StoreApiWithHook = {
@@ -42,7 +44,9 @@ async function createProbeStore(): Promise<StoreApiWithHook> {
       runtimePaneTitlesByTabId: {},
       ptyIdsByTabId: {},
       terminalLayoutsByTabId: {},
-      keybindings: {}
+      keybindings: {},
+      tabWidthsById: {},
+      setTabWidth: () => {}
     }))
   }
   return globals[globalKey] as StoreApiWithHook

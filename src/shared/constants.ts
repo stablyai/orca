@@ -180,6 +180,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
+    tabWidthsById: {},
     groupBy: 'repo',
     sortBy: 'recent',
     projectOrderBy: 'manual',

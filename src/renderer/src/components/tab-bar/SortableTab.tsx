@@ -5,7 +5,6 @@ import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
-import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
@@ -26,6 +25,8 @@ import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
 import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
+import { TabStripSlotResizeHandle } from './TabStripSlotResizeHandle'
+import { TabRenameInput } from './TabRenameInput'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
@@ -259,10 +260,8 @@ export default function SortableTab({
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
       {isEditing ? (
-        <Input
+        <TabRenameInput
           ref={setRenameInputElement}
-          density="compact"
-          data-tab-rename-input="true"
           value={renameValue}
           aria-label={translate(
             'auto.components.tab.bar.SortableTab.ab19f603eb',
@@ -272,20 +271,6 @@ export default function SortableTab({
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={onRenameKeyDown}
-          // Why: stop bubbling so clicking inside the input doesn't activate the tab or start a dnd-kit drag.
-          onPointerDown={(event) => event.stopPropagation()}
-          onMouseDown={(event) => {
-            // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
-            event.stopPropagation()
-            if (event.button === 1) {
-              event.preventDefault()
-            }
-          }}
-          onClick={(event) => event.stopPropagation()}
-          onDoubleClick={(event) => event.stopPropagation()}
-          onAuxClick={(event) => event.stopPropagation()}
-          className="mr-1 min-w-0 flex-1"
-          spellCheck={false}
         />
       ) : (
         <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
@@ -396,6 +381,7 @@ export default function SortableTab({
               {tabRoot}
             </TabHoverCard>
           )}
+          <TabStripSlotResizeHandle tabId={tab.id} />
         </div>
       </ContextMenuTrigger>
 

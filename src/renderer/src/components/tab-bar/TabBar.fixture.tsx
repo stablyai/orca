@@ -202,3 +202,25 @@ export const singleHostedPage = defineFixture({
     />
   )
 })
+
+export const resizedTabs = defineFixture({
+  width: 1280,
+  store: { tabWidthsById: { 'tab-0': 520, 'tab-2': 160 } },
+  render: () => <TabWidthFixture count={4} />
+})
+
+export const resizingTab = defineFixture({
+  width: 1280,
+  render: () => <TabWidthFixture count={4} />,
+  interact: (frame) => {
+    const handle = frame.querySelector<HTMLElement>(
+      '[data-tab-strip-slot="tab-1"] > [data-tab-resize-handle]'
+    )
+    const { right } = handle!.getBoundingClientRect()
+    handle!.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, button: 0, detail: 1, clientX: right })
+    )
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: right + 160 }))
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()))
+  }
+})

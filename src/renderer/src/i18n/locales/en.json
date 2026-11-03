@@ -22250,6 +22250,10 @@
       "open": "{{review}}: Open"
     }
   },
+  "tabResizeHandle": {
+    "label": "Resize tab",
+    "hint": "Drag or use the arrow keys to resize. Double-click or press Enter to reset."
+  },
   "tabHoverCard": {
     "browser": "Browser",
     "editor": "Editor",

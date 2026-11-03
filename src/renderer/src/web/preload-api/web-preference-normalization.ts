@@ -26,6 +26,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { applyTabWidthChanges, normalizeTabWidthsById } from '../../../../shared/tab-strip-width'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-color-overrides'
 import {
@@ -73,7 +74,9 @@ export function mergeWebUIState(
     ),
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
-    )
+    ),
+    // Updates carry per-tab patches, so a spread would drop every other tab's width.
+    tabWidthsById: applyTabWidthChanges(base.tabWidthsById, safeUpdates.tabWidthsById)
   }
 }
 
@@ -105,6 +108,11 @@ export function mergeHostWebUIState(
   return {
     ...mergeWebUIState(local, incoming),
     ...pinned,
+    // The host sends its full map, so it replaces ours; a patch merge would resurrect widths reset elsewhere.
+    tabWidthsById:
+      incoming.tabWidthsById === undefined
+        ? normalizeTabWidthsById(local.tabWidthsById)
+        : normalizeTabWidthsById(incoming.tabWidthsById),
     // Old hosts omit this field; a cached arm must not make their strict ui.set reject mode changes.
     statusBarCompactChangeNoticeDismissed: incoming.statusBarCompactChangeNoticeDismissed !== false
   }

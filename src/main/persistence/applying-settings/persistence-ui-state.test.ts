@@ -150,6 +150,17 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
+  it('merges tab-width patches from concurrent clients and persists the result', async () => {
+    const store = await createStore()
+    store.updateUI({ tabWidthsById: { 'desktop-tab': 400, 'shared-tab': 300 } })
+    // A paired client that never saw the desktop resize patches only its own tabs.
+    store.updateUI({ tabWidthsById: { 'web-tab': 200, 'shared-tab': null } })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().tabWidthsById).toEqual({ 'desktop-tab': 400, 'web-tab': 200 })
+  })
+
   it.each([false, true])(
     'restores sidebarOpen=%s from disk without changing the right sidebar',
     async (sidebarOpen) => {
