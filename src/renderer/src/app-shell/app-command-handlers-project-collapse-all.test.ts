@@ -158,6 +158,25 @@ describe('collapse / expand all projects app command', () => {
     expect(useAppStore.getState().collapsedGroups.size).toBe(0)
   })
 
+  it('lets a focused menu keep its keyboard input', () => {
+    seed()
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    const item = document.createElement('button')
+    menu.append(item)
+    document.body.append(menu)
+    item.focus()
+    const input = shortcutInput()
+
+    try {
+      expect(runToggle(input)).toBe(false)
+      expect(input.preventDefault).not.toHaveBeenCalled()
+      expect(useAppStore.getState().collapsedGroups.size).toBe(0)
+    } finally {
+      menu.remove()
+    }
+  })
+
   it('reports a claimed terminal shortcut through the existing notification policy', () => {
     seed()
     expect(runToggle(shortcutInput(), 'terminal')).toBe(true)

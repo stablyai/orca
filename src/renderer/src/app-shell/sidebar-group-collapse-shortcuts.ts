@@ -22,6 +22,15 @@ function sidebarCollapseShortcutYields(
   )
 }
 
+// The yield above ignores menus and listboxes; one that holds focus still owns its keys.
+function focusedMenuOwnsKeys(): boolean {
+  return (
+    document.activeElement?.closest(
+      '[role="menu"], [role="listbox"]:not([data-worktree-sidebar]):not([data-focus-behavior="page"])'
+    ) != null
+  )
+}
+
 function toggleSidebarGroups(store: AppStoreState, groupKeys: readonly string[]): void {
   const expanding = groupKeys.some((groupKey) => store.collapsedGroups.has(groupKey))
   // Match chip-click scroll anchoring to avoid viewport jumps.
@@ -55,7 +64,7 @@ export function createProjectCollapseAllShortcutHandler(
 ): () => boolean {
   return () => {
     const store = useAppStore.getState()
-    if (sidebarCollapseShortcutYields(store, floatingWorkspaceFocused)) {
+    if (sidebarCollapseShortcutYields(store, floatingWorkspaceFocused) || focusedMenuOwnsKeys()) {
       return false
     }
     const groupKeys = resolveProjectCollapseAllToggleKeys(store)
