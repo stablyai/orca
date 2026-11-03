@@ -17,7 +17,7 @@ import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hoo
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
-import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
+import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
