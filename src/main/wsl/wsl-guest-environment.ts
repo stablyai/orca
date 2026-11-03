@@ -3,8 +3,8 @@ import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
 } from '../../shared/wsl-login-shell-command'
-import { resolveWslExecutablePath } from './wsl-executable-path'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { resolveWslExecutablePath } from './execution/wsl-executable-path'
+import { resolveWslInteropSpawnCwd } from './execution/wsl-interop-spawn-directory'
 
 /** Cache the distro login environment to retain user PATH without repeated blocking profile/login-shell probes (#14288/#9768). */
 

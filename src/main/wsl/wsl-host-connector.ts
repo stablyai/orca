@@ -4,15 +4,16 @@ import { createWslOrcadPairingRecovery } from './wsl-orcad-pairing-repair'
 import {
   readSettledConfirmedRunningWslDistros,
   wasWslDistroLastSeenRunningSettled
-} from '../wsl-background-distro-gate'
+} from './discovery/wsl-background-distro-gate'
 import { parsePairingCode } from '../../shared/pairing'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { verifyOrcadPairingIdentity } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { resolveEnvironmentPairingOffer } from '../../shared/runtime-environment-store'
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
-import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
+import { createWslDistroHolder } from './discovery/wsl-distro-holder'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import { listWslHostDistros } from './wsl-host-distro-list'
-import { resolveWslDistroName } from './wsl-distro-registry-id'
+import { resolveWslDistroName } from './discovery/wsl-distro-registry-id'
 import type { WslHostConnector, WslHostReachability } from './wsl-host-service'
 import { readWslDistroOrcadPublicKey } from './wsl-host-ssh-orcad-conflict'
 import {
@@ -33,7 +34,7 @@ import { createWslOrcadLivenessSupervisor } from './wsl-orcad-liveness-wiring'
 import type { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { confirmsRunning } from './wsl-orcad-liveness-evidence'
 import { requireConfirmedRunning } from './wsl-orcad-connection-errors'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
 import { wslHostServerStopReason } from '../../shared/wsl-host-failure-copy'
 
 function targetFor(distro: string): WslOrcadHostTarget {

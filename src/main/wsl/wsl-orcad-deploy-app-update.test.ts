@@ -9,7 +9,7 @@ import {
   type OrcadActivationRecord
 } from '../managed-server/activation/orcad-activation-record'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import type { WslDistroHolder } from './wsl-distro-holder'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
 const mocks = vi.hoisted(() => ({

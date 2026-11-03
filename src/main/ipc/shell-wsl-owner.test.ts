@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WindowsPathAccessHost from '../windows-path-access-host'
+import type * as WindowsPathAccessHost from '../windows/windows-path-access-host'
 import type * as ExternalEditorLaunch from '../external-editors/external-editor-launch'
 
 const { handleMock, launchMock, showItemInFolderMock, statMock, recordForEnvironmentMock } =
@@ -33,7 +33,7 @@ vi.mock('../wsl/wsl-host-service-instance', () => ({
 }))
 
 // WSL paths require Windows resolution even when this test runs on another platform.
-vi.mock('../windows-path-access-host', async (importOriginal) => {
+vi.mock('../windows/windows-path-access-host', async (importOriginal) => {
   const actual = await importOriginal<typeof WindowsPathAccessHost>()
   return {
     resolveWindowsPathAccess: (owner: unknown) => actual.resolveWindowsPathAccess(owner, 'win32')

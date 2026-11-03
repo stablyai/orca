@@ -8,8 +8,8 @@ import {
 } from '../../shared/runtime-environment-wsl-host-store'
 import { encodePairingOffer } from '../../shared/pairing'
 import { getWslHostDeploymentStorePath } from '../../shared/wsl-host-deployment-store'
-import type { WslDistroHolder } from './wsl-distro-holder'
-import { wslDistroHolderDirectory } from './wsl-distro-holder-record'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
+import { wslDistroHolderDirectory } from './discovery/wsl-distro-holder-record'
 import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from './wsl-orphan-holder-release'
 
 const KEY = Buffer.alloc(32, 7).toString('base64')

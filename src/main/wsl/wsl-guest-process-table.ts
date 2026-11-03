@@ -7,8 +7,8 @@ import {
   WSL_GUEST_PANE_PROCESS_SCRIPT,
   type WslGuestProcessRow
 } from '../persistence/moving-wsl-projects/wsl-move-guest-foreground'
-import { runWslProcess } from './wsl-runner'
-import { blockedWslDistroForPath } from './wsl-unc-access-gate'
+import { runWslProcess } from './execution/wsl-runner'
+import { blockedWslDistroForPath } from './filesystem/wsl-unc-access-gate'
 
 const readsInFlight = new Map<string, Promise<WslGuestProcessRow[] | null>>()
 

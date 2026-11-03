@@ -2,7 +2,7 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
 import { unreadableArgvName, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
-export { readTerminalProcessRows } from '../pty/terminal-process-rows'
+export { readTerminalProcessRows } from '../pty/process-retirement/terminal-process-rows'
 
 function isShellCommand(command: string): boolean {
   const executable = command.trim().split(/\s+/, 1)[0]?.replace(/^-/, '') ?? ''

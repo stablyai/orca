@@ -1,6 +1,9 @@
 import { win32 } from 'node:path'
 import { parseWslUncPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
-import { knownWslAutomountRoots, wslDrivePathUnderRoots } from '../wsl/wsl-automount-root'
+import {
+  knownWslAutomountRoots,
+  wslDrivePathUnderRoots
+} from '../wsl/filesystem/wsl-automount-root'
 import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { readWorktreeGitPath } from './worktree-git-path'
 

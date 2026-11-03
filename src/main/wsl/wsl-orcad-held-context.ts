@@ -8,8 +8,8 @@ import {
 } from '../ssh/ssh-remote-platform-detection'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { LINUX_LIBC_FIRST_PROBE } from '../node-runtime/linux-libc-probe'
-import type { WslDistroHolder } from './wsl-distro-holder'
-import { refuseMissingWslDistro, WslDistroVersion1Error } from './wsl-distro-unsupported'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
+import { refuseMissingWslDistro, WslDistroVersion1Error } from './discovery/wsl-distro-unsupported'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadConnectStateReader } from './wsl-orcad-connect-state-snapshot'
 

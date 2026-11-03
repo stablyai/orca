@@ -14,8 +14,8 @@ import { subscribeSystemPowerLifecycle } from '../power/system-power-lifecycle'
 import {
   deferUntilWslDistroRunning,
   readSettledConfirmedRunningWslDistros
-} from '../wsl-background-distro-gate'
-import type { WslDistroHolder } from './wsl-distro-holder'
+} from './discovery/wsl-background-distro-gate'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import { readWslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection, WslOrcadConnectionManager } from './wsl-orcad-connection'
 import { defaultWslOrcadEnvironmentId } from './wsl-orcad-deploy'

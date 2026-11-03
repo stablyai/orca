@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import type { WslDistroHolder } from './wsl-distro-holder'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
 const mocks = vi.hoisted(() => {

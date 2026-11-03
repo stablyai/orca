@@ -8,7 +8,7 @@ import {
 } from '../../shared/process-table-index'
 import { getProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
 import { readWindowsProcessTable } from '../windows/windows-process-table'
-import { fishArgsSkipConfig } from '../fish-xdg-data-dirs-handoff'
+import { fishArgsSkipConfig } from '../pty/shell-startup/fish-xdg-data-dirs-handoff'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import { getCodexPaneAccount } from './codex-pane-account-registry'
 import { probeCodexSharedServer } from './codex-shared-server-probe'

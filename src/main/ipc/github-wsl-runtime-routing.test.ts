@@ -14,7 +14,7 @@ vi.mock('../telemetry/client', () => mocks.telemetry)
 vi.mock('../telemetry/cohort-classifier', () => mocks.cohort)
 vi.mock('./ui', () => mocks.ui)
 // Routing is under test here, in a running distro; the stopped case lives in github-wsl-stopped-distro.
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async () => 'running'
 }))

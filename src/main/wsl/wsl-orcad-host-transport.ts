@@ -10,14 +10,14 @@ import {
   type SshExecOptions
 } from '../ssh/connection/ssh-exec-options'
 import { writeStringViaExecStdin } from '../ssh/ssh-exec-stdin-file-transfer'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
-import { wrapWslCommandProcess } from './wsl-command-channel'
-import { WSL_COMMAND_LOOP_ARGV0, WSL_COMMAND_LOOP_SCRIPT } from './wsl-command-loop'
-import { createWslCommandLoopPool } from './wsl-command-loop-pool'
-import { uploadDirectoryIntoWsl, wslGuestSourcePath } from './wsl-directory-upload'
-import { resolveWslExecutablePath } from './wsl-executable-path'
-import { noteWslDistroLaunched } from '../wsl-background-distro-gate'
-import { readWslDistroRegistryIdShared } from './wsl-distro-registry-id'
+import { resolveWslInteropSpawnCwd } from './execution/wsl-interop-spawn-directory'
+import { wrapWslCommandProcess } from './execution/wsl-command-channel'
+import { WSL_COMMAND_LOOP_ARGV0, WSL_COMMAND_LOOP_SCRIPT } from './execution/wsl-command-loop'
+import { createWslCommandLoopPool } from './execution/wsl-command-loop-pool'
+import { uploadDirectoryIntoWsl, wslGuestSourcePath } from './filesystem/wsl-directory-upload'
+import { resolveWslExecutablePath } from './execution/wsl-executable-path'
+import { noteWslDistroLaunched } from './discovery/wsl-background-distro-gate'
+import { readWslDistroRegistryIdShared } from './discovery/wsl-distro-registry-id'
 import { ORCAD_WSL_DISTRO_GUID_ENV } from '../orcad/orcad-migration-wsl-destination'
 import {
   ORCAD_IDLE_TIMEOUT_ENV,

@@ -1,7 +1,10 @@
 import { resolve } from 'node:path'
 import { getSystemCodexHomePath } from './codex-home-paths'
-import { readBashStartupEnvVar, readShellStartupEnvVar } from '../pty/shell-startup-env'
-import { readPowerShellProfileEnvValues } from '../pty/powershell-profile-env'
+import {
+  readBashStartupEnvVar,
+  readShellStartupEnvVar
+} from '../pty/shell-startup/shell-startup-env'
+import { readPowerShellProfileEnvValues } from '../pty/shell-startup/powershell-profile-env'
 
 export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env): boolean {
   const codexHome = env.CODEX_HOME?.trim()

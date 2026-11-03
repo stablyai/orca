@@ -2,15 +2,12 @@
 import { existsSync } from 'node:fs'
 import { readWslHostDeployments } from '../../shared/wsl-host-deployment-store'
 import { sameWslDistro } from './wsl-host-add-admission'
-import {
-  createWslDistroHolder,
-  type WslDistroHolder,
-  type WslDistroHolderAdoption
-} from './wsl-distro-holder'
+import { createWslDistroHolder } from './discovery/wsl-distro-holder'
+import type { WslDistroHolder, WslDistroHolderAdoption } from './discovery/wsl-distro-holder-types'
 import {
   listWslDistroHolderRecordDistros,
   wslDistroHolderDirectory
-} from './wsl-distro-holder-record'
+} from './discovery/wsl-distro-holder-record'
 
 /**
  * Which holders to keep: none when hosts are off (`keepHostHolders` false); else a host's, re-read per holder so an Add

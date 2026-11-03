@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeCreatePreparation from '../workspaces/creation/preparation/worktree-create-preparation'
 import type { Project } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl/discovery/distro-catalog'
 
 const mocks = vi.hoisted(() => ({
   prefetchWorktreeCreateBase: vi.fn(),

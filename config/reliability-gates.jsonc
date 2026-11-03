@@ -3771,18 +3771,18 @@
       "invariant": "Shell startup scanning preserves every non-Orca output byte in order across arbitrary PTY chunk boundaries. Bash scalar and supported array PROMPT_COMMAND values preserve user bytes, hook order, and foreground exit status while emitting exactly one OSC 133 A/C/D lifecycle without syntax errors. Before user startup files run, the wrapper publishes its shell PID. If a later exec discards the ready marker, proof-based recovery releases queued startup input only after the launched shell's actual executable image with that exact PID owns the PTY foreground, emits its post-hook line-editor enable sequence, and exposes zle/readline termios; startup reads, line-init hooks, child foreground processes, and non-shell readline replacements cannot trigger that proof. The existing bounded compatibility timeout may enqueue input without proof, but must not publish readiness, lose or duplicate that input across reconnect, or execute it before the replacement shell can accept it.",
       "oracle": "Split Fish output immediately after the ready marker and after the following ESC introducer; local and daemon owners must emit the exact ESC [ ? 2004 h bytes and headless xterm must not render literal control text. Run the real generated wrappers under node-pty with disposable zsh, bash, and Fish startup files. Exercise Bash scalar and array PROMPT_COMMAND values with empty, repeated, escaped, whitespace, control-byte, odd-backslash, status-mutating, DEBUG-trap, zoxide, and RHEL-style hooks; require exact A,C,D:0,A,C,D:1,A,C ordering and byte preservation. Plain and exec -a replacement shells must receive one queued command at their first completed line editor without waiting for the 15-second timeout. The identical oracle must time out without the startup identity and prompt fallback. Same-shell reads, child-process reads, a blocking zle-line-init hook, sqlite3, and sqlite3 renamed zsh must not trigger prompt fallback. Relay owner coverage must use the same lossless scanner composition and release through the same prompt contract.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty/local-pty-provider-shell-readiness.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty/local-pty-provider-shell-readiness.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/shell-startup-output-scanner.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/pty/shell-startup/line-editor-ready-output-scanner.test.ts src/main/pty/shell-startup/shell-startup-identity-scanner.test.ts src/main/pty/shell-startup/shell-startup-output-scanner.test.ts src/main/pty/shell-startup/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty/local-pty-provider-shell-readiness.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/pty/shell-startup/line-editor-ready-output-scanner.test.ts src/main/pty/shell-startup/shell-startup-identity-scanner.test.ts src/main/pty/shell-startup/shell-startup-output-scanner.test.ts src/main/pty/shell-startup/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty/local-pty-provider-shell-readiness.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/pty/shell-startup/shell-startup-output-scanner.test.ts",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-startup-exec-readiness.spec.ts --config tests/playwright.config.ts --project electron-headless --project electron-headful --workers=1"
       ],
       "testFiles": [
         "src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts",
         "src/main/daemon/bash-prompt-command-composition.test.ts",
-        "src/main/line-editor-ready-output-scanner.test.ts",
-        "src/main/shell-startup-identity-scanner.test.ts",
-        "src/main/shell-startup-output-scanner.test.ts",
-        "src/main/shell-prompt-readiness-probe.test.ts",
+        "src/main/pty/shell-startup/line-editor-ready-output-scanner.test.ts",
+        "src/main/pty/shell-startup/shell-startup-identity-scanner.test.ts",
+        "src/main/pty/shell-startup/shell-startup-output-scanner.test.ts",
+        "src/main/pty/shell-startup/shell-prompt-readiness-probe.test.ts",
         "src/shared/pty-slave-line-discipline-echo.test.ts",
         "src/shared/shell-process-readiness.test.ts",
         "src/main/daemon/session.test.ts",
@@ -3804,7 +3804,7 @@
           ]
         },
         {
-          "file": "src/main/shell-startup-output-scanner.test.ts",
+          "file": "src/main/pty/shell-startup/shell-startup-output-scanner.test.ts",
           "assertions": [
             "Fish bracketed-paste output stays byte-exact across marker and ESC chunk splits",
             "every byte after readiness is preserved across every chunk boundary, even when it resembles an identity marker",
@@ -3848,6 +3848,7 @@
           "runner": "manual",
           "platform": "linux",
           "command": "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/shell-startup-output-scanner.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/pty/shell-startup/shell-startup-output-scanner.test.ts",
           "result": "passed",
           "durationSeconds": 7,
           "summary": "A clean Debian 12 arm64 container with real Fish 3.6 and node-pty passed exact marker-stripped output plus headless-xterm rendering."
@@ -3857,7 +3858,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty/local-pty-provider-shell-readiness.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/pty/shell-startup/line-editor-ready-output-scanner.test.ts src/main/pty/shell-startup/shell-startup-identity-scanner.test.ts src/main/pty/shell-startup/shell-startup-output-scanner.test.ts src/main/pty/shell-startup/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty/local-pty-provider-shell-readiness.test.ts",
           "result": "passed",
           "durationSeconds": 6,
           "summary": "473 tests passed with one local Fish skip, including every-boundary scanner composition, real exec, silent-read, line-init-hook, renamed-image, disabled-bracketed-paste, and relay-owner oracles."
@@ -3867,7 +3868,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty/local-pty-provider-shell-readiness.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/pty/shell-startup/line-editor-ready-output-scanner.test.ts src/main/pty/shell-startup/shell-startup-identity-scanner.test.ts src/main/pty/shell-startup/shell-startup-output-scanner.test.ts src/main/pty/shell-startup/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty/local-pty-provider-shell-readiness.test.ts",
           "result": "passed",
           "durationSeconds": 6,
           "summary": "233 tests passed with one local Fish skip, including exact Bash PROMPT_COMMAND byte/status/lifecycle composition across daemon, local, and relay owners."
@@ -9044,7 +9045,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty/pty-management.test.ts src/main/persistence/persistence-initial-load.test.ts src/main/persistence/terminal-topology/persistence-pane-identity-migration.test.ts src/main/persistence/terminal-topology/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty/local-pty-provider-shutdown.test.ts src/main/runtime/worktree-teardown.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/process-retirement/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty/local-pty-provider-shutdown.test.ts src/main/runtime/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-tab-close-restart-persistence.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
@@ -9061,7 +9062,7 @@
         "src/main/persistence/persistence-initial-load.test.ts",
         "src/main/persistence/terminal-topology/persistence-pane-identity-migration.test.ts",
         "src/main/persistence/terminal-topology/persistence-pty-binding-reconciliation.test.ts",
-        "src/main/pty-descendant-termination.test.ts",
+        "src/main/pty/process-retirement/pty-descendant-termination.test.ts",
         "src/main/daemon/session.test.ts",
         "src/main/daemon/terminal-host.test.ts",
         "src/main/providers/local-pty/local-pty-provider-shutdown.test.ts",
@@ -9148,7 +9149,7 @@
           ]
         },
         {
-          "file": "src/main/pty-descendant-termination.test.ts",
+          "file": "src/main/pty/process-retirement/pty-descendant-termination.test.ts",
           "assertions": [
             "20 same-turn process-table requests execute one fresh scan while later arrivals start one shared successor inside their own deadline",
             "snapshot and escalation readers stop at their deadline",
@@ -9513,15 +9514,15 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-spawn-cwd-fallback.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts"
       ],
       "testFiles": [
         "src/shared/terminal-startup-cwd.test.ts",
         "src/main/ipc/pty/pty-spawn-cwd-fallback.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts",
-        "src/main/pty/omp-shell-wrapper.node-pty.test.ts",
-        "src/main/pty/omp-shell-wrapper-alias-safety.test.ts"
+        "src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts",
+        "src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts"
       ],
       "assertionRefs": [
         {
@@ -9565,7 +9566,7 @@
           ]
         },
         {
-          "file": "src/main/pty/omp-shell-wrapper.node-pty.test.ts",
+          "file": "src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts",
           "assertions": [
             "real Bash and Zsh PTYs rebind OMP to a recreated cwd inode without changing the parent shell",
             "an unset PWD with a usable cwd stays unset and does not remap OMP to ORCA_WORKTREE_PATH",
@@ -9622,7 +9623,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts src/main/shell-wrapper-generated-file-snapshot.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/omp-shell-wrapper.node-pty.test.ts src/main/pty/omp-shell-wrapper-alias-safety.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts",
           "result": "passed",
           "durationSeconds": 3,
           "summary": "3 test files passed; real Bash and Zsh PTYs covered usable physical cwd authority, stale-inode recovery with set and unset PWD, extension-enabled and extension-skipping argv, parent-shell isolation, exit status, missing-path visibility, alias safety, and generated local/daemon/relay parity."
@@ -14405,7 +14406,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, SSH and paired-runtime host-platform routing including legacy runtime PTY IDs, active-PTY ownership after worktree host changes, Windows-to-WSL routing, unknown-metadata fallback, production handler composition, KKP authorization on every host, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. A live linux-arm64 Docker target additionally proved real relay deployment, SSH PTY host detection, and exact inactive/active KKP bytes. The Electron byte test runs only on Windows; live Windows evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added. Protocol-version constant inventories are excluded from handshake and foreground-confirmation evidence. The test-value audit narrows store-active-worktree-terminal-creation.test.ts to selected same-ID local/SSH folder creation and owner-context propagation plus split-survivor relay-drop/orphan protection. Immediate detach PTY/relay/tab-map synchronization, plain root-group inventory, quick-command/startup-cwd field normalization, and Windows default/project-runtime/UNC/SSH/Git-Bash shell-metadata examples are intentionally removed. Those direct state and metadata alarms are lost; remaining cases are not equivalent replacements. Historical executed commands, counts and results remain unchanged; no new shell-spawn, input-byte, live platform, remote or mobile evidence is claimed.",
+      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, SSH and paired-runtime host-platform routing including legacy runtime PTY IDs, active-PTY ownership after worktree host changes, Windows-to-WSL routing, unknown-metadata fallback, production handler composition, KKP authorization on every host, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. A live linux-arm64 Docker target additionally proved real relay deployment, SSH PTY host detection, and exact inactive/active KKP bytes. The Electron byte test runs only on Windows; live Windows evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added. Protocol-version constant inventories are excluded from handshake and foreground-confirmation evidence. The test-value audit narrows store-active-worktree-terminal-creation.test.ts to selected same-ID local/SSH folder creation and owner-context propagation plus split-survivor relay-drop/orphan protection. Immediate detach PTY/relay/tab-map synchronization, plain root-group inventory, quick-command/startup-cwd field normalization, and Windows default/project-runtime/UNC/SSH/Git-Bash shell-metadata examples are intentionally removed. Those direct state and metadata alarms are lost; remaining cases are not equivalent replacements. Historical executed commands, counts and results remain unchanged; no new shell-spawn, input-byte, live platform, remote or mobile evidence is claimed. The test-value audit removes the direct Windows installed-path case for Droid npm cmd basename recognition. That exact unit alarm is lost; retained command-line recognition cases are not equivalent replacements. The direct Droid recognition assertion remains a deferred obligation. Historical evidence and broader process-confirmation/input-routing obligations remain unchanged; no new executed coverage, owner-gap closure or credit is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7620",
         "https://github.com/stablyai/orca/pull/7668"
@@ -14616,7 +14617,7 @@
         {
           "file": "src/shared/agent-process-recognition.test.ts",
           "assertions": [
-            "Droid's process name resolves to the allowlisted Droid agent identity without substring matching"
+            "Deferred unit obligation after removal of the direct Windows basename case: Droid's process name resolves to the allowlisted Droid agent identity without substring matching. Retained cases are not equivalent coverage."
           ]
         },
         {
@@ -14987,7 +14988,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract, live Codex orchestration, a dev-runtime CLI repro, and Claude and Codex composer traces. A deterministic worker-start RPC/SQLite contract proves delayed Codex composer acceptance, exactly one submitted turn, durable Dispatch success, and explicit stalled failure when Enter is swallowed without a rescue send. The render gate stays on the PTY-owning runtime, so paired and SSH callers use the same provider write/output path without a wire change. SSH, daemon, remote-runtime, Linux, and Windows live journeys remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract, live Codex orchestration, a dev-runtime CLI repro, and Claude and Codex composer traces. A deterministic worker-start RPC/SQLite contract proves delayed Codex composer acceptance, exactly one submitted turn, durable Dispatch success, and explicit stalled failure when Enter is swallowed without a rescue send. The render gate stays on the PTY-owning runtime, so paired and SSH callers use the same provider write/output path without a wire change. SSH, daemon, remote-runtime, Linux, and Windows live journeys remain gaps. The test-value audit intentionally removes these direct unit alarms: Only OMP joins submit to paste frame. Exact bracketed multiline prompt frame. Claude/team/unknown lead-line positives and Codex/OpenCode negatives. DSB generic lead/submit/delay fallback on three platform strings. 2KB/8KB Windows and 8KB Darwin delay below700ms. 320KB ingest estimate greater than1.4x3342ms. 145KB delay greater than1500ms. Darwin8KB <=2ms, zero/NaN Linux and negative Windows return zero. 400KB greater than40KB across platforms and Windows slower than Darwin. Antigravity100-line settle addition and Aider one-line delta. Retained unit cases still assert safe typed-lead normalization, pinned measured delay floors and ceiling/budget bounds, ESC sanitization, exact framed UTF-8 chunk reassembly, and held-draft discrimination. They are not equivalent replacements for the removed unit alarms. The OMP-versus-Claude/Codex/unidentified-agent submit-join predicate obligation remains deferred. Runtime PTY-writer, worker-start and live evidence above are unchanged; no runtime-writer coverage loss, new execution, owner-gap closure or credit is claimed.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-3800",
         "https://linear.app/stably/issue/STA-3904",
@@ -15016,7 +15017,7 @@
           "file": "src/shared/agent-prompt-injection.test.ts",
           "assertions": [
             "agent prompts are always framed as bracketed paste",
-            "submit stays separate from the paste frame",
+            "Deferred unit obligation: OMP joins submit to the paste frame while Claude, Codex and unidentified agents keep submit separate; the direct predicate table was removed. Runtime-writer coverage is unchanged.",
             "embedded ESC bytes are made inert before framing",
             "chunk reconstruction preserves the paste frame"
           ]
@@ -20543,19 +20544,19 @@
       "invariant": "Only renamed tombstones are recursively removed, active plus retry admissions stay at 64, retries retain their delays and exhaustion behavior, a root displaced at the cap is admitted from another root's freed slot, and no tombstone is handed to removal twice per listing.",
       "oracle": "Drain 1,024 real directory entries in controlled batches using at most 8 directory listings and 64 active removals. Exercise late arrivals discovered after the listing, both roots draining under one shared cap, a failing listing mid-drain, delayed failure retries, exhausted attempt budgets, and cancellation of an in-flight listing.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/terminal-history-tombstone-scan-cost.test.ts src/main/terminal-history-async-delete.test.ts src/main/terminal-history-tombstone-retry.test.ts src/main/terminal-history-gc-fs-call-count.test.ts src/main/terminal-history-gc.test.ts src/main/terminal-history.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/pty/history/terminal-history-tombstone-scan-cost.test.ts src/main/pty/history/terminal-history-async-delete.test.ts src/main/pty/history/terminal-history-tombstone-retry.test.ts src/main/pty/history/terminal-history-gc-fs-call-count.test.ts src/main/pty/history/terminal-history-gc.test.ts src/main/pty/history/terminal-history.test.ts"
       ],
       "testFiles": [
-        "src/main/terminal-history-tombstone-scan-cost.test.ts",
-        "src/main/terminal-history-async-delete.test.ts",
-        "src/main/terminal-history-tombstone-retry.test.ts",
-        "src/main/terminal-history-gc-fs-call-count.test.ts",
-        "src/main/terminal-history-gc.test.ts",
-        "src/main/terminal-history.test.ts"
+        "src/main/pty/history/terminal-history-tombstone-scan-cost.test.ts",
+        "src/main/pty/history/terminal-history-async-delete.test.ts",
+        "src/main/pty/history/terminal-history-tombstone-retry.test.ts",
+        "src/main/pty/history/terminal-history-gc-fs-call-count.test.ts",
+        "src/main/pty/history/terminal-history-gc.test.ts",
+        "src/main/pty/history/terminal-history.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/terminal-history-tombstone-scan-cost.test.ts",
+          "file": "src/main/pty/history/terminal-history-tombstone-scan-cost.test.ts",
           "assertions": [
             "drains 1024 tombstones without re-reading the directory per completion",
             "picks up a tombstone created after the queued names were read",
@@ -20573,6 +20574,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/terminal-history-tombstone-scan-cost.test.ts src/main/terminal-history-async-delete.test.ts src/main/terminal-history-tombstone-retry.test.ts src/main/terminal-history-gc-fs-call-count.test.ts src/main/terminal-history-gc.test.ts src/main/terminal-history.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/pty/history/terminal-history-tombstone-scan-cost.test.ts src/main/pty/history/terminal-history-async-delete.test.ts src/main/pty/history/terminal-history-tombstone-retry.test.ts src/main/pty/history/terminal-history-gc-fs-call-count.test.ts src/main/pty/history/terminal-history-gc.test.ts src/main/pty/history/terminal-history.test.ts",
           "result": "passed",
           "durationSeconds": 1.95,
           "summary": "86 tests across six suites passed, repeated three times with no flakes."

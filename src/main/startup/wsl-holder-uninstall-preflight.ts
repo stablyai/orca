@@ -1,5 +1,6 @@
 import { app } from 'electron'
-import { createWslDistroHolder, type WslDistroHolder } from '../wsl/wsl-distro-holder'
+import { createWslDistroHolder } from '../wsl/discovery/wsl-distro-holder'
+import type { WslDistroHolder } from '../wsl/discovery/wsl-distro-holder-types'
 import { ensureWindowsAppDataPath } from './windows-app-data-path'
 import {
   stopWslHostServersForUninstall,

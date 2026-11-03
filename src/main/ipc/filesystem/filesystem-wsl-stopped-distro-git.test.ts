@@ -37,7 +37,7 @@ vi.mock('electron', async () => (await import('./filesystem-test-harness')).elec
 const isWslDistroRunningMock = vi.hoisted(() =>
   vi.fn(async (_distro: string, _options?: unknown) => false)
 )
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async (distro: string, options: unknown) =>
     (await isWslDistroRunningMock(distro, options)) ? 'running' : 'stopped'
@@ -45,7 +45,7 @@ vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock('node:fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock(
-  '../../wsl-unc-delete',
+  '../../wsl/filesystem/wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
@@ -82,7 +82,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { WslDistroStoppedError } from '../../wsl/wsl-unc-access-gate'
+import { WslDistroStoppedError } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 const UNC_ROOT = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
