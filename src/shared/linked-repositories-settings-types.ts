@@ -1,4 +1,4 @@
 export type LinkedRepositoriesSettings = {
-  /** Show other added projects an agent changes as Linked repositories in Source Control. */
+  /** Show hand-linked and same-group projects as Linked repositories in Source Control. */
   linkedRepositoriesEnabled: boolean
 }

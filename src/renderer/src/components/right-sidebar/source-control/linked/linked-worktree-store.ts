@@ -4,7 +4,7 @@ import { createStore } from 'zustand/vanilla'
 const STORAGE_KEY = 'orca.sourceControl.linkedWorktrees.v1'
 const EMPTY: readonly string[] = []
 
-/** Linked worktree ids, keyed by the workspace whose agents made the changes. */
+/** Linked worktree ids, linked by hand with +, keyed by the workspace they show in. */
 type LinkedWorktreesState = { byWorktreeId: Record<string, readonly string[]> }
 
 function readPersisted(): LinkedWorktreesState {
@@ -52,12 +52,6 @@ function update(worktreeId: string, next: (ids: readonly string[]) => readonly s
     copy[worktreeId] = updated
   }
   linkedWorktreesStore.setState({ byWorktreeId: copy })
-}
-
-export function isWorktreeLinked(worktreeId: string, linkedWorktreeId: string): boolean {
-  return (linkedWorktreesStore.getState().byWorktreeId[worktreeId] ?? EMPTY).includes(
-    linkedWorktreeId
-  )
 }
 
 export function linkWorktree(worktreeId: string, linkedWorktreeId: string): void {

@@ -28,6 +28,7 @@ import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { ActionButton } from '../listing/action-button'
 import { UncommittedEntryRow } from '../listing/uncommitted-entry-row'
 import { LinkedRepoCommitBox } from './linked-repo-commit-box'
+import { findGroupLinkedWorktreeIds } from './linked-worktree-groups'
 import { linkWorktree, unlinkWorktree, useLinkedWorktreeIds } from './linked-worktree-store'
 import { useLinkedWorktreeStatus, type LinkedWorktreeView } from './use-linked-worktree-status'
 
@@ -50,7 +51,7 @@ type Props = {
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
 }
 
-/** Repos this workspace's agents changed outside its own checkout, one sub-section per repo. */
+/** Other projects shown with this workspace: same project group, or linked by hand with +. */
 export function SourceControlLinkedRepoSections({
   activeWorktreeId,
   activeRepoId,
@@ -58,7 +59,25 @@ export function SourceControlLinkedRepoSections({
   revealInExplorer
 }: Props): React.JSX.Element | null {
   useUiLanguageRevision()
-  const linkedIds = useLinkedWorktreeIds(activeWorktreeId)
+  const manualIds = useLinkedWorktreeIds(activeWorktreeId)
+  const repos = useAppStore((s) => s.repos)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const groupIds = useMemo(
+    () =>
+      findGroupLinkedWorktreeIds(
+        repos,
+        getAllWorktreesFromState({ worktreesByRepo }),
+        activeWorktreeId
+      ),
+    [activeWorktreeId, repos, worktreesByRepo]
+  )
+  const groupIdsKey = groupIds.join('\n')
+  // Key on the ids so catalog refreshes that keep the same group do not rebuild the list.
+  const linkedIds = useMemo(
+    () => [...new Set([...groupIdsKey.split('\n').filter(Boolean), ...manualIds])],
+    [groupIdsKey, manualIds]
+  )
+  const groupIdSet = useMemo(() => new Set(groupIdsKey.split('\n')), [groupIdsKey])
   const enabled = useAppStore((s) => s.settings?.linkedRepositoriesEnabled !== false)
   const { views, refreshOne } = useLinkedWorktreeStatus(linkedIds, isVisible && enabled)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
@@ -98,7 +117,7 @@ export function SourceControlLinkedRepoSections({
         <div className="px-3 pb-2 text-[11px] text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.SourceControl.linkedReposEmpty',
-            'Other Orca projects an agent changes appear here.'
+            'Link a project with +, or put projects in the same group to show them here.'
           )}
         </div>
       ) : (
@@ -107,6 +126,7 @@ export function SourceControlLinkedRepoSections({
             key={view.worktree.id}
             view={view}
             activeWorktreeId={activeWorktreeId}
+            isFromGroup={groupIdSet.has(view.worktree.id)}
             isCollapsed={collapsed.has(view.worktree.id)}
             onToggle={() => toggle(view.worktree.id)}
             onRefresh={() => void refreshOne(view.context)}
@@ -121,6 +141,7 @@ export function SourceControlLinkedRepoSections({
 function LinkedRepoSection({
   view,
   activeWorktreeId,
+  isFromGroup,
   isCollapsed,
   onToggle,
   onRefresh,
@@ -128,6 +149,8 @@ function LinkedRepoSection({
 }: {
   view: LinkedWorktreeView
   activeWorktreeId: string
+  /** Group members leave by changing the project's group, so they get no unlink button. */
+  isFromGroup: boolean
   isCollapsed: boolean
   onToggle: () => void
   onRefresh: () => void
@@ -256,14 +279,16 @@ function LinkedRepoSection({
               )}
               onClick={onRefresh}
             />
-            <ActionButton
-              icon={X}
-              title={translate(
-                'auto.components.right.sidebar.SourceControl.linkedReposUnlink',
-                'Remove from this workspace'
-              )}
-              onClick={() => unlinkWorktree(activeWorktreeId, worktree.id)}
-            />
+            {!isFromGroup && (
+              <ActionButton
+                icon={X}
+                title={translate(
+                  'auto.components.right.sidebar.SourceControl.linkedReposUnlink',
+                  'Remove from this workspace'
+                )}
+                onClick={() => unlinkWorktree(activeWorktreeId, worktree.id)}
+              />
+            )}
           </div>
         </div>
       </div>

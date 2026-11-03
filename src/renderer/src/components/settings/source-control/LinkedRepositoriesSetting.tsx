@@ -11,7 +11,7 @@ export const LINKED_REPOSITORIES_KEYWORDS = [
   'other projects',
   'multi repo',
   'cross repo',
-  'agent changes',
+  'project group',
   'source control'
 ]
 
@@ -25,7 +25,7 @@ export function getLinkedRepositoriesTitle(): string {
 export function getLinkedRepositoriesDescription(): string {
   return translate(
     'auto.components.settings.GitPane.linkedRepositoriesDescription',
-    "When an agent changes files in another project you've added to Orca, show that project in this workspace's Source Control so you can review and commit it there."
+    "Show other projects in a workspace's Source Control so you can review and commit them there. Link a project with +, or put projects in the same project group to link them automatically."
   )
 }
 
