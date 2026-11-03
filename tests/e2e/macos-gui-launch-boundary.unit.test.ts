@@ -27,7 +27,10 @@ vi.mock('./helpers/orca-app', () => ({ forwardElectronProcessLogs: vi.fn() }))
 vi.mock('./helpers/e2e-completed-onboarding-profile', () => ({}))
 vi.mock('./helpers/electron-process-shutdown', () => ({}))
 vi.mock('./helpers/electron-home-isolation', () => ({}))
-vi.mock('./helpers/orca-serve-cli-host', () => ({ isolatedServeProfile: vi.fn(), spawnUntilReady: vi.fn() }))
+vi.mock('./helpers/orca-serve-cli-host', () => ({
+  isolatedServeProfile: vi.fn(),
+  spawnUntilReady: vi.fn()
+}))
 
 import globalSetup from './global-setup'
 import { launchPackagedServeHost } from './helpers/packaged-old-orca'
@@ -61,12 +64,13 @@ describe('macOS GUI launch boundary', () => {
     expect(fixture.write).not.toHaveBeenCalled()
   })
 
-
   it('refuses the packaged server before creating its profile or starting Electron', async () => {
     fixture.preflight.mockImplementationOnce(() => {
       throw new Error('Launch denied')
     })
-    await expect(launchPackagedServeHost('/must-not-launch/Electron')).rejects.toThrow('Launch denied')
+    await expect(launchPackagedServeHost('/must-not-launch/Electron')).rejects.toThrow(
+      'Launch denied'
+    )
     expect(fixture.preflight).toHaveBeenCalledOnce()
     expect(fixture.mkdtemp).not.toHaveBeenCalled()
   })
