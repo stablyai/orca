@@ -2279,9 +2279,6 @@
     "terminalRecords": {
       "defaultTitle": "Terminal"
     },
-    "tabCard": {
-      "editor": "Editor"
-    },
     "terminalTabAgent": {
       "newBrowser": "New Browser",
       "browser": "Browser",
