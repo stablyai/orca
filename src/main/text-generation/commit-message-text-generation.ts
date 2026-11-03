@@ -14,7 +14,7 @@ import {
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
 import type { AiTextOperation } from '../../shared/source-control-ai-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   discoverModelsLocal,
   type CommitMessageModelDiscoveryLocalOptions

@@ -14,7 +14,7 @@ import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { expectSettingsWorkScale } from '../../../../shared/global-settings-test-fixture'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   makeFolderWorkspace,
   makeWorktree,
@@ -669,7 +669,7 @@ it('reprojects a supplied local authored map once without host acquisition', asy
       }
     }
     const profiles = vi.spyOn(
-      await import('../../../../shared/agent-launch-profile'),
+      await import('../../../../shared/agent-launch/choices/agent-launch-profile'),
       'projectAgentLaunchProfile'
     )
     try {

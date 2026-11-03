@@ -4,8 +4,10 @@ import {
   type AgentModelCatalogSuccess,
   type AgentModelCatalogSource
 } from './agent-model-catalog-entry'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
-import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 
 export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
 

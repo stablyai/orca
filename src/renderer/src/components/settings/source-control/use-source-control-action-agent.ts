@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isCustomAgentId } from '../../../../../shared/commit-message-agent-spec'
 import { pickSourceControlLaunchAgent } from '../../../../../shared/source-control-launch-agent-selection'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control-ai-actions'

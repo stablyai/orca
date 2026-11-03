@@ -1,7 +1,10 @@
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
-import { independentAgentModelCatalog } from '../agent-model-catalog/agent-model-catalog-discovery'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
   IN_PROCESS_OPTIONS_READER,
@@ -26,7 +29,6 @@ import { structuredAgentSessionImmediatePermission } from './structured-agent-se
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
 import { structuredAgentSessionNeverSent } from './structured-agent-session-never-sent'
-import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
 import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
 
 export {
@@ -162,6 +164,12 @@ export async function readStructuredAgentSessionOptions(
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
+  const reportedModel = live
+    ? (options.current.reportedModel ??
+      (agent === 'claude' && options.current.confirmed?.includes('model')
+        ? options.current.model
+        : undefined))
+    : undefined
   const current = {
     ...selected.current,
     ...options.current,
@@ -250,6 +258,7 @@ export async function readStructuredAgentSessionOptions(
     current: {
       ...current,
       acceptedInputSources,
+      ...(reportedModel ? { reportedModel } : {}),
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
       confirmed,

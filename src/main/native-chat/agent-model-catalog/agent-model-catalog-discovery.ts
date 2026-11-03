@@ -32,8 +32,6 @@ export type AgentModelCatalogProbe = ((
   ) => Promise<AgentModelCatalogResolvedProbe>
 }
 
-export { independentAgentModelCatalog } from '../../../shared/agent-model-catalog-ownership'
-
 /** Agents supply probes or opt out; the service owns caching, refresh and publication. */
 export type AgentModelCatalogDiscovery =
   | {

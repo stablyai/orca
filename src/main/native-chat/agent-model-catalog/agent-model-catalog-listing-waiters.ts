@@ -1,8 +1,10 @@
-import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 import type { AgentModelCatalogReadParams } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 

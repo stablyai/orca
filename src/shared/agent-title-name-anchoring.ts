@@ -7,7 +7,7 @@ import {
 } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import type { TerminalAgent } from './terminal-agent'
-import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from './agent-launch/catalog/tui-agent-display-names'
 
 /** Names matched as whole tokens, paired with the agent each identifies. */
 const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [

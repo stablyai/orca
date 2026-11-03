@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentLaunchExecution } from './agent-launch-executor'
-import type { AgentLaunchModeReceipt } from './agent-launch-mode'
+import type { AgentLaunchModeReceipt } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentLaunchSurfaceFactory } from './agent-launch-surface-factories'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the execution's type is checked; nothing runs it.

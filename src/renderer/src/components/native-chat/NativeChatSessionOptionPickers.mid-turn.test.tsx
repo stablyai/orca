@@ -119,3 +119,68 @@ it('picks effort during a running turn, saves it to the chat, and captures it on
     rpc.call.mock.calls.every(([, method]) => !['turn/steer', 'turn/start'].includes(method))
   ).toBe(true)
 })
+
+it('refreshes the composer model from host execution reports without changing captured input', async () => {
+  let reportedModel = 'claude-opus-5-5'
+  const sent: unknown[] = []
+  rpc.call.mockImplementation(async (_target, method) => {
+    if (method === 'agentSession.options') {
+      return {
+        models: [{ id: 'claude-opus-5-5', label: 'Opus 5.5', efforts: [] }],
+        current: {
+          model: 'claude-opus-5-5',
+          reportedModel,
+          defaulted: [],
+          acceptedInputSources: { model: 'saved' }
+        }
+      }
+    }
+    if (method === 'agentSession.modelCatalog') {
+      return { origin: 'unknown' }
+    }
+    throw new Error(`Unexpected RPC ${method}`)
+  })
+  function Composer({ stamp }: { stamp: string }) {
+    const options = useStructuredAgentSessionOptions({
+      agent: 'claude',
+      sessionId,
+      target,
+      fence: 1,
+      transportEnabled: true,
+      isVisible: true,
+      providerVisible: true,
+      providerRunning: true,
+      turnId: 'running',
+      unloadedTurnRevisions: undefined,
+      hostOptionStamp: stamp,
+      mutate: async () => null
+    })
+    const capture = useStructuredAgentSessionSendOptions(sessionId, undefined, options.sendSource)
+    return (
+      <TooltipProvider>
+        <NativeChatSessionOptionPickers
+          surface={options.optionSurface}
+          snapshot={options.optionSnapshot}
+          isWorking={true}
+        />
+        <button onClick={() => sent.push(capture())}>Capture next message</button>
+      </TooltipProvider>
+    )
+  }
+  const { rerender } = render(<Composer stamp={reportedModel} />)
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /^Model (Claude )?Opus 5\.5$/ })).toBeTruthy()
+  )
+  reportedModel = 'claude-opus-4-8'
+  rerender(<Composer stamp={reportedModel} />)
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /^Model (Claude )?Opus 4\.8$/ })).toBeTruthy()
+  )
+  fireEvent.click(screen.getByText('Capture next message'))
+  expect(sent).toEqual([{ selection: { model: 'claude-opus-5-5' } }])
+  reportedModel = 'claude-opus-5-5'
+  rerender(<Composer stamp={reportedModel} />)
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /^Model (Claude )?Opus 5\.5$/ })).toBeTruthy()
+  )
+})

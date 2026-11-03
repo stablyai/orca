@@ -2,8 +2,7 @@ import {
   configuredDeclarationModels,
   mergedAgentModelCatalogModels
 } from './agent-model-catalog-models'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
-import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
+import * as modelCatalogOwnership from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session/agent-session-availability'
 import type {
@@ -158,9 +157,9 @@ export function agentModelCatalogEntry(
       discovered,
       live,
       configured,
-      usesModelSpecificAcpEfforts(agent)
+      modelCatalogOwnership.usesModelSpecificAcpEfforts(agent)
     ).map((model) =>
-      independentAgentModelCatalog(agent) && discovered?.complete !== true
+      modelCatalogOwnership.independentAgentModelCatalog(agent) && discovered?.complete !== true
         ? { ...model, isDefault: false }
         : model
     ),
@@ -184,7 +183,7 @@ export function agentModelCatalogEntryWithSuccess(
   source: AgentModelCatalogSource,
   at: number
 ): AgentModelCatalogEntry | null {
-  if (independentAgentModelCatalog(identity.agent)) {
+  if (modelCatalogOwnership.independentAgentModelCatalog(identity.agent)) {
     if (source !== 'discovery' || success.models.length === 0) {
       return null
     }
@@ -223,7 +222,7 @@ export function agentModelCatalogEntryWithSuccess(
     )
   }
   const incoming = retainedAgentModelCatalogModels(previous, success)
-  const models = usesModelSpecificAcpEfforts(identity.agent)
+  const models = modelCatalogOwnership.usesModelSpecificAcpEfforts(identity.agent)
     ? fillUnknownModelEfforts(incoming, previous?.models ?? [])
     : incoming
   if (models.length === 0) {
@@ -282,7 +281,7 @@ export function entryWithConfiguredDefault(
   at: number,
   source: AgentModelCatalogListing | null = entry.live
 ): AgentModelCatalogEntry | null {
-  if (independentAgentModelCatalog(entry.agent)) {
+  if (modelCatalogOwnership.independentAgentModelCatalog(entry.agent)) {
     return null
   }
   const next = configuredDefaultFacts(choice, entry.configured)

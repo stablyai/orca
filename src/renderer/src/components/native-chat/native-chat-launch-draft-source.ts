@@ -1,4 +1,4 @@
-import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch-picker-authority'
+import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
@@ -6,7 +6,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
 
 type SetupHandle = { scopeKey: string; active: boolean; readonly initialScope: string }

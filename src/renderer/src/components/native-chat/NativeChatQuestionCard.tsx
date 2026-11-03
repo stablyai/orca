@@ -62,7 +62,7 @@ export function NativeChatQuestionCard({
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
-  const autoAdvance = useNativeChatQuestionAutoAdvance()
+  const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
   const [index, setIndex] = useState(0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Use indices because labels can repeat and the agent commits numbered rows.

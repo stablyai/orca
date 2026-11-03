@@ -1,4 +1,4 @@
-import { usesModelSpecificAcpEfforts } from '../../agent-model-catalog-ownership'
+import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 import { discoveredModel } from './structured-agent-session-discovered-model'
 import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
 import type { AgentSessionModelCatalogResult, AgentSessionModelOption } from '../agent-session-wire'

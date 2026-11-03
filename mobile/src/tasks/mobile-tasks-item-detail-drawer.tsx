@@ -21,7 +21,7 @@ import {
 import { pressedStyle } from '../theme/mobile-theme'
 
 export function MobileTasksItemDetailDrawer({ model }: { model: ConnectionPresentationModel }) {
-  const { actionItem, detailLoading, taskDetailHandoff, setDetailRefreshSeq, taskUiReady } = model
+  const { actionItem, detailLoading, taskDetailHandoff, requestDetailRefresh, taskUiReady } = model
   const t = useMobileTranslation()
   // Keyed by item so a menu left open cannot reappear over the next item's sheet.
   const [menuItemKey, setMenuItemKey] = useState<string | null>(null)
@@ -45,7 +45,7 @@ export function MobileTasksItemDetailDrawer({ model }: { model: ConnectionPresen
                   disabled={detailLoading}
                   accessibilityRole="button"
                   accessibilityLabel={t('tasks.itemDetailDrawer.refreshDetails', 'Refresh details')}
-                  onPress={() => setDetailRefreshSeq((current) => current + 1)}
+                  onPress={requestDetailRefresh}
                 >
                   <RefreshCw
                     size={16}

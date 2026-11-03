@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import {
   beginAgentStartupDeliveryAttempt,

@@ -15,8 +15,10 @@ import {
   projectAgentModelCatalogDefault
 } from './agent-model-catalog-workspace'
 import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
-import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   agentModelCatalogReleasedOwner,
   bindAgentModelCatalogScope,

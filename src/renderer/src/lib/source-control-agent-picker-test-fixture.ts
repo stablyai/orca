@@ -1,4 +1,4 @@
-import type { AgentPickerEntry } from '../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../shared/agent-launch/picker/agent-launch-picker'
 
 export const entry: AgentPickerEntry = {
   agent: 'claude',

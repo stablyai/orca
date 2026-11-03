@@ -5,7 +5,7 @@ import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 

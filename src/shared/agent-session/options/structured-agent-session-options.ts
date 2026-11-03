@@ -9,11 +9,11 @@ import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
 } from '../../native-chat/input/native-chat-session-option-defaults'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import {
   usesInstalledAgentModelCatalog,
   usesModelSpecificAcpEfforts
-} from '../../agent-model-catalog-ownership'
+} from './agent-model-catalog-ownership'
 import {
   fillUnknownCatalogEfforts,
   enrichStructuredAgentEfforts
@@ -71,6 +71,7 @@ export type StructuredAgentSessionOptionState = {
   permissionMode: string | null
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
+  reportedModel?: string
   reportedEffort?: string
   /** The host is still listing models; it only keeps a seed from settling to built-in, since controls follow their data. */
   listingInProgress?: boolean
@@ -201,6 +202,7 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     optionsAnswerPresent: true,
+    reportedModel: current.reportedModel,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
     catalog: keepCatalog ? state.catalog : answeredCatalog,
     fastModeRestricted:
@@ -238,22 +240,15 @@ function structuredAgentSessionControlsModelId(
     : null
 }
 
-/** Runtime reports describe the process whose options answer carried them; a newer fence has none until it answers. */
-export function structuredAgentSessionReportsAtFence<
-  T extends Pick<StructuredAgentSessionOptionState, 'reportedPermissionMode' | 'reportedEffort'>
->(state: T, answeredFence: number | null | undefined, fence: number | null): T {
-  return answeredFence === fence ||
-    (state.reportedPermissionMode === undefined && state.reportedEffort === undefined)
-    ? state
-    : { ...state, reportedPermissionMode: undefined, reportedEffort: undefined }
-}
-
 export function commitStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,
   value: string,
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
+  if (id === 'model') {
+    state = { ...state, reportedModel: undefined }
+  }
   if (id === 'model' || id === 'effort') {
     state = { ...state, reportedEffort: undefined }
   }

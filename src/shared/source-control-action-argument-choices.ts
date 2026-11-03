@@ -1,14 +1,17 @@
 import { editActionArgumentChoicePreferences } from './source-control-action-choice-preferences'
 export { editActionArgumentChoicePreferences } from './source-control-action-choice-preferences'
-import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
-import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
+import { reconcileAgentChoiceArgsDetailed } from './agent-launch/choices/agent-choice-reconciliation'
+import type {
+  AgentChoicePatch,
+  AgentDedicatedChoices
+} from './agent-launch/choices/agent-launch-choices'
 import {
   actionModelSelectionChoices,
   normalizeActionModelSelection,
   readActionModelSelection
 } from './source-control-action-model-selection'
-import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ActionModelSelection, SourceControlActionRecipe } from './source-control-ai-actions'
 
 import {

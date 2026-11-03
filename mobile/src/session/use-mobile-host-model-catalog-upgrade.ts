@@ -9,7 +9,7 @@ import {
   joinHostModelListingWait
 } from '../../../src/shared/host-model-listing-waits'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
-import { usesModelSpecificAcpEfforts } from '../../../src/shared/agent-model-catalog-ownership'
+import { usesModelSpecificAcpEfforts } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
 
 // The host answers a waiting read when its first listing lands, within its own 30s picker wait.
 const LISTING_WAIT_TIMEOUT_MS = 45_000

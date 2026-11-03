@@ -12,8 +12,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import NewWorkspaceComposerModal from './NewWorkspaceComposerModal'
 import type { NewWorkspaceComposerCardProps } from './new-workspace/new-workspace-composer-card-props'
 import type * as SetupButtonModule from './agent/AgentLaunchSetupButton'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentPickerDraft } from '../../../shared/agent-launch-picker'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentPickerDraft } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const evidence = vi.hoisted(() => {

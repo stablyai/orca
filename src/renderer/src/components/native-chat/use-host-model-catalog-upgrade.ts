@@ -22,7 +22,7 @@ import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
 } from '../../../../shared/host-model-listing-waits'
-import { usesModelSpecificAcpEfforts } from '../../../../shared/agent-model-catalog-ownership'
+import { usesModelSpecificAcpEfforts } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 /** Warm visible chats from the host catalog and share one listing wait per chat. Recheck held unavailability on agent changes, focus and turn edges. */

@@ -1,4 +1,4 @@
-import { getAgentLaunchExecutableName } from '../../shared/agent-command-line-intent'
+import { getAgentLaunchExecutableName } from '../../shared/agent-launch/startup/agent-command-line-intent'
 import {
   isAgentStatusHooksEnabledForAgent,
   type AgentStatusHooksSettings
@@ -9,7 +9,7 @@ import {
   isPiCompatibleAgentType,
   type PiAgentKind
 } from '../../shared/pi-agent-kind'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { wslHookRelayManager, type WslHookRelayManager } from './wsl-hook-relay-manager'
 import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
 
