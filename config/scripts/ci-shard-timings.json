@@ -7134,7 +7134,6 @@
       "src/preload/opencode-go-credentials.test.ts": 45,
       "src/preload/plugin-frame-guest-render-lane.test.ts": 47,
       "src/preload/plugin-frame-guest.test.ts": 287,
-      "src/preload/pty-snapshot-capability-ipc.test.ts": 1144,
       "src/preload/renderer-heap-statistics-reader.test.ts": 50,
       "src/preload/renderer-process-memory-reader.test.ts": 66,
       "src/preload/renderer-restart-wiring.test.ts": 96,

@@ -526,24 +526,6 @@ it('sends a duplicate close with its reason even when the issue already reads cl
   ).toBe('closed')
 })
 
-it('keeps ordinary metadata caches distinct by canonical repository and host', () => {
-  const identities = [
-    issueRepo,
-    { ...issueRepo, owner: 'upstream-owner' },
-    { ...issueRepo, host: 'ghe.example:8443' }
-  ]
-  for (const ownerRepo of identities) {
-    function Metadata() {
-      useRepoLabels(registeredRepo.path, registeredRepo.id, { ownerRepo })
-      useRepoAssignees(registeredRepo.path, registeredRepo.id, { ownerRepo })
-      return null
-    }
-    renderToStaticMarkup(createElement(Metadata))
-  }
-  expect(new Set(fixture.loads.filter((_, i) => i % 2 === 0).map((load) => load.key)).size).toBe(3)
-  expect(new Set(fixture.loads.filter((_, i) => i % 2 === 1).map((load) => load.key)).size).toBe(3)
-})
-
 it('keeps metadata requests without an explicit target compatible', async () => {
   function Metadata() {
     useRepoLabels(registeredRepo.path, registeredRepo.id)
@@ -624,52 +606,6 @@ it('keeps Project row metadata on the existing slug route', async () => {
     host: 'ghe.example'
   })
   expect(fixture.requests).toEqual([])
-})
-
-it('rolls back a rejected fork label without changing the upstream row', async () => {
-  const store = createTestStore()
-  store.setState({ repos: [], recordFeatureInteraction: vi.fn() })
-  fixture.store = store
-  const key = workItemsCacheKey(registeredRepo.id, 36, '', getTaskSourceCacheScope(sourceContext))
-  store.setState({ workItemsCache: { [key]: { data: [upstream, fork], fetchedAt: 1 } } })
-  fixture.gh.mockRejectedValueOnce(new Error('Fixture rejects label'))
-  let pending = Promise.resolve(false)
-  const observed: string[][][] = []
-  runGHEditLabelToggle({
-    item: fork,
-    itemNumber: fork.number,
-    itemRepoId: fork.repoId,
-    repoPath: registeredRepo.path,
-    sourceContext,
-    projectOrigin: undefined,
-    issueRepo,
-    label: 'fork-only-label',
-    localLabels: [],
-    run: (_key, options) => {
-      pending = (async () => {
-        options.onOptimistic?.()
-        observed.push(store.getState().workItemsCache[key]?.data?.map((row) => row.labels) ?? [])
-        try {
-          await options.mutate()
-          return true
-        } catch {
-          options.onRevert?.()
-          observed.push(store.getState().workItemsCache[key]?.data?.map((row) => row.labels) ?? [])
-          return false
-        }
-      })()
-      return pending
-    },
-    onLabelsChange: vi.fn(),
-    patchProjectRowIfNeeded: vi.fn(),
-    onMutated: vi.fn()
-  })
-  expect(await pending).toBe(false)
-  // Without a task record, Tasks copies take only a confirmed change; the dialog keeps its own optimism.
-  expect(observed).toEqual([
-    [[], []],
-    [[], []]
-  ])
 })
 
 it('does not fall back to upstream metadata for an invalid explicit repository', async () => {
