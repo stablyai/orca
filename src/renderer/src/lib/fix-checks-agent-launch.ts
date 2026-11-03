@@ -1,7 +1,5 @@
-import {
-  ensureAgentLaunchPreferences,
-  type AgentLaunchPreferences
-} from '@/components/settings/use-host-agent-launch-preferences'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
   resolveChecksActionAgent,
   sourceControlRepoAgentRows

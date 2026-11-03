@@ -247,7 +247,7 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
     vi.spyOn(catalog, 'getAgentSessionOptionLaunchCatalog')
   ]
   const counts = () => spies.map((spy) => spy.mock.calls.length)
-  const chips = await import('../settings/agent-model-choice-chips')
+  const chips = await import('./launch-settings/agent-model-choice-chips')
   const buildChips = chips.agentModelChoiceChips
   const projectionPasses: { counts: number[]; permission: boolean }[] = []
   const chipBuilder = vi.spyOn(chips, 'agentModelChoiceChips').mockImplementation((...input) => {

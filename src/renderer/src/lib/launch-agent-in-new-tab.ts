@@ -14,7 +14,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-ow
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
-import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'

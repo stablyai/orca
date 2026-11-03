@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/source-control-action-selection'
 import { Info, RefreshCw, RotateCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
-import { sourceControlPickerDraft } from '../settings/source-control-agent-launch-picker'
+import { sourceControlPickerDraft } from '../../lib/source-control-agent-launch-picker'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
