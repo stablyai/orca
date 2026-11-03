@@ -8,8 +8,8 @@ import {
   type PackageImports
 } from './release-missing-packages.ts'
 
-import { CHECKOUT_PROCESS_TIMEOUT_MS, runCheckoutProcess } from './release-checkout-process'
-import { prefetchReleaseBlobs } from './release-checkout-prefetch'
+import { CHECKOUT_PROCESS_TIMEOUT_MS, runCheckoutProcess } from './release-checkout-process.ts'
+import { prefetchReleaseBlobs } from './release-checkout-prefetch.ts'
 
 // Extract runtime, renderer, codecs and the phone row reader; omit CLI to bound cold-CI extraction.
 // Add source workspace packages from each release’s own policy.

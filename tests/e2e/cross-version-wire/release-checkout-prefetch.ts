@@ -1,4 +1,4 @@
-import { runCheckoutProcess } from './release-checkout-process'
+import { runCheckoutProcess } from './release-checkout-process.ts'
 
 export async function prefetchReleaseBlobs(
   repoRoot: string,
