@@ -85,6 +85,12 @@ type ResolveSourceControlAiInput = {
   operation: AiTextOperation
   discoveryHostKey?: string
   prCreationProductDefaults?: SourceControlAiPrCreationDefaults
+  /**
+   * When set and the agent has a non-interactive SC AI contract, prefer it over
+   * the configured Source Control AI agent for this resolve only (e.g. first-work
+   * branch rename should use the workspace-selected agent).
+   */
+  preferredAgentId?: TuiAgent | null
 }
 
 export type ResolveSourceControlAiPrCreationDefaultsInput = {
@@ -160,7 +166,18 @@ export function resolveSourceControlAiForOperation(
   if (!actionRecipe.commandInputTemplate.trim()) {
     return resolveFailure(textGenerationFailure(COMMAND_TEMPLATE_EMPTY[input.operation]))
   }
-  const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
+  // Why: action recipes own the new customization model. The legacy global
+  // agent remains a fallback so existing users migrate without losing intent.
+  // Callers (first-work branch rename) may prefer the workspace-selected agent
+  // when it supports non-interactive generation so rename doesn't burn a
+  // default agent the user already exhausted.
+  const usePreferredWorkspaceAgent =
+    !!input.preferredAgentId && !!getCommitMessageAgentSpec(input.preferredAgentId)
+  const preferredAgent = usePreferredWorkspaceAgent
+    ? input.preferredAgentId
+    : hasActionAgentRecipe(actionRecipe)
+      ? actionRecipe.agentId
+      : source.agentId
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
     input.settings.defaultTuiAgent,
@@ -205,10 +222,13 @@ export function resolveSourceControlAiForOperation(
     }
   }
 
-  const actionAgentId = actionRecipe.agentId ?? agentChoice
+  const agentId = agentChoice
+  // Why: a workspace preferred agent must not be re-overridden by a branchName
+  // action recipe that still points at the exhausted default agent.
+  const actionAgentId = usePreferredWorkspaceAgent ? agentId : (actionRecipe.agentId ?? agentId)
   const resolvedAgent =
-    actionAgentId === agentChoice
-      ? agentChoice
+    actionAgentId === agentId
+      ? agentId
       : resolveCommitMessageAgentChoice(
           actionAgentId,
           input.settings.defaultTuiAgent,

@@ -3,6 +3,7 @@ import {
   generateBranchNameFromContext,
   resolveTextGenerationParams
 } from '../text-generation/commit-message-text-generation'
+import { asSupportedBranchRenameAgent } from './branch-rename-generation-agent'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import { retryFailedGeneration } from './first-work-generation-backoff'
@@ -13,7 +14,8 @@ export async function runFolderWorkspaceTitleAutoRename(
   assistantMessage: string | undefined,
   deps: FirstWorkBranchRenameDeps,
   stop: (reason: string, clearError?: boolean) => true,
-  retry: (reason: string) => false
+  retry: (reason: string) => false,
+  workspaceAgentType?: string
 ): Promise<boolean> {
   if (deps.isFolderWorkspaceWslMoveBlocked?.(worktreeId) === true) {
     return retry('a WSL move is taking the workspace')
@@ -28,7 +30,10 @@ export async function runFolderWorkspaceTitleAutoRename(
 
   const originalDisplayName = deps.getCurrentDisplayName(worktreeId)
   const settings = deps.getSettings()
-  const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
+  const preferredAgentId = asSupportedBranchRenameAgent(workspaceAgentType)
+  const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null, {
+    preferredAgentId
+  })
   if (!resolvedParams.ok) {
     deps.setRenameError(worktreeId, resolvedParams.error)
     return stop(`no generation agent: ${resolvedParams.error}`)

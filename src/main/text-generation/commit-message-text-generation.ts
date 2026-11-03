@@ -62,17 +62,28 @@ export function trimGeneratedCommitMessage(message: string): string {
   return trimCommitMessage(message)
 }
 
+export type ResolveTextGenerationOptions = {
+  /**
+   * Prefer this agent when it supports non-interactive SC AI generation.
+   * Used by first-work branch rename so the workspace-selected agent wins over
+   * the global Source Control AI default.
+   */
+  preferredAgentId?: TuiAgent | null
+}
+
 export function resolveCommitMessageSettings(
   settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
   discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
   operation: AiTextOperation = 'commitMessage',
-  repo?: Pick<Repo, 'sourceControlAi'> | null
+  repo?: Pick<Repo, 'sourceControlAi'> | null,
+  options?: ResolveTextGenerationOptions
 ): ResolveCommitMessageSettingsResult {
   const resolved = resolveSourceControlAiForOperation({
     settings,
     repo,
     operation,
-    discoveryHostKey
+    discoveryHostKey,
+    ...(options?.preferredAgentId ? { preferredAgentId: options.preferredAgentId } : {})
   })
   return resolved.ok ? { ok: true, params: resolved.value.params } : resolved
 }
@@ -81,9 +92,10 @@ export function resolveTextGenerationParams(
   settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
   discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
   operation: AiTextOperation = 'commitMessage',
-  repo?: Pick<Repo, 'sourceControlAi'> | null
+  repo?: Pick<Repo, 'sourceControlAi'> | null,
+  options?: ResolveTextGenerationOptions
 ): ResolveCommitMessageSettingsResult {
-  return resolveCommitMessageSettings(settings, discoveryHostKey, operation, repo)
+  return resolveCommitMessageSettings(settings, discoveryHostKey, operation, repo, options)
 }
 
 export function commandBackslashMode(
