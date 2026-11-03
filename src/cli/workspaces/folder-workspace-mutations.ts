@@ -93,6 +93,7 @@ async function setFolderWorkspace(
       `does not apply: a folder workspace cannot have a parent. To nest a worktree under it, run orca worktree set --worktree <child> --parent-worktree ${key}.`
     ],
     ['no-parent', 'does not apply: a folder workspace never has a parent.'],
+    ['url', 'is not supported for folder workspaces; only repo workspaces can store a link.'],
     ...LINK_FLAGS.map((flag): [string, string] => [
       flag,
       `does not apply to a folder workspace. Link it with orca reference add <url> --worktree ${key}.`
