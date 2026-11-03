@@ -49,7 +49,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
             ...this.serveBrowserTabs.listUnstarted(worktreeId)
           ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const session = serverTabs.length > 0 ? this.getWorkspaceSessionForWorktree(worktreeId) : null
     const publishedServerTabs = serverTabs.map((tab) => {
       const persistedProps = this.getPersistedUnifiedSessionTabProps(
         worktreeId,
