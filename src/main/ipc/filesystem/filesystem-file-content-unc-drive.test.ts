@@ -70,7 +70,7 @@ import { registerFilesystemHandlers } from './filesystem'
 import {
   invalidateAuthorizedRootsCache,
   registerWorktreeRootsForRepo
-} from '../registered-worktree-roots-cache'
+} from '../worktrees/removal/registered-worktree-roots-cache'
 
 function eperm(target: string): Error {
   return Object.assign(new Error(`EPERM: operation not permitted, '${target}'`), {

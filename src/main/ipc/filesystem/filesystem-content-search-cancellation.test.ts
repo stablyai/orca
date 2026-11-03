@@ -58,7 +58,7 @@ vi.mock('./filesystem-path-containment', () => ({
   validateGitRelativeFilePath: vi.fn((value: string) => value)
 }))
 
-vi.mock('../registered-worktree-roots-cache', () => ({
+vi.mock('../worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: vi.fn(async (value: string) => value)
 }))
 

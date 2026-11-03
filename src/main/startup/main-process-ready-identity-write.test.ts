@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DurableFileWrite from '../durable-file-write'
+import type * as DurableFileWrite from '../filesystem/durable-file-write'
 import { JIRA_IMAGE_SCHEME } from '../../shared/jira/jira-attachment-image'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   writeFileDurableSync: vi.fn()
 }))
 
-vi.mock('../durable-file-write', async (importOriginal) => {
+vi.mock('../filesystem/durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
   return {
     ...actual,

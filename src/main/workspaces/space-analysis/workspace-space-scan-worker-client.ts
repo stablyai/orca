@@ -3,11 +3,11 @@ import { Worker } from 'node:worker_threads'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorkspaceSpaceWorktree } from '../../../shared/workspace-space-types'
-import { WorkerThreadRequestQueue } from '../../worker-thread-request-queue'
+import { WorkerThreadRequestQueue } from '../../worker-threads/worker-thread-request-queue'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
-} from '../../worker-thread-entry-path'
+} from '../../worker-threads/worker-thread-entry-path'
 import type {
   WorkspaceSpaceScanWorkerRequest,
   WorkspaceSpaceScanWorkerResponse

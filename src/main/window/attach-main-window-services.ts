@@ -33,7 +33,7 @@ import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
 import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
-} from '../ipc/worktree-base-directory-watcher'
+} from '../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'

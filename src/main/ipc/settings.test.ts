@@ -81,7 +81,7 @@ vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: reconcileClaudeAgentViewMock })
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: prepareLocalWorktreeRootsForReposMock
 }))
 

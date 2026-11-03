@@ -1,6 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
+import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
 import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
@@ -276,10 +277,17 @@ const {
   }
 })
 
+const listWorktreesStrictMock = vi.hoisted(() => vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES))
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesStrictMock
+}))
+
 vi.mock('../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
   listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+  listWorktreesStrict: listWorktreesStrictMock,
   describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
   assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addSparseWorktree: addSparseWorktreeMock,
@@ -337,38 +345,43 @@ vi.mock('../../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 
-vi.mock('../../agent-trust-presets', () => ({
+vi.mock('../../agent-launch/trust/agent-trust-presets', () => ({
   markCodexProjectTrusted: markCodexProjectTrustedMock,
   markCopilotFolderTrusted: markCopilotFolderTrustedMock,
   markCursorWorkspaceTrusted: markCursorWorkspaceTrustedMock
 }))
 
-vi.mock('../../hooks', () => ({
+const parseOrcaYamlMock = vi.hoisted(() => vi.fn().mockReturnValue(null))
+vi.mock('../../../shared/orca-yaml', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  parseOrcaYaml: parseOrcaYamlMock
+}))
+
+vi.mock('../../workspace-hooks/hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   loadHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
-  hasHooksFile: vi.fn().mockReturnValue(false),
-  parseOrcaYaml: vi.fn().mockReturnValue(null)
+  hasHooksFile: vi.fn().mockReturnValue(false)
 }))
 
-vi.mock('../../setup-runner-script-text', () => ({
+vi.mock('../../workspace-hooks/setup-runner-script-text', () => ({
   buildPosixRunnerScript: (script: string) => `#!/usr/bin/env bash\nset -e\n${script}\n`,
   buildWindowsRunnerScript: (script: string) => `@echo off\r\n${script}\r\n`
 }))
 
-vi.mock('../../worktree-runner-script', () => ({
+vi.mock('../../workspace-hooks/worktree-runner-script', () => ({
   createSetupRunnerScript: vi.fn(),
   resolveSetupRunnerShell: vi.fn().mockReturnValue(undefined)
 }))
 
-vi.mock('../../setup-hook-env-vars', () => ({
+vi.mock('../../workspace-hooks/setup-hook-env-vars', () => ({
   getSetupRunnerEnvVars: (_repo: never, worktreePath: string) => ({
     ORCA_ROOT_PATH: '/remote/repo',
     ORCA_WORKTREE_PATH: worktreePath
   })
 }))
 
-vi.mock('../../effective-hook-config', () => ({
+vi.mock('../../workspace-hooks/effective-hook-config', () => ({
   getEffectiveHooksFromConfig: vi.fn().mockReturnValue(null),
   getDefaultTabsLaunch: vi.fn().mockReturnValue(undefined),
   shouldRunSetupForCreate: vi
@@ -390,11 +403,11 @@ vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
-vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 
@@ -406,7 +419,7 @@ vi.mock('../../ipc/filesystem/filesystem-path-containment', async () => {
   return { isENOENT: actual.isENOENT }
 })
 
-vi.mock('../../worktree-root-preparation', () => ({
+vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
@@ -534,12 +547,9 @@ vi.mock('../../github/issues', async (importOriginal) => {
 })
 
 // Fabricated repo paths need deterministic async default-ref resolution.
-vi.mock('../../git/repo', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  const actualGetBaseRefDefault = actual.getBaseRefDefault as (
-    path: string,
-    options?: { wslDistro?: string }
-  ) => Promise<string | null>
+vi.mock('../../git/repo-default-base-ref', async (importOriginal) => {
+  const actual = await importOriginal<typeof GitRepoDefaultBaseRefModule>()
+  const actualGetBaseRefDefault = actual.getBaseRefDefault
   return {
     ...actual,
     // Keep fake local defaults deterministic while WSL exercises real async Git options.
@@ -554,10 +564,14 @@ vi.mock('../../git/repo', async (importOriginal) => {
         options.wslDistro
           ? actualGetBaseRefDefault(options.cwd, options)
           : Promise.resolve('origin/main')
-      ),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null)
+      )
   }
 })
+
+vi.mock('../../git/repo', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchConflictKind: vi.fn().mockResolvedValue(null)
+}))
 
 vi.mock('../../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../../git/git-username')
