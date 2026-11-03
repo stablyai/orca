@@ -52,7 +52,9 @@ describe('MobileNativeChatMessage', () => {
         'Review complete\n\nThe **result** is ready.'
       )
       expect(textIn(tree.root)).toContain('Review worker')
-      expect(textIn(tree.root)).not.toMatch(/Subject:|──── From:|orchestration reply/)
+      expect(
+        [...textIn(tree.root), ...markdown.map((node) => node.props.content)].join('\n')
+      ).not.toMatch(/Subject:|──── From:|orchestration reply/)
       expect(mobileNativeChatDisplayCopyText(message)).toBe(
         'Review complete\n\nThe **result** is ready.'
       )
