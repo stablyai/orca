@@ -1,15 +1,14 @@
 import { getFileOpenPosition } from './file-open-position'
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
-import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import type { RuntimeFileOpenResult } from '../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
-import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
-import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { callFileOpen } from './file-open-call'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
+import { resolveFilePath } from './file-open-path'
 
 type FileOpenMode = 'edit' | 'diff'
 type OpenChangedMode = FileOpenMode | 'both'
@@ -48,49 +47,6 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
     )
   }
   return await resolveCurrentWorktreeSelector(cwd, client)
-}
-
-// Only UNC roots need Linux-path translation; backslash filenames have no equivalent Windows spelling.
-function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): string {
-  // Interop may omit WSL_DISTRO_NAME; the launcher's UNC cwd also identifies the caller's distro.
-  const distro = process.env.WSL_DISTRO_NAME || parseWslUncPath(cwd)?.distro
-  if (
-    !distro ||
-    !path.startsWith('/') ||
-    path.startsWith('//') ||
-    path.includes('\\') ||
-    !isWslUncPath(rootPath)
-  ) {
-    return path
-  }
-  return toWindowsWslPath(path, distro)
-}
-
-async function resolveFilePath(
-  ctx: HandlerContext,
-  worktree: string,
-  path: string
-): Promise<string> {
-  if (!isRuntimePathAbsolute(path)) {
-    return path
-  }
-  // Relativize only paths inside the worktree; leave others for the runtime guard.
-  const result = await ctx.client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-    worktree
-  })
-
-  const rootPath = result.result.worktree.path
-  const relativePath = relativePathInsideRoot(
-    rootPath,
-    toWorktreeRootPathFlavor(rootPath, ctx.cwd, path)
-  )
-  if (relativePath === '') {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'The selected worktree root is a directory, not a file-open target.'
-    )
-  }
-  return relativePath ?? path
 }
 
 function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMode {
