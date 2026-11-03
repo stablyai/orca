@@ -261,6 +261,9 @@ export const TerminalCreateParams = z.object({
   resumeOrigin: z.literal('saved').optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
+  viewMode: z.enum(['terminal', 'chat']).optional(),
+  // The agent `command` starts, for chat view only; unlike launchAgent it never replaces host launch planning.
+  commandAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
   /** The creator's palette and cursor, validated by the host; older hosts drop it. */

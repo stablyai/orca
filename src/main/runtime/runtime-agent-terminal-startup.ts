@@ -25,6 +25,7 @@ import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
+import { terminalChatViewRefusal } from './terminal-chat-view-host-support'
 import {
   resolvePlainTerminalProjectRuntime,
   resolvePlainTerminalPtyOptions
@@ -76,7 +77,20 @@ export async function resolveAgentTerminalCreateOptions(
           isRemote: Boolean(workspace.connectionId)
         })
       : null)
-  const launchAgent = plannedAgent ?? opts.launchAgent
+  if (opts.commandAgent) {
+    const chatViewRefusal = terminalChatViewRefusal({
+      commandAgent: opts.commandAgent,
+      plannedAgent: plannedAgent ?? opts.launchAgent ?? null,
+      connectionId: workspace.connectionId
+    })
+    if (chatViewRefusal) {
+      throw chatViewRefusal
+    }
+  }
+  // Named after planning, so the identity never turns a typed command into a host-built launch.
+  const identified =
+    opts.commandAgent && !opts.launchAgent ? { ...opts, launchAgent: opts.commandAgent } : opts
+  const launchAgent = plannedAgent ?? identified.launchAgent
   // Refuse unsupported requested shells before any return, using the runtime that will spawn this PTY.
   const shellRefusal = terminalShellOverrideRefusal({
     shellOverride: opts.shellOverride,
@@ -115,7 +129,7 @@ export async function resolveAgentTerminalCreateOptions(
     }
   }
   if (!launchAgent || !store) {
-    return opts
+    return identified
   }
   const runtime =
     opts.launchRuntime ??
@@ -133,7 +147,7 @@ export async function resolveAgentTerminalCreateOptions(
           host,
           sessionOptions
         )
-      : opts
+      : identified
   if (!launch.launchAgent) {
     return launch
   }

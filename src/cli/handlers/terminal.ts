@@ -40,8 +40,11 @@ import {
 } from '../../shared/windows-terminal-shell'
 import {
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_VIEW_MODE_RUNTIME_CAPABILITY,
   TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
+import type { TuiAgent } from '../../shared/tui-agent'
+import { parseCliAgent } from '../agent-launch-request'
 import {
   getBrowserWorktreeSelector,
   getOptionalWorktreeSelector,
@@ -51,9 +54,46 @@ import {
 import { revealPairedTerminalOnLocalDesktop } from '../paired-terminal-desktop-reveal'
 import { terminalCloseHandler } from './terminal-close'
 import { terminalSendHandler } from './terminal-send'
+import { requireTerminalHostCapability } from './terminal-host-capability'
 
 // Long terminal waits must outlive the ordinary transport timeout.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+/** Chat needs the agent named, because a wrapper command hides it from the host. */
+function readTerminalViewModeFlags(
+  flags: Map<string, string | boolean>,
+  command: string | undefined
+): { viewMode: 'terminal' } | { viewMode: 'chat'; commandAgent: TuiAgent } | undefined {
+  const viewMode = flags.has('view-mode') ? getRequiredStringFlag(flags, 'view-mode') : undefined
+  if (viewMode !== undefined && viewMode !== 'chat' && viewMode !== 'terminal') {
+    throw new RuntimeClientError('invalid_argument', '--view-mode must be one of: chat, terminal')
+  }
+  const commandAgent = flags.has('command-agent')
+    ? parseCliAgent(getRequiredStringFlag(flags, 'command-agent'))
+    : undefined
+  if (viewMode !== 'chat') {
+    if (commandAgent !== undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--command-agent names the agent for --view-mode chat; pass --view-mode chat or omit --command-agent.'
+      )
+    }
+    return viewMode === 'terminal' ? { viewMode } : undefined
+  }
+  if (!command?.trim()) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--view-mode chat shows the agent that --command starts; pass --command.'
+    )
+  }
+  if (commandAgent === undefined) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--view-mode chat needs --command-agent <agent> to name the agent that --command starts, such as claude or codex.'
+    )
+  }
+  return { viewMode, commandAgent }
+}
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const terminal = await getTerminalHandle(flags, cwd, client)
@@ -179,30 +219,32 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
           `--shell must be one of: ${listSupportedWindowsShellOverrides().join(', ')}`
         )
       }
-      // Older hosts ignore shell and successfully create the wrong default shell; check support first.
-      const status = await client.getCliStatus()
-      // An unreachable host reports no capabilities at all; that is not evidence it lacks --shell.
-      if (!status.result.runtime.reachable) {
-        throw new RuntimeClientError(
-          'runtime_unavailable',
-          'Orca could not verify --shell support on the execution host, so no terminal was created. Wait for the execution host to become reachable and retry.'
-        )
-      }
-      if (
-        status.result.runtime.capabilities?.includes(
-          TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY
-        ) !== true
-      ) {
-        throw new RuntimeClientError(
-          'incompatible_runtime',
-          'This Orca host does not support --shell, and would silently create a terminal running its default shell instead. No terminal was created; update Orca on the execution host.'
-        )
-      }
+      await requireTerminalHostCapability(
+        client,
+        TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+        {
+          unreachable:
+            'Orca could not verify --shell support on the execution host, so no terminal was created. Wait for the execution host to become reachable and retry.',
+          missing:
+            'This Orca host does not support --shell, and would silently create a terminal running its default shell instead. No terminal was created; update Orca on the execution host.'
+        }
+      )
+    }
+    const viewMode = readTerminalViewModeFlags(flags, command)
+    // An older host already opens a plain terminal, so only chat needs the check.
+    if (viewMode?.viewMode === 'chat') {
+      await requireTerminalHostCapability(client, TERMINAL_CREATE_VIEW_MODE_RUNTIME_CAPABILITY, {
+        unreachable:
+          'Orca could not verify --view-mode support on the execution host, so no terminal was created. Wait for the execution host to become reachable and retry.',
+        missing:
+          'This Orca host does not support --view-mode, and would silently open a plain terminal instead. No terminal was created; update Orca on the execution host.'
+      })
     }
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
       ...(shell !== undefined ? { shell } : {}),
+      ...viewMode,
       title: getOptionalStringFlag(flags, 'title'),
       focus,
       ...(focus ? { presentation: 'focused' } : {}),
@@ -229,22 +271,12 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     // Why refused rather than sent: an older host strips the unknown param and splits again,
     // starting a second copy of the command the retry exists to avoid.
     if (retrySplit !== undefined) {
-      const status = await client.getCliStatus()
-      if (!status.result.runtime.reachable) {
-        throw new RuntimeClientError(
-          'runtime_unavailable',
-          'Orca could not verify --retry-split support on the execution host, so nothing was split. Wait for the execution host to become reachable and retry.'
-        )
-      }
-      if (
-        status.result.runtime.capabilities?.includes(TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY) !==
-        true
-      ) {
-        throw new RuntimeClientError(
-          'incompatible_runtime',
+      await requireTerminalHostCapability(client, TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY, {
+        unreachable:
+          'Orca could not verify --retry-split support on the execution host, so nothing was split. Wait for the execution host to become reachable and retry.',
+        missing:
           'This Orca host does not support --retry-split and would split again. Nothing was split; check `orca terminal list --json` for the pane instead.'
-        )
-      }
+      })
     }
     const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
       terminal: await getTerminalHandle(flags, cwd, client),

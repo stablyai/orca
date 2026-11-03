@@ -28,6 +28,10 @@ export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
   'terminal.create-shell-selection.v1' as const
 
+// Why: an older host strips terminal.create's `viewMode` and `commandAgent` and answers with a
+// terminal view that looks like success, so a client asking for chat must refuse instead.
+export const TERMINAL_CREATE_VIEW_MODE_RUNTIME_CAPABILITY = 'terminal.create-view-mode.v1' as const
+
 // Why: an older host strips terminal.split's `retrySplit` and splits again, duplicating the command.
 export const TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY = 'terminal.split-retry.v1' as const
 
@@ -45,5 +49,6 @@ export const TERMINAL_RUNTIME_CAPABILITIES = [
   ...TERMINAL_QUICK_COMMAND_RUNTIME_CAPABILITIES,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_VIEW_MODE_RUNTIME_CAPABILITY,
   TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
 ] as const

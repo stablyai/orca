@@ -71,6 +71,8 @@ export type TerminalCreateOptions = {
   /** Unvalidated wire value: the creator's palette and cursor, pinned with its colours on a windowed host. */
   terminalViewAttributes?: unknown
   viewMode?: 'terminal' | 'chat'
+  /** terminal.create's chat view: the agent `command` starts, applied after launch planning so the command stays as typed. */
+  commandAgent?: TuiAgent
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string
   /** Main-internal placement anchor; removed before PTY dispatch. */
