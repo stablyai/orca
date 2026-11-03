@@ -2,10 +2,6 @@ import {
   captureWebSessionIntentOwner,
   matchesWebSessionIntentOwner
 } from '@/runtime/web-runtime-session-environment'
-import { recordTerminalTabCloseThroughLayoutOwner } from '@/store/terminals/terminal-tab-close-layout-owner'
-import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { omitRecordKeys } from '@/store/slices/worktrees/teardown/record-key-omission'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -133,7 +129,6 @@ export async function createTerminalTabOnHost({
     { ...rpcOptions, timeoutMs: 15_000 }
   )
   const tab = created.tab
-  let createdAliasId: string | undefined
   try {
     if (!isValidHostTerminalTabId(tab.parentTabId) || !isTerminalLeafId(tab.leafId)) {
       throw new Error('invalid_host_reply')
@@ -158,7 +153,7 @@ export async function createTerminalTabOnHost({
     }
     const localTabId = toWebTerminalSurfaceTabId(tab.parentTabId)
     if (!latest.tabsByWorktree[worktreeId]?.some((row) => row.id === localTabId)) {
-      createdAliasId = latest.createTab(worktreeId, groupId, undefined, {
+      latest.createTab(worktreeId, groupId, undefined, {
         id: localTabId,
         initialLeafId: tab.leafId,
         mirroredHostTab: true,
@@ -168,7 +163,7 @@ export async function createTerminalTabOnHost({
           tabId: tab.parentTabId,
           leafId: tab.leafId
         }
-      }).id
+      })
     }
     latest.setActiveTab(localTabId)
     latest.setActiveTabType('terminal', worktreeId)
@@ -191,46 +186,6 @@ export async function createTerminalTabOnHost({
       title: tab.title
     }
   } catch (error) {
-    if (createdAliasId) {
-      const latest = useAppStore.getState()
-      const id = createdAliasId
-      const row = latest.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === id)
-      if (
-        row?.hostTerminalAlias?.executionHostId === host.id &&
-        row.hostTerminalAlias.worktreeId === hostWorktreeId &&
-        row.hostTerminalAlias.tabId === tab.parentTabId
-      ) {
-        if (
-          !ORCA_LAYOUT_OWNER_IS_MAIN ||
-          !recordTerminalTabCloseThroughLayoutOwner(latest, worktreeId, id, 'cleanup')
-        ) {
-          commitTerminalSurfaceClose(worktreeId, { kind: 'tab', tabId: id }, 'cleanup')
-        }
-        const tabsByWorktree = {
-          ...latest.tabsByWorktree,
-          [worktreeId]: latest.tabsByWorktree[worktreeId].filter((candidate) => candidate.id !== id)
-        }
-        const stillMirrored = Object.values(tabsByWorktree).some((rows) =>
-          rows.some((candidate) => candidate.id === id)
-        )
-        useAppStore.setState({
-          tabsByWorktree,
-          unifiedTabsByWorktree: {
-            ...latest.unifiedTabsByWorktree,
-            [worktreeId]: (latest.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-              (entry) => entry.entityId !== id
-            )
-          },
-          ...(!stillMirrored
-            ? {
-                terminalLayoutsByTabId: omitRecordKeys(latest.terminalLayoutsByTabId, [id]),
-                ptyIdsByTabId: omitRecordKeys(latest.ptyIdsByTabId, [id])
-              }
-            : {})
-        })
-        useAppStore.getState().reconcileWorktreeTabModel(worktreeId)
-      }
-    }
     if (!matchesWebSessionIntentOwner(owner)) {
       throw error
     }

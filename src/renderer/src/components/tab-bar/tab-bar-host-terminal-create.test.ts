@@ -156,8 +156,12 @@ it.each(['created', 'repaired', 'refresh-failed'])(
       await expect(createTerminalTabOnHost(REQUEST)).rejects.toThrow(
         outcome === 'repaired' ? 'runtime_environment_pairing_changed' : 'refresh failed'
       )
-      expect(store.getState().tabsByWorktree[LOCAL] ?? []).toHaveLength(0)
-      expect(store.getState().unifiedTabsByWorktree[LOCAL] ?? []).toHaveLength(0)
+      expect(store.getState().tabsByWorktree[LOCAL] ?? []).toHaveLength(
+        outcome === 'refresh-failed' ? 1 : 0
+      )
+      expect(store.getState().unifiedTabsByWorktree[LOCAL] ?? []).toHaveLength(
+        outcome === 'refresh-failed' ? 1 : 0
+      )
       expect(mocks.call.mock.calls.some((call) => call[1] === 'session.tabs.close')).toBe(
         outcome === 'refresh-failed'
       )
