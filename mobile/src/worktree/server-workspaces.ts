@@ -9,6 +9,7 @@ import {
   relayHostWorktreesRead
 } from './server-workspace-operations'
 import {
+  isWorktreeCatalogRow,
   WorktreeCatalogSnapshotClient,
   type WorktreeCatalogRequest
 } from './worktree-catalog-snapshot-client'
@@ -59,15 +60,7 @@ export function withServerHosts<Value>(
 
 function serverRowSchema(hostId: ExecutionHostId) {
   return z.custom<Worktree>(
-    (row) =>
-      typeof row === 'object' &&
-      row !== null &&
-      'hostId' in row &&
-      row.hostId === hostId &&
-      'worktreeId' in row &&
-      typeof row.worktreeId === 'string' &&
-      'repoId' in row &&
-      typeof row.repoId === 'string'
+    (row) => isWorktreeCatalogRow(row) && 'hostId' in row && row.hostId === hostId
   )
 }
 

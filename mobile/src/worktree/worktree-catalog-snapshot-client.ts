@@ -27,14 +27,28 @@ export type WorktreeCatalogFetchResult =
 
 const snapshotIdSchema = z.string().min(1).max(128)
 
-// Rows stay opaque, as consumers validate their own projections; malformed fields read as absent.
+/** The identity every reader keys a catalog row by; consumers validate their own projections of the rest. */
+export function isWorktreeCatalogRow(row: unknown): row is Worktree {
+  return (
+    typeof row === 'object' &&
+    row !== null &&
+    'worktreeId' in row &&
+    typeof row.worktreeId === 'string' &&
+    'repoId' in row &&
+    typeof row.repoId === 'string'
+  )
+}
+
+const catalogRowSchema = z.custom<Worktree>(isWorktreeCatalogRow)
+
+// One unreadable row fails the whole reply: dropping it would shift later deltas' base indexes.
 const catalogReplySchema = z.looseObject({
-  worktrees: z.array(z.custom<Worktree>()).optional().catch(undefined),
+  worktrees: z.array(catalogRowSchema).optional().catch(undefined),
   snapshotId: snapshotIdSchema.optional().catch(undefined),
   unchanged: z.boolean().optional().catch(undefined),
   baseSnapshotId: snapshotIdSchema.optional().catch(undefined),
   rowsFromBase: z
-    .array(z.union([z.number(), z.custom<Worktree>()]))
+    .array(z.union([z.number(), catalogRowSchema]))
     .optional()
     .catch(undefined)
 })
