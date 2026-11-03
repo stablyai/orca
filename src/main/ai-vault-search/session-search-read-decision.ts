@@ -26,7 +26,10 @@ export function sessionSearchReadDecision(args: {
   if (!row) {
     return 'any'
   }
-  if (heldOut(row, file.mtimeMs)) {
+  if (
+    heldOut(row, file.mtimeMs) &&
+    (row.contentFingerprint ?? null) === (file.contentFingerprint ?? null)
+  ) {
     return 'skip'
   }
   if (row.state === 'due') {
@@ -59,6 +62,7 @@ function heldOut(row: SessionSearchFileRow, mtimeMs: number): boolean {
 function statMatches(row: SessionSearchFileRow, file: SessionFileCandidate['file']): boolean {
   return (
     row.mtimeMs === file.mtimeMs &&
+    (row.contentFingerprint ?? null) === (file.contentFingerprint ?? null) &&
     (row.sizeBytes === null || file.sizeBytes === undefined || row.sizeBytes === file.sizeBytes)
   )
 }

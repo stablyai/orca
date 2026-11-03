@@ -4,6 +4,8 @@ import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
 import {
   fileIdentity,
+  type SessionSearchFileRow,
+  type SessionSearchFileState,
   type SessionSearchFileIdentity,
   type SessionSearchIndexedFile
 } from './session-search-file-cursor'
@@ -14,19 +16,9 @@ import {
 } from './session-search-index-writer'
 import { deleteExpiredSearchFiles, drainOrphanedMessages } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
+import { readSessionSearchFileRows } from './session-search-file-records'
 
-/** Due files need a full reread; failed reads track counts and mtime to bound retries. */
-export type SessionSearchFileState = 'current' | 'due' | 'failed'
-
-export type SessionSearchFileRow = {
-  path: string
-  identity: SessionSearchFileIdentity
-  mtimeMs: number
-  sizeBytes: number | null
-  state: SessionSearchFileState
-  failCount: number
-  failedMtimeMs: number | null
-}
+export type { SessionSearchFileRow, SessionSearchFileState } from './session-search-file-cursor'
 
 export type SessionSearchResumableCursor = { byteOffset: number; prefixHash: string }
 
@@ -206,47 +198,29 @@ export class SessionSearchStore {
   }
 
   files(): SessionSearchFileRow[] {
-    return (
-      this.db
-        .prepare(
-          // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
-          `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
-                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
-                  state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
-           FROM files`
-        )
-        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-        dev: number | null
-        ino: number | null
-      })[]
-    ).map((row) => ({
-      path: row.path,
-      identity:
-        typeof row.dev === 'number' && typeof row.ino === 'number'
-          ? { dev: row.dev, ino: row.ino }
-          : null,
-      mtimeMs: row.mtimeMs,
-      sizeBytes: row.sizeBytes,
-      state: row.state,
-      failCount: row.failCount,
-      failedMtimeMs: row.failedMtimeMs
-    }))
+    return readSessionSearchFileRows(this.db)
   }
 
-  setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
+  setFileState(
+    path: string,
+    state: SessionSearchFileState,
+    atMtimeMs?: number,
+    contentFingerprint?: string
+  ): void {
     try {
       if (state === 'failed') {
         // Persist initial failures too, or unreadable new files retry forever.
         this.db
           .prepare(
-            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
-             VALUES (?, 0, ?, 'failed', 1, ?)
+            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms, content_fingerprint)
+             VALUES (?, 0, ?, 'failed', 1, ?, ?)
              ON CONFLICT(path) DO UPDATE SET
                state = 'failed',
                fail_count = files.fail_count + 1,
-               failed_mtime_ms = excluded.failed_mtime_ms`
+               failed_mtime_ms = excluded.failed_mtime_ms,
+               content_fingerprint = COALESCE(excluded.content_fingerprint, files.content_fingerprint)`
           )
-          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
+          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null, contentFingerprint ?? null)
         return
       }
       this.db

@@ -143,6 +143,7 @@ function sessionParseCacheCoversTranscript(
     entry !== undefined &&
     entry.platform === platform &&
     entry.mtimeMs === file.mtimeMs &&
+    entry.contentFingerprint === file.contentFingerprint &&
     (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
   )
 }
@@ -232,6 +233,7 @@ async function parseCachedInLane(
   storeSessionParseCacheEntry(key, {
     agent: candidate.agent,
     mtimeMs: file.mtimeMs,
+    contentFingerprint: file.contentFingerprint,
     sizeBytes: file.sizeBytes ?? null,
     platform,
     session: enriched.session,

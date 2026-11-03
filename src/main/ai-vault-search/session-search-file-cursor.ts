@@ -4,6 +4,19 @@ import type { FileWithMtime } from '../ai-vault/session-scanner-types'
 
 export type SessionSearchFileIdentity = { dev: number; ino: number } | null
 
+export type SessionSearchFileState = 'current' | 'due' | 'failed'
+
+export type SessionSearchFileRow = {
+  path: string
+  identity: SessionSearchFileIdentity
+  mtimeMs: number
+  sizeBytes: number | null
+  contentFingerprint?: string | null
+  state: SessionSearchFileState
+  failCount: number
+  failedMtimeMs: number | null
+}
+
 /** A null byteOffset marks a committed prefix that needs a whole read before it can resume. */
 export type SessionSearchIndexedFile = {
   byteOffset: number | null

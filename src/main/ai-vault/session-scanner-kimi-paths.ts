@@ -45,13 +45,30 @@ export function kimiPrimaryAgentWirePath(
   if (agents) {
     for (const [id, value] of Object.entries(agents)) {
       const record = asRecord(value)
-      if (record?.type === 'main' && record.parentAgentId == null) {
+      if (record?.type === 'main' && record.parentAgentId == null && safeKimiAgentId(id)) {
         primaryId = id
         break
       }
     }
   }
   return join(dirname(statePath), 'agents', primaryId, 'wire.jsonl')
+}
+
+export function kimiSessionWirePaths(statePath: string, state: Record<string, unknown>): string[] {
+  const primary = kimiPrimaryAgentWirePath(statePath, state)
+  if (state.version !== 2) {
+    return [primary]
+  }
+  const children = Object.keys(asRecord(state.agents) ?? {})
+    .filter(safeKimiAgentId)
+    .map((id) => join(dirname(statePath), 'agents', id, 'wire.jsonl'))
+    .filter((path) => path !== primary)
+    .sort()
+  return [primary, ...children]
+}
+
+function safeKimiAgentId(id: string): boolean {
+  return id !== '.' && id !== '..' && !/[\\/:]/.test(id) && !id.includes('\0')
 }
 
 // Share parsed indexes by path and file identity; one home can hold many sessions.

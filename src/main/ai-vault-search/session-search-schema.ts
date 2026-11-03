@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS files(
   -- Retry held-out failures only after the source mtime changes.
   failed_mtime_ms REAL,
   -- SHA-256 of bytes [0, byte_offset); lets a reread after restart append instead of replace.
-  prefix_hash TEXT
+  prefix_hash TEXT,
+  content_fingerprint TEXT
 );
 CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime_ms);
 CREATE TABLE IF NOT EXISTS messages(
@@ -101,6 +102,9 @@ export function addSessionSearchPrefixHashColumn(db: SyncDatabase): void {
     const columns = db.prepare('PRAGMA table_info(files)').all()
     if (!columns.some((column) => asRecord(column)?.name === 'prefix_hash')) {
       db.exec('ALTER TABLE files ADD COLUMN prefix_hash TEXT')
+    }
+    if (!columns.some((column) => asRecord(column)?.name === 'content_fingerprint')) {
+      db.exec('ALTER TABLE files ADD COLUMN content_fingerprint TEXT')
     }
     db.exec('COMMIT')
   } catch (error) {

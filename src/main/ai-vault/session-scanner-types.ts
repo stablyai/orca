@@ -70,6 +70,7 @@ export type FileWithMtime = {
   // Discovery’s transcript byte length avoids restats; synthetic database rows omit it.
   sizeBytes?: number
   sidecar?: SessionSidecarObservation
+  contentFingerprint?: string
   // Codex dual-root scans use filesystem identity to deduplicate hardlink aliases.
   dev?: number
   ino?: number
