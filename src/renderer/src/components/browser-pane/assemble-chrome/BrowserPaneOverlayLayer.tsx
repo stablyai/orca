@@ -120,9 +120,11 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
 
 // Memoize the layer against unrelated parent props; focused-split state comes from its own selector.
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
+  foldedBrowserGroupId,
   worktreeId,
   isWorktreeActive
 }: {
+  foldedBrowserGroupId?: string | null
   worktreeId: string
   isWorktreeActive: boolean
 }): React.JSX.Element {
@@ -199,7 +201,12 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     <>
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
-        const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
+        const isActive = Boolean(
+          isWorktreeActive &&
+          assignment &&
+          assignment.groupId !== foldedBrowserGroupId &&
+          assignment.isActiveInGroup
+        )
         const inFocusedGroup =
           knownFocusedGroupId !== undefined && assignment?.groupId === knownFocusedGroupId
         const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
@@ -285,17 +292,23 @@ function ClientHostedBrowserRowOverlaySlot({
 }
 
 export const RetainedBrowserPaneOverlayLayer = memo(function RetainedBrowserPaneOverlayLayer({
+  foldedBrowserGroupId,
   worktreeId,
   isWorktreeActive,
   mountEligible
 }: {
+  foldedBrowserGroupId?: string | null
   worktreeId: string
   isWorktreeActive: boolean
   mountEligible: boolean
 }): React.JSX.Element | null {
   return (
     <DeferredBrowserContent mountEligible={mountEligible}>
-      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
+      <BrowserPaneOverlayLayer
+        foldedBrowserGroupId={foldedBrowserGroupId}
+        worktreeId={worktreeId}
+        isWorktreeActive={isWorktreeActive}
+      />
     </DeferredBrowserContent>
   )
 })

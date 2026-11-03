@@ -3648,6 +3648,8 @@
           "TabGroupPanel": {
             "814fb04c43": "편집기 로드 중...",
             "9acaf92093": "창 작업",
+            "expandBrowser": "웹페이지 펼치기",
+            "collapseBrowser": "웹페이지 접기",
             "closePaneColumn": "분할 창 닫기"
           },
           "AiVaultSessionDropLayer": {

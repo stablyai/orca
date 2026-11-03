@@ -4342,6 +4342,8 @@
           "TabGroupPanel": {
             "814fb04c43": "Loading editor...",
             "9acaf92093": "Pane Actions",
+            "expandBrowser": "Expand webpage",
+            "collapseBrowser": "Collapse webpage",
             "closePaneColumn": "Close split pane"
           },
           "AiVaultSessionDropLayer": {

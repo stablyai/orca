@@ -1,4 +1,6 @@
 import React from 'react'
+import { useAppStore } from '../store'
+
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
 import {
@@ -12,6 +14,20 @@ import {
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
+
+function isSideGroup(node: TabGroupLayoutNode, groupId: string): boolean {
+  if (node.type === 'leaf') {
+    return false
+  }
+  return (
+    (node.direction === 'horizontal' &&
+      [node.first, node.second].some(
+        (child) => child.type === 'leaf' && child.groupId === groupId
+      )) ||
+    isSideGroup(node.first, groupId) ||
+    isSideGroup(node.second, groupId)
+  )
+}
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
@@ -41,6 +57,20 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   backgroundMountTabIds: ReadonlySet<string> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
+  const [folded, setFold] = React.useState<{ groupId: string; tabId: string } | null>(null)
+  const stillActive = useAppStore(
+    (state) =>
+      !folded ||
+      state.groupsByWorktree[worktreeId]?.some(
+        (group) => group.id === folded.groupId && group.activeTabId === folded.tabId
+      )
+  )
+  const foldedGroupId =
+    folded && stillActive && isSideGroup(layout, folded.groupId) ? folded.groupId : null
+  if (folded && !foldedGroupId) {
+    setFold(null)
+  }
+  const browserFold = React.useMemo(() => ({ groupId: foldedGroupId, setFold }), [foldedGroupId])
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
@@ -63,12 +93,14 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       data-workspace-surface-id={worktreeId}
     >
       <TabGroupSplitLayout
+        browserFold={browserFold}
         layout={layout}
         worktreeId={worktreeId}
         focusedGroupId={focusedGroupId}
         isWorktreeActive={isVisible}
       />
       <WorkspacePaneOverlayLayers
+        foldedBrowserGroupId={foldedGroupId}
         worktreeId={worktreeId}
         worktreePath={worktreePath}
         isVisible={isVisible}
