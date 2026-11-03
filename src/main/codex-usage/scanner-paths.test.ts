@@ -197,6 +197,36 @@ describe('listCodexSessionFiles', () => {
     ])
   })
 
+  it('scans the guest Codex homes a paired desktop picked on this host', async () => {
+    const guestHome = join(
+      fakeHomeDir,
+      '.local',
+      'share',
+      'orca',
+      'codex-accounts',
+      'guest-1',
+      'home'
+    )
+    const guestSessionsDir = join(guestHome, 'sessions')
+    mkdirSync(guestSessionsDir, { recursive: true })
+    writeFileSync(join(guestHome, '.orca-managed-home'), 'guest-1\n', 'utf-8')
+    const guestSessionPath = join(guestSessionsDir, 'guest.jsonl')
+    writeFileSync(
+      guestSessionPath,
+      [
+        `${JSON.stringify({
+          type: 'session_meta',
+          payload: { id: 'guest-session', cwd: join(fakeHomeDir, 'repo') }
+        })}\n`,
+        usageRecord('2026-07-21T12:00:00.000Z', 7)
+      ].join(''),
+      'utf-8'
+    )
+
+    expect(getCodexSessionDirectories()).toContain(guestSessionsDir)
+    expect(await listCodexSessionFiles()).toEqual([guestSessionPath])
+  })
+
   it('does not scan an account home redirected outside managed storage', async () => {
     const accountDir = join(userDataDir, 'codex-accounts', 'acct-redirected')
     const externalHome = join(fakeHomeDir, 'redirected-account-home')

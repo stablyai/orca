@@ -1,8 +1,9 @@
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, lstatSync } from 'node:fs'
 import { realpath, readdir, stat } from 'node:fs/promises'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { getCodexAccountHomeSessionDirectories } from '../codex/codex-account-home-discovery'
+import { listGuestCodexAccountHomes } from '../codex-accounts/guest-codex-account-homes'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
 import { normalizeFsPath } from '../usage/usage-path-comparison'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
@@ -69,8 +70,22 @@ export function getCodexSessionDirectories(): string[] {
   return [
     getCodexSessionsDirectory(),
     join(getSystemCodexHomePath(), 'sessions'),
-    ...getCodexAccountHomeSessionDirectories()
+    ...getCodexAccountHomeSessionDirectories(),
+    ...getGuestCodexAccountSessionDirectories()
   ].filter((dirPath, index, allDirPaths) => allDirPaths.indexOf(dirPath) === index)
+}
+
+// Why: a server runs a paired desktop's chosen Codex account from a guest home, as AI Vault knows.
+function getGuestCodexAccountSessionDirectories(): string[] {
+  return listGuestCodexAccountHomes().flatMap((accountHome) => {
+    const sessionsPath = join(accountHome, 'sessions')
+    try {
+      // A redirected sessions root could make usage scan unrelated, unbounded trees.
+      return lstatSync(sessionsPath).isDirectory() ? [sessionsPath] : []
+    } catch {
+      return []
+    }
+  })
 }
 
 function hasLegacyCopiedSessionBridgeMarkers(): boolean {
