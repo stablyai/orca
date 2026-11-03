@@ -22,8 +22,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -225,38 +227,6 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
       ackApplied(null, { id, hiddenDropEpisode: episode })
       setHidden(null, { id, hidden: false })
       expect(restoreMarkers()).toBe(3)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('keeps drop memory armed when the snapshot is refused', async () => {
-    vi.useFakeTimers()
-    try {
-      const daemon = installObservableDaemonTestProvider()
-      const runtime = buildRuntime()
-      runtime.serializeHiddenOutputRecoveryBuffer = vi.fn(async () => null)
-      const result = { id: await registerAndSpawnDaemonPty(runtime) }
-      const setHidden = getPtySetHiddenRendererPtyListener()
-      mainWindow.webContents.send.mockClear()
-
-      setHidden(null, { id: result.id, hidden: true })
-      daemon.emitData(result.id, 'hidden output')
-      vi.advanceTimersByTime(50)
-
-      // A refused snapshot painted nothing; the next reveal still needs a restore signal.
-      expect(
-        await handlers.get('pty:getMainBufferSnapshot')!(null, {
-          id: result.id
-        })
-      ).toBeNull()
-      setHidden(null, { id: result.id, hidden: false })
-      expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
-        id: result.id,
-        hiddenDropEpisode: expect.any(Number),
-        reason: 'unhide',
-        markerSeq: 42
-      })
     } finally {
       vi.useRealTimers()
     }

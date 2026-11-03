@@ -13,7 +13,7 @@ const TAB_ACTIONS_WITHOUT_KEYBOARD_OWNER = new Set<KeybindingActionId>([
   'tab.openMarkdown'
 ])
 
-/** A focused page hands every tab-scope chord to Orca, as Chrome reserves its tab shortcuts. */
+/** A focused page hands tab chords back to Orca. */
 export function matchesGuestTabShortcut(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,

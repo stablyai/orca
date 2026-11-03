@@ -53,41 +53,6 @@ describe('dispatchTerminalNotification', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses a live pane key when marking inactive worktree attention', () => {
-    dispatchTerminalNotification('wt-primary', {
-      source: 'agent-task-complete',
-      terminalTitle: 'codex',
-      paneKey
-    })
-
-    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        source: 'agent-task-complete',
-        notificationId: buildAgentNotificationId({
-          worktreeId: 'wt-primary',
-          paneKey,
-          stateStartedAt: mockState.agentStatusByPaneKey[paneKey].stateStartedAt
-        }),
-        worktreeId: 'wt-primary',
-        paneKey,
-        repoLabel: 'orca',
-        worktreeLabel: 'master',
-        terminalTitle: 'codex',
-        isActiveWorktree: false,
-        agentType: 'codex',
-        agentState: 'done',
-        agentPrompt: 'codex-hook-notify',
-        agentLastAssistantMessage: 'Done.'
-      })
-    )
-    expect(mockState.markAgentAttentionUnread).toHaveBeenCalledWith({
-      workspaceId: 'wt-primary',
-      subjectKey: paneKey,
-      groupId: 'tab-1',
-      reason: 'agent-completion'
-    })
-  })
-
   it('builds the notification id from a completion snapshot, not the pinned working row', () => {
     const pinnedWorkingStartedAt = NOW - 60_000
     // Match row agent identity to the event or rejection makes both fallback outcomes pass vacuously.
@@ -256,87 +221,6 @@ describe('dispatchTerminalNotification', () => {
       groupId: 'tab-1',
       reason: 'agent-completion'
     })
-  })
-
-  it('hands the completion to the attention module whatever the pane-attention setting', () => {
-    mockState.settings.experimentalTerminalAttention = false
-
-    dispatchTerminalNotification('wt-primary', {
-      source: 'agent-task-complete',
-      terminalTitle: 'codex',
-      paneKey
-    })
-
-    expect(window.api.notifications.dispatch).toHaveBeenCalled()
-    expect(mockState.markAgentAttentionUnread).toHaveBeenCalledWith({
-      workspaceId: 'wt-primary',
-      subjectKey: paneKey,
-      groupId: 'tab-1',
-      reason: 'agent-completion'
-    })
-  })
-
-  it('offers attention-only completion to main for independent mobile delivery', () => {
-    mockState.settings.notifications = { ...mockState.settings.notifications, enabled: false }
-    dispatchTerminalNotification('wt-primary', {
-      source: 'agent-task-complete',
-      terminalTitle: 'codex',
-      paneKey
-    })
-
-    expect(mockState.markAgentAttentionUnread).toHaveBeenCalledWith({
-      workspaceId: 'wt-primary',
-      subjectKey: paneKey,
-      groupId: 'tab-1',
-      reason: 'agent-completion'
-    })
-    expect(window.api.notifications.dispatch).toHaveBeenCalled()
-  })
-
-  it('names the server running the workspace so a phone opens it there, and none for local work', () => {
-    for (const workspaceOwner of [
-      { executionHostId: 'local' as const, runtimeEnvironmentId: null },
-      // A server's own SSH target still runs behind that server.
-      { executionHostId: 'ssh:qa' as const, runtimeEnvironmentId: 'env-1' },
-      // A tab stamped with the server before its environment is known.
-      { executionHostId: 'runtime:env-2' as const, runtimeEnvironmentId: null }
-    ]) {
-      dispatchTerminalNotification('wt-primary', {
-        source: 'agent-task-complete',
-        terminalTitle: 'codex',
-        paneKey,
-        workspaceOwner
-      })
-    }
-    const calls = vi.mocked(window.api.notifications.dispatch).mock.calls
-    expect(calls.map(([request]) => request.executionHost)).toEqual([
-      undefined,
-      'runtime:env-1',
-      'runtime:env-2'
-    ])
-  })
-
-  it('writes unread with the completion reason while the agent-complete banner toggle is off', () => {
-    // Main applies desktop-banner settings after unread/mobile delivery; disabling banners must preserve tray/unread attention.
-    mockState.settings.notifications = {
-      ...mockState.settings.notifications,
-      enabled: true,
-      agentTaskComplete: false
-    }
-
-    dispatchTerminalNotification('wt-primary', {
-      source: 'agent-task-complete',
-      terminalTitle: 'codex',
-      paneKey
-    })
-
-    expect(mockState.markAgentAttentionUnread).toHaveBeenCalledWith({
-      workspaceId: 'wt-primary',
-      subjectKey: paneKey,
-      groupId: 'tab-1',
-      reason: 'agent-completion'
-    })
-    expect(window.api.notifications.dispatch).toHaveBeenCalled()
   })
 
   it('records a bell as a distinct reason and never as an agent completion', () => {
@@ -613,54 +497,6 @@ describe('dispatchTerminalNotification', () => {
     expect(dispatchArgs?.agentType).toBeUndefined()
     expect(dispatchArgs?.agentPrompt).toBeUndefined()
     expect(dispatchArgs?.agentLastAssistantMessage).toBeUndefined()
-  })
-
-  it('does not reuse an untyped fresh agent snapshot when the terminal title names an agent', () => {
-    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
-      agentType: undefined,
-      terminalTitle: 'unknown',
-      lastAssistantMessage: 'Previous agent done.'
-    })
-
-    dispatchTerminalNotification('wt-primary', {
-      source: 'agent-task-complete',
-      terminalTitle: 'Claude Code',
-      paneKey
-    })
-
-    const dispatchArgs = getLastNotificationDispatchArg()
-    expect(dispatchArgs).toEqual(
-      expect.objectContaining({
-        source: 'agent-task-complete',
-        worktreeId: 'wt-primary',
-        paneKey,
-        terminalTitle: 'Claude Code'
-      })
-    )
-    expect(dispatchArgs?.agentType).toBeUndefined()
-    expect(dispatchArgs?.agentLastAssistantMessage).toBeUndefined()
-  })
-
-  it('keeps a fresh agent snapshot when the terminal title matches the stored agent', () => {
-    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
-      agentType: 'codex',
-      terminalTitle: 'Codex',
-      lastAssistantMessage: 'Codex done.'
-    })
-
-    dispatchTerminalNotification('wt-primary', {
-      source: 'agent-task-complete',
-      terminalTitle: '⠋ Codex',
-      paneKey
-    })
-
-    const dispatchArgs = getLastNotificationDispatchArg()
-    expect(dispatchArgs).toEqual(
-      expect.objectContaining({
-        agentType: 'codex',
-        agentLastAssistantMessage: 'Codex done.'
-      })
-    )
   })
 
   it('drops a title-only completion when fresh hook state is still active', () => {

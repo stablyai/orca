@@ -38,7 +38,7 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-vi.mock('@/components/settings/use-session-search-status', () => ({
+vi.mock('@/components/settings/session-history/use-session-search-status', () => ({
   useSessionSearchStatus: () => ({
     status: mocks.status,
     failed: false,

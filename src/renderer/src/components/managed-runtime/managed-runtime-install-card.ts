@@ -140,10 +140,7 @@ function offerCard(
   const label = hero
     ? translate('components.managed-runtime.install', 'Install {{agent}}', { agent })
     : translate('components.managed-runtime.installShort', 'Install')
-  const hint = translate(
-    'components.managed-runtime.settingsHint',
-    'Also in Settings › Chat › Providers'
-  )
+  const hint = translate('components.managed-runtime.settingsHint', 'Also in Settings › Agents')
   return {
     tone: 'offer',
     title,

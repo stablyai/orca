@@ -6,7 +6,7 @@ import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealTarget
 } from '../../shared/terminal-pane-reveal'
-import { addFanoutListener } from '../event-listener-fanout'
+import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { focusExistingMainWindow } from './focus-existing-window'
 

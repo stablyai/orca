@@ -14,6 +14,10 @@ import {
 } from './terminal/background-terminal-worktree-mount'
 import type { StartupTerminalTabHold } from './terminal/startup-terminal-tab-hold'
 import {
+  subscribeTerminalPrewarmWorktrees,
+  type TerminalPrewarmStage
+} from './terminal/terminal-worktree-prewarm'
+import {
   combineTerminalWorktreeParkIds,
   useManualTerminalWorktreeParking
 } from './terminal-pane/use-manual-terminal-worktree-parking'
@@ -69,6 +73,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
+  const prewarmLeasesRef = useRef(new Map<string, TerminalPrewarmStage>())
   const startupTerminalTabHoldRef = useRef<StartupTerminalTabHold | null>(null)
   // Cold activation runs during render; return its count into a ref instead of triggering a render-phase state update.
   const activationDeferralPlanRevisionRef = useRef(0)
@@ -136,6 +141,11 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     }
   }, [closeDialogDebounceTimersRef, measurableBackgroundWorktreeIdsRef, mountedWorktreeIdsRef])
 
+  useEffect(
+    () => subscribeTerminalPrewarmWorktrees(() => setTerminalParkingRevision((r) => r + 1)),
+    []
+  )
+
   useEffect(() => {
     const timers = terminalWorktreeParkingTimersRef.current
     return () => {
@@ -166,6 +176,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     backgroundMountTabIdsByWorktreeRef,
     activationDeferredMountTabIdsByWorktreeRef,
     lastActivationWorktreeIdRef,
+    prewarmLeasesRef,
     startupTerminalTabHoldRef,
     activationDeferralPlanRevisionRef
   }

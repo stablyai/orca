@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import SyncDatabase from '../sqlite/sync-database'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { cwdKey } from './session-search-file-records'

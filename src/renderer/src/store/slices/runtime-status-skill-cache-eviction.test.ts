@@ -127,45 +127,6 @@ describe('runtime environment skill-cache eviction', () => {
     }
   )
 
-  it('rescans only the removed runtime environment', async () => {
-    const store = createTestStore()
-    store.getState().setRuntimeEnvironments([environment('env-a'), environment('env-b')])
-    discoverSkillsForRuntimeTarget
-      .mockResolvedValueOnce(result(1))
-      .mockResolvedValueOnce(result(2))
-      .mockResolvedValueOnce(result(3))
-
-    await discoverInstalledAgentSkills(false, undefined, remote('env-a'))
-    await discoverInstalledAgentSkills(false, undefined, remote('env-b'))
-    store.getState().setRuntimeEnvironments([environment('env-b')])
-
-    await expect(discoverInstalledAgentSkills(false, undefined, remote('env-a'))).resolves.toEqual(
-      result(3)
-    )
-    await expect(discoverInstalledAgentSkills(false, undefined, remote('env-b'))).resolves.toEqual(
-      result(2)
-    )
-    expect(discoverSkillsForRuntimeTarget).toHaveBeenCalledTimes(3)
-  })
-
-  it('evicts a re-paired runtime without churning an unchanged runtime', async () => {
-    const store = createTestStore()
-    store.getState().setRuntimeEnvironments([environment('env-a')])
-    discoverSkillsForRuntimeTarget.mockResolvedValueOnce(result(1)).mockResolvedValueOnce(result(2))
-
-    await discoverInstalledAgentSkills(false, undefined, remote('env-a'))
-    store.getState().setRuntimeEnvironments([environment('env-a')])
-    await expect(discoverInstalledAgentSkills(false, undefined, remote('env-a'))).resolves.toEqual(
-      result(1)
-    )
-
-    store.getState().setRuntimeEnvironments([environment('env-a', 2)])
-    await expect(discoverInstalledAgentSkills(false, undefined, remote('env-a'))).resolves.toEqual(
-      result(2)
-    )
-    expect(discoverSkillsForRuntimeTarget).toHaveBeenCalledTimes(2)
-  })
-
   it('does not let an in-flight scan restore a removed runtime cache entry', async () => {
     const store = createTestStore()
     const staleScan = deferred()

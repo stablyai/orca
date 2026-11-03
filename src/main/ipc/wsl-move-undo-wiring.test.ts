@@ -21,7 +21,7 @@ const host = vi.hoisted(() => ({
   connect: vi.fn(async (..._args: unknown[]): Promise<boolean> => true),
   keptForPeers: false
 }))
-vi.mock('../wsl/wsl-host-kept-for-peers', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-kept-for-peers', () => ({
   wasWslHostKeptForPeers: () => host.keptForPeers
 }))
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -36,7 +36,9 @@ vi.mock('./wsl-move-host-connect', () => ({
   wslHostRemovalPending: () => host.removalPending,
   connectWslMoveHostService: (...args: unknown[]) => host.connect(...args)
 }))
-vi.mock('../wsl/wsl-host-service-instance', () => ({ getWslHostService: () => ({}) }))
+vi.mock('../wsl/host-lifecycle/wsl-host-service-instance', () => ({
+  getWslHostService: () => ({})
+}))
 vi.mock('./wsl-host-automation-disable', () => ({
   readWslHostAutomationStates: async (_userData: string, _environmentId: string, ids: string[]) =>
     Object.fromEntries(ids.map((id) => [id, host.enabledOnHost.get(id) ?? false])),
@@ -247,7 +249,10 @@ describe("undo's stop of the host's terminals", () => {
       ].filter((terminal) => worktree === null || terminal.worktreeId === worktree)
       return { ok: true, result: { terminals, truncated: false } }
     })
-    expect(await createWslMoveUndoPorts(store, '/user-data').stopHostCopies(move)).toBe('stopped')
+    expect(await createWslMoveUndoPorts(store, '/user-data').stopHostCopies(move)).toEqual({
+      outcome: 'stopped',
+      slept: true
+    })
     const slept = rpc.call.mock.calls
       .filter(([, , method]) => method === 'worktree.sleep')
       .map(([, , , params]) => params)

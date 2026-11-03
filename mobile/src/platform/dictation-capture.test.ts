@@ -1,4 +1,4 @@
-// Pin the native interruption rule too: began/blocked cancel, while ended alone returns the OS session and must leave dictation alive.
+// Pin the native interruption rule too: began/blocked end capture, while ended alone returns the OS session and must leave dictation alive.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const engine = vi.hoisted(() => ({

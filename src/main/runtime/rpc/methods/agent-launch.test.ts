@@ -191,6 +191,43 @@ describe('what agent.launch accepts', () => {
 })
 
 describe('the worktree factory', () => {
+  // Why: a desktop older than #34525 sends its own dispatch token, which this host cannot verify (#34433).
+  it('creates a plain worktree for another owner’s automation run, but surfaces store failures', async () => {
+    const provenanceRequest = {
+      automationId: 'desktop-automation',
+      automationRunId: 'desktop-run',
+      dispatchToken: 'desktop-token',
+      createRequestId: 'create-request-desktop'
+    }
+    const launchFor = (failure: string, runtime: RuntimeStub) =>
+      launch(
+        {
+          ...CREATE_LAUNCH,
+          target: {
+            ...CREATE_LAUNCH.target,
+            create: {
+              ...CREATE_LAUNCH.target.create,
+              automationProvenanceRequest: provenanceRequest
+            }
+          }
+        },
+        Object.assign(runtime, {
+          showAutomation: () => {
+            throw new Error(failure)
+          },
+          listAutomationRuns: () => []
+        })
+      )
+
+    const runtime = runtimeStub()
+    await launchFor('Automation not found.', runtime)
+    expect(createArgs(runtime).automationProvenance).toBeUndefined()
+
+    await expect(launchFor('database is locked', runtimeStub())).rejects.toThrow(
+      'database is locked'
+    )
+  })
+
   it('creates a structured launch’s worktree with no startup agent', async () => {
     const runtime = runtimeStub()
     const result = await launch(CREATE_LAUNCH, runtime)
@@ -546,6 +583,7 @@ describe('the terminal factory', () => {
     const result = await launch(CREATE_LAUNCH, runtime)
 
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', {
+      wslUserAct: true,
       startupAgent: 'claude',
       terminalImageViewerSupported: false,
       viewMode: 'terminal',
@@ -571,6 +609,7 @@ describe('the terminal factory', () => {
     expect(runtime.showManagedTerminalWorkspace).not.toHaveBeenCalled()
     // Normalize selectors to ids before lower layers add their own id: prefix.
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', {
+      wslUserAct: true,
       startupAgent: 'gemini',
       terminalImageViewerSupported: false,
       viewMode: 'terminal',

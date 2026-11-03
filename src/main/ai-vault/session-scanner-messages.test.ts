@@ -1,13 +1,13 @@
 import { expect, it, vi } from 'vitest'
 import { createAccumulator } from './session-scanner-accumulator'
-import { decodeSessionMessage } from './session-decoded-message'
+import { decodeSessionMessage } from './transcripts/session-decoded-message'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import {
   addDecodedSessionMessage,
   addPreviewMessage,
   addSessionContent
 } from './session-scanner-messages'
-import type { TranscriptMessage } from './session-transcript-consumers'
+import type { TranscriptMessage } from './transcripts/session-transcript-consumers'
 
 const AT = '2026-05-01T00:00:00.000Z'
 

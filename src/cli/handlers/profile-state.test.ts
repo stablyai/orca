@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as durableFileWrite from '../../main/durable-file-write'
+import type * as ProcessHostModule from '@orca/process-host'
+import * as durableFileWrite from '../../main/filesystem/durable-file-write'
 import * as http1Marker from '../../main/startup/http1-compatibility-marker'
 import { readPersistedHttp1CompatibilityMode } from '../../main/startup/http1-compatibility-profile-state'
 import {
@@ -20,15 +21,27 @@ import {
 } from '../../main/persistence/profile-state/profile-state-backup-path'
 import { writeProfileStateDatabaseSnapshotAsync } from '../../main/persistence/profile-state/profile-state-database-snapshot'
 import { profileStateJsonExportPath } from '../../main/persistence/profile-state/legacy-json/profile-state-export-path'
+import { PROFILE_STATE_RECOVERY_RESULT_PREFIX } from '../../shared/profile-state-recovery-command'
 import { main } from '../index'
 
-const { getCliStatusMock, getDefaultUserDataPathMock, runtimeClientConstructorMock } = vi.hoisted(
-  () => ({
-    getCliStatusMock: vi.fn(),
-    getDefaultUserDataPathMock: vi.fn(),
-    runtimeClientConstructorMock: vi.fn()
-  })
-)
+const {
+  getCliStatusMock,
+  getDefaultUserDataPathMock,
+  runProcessMock,
+  runtimeClientConstructorMock
+} = vi.hoisted(() => ({
+  getCliStatusMock: vi.fn(),
+  getDefaultUserDataPathMock: vi.fn(),
+  runProcessMock: vi.fn(),
+  runtimeClientConstructorMock: vi.fn()
+}))
+
+// Only the bundled-recovery case stubs the child; other cases keep the real process host.
+vi.mock('@orca/process-host', async (importOriginal) => {
+  const actual = await importOriginal<typeof ProcessHostModule>()
+  runProcessMock.mockImplementation(actual.runProcess)
+  return { ...actual, runProcess: runProcessMock }
+})
 
 vi.mock('../runtime-client', () => {
   class RuntimeClientError extends Error {
@@ -43,7 +56,14 @@ vi.mock('../runtime-client', () => {
   }
 
   class RuntimeClient {
-    getCliStatus = getCliStatusMock
+    async getOfflineRuntimeAdmission() {
+      const status = await getCliStatusMock()
+      return {
+        reachable: status.result.runtime.reachable,
+        legacyPidRunning: status.result.app.running,
+        pid: status.result.app.pid ?? null
+      }
+    }
 
     constructor(
       _userDataPath?: string,
@@ -150,6 +170,72 @@ describe('profile-state CLI recovery', () => {
     })
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it('keeps current history through CLI repair and reports its source honestly', async () => {
+    const profile = createProfile()
+    getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+    rmSync(profile.databaseFile)
+    rmSync(`${profile.databaseFile}-wal`)
+    rmSync(profile.dataFile)
+    const runs = [{ id: 'recent-run', status: 'completed' }]
+    const opened = openProfileStateDatabase(profile.databaseFile, 'profile-cli-recovery')
+    try {
+      importProfileStateJson(opened.db, JSON.stringify({ automationRuns: runs }))
+      opened.db.exec(
+        "UPDATE profile_state_documents SET content_hash = 'broken' WHERE domain = 'automationRuns'"
+      )
+    } finally {
+      opened.db.close()
+    }
+    await main(['profile', 'state', 'rollback', '--repair'], profile.userDataPath)
+    expect(process.exitCode).toBe(0)
+    const output = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
+    expect(output).toContain('repaired automationRuns: current runs kept')
+    expect(output).not.toContain('starts empty')
+    const repaired = openProfileStateDatabaseReadOnly(profile.databaseFile, 'profile-cli-recovery')
+    try {
+      expect(JSON.parse(exportProfileStateJson(repaired.db))).toEqual({ automationRuns: runs })
+    } finally {
+      repaired.db.close()
+    }
+  })
+
+  it('prints kept and backup-restored sections returned by the bundled recovery process', async () => {
+    const profile = createProfile()
+    getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+    vi.stubEnv('ORCA_APP_EXECUTABLE', '/packaged/Orca')
+    const result = {
+      profileId: 'profile-cli-recovery',
+      dataFile: profile.dataFile,
+      databaseFile: profile.databaseFile,
+      exportPaths: [],
+      backups: [],
+      revision: 3,
+      quarantineDirectory: '/quarantine',
+      removedDatabaseFiles: [],
+      storage: 'sqlite',
+      restoredPath: profile.databaseFile,
+      repairedSections: [
+        { domain: 'automationRuns', source: 'current' },
+        { domain: 'repos', backupId: '1-a', backupCreatedAtMs: 5 }
+      ]
+    }
+    runProcessMock.mockResolvedValueOnce({
+      code: 0,
+      signal: null,
+      timedOut: false,
+      stdout: `starting\n${PROFILE_STATE_RECOVERY_RESULT_PREFIX}${JSON.stringify({ ok: true, result })}\n`,
+      stderr: ''
+    })
+    await main(['profile', 'state', 'rollback', '--repair'], profile.userDataPath)
+    expect(process.exitCode).toBe(0)
+    expect(runProcessMock).toHaveBeenCalledOnce()
+    const output = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
+    expect(output).toContain('repaired automationRuns: current runs kept')
+    expect(output).toContain(
+      `repaired repos: from backup 1-a saved ${new Date(5).toLocaleString()}`
+    )
   })
 
   it('restores the selected export through the offline CLI command', async () => {

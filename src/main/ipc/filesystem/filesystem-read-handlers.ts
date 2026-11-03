@@ -10,11 +10,12 @@ import { readdir, stat } from 'node:fs/promises'
 import type { DirEntry, MarkdownDocument } from '../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../shared/file-name-sort'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
-  resolveLocalFileRequestPath
+  resolveLocalFileRequestPath,
+  resolveLocalListRequestPath
 } from '../local-file-access-resolution'
 import { isPathAbsentError } from './filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
@@ -25,8 +26,11 @@ import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'
 import { grantRemoteFilePreview, readLocalFilePreview } from '../../media/media-preview-protocol'
 import { readPreviewGrantRange } from '../../media/preview-grant-range-read'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
-import { assertWslUncPathRunning, guardWslUncPathAccess } from '../../wsl/wsl-unc-access-gate'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
+import {
+  assertWslUncPathRunning,
+  guardWslUncPathAccess
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 import { parseRemoteFilePreviewAddress } from '../../../shared/remote-file-preview-address'
 import {
   readLocalFileContent,
@@ -48,6 +52,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         followSymlinks?: boolean
         /** A user act (open or Retry); may start a stopped WSL distro. */
         wakeWslDistro?: boolean
+        access?: LocalFileAccess
       }
     ): Promise<DirEntry[]> => {
       // Record throw site and redacted path shape because fs:readDir IPC errors otherwise lack context.
@@ -60,14 +65,14 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         return await guardWslUncPathAccess(
           args.dirPath,
           async () => {
-            const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
+            const dirPath = await resolveLocalListRequestPath(args.dirPath, args.access, store)
             throwSite = 'readdir'
             const entries = await readdir(windowsFsPath(dirPath), { withFileTypes: true })
             const mapped = await classifyFilesystemDirectoryEntries(
               args.dirPath,
               entries,
               args.followSymlinks ?? store.getSettings().followSymlinkedDirectories ?? false,
-              (path) => resolveDesktopAuthorizedPath(path, store)
+              (path) => resolveLocalListRequestPath(path, args.access, store)
             )
             return sortDirEntries(mapped)
           },

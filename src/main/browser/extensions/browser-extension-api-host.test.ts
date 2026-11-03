@@ -581,4 +581,128 @@ describe('extension subframe listener retirement', () => {
       host.forgetBrowserExtensionContexts(sess)
     }
   })
+
+  it.each([1, 10, 100])('visits frame registrations linearly for %s extensions', async (count) => {
+    const { sess, state } = isolatedSession()
+    const pages: ReturnType<typeof frameEvent>[] = []
+    const ids: string[] = []
+    try {
+      for (let index = 0; index < count; index++) {
+        const suffix = index
+          .toString(16)
+          .padStart(4, '0')
+          .replace(/[0-9a-f]/g, (digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)))
+        const id = `${'c'.repeat(28)}${suffix}`
+        ids.push(id)
+        extensions.set(id, makeExtension(id, ['probe']))
+        const page = frameEvent(`chrome-extension://${id}/page.html`, sess, 40, index + 1)
+        await invoke(page.event, listen)
+        pages.push(page)
+      }
+      let visits = 0
+      const values = state.frames.values.bind(state.frames)
+      const entries = state.frames[Symbol.iterator].bind(state.frames)
+      const countRows = <T>(iterator: MapIterator<T>): MapIterator<T> => {
+        const next = iterator.next.bind(iterator)
+        iterator.next = () => {
+          const row = next()
+          if (!row.done) {
+            visits++
+          }
+          return row
+        }
+        return iterator
+      }
+      vi.spyOn(state.frames, 'values').mockImplementation(() => countRows(values()))
+      vi.spyOn(state.frames, Symbol.iterator).mockImplementation(() => countRows(entries()))
+      host.emitBrowserExtensionEvent({ session: sess }, 'probe', 'onPing', ['scale'])
+      for (const page of pages) {
+        expect(page.frame.send).toHaveBeenCalledExactlyOnceWith(BROWSER_EXTENSION_EVENT_CHANNEL, {
+          namespace: 'probe',
+          event: 'onPing',
+          args: ['scale']
+        })
+      }
+      expect(visits).toBeLessThanOrEqual(count * 3)
+    } finally {
+      host.forgetBrowserExtensionContexts(sess)
+      for (const id of ids) {
+        extensions.delete(id)
+      }
+    }
+  })
+
+  it('keeps extension membership snapshotted while resolving current frames after callbacks', async () => {
+    const { sess } = isolatedSession()
+    const first = frameEvent(`chrome-extension://${EXTENSION_ID}/first.html`, sess, 41, 1)
+    const previous = frameEvent(`chrome-extension://${OTHER_ID}/old.html`, sess, 41, 2)
+    const successor = frameEvent(`chrome-extension://${OTHER_ID}/new.html`, sess, 41, 3)
+    const addedId = 'd'.repeat(32)
+    const added = frameEvent(`chrome-extension://${addedId}/new.html`, sess, 41, 4)
+    extensions.set(OTHER_ID, makeExtension(OTHER_ID, ['probe']))
+    extensions.set(addedId, makeExtension(addedId, ['probe']))
+    try {
+      await invoke(first.event, listen)
+      await invoke(previous.event, listen)
+      const oldChannel = channel()
+      host.emitBrowserExtensionEvent({ session: sess }, 'probe', 'onPing', (extension) => {
+        if (extension.id === EXTENSION_ID) {
+          oldChannel.port1.emit('close')
+          void invoke(successor.event, listen)
+          void invoke(added.event, listen)
+        }
+        return ['current frames']
+      })
+      expect(first.frame.send).toHaveBeenCalledTimes(1)
+      expect(previous.frame.send).not.toHaveBeenCalled()
+      expect(successor.frame.send).toHaveBeenCalledTimes(1)
+      expect(added.frame.send).not.toHaveBeenCalled()
+      host.emitBrowserExtensionEvent({ session: sess }, 'probe', 'onPing', ['next'])
+      expect(added.frame.send).toHaveBeenCalledTimes(1)
+    } finally {
+      host.forgetBrowserExtensionContexts(sess)
+      extensions.set(OTHER_ID, makeExtension(OTHER_ID, []))
+      extensions.delete(addedId)
+    }
+  })
+
+  it('delivers to a replacement registered while resolving the same extension arguments', async () => {
+    const { sess } = isolatedSession()
+    const previous = frameEvent(`chrome-extension://${EXTENSION_ID}/old.html`, sess, 42, 1)
+    const successor = frameEvent(`chrome-extension://${EXTENSION_ID}/new.html`, sess, 42, 2)
+    await invoke(previous.event, listen)
+    const oldChannel = channel()
+    try {
+      host.emitBrowserExtensionEvent({ session: sess }, 'probe', 'onPing', () => {
+        oldChannel.port1.emit('close')
+        void invoke(successor.event, listen)
+        return ['replacement']
+      })
+      expect(previous.frame.send).not.toHaveBeenCalled()
+      expect(successor.frame.send).toHaveBeenCalledTimes(1)
+      expect(oldChannel.port1.close).toHaveBeenCalledTimes(1)
+    } finally {
+      host.forgetBrowserExtensionContexts(sess)
+    }
+  })
+
+  it('keeps live frame iteration when a send replaces the final frame registration', async () => {
+    const { sess } = isolatedSession()
+    const previous = frameEvent(`chrome-extension://${EXTENSION_ID}/old.html`, sess, 43, 1)
+    const successor = frameEvent(`chrome-extension://${EXTENSION_ID}/new.html`, sess, 43, 2)
+    await invoke(previous.event, listen)
+    const oldChannel = channel()
+    previous.frame.send.mockImplementation(() => {
+      oldChannel.port1.emit('close')
+      void invoke(successor.event, listen)
+    })
+    try {
+      host.emitBrowserExtensionEvent({ session: sess }, 'probe', 'onPing', ['replacement'])
+      expect(previous.frame.send).toHaveBeenCalledTimes(1)
+      expect(successor.frame.send).toHaveBeenCalledTimes(1)
+      expect(oldChannel.port1.close).toHaveBeenCalledTimes(1)
+    } finally {
+      host.forgetBrowserExtensionContexts(sess)
+    }
+  })
 })

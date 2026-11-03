@@ -40,10 +40,13 @@ import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-me
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import { useWslHostUnavailableReason } from '../terminal-pane/use-wsl-host-unavailable-reason'
+import { useStoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
+  useUiLanguageRevision()
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const setRightSidebarExplorerView = useAppStore((s) => s.setRightSidebarExplorerView)
   const searchPanel = useFileSearchPanel(explorerView)
@@ -52,6 +55,7 @@ function FileExplorerFiles(): React.JSX.Element {
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
   const wslHostUnavailable = useWslHostUnavailableReason(activeWorktreeId)
+  const stoppedWslHost = useStoppedWslHost(activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   // Why: a folder workspace has no repo row, so only the catalog owner names its SSH host.
@@ -156,7 +160,7 @@ function FileExplorerFiles(): React.JSX.Element {
     }
   }, [activeWorktreeId, toggleShowDotfilesForWorktree])
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
-  const selection = useFileExplorerSelection(rowProjection, isMac)
+  const selection = useFileExplorerSelection(rowProjection, isMac, openInOwner)
   const selectedNode = selection.selectedPath
     ? rowProjection.getRowByPath(selection.selectedPath)
     : null
@@ -196,7 +200,8 @@ function FileExplorerFiles(): React.JSX.Element {
     selectedNode,
     rowProjection,
     rowExpandedPaths,
-    visibleRowCount
+    visibleRowCount,
+    pathOwner: openInOwner
   })
   const { inlineInputState, rowScrolling } = paneState
   const {
@@ -326,6 +331,7 @@ function FileExplorerFiles(): React.JSX.Element {
             handleExplorerBackgroundContextMenuCapture={handleExplorerBackgroundContextMenuCapture}
             handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
             wslHostUnavailable={wslHostUnavailable}
+            stoppedWslHost={stoppedWslHost}
           />
           <div
             className={cn(

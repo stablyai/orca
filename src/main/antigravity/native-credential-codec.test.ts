@@ -95,4 +95,24 @@ describe('native Antigravity credential format', () => {
       refreshToken: null
     })
   })
+  it('preserves the legacy direct OAuth token without inventing an auth method', () => {
+    const contents =
+      '{"access_token":"fixture-only","refresh_token":"fixture-refresh","expiry":"2030-01-01T00:00:00Z"}'
+    expect(parseAntigravityNativeCredential(contents)).toMatchObject({
+      contents,
+      authMethod: '',
+      accessToken: 'fixture-only',
+      refreshToken: 'fixture-refresh'
+    })
+    for (const authMethod of ['', undefined]) {
+      const rewritten = JSON.stringify({ token: JSON.parse(contents), auth_method: authMethod })
+      expect(parseAntigravityNativeCredential(rewritten)).toMatchObject({
+        contents: rewritten,
+        authMethod: ''
+      })
+    }
+    expect(() =>
+      parseAntigravityNativeCredential('{"auth_method":"consumer","access_token":"fixture-only"}')
+    ).toThrow('could not be decoded')
+  })
 })

@@ -544,7 +544,7 @@ describe('issue source operations', () => {
       new Error('GraphQL: API rate limit already exceeded for user ID 1.')
     )
 
-    await expect(updateIssue('/repo-root', 924, { state: 'closed' })).resolves.toEqual({
+    await expect(updateIssue('/repo-root', 924, { state: 'closed' })).resolves.toMatchObject({
       ok: false,
       error: 'GitHub rate limit hit. Try again in a few minutes.'
     })

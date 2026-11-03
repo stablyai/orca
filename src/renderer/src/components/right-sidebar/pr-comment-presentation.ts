@@ -88,9 +88,9 @@ const MARKDOWN_BASE = cn(
   '[&_code]:text-[0.92em] [&_pre]:text-xs [&_pre_code]:text-[1em] [&_table]:text-[12px]',
   // Use absolute caption sizes because nested sub/sup percentages compound into illegible text.
   '[&_sub]:text-[11px] [&_sup]:text-[11px]',
-  // Nested sub wrappers compound image offsets; neutralize only image wrappers, preserving real subscripts.
-  '[&_sub:has(img)]:bottom-0 [&_sub:has(img)]:align-middle',
-  '[&_sup:has(img)]:top-0 [&_sup:has(img)]:align-middle',
+  // Nested sub wrappers compound image/icon offsets; preserve real subscripts.
+  '[&_sub:has(img,svg)]:bottom-0 [&_sub:has(img,svg)]:align-middle',
+  '[&_sup:has(img,svg)]:top-0 [&_sup:has(img,svg)]:align-middle',
   '[&_pre]:max-h-none [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap',
   '[&_table]:w-full [&_table]:max-w-full'
 )

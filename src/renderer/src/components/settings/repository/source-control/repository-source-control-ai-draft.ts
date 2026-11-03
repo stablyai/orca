@@ -7,7 +7,7 @@ import {
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { completeRepoActionRecipe } from './repository-source-control-ai-labels'
-import { SOURCE_CONTROL_TEXT_ACTION_ID_SET } from '../../source-control-action-recipe-options'
+import { SOURCE_CONTROL_TEXT_ACTION_ID_SET } from '../../source-control/source-control-action-recipe-options'
 
 type RepoActionRecipe = NonNullable<
   NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
@@ -56,7 +56,7 @@ export function dropRepoLegacyInstructionForAction(
  *  saved explicit args clear and never the agent only detected to run a default selection. */
 export function readCompleteRecipeForDraft(
   current: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId
 ): RepoActionRecipe {
   const recipe = resolveSourceControlActionRecipe({
@@ -130,7 +130,7 @@ export function withRepoAiHostedReviewDefault(
 
 export function withRepoAiActionMode(
   base: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId,
   mode: 'inherit' | 'override'
 ): RepoSourceControlAiOverrides {
@@ -158,15 +158,16 @@ export function withRepoAiActionMode(
 
 export function withRepoAiActionRecipeText(
   base: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
+  _settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
   actionId: SourceControlActionId,
   text: ActionRecipeTextDraft
 ): RepoSourceControlAiOverrides {
-  const currentRecipe = readCompleteRecipeForDraft(base, settings, actionId)
   const preferencesEdited = !sameDraftLaunchPreferences(
     text,
     readActionRecipeTextDraft(base, actionId)
   )
+  const own = base.actionOverrides?.[actionId]
+  const currentRecipe = own ?? {}
   return normalizeRepoAiDraft(
     setActionOverride(base, actionId, {
       ...currentRecipe,
@@ -174,6 +175,7 @@ export function withRepoAiActionRecipeText(
         ? { commandInputTemplate: text.commandInputTemplate }
         : {}),
       ...(text.agentArgs !== undefined ? { agentArgs: text.agentArgs } : {}),
+      argumentChoices: text.argumentChoices,
       ...(preferencesEdited ? { launchPreferences: text.launchPreferences } : {})
     })
   )
@@ -183,7 +185,7 @@ export function withRepoAiActionRecipeText(
  *  show it as empty. */
 export type ActionRecipeTextDraft = Pick<
   RepoActionRecipe,
-  'commandInputTemplate' | 'agentArgs' | 'launchPreferences'
+  'commandInputTemplate' | 'agentArgs' | 'launchPreferences' | 'argumentChoices'
 >
 
 // An own undefined is a deliberate clear; an absent preference leaves inheritance untouched.
@@ -198,6 +200,7 @@ function sameActionRecipeText(a: ActionRecipeTextDraft, b: ActionRecipeTextDraft
   return (
     a.commandInputTemplate === b.commandInputTemplate &&
     a.agentArgs === b.agentArgs &&
+    JSON.stringify(a.argumentChoices) === JSON.stringify(b.argumentChoices) &&
     sameDraftLaunchPreferences(a, b)
   )
 }
@@ -210,6 +213,7 @@ export function readActionRecipeTextDraft(
   return {
     commandInputTemplate: recipe?.commandInputTemplate,
     agentArgs: recipe?.agentArgs,
+    argumentChoices: recipe?.argumentChoices,
     ...(recipe?.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {})
   }
 }
@@ -218,7 +222,10 @@ export function composeDisplayRepoAi(
   immediate: RepoSourceControlAiOverrides,
   customCommandDraft: string | null,
   actionTextDrafts: Partial<Record<SourceControlActionId, ActionRecipeTextDraft>>,
-  settings: GlobalSettings | null = null
+  _settings: Pick<
+    GlobalSettings,
+    'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'
+  > | null = null
 ): RepoSourceControlAiOverrides {
   let next =
     customCommandDraft === null ? immediate : withRepoAiCustomCommand(immediate, customCommandDraft)
@@ -228,9 +235,6 @@ export function composeDisplayRepoAi(
     if (!draft || !hasOwnActionOverride(next.actionOverrides, actionId) || !currentRecipe) {
       continue
     }
-    if (!sameDraftLaunchPreferences(draft, readActionRecipeTextDraft(next, actionId))) {
-      currentRecipe = readCompleteRecipeForDraft(next, settings, actionId)
-    }
     next = {
       ...next,
       actionOverrides: {
@@ -239,6 +243,7 @@ export function composeDisplayRepoAi(
           ...currentRecipe,
           commandInputTemplate: draft.commandInputTemplate,
           agentArgs: draft.agentArgs,
+          argumentChoices: draft.argumentChoices,
           launchPreferences: draft.launchPreferences
         }
       }

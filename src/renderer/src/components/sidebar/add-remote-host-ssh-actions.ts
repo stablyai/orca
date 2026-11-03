@@ -5,18 +5,19 @@ import {
   getSshTargetDraftConnectionFields,
   hasAdvancedConnectionValues,
   type EditingTarget
-} from '../settings/ssh-target-draft'
-import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../../shared/ssh-types'
-import type {
-  SshConfigHostSummary,
-  SshConfigHostListArgs,
-  SshConfigHostListResult,
-  SshConfigHostResolution,
-  SshRepoReadoption,
-  SshTarget,
-  SshTargetAddResult,
-  SshTargetCreateInput
+} from '../settings/ssh/targets/ssh-target-draft'
+import {
+  SSH_CONFIG_HOST_RESULT_LIMIT,
+  type SshConfigHostSummary,
+  type SshConfigHostListArgs,
+  type SshConfigHostListResult,
+  type SshConfigHostResolution,
+  type SshRepoReadoption,
+  type SshTarget,
+  type SshTargetAddResult,
+  type SshTargetCreateInput
 } from '../../../../shared/ssh-types'
+
 import { isDuplicateSshTargetAlias } from './ssh-target-duplicate'
 
 type SshApi = {
@@ -184,17 +185,11 @@ export async function addAllSshConfigHostsToOrca({
       return { kind: 'already-synced' }
     }
     toast.success(
-      result.targets.length > 1
-        ? translate(
-            'auto.components.sidebar.AddRemoteHostDialog.sshImportSyncedPlural',
-            'Added {{count}} hosts to Orca.',
-            { count: result.targets.length }
-          )
-        : translate(
-            'auto.components.sidebar.AddRemoteHostDialog.sshImportSyncedSingular',
-            'Added {{count}} host to Orca.',
-            { count: result.targets.length }
-          )
+      translate(
+        'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced',
+        'Added {{count}} hosts to Orca.',
+        { count: result.targets.length, defaultValue_one: 'Added {{count}} host to Orca.' }
+      )
     )
     return { kind: 'added', count: result.targets.length }
   } catch (error) {
@@ -218,7 +213,12 @@ export async function loadSshConfigHostsForPicker(
     const listed: unknown = await ssh.listConfigHosts(args)
     const result = normalizeSshConfigHostListResult(listed)
     if (!result) {
-      throw new Error('Invalid SSH config host response')
+      throw new Error(
+        translate(
+          'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerInvalidResponse',
+          'Invalid SSH config host response'
+        )
+      )
     }
     return { ok: true, result }
   } catch (error) {

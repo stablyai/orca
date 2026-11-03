@@ -7,6 +7,11 @@ import {
   type PersistedRuntimeEnvironment
 } from './runtime-environments'
 import { hardenExistingSecureFile } from './secure-file'
+import {
+  remoteServerPairingFailureText,
+  type RemoteServerPairingFailureCode,
+  type RemoteServerPairingFailureFields
+} from './remote-server-pairing-failure-copy'
 
 const ENVIRONMENTS_FILE = 'orca-environments.json'
 export const MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES = 1024 * 1024
@@ -15,12 +20,33 @@ export type RuntimeEnvironmentStoreErrorCode = 'invalid_argument' | 'runtime_err
 
 export class RuntimeEnvironmentStoreError extends Error {
   readonly code: RuntimeEnvironmentStoreErrorCode
+  /** Set when `message` comes from REMOTE_SERVER_PAIRING_FAILURE_COPY, so clients can translate it. */
+  readonly pairingFailure?: RemoteServerPairingFailureFields
 
-  constructor(code: RuntimeEnvironmentStoreErrorCode, message: string) {
+  constructor(
+    code: RuntimeEnvironmentStoreErrorCode,
+    message: string,
+    pairingFailure?: RemoteServerPairingFailureFields
+  ) {
     super(message)
     this.name = 'RuntimeEnvironmentStoreError'
     this.code = code
+    if (pairingFailure) {
+      this.pairingFailure = pairingFailure
+    }
   }
+}
+
+/** An invalid-argument store error whose English message comes from the pairing failure table. */
+export function remoteServerPairingStoreError(
+  errorCode: RemoteServerPairingFailureCode,
+  errorParams?: { name: string }
+): RuntimeEnvironmentStoreError {
+  return new RuntimeEnvironmentStoreError(
+    'invalid_argument',
+    remoteServerPairingFailureText(errorCode, errorParams),
+    { errorCode, ...(errorParams ? { errorParams } : {}) }
+  )
 }
 
 export function getEnvironmentStorePath(userDataPath: string): string {

@@ -4,7 +4,7 @@
  */
 import type { Store } from '../loading-store/store'
 import { recoverInterruptedWslMoves } from './wsl-move-reset'
-import { isWslDistroRegistered } from '../../wsl/wsl-distro-registry-id'
+import { isWslDistroRegistered } from '../../wsl/discovery/wsl-distro-registry-id'
 import { runWslMoveStartupRewrite } from './wsl-move-startup-rewrite'
 import { installWslMoveRetention } from './wsl-move-retention'
 import { registerWslMoveDesktopRewriteRegistry } from './wsl-move-desktop-rewrite-registry'

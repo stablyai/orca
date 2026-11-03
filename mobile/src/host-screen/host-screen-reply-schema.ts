@@ -49,21 +49,38 @@ export function readMobileRepoIcon(value: unknown): MobileHostRepoIcon | null {
 // Drop catalog rows without id/displayName; salvage badgeColor and unknown icon arms to the renderer’s existing fallbacks. path labels older hosts’ repo sections.
 // Image icons read only src/label; leave source opaque so newer source arms do not erase usable images.
 // Keep host ids as strings: getRepoExecutionHostId already maps unknown spellings to local, preserving newer hosts’ rows.
-export const hostRepoCatalogSchema = z
-  .looseObject({
-    repos: salvagingArray(
-      z.looseObject({
-        id: z.string(),
-        displayName: z.string(),
-        path: salvagedOptional('path', z.string()),
-        badgeColor: salvagedOptional('badgeColor', z.string()),
-        repoIcon: salvagedOptional('repoIcon', mobileRepoIconSchema),
-        connectionId: salvagedOptional('connectionId', z.string().nullable()),
-        executionHostId: salvagedOptional('executionHostId', z.string().nullable())
-      })
-    )
+const hostRepoCatalogRepos = salvagingArray(
+  z.looseObject({
+    id: z.string(),
+    displayName: z.string(),
+    path: salvagedOptional('path', z.string()),
+    badgeColor: salvagedOptional('badgeColor', z.string()),
+    repoIcon: salvagedOptional('repoIcon', mobileRepoIconSchema),
+    connectionId: salvagedOptional('connectionId', z.string().nullable()),
+    executionHostId: salvagedOptional('executionHostId', z.string().nullable())
   })
+)
+
+export const hostRepoCatalogSchema = z
+  .looseObject({ repos: hostRepoCatalogRepos })
   .transform((reply) => reply.repos)
+
+// Snapshot reads: `unchanged` names the catalog the caller holds; older hosts always answer repos.
+export const hostRepoCatalogSnapshotSchema = z.union([
+  z
+    .looseObject({ unchanged: z.literal(true), snapshotId: z.string() })
+    .transform(({ snapshotId }) => ({ kind: 'unchanged' as const, snapshotId })),
+  z
+    .looseObject({
+      repos: hostRepoCatalogRepos,
+      snapshotId: salvagedOptional('snapshotId', z.string().min(1).max(128))
+    })
+    .transform(({ repos, snapshotId }) => ({
+      kind: 'catalog' as const,
+      repos,
+      snapshotId: snapshotId ?? null
+    }))
+])
 
 // Keep target parsing total: absent/malformed targets yield [] and labels degrade to host ids on older hosts. A throw here would also skip the subsequent platform write.
 export const hostSshTargetSummariesSchema = z
@@ -140,6 +157,16 @@ export const hostViewSettingsSchema = z
 // Most writes read acceptance alone; keep activation opaque for its second consumer.
 // headlessActivationNeedsHostRenderer is a total guard inside a fire-and-forget startup task: a throwing reader would cause an unhandled rejection and skip terminal loading.
 export const hostScreenUnreadReplySchema = z.unknown()
+
+// null: no orca.yaml archive script needs trust. Absent (older host) or malformed: unknown, so the hook does not run.
+export const worktreeArchiveHookTrustSchema = z
+  .looseObject({
+    archiveTrust: salvagedOptional(
+      'archiveTrust',
+      z.looseObject({ contentHash: z.string().min(1), scriptContent: z.string() }).nullable()
+    )
+  })
+  .transform((reply) => reply.archiveTrust)
 
 export type HostRepoCatalogRow = z.output<typeof hostRepoCatalogSchema>[number]
 

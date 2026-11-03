@@ -68,6 +68,30 @@ function resolve(
 }
 
 describe('mobile AI Vault resume target guards', () => {
+  it('uses host correspondence to select the owning folder instead of the active route', () => {
+    const folder = worktree({
+      worktreeId: 'folder:linked',
+      repoId: 'folder-workspace:group',
+      workspaceKind: 'folder-workspace',
+      path: '/var/example'
+    })
+    const args = {
+      session: session({ cwd: '/private/var/example', cwdAliases: ['/var/example'] }),
+      activeWorktreeId: 'route',
+      worktrees: [worktree({ worktreeId: 'route', path: '/elsewhere' }), folder],
+      folderWorkspaces: [{ id: 'linked', projectGroupId: 'group', folderPath: '/var/example' }],
+      projectGroups: [{ id: 'group', parentGroupId: null, connectionId: null }]
+    }
+    expect(resolve(args)).toMatchObject({
+      status: 'ready',
+      worktreeId: 'folder:linked',
+      workspacePath: '/var/example'
+    })
+    expect(
+      resolve({ ...args, session: { ...args.session, executionHostId: 'ssh:other' } }).status
+    ).toBe('blocked')
+  })
+
   const repos = [
     { id: 'local-repo', path: '/Users/ada/repo', connectionId: null },
     { id: 'ssh-repo', path: '/home/ada/ssh-repo', connectionId: 'builder' },

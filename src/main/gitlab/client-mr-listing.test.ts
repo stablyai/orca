@@ -23,7 +23,8 @@ const {
 
 // Why: the #9171 default-branch guard resolves the repo default branch via
 // git; keep those probes hermetic instead of spawning real git processes.
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -249,6 +250,22 @@ describe('gitlab client — MR operations', () => {
         headers: { 'x-total-pages': '5', 'x-total': '7' }
       })
       expect((await listMergeRequests('/repo', 'all', 1, 2)).totalPages).toBe(5)
+    })
+
+    it('retains MR inference when a known-other remote has an unresolved companion', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+      gitExecFileAsyncMock.mockResolvedValueOnce({
+        stdout:
+          'origin\tgit@github.com:team/project.git (fetch)\nupstream\t/local/project.git (fetch)\n'
+      })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+      const result = await listMergeRequests('/repo')
+
+      expect(result.error).toBeUndefined()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(expect.arrayContaining(['mr', 'list']), {
+        cwd: '/repo'
+      })
     })
 
     it('falls back to glab mr list when project ref is unresolved', async () => {

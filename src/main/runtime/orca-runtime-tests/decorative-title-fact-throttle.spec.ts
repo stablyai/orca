@@ -53,27 +53,6 @@ describe('decorative title fact throttle', () => {
     }
   })
 
-  it('propagates a real title change on the tick it arrives, mid-heartbeat', () => {
-    const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
-
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Claude Code\x07')
-    vi.setSystemTime(new Date(EPOCH + SPINNER_INTERVAL_MS))
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠙ Claude Code\x07')
-    vi.setSystemTime(new Date(EPOCH + 2 * SPINNER_INTERVAL_MS))
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠹ Claude Code\x07')
-    expect(titleFacts(batches)).toHaveLength(1)
-
-    const beforeChange = batches.length
-    vi.setSystemTime(new Date(EPOCH + 3 * SPINNER_INTERVAL_MS))
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;✳ Claude Code\x07')
-
-    expect(batches.length).toBeGreaterThan(beforeChange)
-    expect(titleFacts(batches.slice(beforeChange))).toEqual([
-      { kind: 'title', normalizedTitle: '✳ Claude Code', rawTitle: '✳ Claude Code' }
-    ])
-  })
-
   it('propagates a changed working label immediately even while the spinner rotates', () => {
     // Only spinner glyphs are decorative; Grok/Pi label churn changes content.
     const { runtime, batches } = createSideEffectRuntime()

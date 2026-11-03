@@ -8,7 +8,11 @@ const { runWslProcessMock } = vi.hoisted(() => ({
   runWslProcessMock: vi.fn()
 }))
 
-vi.mock('../wsl/wsl-runner', () => ({
+// The E9 running check has its own cases; these cover the chain once the distro runs.
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({
+  assertWslUncPathRunning: async () => {}
+}))
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: runWslProcessMock
 }))
 

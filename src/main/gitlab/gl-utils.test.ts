@@ -1,13 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, glabExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  glabExecFileAsyncMock: vi.fn()
+const { gitExecFileAsyncMock, glabExecFileAsyncMock, readLocalGitConfigSignatureMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    glabExecFileAsyncMock: vi.fn(),
+    readLocalGitConfigSignatureMock: vi.fn()
+  })
+)
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../github/local-git-config-signature', () => ({
+  readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
 import {
@@ -32,9 +44,9 @@ import {
   resolveIssueSource
 } from './gl-utils'
 import { GlabNonListResponseError } from './glab-api-response'
-import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
-import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
+import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remotes/remote-url-probe'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remotes/remote-ref-probe-cache'
 
 function mockGitRemoteCommands(remotes: Record<string, string>): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -71,6 +83,11 @@ describe('gitlab project ref resolution', () => {
     glabExecFileAsyncMock.mockReset()
     _resetProjectRefCache()
     _resetRemoteNameListingCache()
+    readLocalGitConfigSignatureMock
+      .mockReset()
+      .mockImplementation(async (context: { wslDistro?: string }) =>
+        context.wslDistro ? undefined : 'sig-1'
+      )
   })
 
   afterEach(() => {
@@ -92,17 +109,89 @@ describe('gitlab project ref resolution', () => {
     })
   })
 
-  it('prefers upstream for issue project ref resolution', async () => {
+  it.each([undefined, 'Ubuntu'])(
+    'rechecks a warm GitLab identity after migration (%s)',
+    async (wslDistro) => {
+      const localGitOptions = wslDistro ? { wslDistro } : {}
+      mockGitRemoteCommands({ origin: 'git@gitlab.com:team/project.git\n' })
+      await expect(getProjectRef('/repo', undefined, null, localGitOptions)).resolves.toEqual({
+        host: 'gitlab.com',
+        path: 'team/project'
+      })
+
+      mockGitRemoteCommands({ origin: 'git@github.com:team/project.git\n' })
+      if (!wslDistro) {
+        readLocalGitConfigSignatureMock.mockResolvedValue('sig-2')
+      }
+
+      await expect(getProjectRef('/repo', undefined, null, localGitOptions)).resolves.toBeNull()
+    }
+  )
+
+  it.each(['sig-2', undefined])(
+    'does not return a warm identity after freshness was lost (%s) and the probe timed out',
+    async (signature) => {
+      mockGitRemoteCommands({ origin: 'git@gitlab.com:team/project.git\n' })
+      await expect(getProjectRef('/repo')).resolves.toEqual({
+        host: 'gitlab.com',
+        path: 'team/project'
+      })
+      gitExecFileAsyncMock.mockRejectedValue(new Error('git remote get-url timed out'))
+      readLocalGitConfigSignatureMock.mockResolvedValue(signature)
+
+      await expect(getProjectRef('/repo')).resolves.toBeNull()
+    }
+  )
+
+  it.each(['before capture', 'after capture', 'late publication'])(
+    'refreshes on the next independent signature after an edit (%s)',
+    async (ordering) => {
+      const captured = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<{ stdout: string }>()
+      const oldUrl = 'git@gitlab.com:team/old.git'
+      const newUrl = 'git@gitlab.com:team/current.git'
+      readLocalGitConfigSignatureMock.mockResolvedValue('sig-0')
+      gitExecFileAsyncMock
+        .mockImplementationOnce(() => {
+          captured.resolve()
+          return release.promise
+        })
+        .mockResolvedValue({ stdout: newUrl })
+      const old = getProjectRefForRemote('/repo', 'origin')
+      await captured.promise
+      readLocalGitConfigSignatureMock.mockResolvedValue('sig-1')
+      if (ordering === 'late publication') {
+        expect((await getProjectRefForRemote('/repo', 'origin'))?.path).toBe('team/current')
+      }
+      release.resolve({ stdout: ordering === 'before capture' ? newUrl : oldUrl })
+      expect((await old)?.path).toBe(ordering === 'before capture' ? 'team/current' : 'team/old')
+      expect((await getProjectRefForRemote('/repo', 'origin'))?.path).toBe('team/current')
+      const reads = gitExecFileAsyncMock.mock.calls.length
+      expect(reads).toBe(ordering === 'late publication' ? 3 : 2)
+      expect((await getProjectRefForRemote('/repo', 'origin'))?.path).toBe('team/current')
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(reads)
+    }
+  )
+
+  it('returns upstream before a slow origin, retaining the late origin cache fill', async () => {
     mockGitRemoteCommands({
       origin: 'git@gitlab.com:fork/orca.git\n',
       upstream: 'git@gitlab.com:stablyai/orca.git\n'
     })
 
+    const origin = Promise.withResolvers<{ stdout: string }>()
+    const serve = gitExecFileAsyncMock.getMockImplementation()
+    gitExecFileAsyncMock.mockImplementation((args: string[]) =>
+      args[1] === 'get-url' && args[2] === 'origin' ? origin.promise : serve?.(args)
+    )
     await expect(getIssueProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'stablyai/orca'
     })
     expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(1)
+    origin.resolve({ stdout: 'git@gitlab.com:fork/orca.git' })
+    expect((await getProjectRef('/repo'))?.path).toBe('fork/orca')
+    expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
   })
 
   it('does not spawn git remote get-url upstream on an origin-only clone', async () => {
@@ -121,18 +210,25 @@ describe('gitlab project ref resolution', () => {
     expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
   })
 
-  it('falls back to origin when upstream is present but non-GitLab', async () => {
+  it('falls back on an upstream timeout and retries upstream on the next attempt', async () => {
     mockGitRemoteCommands({
       origin: 'git@gitlab.com:fork/orca.git\n',
       upstream: 'git@example.com:stablyai/orca.git\n'
     })
 
+    const serve = gitExecFileAsyncMock.getMockImplementation()
+    gitExecFileAsyncMock.mockImplementation((args: string[]) =>
+      args[2] === 'upstream' ? Promise.reject(new Error('git timed out')) : serve?.(args)
+    )
     await expect(getIssueProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'fork/orca'
     })
     expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(1)
     expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
+    mockGitRemoteCommands({ upstream: 'git@gitlab.com:team/recovered.git' })
+    expect((await getIssueProjectRef('/repo'))?.path).toBe('team/recovered')
+    expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(2)
   })
 
   it('finds the GitLab project on other remotes, preferring one named gitlab like glab', async () => {
@@ -177,7 +273,7 @@ describe('gitlab project ref resolution', () => {
   it('keeps local host and local WSL project-ref cache entries separate for the same path', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git@gitlab.com:host/orca.git\n' })
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:wsl/orca.git\n' })
+      .mockResolvedValue({ stdout: 'git@gitlab.com:wsl/orca.git\n' })
 
     await expect(getProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
@@ -196,7 +292,7 @@ describe('gitlab project ref resolution', () => {
       }
     )
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
       cwd: '/repo',
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS
@@ -279,7 +375,7 @@ describe('gitlab project ref resolution', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps a resolved project ref past the negative interval', async () => {
+  it('periodically revalidates a signed project ref for external configuration changes', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:fork/orca.git\n' })
@@ -294,7 +390,7 @@ describe('gitlab project ref resolution', () => {
       path: 'fork/orca'
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('re-resolves a self-hosted remote once glab auth knows its host', async () => {

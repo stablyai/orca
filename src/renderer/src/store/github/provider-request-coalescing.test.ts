@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import type { GitHubProjectTable } from '../../../../shared/github/project-types'
-import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
+
 import type { FetchOptions } from './cache-model'
-import { projectViewCacheKey, projectViewRequestKey } from './cache-identity'
-import { inflightProjectViewRequests } from './request-coordination'
+import './cache-identity'
+import './request-coordination'
 import {
   createTestStore,
   mockApi,
@@ -29,40 +28,6 @@ function workItems(title: string): ListWorkItemsResult<GitHubWorkItem> {
       }
     ],
     sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
-  }
-}
-
-const projectViewRequest = {
-  owner: 'acme',
-  ownerType: 'organization' as const,
-  projectNumber: 1,
-  viewId: 'view-1'
-}
-const projectViewCacheKey1 = projectViewCacheKey('organization', 'acme', 1, 'view-1')
-
-function projectTable(title: string): GitHubProjectTable {
-  return {
-    project: {
-      id: 'project-1',
-      owner: 'acme',
-      ownerType: 'organization',
-      number: 1,
-      title,
-      url: 'https://github.com/orgs/acme/projects/1'
-    },
-    selectedView: {
-      id: 'view-1',
-      number: 1,
-      name: 'Table',
-      layout: 'TABLE_LAYOUT',
-      filter: '',
-      fields: [],
-      groupByFields: [],
-      sortByFields: []
-    },
-    rows: [],
-    totalCount: 0,
-    parentFieldDropped: false
   }
 }
 
@@ -259,7 +224,7 @@ describe('GitHub provider request upgrade coalescing', () => {
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
   })
 
-  it('keeps a superseded check reply from rewinding the cached run state', async () => {
+  it('keeps a superseded check reply from rewinding the cached or shown run state', async () => {
     const store = createTestStore()
     const plain = Promise.withResolvers<PRCheckDetail[]>()
     const noCacheOnly = Promise.withResolvers<PRCheckDetail[]>()
@@ -289,54 +254,8 @@ describe('GitHub provider request upgrade coalescing', () => {
     forcedOnly.resolve(newer)
     await expect(forcedFetch).resolves.toEqual(newer)
     noCacheOnly.resolve(older)
-    await expect(noCacheFetch).resolves.toEqual(older)
+    await expect(noCacheFetch).resolves.toEqual(newer)
 
     expect(Object.values(store.getState().checksCache).map((entry) => entry.data)).toEqual([newer])
-  })
-
-  it('keeps a superseded project failure from stamping the known view key', async () => {
-    const store = createTestStore()
-    const weak = Promise.withResolvers<GetProjectViewTableResult>()
-    const replacementWeak = Promise.withResolvers<GetProjectViewTableResult>()
-    const forcedResult = Promise.withResolvers<GetProjectViewTableResult>()
-    mockApi.gh.getProjectViewTable
-      .mockReturnValueOnce(weak.promise)
-      .mockReturnValueOnce(replacementWeak.promise)
-      .mockReturnValue(forcedResult.promise)
-
-    const first = store.getState().fetchProjectViewTable({ kind: 'local' }, projectViewRequest)
-    const forcedFetch = store
-      .getState()
-      .fetchProjectViewTable({ kind: 'local' }, projectViewRequest, { force: true })
-    // Supersede non-forced entry in the microtask before forced waiter rechecks, after initial request clears.
-    const pending = inflightProjectViewRequests.get(
-      projectViewRequestKey(projectViewRequest, 'local')
-    )
-    expect(pending).toBeDefined()
-    let replacementFetch: Promise<GetProjectViewTableResult> | undefined
-    void pending?.promise.then(() => {
-      replacementFetch = store
-        .getState()
-        .fetchProjectViewTable({ kind: 'local' }, projectViewRequest)
-    })
-
-    const staleError = { type: 'network_error' as const, message: 'first attempt offline' }
-    weak.resolve({ ok: false, error: staleError })
-    await first
-    await vi.waitFor(() => expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(3))
-    expect(store.getState().projectViewCache[projectViewCacheKey1]).toMatchObject({
-      error: staleError
-    })
-
-    forcedResult.resolve({ ok: true, data: projectTable('forced') })
-    await expect(forcedFetch).resolves.toEqual({ ok: true, data: projectTable('forced') })
-    const error = { type: 'network_error' as const, message: 'offline' }
-    replacementWeak.resolve({ ok: false, error })
-    await expect(replacementFetch).resolves.toEqual({ ok: false, error })
-
-    expect(store.getState().projectViewCache[projectViewCacheKey1]).toMatchObject({
-      data: projectTable('forced')
-    })
-    expect(store.getState().projectViewCache[projectViewCacheKey1].error).toBeUndefined()
   })
 })

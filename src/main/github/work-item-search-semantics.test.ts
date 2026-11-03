@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { api } from './work-item-search-test-harness'
 import { listWorkItems } from './client/list/list-work-items'
 import { countWorkItems } from './client/list/count-work-items'
@@ -70,16 +70,31 @@ it.each([
     'review-requested:"some user" reviewed-by:someone',
     'review-requested:"some user" reviewed-by:someone sort:created-desc',
     'repo:fixture/repo is:pull-request review-requested:"some user" reviewed-by:someone'
+  ],
+  [
+    'is:pr title:foo OR title:bar',
+    'title:foo OR title:bar sort:created-desc',
+    'repo:fixture/repo is:pull-request title:foo OR title:bar'
   ]
 ])('keeps rich PR lists and full count predicates for %s', async (query, prSearch, countSearch) => {
+  api.expectedSearch = `( ${prSearch} ) repo:fixture/repo type:pr`
+  api.specialNodes = []
+  api.reportedCount = 120
   expect((await listWorkItems('fixture/repo', 24, query)).items).toEqual([])
-  expect(api.graphqlCalls).toBe(0)
+  expect(api.graphqlCalls).toBe(1)
   expect(api.restSearches).toBe(0)
-  expect(api.calls[0].args).toContain(prSearch)
-  expect(api.calls[0].args).toContain('--json')
-  api.expectedSearch = countSearch
+  const request = api.calls.find(({ args }) => args.includes('graphql'))
+  expect(request?.args.join(' ')).toContain(
+    JSON.stringify(`( ${prSearch} ) repo:fixture/repo type:pr sort:created-desc`)
+  )
+  expect(request?.args.join(' ')).toContain('reviewRequests(first: 100)')
   expect(await countWorkItems('fixture/repo', query)).toBe(120)
   expect(api.graphqlCalls).toBe(1)
+  vi.stubEnv('GH_TOKEN', 'fixture-rest-fallback')
+  api.graphqlAvailable = false
+  api.expectedSearch = countSearch
+  expect(await countWorkItems('fixture/repo', query)).toBe(120)
+  expect(api.restSearches).toBe(1)
 })
 
 it('falls back with the original numbered query when GraphQL is unavailable', async () => {

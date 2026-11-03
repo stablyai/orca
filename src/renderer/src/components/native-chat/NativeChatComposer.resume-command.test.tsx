@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+// @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import type { RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,6 +16,7 @@ type FieldProps = {
   onChooseMentionFile?: (path: string) => void
   onSend?: () => void
   onChoosePickerItem?: (item: NativeChatPickerItem) => void
+  goalMode?: { active: boolean }
 }
 type KeyDownArgs = {
   completePickerItem: (item: NativeChatPickerItem) => void
@@ -277,6 +279,34 @@ describe('/resume in the native chat composer', () => {
     }
   )
 
+  it.each([undefined, [], [{ name: 'fast', kind: 'command' as const }]])(
+    'saves typed provider commands with inventory %j through the inline composer',
+    (inventory) => {
+      for (const text of ['/fast', '/permissions']) {
+        mocks.draft = text
+        const editor: QueuedMessageInlineEditor = {
+          messageId: 'queued-provider',
+          draftScopeKey: 'queued-edit:provider',
+          text,
+          change: vi.fn(),
+          acquiring: false,
+          saving: false,
+          canSave: true,
+          imagesCapable: true,
+          save: vi.fn(),
+          cancel: vi.fn()
+        }
+        const { transport } = renderStructuredChat(editor)
+        transport.sessionCommands = inventory
+        act(() => mocks.fieldProps?.onSend?.())
+        expect(editor.save).toHaveBeenCalledOnce()
+        expect(transport.send).not.toHaveBeenCalled()
+        expect(transport.dispatchCommand).not.toHaveBeenCalled()
+        cleanup()
+      }
+    }
+  )
+
   it('saves ordinary text and a picked provider skill without any send or command RPC', () => {
     mocks.draft = '/res'
     const editor: QueuedMessageInlineEditor = {
@@ -325,7 +355,7 @@ describe('/resume in the native chat composer', () => {
     act(() => mocks.fieldProps?.onSend?.())
 
     expect(mocks.openHistory).not.toHaveBeenCalled()
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume')
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume', undefined)
   })
 
   it('derives inline catalog from the same action boundary before resolving namesake skills', () => {
@@ -370,4 +400,37 @@ describe('/resume in the native chat composer', () => {
     act(() => mocks.fieldProps?.onChooseMentionFile?.('src/file.ts'))
     expect(mocks.setDraft).toHaveBeenCalledWith(expect.stringContaining('src/file.ts'))
   })
+})
+
+describe('/goal picked in a structured chat without host goals', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.fieldProps = null
+  })
+  afterEach(() => cleanup())
+
+  // Claude's pre-turn initialize rows are unclassified; only its built-in goal carries the marker.
+  it.each([true, false])(
+    'opens goal entry only for the provider built-in, builtin=%s',
+    (builtin) => {
+      mocks.draft = '/go'
+      const { transport, rerender } = renderStructuredChat()
+      transport.sessionCommands = [
+        {
+          name: 'goal',
+          kind: 'command',
+          kindUnspecified: true,
+          description: 'Set a goal',
+          ...(builtin ? { builtin: true as const } : {})
+        }
+      ]
+      rerender()
+      const goal = mocks.fieldProps?.autocomplete?.items?.find((item) => item.name === 'goal')
+      expect(goal).toBeDefined()
+      act(() => mocks.fieldProps?.onChoosePickerItem?.(goal!))
+      expect(mocks.fieldProps?.goalMode?.active).toBe(builtin)
+      expect(mocks.setDraft).toHaveBeenLastCalledWith(builtin ? '' : '/goal ')
+      expect(transport.send).not.toHaveBeenCalled()
+    }
+  )
 })

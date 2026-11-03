@@ -12,12 +12,14 @@ vi.mock('electron', () => ({
   },
   BrowserWindow: { getAllWindows: () => [] }
 }))
-vi.mock('../wsl/wsl-host-connector', () => ({ createWslHostConnector: () => undefined }))
-vi.mock('../wsl/wsl-orphan-holder-release', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-connector', () => ({
+  createWslHostConnector: () => undefined
+}))
+vi.mock('../wsl/host-lifecycle/wsl-orphan-holder-release', () => ({
   releaseUnwantedWslHolders: () => undefined,
   wslHolderKeepPolicy: () => undefined
 }))
-vi.mock('../wsl/wsl-host-e2e-fake-connector', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
   createFakeWslHostConnector: () => undefined,
   readFakeWslHostsConfig: () => undefined
 }))
@@ -25,8 +27,12 @@ vi.mock('../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () =>
 vi.mock('./wsl-host-automation-wake-wiring', () => ({
   createWslHostAutomationWake: () => undefined
 }))
-vi.mock('../wsl/wsl-host-gate', () => ({ wslHostsGateOpen: () => undefined }))
-vi.mock('../wsl/wsl-host-service-instance', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-gate', async (importOriginal) => ({
+  // The rest stay real, so a gate export added later never breaks this suite's handler wiring.
+  ...(await importOriginal<typeof WslHostGate>()),
+  wslHostsGateOpen: () => undefined
+}))
+vi.mock('../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: environment.getService,
   setWslHostService: () => undefined
 }))
@@ -45,12 +51,14 @@ vi.mock('./runtime-environments/runtime-environment-request-connections', () => 
 vi.mock('../ssh/orcad-terminal-census-client', () => ({
   requestOrcadTerminalCensus: () => undefined
 }))
-vi.mock('../wsl/wsl-orcad-host-account-push', () => ({
+vi.mock('../wsl/orcad/wsl-orcad-host-account-push', () => ({
   changesWslHostAccounts: () => undefined,
   pushWslOrcadHostAccountEnv: () => undefined
 }))
-vi.mock('../wsl/wsl-orcad-host-environments', () => ({ wslOrcadHostSupports: () => undefined }))
-vi.mock('../wsl/wsl-host-connection-record', () => ({
+vi.mock('../wsl/orcad/wsl-orcad-host-environments', () => ({
+  wslOrcadHostSupports: () => undefined
+}))
+vi.mock('../wsl/host-lifecycle/wsl-host-connection-record', () => ({
   readWslHostRecordsQuietly: () => [
     { environmentId: 'wsl:ubuntu', distro: 'Ubuntu' },
     { environmentId: 'wsl:debian', distro: 'Debian' }
@@ -58,8 +66,9 @@ vi.mock('../wsl/wsl-host-connection-record', () => ({
   persistWslHostConnection: () => false,
   toWslHostStatus: () => ({})
 }))
-import { WslHostService } from '../wsl/wsl-host-service'
+import { WslHostService } from '../wsl/host-lifecycle/wsl-host-service'
 import { registerWslHostHandlers } from './wsl-host-handlers'
+import type * as WslHostGate from '../wsl/host-lifecycle/wsl-host-gate'
 
 class Sender extends EventEmitter {
   constructor(readonly id: number) {

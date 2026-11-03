@@ -7,7 +7,7 @@ import {
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from '../orca-runtime-postlude'
-import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../workspaces/execution-host/project-runtime-git-options'
 import { withTimeoutResult } from '../runtime-async-boundaries'
 import { readRepoWorktreeAdminFingerprint } from '../repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
@@ -17,7 +17,7 @@ import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from '../repo-worktree-row-resolution'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
-import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 
@@ -203,9 +203,16 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
         }
       }
     }
+    const registered = new Set(
+      (this.store?.getRepos() ?? []).map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
+    )
     for (const key of scopeKeys) {
-      this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanCache.delete(key)
+      if (registered.has(key)) {
+        this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
+      } else {
+        this.worktreeScanGenerations.delete(key)
+        this.worktreeScanCache.delete(key)
+      }
       this.worktreeScanInFlight.delete(key)
     }
   }
@@ -223,7 +230,6 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     )
     for (const key of affectedScopeKeys) {
       this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanCache.delete(key)
       this.worktreeScanInFlight.delete(key)
     }
     if (affectedScopeKeys.size > 0) {

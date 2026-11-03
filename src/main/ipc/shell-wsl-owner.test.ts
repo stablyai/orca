@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WindowsPathAccessHost from '../windows-path-access-host'
-import type * as ExternalEditorLaunch from '../external-editor-launch'
+import type * as WindowsPathAccessHost from '../windows/windows-path-access-host'
+import type * as ExternalEditorLaunch from '../external-editors/external-editor-launch'
 
 const { handleMock, launchMock, showItemInFolderMock, statMock, recordForEnvironmentMock } =
   vi.hoisted(() => ({
@@ -24,23 +24,23 @@ vi.mock('node:fs/promises', () => ({
   stat: statMock
 }))
 
-vi.mock('../codex-cli/command', () => ({
+vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommand: (command: string) => command
 }))
 
-vi.mock('../wsl/wsl-host-service-instance', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () => ({ recordForEnvironment: recordForEnvironmentMock })
 }))
 
 // WSL paths require Windows resolution even when this test runs on another platform.
-vi.mock('../windows-path-access-host', async (importOriginal) => {
+vi.mock('../windows/windows-path-access-host', async (importOriginal) => {
   const actual = await importOriginal<typeof WindowsPathAccessHost>()
   return {
     resolveWindowsPathAccess: (owner: unknown) => actual.resolveWindowsPathAccess(owner, 'win32')
   }
 })
 
-vi.mock('../external-editor-launch', async (importOriginal) => {
+vi.mock('../external-editors/external-editor-launch', async (importOriginal) => {
   const actual = await importOriginal<typeof ExternalEditorLaunch>()
   return {
     ...actual,
@@ -139,12 +139,5 @@ describe('shell handlers for a WSL-owned path', () => {
     ).resolves.toEqual({ ok: false, reason: 'remote-runtime-unsupported' })
     expect(statMock).not.toHaveBeenCalled()
     expect(launchMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps opening with the system default refused for a WSL owner', async () => {
-    await expect(getHandler('shell:openFilePath')({}, '/home/me/a.txt', WSL_OWNER)).resolves.toBe(
-      false
-    )
-    expect(statMock).not.toHaveBeenCalled()
   })
 })

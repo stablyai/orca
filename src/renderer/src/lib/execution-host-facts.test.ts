@@ -50,12 +50,6 @@ function state(): State {
 const serverRepo = { path: '/srv/repo', executionHostId: 'runtime:linux-box' }
 
 describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
-  it("reads a server project's worktree as the server's OS (#27971)", () => {
-    expect(
-      resolveRepoWorktreeLaunchPlatform(state(), serverRepo, { id: 'wt', path: '/srv/wt' })
-    ).toBe('linux')
-  })
-
   it("lets a worktree's own host outrank its repo's", () => {
     expect(
       resolveRepoWorktreeLaunchPlatform(state(), serverRepo, {

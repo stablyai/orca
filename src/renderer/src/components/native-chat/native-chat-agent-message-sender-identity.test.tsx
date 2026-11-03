@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -6,11 +10,11 @@ import { useAppStore } from '@/store'
 import type {
   AgentSessionConversationName,
   AgentSessionStatusSummary
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   foldAgentSessionConversationNames,
   type AgentSessionConversationNames
-} from '../../../../shared/agent-session-conversation-names'
+} from '../../../../shared/agent-session/agent-session-conversation-names'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
@@ -174,20 +178,31 @@ it('uses the recipient host when identical session text is published by two host
     }
   })
   render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
-  expect(screen.getByRole('button', { name: 'Remote sender' })).toBeInTheDocument()
+  expect(screen.getByText('Remote sender')).toBeInTheDocument()
 })
 
 it('shows a chat sender by its current rename', () => {
+  const renamed = 'Production Release Scan & Compatibility Review'
   useAppStore.setState({ unifiedTabsByWorktree: { [SENDER]: [tab(ROOT, '')] } })
   const feed = feeds.get('local')!
   const status = feed.snapshot
   expect(feed.names.has(ROOT)).toBe(false)
   render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
-  expect(screen.getByRole('button', { name: 'Original sender' })).toBeInTheDocument()
+  expect(screen.getByText('Original sender')).toBeInTheDocument()
   act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: null }]))
-  expect(screen.getByRole('button', { name: 'Original sender' })).toBeInTheDocument()
-  act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: 'Renamed sender' }]))
-  expect(screen.getByRole('button', { name: 'Renamed sender' })).toBeInTheDocument()
+  expect(screen.getByText('Original sender')).toBeInTheDocument()
+  act(() => publish('local', undefined, [{ sessionId: ROOT, conversationName: renamed }]))
+  const name = screen.getByText(renamed)
+  expect(name).toBeInTheDocument()
+  fireEvent.click(name)
+  expect(openAgentMessageSender).toHaveBeenCalledWith(
+    source(),
+    source().senders[0],
+    RECIPIENT,
+    undefined,
+    undefined,
+    renamed
+  )
   expect(feed.snapshot).toBe(status)
   expect(status.get(ROOT)?.conversationName).toBeUndefined()
 })
@@ -211,17 +226,45 @@ it.each([false, true])(
     })
     const from = source(true)
     render(<NativeChatAgentMessageSenders from={from} chatWorktreeId={RECIPIENT} queued={queued} />)
-    expect(screen.getByRole('button', { name: 'Original sender' })).toBeInTheDocument()
+    expect(screen.getByText('Original sender')).toBeInTheDocument()
     act(() => {
       useAppStore.setState({
         agentStatusByPaneKey: { [PANE]: row({ key: 'session_id', id: 'provider-b' }) },
         tabsByWorktree: { [SENDER]: [{ ...terminal, customTitle: 'Renamed B' }] }
       })
     })
-    const link = screen.getByRole('button', { name: 'Original sender' })
+    const link = screen.getByText('Original sender')
     expect(link).toBeInTheDocument()
     fireEvent.click(link)
-    expect(openAgentMessageSender).toHaveBeenCalledWith(from, from.senders[0], RECIPIENT)
+    expect(openAgentMessageSender).toHaveBeenCalledWith(
+      from,
+      from.senders[0],
+      RECIPIENT,
+      undefined,
+      undefined,
+      'Original sender'
+    )
     expect(feeds.get('local')!.activations).toBe(0)
   }
 )
+
+it('uses the same published /clear successor for the live sender label', () => {
+  const live = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
+  publish('local', [summary(live)], [{ sessionId: live, conversationName: 'Continued sender' }])
+  useAppStore.setState({ unifiedTabsByWorktree: { [SENDER]: [tab(live, '')] } })
+  useAppStore.getState().setAgentSenderPublication('local', {
+    associations: [
+      {
+        identity: `orca_session_id:${ROOT}`,
+        sessionId: live,
+        paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(live), live),
+        worktreeId: SENDER
+      }
+    ],
+    principals: [],
+    attachments: [],
+    revision: { epoch: 'host', revision: 1 }
+  })
+  render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
+  expect(screen.getByText('Continued sender')).toBeInTheDocument()
+})

@@ -60,7 +60,8 @@ function Probe({ doc, markdownTab = tab }: { doc: MarkdownDocState; markdownTab?
     markdownSaveSeqRef: { current: new Map() },
     markdownSaveInFlightRef: { current: new Set() },
     showToast,
-    readMarkdownTab: vi.fn()
+    readMarkdownTab: vi.fn(),
+    dictationLeaveHold: { holdsLeave: false, hold: () => false }
   }
   const actions = useMobileSessionMarkdownActions(scope)
   return createElement(MarkdownReader, {

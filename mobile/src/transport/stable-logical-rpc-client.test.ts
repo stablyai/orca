@@ -8,6 +8,7 @@ import {
   LogicalClientCutoverError,
   type MobileConnectionPath
 } from './stable-logical-rpc-client'
+import { LogicalClientSuspendedError } from './logical-client-suspended-error'
 
 class FakeSession implements RpcClient {
   readonly sendRequest =
@@ -169,6 +170,23 @@ describe('stable logical RPC client', () => {
     await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
   })
 
+  it('reports requests the suspended session never sent as suspended, and written ones as ambiguous', async () => {
+    const session = new FakeSession('connected')
+    const unsent = deferred<RpcResponse>()
+    const written = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValueOnce(unsent.promise).mockReturnValueOnce(written.promise)
+    const client = createStableLogicalRpcClient(session, 'relay')
+    const waiting = client.sendRequest('speech.dictation.chunk').catch((error: unknown) => error)
+    const inFlight = client.sendRequest('speech.dictation.chunk').catch((error: unknown) => error)
+
+    client.suspendActiveSession()
+    unsent.reject(new Error('relay session closed'))
+    written.reject(markRpcDeliveryUnknown(new Error('Client closed')))
+
+    expect(await waiting).toBeInstanceOf(LogicalClientSuspendedError)
+    expect(isRpcDeliveryUnknown(await inFlight)).toBe(true)
+  })
+
   it('preserves delivery ambiguity without replaying a mutation after relay replacement', async () => {
     const session = new FakeSession('connected')
     const replacement = new FakeSession('connected')
@@ -233,7 +251,7 @@ describe('stable logical RPC client', () => {
     expect(client.getPendingPath()).toBeNull()
 
     const migrating = client.migrateTo(replacement, 'relay')
-    replacement.setState('connecting')
+    // The replacement never announces its initial connecting state; the client must still show it.
     expect(client.getState()).toBe('connecting')
     expect(client.getPendingPath()).toBe('relay')
     replacement.setState('handshaking')
@@ -406,7 +424,7 @@ describe('stable logical RPC client', () => {
     replacement.setState('disconnected')
 
     await expect(migrating).rejects.toThrow(/disconnected/)
-    expect(states).toEqual(['handshaking', 'disconnected'])
+    expect(states).toEqual(['connecting', 'handshaking', 'disconnected'])
     expect(client.getState()).toBe('disconnected')
     expect(client.getPendingPath()).toBeNull()
   })

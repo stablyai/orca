@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
-import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
-import { getRemoteFileTarget } from './repo-remote-file-target'
+import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './remotes/hosted-remote-url'
+import { getRemoteFileTarget } from './remotes/repo-remote-file-target'
 import {
   DEFAULT_BASE_REF_PROBE_TIMEOUT_MS,
   getDefaultBaseRefAsync,
@@ -112,9 +112,12 @@ function parseRemoteCount(stdout: string): number {
 }
 
 /** Count configured remotes; zero means either none or unavailable. */
-export async function getRemoteCount(path: string): Promise<number> {
+export async function getRemoteCount(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<number> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
     return parseRemoteCount(stdout)
   } catch (err) {
     console.warn('[getRemoteCount] git remote failed', { path, err })

@@ -1,7 +1,7 @@
 // Drive built Electron/orcad server through public pairing/RPC, create terminal and require real command output, then shutdown; --browser also checks provider actions.
 // Boot/port/host.platform can pass with dead PTYs when renderer fallback times out; both targets must satisfy the same end-to-end contract.
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -303,8 +303,8 @@ async function main() {
         throw new Error(`browser.eval returned ${JSON.stringify(evaluated)}`)
       }
       const screenshot = orca(pairingCode, ['screenshot', ...targetFlags])
-      if (screenshot?.format !== 'png' || typeof screenshot.data !== 'string' || !screenshot.data) {
-        throw new Error('browser.screenshot returned no PNG data')
+      if (screenshot?.format !== 'png' || !screenshot.path || !statSync(screenshot.path).size) {
+        throw new Error('browser.screenshot saved no PNG file')
       }
       log('browser navigate/evaluate/screenshot round trip OK')
     }

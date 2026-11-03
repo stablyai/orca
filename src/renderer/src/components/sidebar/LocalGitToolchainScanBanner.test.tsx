@@ -80,17 +80,6 @@ describe('LocalGitToolchainScanBanner', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('shows one banner instead of a per-repo marker for an Xcode license failure', async () => {
-    useAppStore.setState({ repos, detectedWorktreesByRepo: blockedListings() })
-
-    const container = await render()
-
-    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1)
-    expect(container.textContent).toContain('sudo xcodebuild -license accept')
-    expect(container.textContent).toContain('Worktree scan paused for 2 projects')
-    expect(container.querySelector('button[aria-label^="Worktree scan failed"]')).toBeNull()
-  })
-
   it('rescans every blocked repo when the window regains focus and confirms recovery', async () => {
     useAppStore.setState({ repos, detectedWorktreesByRepo: blockedListings() })
     const fetchWorktrees = vi

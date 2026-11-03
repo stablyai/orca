@@ -2,7 +2,7 @@ import React from 'react'
 import { Play, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
+import { SettingsSwitch } from '@/components/settings/form-controls/SettingsFormControls'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type {
   ExternalAutomationAction,
@@ -94,16 +94,11 @@ export function ExternalAutomationManagers({
           </div>
         </div>
         <Badge variant="outline">
-          {automationCount}{' '}
-          {automationCount === 1
-            ? translate(
-                'auto.components.automations.ExternalAutomationManagers.701515f010',
-                'automation'
-              )
-            : translate(
-                'auto.components.automations.ExternalAutomationManagers.e2532150ed',
-                'automations'
-              )}
+          {translate(
+            'auto.components.automations.ExternalAutomationManagers.automationCount',
+            '{{count}} automations',
+            { count: automationCount, defaultValue_one: '{{count}} automation' }
+          )}
         </Badge>
       </div>
       <div className="divide-y divide-border/50">

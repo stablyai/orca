@@ -1,7 +1,9 @@
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
-import { commitRuntimeGit } from '@/runtime/runtime-git-sync-client'
+import { commitRuntimeGit, completeRuntimeGitMerge } from '@/runtime/runtime-git-sync-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -156,7 +158,65 @@ export function useSourceControlCommitAction({
     ]
   )
 
-  return { handleCommit }
+  const handleCompleteMerge = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath || unresolvedConflictCount > 0) {
+      return
+    }
+    if (commitInFlightRef.current[activeWorktreeId]) {
+      return
+    }
+    commitInFlightRef.current[activeWorktreeId] = true
+    setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    let result: { success: boolean; error?: string }
+    try {
+      result = await completeRuntimeGitMerge({
+        target: requireGitOwnerTarget(activeRepoTarget),
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: getConnectionId(activeWorktreeId) ?? undefined
+      })
+    } catch (error) {
+      result = { success: false, error: error instanceof Error ? error.message : undefined }
+    } finally {
+      setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      commitInFlightRef.current[activeWorktreeId] = false
+    }
+    void refreshActiveGitStatusAfterMutation()
+    if (!result.success) {
+      // The commit area and its inline error stay hidden while the merge is paused.
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.source.control.commit.completeMergeFailed',
+          'Complete merge failed'
+        ),
+        { description: result.error }
+      )
+      return
+    }
+    if (compareBaseRef) {
+      beginGitBranchCompareRequest(
+        activeWorktreeId,
+        `${activeWorktreeId}:${compareBaseRef}:${Date.now()}:post-commit`,
+        compareBaseRef
+      )
+    }
+    void refreshBranchCompareRef.current()
+    void refreshGitHistoryRef.current()
+  }, [
+    activeRepoTarget,
+    activeWorktreeId,
+    beginGitBranchCompareRequest,
+    commitInFlightRef,
+    compareBaseRef,
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef,
+    refreshGitHistoryRef,
+    setCommitInFlightByWorktree,
+    unresolvedConflictCount,
+    worktreePath
+  ])
+
+  return { handleCommit, handleCompleteMerge }
 }
 
 export type SourceControlCommitAction = ReturnType<typeof useSourceControlCommitAction>

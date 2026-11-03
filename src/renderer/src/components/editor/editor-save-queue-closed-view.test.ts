@@ -1,3 +1,4 @@
+import { ORCA_EDITOR_FILE_CACHE_STALE_EVENT, ORCA_EDITOR_FILE_SAVED_EVENT } from './editor-autosave'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
@@ -40,6 +41,73 @@ describe('editor save queue: the saving view closes mid-write', () => {
     expect(h.view('B').isDirty).toBe(true)
     expect(needsSavePromptOnClose(h.store.getState(), 'B')).toBe(true)
     expect(h.disk.files.get(CLOSED_VIEW_PATH)).toBe('edit')
+  })
+
+  it('publishes one settled record before accepting newer subscriber typing', async () => {
+    h.type('A', 'edit')
+    h.holdNextWrite()
+    const saved = h.queue.queueSave(h.view('A'), 'edit')
+    await vi.advanceTimersByTimeAsync(0)
+    h.closeView('A')
+    const unsubscribe = h.store.subscribe((state, previous) => {
+      if (
+        state.openFiles[0]?.lastKnownDiskSignature !== previous.openFiles[0]?.lastKnownDiskSignature
+      ) {
+        expect(state.openFiles[0]?.isDirty).toBe(false)
+        expect(state.editorDrafts.B).toBeUndefined()
+        h.type('B', 'typed during publication')
+      }
+    })
+    h.release()
+    await expect(saved).resolves.toBe('written')
+    unsubscribe()
+    expect(h.view('B').isDirty).toBe(true)
+    expect(h.store.getState().editorDrafts.B).toBe('typed during publication')
+    expect(h.view('B').lastKnownDiskSignature).toBe(getDiskBaselineSignature('edit'))
+  })
+
+  it('does not notify a reused view replaced synchronously during settlement', async () => {
+    h.type('A', 'edit')
+    h.holdNextWrite()
+    const saved = h.queue.queueSave(h.view('A'), 'edit')
+    await vi.advanceTimersByTimeAsync(0)
+    h.closeView('A')
+    let replaced = false
+    const events = vi.spyOn(window, 'dispatchEvent')
+    const unsubscribe = h.store.subscribe((state, previous) => {
+      if (
+        !replaced &&
+        state.openFiles[0]?.lastKnownDiskSignature !== previous.openFiles[0]?.lastKnownDiskSignature
+      ) {
+        replaced = true
+        h.closeView('B')
+        h.store.setState({
+          openFiles: [
+            {
+              ...closedViewTab('B', 'wt-2'),
+              filePath: '/repo/foreign.md',
+              relativePath: 'foreign.md',
+              isDirty: true
+            }
+          ],
+          editorDrafts: { B: 'foreign draft' }
+        })
+      }
+    })
+    h.release()
+    await expect(saved).resolves.toBe('written')
+    unsubscribe()
+    expect(replaced).toBe(true)
+    expect(h.view('B').lastKnownDiskSignature).toBe(getDiskBaselineSignature('disk'))
+    expect(h.store.getState().editorDrafts.B).toBe('foreign draft')
+    expect(
+      events.mock.calls.filter(
+        ([event]) =>
+          event.type === ORCA_EDITOR_FILE_SAVED_EVENT ||
+          event.type === ORCA_EDITOR_FILE_CACHE_STALE_EVENT
+      )
+    ).toEqual([])
+    events.mockRestore()
   })
 
   it('keeps the other view dirty when it typed past the write', async () => {

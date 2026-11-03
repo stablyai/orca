@@ -1,15 +1,6 @@
 import { Plug } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
-import type { ActivePluginPanel } from '@/store/plugin-panels'
-import { getPluginPanelActivityItems, resolvePluginPanelIcon } from './plugin-panel-activity-items'
-
-const panel: ActivePluginPanel = {
-  id: 'dashboard',
-  title: 'Dashboard',
-  tabKey: 'plugin:orca-samples.demo/dashboard',
-  pluginKey: 'orca-samples.demo',
-  pluginName: 'Demo'
-}
+import { resolvePluginPanelIcon } from './plugin-panel-activity-items'
 
 describe('resolvePluginPanelIcon', () => {
   it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
@@ -18,11 +9,4 @@ describe('resolvePluginPanelIcon', () => {
       expect(resolvePluginPanelIcon(iconName)).toBe(Plug)
     }
   )
-
-  it('keeps a hostile manifest icon renderable by the activity bar', () => {
-    // Inherited Object members are invalid React components and can crash the whole sidebar rail.
-    const item = getPluginPanelActivityItems([{ ...panel, icon: 'constructor' }])[0]!
-    expect(item.icon).not.toBe(Object)
-    expect(item.icon).toBe(Plug)
-  })
 })

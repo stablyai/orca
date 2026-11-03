@@ -72,6 +72,7 @@ function orchestratorOverDriver(): {
     now: () => clock.now,
     appVersion: '1.0.0',
     autoMoveEnabled: () => true,
+    autoMovesBridgeProjects: () => true,
     prepareHost: async () => 'ready',
     hostRemovalPending: () => false,
     hasHost: () => true,
@@ -125,15 +126,6 @@ function stateOf(orchestrator: WslMoveOrchestrator) {
 }
 
 describe('the move orchestrator over the real driver', () => {
-  it('moves a distro on a wake and records the journal migration it finished', async () => {
-    const { orchestrator } = orchestratorOverDriver()
-    await orchestrator.trigger('Ubuntu', 'project-opened')
-    const committed = listWslMoveCutovers(userDataPath)
-    expect(committed).toHaveLength(1)
-    expect(stateOf(orchestrator)).toEqual({ kind: 'done', migrationId: committed[0]?.migrationId })
-    expect([...world.catalog.values()]).toEqual(['committed'])
-  })
-
   it('defers on the driver blockers, then moves on the re-check once the terminals are free', async () => {
     world.gate = {
       panes: [

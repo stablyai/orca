@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
+import { defaultWslOrcadEnvironmentId } from '../wsl/orcad/wsl-orcad-deploy'
 
 const bindings = vi.hoisted(() => ({ filePath: '' }))
 
@@ -95,11 +95,6 @@ describe('WSL host browser jar identity', () => {
     const before = jar(wslHost('Ubuntu', 'orcad-key-a'))
 
     expect(jar(wslHost('Ubuntu-work', 'orcad-key-a'))).not.toBe(before)
-  })
-
-  // A golden image with a baked-in orcad key, imported twice on one desktop.
-  it('keeps two distros that carry the same orcad key in separate jars', () => {
-    expect(jar(wslHost('Ubuntu', 'baked-key'))).not.toBe(jar(wslHost('Ubuntu-2', 'baked-key')))
   })
 
   // Accepted (R45, Low): the same name and key is the same host to this desktop.

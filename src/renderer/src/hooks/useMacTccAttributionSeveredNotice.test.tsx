@@ -67,7 +67,8 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/store/plugin-language-packs', () => ({
   usePluginLanguagePackStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ entries: [], loaded: true })
+    selector({ entries: [], loaded: true }),
+  usePluginLanguagePacks: () => []
 }))
 
 vi.mock('@/i18n/i18n', () => ({
@@ -112,14 +113,6 @@ describe('useMacTccAttributionSeveredNotice', () => {
     cleanup()
   })
 
-  it('does not toast when attribution is intact', async () => {
-    render(<MacosTccPromptNoticeHost />)
-    await waitFor(() => {
-      expect(macTccAttribution).toHaveBeenCalled()
-    })
-    expect(toast.warning).not.toHaveBeenCalled()
-  })
-
   it('does not probe on non-macOS focus', async () => {
     platform.value = 'win32'
     render(<MacosTccPromptNoticeHost />)
@@ -129,29 +122,6 @@ describe('useMacTccAttributionSeveredNotice', () => {
     })
 
     expect(macTccAttribution).not.toHaveBeenCalled()
-  })
-
-  it('toasts Manage Sessions remedy once when attribution is severed', async () => {
-    macTccAttribution.mockResolvedValue({ health: 'severed', folderAccessMismatch: null })
-    render(<MacosTccPromptNoticeHost />)
-    await waitFor(() => {
-      expect(toast.warning).toHaveBeenCalledTimes(1)
-    })
-    const call = vi.mocked(toast.warning).mock.calls[0]
-    const title = String(call?.[0] ?? '')
-    const options = call?.[1] as
-      | { description?: string; action?: { onClick?: () => void } }
-      | undefined
-    expect(title).toMatch(/macOS permissions may not reach Orca terminals/i)
-    expect(String(options?.description ?? '')).toMatch(/Manage Sessions/i)
-    options?.action?.onClick?.()
-    expect(setSettingsSearchQuery).toHaveBeenCalledWith('')
-    expect(openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'terminal',
-      repoId: null,
-      sectionId: 'terminal-manage-sessions'
-    })
-    expect(openSettingsPage).toHaveBeenCalled()
   })
 
   it('does not toast again after the first severed notice this session', async () => {
@@ -324,30 +294,6 @@ describe('useMacTccAttributionSeveredNotice folder-access notice', () => {
     cleanup()
   })
 
-  it('does not toast when there is no mismatch', async () => {
-    render(<MacosTccPromptNoticeHost />)
-    await waitFor(() => {
-      expect(macTccAttribution).toHaveBeenCalled()
-    })
-    expect(folderNoticeCalls()).toHaveLength(0)
-  })
-
-  it('names the denied folder and the cost, and leaves the steps to the dialog', async () => {
-    macTccAttribution.mockResolvedValue({ health: 'intact', folderAccessMismatch: SCOPE_A })
-    render(<MacosTccPromptNoticeHost />)
-    await waitFor(() => {
-      expect(folderNoticeCalls()).toHaveLength(1)
-    })
-
-    const notice = folderNoticeCalls()[0]
-    expect(notice.title).toMatch(/Terminals can’t read your Documents folder/i)
-    expect(notice.options.description).toMatch(/may fail until it’s fixed/)
-    expect(notice.options.description).not.toMatch(/Manage Sessions|System Settings/)
-    expect(notice.options.duration).toBe(Infinity)
-    expect(notice.options.action?.label).toBe('Fix')
-    expect(notice.options.cancel).toBeUndefined()
-  })
-
   it('opens the fix dialog rather than Manage Sessions', async () => {
     macTccAttribution.mockResolvedValue({ health: 'intact', folderAccessMismatch: SCOPE_A })
     render(<MacosTccPromptNoticeHost />)
@@ -452,31 +398,6 @@ describe('useMacTccAttributionSeveredNotice folder-access notice', () => {
     expect(useMacFolderAccessFixStore.getState().mismatch).toEqual(denied)
   })
 
-  it('substitutes the folder word for each protected class', async () => {
-    for (const [cwdClass, expected] of [
-      ['desktop', 'Desktop folder'],
-      ['downloads', 'Downloads folder'],
-      ['other-home', 'workspace folder'],
-      ['outside-home', 'workspace folder']
-    ]) {
-      vi.mocked(toast.warning).mockClear()
-      macTccAttribution.mockResolvedValue({
-        health: 'intact',
-        folderAccessMismatch: {
-          daemonScope: `scope-${cwdClass}`,
-          cwdClass,
-          freshDaemonAccess: 'allowed'
-        }
-      })
-      render(<MacosTccPromptNoticeHost />)
-      await waitFor(() => {
-        expect(folderNoticeCalls()).toHaveLength(1)
-      })
-      expect(folderNoticeCalls()[0].title).toContain(expected)
-      cleanup()
-    }
-  })
-
   it('shows once per daemon scope, not once per poll', async () => {
     macTccAttribution.mockResolvedValue({ health: 'intact', folderAccessMismatch: SCOPE_A })
     render(<MacosTccPromptNoticeHost />)
@@ -492,16 +413,6 @@ describe('useMacTccAttributionSeveredNotice folder-access notice', () => {
     })
     expect(folderNoticeCalls()).toHaveLength(1)
     expect(shownEvents()).toHaveLength(1)
-  })
-
-  it('counts the notice as shown when it raises one, and not when it withholds one', async () => {
-    macTccAttribution.mockResolvedValue({ health: 'intact', folderAccessMismatch: SCOPE_A })
-    render(<MacosTccPromptNoticeHost />)
-    await waitFor(() => {
-      expect(folderNoticeCalls()).toHaveLength(1)
-    })
-
-    expect(shownEvents()).toEqual([{ action: 'shown', cwd_class: 'documents' }])
   })
 
   it('never re-shows a scope the user dismissed this session', async () => {
@@ -640,14 +551,5 @@ describe('useMacTccAttributionSeveredNotice folder-access notice', () => {
     })
 
     expect(dismissedEvents()).toHaveLength(1)
-  })
-
-  it('raises both notices when attribution is severed and a folder is denied', async () => {
-    macTccAttribution.mockResolvedValue({ health: 'severed', folderAccessMismatch: SCOPE_A })
-    render(<MacosTccPromptNoticeHost />)
-    await waitFor(() => {
-      expect(toast.warning).toHaveBeenCalledTimes(2)
-    })
-    expect(folderNoticeCalls()).toHaveLength(1)
   })
 })

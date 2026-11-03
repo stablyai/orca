@@ -1,21 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WorktreeCreatePreparation from '../worktree-create-preparation'
+import type * as WorktreeCreatePreparation from '../workspaces/creation/preparation/worktree-create-preparation'
 import type { Project } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl/discovery/distro-catalog'
 
 const mocks = vi.hoisted(() => ({
   prefetchWorktreeCreateBase: vi.fn(),
   prepareWorktreeCreateForRepo: vi.fn()
 }))
 
-vi.mock('../worktree-create-base-prefetch', () => ({
+vi.mock('../workspaces/creation/worktree-create-base-prefetch', () => ({
   prefetchWorktreeCreateBase: mocks.prefetchWorktreeCreateBase
 }))
-vi.mock('../worktree-create-preparation', async (importOriginal) => ({
-  ...(await importOriginal<typeof WorktreeCreatePreparation>()),
-  prepareWorktreeCreateForRepo: mocks.prepareWorktreeCreateForRepo
-}))
+vi.mock(
+  '../workspaces/creation/preparation/worktree-create-preparation',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorktreeCreatePreparation>()),
+    prepareWorktreeCreateForRepo: mocks.prepareWorktreeCreateForRepo
+  })
+)
 
 import { OrcaRuntimeService } from './orca-runtime'
 

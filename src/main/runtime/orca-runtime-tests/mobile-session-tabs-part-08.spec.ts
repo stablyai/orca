@@ -651,7 +651,7 @@ describe('OrcaRuntimeService', () => {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expect(
         runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
-      ).resolves.toEqual({ closed: true })
+      ).resolves.toEqual({ closed: true, retirementConfirmed: true })
       expect(closeTerminalTab).not.toHaveBeenCalled()
       expect(kill).toHaveBeenCalledWith(servePtyId)
       expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()

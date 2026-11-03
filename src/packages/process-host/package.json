@@ -20,6 +20,11 @@
       "types": "./dist/process-spec.d.ts",
       "default": "./dist/process-spec.js"
     },
+    "./isolated-detached-spawn": {
+      "orca-source": "./src/isolated-detached-spawn.ts",
+      "types": "./dist/isolated-detached-spawn.d.ts",
+      "default": "./dist/isolated-detached-spawn.js"
+    },
     "./fork-process": {
       "orca-source": "./src/fork-process.ts",
       "types": "./dist/fork-process.d.ts",

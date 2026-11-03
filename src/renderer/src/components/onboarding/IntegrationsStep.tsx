@@ -8,6 +8,7 @@ import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { cn } from '@/lib/utils'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type GitHubSetupState = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
 
@@ -83,7 +84,7 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.api.shell.openUrl('https://cli.github.com')}
+              onClick={(event) => openAppHttpLink('https://cli.github.com', { event })}
             >
               <ExternalLink className="size-3.5" />
               {translate('auto.components.onboarding.IntegrationsStep.bd5d976fb2', 'Install gh')}
@@ -106,7 +107,7 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void refreshPreflightStatus({ force: true })}
+              onClick={() => void refreshPreflightStatus({ force: true, wakeWslDistro: true })}
             >
               {translate('auto.components.onboarding.IntegrationsStep.80e3ce0bc9', 'Re-check')}
             </Button>

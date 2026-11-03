@@ -9,7 +9,7 @@ import {
   drainShellStartupOutputScanState,
   scanShellStartupOutput,
   type ShellStartupOutputScanState
-} from '../shell-startup-output-scanner'
+} from '../pty/shell-startup/shell-startup-output-scanner'
 import type { HeadlessEmulator } from './headless-emulator'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { basename } from 'node:path'

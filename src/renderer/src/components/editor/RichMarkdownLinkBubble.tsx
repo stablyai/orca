@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
+import { isEditorAnchorVisible, observeAnchorAncestorVisibility } from './editor-anchor-visibility'
 
 export type LinkBubbleState = {
   kind: 'markdown' | 'html-superscript'
@@ -21,7 +22,6 @@ export type LinkBubbleState = {
 const LINK_BUBBLE_VIEWPORT_MARGIN = 8
 const LINK_BUBBLE_MAX_WIDTH = 344
 const LINK_BUBBLE_HEIGHT = 40
-const LINK_BUBBLE_LAYOUT_ATTRIBUTES = ['aria-hidden', 'class', 'hidden', 'inert', 'style']
 
 function hasRectChanged(initialRect: DOMRect, nextRect: DOMRect): boolean {
   return (
@@ -37,27 +37,6 @@ function getStableAnchorClassName(anchorElement: HTMLElement): string {
     .filter((className) => className !== 'rich-markdown-mod-held')
     .sort()
     .join(' ')
-}
-
-function isAnchorVisible(anchorElement: HTMLElement): boolean {
-  if (!anchorElement.isConnected || anchorElement.getClientRects().length === 0) {
-    return false
-  }
-  for (let element: HTMLElement | null = anchorElement; element; element = element.parentElement) {
-    const style = window.getComputedStyle(element)
-    if (
-      element.hidden ||
-      element.inert ||
-      element.getAttribute('aria-hidden') === 'true' ||
-      style.display === 'none' ||
-      style.visibility === 'hidden' ||
-      style.visibility === 'collapse' ||
-      Number.parseFloat(style.opacity) === 0
-    ) {
-      return false
-    }
-  }
-  return true
 }
 
 function clampDocumentBubblePosition(linkBubble: LinkBubbleState): React.CSSProperties {
@@ -191,7 +170,7 @@ export function RichMarkdownLinkBubble({
   onDismissRef.current = onDismiss
 
   useEffect(() => {
-    if (!anchorElement || !isAnchorVisible(anchorElement)) {
+    if (!anchorElement || !isEditorAnchorVisible(anchorElement)) {
       onDismissRef.current()
       return
     }
@@ -214,7 +193,7 @@ export function RichMarkdownLinkBubble({
         (mutation) => mutation.target === anchorElement && mutation.attributeName === 'style'
       )
       if (
-        !isAnchorVisible(anchorElement) ||
+        !isEditorAnchorVisible(anchorElement) ||
         hasRectChanged(initialRect, anchorElement.getBoundingClientRect()) ||
         getStableAnchorClassName(anchorElement) !== initialAnchorClassName ||
         anchorStyleChanged
@@ -226,7 +205,7 @@ export function RichMarkdownLinkBubble({
       dismissIfLayoutInvalidated()
     })
     const intersectionObserver = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting || !isAnchorVisible(anchorElement)) {
+      if (!entry?.isIntersecting || !isEditorAnchorVisible(anchorElement)) {
         dismiss()
       }
     })
@@ -242,16 +221,7 @@ export function RichMarkdownLinkBubble({
 
     resizeObserver.observe(anchorElement)
     intersectionObserver.observe(anchorElement)
-    for (
-      let element: HTMLElement | null = anchorElement;
-      element;
-      element = element.parentElement
-    ) {
-      mutationObserver.observe(element, {
-        attributes: true,
-        attributeFilter: LINK_BUBBLE_LAYOUT_ATTRIBUTES
-      })
-    }
+    observeAnchorAncestorVisibility(mutationObserver, anchorElement)
     window.addEventListener('pointerdown', dismissOutside, true)
     window.addEventListener('focusin', dismissOutside, true)
     window.addEventListener('scroll', dismissOnScroll, true)

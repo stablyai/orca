@@ -21,7 +21,7 @@ import { collectLayoutEvents } from '../../runtime/workspace-layout-stream-event
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeCatalogVersion
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropWorkspacesTheListingInvalidates } from '../restoring-sessions/invalid-workspace-layout-purge'
 import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
 import { windowViewSaveForMain } from '../window-save-view'
@@ -193,6 +193,15 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
       dropWorkspacesTheListingInvalidates(
         store,
         listing([KEPT], { authoritative: false, source: 'metadata-fallback' })
+      )
+      // Stored rows from a stopped WSL distro are not a scan either.
+      dropWorkspacesTheListingInvalidates(
+        store,
+        listing([KEPT], {
+          authoritative: false,
+          source: 'metadata-fallback',
+          wslDistroStopped: { distro: 'Ubuntu', state: 'stopped' }
+        })
       )
       dropWorkspacesTheListingInvalidates(store, null)
       dropWorkspacesTheListingInvalidates(store, { providerAbortStatus: 'timed-out' })

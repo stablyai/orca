@@ -40,7 +40,7 @@ import {
   isConnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry
 } from '@/runtime/runtime-host-connection-state'
-import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
+import { RuntimeRepairDialog } from '../runtime-access/RuntimeRepairDialog'
 
 export function SshStatusSegment({
   compact,

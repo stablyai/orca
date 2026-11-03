@@ -6,7 +6,7 @@ import {
   compactSourceControlTree,
   flattenSourceControlTree,
   type SourceControlTreeNode
-} from '@/components/right-sidebar/source-control-tree'
+} from '../../../../../../shared/source-control-tree'
 import {
   getCombinedDiffFileTreeSectionKey,
   isGitStatusEntry,
@@ -15,12 +15,21 @@ import {
   type CombinedDiffFileTreeMode
 } from '../resolve-changes/combined-diff-section-identity'
 import type { CombinedDiffTreeNode } from './combined-diff-file-tree-row'
+import { translate } from '@/i18n/i18n'
 
 const UNCOMMITTED_AREA_ORDER: readonly GitStagingArea[] = ['unstaged', 'staged', 'untracked']
-const UNCOMMITTED_AREA_LABELS: Record<GitStagingArea, string> = {
-  unstaged: 'Changes',
-  staged: 'Staged Changes',
-  untracked: 'Untracked Files'
+function uncommittedAreaLabel(area: GitStagingArea): string {
+  switch (area) {
+    case 'unstaged':
+      return translate('auto.components.right.sidebar.SourceControl.d4ef4bafc5', 'Changes')
+    case 'staged':
+      return translate('auto.components.right.sidebar.SourceControl.48a003c1b1', 'Staged Changes')
+    case 'untracked':
+      return translate(
+        'auto.components.editor.CombinedDiffViewer.untrackedFiles',
+        'Untracked Files'
+      )
+  }
 }
 
 export type CombinedDiffTreeGroup = {
@@ -51,7 +60,7 @@ export function buildCombinedDiffUncommittedTreeGroups(
     const roots = compactSourceControlTree(buildGitStatusSourceControlTree(area, areaEntries))
     return {
       area,
-      label: UNCOMMITTED_AREA_LABELS[area],
+      label: uncommittedAreaLabel(area),
       roots: roots as CombinedDiffTreeNode[]
     }
   }).filter((group): group is CombinedDiffTreeGroup => group !== null)

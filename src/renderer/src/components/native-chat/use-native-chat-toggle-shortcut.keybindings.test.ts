@@ -3,7 +3,11 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
-import { makeGroup, makeTerminalTab, makeUnifiedTab } from '../worktree-jump-palette-test-fixtures'
+import {
+  makeGroup,
+  makeTerminalTab,
+  makeUnifiedTab
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useNativeChatToggleShortcut } from './use-native-chat-toggle-shortcut'
 import { useGlobalKeybindings } from '@/app-shell/use-global-keybindings'
 import { useAppChromeLayout } from '@/app-shell/use-app-chrome-layout'
@@ -14,7 +18,7 @@ vi.mock('@/store/plugin-panels', () => ({ usePluginCommands: () => plugins.comma
 vi.mock('@/lib/plugin-command-execution', () => ({ executePluginCommand: vi.fn(async () => {}) }))
 vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'win32' }))
 vi.mock('@/app-shell/app-window-chrome', () => ({ shortcutPlatform: 'win32' }))
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 import { executePluginCommand } from '@/lib/plugin-command-execution'

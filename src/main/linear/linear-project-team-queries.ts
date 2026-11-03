@@ -10,7 +10,8 @@ import { coalesce, normalizeConcreteWorkspaceId } from './linear-project-models'
 export async function listProjectTeams(
   projectId: string,
   workspaceId: LinearConcreteWorkspaceId,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<NonNullable<LinearProjectSummary['teams']>> {
   const id = projectId.trim()
   if (!id) {
@@ -21,15 +22,16 @@ export async function listProjectTeams(
   return coalesce(
     key,
     async () => {
-      const entry = getClients(concreteWorkspaceId)[0]
+      const entry = getClients(concreteWorkspaceId, signal)[0]
       if (!entry) {
         return []
       }
       const teams: NonNullable<LinearProjectSummary['teams']> = []
       let after: string | undefined
-      await acquire()
+      await acquire(signal)
       try {
         while (true) {
+          signal?.throwIfAborted()
           const result = await entry.client.client.rawRequest<
             ProjectTeamsResponse,
             LinearRawVariables
@@ -72,6 +74,7 @@ export async function listProjectTeams(
         release()
       }
     },
-    force
+    force,
+    signal
   )
 }

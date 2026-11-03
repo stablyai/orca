@@ -9,6 +9,7 @@ export const WSL_MOVE_REFUSAL_VALUES = [
   'none',
   'unavailable',
   'already_running',
+  'undo_running',
   'already_in_flight',
   'nothing_new',
   'host_unavailable',
@@ -115,5 +116,28 @@ export const wslMoveOrchestratorSchema = z
     reset_reason: z.enum(WSL_MOVE_RESET_REASON_VALUES),
     park_reason: z.enum(WSL_MOVE_ORCHESTRATOR_PARK_REASON_VALUES),
     attempt_bucket: z.enum(WSL_MOVE_ORCHESTRATOR_ATTEMPT_BUCKETS)
+  })
+  .strict()
+
+/** How "use this project here again" ended; refusals keep the result's own reason. */
+export const WSL_MOVE_UNDO_OUTCOME_VALUES = [
+  'released',
+  'not_moved',
+  'superseded',
+  'move_running',
+  'host_still_running',
+  'host_unreachable',
+  'unsaved_files',
+  'failed',
+  // The undo threw instead of returning a refusal.
+  'threw',
+  'other'
+] as const
+
+// Same enum-only rule as `wsl_move`: no distro, project or migration id leaves.
+export const wslMoveUndoSchema = z
+  .object({
+    outcome: z.enum(WSL_MOVE_UNDO_OUTCOME_VALUES),
+    duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS)
   })
   .strict()

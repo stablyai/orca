@@ -1,4 +1,3 @@
-import { settleBrowserDialogOnLiveScreencast } from '../browser-dialog-settlement'
 import type { BrowserScreencastResult } from '../../../shared/runtime-types'
 import { BrowserError } from '../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
@@ -256,18 +255,5 @@ export class RuntimeBrowserScreencasts {
     }
     // Departed viewers must not pin the shared frame budget.
     void applySharedScreencastFrameBudget(active, session).catch(() => {})
-  }
-
-  settleDialog(
-    browserPageId: string | undefined,
-    accept: boolean,
-    promptText?: string
-  ): Promise<boolean> {
-    return settleBrowserDialogOnLiveScreencast(
-      this.activeScreencastsByPageId,
-      browserPageId,
-      accept,
-      promptText
-    )
   }
 }

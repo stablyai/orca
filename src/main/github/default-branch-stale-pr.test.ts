@@ -86,7 +86,8 @@ vi.mock('./gh-utils', () => ({
   _resetOwnerRepoCache: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -215,7 +216,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     const pr = await getPRForBranch('/repo-root', 'master')
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1', '--include'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=10', '--include'],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(pr).toBeNull()
@@ -282,21 +283,36 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
       if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
         return { stdout: 'HTTP/2.0 200 OK\n\n[]' }
       }
-      if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
+      if (args[0] === 'api' && args[1] === 'graphql' && args.includes('number=7')) {
         return {
           stdout: JSON.stringify({
-            number: 7,
-            title: 'Historical PR',
-            state: 'CLOSED',
-            url: 'https://github.com/acme/widgets/pull/7',
-            statusCheckRollup: [],
-            updatedAt: '2024-01-01T00:00:00Z',
-            isDraft: false,
-            mergeable: 'UNKNOWN',
-            baseRefName: 'old-release',
-            headRefName: 'master',
-            baseRefOid: 'base-oid',
-            headRefOid: 'stale-master-oid'
+            data: {
+              repository: {
+                pullRequest: {
+                  number: 7,
+                  title: 'Historical PR',
+                  state: 'CLOSED',
+                  url: 'https://github.com/acme/widgets/pull/7',
+                  reviewDecision: null,
+                  mergeStateStatus: 'UNKNOWN',
+                  autoMergeRequest: null,
+                  headRepositoryOwner: { login: 'acme' },
+                  headRepository: { name: 'widgets' },
+                  commits: {
+                    nodes: [{ commit: { oid: 'stale-master-oid', statusCheckRollup: null } }]
+                  },
+                  stack: null,
+                  stackEntry: null,
+                  updatedAt: '2024-01-01T00:00:00Z',
+                  isDraft: false,
+                  mergeable: 'UNKNOWN',
+                  baseRefName: 'old-release',
+                  headRefName: 'master',
+                  baseRefOid: 'base-oid',
+                  headRefOid: 'stale-master-oid'
+                }
+              }
+            }
           })
         }
       }
@@ -314,21 +330,36 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
       if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
         return { stdout: 'HTTP/2.0 200 OK\n\n[]' }
       }
-      if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
+      if (args[0] === 'api' && args[1] === 'graphql' && args.includes('number=7')) {
         return {
           stdout: JSON.stringify({
-            number: 7,
-            title: 'Historical PR',
-            state: 'MERGED',
-            url: 'https://github.com/acme/widgets/pull/7',
-            statusCheckRollup: [],
-            updatedAt: '2024-01-01T00:00:00Z',
-            isDraft: false,
-            mergeable: 'UNKNOWN',
-            baseRefName: 'old-release',
-            headRefName: 'master',
-            baseRefOid: 'base-oid',
-            headRefOid: 'stale-master-oid'
+            data: {
+              repository: {
+                pullRequest: {
+                  number: 7,
+                  title: 'Historical PR',
+                  state: 'MERGED',
+                  url: 'https://github.com/acme/widgets/pull/7',
+                  reviewDecision: null,
+                  mergeStateStatus: 'UNKNOWN',
+                  autoMergeRequest: null,
+                  headRepositoryOwner: { login: 'acme' },
+                  headRepository: { name: 'widgets' },
+                  commits: {
+                    nodes: [{ commit: { oid: 'stale-master-oid', statusCheckRollup: null } }]
+                  },
+                  stack: null,
+                  stackEntry: null,
+                  updatedAt: '2024-01-01T00:00:00Z',
+                  isDraft: false,
+                  mergeable: 'UNKNOWN',
+                  baseRefName: 'old-release',
+                  headRefName: 'master',
+                  baseRefOid: 'base-oid',
+                  headRefOid: 'stale-master-oid'
+                }
+              }
+            }
           })
         }
       }

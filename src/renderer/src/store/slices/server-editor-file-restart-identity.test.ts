@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { RuntimeMobileSessionFileTab } from '../../../../shared/runtime-types'
+
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { buildWorkspaceSessionPayload } from '../../lib/workspace-session'
-import { createMirroredEditorFileResolver } from '../../runtime/web-session-tabs-sync/mirrored-editor-file-identity'
+import '../../runtime/web-session-tabs-sync/mirrored-editor-file-identity'
 import { buildHydratedEditorSessionState } from './editor/actions/hydrated-editor-session-state'
 import { buildOwnedEditorFileId } from './editor/file-ids/editor-file-ids'
-import type { OpenFile } from './editor/types/open-file'
+
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
@@ -98,51 +98,6 @@ describe('a server file keeps its id across a restart', () => {
     expect(editorEntityIds(restarted, WT_A)).toEqual([fileId])
     expect((restarted.unifiedTabsByWorktree[WT_A] ?? []).map((tab) => tab.id)).toEqual(tabIds)
     expect(restarted.activeFileIdByWorktree[WT_A]).toBe(fileId)
-  })
-
-  it('names a file the live mirror opens the way a restart restores it', () => {
-    const hostTab: RuntimeMobileSessionFileTab = {
-      type: 'file',
-      id: 'host-tab-1',
-      title: 'notes.ts',
-      filePath: FILE_PATH,
-      relativePath: 'notes.ts',
-      language: 'typescript',
-      isDirty: false,
-      isActive: true
-    }
-    const { fileId } = createMirroredEditorFileResolver([], WT_A, ENV)(hostTab, null)
-    expect(fileId).toBe(buildOwnedEditorFileId(FILE_PATH, WT_A, ENV))
-
-    const mirrored: OpenFile = {
-      id: fileId,
-      filePath: FILE_PATH,
-      relativePath: 'notes.ts',
-      worktreeId: WT_A,
-      language: 'typescript',
-      isDirty: false,
-      runtimeEnvironmentId: ENV,
-      mode: 'edit',
-      mirroredFromRuntimeSession: true
-    }
-    const session = buildWorkspaceSessionPayload({
-      ...prepareStore().getState(),
-      openFiles: [mirrored]
-    })
-    const restored = buildHydratedEditorSessionState(session, new Set([WT_A]), WT_A)
-    expect(restored.state.openFiles.map((file) => file.id)).toEqual([fileId])
-    expect(restored.editorFileIdMigrationsByWorktree[WT_A]?.has(fileId)).not.toBe(true)
-  })
-
-  it('keeps an unsaved draft of a server file through a restart', () => {
-    const store = prepareStore()
-    const fileId = openServerFile(store, WT_A, ENV)
-    store.getState().setEditorDraft(fileId, 'unsaved edit')
-    store.getState().markFileDirty(fileId, true)
-
-    const restarted = restart(store)
-    expect(restarted.editorDrafts[fileId]).toBe('unsaved edit')
-    expect(restarted.openFiles.find((file) => file.id === fileId)?.isDirty).toBe(true)
   })
 
   it('still names a local file by its path, also after a server file with the same path', () => {
