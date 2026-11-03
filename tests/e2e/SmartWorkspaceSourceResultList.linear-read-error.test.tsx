@@ -468,17 +468,19 @@ it.each(['success', 'fallback', 'legacy', 'release'] as const)(
     const fresh = Promise.withResolvers<LinearIssue | null>()
     const control = Promise.withResolvers<LinearIssue | null>()
     let aliasLoads = 0
-    detailTransport.issue.mockReset().mockImplementation(async (_id, workspaceId) => {
-      const issue =
-        workspaceId === 'L'
-          ? await (++aliasLoads === 1 ? old.promise : fresh.promise)
-          : aliasRow('Exact W', 'W')
-      if (!issue) {
-        throw new Error('missing issue')
-      }
-      // Only SDK I/O is synthetic; actual main concurrency/mapping/detail settlement runs.
-      return { ...issue, updatedAt: new Date(issue.updatedAt), labelIds: [] }
-    })
+    detailTransport.search
+      .mockReset()
+      .mockImplementation(async (_query, _variables, workspaceId) => {
+        const issue =
+          workspaceId === 'L'
+            ? await (++aliasLoads === 1 ? old.promise : fresh.promise)
+            : aliasRow('Exact W', 'W')
+        if (!issue) {
+          throw new Error('missing issue')
+        }
+        // Only provider I/O is synthetic; actual main concurrency/mapping/detail settlement runs.
+        return { data: { issue: { ...issue, labels: { nodes: [] } } } }
+      })
     detailTransport.rpc.mockReset().mockImplementation((target, method, params) => {
       expect(target).toEqual({ kind: 'environment', environmentId: 'env-1' })
       expect(method).toBe('linear.getIssue')
@@ -533,7 +535,8 @@ it.each(['success', 'fallback', 'legacy', 'release'] as const)(
         workspaceId: 'W'
       })
     const loads = (workspaceId: string) =>
-      detailTransport.issue.mock.calls.filter(([, workspace]) => workspace === workspaceId).length
+      detailTransport.search.mock.calls.filter(([, , workspace]) => workspace === workspaceId)
+        .length
     try {
       fireEvent.click(screen.getByRole('button', { name: 'Linear tab' }))
       await waitFor(() => expect(loads('L')).toBe(1))

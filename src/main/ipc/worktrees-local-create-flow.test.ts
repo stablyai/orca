@@ -101,7 +101,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
     computeWorkspaceRootAsync: vi.fn(actual.computeWorkspaceRootAsync)
   }
 })
-vi.mock('../terminal-history-deletion', async () =>
+vi.mock('../pty/history/terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
 vi.mock('../ports/advertised-url-watcher', async () =>

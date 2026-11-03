@@ -7,7 +7,7 @@ const { spawnMock, resolveForegroundMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node-pty', () => ({ spawn: spawnMock }))
-vi.mock('../../src/main/pwsh', () => ({ isPwshAvailable: vi.fn(() => false) }))
+vi.mock('../../src/main/pty/shell-startup/pwsh', () => ({ isPwshAvailable: vi.fn(() => false) }))
 vi.mock('../../src/main/providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: () =>
     'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',

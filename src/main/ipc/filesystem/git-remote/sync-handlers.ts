@@ -16,7 +16,7 @@ import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from '../..
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
-import { assertWslUncPathRunning } from '../../../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

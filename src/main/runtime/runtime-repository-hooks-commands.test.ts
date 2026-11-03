@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   loadHooks: vi.fn((): OrcaHooks | null => null)
 }))
 
-vi.mock('../wsl/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: mocks.blocked }))
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: mocks.blocked }))
 vi.mock('../workspace-hooks/hooks', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   hasHooksFile: mocks.hasHooksFile,

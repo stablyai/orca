@@ -3,13 +3,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextAutomationOccurrenceAfter } from '../../shared/automation-schedule-occurrences'
-import { WslHostService } from '../wsl/wsl-host-service'
-import { makeConnector, UBUNTU } from '../wsl/wsl-host-service-test-connector'
+import { WslHostService } from '../wsl/host-lifecycle/wsl-host-service'
+import {
+  makeConnector,
+  UBUNTU
+} from '../wsl/host-lifecycle/__tests__/wsl-host-service-test-connector'
 import {
   readWslHostAutomationWakes,
   writeWslHostAutomationWakes
-} from '../wsl/wsl-host-automation-wake-store'
-import type { WslHostAutomationDue, WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
+} from '../wsl/host-lifecycle/wsl-host-automation-wake-store'
+import type {
+  WslHostAutomationDue,
+  WslHostAutomationWake
+} from '../wsl/host-lifecycle/wsl-host-automation-wake'
 
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() }, ipcMain: { handle: vi.fn() } }))
 

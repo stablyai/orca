@@ -1,5 +1,5 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { splitOpenCodeSqliteCandidate } from '../ai-vault/session-scanner-opencode-sqlite-paths'
+import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 
 /** A session inside a shared container rather than a standalone transcript file. */

@@ -8,7 +8,7 @@ import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
-import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
+import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-environment-path'
 import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
 import {
   getPreflightWslTarget,
@@ -28,9 +28,9 @@ import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from '../ipc/preflight-remote-windows-terminal-capabilities'
-import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
-import { prunePreflightWslCache } from '../preflight-wsl-cache'
-import { assertWslDistroRunningForExec } from '../wsl/wsl-background-exec-gate'
+import { invalidateWslGuestEnvironment } from '../wsl/execution/wsl-guest-environment'
+import { prunePreflightWslCache } from '../wsl/discovery/preflight-wsl-cache'
+import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import {
   detectInstalledAgents,
   type InstalledAgentDetectionOptions

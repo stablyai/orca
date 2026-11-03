@@ -22,7 +22,7 @@ import {
   refreshWslHostPairing
 } from '../../../shared/runtime-environment-wsl-host-store'
 import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
-import { WslOrcadConnectionManager } from '../../wsl/wsl-orcad-connection'
+import { WslOrcadConnectionManager } from '../../wsl/orcad/wsl-orcad-connection'
 
 vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
   const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')

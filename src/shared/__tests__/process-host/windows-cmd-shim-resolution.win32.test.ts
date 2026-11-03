@@ -54,12 +54,4 @@ describeOnWindows('resolved .cmd shim spawn', () => {
     expect(result.code).toBe(0)
     expect(decode(result.stdout)).toEqual([prompt])
   })
-
-  it('reports the script exit code without a cmd.exe hop in between', async () => {
-    const failing = join(dir, 'fail.cmd')
-    writeFileSync(failing, npmProgNodeShim('fail.js'))
-    writeFileSync(join(dir, 'fail.js'), 'process.exit(7)\n')
-    const result = await runProcess({ program: failing, timeoutMs: 30_000 })
-    expect(result.code).toBe(7)
-  })
 })

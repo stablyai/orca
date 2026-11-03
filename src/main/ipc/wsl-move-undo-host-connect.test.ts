@@ -23,7 +23,7 @@ vi.mock('../../shared/runtime-environment-wsl-host-store', () => ({
   findWslHostDeployment: () =>
     host.pendingStop ? { environmentId: 'wsl:ubuntu', pendingStop: { at: 1 } } : null
 }))
-vi.mock('../wsl/wsl-host-service-instance', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () => ({
     recordForEnvironment: () => ({ environmentId: 'wsl:ubuntu', distro: 'Ubuntu' }),
     getStatuses: () => [],

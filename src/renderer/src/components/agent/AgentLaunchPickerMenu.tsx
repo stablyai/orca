@@ -1,6 +1,11 @@
-import { memo, useId, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
+import { memo, useId, useRef, useState, type ComponentProps } from 'react'
 import { Input } from '@/components/ui/input'
-import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  useDropdownMenuClose
+} from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -34,13 +39,6 @@ type Launch = (
   draft?: AgentPickerDraft,
   entry?: AgentPickerEntry
 ) => boolean | void | Promise<boolean>
-
-function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
-  // Radix row hover must not steal focus from the row's portaled setup or its nested controls.
-  if (event.currentTarget.querySelector('[data-slot="popover-trigger"][aria-expanded="true"]')) {
-    event.preventDefault()
-  }
-}
 
 export function AgentLaunchPickerMenu({
   disabled,
@@ -179,18 +177,20 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       }
     : undefined
   const setupId = useId()
-  const item = useRef<HTMLDivElement>(null)
-  const dismissing = useRef(false)
+  const closeMenu = useDropdownMenuClose()
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
   return (
     <AgentLaunchSetupButton
+      submenu
       entry={entry}
       initial={initial}
       open={openSetup === setupId}
       replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
-      disabled={disabled}
+      disabled={disabled || !entry.surfaces.length}
       onOpenChange={(next) => {
-        onSetupOpenChange(next ? setupId : null)
+        if (next || openSetup === setupId) {
+          onSetupOpenChange(next ? setupId : null)
+        }
         if (next) {
           onSelectAgent?.(entry.agent)
         }
@@ -198,20 +198,16 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       onUse={(draft) => {
         const result = runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
         if (result !== false) {
-          // The row click dismisses Radix only; the operation above owns acceptance.
-          dismissing.current = true
-          item.current?.click()
+          closeMenu()
         }
         return result
       }}
       renderAnchor={(trigger) => (
-        <DropdownMenuItem
-          ref={item}
-          variant="launch"
-          disabled={disabled || !entry.surfaces.length}
-          onSelect={(event) => {
-            if (dismissing.current) {
-              dismissing.current = false
+        <div
+          data-agent-launch-row
+          onClick={(event) => {
+            event.preventDefault()
+            if (disabled || !entry.surfaces.length) {
               return
             }
             const draft = initial
@@ -224,29 +220,34 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
                     : row.kind === 'terminal' || row.kind === 'cli'
                 ) ?? pickerLaunchRow(entry, surface))
             const result = draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)
-            if (result === false) {
-              event.preventDefault()
+            if (result !== false) {
+              closeMenu()
             }
           }}
           onKeyDown={(event) => {
-            if (event.key === 'ArrowRight') {
+            if (
+              event.target === event.currentTarget &&
+              (event.key === 'Enter' || event.key === ' ')
+            ) {
               event.preventDefault()
-              item.current?.querySelector<HTMLButtonElement>('button')?.focus()
+              event.currentTarget.click()
             }
           }}
-          onPointerMove={keepSetupFocus}
-          onPointerLeave={keepSetupFocus}
         >
-          <AgentIcon agent={entry.agent} size={14} />
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-          {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-            <span className="text-xs text-muted-foreground">
-              {chatUnavailableLabel(unavailable.reason)}
+          <Button asChild variant="menu-launch" size="menu">
+            <span>
+              <AgentIcon agent={entry.agent} size={14} />
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+              {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
+                <span className="text-xs text-muted-foreground">
+                  {chatUnavailableLabel(unavailable.reason)}
+                </span>
+              ) : null}
             </span>
-          ) : null}
+          </Button>
           {trigger}
-        </DropdownMenuItem>
+        </div>
       )}
     />
   )

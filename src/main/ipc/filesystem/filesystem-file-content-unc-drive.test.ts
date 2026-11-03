@@ -35,7 +35,7 @@ vi.mock('../../git/worktree-listing', async (importOriginal) => {
 vi.mock('./local-disk-write-precondition', () => diskPreconditionMock)
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 // The distro these UNC fixtures name counts as running, so the boot gate lets the touch through.
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async () => 'running'
 }))
@@ -49,7 +49,7 @@ vi.mock('node:fs/promises', async () => ({
   mkdir: mkdirMock
 }))
 vi.mock(
-  '../../wsl-unc-delete',
+  '../../wsl/filesystem/wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(

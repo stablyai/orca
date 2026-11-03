@@ -42,7 +42,7 @@ const dependencyExports: [string, string[]][] = [
   ['../updater', ['isQuittingForUpdate']],
   ['../updater-lifecycle-diagnostics', ['recordUpdaterLifecycle']],
   ['../macos-permissions/macos-tcc-prompt-notice', ['stopTccPromptNotice']],
-  ['../terminal-history-gc', ['cancelHistoryGc']],
+  ['../pty/history/terminal-history-gc', ['cancelHistoryGc']],
   ['./window-all-closed-quit-policy', ['shouldQuitWhenAllWindowsClosed']],
   ['./configure-process', ['isDevParentShutdownRequested']],
   ['../persistence/loading-store/user-data-path', ['getCanonicalUserDataPath']]
