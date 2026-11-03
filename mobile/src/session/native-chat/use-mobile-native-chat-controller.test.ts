@@ -644,6 +644,8 @@ describe('useMobileNativeChatController terminal turn', () => {
     viewMode.isTabChatView = () => true
     workingTab.agentStatus.workingMode = undefined
     workingTab.agentStatus.stateStartedAt = turnStartedAt
+    workingTab.agentStatus.turnStartedAt = turnStartedAt
+    workingTab.agentStatus.lastAssistantMessage = 'Partial reply'
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -658,30 +660,56 @@ describe('useMobileNativeChatController terminal turn', () => {
     vi.useRealTimers()
   })
 
-  it('uses the send-time turn epoch for a queued echo, even when the active prompt has landed', () => {
-    const originalMessages = sessionState.messages
-    sessionState.messages = [
-      {
-        id: 'active-prompt',
-        role: 'user',
-        blocks: [{ type: 'text', text: 'Run tests' }],
-        source: 'transcript',
-        timestamp: null
+  it.each([turnStartedAt, undefined])(
+    'keeps queued echoes behind the answer through state changes and Stop, with turn epoch %s',
+    (epoch) => {
+      if (epoch === undefined) {
+        Reflect.deleteProperty(workingTab.agentStatus, 'turnStartedAt')
       }
-    ]
-    draftPending = [
-      { id: 'follow-up', text: 'Then docs', sentAt: 1, queuedDuringWorkingEpoch: turnStartedAt }
-    ]
-    try {
-      rerender()
-      expect(controller?.chatPending[0]).toMatchObject({ pendingSend: 'queued' })
-      workingTab.agentStatus.stateStartedAt += 1000
-      rerender()
-      expect(controller?.chatPending[0]).toMatchObject({ pendingSend: 'queued' })
-    } finally {
-      draftPending = []
-      sessionState.messages = originalMessages
+      const originalMessages = sessionState.messages
+      sessionState.messages = [
+        {
+          id: 'active-prompt',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Run tests' }],
+          source: 'transcript',
+          timestamp: null
+        }
+      ]
+      draftPending = [
+        { id: 'follow-up', text: 'Then docs', sentAt: 1, queuedDuringWorkingEpoch: epoch ?? null }
+      ]
+      try {
+        rerender()
+        expect(controller?.chatPending[0]).toMatchObject({ pendingSend: 'queued' })
+        workingTab.agentStatus.stateStartedAt += 1000
+        rerender()
+        expect(controller?.chatPending[0]).toMatchObject({ pendingSend: 'queued' })
+        act(() => controller?.handleNativeChatStop())
+        expect(controller?.nativeChatCanStop).toBe(false)
+        expect(controller?.nativeChatStreamingText).toBe('Partial reply')
+        expect(controller?.chatPending[0]).toMatchObject({ pendingSend: 'queued' })
+      } finally {
+        draftPending = []
+        sessionState.messages = originalMessages
+      }
     }
+  )
+
+  it('captures an unknown active turn while an older host transcript is still empty', async () => {
+    Reflect.deleteProperty(workingTab.agentStatus, 'turnStartedAt')
+    workingTab.agentStatus.lastAssistantMessage = ''
+    rerender()
+    expect(controller?.nativeChatTurnActive).toBe(false)
+    captureSendOrigin.mockReturnValue(ORIGIN)
+    clientStub.sendRequest.mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
+    sendWithOutcome.mockResolvedValueOnce('accepted')
+    await act(async () => controller?.handleNativeChatSend('Then docs'))
+    expect(acceptSend).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queuedDuringWorkingEpoch: null }),
+      'Then docs',
+      undefined
+    )
   })
 
   it('captures the turn epoch when sending a follow-up before its acknowledgement', async () => {

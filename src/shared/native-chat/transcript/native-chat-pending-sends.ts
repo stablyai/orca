@@ -211,7 +211,10 @@ export function nativeChatPendingSendPlacement(
   workingEpoch?: number | null
 ): 'active' | 'queued' {
   return entry.queuedDuringWorkingEpoch !== undefined &&
-    entry.queuedDuringWorkingEpoch === workingEpoch
+    workingEpoch !== undefined &&
+    (entry.queuedDuringWorkingEpoch === null ||
+      workingEpoch === null ||
+      entry.queuedDuringWorkingEpoch === workingEpoch)
     ? 'queued'
     : 'active'
 }

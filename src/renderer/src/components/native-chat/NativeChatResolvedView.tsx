@@ -27,7 +27,6 @@ import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
-import { nativeChatHookTurnStartedAt } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
 import { launchPromptAsMessage, shouldPruneLaunchPrompt } from './native-chat-pending'
 import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
@@ -103,9 +102,8 @@ export function NativeChatResolvedView({
   )
   // A coalesced interrupt/restart can stay working; the newer epoch must still clear Stop suppression.
   const workingEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null)
-  const sendWorkingEpoch = useAppStore((s) =>
-    liveWorking ? nativeChatHookTurnStartedAt(s.agentStatusByPaneKey[paneKey]) : undefined
-  )
+  const turnEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.turnStartedAt ?? null)
+  const sendWorkingEpoch = liveWorking || session.hookAwaitingInput ? turnEpoch : undefined
   const canSend = useNativeChatCanSend(targetPtyId)
   // Share verified composer delivery with prompt answers and ESC-based Stop.
   const send = useNativeChatInteractiveSend(paneKey, targetPtyId, agent)

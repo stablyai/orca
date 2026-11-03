@@ -148,12 +148,12 @@ export function buildMobileNativeChatTransientData({
     }
     return { ...message, blocks }
   })
-  const data: NativeChatMessage[] = [...renderedFolded]
+  const transient: NativeChatMessage[] = []
   if (streaming) {
-    data.push(nativeChatStreamingMessage(streaming))
+    transient.push(nativeChatStreamingMessage(streaming))
   }
   for (const item of pending) {
-    data.push({
+    transient.push({
       id: item.id,
       role: 'user',
       blocks: [
@@ -168,6 +168,6 @@ export function buildMobileNativeChatTransientData({
   return {
     folded: renderedFolded,
     streaming,
-    data: orderNativeChatDisplayMessages(data, { preserveTranscriptOrder: true })
+    data: [...renderedFolded, ...orderNativeChatDisplayMessages(transient)]
   }
 }

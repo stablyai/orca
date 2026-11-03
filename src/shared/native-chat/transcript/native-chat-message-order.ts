@@ -28,30 +28,23 @@ export function compareNativeChatDisplayMessages(
   a: NativeChatMessage,
   b: NativeChatMessage
 ): number {
-  const rank = messageSortRank(a) - messageSortRank(b)
-  return rank || compareNativeChatTranscriptMessages(a, b)
+  const rank = messageSortRank(a)
+  const difference = rank - messageSortRank(b)
+  return difference || (rank === 0 ? compareNativeChatTranscriptMessages(a, b) : 0)
 }
 
 export function orderNativeChatDisplayEntries<T>(
   entries: readonly T[],
-  messageOf: (entry: T) => NativeChatMessage,
-  preserveTranscriptOrder = false
+  messageOf: (entry: T) => NativeChatMessage
 ): T[] {
   return [0, 1, 2, 3].flatMap((rank) => {
     const tier = entries.filter((entry) => messageSortRank(messageOf(entry)) === rank)
-    return rank === 0 && !preserveTranscriptOrder
-      ? orderNativeChatTranscriptEntries(tier, messageOf)
-      : tier
+    return rank === 0 ? orderNativeChatTranscriptEntries(tier, messageOf) : tier
   })
 }
 
 export function orderNativeChatDisplayMessages(
-  messages: readonly NativeChatMessage[],
-  options?: { preserveTranscriptOrder: boolean }
+  messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
-  return orderNativeChatDisplayEntries(
-    messages,
-    (message) => message,
-    options?.preserveTranscriptOrder
-  )
+  return orderNativeChatDisplayEntries(messages, (message) => message)
 }

@@ -161,7 +161,7 @@ export function useMobileNativeChatController(args: {
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
   const nativeChatAgentWorking = activeTurn.isWorking
-  const workingEpoch = terminalTurn.isWorking ? terminalTurn.workingStartedAt : undefined
+  const workingEpoch = terminalTurn.workingEpoch
   const placedChatPending = useMemo(
     () =>
       chatPending.map((entry) => ({

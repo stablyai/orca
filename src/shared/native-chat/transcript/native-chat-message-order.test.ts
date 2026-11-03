@@ -78,13 +78,18 @@ describe('terminal chat causal order', () => {
       source: 'transcript',
       transcriptOrder: 3
     }
-    const result = tail([answer, landed, caughtUp], [active, queued], 500)
+    const result = tail(
+      [answer, landed, caughtUp],
+      [active, queued, { ...queued, id: 'last', text: 'Then summarize', sentAt: 0 }],
+      500
+    )
     expect(result.messages.map((row) => row.id)).toEqual([
       'old-answer',
       'prompt',
       'answer',
       'streaming',
-      'pending:follow-up'
+      'pending:follow-up',
+      'pending:last'
     ])
     expect(result.preview).toBeNull()
   })
@@ -99,8 +104,12 @@ describe('terminal chat causal order', () => {
     expect(result.preview).toBe('Starting the tests')
   })
 
-  it('keeps a send made during an unknown working epoch behind the current answer', () => {
-    const result = tail([answer], [{ ...queued, queuedDuringWorkingEpoch: null }], null)
+  it.each([
+    [null, null],
+    [500, null],
+    [null, 500]
+  ])('keeps queued placement without durable evidence of a new turn (%s → %s)', (sent, current) => {
+    const result = tail([answer], [{ ...queued, queuedDuringWorkingEpoch: sent }], current)
     expect(result.messages.map((row) => row.id)).toEqual([
       'old-answer',
       'streaming',

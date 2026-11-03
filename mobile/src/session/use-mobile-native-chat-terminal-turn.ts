@@ -32,6 +32,7 @@ const NO_MESSAGES: NativeChatMessage[] = []
 export type MobileNativeChatTerminalTurn = NativeChatTerminalTurn & {
   streamingText: string | undefined
   workingStartedAt: number | null
+  workingEpoch: number | null | undefined
   settledTurns: NativeChatSettledTurns
   /** Stop hides working until the turn ends or a newer working epoch starts. */
   stop: () => void
@@ -68,12 +69,11 @@ export function useMobileNativeChatTerminalTurn(args: {
   })
   const liveWorking = live.status === 'working'
   const turnStartedAt = nativeChatHookTurnStartedAt(status ?? undefined)
+  const workingEpoch =
+    liveWorking || live.hookAwaitingInput ? (status?.turnStartedAt ?? null) : undefined
   const messagesWithPending = useMemo(
-    () => [
-      ...messages,
-      ...pendingSendsAsMessages(args.pending ?? [], [], liveWorking ? turnStartedAt : undefined)
-    ],
-    [messages, args.pending, liveWorking, turnStartedAt]
+    () => [...messages, ...pendingSendsAsMessages(args.pending ?? [], messages, workingEpoch)],
+    [messages, args.pending, workingEpoch]
   )
   // Throttle status-part previews to avoid reparsing the whole accumulated markdown per part.
   const streamingText = useThrottledLatestValue(
@@ -148,6 +148,7 @@ export function useMobileNativeChatTerminalTurn(args: {
     ...turn,
     streamingText,
     workingStartedAt: turn.turnActive ? turnStartedAt : null,
+    workingEpoch,
     settledTurns,
     stop: stopTurn
   }
