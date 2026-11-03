@@ -28,7 +28,7 @@ const {
   scanAiVaultSessionsInService: vi.fn()
 }))
 
-vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('./scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService
 }))

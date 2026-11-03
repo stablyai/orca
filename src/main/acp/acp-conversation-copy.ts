@@ -8,7 +8,7 @@ import {
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AiVaultConversationCopy } from '../../shared/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
 import { AcpRpcError } from './acp-errors'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpStructuredConnection } from './acp-structured-connection'
