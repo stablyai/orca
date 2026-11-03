@@ -30,6 +30,7 @@ const SETTINGS_NAV_TARGETS = [
   'computer-use',
   'developer-permissions',
   'privacy',
+  'backup-restore',
   'advanced',
   'dev',
   'voice',
