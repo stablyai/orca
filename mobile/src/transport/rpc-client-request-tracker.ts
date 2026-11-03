@@ -68,13 +68,13 @@ export class RpcClientRequestTracker {
         if (wasConnected && generation !== this.options.getGeneration?.()) {
           throw new Error('Connection changed')
         }
-        requestOptions?.beforeSend?.()
         if (!wasConnected) {
           console.log('[net] sendRequest waited for connect', {
             method,
             waitedMs: Date.now() - waitStart
           })
         }
+        requestOptions?.beforeSend?.()
         const response = await this.sendConnectedRequest(
           snapshot.method,
           snapshot.params,

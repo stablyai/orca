@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { AGENT_STATUS_STATES } from '../../../src/shared/agent-status-types'
-import { isTuiAgent } from '../../../src/shared/tui-agent-config'
+import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import {
   isMobileTerminalTabRunningAgent,
   resolveMobileTerminalTabOwnedAgentId

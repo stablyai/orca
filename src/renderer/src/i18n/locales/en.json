@@ -4149,7 +4149,7 @@
             "copyFilePathFailed": "Failed to copy file path",
             "downloadOpenWithDefaultApp": "Download & open with default app",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
-            "openInThisGroup": "Open in this group",
+            "openInNewTab": "Open in new tab",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -9429,7 +9429,7 @@
           "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
           "8eefeaa3da": "Focus Follows Mouse",
-          "96fe15def8": "Mouse and clipboard behavior for terminal panes.",
+          "96fe15def8": "Scrolling, mouse, and clipboard behavior for terminal panes.",
           "45721f3e67": "Terminal Interaction",
           "9c0b1c1792": "On",
           "c1fc9e9444": "GPU Acceleration",
@@ -20448,7 +20448,8 @@
         "cancelled": "Orca won't continue this chat automatically.",
         "scheduled": "Orca will continue this chat at {{time}}.",
         "cancel": "Don't continue"
-      }
+      },
+      "settings": "Chat settings"
     },
     "tab": {
       "bar": {
@@ -20812,7 +20813,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Trim Gutter on Copy",
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
-        "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard."
+        "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard.",
+        "scrollOnUserInput": "Scroll to Bottom on Input",
+        "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place."
       },
       "terminal": {
         "clipboard": {
@@ -20827,6 +20830,15 @@
             "whitespace": "whitespace",
             "spaces": "spaces"
           }
+        },
+        "search": {
+          "typing": "typing",
+          "input": "input",
+          "jump": "jump",
+          "bottom": "bottom",
+          "scrollback": "scrollback",
+          "snap": "snap",
+          "position": "position"
         }
       },
       "nativeChat": {
@@ -21224,13 +21236,6 @@
       "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
       "terminalSaveFailed": "Could not switch to terminal. Choose Terminal in Settings → Agents.",
       "dismiss": "Dismiss",
-      "liveSwitching": "Live switching available",
-      "liveSwitchingTitle": "Live switching 101",
-      "liveSwitchingDescription": "Right-click an agent tab to switch between Chat UI and the terminal.",
-      "liveSwitchingGotIt": "Got it",
-      "liveSwitchingTerminalTab": "Claude Code",
-      "liveSwitchingPolishTab": "Polish Bottom…",
-      "liveSwitchingCouncilTab": "Council Review",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
       "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",

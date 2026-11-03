@@ -11,8 +11,9 @@ import {
   normalizeTerminalTitle,
   detectAgentStatusFromTitle
 } from './agent-detection'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
-import { getAgentResumeArgv } from './agent-resume-argv'
+import { buildAgentStartupPlan } from './agent-launch/startup/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from './agent-launch/startup/tui-agent-resume-startup'
+import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
 

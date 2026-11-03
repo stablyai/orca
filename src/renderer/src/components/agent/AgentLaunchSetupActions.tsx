@@ -1,6 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { AgentPickerEntry, AgentPickerSurface } from '../../../../shared/agent-launch-picker'
+import type {
+  AgentPickerEntry,
+  AgentPickerSurface
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { AgentLaunchSurfaceButtons } from './AgentLaunchSetupFooter'
 
 /** Select mode's buttons: a launch entry picks its surface; a text card's Use stages its draft. */

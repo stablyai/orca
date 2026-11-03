@@ -31,7 +31,7 @@ import {
   changePrompt,
   promptEditor
 } from '@/components/native-chat/native-chat-prompt-editor.test-support'
-import type { AgentPickerEntry } from '../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import * as launcher from './launch-agent-in-new-tab'
 import type * as StructuredLaunch from './launch-structured-agent-session'
 import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'

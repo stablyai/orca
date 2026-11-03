@@ -8,6 +8,7 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
+import type { AppState } from '../../store/types'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import {
   encodeWorkspaceFilePaths,
@@ -30,7 +31,7 @@ vi.mock('@/i18n/i18n', () => ({
     )
 }))
 vi.mock('@/store', () => ({
-  useAppStore: {
+  useAppStore: Object.assign((selector: (state: Partial<AppState>) => unknown) => selector({}), {
     getState: () => ({
       settings: { activeRuntimeEnvironmentId: null },
       repos: [{ id: 'repo1', connectionId: null, executionHostId: 'local' }],
@@ -39,7 +40,7 @@ vi.mock('@/store', () => ({
       folderWorkspaces: [],
       sshConnectionStates: new Map()
     })
-  }
+  })
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 vi.mock('./TerminalPaneResumeInChatButton', () => ({
@@ -202,6 +203,7 @@ describe('TerminalPaneHeaderOverlay', () => {
       true
     )
     expect(container.querySelector('button[aria-label="Show chat view"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Chat settings"]')).toBeNull()
   })
 
   it('keeps Show terminal as the way back from chat view', () => {
@@ -212,6 +214,12 @@ describe('TerminalPaneHeaderOverlay', () => {
     })
 
     expect(container.querySelector('button[aria-label="Show terminal"]')).not.toBeNull()
+    expect(container.querySelectorAll('button[aria-label="Chat settings"]')).toHaveLength(1)
+    expect(
+      container.querySelector(
+        '.pane-title-bar[data-active-pane] button[aria-label="Chat settings"]'
+      )
+    ).not.toBeNull()
     expect(container.textContent).not.toContain('Continue in Chat UI')
   })
 

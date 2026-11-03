@@ -5,7 +5,7 @@ import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   type AgentChatPermissionMode,
   type AgentChatPermissionModeIconName
-} from '../../../../shared/agent-chat-permission-mode'
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 const ICONS_BY_NAME: Record<AgentChatPermissionModeIconName, LucideIcon> = {
   Hand,

@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { getAgentResumeArgv } from './agent-resume-argv'
+import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 import {
   normalizeAgentProviderSession,
   RESUMABLE_TUI_AGENTS
 } from './agent-session/lifecycle/agent-session-resume'
-import { AGENT_EFFORT_LEVEL } from './agent-effort-level'
+import { AGENT_EFFORT_LEVEL } from './agent-launch/choices/agent-effort-level'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { normalizeMainAgentStatusField } from './agent-status-types'
 import { salvagingRecord } from './zod-salvage'

@@ -46,9 +46,9 @@ export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-linear-connect': 'identical'
   },
   'tasks.linear-team-context': {
-    'matrix-tasks.linear-team-context-linear.listteams-1': 'result-absent-settlement',
-    'matrix-tasks.linear-team-context-linear.teamstates-1': 'result-absent-settlement',
-    'tk-linear-team-context': 'identical'
+    'matrix-tasks.linear-team-context-linear.listteams-1': { verdict: 'bridge-contract' },
+    'matrix-tasks.linear-team-context-linear.teamstates-1': { verdict: 'bridge-contract' },
+    'tk-linear-team-context': { verdict: 'bridge-contract' }
   },
   'tasks.project-board-load': {
     'matrix-tasks.project-board-load-github.project.listaccessible-1': 'result-absent-settlement',

@@ -22,9 +22,9 @@ import {
   type SourceControlAgentRows
 } from '@/lib/source-control-agent-picker'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-launch-route-input'
-import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 
 /** The shared surface rows configure a recipe here; they never start an agent. */

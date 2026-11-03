@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { withFreshOmpLaunch } from './omp-fresh-launch'
-import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
+import { withFreshOmpLaunch } from './agent-launch/startup/omp-fresh-launch'
+import { buildAgentDraftLaunchPlan } from './agent-launch/startup/tui-agent-startup'
 import { detectExplicitPiAgentKindFromCommand } from './pi-agent-kind'
 import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
 

@@ -799,7 +799,8 @@
     },
     "prSidebar": {
       "loading": "正在載入 PR…",
-      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。"
+      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。",
+      "retryLoading": "重新嘗試載入 PR"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主機清單",

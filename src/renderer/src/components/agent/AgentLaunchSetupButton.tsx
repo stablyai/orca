@@ -7,13 +7,14 @@ import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry,
+  AgentPickerDraftOwner
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
-import {
-  useAgentPickerSetup,
-  type AgentPickerSetupIdentity,
-  type AgentPickerDraftOwner
-} from './agent-launch-picker-drafts'
+import { useAgentPickerSetup, type AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
+
 export {
   invalidateAgentPickerDrafts,
   retireAgentPickerDrafts,

@@ -9,7 +9,7 @@ import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/share
 import { BoundedMap } from '../../../src/shared/bounded-map'
 import type { RpcClient } from '../transport/rpc-client'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
-import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
+import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
 import {
   createStructuredAgentSessionOptionState,
   structuredAgentSessionReportsAtFence

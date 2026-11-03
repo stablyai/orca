@@ -71,14 +71,15 @@ export function workItemsCacheKey(
   repoId: string,
   limit: number,
   query: string,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  binding?: string
 ): string {
   const scope = executionHostId?.trim() ?? ''
   const hostId = normalizeExecutionHostId(scope)
   return composeRepoCacheKey(
     hostId ? (hostId !== LOCAL_EXECUTION_HOST_ID ? hostId : null) : scope,
     repoId,
-    `${limit}::${query}`
+    `${binding ? `binding=${encodeURIComponent(binding)}::` : ''}${limit}::${query}`
   )
 }
 

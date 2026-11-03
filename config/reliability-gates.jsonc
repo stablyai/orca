@@ -506,10 +506,10 @@
       "invariant": "A literal sleep followed by && must not cause the later harness to lose hook/account preparation or hidden renderer query delivery. Preparation and typed-command hints are not live process evidence. Fresh agent startup output may request one bounded host confirmation after the initial command read window has expired.",
       "oracle": "Delayed OpenCode 2 installs v2 hooks rather than v1, disabled harnesses do not fall back, selected managed accounts survive, and Pi/OMP/Prime preparation targets the requested harness. A captured Claude startup title at 30 seconds yields process-confirmed routing, never title-authorized routing. A title storm causes at most three additional reads; close and untrackable providers cause none.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-launch/startup/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
       ],
       "testFiles": [
-        "src/shared/agent-command-line-intent.test.ts",
+        "src/shared/agent-launch/startup/agent-command-line-intent.test.ts",
         "src/shared/pi-agent-kind.test.ts",
         "src/shared/opencode-launch-command.test.ts",
         "src/main/ipc/pty/host-env/opencode-hook-installation.test.ts",
@@ -546,7 +546,7 @@
           "result": "passed",
           "durationSeconds": 1.86,
           "summary": "214 assertions pass across nine files, including all 45 harness classifications, actual hook files, delayed account preparation, late process routing, hidden query delivery and bounded recovery.",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-launch/startup/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
         }
       ],
       "runtimeBudget": {
@@ -6655,7 +6655,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/network/client-routes/browser-client-network-route-registry.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/client-hosts/leases/paired-runtime-browser-host-lease.test.ts src/main/browser/client-hosts/leases/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/network/client-routes/browser-client-network-route-registry.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/client-hosts/leases/paired-runtime-browser-host-lease.test.ts src/main/browser/client-hosts/leases/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/network/client-routes/browser-client-network-route-registry.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/client-hosts/leases/paired-runtime-browser-host-lease.test.ts src/main/browser/client-hosts/leases/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/client-routes/browser-client-network-route-registry.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-registry.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime.test.ts src/main/browser/client-pages/execution/browser-client-page-command-executor.test.ts src/main/browser/sessions/browser-session-startup.test.ts src/main/ipc/runtime-environments/runtime-environments-subscription-teardown.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/client-routes/browser-client-network-route-registry.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-registry.test.ts src/main/browser/client-pages/execution/browser-client-page-command-executor.test.ts src/main/browser/sessions/browser-session-startup.test.ts src/main/ipc/runtime-environments/runtime-environments-subscription-teardown.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/browser/network/execution-routes/browser-network-deferred-socket.test.ts src/main/browser/network/execution-routes/browser-network-execution-route.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/network/execution-routes/ssh-browser-network-execution-route.test.ts src/main/browser/network/tunnels/system-ssh-socks-client-socket.test.ts src/main/ssh/system-transport/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/main/ssh/system-transport/system-ssh-forward-process.test.ts src/main/ssh/system-transport/system-ssh-operations.test.ts src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
@@ -6691,7 +6691,6 @@
         "src/main/browser/network/client-routes/browser-client-network-route-registry.test.ts",
         "src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts",
         "src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-registry.test.ts",
-        "src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime.test.ts",
         "src/main/browser/client-hosts/lifecycle/browser-client-host-reconciliation-command-order.test.ts",
         "src/main/browser/client-pages/execution/browser-client-page-command-executor.test.ts",
         "src/main/browser/client-pages/execution/browser-client-page-command-integration.test.ts",
@@ -6985,10 +6984,6 @@
             "final shutdown force-closes retained retired routes",
             "registry shutdown closes every route and rejects later admission"
           ]
-        },
-        {
-          "file": "src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime.test.ts",
-          "assertions": ["pairing resolution failures preserve the asynchronous start contract"]
         },
         {
           "file": "src/main/browser/client-hosts/commands/browser-client-host-command-dispatcher.test.ts",
@@ -13089,18 +13084,17 @@
       "providers": ["daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["daemon", "ssh"],
-      "coverageNotes": "A preload contract and Electron main-stall oracle prove capability lookup is asynchronous. Startup prefetch covers restored primary and split-pane PTY identities before cold activation, while unknown providers remain eager. Docker SSH journeys prove remote terminals still remount eagerly and reclaim their authenticated PTY owner after restart.",
+      "coverageNotes": "An Electron main-stall oracle proves capability lookup is asynchronous. Startup prefetch covers restored primary and split-pane PTY identities before cold activation, while unknown providers remain eager. Docker SSH journeys prove remote terminals still remount eagerly and reclaim their authenticated PTY owner after restart.",
       "motivatingLinks": ["https://stablygroup.slack.com/archives/C0BD60A5J85/p1785524559818629"],
       "invariant": "PTY snapshot capability discovery must never synchronously block renderer JavaScript. Restored daemon capability must be known before workspace readiness enables cold activation; unknown or legacy capability must remain eager. A healthy SSH provider must return definitive false without polling. One unresponsive capability batch must fail open within one second regardless of PTY count, and stale async responses must not update current bindings.",
-      "oracle": "The preload test rejects sendSync and requires ipcRenderer.invoke. Unit contracts assert 512-ID batching, one-second fail-open, unknown retry, definitive SSH false, and generation-fenced stale responses. During an injected 1.5-second Electron main-thread stall, a renderer-owned 50ms interval must keep a maximum gap below 500ms and each API call must return within 100ms. The production cold-activation journey must still mount at most three of eight daemon tabs after reload, while Docker SSH restoration remains eager.",
+      "oracle": "Unit contracts assert 512-ID batching, one-second fail-open, unknown retry, definitive SSH false, and generation-fenced stale responses. During an injected 1.5-second Electron main-thread stall, a renderer-owned 50ms interval must keep a maximum gap below 500ms and each API call must return within 100ms. The production cold-activation journey must still mount at most three of eight daemon tabs after reload, while Docker SSH restoration remains eager.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/preload/pty-snapshot-capability-ipc.test.ts src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/preload/pty-snapshot-capability-ipc.test.ts",
         "src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts",
         "src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts",
         "src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx",
@@ -14820,7 +14814,7 @@
       "invariant": "A public CLI send containing non-empty text plus Enter and no interrupt identifies agent-prompt intent. The owning runtime uses bracketed-paste and settled submit only when a fresh foreground-process read positively identifies the exact target as Claude or Codex on a desktop call; every other agent, stale agent metadata over a shell, text-only input, bare Enter, interrupts, mobile input, query replies, and older clients keep the direct terminal contract.",
       "oracle": "Launch a bare fake Codex through the real Electron PTY and delay its composer render for 1,200 ms, beyond the legacy generic 500 ms gap. Send a 557-byte prompt with the public CLI and require the marker, zero premature Enter, no rescue Enter, and one submission. POSIX child stdin must retain one bracketed-paste frame; Windows ConPTY consumes that control frame, so runtime tests require the frame at the PTY write boundary while the Windows child requires the exact prompt. The same harness against the installed pre-fix runtime must record one premature Enter and require one bare rescue Enter. Focused units require CLI intent only for text plus Enter, settlement only for freshly identified Claude/Codex, the legacy platform delay for every other configured agent, stale Codex launch identity over a shell to fall back, no wrapper polling, and byte-for-byte direct delivery for non-targets.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-prompt-injection.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts",
         "pnpm run build:cli && pnpm exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm.cmd exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "node tests/tools/repro-terminal-send-submit.mjs --cli orca --worktree <registered-worktree> --discard-report"
@@ -14830,7 +14824,7 @@
         "src/main/runtime/rpc/terminal-agent-prompt-send.test.ts",
         "src/main/runtime/rpc/terminal-send.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
-        "src/shared/agent-prompt-injection.test.ts",
+        "src/shared/agent-launch/startup/agent-prompt-injection.test.ts",
         "tests/e2e/terminal-send-agent-prompt-submit.spec.ts",
         "tests/tools/repro-terminal-send-submit.mjs"
       ],
@@ -14900,6 +14894,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-prompt-injection.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts",
           "result": "passed",
           "durationSeconds": 23.2,
           "summary": "After rebasing onto current main, the final narrowed runtime/CLI/RPC suite passed 1,201 tests with one skip, including fresh Claude/Codex identity, stale-agent shell fallback, and legacy timing for every other configured agent."
@@ -14963,12 +14958,12 @@
       "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Local worker-start with supported observation must preserve an unobserved turn as start_unknown without revoking authority, closing questions, or triggering a rescue Enter; a worker report during observation must settle normally. Claude and Codex must emit a post-paste composer marker and then settle, or reach the bounded fallback first; every other agent retains the platform delay.",
       "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, Claude/Codex marker-gated multi-frame renders, and the legacy platform delay for every other configured agent. The candidate resets settlement on later frames, gives a late marker a fresh bounded window, and still submits once at the hard deadline if output never settles. The worker-start contract drives the production RPC through a delayed fake Codex composer and independently checks exact turn/Enter counts plus reopened SQLite Task, Dispatch, worker receipt, and mutation receipt state for accepted and swallowed outcomes. Other orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts --reporter=dot",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
       "testFiles": [
-        "src/shared/agent-prompt-injection.test.ts",
+        "src/shared/agent-launch/startup/agent-prompt-injection.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts",
         "src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts",
@@ -14977,7 +14972,7 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/shared/agent-prompt-injection.test.ts",
+          "file": "src/shared/agent-launch/startup/agent-prompt-injection.test.ts",
           "assertions": [
             "agent prompts are always framed as bracketed paste",
             "Deferred unit obligation: OMP joins submit to the paste frame while Claude, Codex and unidentified agents keep submit separate; the direct predicate table was removed. Runtime-writer coverage is unchanged.",
@@ -15045,6 +15040,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
           "result": "passed",
           "durationSeconds": 11.32,
           "summary": "4 files and 1,303 tests passed with one skipped. Claude and Codex both wait for post-marker quiescence, and a Codex marker arriving at 7.9 seconds receives a fresh window through its final slow frame. Exact-build live Codex workers accepted injected prompts without manual Enter, replied, called worker_done, and settled successfully in the rendered Electron UI."
@@ -15054,6 +15050,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
           "result": "passed",
           "durationSeconds": 13.3,
           "summary": "4 files and 1,283 tests passed. The hardened multi-frame oracle failed on the first-marker candidate because it submitted at 751 ms during an intermediate Claude frame; the quiescence candidate waited through the final 1,000 ms frame and submitted once at 2,500 ms. Continuous render output remained bounded to one fallback submit at 8 seconds. An isolated Claude Code 2.1.231 Haiku probe saw the first marker at 400 ms, continued output through 1,500 ms, sent one Enter at 3,000 ms after 1.5 seconds quiet, and created the expected marker; no Fable or Opus probe was used."
@@ -15063,6 +15060,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
           "result": "passed",
           "durationSeconds": 16.9,
           "summary": "4 files and 1,282 tests passed. Unmodified main wrote Enter at 500 ms before the deterministic Claude composer rendered at 750 ms; the candidate waited for the split show-cursor marker and wrote one Enter. A live Claude Code 2.1.231 Haiku trace rendered the pasted marker and show-cursor in one 523-byte frame without submitting a model request."
@@ -15072,6 +15070,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-launch/startup/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
           "result": "passed",
           "durationSeconds": 7.4,
           "summary": "4 test files passed, 697 tests passed; covers framing, runtime PTY writes, orchestration RPC dispatch, and coordinator dispatch behavior."

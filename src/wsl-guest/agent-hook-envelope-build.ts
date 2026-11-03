@@ -21,6 +21,7 @@ export function buildRelayHookEnvelope(
       : {}),
     agentPresence: hasSeparateHookSessionAdmission(source)
       ? {
+          ...event.agentPresence,
           agent: source,
           session: event.statusAdmissionSession
         }

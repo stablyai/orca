@@ -54,7 +54,7 @@ import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository
 import { translate } from '@/i18n/i18n'
 import { SourceControlActionOptionField } from '../../../agent/launch-settings/AgentChoiceOptionField'
 import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control-launch-agent-selection'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { captureSourceControlActionSelection } from '../../../../../../shared/source-control-ai-operation-policy'
 
 export function RepositorySourceControlAiActionRows(

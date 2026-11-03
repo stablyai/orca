@@ -3,7 +3,7 @@ import {
   getAgentSessionOptionCatalog
 } from '../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { SourceControlActionLaunchPreferences } from '../../../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   sourceControlActionOptions,
   sourceControlActionPermissionModeRoute
