@@ -18,6 +18,8 @@ import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
 } from '../structured-agent-session-owner-probe'
+import { withCodexWindowsTarShimResolvers } from '../../../codex/codex-windows-tar-shim'
+import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
 import { createStructuredAgentSessionLifecycleDelivery } from '../structured-agent-session-lifecycle-delivery'
@@ -31,7 +33,12 @@ export async function installOnJournal(
   { journalDatabase, store }: OpenedAgentSessionRecordStore,
   catalogOwner: CatalogOwner
 ): Promise<InstalledRuntime> {
-  const envResolvers = catalogOwner.environment
+  // Why: Codex's Windows updater extracts with the first `tar` on PATH, which Git Bash-inherited
+  // environments point at Git for Windows' GNU tar that misreads native paths (#32127).
+  const envResolvers = withCodexWindowsTarShimResolvers(
+    catalogOwner.environment,
+    getProfileUserDataPath()
+  )
   let host: StructuredAgentSessionHost | null = null
   const lifecycle = createStructuredAgentSessionLifecycleDelivery({
     handle: (event) => host?.handleAdapterEvent(event),
