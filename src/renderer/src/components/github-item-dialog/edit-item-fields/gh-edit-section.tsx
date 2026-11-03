@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
+import { useRepoLabels, useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
+import { useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
@@ -41,6 +42,9 @@ const NO_ASSIGNEES: string[] = []
 
 export function GHEditSection(props: GitHubItemDialogEditSectionProps): React.JSX.Element | null {
   const { item, projectOrigin } = props
+  if (item.type === 'pr') {
+    return null
+  }
   const repository = projectOrigin ?? parseOwnerRepoFromItemUrl(item.url)
   const itemKey = `${item.repoId}\0${repository ? githubRepoIdentityKey(repository) : item.url}\0${item.type}\0${item.id}`
   return <GHEditSectionItem key={itemKey} {...props} />

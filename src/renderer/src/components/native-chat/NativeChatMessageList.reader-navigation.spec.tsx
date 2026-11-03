@@ -365,6 +365,7 @@ describe('reader navigation', () => {
       const composer = {
         focus,
         insertTypedText,
+        insertAgentReferences: () => false,
         acceptsText: () => true,
         appendText: vi.fn(),
         handlePasteEvent: vi.fn(),

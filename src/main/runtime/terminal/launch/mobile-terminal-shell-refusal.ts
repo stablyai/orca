@@ -1,7 +1,7 @@
 import {
   resolveLocalLaunchScopeRuntime,
   type LaunchScopeRuntimeStore
-} from '../../../local-project-runtime-resolution'
+} from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { terminalShellOverrideRefusal } from '../../terminal-shell-override-host-support'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 

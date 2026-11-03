@@ -33,7 +33,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
 | `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 4. |
-| `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 3. |
+| `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8. |
 | `contributes.languagePacks` | [LanguagePackContribution](#languagepackcontribution)[] | no | 1.4.160 | Interface translations. At most 16. |
 | `contributes.keybindings` | [KeybindingContribution](#keybindingcontribution)[] | no | 1.4.160 | Keyboard shortcuts for contributed commands. At most 256. |
 | `contributes.vmRecipes` | [VmRecipeContribution](#vmrecipecontribution)[] | no | 1.4.160 | Virtual machine environment recipes. At most 64. |
@@ -44,7 +44,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.customEditors` | [CustomEditorContribution](#customeditorcontribution)[] | no | 1.4.245 | Editors that open files of given types in the editor tab. At most 16. |
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
-| `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8. |
+| `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
@@ -80,6 +80,7 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 | `title` | string | yes | 1.4.160 | Title shown in the command palette. Example: `"Restart kernel"` |
 | `when` | `"global"` \| `"workspace"` | no | 1.4.160 | Where the command is available. `workspace` hides it when no workspace is active. Defaults to `global`. |
 | `action` | `"worktree.history.back"` \| `"worktree.history.forward"` \| `"sidebar.left.toggle"` \| `"sidebar.sleepingWorkspaces.toggle"` \| `"floatingWorkspace.maximize"` \| `"tab.rename"` \| `"workspace.rename"` \| `"workspace.openBoard"` \| `"view.tasks"` \| `"sidebar.right.toggle"` \| `"sidebar.explorer.toggle"` \| `"sidebar.search.toggle"` \| `"sidebar.sourceControl.toggle"` \| `"sidebar.checks.toggle"` \| `"sidebar.ports.toggle"` | no | 1.4.160 | Built-in Orca action this command runs. A command with an action is declarative and never starts the plugin worker; one without needs `main`. Example: `"view.tasks"` |
+| `replaces` | `"worktree.history.back"` \| `"worktree.history.forward"` \| `"sidebar.left.toggle"` \| `"sidebar.sleepingWorkspaces.toggle"` \| `"floatingWorkspace.maximize"` \| `"tab.rename"` \| `"workspace.rename"` \| `"workspace.openBoard"` \| `"view.tasks"` \| `"sidebar.right.toggle"` \| `"sidebar.explorer.toggle"` \| `"sidebar.search.toggle"` \| `"sidebar.sourceControl.toggle"` \| `"sidebar.checks.toggle"` \| `"sidebar.ports.toggle"` | no | 1.4.248 | Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. To also run Orca’s own, the command calls `commands.run` with the action (`workspace:write`); that never reaches a replacement. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does. Example: `"view.tasks"` |
 
 ## EventContribution
 
@@ -95,7 +96,7 @@ A hook Orca runs through the worker before (or after) it acts. Requires `main` a
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `event` | `"terminal.send"` \| `"workspace.create.before"` \| `"workspace.create.after"` | yes | 1.4.248 | Hook the worker handles with `orca.hooks.on`. |
+| `event` | `"terminal.send"` \| `"workspace.create.before"` \| `"workspace.create.after"` \| `"agent.launch.before"` \| `"agent.prompt.before"` \| `"agent.tool.before"` \| `"agent.tool.after"` \| `"editor.save.before"` | yes | 1.4.248 | Hook the worker handles with `orca.hooks.on`. |
 | `onError` | `"pass"` \| `"deny"` | no | 1.4.248 | What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe. |
 
 ## LanguagePackContribution
@@ -162,7 +163,7 @@ An editor for the listed files, shown in the editor tab beside Source. It must l
 | `extensions` | string[] | no | 1.4.245 | File-name suffixes, with the dot, this editor opens, ignoring case. A longer suffix such as `.excalidraw.json` wins over a shorter one, and a file named only the suffix never matches. At most 32. Example: `[".excalidraw",".excalidraw.json"]` |
 | `filenames` | string[] | no | 1.4.245 | Exact file names this editor opens, ignoring case; a name beats any extension. Names must be portable: no path separators, `.`, `..` or characters Windows forbids. At most 32. Example: `[]` |
 | `entry` | string | yes | 1.4.245 | HTML file rendered inside an editor frame, like a panel, or a `.ts`/`.tsx` module that Orca transpiles and loads in a generated page (needs `engines.orca` `>=1.4.246`). It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"editor/index.html"` |
-| `priority` | `"default"` \| `"option"` | no | 1.4.245 | `default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`. Example: `"default"` |
+| `priority` | `"default"` \| `"option"` | no | 1.4.245 | `default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`; a longer suffix such as `.sketch.json` is not one of them and opens by default. Example: `"default"` |
 | `contentKind` | `"text"` \| `"bytes"` | no | 1.4.245 | `text` (the default) sends the file as text and accepts full-text edits. `bytes` sends the file's raw bytes, for binary formats such as spreadsheets, and accepts full-byte edits. Example: `"bytes"` |
 | `frame` | `"any"` \| `"isolated"` | no | 1.4.248 | `any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app. Example: `"isolated"` |
 
@@ -216,7 +217,7 @@ A host API the plugin may call once the user consents.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"workspace:read"` \| `"agent:read"` \| `"terminal:send"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` | yes | 1.4.160 | Capability granted on user consent. |
+| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` | yes | 1.4.160 | Capability granted on user consent. |
 
 ## Screenshot
 

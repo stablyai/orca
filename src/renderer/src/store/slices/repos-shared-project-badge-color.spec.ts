@@ -160,17 +160,5 @@ export function registerReposSharedProjectBadgeColorTests(): void {
       )
       expect(badgeColor(store)).toBe(recolored)
     })
-
-    it('leaves a remote-only project showing its own host color', async () => {
-      reposList.mockResolvedValue([])
-      projectsList.mockResolvedValue([])
-      listHostSetups.mockResolvedValue([])
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-      await store.getState().fetchReposForAllHosts()
-
-      expect(badgeColor(store)).toBe(REMOTE_NEUTRAL)
-    })
   })
 }

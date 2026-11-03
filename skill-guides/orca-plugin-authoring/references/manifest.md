@@ -36,7 +36,7 @@
 - `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
 - `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 4.
-- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 3.
+- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.
 - `languagePacks` (LanguagePackContribution[], since 1.4.160): Interface translations. At most 16.
 - `keybindings` (KeybindingContribution[], since 1.4.160): Keyboard shortcuts for contributed commands. At most 256.
 - `vmRecipes` (VmRecipeContribution[], since 1.4.160): Virtual machine environment recipes. At most 64.
@@ -47,7 +47,7 @@
 - `customEditors` (CustomEditorContribution[], since 1.4.245): Editors that open files of given types in the editor tab. At most 16.
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
-- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.
+- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
 
 Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`, `sidebarCards`.
 
@@ -69,6 +69,7 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 - `title` (string, required, since 1.4.160): Title shown in the command palette.
 - `when` ("global" | "workspace", since 1.4.160): Where the command is available. `workspace` hides it when no workspace is active. Defaults to `global`.
 - `action` (one of worktree.history.back, worktree.history.forward, sidebar.left.toggle, sidebar.sleepingWorkspaces.toggle, floatingWorkspace.maximize, tab.rename, workspace.rename, workspace.openBoard, view.tasks, sidebar.right.toggle, sidebar.explorer.toggle, sidebar.search.toggle, sidebar.sourceControl.toggle, sidebar.checks.toggle, sidebar.ports.toggle, since 1.4.160): Built-in Orca action this command runs. A command with an action is declarative and never starts the plugin worker; one without needs `main`.
+- `replaces` (one of worktree.history.back, worktree.history.forward, sidebar.left.toggle, sidebar.sleepingWorkspaces.toggle, floatingWorkspace.maximize, tab.rename, workspace.rename, workspace.openBoard, view.tasks, sidebar.right.toggle, sidebar.explorer.toggle, sidebar.search.toggle, sidebar.sourceControl.toggle, sidebar.checks.toggle, sidebar.ports.toggle, since 1.4.248): Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. To also run Orca’s own, the command calls `commands.run` with the action (`workspace:write`); that never reaches a replacement. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.
 
 ## EventContribution
 
@@ -80,7 +81,7 @@ An event subscription. Requires `main`, the `trusted-worker` execution profile a
 
 A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile.
 
-- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
+- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before" | "agent.tool.before" | "agent.tool.after" | "editor.save.before", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
 - `onError` ("pass" | "deny", since 1.4.248): What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe.
 
 ## LanguagePackContribution
@@ -135,7 +136,7 @@ An editor for the listed files, shown in the editor tab beside Source. It must l
 - `extensions` (string[], since 1.4.245): File-name suffixes, with the dot, this editor opens, ignoring case. A longer suffix such as `.excalidraw.json` wins over a shorter one, and a file named only the suffix never matches. At most 32.
 - `filenames` (string[], since 1.4.245): Exact file names this editor opens, ignoring case; a name beats any extension. Names must be portable: no path separators, `.`, `..` or characters Windows forbids. At most 32.
 - `entry` (string, required, since 1.4.245): HTML file rendered inside an editor frame, like a panel, or a `.ts`/`.tsx` module that Orca transpiles and loads in a generated page (needs `engines.orca` `>=1.4.246`). It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust.
-- `priority` ("default" | "option", since 1.4.245): `default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`.
+- `priority` ("default" | "option", since 1.4.245): `default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`; a longer suffix such as `.sketch.json` is not one of them and opens by default.
 - `contentKind` ("text" | "bytes", since 1.4.245): `text` (the default) sends the file as text and accepts full-text edits. `bytes` sends the file's raw bytes, for binary formats such as spreadsheets, and accepts full-byte edits.
 - `frame` ("any" | "isolated", since 1.4.248): `any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.
 
@@ -181,7 +182,7 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 
 A host API the plugin may call once the user consents.
 
-- `kind` ("workspace:read" | "agent:read" | "terminal:send" | "notifications:show" | "storage:own" | "secrets:own" | "settings:own", required, since 1.4.160): Capability granted on user consent.
+- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, required, since 1.4.160): Capability granted on user consent.
 
 ## Screenshot
 

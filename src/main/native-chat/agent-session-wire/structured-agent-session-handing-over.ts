@@ -11,6 +11,7 @@ type HandoverJournal = Pick<UnopenedSendJournal, 'submissions'>
 type HandoverInput = {
   owner: () => void
   unadmitted: boolean
+  compilerPermission?: 'auto'
   signal?: AbortSignal
   pending?: () => boolean
   finalization: { close: (cause: UnsentSendHold['cause']) => void; completion: Promise<void> }
@@ -67,12 +68,14 @@ export function markStructuredAgentSessionInputUnadmitted(
   clientMessageId: string,
   owner: () => void,
   unadmitted: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  compilerPermission?: 'auto'
 ): void {
   const input = handingOver.get(journal)?.get(clientMessageId)?.input
   if (input?.owner === owner) {
     Object.assign(input, {
       unadmitted,
+      compilerPermission,
       signal,
       pending: () =>
         journal
@@ -80,6 +83,15 @@ export function markStructuredAgentSessionInputUnadmitted(
           .some((s) => s.clientMessageId === clientMessageId && s.dispatchState === 'pending')
     })
   }
+}
+
+export function continuingStructuredAgentSessionCompilerPermission(
+  journal: HandoverJournal,
+  clientMessageId: string
+): 'auto' | undefined {
+  return continuingStructuredAgentSessionInput(journal, clientMessageId)
+    ? handingOver.get(journal)?.get(clientMessageId)?.input?.compilerPermission
+    : undefined
 }
 
 /** Runs one handover with its send counted as held, from before its pending row until the adapter

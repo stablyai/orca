@@ -207,7 +207,7 @@ describe('ClaudeHookService.install', () => {
       expect(managedScript).toMatch(
         process.platform === 'win32'
           ? /^@echo off\r\nsetlocal\r\necho \{\}\r\n/
-          : /^#!\/bin\/sh\nprintf "\{\}\\n"\n/
+          : /^#!\/bin\/sh\norca_hook_printed=\n[\s\S]*\ntrap orca_hook_finish EXIT\n/
       )
     } finally {
       vi.unstubAllEnvs()

@@ -27,7 +27,7 @@ import {
   structuredAgentSessionHostKey
 } from '@/runtime/structured-agent-session-host-capability'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/structured-agent-session-options-read-owner'
+import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-read-owner'
 
 export { firstFrameOptionState } from './structured-agent-session-option-first-frame'
 import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
@@ -93,6 +93,7 @@ export function useStructuredAgentSessionOptionState(args: {
         ? {
             sessionId: acceptedSupport.sessionId,
             commands: acceptedSupport.result.conversationCommands ?? [],
+            compactInstructions: acceptedSupport.result.compactInstructions === true,
             threadGoal: acceptedSupport.result.threadGoal,
             reportedThreadGoal: acceptedSupport.result.reportedThreadGoal,
             contextUsage: acceptedSupport.result.contextUsage,

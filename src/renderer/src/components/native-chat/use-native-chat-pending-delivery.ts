@@ -8,7 +8,7 @@ import {
   prunePendingSends,
   releaseEmptyTranscriptClaims,
   type NativeChatPendingSend
-} from '../../../../shared/native-chat-pending-sends'
+} from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
   appendPendingSendCache,
   nextNativeChatPendingSendId,

@@ -6,12 +6,12 @@ import {
   consumePendingTccPromptNotice,
   dismissTccPromptNotice,
   releasePendingTccPromptNotice
-} from '../macos-tcc-prompt-notice'
+} from '../macos-permissions/macos-tcc-prompt-notice'
 import { registerRepoHandlers } from '../ipc/repos'
 import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
-import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup/workspace-cleanup'
 import { registerPtyHandlers } from '../ipc/pty/register-handlers'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
@@ -23,7 +23,10 @@ import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
-import type { PreQuitCleanupFailureMode, UpdateInstallMode } from '../updater'
+import type {
+  PreQuitCleanupFailureMode,
+  UpdateInstallMode
+} from '../updater/lifecycle/updater-state'
 import { scheduleHistoryGc } from '../terminal-history-gc'
 import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
 import { listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
@@ -34,7 +37,7 @@ import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-se
 import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
-} from '../ipc/worktree-base-directory-watcher'
+} from '../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
@@ -157,7 +160,13 @@ export function attachMainWindowServices(
     }
   )
   mainWindow.webContents.session.setPermissionCheckHandler(
-    (_webContents, permission, _origin, details) => {
+    (webContents, permission, _origin, details) => {
+      // Electron's typings omit 'local-fonts', which Chromium checks before queryLocalFonts().
+      const permissionName: string = permission
+      // Only the app frame's font picker may list fonts; not subframes or other default-session pages.
+      if (permissionName === 'local-fonts') {
+        return webContents?.id === mainWindow.webContents.id && details.isMainFrame === true
+      }
       if (permission !== 'media') {
         return allowedPermissions.has(permission)
       }

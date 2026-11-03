@@ -7,7 +7,7 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSnapshot
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import {
   claudeProviderHandle,
   codexProviderHandle

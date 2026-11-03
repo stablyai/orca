@@ -6,7 +6,10 @@ import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import type { PaneStartStatus } from '../../../../../shared/workspace-layout/workspace-layout-published'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { resolveTerminalTabId } from './terminal-tab-id'
-import { parseWslDistroHold } from '../../../../../shared/wsl-distro-stopped-hold'
+import {
+  findWslDistroHoldInText,
+  wslDistroHoldUserMessage
+} from '../../../../../shared/wsl-distro-stopped-hold'
 import { holdPaneForStoppedWslDistro } from '../wsl-distro-stopped-hold-state'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
@@ -110,7 +113,8 @@ export function showPaneStartFailure(
   session: ConnectPanePtySession,
   reason: string | undefined
 ): void {
-  const hold = reason ? parseWslDistroHold(reason) : null
+  // Main publishes the code; an RPC refusal carries the sentence instead.
+  const hold = reason ? (findWslDistroHoldInText(reason)?.hold ?? null) : null
   if (hold && !session.disposed && !session.runtimeEnvironmentId) {
     // Main held background work on a stopped (or unchecked) distro: the card's Start asks main to start it.
     const state = useAppStore.getState()
@@ -132,7 +136,10 @@ export function showPaneStartFailure(
   if (!session.disposed) {
     session.deps.onPtyErrorRef?.current?.(
       session.pane.id,
-      `The terminal could not start: ${reason ?? 'unknown error'}`
+      // A paired host's held pane has no local Start: the sentence, which the banner localizes.
+      hold
+        ? wslDistroHoldUserMessage(hold)
+        : `The terminal could not start: ${reason ?? 'unknown error'}`
     )
   }
 }

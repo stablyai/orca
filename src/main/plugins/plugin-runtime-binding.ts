@@ -4,6 +4,10 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/pl
 import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
 import type { PluginService } from './plugin-service'
 import { installPluginHookRunner } from './hooks/plugin-hook-participants'
+import { installPluginResidentWorkerWarmer } from './workers/plugin-resident-worker'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { pluginRuntimeRpc } from './plugin-runtime-rpc'
+import type { PluginRuntimeRpc } from './workers/plugin-host-workspace-method-bindings'
 import {
   pluginTerminalTitle,
   projectPluginWorkspaceContext,
@@ -19,16 +23,18 @@ type PluginEvents = {
   wantsEvent(event: PluginEventName): boolean
 }
 
-type RuntimeDelegateSource = Omit<PluginRuntimeDelegate, 'listAgentStatuses'>
+type RuntimeDelegateSource = Omit<PluginRuntimeDelegate, 'listAgentStatuses' | 'callRuntime'>
 
 const WORKSPACE_CHANGE_DEBOUNCE_MS = 150
 
 /** Main's runtime, plus the hook server's agent rows, as the plugin host's delegate. */
 export function pluginRuntimeDelegate(
   runtime: RuntimeDelegateSource,
-  agentStatuses: () => readonly PluginAgentStatusRow[]
+  agentStatuses: () => readonly PluginAgentStatusRow[],
+  callRuntime?: PluginRuntimeRpc
 ): PluginRuntimeDelegate {
   return {
+    ...(callRuntime ? { callRuntime } : {}),
     resolveActiveWorktreeContext: () => runtime.resolveActiveWorktreeContext(),
     listTerminals: (...args) => runtime.listTerminals(...args),
     sendTerminal: (...args) => runtime.sendTerminal(...args),
@@ -40,12 +46,14 @@ export function pluginRuntimeDelegate(
 /** Binds the plugin host to main's runtime: its delegate, and the hooks Orca's own code runs. */
 export function bindPluginRuntime(
   service: PluginService,
-  runtime: RuntimeDelegateSource,
+  runtime: OrcaRuntimeService,
   hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] }
 ): PluginRuntimeDelegate {
-  const delegate = pluginRuntimeDelegate(runtime, () => hookServer.getStatusSnapshot())
+  const statuses = () => hookServer.getStatusSnapshot()
+  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime))
   service.setRuntimeDelegate(delegate)
-  installPluginHookRunner(service)
+  installPluginHookRunner(service, runtime)
+  installPluginResidentWorkerWarmer(service)
   return delegate
 }
 

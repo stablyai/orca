@@ -25,7 +25,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QueuedEditLease } from './structured-agent-session-queued-edit-lease'
-import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
 
 export type QueuedEditTransport = {

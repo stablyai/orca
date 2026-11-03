@@ -24,6 +24,7 @@ import {
   movePaneScopedSetEntries
 } from './pane-scoped-cache-entries'
 import type { JcodeUserPromptEvidence } from '../jcode-session-files'
+import type { HookRootAttempt } from '../hook-process-root-evidence'
 import {
   moveOpenCodeSessionBindings,
   unbindOpenCodeSessionsOfPane,
@@ -60,6 +61,8 @@ export type HookListenerState = {
   claudeConsumedCompactPromptIdByPaneKey: Map<string, string>
   /** Lead session_id changes retire replaced-conversation claims even without SessionStart (/clear/relaunch/resume). */
   claudeSessionOwnerByPaneKey: Map<string, string>
+  /** Execution-host evidence attempts for processes acquiring a pane, by pane and process identity. */
+  hookRootAttempts: Map<string, HookRootAttempt>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
   /** Incremental parent/child rollout cursors for Codex collaboration v2. */
@@ -139,6 +142,7 @@ export function createHookListenerState(
     claudeLaunchedBackgroundTasksByPaneKey: new Map(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
     claudeSessionOwnerByPaneKey: new Map(),
+    hookRootAttempts: new Map(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map(),
@@ -248,21 +252,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
-}
-
-/** Keep claim-bearing caches aligned with clearPaneCacheState: stored rows and latches can assert state; prompt/tool/transcript caches only render it. */
-export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
-  return (
-    state.lastStatusByPaneKey.has(paneKey) ||
-    state.claudeSubagentRosterByPaneKey.has(paneKey) ||
-    state.claudeLeadStateByPaneKey.has(paneKey) ||
-    state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-    state.claudeActiveSessionCronPaneKeys.has(paneKey) ||
-    state.claudeLaunchedBackgroundTasksByPaneKey.has(paneKey) ||
-    state.claudeSessionOwnerByPaneKey.has(paneKey) ||
-    state.codexSubagentRosterByPaneKey.has(paneKey) ||
-    state.codexLeadStateByPaneKey.has(paneKey)
-  )
+  // A disposed pane's unfinished evidence and exit intent die with it.
+  deletePaneScopedCacheEntry(state.hookRootAttempts, paneKey)
 }
 
 export function movePaneCacheState(
@@ -344,4 +335,5 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
   state.hermesTurnByPaneKey.clear()
+  state.hookRootAttempts.clear()
 }

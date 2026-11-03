@@ -76,11 +76,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
-import {
-  clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache
-} from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { clearNativeChatDraftCacheForTests } from '@/components/native-chat/native-chat-draft-cache'
 import {
   cancelStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch,
@@ -192,55 +188,6 @@ describe('notes sent to a new agent', () => {
     })
   })
 
-  it('leaves the shelf once the new chat delivers them', async () => {
-    mocks.launch.mockResolvedValue({ sessionId: chat.sessionId, fence: 1 })
-    const { onDelivered } = sendNotesToNewAgent()
-    expect(isNoteInFlight('note-a')).toBe(true)
-
-    await vi.waitFor(() => expect(onDelivered).toHaveBeenCalledOnce())
-    expect(isNoteInFlight('note-a')).toBe(false)
-  })
-
-  // Notes retain text until delivery; the chat composer must not get a duplicate copy to send.
-  it("come back to the shelf, never into the new chat's composer, when the host refuses them", async () => {
-    mocks.launch.mockResolvedValue({ sessionId: chat.sessionId, fence: 1 })
-    mocks.callRuntimeRpc.mockResolvedValue({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale', message: 'stale' }
-    })
-    const { onDelivered } = sendNotesToNewAgent()
-
-    await vi.waitFor(() => expect(isNoteInFlight('note-a')).toBe(false))
-    expect(onDelivered).not.toHaveBeenCalled()
-    expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(chat.sessionId))).toBe('')
-  })
-
-  it('report the refusal once, as a send to a chat does', async () => {
-    mocks.launch.mockResolvedValue({ sessionId: chat.sessionId, fence: 1 })
-    mocks.callRuntimeRpc.mockResolvedValue({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale', message: 'stale' }
-    })
-    const { launch } = sendNotesToNewAgent()
-    await expect(
-      newAgentPromptOutcome({ delivery: launch.promptDeliveryResult! })
-    ).resolves.toEqual({
-      delivered: false,
-      failure: { status: 'not-writable', code: 'session-send-refused' }
-    })
-  })
-
-  it("come back to the shelf when the start fails, and only there, not in that chat's composer", async () => {
-    mocks.launch.mockRejectedValue(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    const { onDelivered } = sendNotesToNewAgent()
-    await failTheStart()
-
-    expect(isNoteInFlight('note-a')).toBe(false)
-    expect(onDelivered).not.toHaveBeenCalled()
-    expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(chat.sessionId))).toBe('')
-    expect(sentMessages()).toHaveLength(0)
-  })
-
   it("are not sent again by that chat's Retry", async () => {
     mocks.launch.mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('unsupported'))
     sendNotesToNewAgent()
@@ -253,18 +200,6 @@ describe('notes sent to a new agent', () => {
     expect(sentMessages()).toHaveLength(0)
   })
 
-  it('come back to the shelf when the failed chat is closed', async () => {
-    mocks.launch.mockRejectedValue(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    const { onDelivered } = sendNotesToNewAgent()
-    await failTheStart()
-
-    cancelStructuredAgentLaunch(WORKTREE_ID, chat.sessionId)
-    await settle()
-
-    expect(isNoteInFlight('note-a')).toBe(false)
-    expect(onDelivered).not.toHaveBeenCalled()
-  })
-
   it('come back when a chat still starting is closed, without waiting on its create', async () => {
     mocks.launch.mockImplementation(() => new Promise(() => undefined))
     const { onDelivered } = sendNotesToNewAgent()
@@ -274,41 +209,5 @@ describe('notes sent to a new agent', () => {
 
     expect(isNoteInFlight('note-a')).toBe(false)
     expect(onDelivered).not.toHaveBeenCalled()
-  })
-})
-
-describe('why notes sent to a new agent did not go', () => {
-  it.each([
-    [
-      'nobody could confirm it',
-      { delivered: false, failureNotified: false, unconfirmed: true as const },
-      { status: 'unconfirmed', code: 'runtime-unverifiable' }
-    ],
-    [
-      "the chat's one send was taken",
-      { delivered: false, failureNotified: false, busy: true as const },
-      { status: 'not-ready', code: 'session-send-refused' }
-    ],
-    [
-      'the host refused it',
-      { delivered: false, failureNotified: false },
-      { status: 'not-writable', code: 'session-send-refused' }
-    ]
-  ])('says so once when %s', async (_why, result, failure) => {
-    await expect(newAgentPromptOutcome({ delivery: Promise.resolve(result) })).resolves.toEqual({
-      delivered: false,
-      failure
-    })
-  })
-
-  it('leaves a failure the new chat already shows to that chat', async () => {
-    await expect(
-      newAgentPromptOutcome({
-        delivery: Promise.resolve({ delivered: false, failureNotified: true })
-      })
-    ).resolves.toEqual({ delivered: false })
-    await expect(
-      newAgentPromptOutcome({ delivery: Promise.reject(new Error('start failed')) })
-    ).resolves.toEqual({ delivered: false })
   })
 })

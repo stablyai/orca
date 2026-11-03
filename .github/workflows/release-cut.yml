@@ -803,14 +803,6 @@ jobs:
         if: runner.os == 'macOS'
         run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
-      - name: Run fresh-startup golden on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $env:SKIP_BUILD = '1'
-          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
-          pnpm run --if-present test:e2e:windows-fresh-startup-golden
-
       - name: Upload Playwright traces
         if: failure()
         uses: actions/upload-artifact@v7

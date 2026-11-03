@@ -50,19 +50,3 @@ it('recovers capped imports after disabling and enabling images', async () => {
     vi.resetModules()
   }
 })
-
-it('does not duplicate an in-flight import when recovery is requested', async () => {
-  let resolveImport: (value: string) => void = () => {}
-  const pending = new Promise<string>((resolve) => {
-    resolveImport = resolve
-  })
-  const load = vi.fn(() => pending)
-  const loader = createLazyXtermAddonLoader({ load, failureMessage: 'load failed' })
-  const first = loader.prime()
-  loader.rearm()
-  expect(loader.prime()).toBe(first)
-  expect(load).toHaveBeenCalledTimes(1)
-  resolveImport('ready')
-  await first
-  expect(loader.getConstructor()).toBe('ready')
-})

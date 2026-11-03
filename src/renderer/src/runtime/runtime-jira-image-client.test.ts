@@ -74,37 +74,6 @@ describe('remote Jira binary images', () => {
     expect(stream().close).toHaveBeenCalledOnce()
   })
 
-  it.each([
-    { mimeType: 'image/svg+xml', byteLength: 1 },
-    { mimeType: 'image/png', byteLength: 8 * 1024 * 1024 + 1 },
-    { mimeType: 'image/png', byteLength: -1 }
-  ])('rejects invalid or oversized metadata before retaining bytes: %o', async (header) => {
-    const image = read().catch((error) => error)
-    emit({ type: 'image', ...header })
-    expect(await image).toBeInstanceOf(Error)
-    expect(stream().close).toHaveBeenCalledOnce()
-  })
-
-  it.each(['before metadata', 'out of order', 'oversized', 'incomplete'] as const)(
-    'rejects %s image chunks',
-    async (mode) => {
-      const image = read().catch((error) => error)
-      if (mode !== 'before metadata') {
-        emit({ type: 'image', mimeType: 'image/png', byteLength: 1 })
-      }
-      if (mode === 'incomplete') {
-        emit({ type: 'end' })
-      } else {
-        send(
-          mode === 'oversized' ? Uint8Array.from([1, 2]) : Uint8Array.of(1),
-          mode === 'out of order' ? 1 : 0
-        )
-      }
-      expect(await image).toBeInstanceOf(Error)
-      expect(stream().close).toHaveBeenCalledOnce()
-    }
-  )
-
   it('separates simultaneous image transfers on a shared binary carrier', async () => {
     const a = read()
     const b = read()

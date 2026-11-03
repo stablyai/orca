@@ -74,6 +74,27 @@ function harness(
   return { host, posted, send, messages, documents, answers, answerFlushes }
 }
 
+function setupWith(initial: {
+  text: string
+  onMergesOutside: () => void
+  onKeyChord?: CustomEditorHostOptions['onKeyChord']
+}) {
+  const doc = { text: initial.text, readOnly: false }
+  const onEdit = vi.fn((text: string) => {
+    doc.text = text
+  })
+  return {
+    ...harness({
+      getDocument: () => doc,
+      onEdit,
+      onMergesOutside: initial.onMergesOutside,
+      flushTimeoutMs: 1_000,
+      ...(initial.onKeyChord ? { onKeyChord: initial.onKeyChord } : {})
+    }),
+    onEdit
+  }
+}
+
 function setup(initial: {
   text: string
   readOnly?: boolean
@@ -497,5 +518,65 @@ describe('custom editor document channel', () => {
     expect(documents()).toHaveLength(1)
     send(READY)
     expect(documents()).toHaveLength(2)
+  })
+
+  it('settles a merge only on the edit made against its own version', async () => {
+    const onMergesOutside = vi.fn()
+    const onKeyChord = vi.fn()
+    const { host, send, documents, onEdit } = setupWith({
+      text: 'a+mine',
+      onMergesOutside,
+      onKeyChord
+    })
+    send(READY)
+    await expect(host.mergeOutsideChange('a+agent', 'a')).resolves.toBeNull()
+    send({ orca: 1, kind: 'evt', event: 'editor.merges', payload: {} })
+    expect(onMergesOutside).toHaveBeenCalledOnce()
+    const merged = host.mergeOutsideChange('a+mine+agent', 'a')
+    expect(documents().at(-1)).toMatchObject({
+      payload: {
+        version: 2,
+        content: { kind: 'text', text: 'a+mine+agent' },
+        ancestor: { kind: 'text', text: 'a' }
+      }
+    })
+    // The merge result equals the disk text just sent; it still has to reach the buffer.
+    send(edit('a+mine+agent', 2))
+    await expect(merged).resolves.toBe('a+mine+agent')
+    expect(onEdit).toHaveBeenLastCalledWith('a+mine+agent')
+    // Events after the capability still reach their handlers (Save included).
+    send(
+      keydown({
+        key: 's',
+        code: 'KeyS',
+        metaKey: true,
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false
+      })
+    )
+    expect(onKeyChord).toHaveBeenCalledOnce()
+  })
+
+  it('answers null when the session never acknowledges, or the frame remounts', async () => {
+    vi.useFakeTimers()
+    try {
+      const { host, send } = setupWith({ text: 'a', onMergesOutside: vi.fn() })
+      send(READY)
+      send({ orca: 1, kind: 'evt', event: 'editor.merges', payload: {} })
+      const silent = host.mergeOutsideChange('b', 'a')
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(silent).resolves.toBeNull()
+      // A frame whose merge threw edits against the old version: refused, never the acknowledgement.
+      const failed = host.mergeOutsideChange('b2', 'a')
+      send(edit('a+typed', 1, 77))
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(failed).resolves.toBeNull()
+      const remounted = host.mergeOutsideChange('c', 'a')
+      host.reset()
+      await expect(remounted).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

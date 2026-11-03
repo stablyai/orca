@@ -8,7 +8,7 @@ import {
   setWindowsSecurityForTests
 } from './windows-security-addon'
 import { readPrivateWindowsFile } from './secure-path-windows-acl'
-import { writeCredentialFileAtomic } from '../main/integration-credential-file'
+import { writeCredentialFileAtomic } from '../main/credentials/integration-credential-file'
 
 const roots: string[] = []
 afterEach(() => {
