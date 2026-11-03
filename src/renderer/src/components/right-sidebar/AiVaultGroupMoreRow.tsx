@@ -15,7 +15,7 @@ export function AiVaultGroupMoreRow({
   return (
     <button
       type="button"
-      className="flex h-7 w-full items-center gap-1.5 border-b border-sidebar-border px-3 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+      className="flex h-7 w-full items-center gap-1.5 border-b border-sidebar-border px-3 text-left text-2xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
       onClick={onToggle}
       aria-expanded={expanded}
     >
