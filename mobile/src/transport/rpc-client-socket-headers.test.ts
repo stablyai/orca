@@ -31,9 +31,9 @@ class CapturingWebSocket {
   readonly CLOSED = 3
   readyState = 0
   onopen: (() => void) | null = null
-  onclose: (() => void) | null = null
+  onclose: ((event: { code: number; reason: string; wasClean: boolean }) => void) | null = null
   onmessage: ((event: { data: unknown }) => void) | null = null
-  onerror: (() => void) | null = null
+  onerror: ((event: { message: string; headers: Record<string, string> }) => void) | null = null
   constructor(...args: unknown[]) {
     seenWebSocketArgs.push(args)
     sockets.push(this)
@@ -98,8 +98,8 @@ describe('direct socket edge-auth headers', () => {
       wasClean: false,
       response: error
     }
-    Reflect.apply(socket?.onerror ?? (() => {}), socket, [error])
-    Reflect.apply(socket?.onclose ?? (() => {}), socket, [closed])
+    socket?.onerror?.(error)
+    socket?.onclose?.(closed)
     expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain('synthetic-secret')
     expect(JSON.stringify(logs)).not.toContain('synthetic-secret')
     expect(JSON.stringify(consoleSpy.mock.calls)).toContain('1006')
