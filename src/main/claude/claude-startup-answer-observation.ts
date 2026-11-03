@@ -34,8 +34,9 @@ export function claudeStartupAnswerObservation(next?: (chunk: Buffer | string) =
     }
   }
   // The shared line budget bounds retention; a rejected prefix cannot prove a root record.
+  // A capture ends parsing mid-chunk; the rest of that chunk only reaches the next handler.
   const framer = createIncrementalNdjsonFramer(observe, () => {}, {
-    acceptLine: mayBeFailedResult
+    acceptLine: (line) => !done && mayBeFailedResult(line)
   })
   return {
     failure: () => failure,
@@ -44,6 +45,9 @@ export function claudeStartupAnswerObservation(next?: (chunk: Buffer | string) =
     feed: (chunk: Buffer | string): void => {
       if (!done) {
         framer.feed(typeof chunk === 'string' ? chunk : decoder.write(chunk))
+        if (done) {
+          framer.reset()
+        }
       }
       next?.(chunk)
     }

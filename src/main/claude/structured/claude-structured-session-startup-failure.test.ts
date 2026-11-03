@@ -325,7 +325,11 @@ it('parses only failed root results at startup, bounded by candidates rather tha
             : assistant(`working ${index}`)
         )
       }
-      observation.feed(failedResult('error_during_execution'))
+      // Later failed results coalesced into the capturing chunk must not be parsed.
+      observation.feed(
+        failedResult('error_during_execution') +
+          failedResult('error_in_capturing_chunk').repeat(records)
+      )
       await flush()
       const parsed = parse.mock.calls.map(([text]) => String(text))
       const failure = observation.failure()
@@ -336,8 +340,12 @@ it('parses only failed root results at startup, bounded by candidates rather tha
       observation.feed(failedResult('error_after_finish'))
       await flush()
       return {
-        irrelevantParses: parsed.filter((text) => !text.includes('error_during_execution')).length,
+        irrelevantParses: parsed.filter(
+          (text) => !text.includes('error_during_execution') && !text.includes('capturing_chunk')
+        ).length,
         candidateParses: parsed.filter((text) => text.includes('error_during_execution')).length,
+        sameChunkParsesAfterCapture: parsed.filter((text) => text.includes('capturing_chunk'))
+          .length,
         failure,
         parsesAfterCapture: parse.mock.calls.length
       }
@@ -350,6 +358,7 @@ it('parses only failed root results at startup, bounded by candidates rather tha
   expect(n).toMatchObject({
     irrelevantParses: 0,
     candidateParses: 1,
+    sameChunkParsesAfterCapture: 0,
     failure: expect.objectContaining({ errorClass: 'error_result' }),
     parsesAfterCapture: 0
   })
