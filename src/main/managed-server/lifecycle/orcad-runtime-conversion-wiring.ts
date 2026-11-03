@@ -9,7 +9,9 @@ import {
   abortRemoteOrcadMigrationCatalog,
   commitRemoteOrcadMigrationCatalog,
   listRemoteOrcadRepositories,
+  readRemoteOrcadMigrationCapabilities,
   readRemoteOrcadMigrationCatalogState,
+  stageRemoteOrcadMigrationBlobChunk,
   stageRemoteOrcadMigrationCatalog,
   stageRemoteOrcadMigrationSnapshotChunk
 } from '../../ssh/orcad-migration-catalog-client'
@@ -39,7 +41,9 @@ export function orcadMigrationDestinationFor(
     abort: (manifest) => abortRemoteOrcadMigrationCatalog(pairingCode, manifest, options),
     abortByReference: (manifest) =>
       abortRemoteOrcadMigrationCatalogByReference(pairingCode, manifest, options),
-    stageChunk: (request) => stageRemoteOrcadMigrationSnapshotChunk(pairingCode, request, options)
+    stageChunk: (request) => stageRemoteOrcadMigrationSnapshotChunk(pairingCode, request, options),
+    readCapabilities: () => readRemoteOrcadMigrationCapabilities(pairingCode, options),
+    stageBlobChunk: (request) => stageRemoteOrcadMigrationBlobChunk(pairingCode, request, options)
   }
 }
 
