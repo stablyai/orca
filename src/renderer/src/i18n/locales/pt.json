@@ -4630,7 +4630,11 @@
             "5a70844e54": "Mecanismo de Busca Padrão",
             "f1da035bcb": "Sessão e Cookies",
             "f6de9e25a0": "Zoom Padrão",
-            "1c2aff8f82": "Página Inicial Padrão"
+            "1c2aff8f82": "Página Inicial Padrão",
+            "linkRoutingExistingTab": {
+              "reuse": "reutilizar",
+              "split": "dividir"
+            }
           },
           "use": {
             "search": {
@@ -9690,6 +9694,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "Ativar Uso do Navegador por Agente"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Abrir links na aba atual do navegador",
+          "description": "Links do terminal, do chat e do markdown carregam na última aba do navegador que você usou em vez de uma nova aba ou divisão."
         }
       },
       "right": {

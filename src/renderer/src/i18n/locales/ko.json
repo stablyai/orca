@@ -9250,7 +9250,11 @@
             "5a70844e54": "기본 검색 엔진",
             "f1da035bcb": "세션 및 쿠키",
             "f6de9e25a0": "기본 줌",
-            "1c2aff8f82": "기본 홈 페이지"
+            "1c2aff8f82": "기본 홈 페이지",
+            "linkRoutingExistingTab": {
+              "reuse": "재사용",
+              "split": "분할"
+            }
           },
           "use": {
             "search": {
@@ -12775,6 +12779,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "에이전트 브라우저 사용 활성화"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "링크를 현재 브라우저 탭에서 열기",
+          "description": "터미널, 채팅, markdown의 링크를 새 탭이나 분할 대신 마지막으로 사용한 브라우저 탭에서 엽니다."
         }
       },
       "right": {

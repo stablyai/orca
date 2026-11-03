@@ -9287,7 +9287,11 @@
             "5a70844e54": "デフォルトの検索エンジン",
             "f1da035bcb": "セッションと Cookie",
             "f6de9e25a0": "デフォルトのズーム",
-            "1c2aff8f82": "デフォルトのホームページ"
+            "1c2aff8f82": "デフォルトのホームページ",
+            "linkRoutingExistingTab": {
+              "reuse": "再利用",
+              "split": "分割"
+            }
           },
           "use": {
             "search": {
@@ -12775,6 +12779,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "Agent ブラウザの使用を有効にする"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "リンクを現在のブラウザタブで開く",
+          "description": "ターミナル、チャット、Markdown のリンクを、新規タブや分割ではなく最後に使ったブラウザタブで読み込みます。"
         }
       },
       "right": {

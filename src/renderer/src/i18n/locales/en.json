@@ -10395,7 +10395,11 @@
             "5a70844e54": "Default search engine",
             "f1da035bcb": "Session & cookies",
             "f6de9e25a0": "Default zoom",
-            "1c2aff8f82": "Default home page"
+            "1c2aff8f82": "Default home page",
+            "linkRoutingExistingTab": {
+              "reuse": "reuse",
+              "split": "split"
+            }
           },
           "use": {
             "search": {
@@ -13957,6 +13961,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "Enable agent browser use"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Open links in the current browser tab",
+          "description": "Links from the terminal, chat, and markdown load in the browser tab you used last instead of a new tab or split."
         }
       },
       "right": {

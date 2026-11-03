@@ -9250,7 +9250,11 @@
             "5a70844e54": "默认搜索引擎",
             "f1da035bcb": "会话和 Cookie",
             "f6de9e25a0": "默认缩放",
-            "1c2aff8f82": "默认主页"
+            "1c2aff8f82": "默认主页",
+            "linkRoutingExistingTab": {
+              "reuse": "复用",
+              "split": "拆分"
+            }
           },
           "use": {
             "search": {
@@ -12775,6 +12779,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "启用智能体浏览器使用"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "在当前浏览器标签页中打开链接",
+          "description": "终端、聊天和 Markdown 中的链接会在你上次使用的浏览器标签页中加载，而不是新建标签页或分屏。"
         }
       },
       "right": {

@@ -9949,7 +9949,11 @@
             "5a70844e54": "Standardsuchmaschine",
             "f1da035bcb": "Sitzung und Cookies",
             "f6de9e25a0": "Standardzoom",
-            "1c2aff8f82": "Standardstartseite"
+            "1c2aff8f82": "Standardstartseite",
+            "linkRoutingExistingTab": {
+              "reuse": "wiederverwenden",
+              "split": "teilen"
+            }
           },
           "use": {
             "search": {
@@ -13421,6 +13425,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "Browser-Nutzung durch Agenten aktivieren"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Links im aktuellen Browser-Tab öffnen",
+          "description": "Links aus dem Terminal, Chat und Markdown werden im zuletzt verwendeten Browser-Tab geladen statt in einem neuen Tab oder einer neuen Teilung."
         }
       },
       "right": {
