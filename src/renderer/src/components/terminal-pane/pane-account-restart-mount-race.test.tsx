@@ -3,7 +3,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
-import { notifyQueuedRestartPaneBound } from './pane-account-restart-readiness'
+import { useTerminalPaneLayoutBindings } from './use-terminal-pane-layout-bindings'
+import type { TerminalPaneLayoutController } from './use-terminal-pane-layout-persistence'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
 vi.mock('@/components/pet/pet-models', () => ({
@@ -98,15 +99,26 @@ it('restarts a working Claude queued before its unchanged PTY reattach finishes'
     Object.assign(controller, { [key]: vi.fn() })
   }
   renderHook(() => useTerminalPaneProcessExitActions(controller))
+  const layoutController = {
+    tabId: 'tab-1',
+    managerRef: controller.managerRef,
+    paneTransportsRef: controller.paneTransportsRef,
+    setTabLayout: useAppStore.getState().setTabLayout,
+    containerRef: { current: null },
+    expandedPaneIdRef: { current: null },
+    expandedStyleSnapshotRef: { current: new Map() },
+    pendingPaneSizeRefreshFrameIdsRef: { current: new Map() },
+    persistLayoutSnapshot: vi.fn(),
+    setExpandedPaneId: vi.fn(),
+    setTabPaneExpanded: vi.fn()
+  } as unknown as TerminalPaneLayoutController
+  const bindings = renderHook(() => useTerminalPaneLayoutBindings(layoutController))
   act(() => useAppStore.getState().queuePaneAccountRestarts(['pty-old'], 'claude'))
   expect(connectPanePty).not.toHaveBeenCalled()
-  // Same-ID reattach leaves the layout identical; only the bind signal reports the transport is ready.
+  // Same-ID reattach goes through the leaf bind the connection prefers and leaves the layout identical.
   act(() => {
     attachedPtyId = 'pty-old'
-    useAppStore
-      .getState()
-      .setTabLayout('tab-1', { ...layout, ptyIdsByLeafId: { [LEAF]: 'pty-old' } })
-    notifyQueuedRestartPaneBound('tab-1', 'pty-old')
+    bindings.result.current.syncPanePtyLayoutBindingForLeaf(LEAF, 'pty-old', 1)
   })
   expect(useAppStore.getState().terminalLayoutsByTabId['tab-1']).toBe(layout)
   expect(connectPanePty).toHaveBeenCalledTimes(1)

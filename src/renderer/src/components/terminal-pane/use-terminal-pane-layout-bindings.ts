@@ -56,6 +56,7 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
           ...layoutWithoutPtyBindings,
           ptyIdsByLeafId: { ...existingBindings, [leafId]: ptyId }
         })
+        notifyQueuedRestartPaneBound(tabId, ptyId)
         return
       }
       const nextBindings = { ...existingBindings }
@@ -92,11 +93,8 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
   const syncPanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null): void => {
       writePanePtyLayoutBinding(paneId, ptyId, false)
-      if (ptyId) {
-        notifyQueuedRestartPaneBound(tabId, ptyId)
-      }
     },
-    [tabId, writePanePtyLayoutBinding]
+    [writePanePtyLayoutBinding]
   )
   const syncPanePtyLayoutBindingForLeaf = useCallback(
     (leafId: string, ptyId: string | null, sourcePaneId: number): void => {
