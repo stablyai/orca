@@ -46,6 +46,7 @@ import type {
   StructuredAgentSessionAcquisitionReceipt
 } from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
+import type { AgentSessionStartFailure } from './structured-agent-session-start-failure'
 import type {
   StructuredAgentSessionProviderOpen,
   StructuredAgentSessionProviderOpenResult
@@ -277,6 +278,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
+  /** This exact acquisition's ending before the host committed it ready, as the adapter reads it. */
+  startupEnding?(
+    sessionId: string,
+    acquisitionGeneration: string
+  ): AgentSessionStartFailure | undefined
+  /** The start's owner finished: nothing reads this acquisition's ending any more. */
+  retireStartup?(sessionId: string, acquisitionGeneration: string): void
   /** Undefined preserves the client catalog when the provider reports none. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands

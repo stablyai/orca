@@ -50,7 +50,9 @@ const AddProjectFromFolderDialog = lazy(
 )
 const DiagramViewerModal = lazy(() => import('../components/editor/DiagramViewerModal'))
 const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
-const NodeDistMirrorDialog = lazy(() => import('../components/settings/NodeDistMirrorDialog'))
+const NodeDistMirrorDialog = lazy(
+  () => import('../components/settings/advanced/network/NodeDistMirrorDialog')
+)
 const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
 )
@@ -64,12 +66,12 @@ const DictationController = lazy(() =>
   }))
 )
 const SshPassphraseDialog = lazy(() =>
-  import('../components/settings/SshPassphraseDialog').then((module) => ({
+  import('../components/ssh-authentication/SshPassphraseDialog').then((module) => ({
     default: module.SshPassphraseDialog
   }))
 )
 const RemoteServerUpdateDialog = lazy(
-  () => import('../components/settings/RemoteServerUpdateDialog')
+  () => import('../components/settings/runtime-environments/updates/RemoteServerUpdateDialog')
 )
 const ContextualTourOverlay = lazy(() =>
   import('../components/contextual-tours/ContextualTourOverlay').then((module) => ({

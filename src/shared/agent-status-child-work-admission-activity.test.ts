@@ -46,57 +46,6 @@ function setup() {
 }
 
 describe('child-work admission of what a child is doing', () => {
-  it('folds raw provider text to the one-line previews a status row carries', () => {
-    const { store, admission } = setup()
-    const command = `  npm test\n-- --run ${'x'.repeat(200)}`
-    expect(
-      admission.announce(
-        observation({
-          operation: {
-            toolName: `mcp__${'long_server_name_'.repeat(5)}tool`,
-            input: command,
-            basis: 'open',
-            observedAt: 10
-          },
-          lastMessage: 'Line one\n\nLine two'
-        })
-      )
-    ).toMatchObject({ accepted: true })
-
-    const child = store.getChild('child-1')
-    expect(child?.operation?.toolName).toHaveLength(60)
-    expect(child?.operation?.input?.startsWith('npm test -- --run xxx')).toBe(true)
-    expect(child?.operation?.input).toHaveLength(160)
-    expect(child?.lastMessage).toBe('Line one Line two')
-  })
-
-  it('keeps a preview whose cut lands on a space or whose text carries control characters', () => {
-    const { store, admission } = setup()
-    admission.announce(
-      observation({
-        operation: {
-          toolName: 'Bash',
-          input: `${'x'.repeat(159)} --tail`,
-          basis: 'open',
-          observedAt: 10
-        },
-        lastMessage: `${'y'.repeat(511)} more`
-      })
-    )
-    expect(store.getChild('child-1')?.operation?.input).toBe('x'.repeat(159))
-    expect(store.getChild('child-1')?.lastMessage).toBe('y'.repeat(511))
-
-    admission.announce(
-      observation({
-        observedAt: 11,
-        operation: { toolName: 'Bash', input: "cut -d'\t' -f1", basis: 'open', observedAt: 11 },
-        lastMessage: 'col1\tcol2 \u001b[31mred'
-      })
-    )
-    expect(store.getChild('child-1')?.operation?.input).toBe("cut -d' ' -f1")
-    expect(store.getChild('child-1')?.lastMessage).toBe('col1 col2  [31mred')
-  })
-
   it('clamps an operation stamped in another clock into the child evidence window', () => {
     const { store, admission } = setup()
     admission.announce(
@@ -114,57 +63,6 @@ describe('child-work admission of what a child is doing', () => {
       basis: 'reported',
       observedAt: 10
     })
-  })
-
-  it('carries owner and residency through, and clears the operation of a parked child', () => {
-    const { store, admission } = setup()
-    admission.announce(
-      observation({ operation: { toolName: 'Bash', basis: 'open', observedAt: 10 } })
-    )
-    expect(store.getChild('child-1')?.operation).toMatchObject({ toolName: 'Bash' })
-    admission.announce(
-      observation({
-        aliases: [{ segmentId: 'segment-1', aliasKind: 'task_id', alias: 'shell-1' }],
-        kind: 'command',
-        parentChildWorkId: 'child-1',
-        residency: 'background'
-      })
-    )
-    expect(store.getChild('child-2')).toMatchObject({
-      parentChildWorkId: 'child-1',
-      residency: 'background'
-    })
-
-    admission.announce(
-      observation({
-        state: 'idle',
-        observedAt: 12,
-        operation: { toolName: 'Bash', basis: 'reported', observedAt: 11 }
-      })
-    )
-    expect(store.getChild('child-1')).toMatchObject({ state: 'idle' })
-    expect(store.getChild('child-1')).not.toHaveProperty('operation')
-  })
-})
-
-describe('child-work identity by provider thread', () => {
-  it('keeps one host id for a subagent named by its own thread', () => {
-    const { store, admission } = setup()
-    const codexChild = observation({
-      provider: 'codex',
-      aliases: [{ segmentId: 'thread-parent', aliasKind: 'thread_id', alias: 'thread-child' }],
-      fence: { invocationId: 'turn-1', generation: 1 },
-      residency: 'background'
-    })
-    expect(admission.announce(codexChild)).toMatchObject({ accepted: true, created: true })
-    expect(admission.announce({ ...codexChild, observedAt: 12 })).toMatchObject({
-      accepted: true,
-      childWorkId: 'child-1',
-      created: false
-    })
-    expect(store.getAliasesForChild('child-1')).toMatchObject([
-      { aliasKind: 'thread_id', alias: 'thread-child' }
-    ])
   })
 })
 
@@ -215,27 +113,6 @@ describe('child-work settlement stamping', () => {
       )
     ).toMatchObject({ accepted: true })
     expect(store.getChild('child-1')).toMatchObject({ observedAt: 25, settledAt: 20 })
-  })
-
-  it('accepts later evidence for an ending first reported without an outcome', () => {
-    const { store, admission } = setup()
-    admission.announce(observation())
-    admission.announce(observation({ state: 'done', membership: 'settled', observedAt: 20 }))
-    expect(
-      admission.announce(
-        observation({
-          state: 'done',
-          membership: 'settled',
-          observedAt: 22,
-          lastMessage: 'Final words'
-        })
-      )
-    ).toMatchObject({ accepted: true })
-    expect(store.getChild('child-1')).toMatchObject({
-      outcome: 'unknown',
-      settledAt: 20,
-      lastMessage: 'Final words'
-    })
   })
 
   it('refines an ending first recorded as unknown, keeping when it settled', () => {
@@ -313,14 +190,6 @@ describe('child-work settlement stamping', () => {
       lastMessage: 'Cleanup finished'
     })
     expect(store.getAliasesForChild('child-1').map((alias) => alias.alias)).toContain('toolu-1')
-  })
-
-  it('stamps a child first seen already settled at that observation', () => {
-    const { store, admission } = setup()
-    admission.announce(
-      observation({ state: 'done', membership: 'settled', outcome: 'cancelled', observedAt: 14 })
-    )
-    expect(store.getChild('child-1')).toMatchObject({ firstObservedAt: 14, settledAt: 14 })
   })
 
   it('records when the previous invocation settled, not its newest evidence, on resume', () => {

@@ -26,7 +26,7 @@ import {
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
-import { resolveLocalFileRequestPath } from '../../ipc/local-file-access-resolution'
+import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { filePreviewForPath } from '../../../shared/file-preview-kind'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'

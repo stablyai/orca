@@ -1,4 +1,8 @@
-import { buildAgentTuiClearInputForText } from '../../../../shared/agent-tui-input-clear'
+import {
+  AGENT_TUI_CLEAR_MAX_LINES,
+  countAgentTuiInputLines,
+  buildAgentTuiClearInputForText
+} from '../../../../shared/agent-tui-input-clear'
 
 export type NativeChatLaunchDraftSendPlan =
   /** Input line holds a stale injected draft — replace it, clearing every line. */
@@ -31,15 +35,23 @@ export function resolveNativeChatLaunchDraftSend(args: {
   readInputLine: () => string | null | undefined
 }): {
   plan: NativeChatLaunchDraftSendPlan
-  sendOptions: { clearInput: string; confirmCleared: () => boolean } | undefined
+  sendOptions: { clearInput: string | null; confirmCleared?: () => boolean }
 } {
   const { launchDraft, launchDraftResolved, agent, readInputLine } = args
   // A resolved prefill no longer owns TUI input; clearing again could erase the user’s replacement.
   const seededText =
     launchDraft && launchDraft.agent === agent && !launchDraftResolved ? launchDraft.text : null
   const plan = planNativeChatLaunchDraftSend({ seededText })
+  const draft = readInputLine()
+  if (
+    [draft, seededText].some(
+      (text) => text != null && countAgentTuiInputLines(text) > AGENT_TUI_CLEAR_MAX_LINES
+    )
+  ) {
+    return { plan, sendOptions: { clearInput: null } }
+  }
   if (plan.kind !== 'replace-draft') {
-    return { plan, sendOptions: undefined }
+    return { plan, sendOptions: { clearInput: buildAgentTuiClearInputForText(draft) } }
   }
   return {
     plan,

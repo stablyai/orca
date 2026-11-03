@@ -22,6 +22,7 @@ export type FreshSpawnOptions = {
 export type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   agent: ResumableTuiAgent
   resumeProviderSession: AgentProviderSessionMetadata
+  connectionId?: string | null
   /** Built from the pane's saved facts, so the host refuses it for a chat's conversation. */
   resumeOrigin: 'saved'
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']

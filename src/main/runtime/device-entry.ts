@@ -44,6 +44,7 @@ export type DeviceKeyLookup =
   | { kind: 'unknown' }
   // An unusable key is not revocation evidence.
   | { kind: 'not-keyed' }
+  | { kind: 'refused' }
   | { kind: 'unavailable' }
 
 // Only unscanned token rows are rotatable pairing offers; keyed rows never are.
@@ -59,13 +60,19 @@ export function sameGrants(entry: DeviceEntry, grants: readonly RuntimeDeviceGra
 }
 
 // Clients erase keys on unknown; reserve that verdict for readable absence.
-export function lookupDeviceKeyRow(device: DeviceEntry | null): DeviceKeyLookup {
+export function lookupDeviceKeyRow(
+  device: DeviceEntry | null,
+  devices: readonly DeviceEntry[]
+): DeviceKeyLookup {
   if (!device) {
     return { kind: 'unknown' }
   }
-  return device.credentialKind === 'device-key' && device.devicePublicKeyB64
+  if (device.credentialKind !== 'device-key' || !device.devicePublicKeyB64) {
+    return { kind: 'not-keyed' }
+  }
+  return withPairedParent(device, devices)
     ? { kind: 'found', device: { ...device, devicePublicKeyB64: device.devicePublicKeyB64 } }
-    : { kind: 'not-keyed' }
+    : { kind: 'refused' }
 }
 
 export type AuthenticatedPrincipalBinding = {
@@ -86,15 +93,25 @@ export function isStillAuthenticated(
   )
 }
 
-/** A delegated child authenticates only while its parent desktop is still paired. */
+// Forks and delegated phones lose authority with any ancestor pairing.
 function withPairedParent(
   device: DeviceEntry,
-  devices: readonly DeviceEntry[]
+  devices: readonly DeviceEntry[],
+  ancestors = new Set<string>()
 ): DeviceEntry | null {
-  const { parentDeviceId } = device
-  return parentDeviceId === undefined || devices.some((d) => d.deviceId === parentDeviceId)
-    ? device
-    : null
+  if (ancestors.has(device.deviceId)) {
+    return null
+  }
+  ancestors.add(device.deviceId)
+  const paired = [device.parentDeviceId, device.forkedFrom].every((parentId) => {
+    if (parentId === undefined) {
+      return true
+    }
+    const parent = devices.find((candidate) => candidate.deviceId === parentId)
+    return parent !== undefined && withPairedParent(parent, devices, ancestors) !== null
+  })
+  ancestors.delete(device.deviceId)
+  return paired ? device : null
 }
 
 export function findTokenDevice(

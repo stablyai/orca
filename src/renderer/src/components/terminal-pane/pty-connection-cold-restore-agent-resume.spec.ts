@@ -1,3 +1,4 @@
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -240,7 +241,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       )
     })
 
-    it('resumes from the quit-captured sleeping record when cold-restoring after an app restart', async () => {
+    it('resumes the same agent after consecutive daemon losses before another status arrives', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('fresh-pty')
@@ -294,7 +295,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
@@ -335,8 +336,38 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
           })
         })
       )
-      // Why: consuming the record prevents a later worktree activation from launching a duplicate resume tab.
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.agentStatusByPaneKey).toEqual({})
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        paneKey,
+        providerSession: { id: 'codex-session-1', transcriptPath },
+        origin: 'quit',
+        restoreOnTabOpenOnly: true
+      })
+      binding.dispose()
+      const replacement = createMockTransport('second-fresh-pty')
+      replacement.connect.mockResolvedValue({
+        id: 'second-fresh-pty',
+        coldRestore: { scrollback: 'second-payload', cwd: '/tmp/wt-1' }
+      })
+      transportFactoryQueue.push(replacement)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({
+            restoredLeafId: LEAF_1,
+            restoredPtyIdByLeafId: { [LEAF_1]: 'fresh-pty' }
+          })
+        )
+      )
+      await flushAsyncTicks(20)
+      await vi.advanceTimersByTimeAsync(70)
+      expect(replacement.connect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
+          resumeProviderSession: { key: 'session_id', id: 'codex-session-1', transcriptPath }
+        })
+      )
     })
 
     it('marks the pane as freshly started when main declined an unverifiable resume', async () => {
@@ -497,6 +528,13 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(duplicateLegacyPaneKey)
       expect(mockStoreState.sleepingAgentSessionsByPaneKey[legacyPaneKey]).toBeUndefined()
       expect(mockStoreState.sleepingAgentSessionsByPaneKey[duplicateLegacyPaneKey]).toBeUndefined()
+      expect(
+        mockStoreState.sleepingAgentSessionsByPaneKey[makePaneKey('tab-1', LEAF_1)]
+      ).toMatchObject({
+        providerSession: { id: 'codex-session-1' },
+        origin: 'quit',
+        restoreOnTabOpenOnly: true
+      })
     })
 
     it('does not choose a non-exact legacy record when same-tab provider sessions differ', async () => {

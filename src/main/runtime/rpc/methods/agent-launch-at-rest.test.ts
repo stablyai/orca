@@ -11,6 +11,8 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import type { RpcContext } from '../core'
 import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { CodexAppServerRequestError } from '../../../codex/app-server/codex-app-server-request-error'
+import { CodexAppServerExitError } from '../../../codex/app-server/codex-app-server-exit-error'
+import { codexStartFailure } from '../../../codex/app-server/codex-startup-outcome'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import * as structuredCreate from './structured-agent-session-create'
@@ -39,7 +41,9 @@ const CLI: Partial<RpcContext> = {}
 const SESSION = 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
 
 let rig: RestTestRig
+const openEnded = new Map<string, (error: Error) => void>()
 beforeEach(async () => {
+  openEnded.clear()
   // The launch mints its operation id from the wall clock; the rig's host reads a fixed one.
   vi.useFakeTimers({ now: HOST_TEST_NOW, toFake: ['Date'] })
   rig = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
@@ -135,12 +139,18 @@ async function child(sessionId = SESSION) {
 
 async function endChild(sessionId = SESSION) {
   const current = await child(sessionId)
+  await vi.waitFor(() => expect(openEnded.has(current.acquisitionGeneration)).toBe(true))
   await rig.host.handleAdapterEvent({
     type: 'ended',
     ...current,
     reason: 'exited during initialize',
     cause: 'unexpected-exit'
   })
+  // The real adapter answers its outstanding open with the drained exit once the child exits.
+  openEnded.get(current.acquisitionGeneration)?.(
+    codexStartFailure(new CodexAppServerExitError('codex app-server connection ended'))
+  )
+  openEnded.delete(current.acquisitionGeneration)
   await vi.waitFor(() =>
     expect(rig.host.collaboratorsForTests().sessions.get(sessionId)?.child).toBeNull()
   )
@@ -149,6 +159,17 @@ async function endChild(sessionId = SESSION) {
 function holdStarts() {
   const acquire = rig.adapter.acquire.getMockImplementation()!
   rig.adapter.acquire.mockImplementation(rig.heldStart(acquire))
+  const open = rig.host.deps.adapter.open
+  vi.spyOn(rig.host.deps.adapter, 'open').mockImplementation((input) =>
+    Promise.race([
+      open(input),
+      new Promise<never>((_resolve, reject) => {
+        if (input.acquisitionGeneration) {
+          openEnded.set(input.acquisitionGeneration, reject)
+        }
+      })
+    ])
+  )
 }
 
 it('a whitespace-only submit creates an eager empty chat without sending a turn', async () => {
@@ -232,7 +253,14 @@ it.each(['spawn', 'open'] as const)(
       )
     } else {
       vi.spyOn(rig.host.deps.adapter, 'open').mockRejectedValueOnce(
-        new CodexAppServerRequestError('initialize', -32603, 'temporarily unavailable')
+        codexStartFailure(
+          new CodexAppServerRequestError(
+            'initialize',
+            -32001,
+            'Server overloaded; retry later.',
+            'Server overloaded; retry later.'
+          )
+        )
       )
     }
     const result = await launch(CLI, 'fix the build')

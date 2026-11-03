@@ -30,7 +30,7 @@ import {
   readRuntimeAiVaultDeleteSessionResponse,
   runtimeAiVaultDeleteSessionParams
 } from '../../shared/ai-vault-runtime-session-delete'
-import type { RuntimeAiVaultHostInfo } from '../ipc/ai-vault-runtime-scan'
+import type { RuntimeAiVaultHostInfo } from './ai-vault-runtime-scan'
 
 export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number

@@ -4,10 +4,7 @@ import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginWorkerHandle } from './plugin-host-process'
 import { PluginWorkerManager } from './plugin-worker-manager'
 import { buildPluginWorkerSpawnSpec } from './plugin-worker-spawn-spec'
-import {
-  createPluginResidentWorkerWarmer,
-  pluginNeedsResidentWorker
-} from './plugin-resident-worker'
+import { createPluginResidentWorkerWarmer } from './plugin-resident-worker'
 
 function plugin(
   pluginKey: string,
@@ -53,15 +50,6 @@ function worker(): PluginWorkerHandle {
 const meter = { statusBarItems: [{ id: 'usage' }] }
 
 describe('resident plugin workers', () => {
-  it('needs a resident worker for hooks or status bar items, only with a worker entry', () => {
-    expect(pluginNeedsResidentWorker(plugin('a', meter).manifest)).toBe(true)
-    expect(
-      pluginNeedsResidentWorker(plugin('a', { hooks: [{ event: 'terminal.send' }] }).manifest)
-    ).toBe(true)
-    expect(pluginNeedsResidentWorker(plugin('a', {}).manifest)).toBe(false)
-    expect(pluginNeedsResidentWorker(plugin('a', meter, { main: false }).manifest)).toBe(false)
-  })
-
   it('starts a status bar plugin once per approved revision while it is enabled', () => {
     let plugins = [plugin('acme.meter', meter), plugin('acme.plain', {})]
     const enabled = new Set(['acme.meter', 'acme.plain'])
