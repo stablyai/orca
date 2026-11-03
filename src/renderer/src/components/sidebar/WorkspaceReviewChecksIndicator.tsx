@@ -1,9 +1,8 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceReviewChecksSummary } from '../../../../shared/workspace-review-checks'
-import { PullRequestIcon } from './WorktreeCardHelpers'
-import { getReviewChecksTone } from './worktree-review-helpers'
+import { ReviewIcon } from './worktree-review-helpers'
+import { reviewStateLabel } from './WorktreeCardMetadataStatusBadges'
 
 export function workspaceReviewChecksLabel(summary: WorkspaceReviewChecksSummary): string {
   const status =
@@ -16,10 +15,15 @@ export function workspaceReviewChecksLabel(summary: WorkspaceReviewChecksSummary
           : summary.state === 'unknown'
             ? translate('workspace.links.checksUnknown', 'Unknown')
             : translate('workspace.links.checksNeutral', 'Neutral')
-  return translate('workspace.links.allReviewChecks', 'Reviews: {{count}} · Checks: {{status}}', {
-    count: summary.total,
-    status
-  })
+  const checks = translate(
+    'workspace.links.allReviewChecks',
+    'Reviews: {{count}} · Checks: {{status}}',
+    {
+      count: summary.total,
+      status
+    }
+  )
+  return `${reviewStateLabel(summary.reviewState, 'PR')} · ${checks}`
 }
 
 export function WorkspaceReviewChecksIndicator({
@@ -29,9 +33,12 @@ export function WorkspaceReviewChecksIndicator({
   summary: WorkspaceReviewChecksSummary
   className?: string
 }): React.JSX.Element {
-  const tone =
-    summary.state === 'failure' || summary.state === 'pending' || summary.state === 'success'
-      ? getReviewChecksTone(summary.state)
-      : null
-  return <PullRequestIcon className={cn(className, tone ?? 'text-muted-foreground')} />
+  return (
+    <ReviewIcon
+      review={{ state: summary.reviewState }}
+      className={className}
+      variant="generic"
+      showChecks={false}
+    />
+  )
 }

@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import ko from '@/i18n/locales/ko.json'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { getWorktreeCardPrDisplay, type WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { gitlabMrCheckCases } from '../../../../shared/gitlab-mr-checks.test-fixture'
@@ -45,6 +47,9 @@ vi.mock('./use-worktree-sleep-state', () => ({
 }))
 
 describe('WorktreeCardStatusSlot', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
   beforeEach(() => {
     mocks.status = 'active'
     mocks.sleeping = false
@@ -164,6 +169,98 @@ describe('WorktreeCardStatusSlot', () => {
     }
   )
 
+  it.each([
+    {
+      state: 'merged',
+      status: 'success',
+      icon: 'merge',
+      tone: 'text-purple-600/70',
+      label: 'State: Merged',
+      locale: 'en',
+      stale: false
+    },
+    {
+      state: 'merged',
+      status: 'failure',
+      icon: 'merge',
+      tone: 'text-purple-600/70',
+      label: 'State: Merged',
+      locale: 'en',
+      stale: false
+    },
+    {
+      state: 'draft',
+      status: 'success',
+      icon: 'pull-request-draft',
+      tone: 'text-muted-foreground/50',
+      label: 'State: Draft PR',
+      locale: 'en',
+      stale: false
+    },
+    {
+      state: 'closed',
+      status: 'success',
+      icon: 'pull-request-closed',
+      tone: 'text-muted-foreground/60',
+      label: 'State: Closed',
+      locale: 'en',
+      stale: false
+    },
+    {
+      state: 'merged',
+      status: undefined,
+      icon: 'merge',
+      tone: 'text-purple-600/70',
+      label: 'State: Merged',
+      locale: 'en',
+      stale: true
+    },
+    {
+      state: 'merged',
+      status: 'success',
+      icon: 'merge',
+      tone: 'text-purple-600/70',
+      label: ko.auto.components.sidebar.WorktreeCardMetadataStatusBadges.f394b3e86e,
+      locale: 'ko',
+      stale: false
+    }
+  ] as const)(
+    'preserves $state collection lifecycle with $status checks ($locale, stale=$stale)',
+    async ({ state, status, icon, tone, label, locale, stale }) => {
+      await i18n.changeLanguage(locale)
+      const items = [referenceAttachment(1), referenceAttachment(2)]
+      const details = Object.fromEntries(
+        items.map((item) => [
+          getWorkspaceAttachmentKey(item),
+          { stale, review: { ...referenceReview(item.number, { state }), status } }
+        ])
+      )
+      const markup = renderToStaticMarkup(
+        <WorktreeCardStatusSlot
+          worktreeId="wt-1"
+          showStatus
+          showUnreadAction={false}
+          isUnread={false}
+          unreadTooltip=""
+          onPointerDown={vi.fn()}
+          onToggleUnread={vi.fn()}
+          newCardStyle
+          prDisplay={{ ...review, state, status }}
+          reviewChecks={summarizeWorkspaceReviewChecks(items, details)}
+        />
+      )
+      expect(markup).toContain(`lucide-git-${icon}`)
+      expect(markup).toContain(tone)
+      expect(markup).not.toContain('text-emerald-500')
+      expect(markup).toContain(label)
+      if (stale) {
+        expect(markup).toContain('Last known status')
+        expect(markup).toContain('shimmer')
+        expect(markup).toContain('Checks: Unknown')
+      }
+    }
+  )
+
   it('uses checks from every attached review rather than the legacy passing review', () => {
     const items = [referenceAttachment(1), referenceAttachment(2)]
     const details = Object.fromEntries(
@@ -191,7 +288,8 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
     expect(markup).toContain('Reviews: 2 · Checks: Failed')
-    expect(markup).toContain('text-rose-500/85')
+    expect(markup).toContain('State: Open')
+    expect(markup).toContain('text-emerald-500/80')
     expect(markup).not.toContain('checks: Passing')
   })
   it('keeps incomplete collection checks neutral instead of claiming passing', () => {
