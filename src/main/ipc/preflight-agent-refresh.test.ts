@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalCommandResolver from './command-path-resolver'
-import type * as WslGuestEnvironment from '../wsl/wsl-guest-environment'
+import type * as WslGuestEnvironment from '../wsl/execution/wsl-guest-environment'
 import { resolveProfileLoadingShell } from '../startup/hydrate-shell-path'
 
 const {
@@ -37,7 +37,7 @@ const {
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 const invalidateGuest = vi.hoisted(() => vi.fn())
-vi.mock('../wsl/wsl-guest-environment', async (original) => ({
+vi.mock('../wsl/execution/wsl-guest-environment', async (original) => ({
   ...(await original<typeof WslGuestEnvironment>()),
   invalidateWslGuestEnvironment: invalidateGuest
 }))

@@ -6,7 +6,7 @@ import {
   stopWslHostServersForUninstall,
   wslHostUninstallStopDependencies,
   type WslHostUninstallStopDependencies
-} from '../wsl/wsl-host-uninstall-server-stop'
+} from '../wsl/host-lifecycle/wsl-host-uninstall-server-stop'
 
 /** The NSIS uninstaller's flag (config/nsis/orca-installer-hooks.nsh); keep the two in sync. */
 export const WSL_HOLDER_UNINSTALL_FLAG = '--orca-uninstall-release-wsl-holders'

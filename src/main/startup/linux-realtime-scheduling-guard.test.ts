@@ -16,7 +16,7 @@ import {
   listProcessTree,
   refuseRealtimeSchedulingUnderZeroRtTime
 } from './linux-realtime-scheduling-guard'
-import { getStartupRtPrioOutcome, setStartupRtPrioOutcome } from '../linux-rttime-limit'
+import { getStartupRtPrioOutcome, setStartupRtPrioOutcome } from './linux-rttime-limit'
 
 let dir: string
 let procRoot: string

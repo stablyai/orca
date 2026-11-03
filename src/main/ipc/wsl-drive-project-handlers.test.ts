@@ -23,7 +23,10 @@ vi.mock('./wsl-drive-unc-conversion-handlers', () => ({
 }))
 
 import { registerWslDriveProjectHandlers, readWorktreeLinks } from './wsl-drive-project-handlers'
-import { noteWslHostsLivePolicyBlock, resetWslHostsGateForTests } from '../wsl/wsl-host-gate'
+import {
+  noteWslHostsLivePolicyBlock,
+  resetWslHostsGateForTests
+} from '../wsl/host-lifecycle/wsl-host-gate'
 
 const invoke = (channel: string, request?: unknown) => handlers.get(channel)?.({}, request)
 const originalPlatform = process.platform

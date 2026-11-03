@@ -14,13 +14,13 @@ import { filterUserWslDistros } from '../wsl/discovery/wsl-distro-list-output'
 import { peekConfirmedRunningWslDistros } from '../wsl/discovery/wsl-running-distro-cache'
 import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows/windows-native-registry'
 import { readWslDistroRegistrations } from '../wsl/discovery/wsl-distro-registry-id'
-import { listWslHostDistros } from '../wsl/wsl-host-distro-list'
+import { listWslHostDistros } from '../wsl/host-lifecycle/wsl-host-distro-list'
 import {
   wslHostsAppliedMovedProjects,
   wslHostsAppliedPolicyState,
   wslHostsGateOpen,
   wslHostsGateState
-} from '../wsl/wsl-host-gate'
+} from '../wsl/host-lifecycle/wsl-host-gate'
 import { isForeignLink, readWorktreeLinks } from '../git/worktree-prune-guard'
 import { isTelemetryEnabled, track } from './client'
 import {

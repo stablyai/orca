@@ -51,7 +51,7 @@ const MANUAL_OPT_IN = [
   // Same flag; real WSL POSIX semantics.
   'src/main/skills/skill-wsl-posix-semantics.integration.test.ts',
   // `runRealWsl = … && ORCA_REAL_WSL_DELETE_TEST === '1'`; real distro traversal race.
-  'src/main/wsl-approved-root-race.wsl.test.ts',
+  'src/main/persistence/moving-wsl-projects/wsl-approved-root-race.wsl.test.ts',
   // Same flag; real UNC delete against a distro.
   'src/main/wsl/filesystem/wsl-unc-delete.wsl.test.ts',
   // `enabled = platform === 'win32' && ORCA_REAL_WSL_RUNNER_TEST === '1'`; mutates a real distro's ~/.profile.

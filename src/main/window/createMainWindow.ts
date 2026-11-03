@@ -25,7 +25,7 @@ import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
-import { wslHostsWindowArguments } from '../wsl/wsl-host-gate'
+import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   formatHiddenWindowFramePumpArgument,
   shouldPumpHiddenWindowFrames

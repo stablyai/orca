@@ -13,7 +13,7 @@ import { runWslProcess } from './wsl-runner'
 import {
   invalidateWslGuestEnvironment,
   seedWslGuestEnvironmentForTests
-} from '../wsl-guest-environment'
+} from './wsl-guest-environment'
 
 const ENVIRONMENT = {
   path: '/home/u/.nvm/bin:/usr/bin',

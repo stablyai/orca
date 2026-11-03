@@ -7,7 +7,7 @@ import {
   materializeNodeRuntimeArchive,
   nodeRuntimeArchiveCachePath
 } from '../../node-runtime/pinned-runtime-materializer'
-import { wslHostsGateOpen } from '../wsl-host-gate'
+import { wslHostsGateOpen } from '../host-lifecycle/wsl-host-gate'
 
 /** Off the startup path; the archive is about 55 MB. */
 const PREFETCH_DELAY_MS = 60_000

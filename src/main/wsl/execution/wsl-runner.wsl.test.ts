@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runWslProcess } from './wsl-runner'
-import { invalidateWslGuestEnvironment } from '../wsl-guest-environment'
+import { invalidateWslGuestEnvironment } from './wsl-guest-environment'
 import { runProcess } from '@orca/process-host'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 

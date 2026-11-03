@@ -14,13 +14,13 @@ vi.mock('./windows-app-data-path', () => ({ ensureWindowsAppDataPath: vi.fn() })
 vi.mock('../wsl/discovery/wsl-distro-holder', () => ({
   createWslDistroHolder: () => ({ releaseAll })
 }))
-vi.mock('../wsl/wsl-host-uninstall-server-stop', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-uninstall-server-stop', () => ({
   stopWslHostServersForUninstall: stopServers,
   wslHostUninstallStopDependencies: () => ({ distros: () => [], listRunning: async () => [] })
 }))
 
 import type { WslDistroHolder } from '../wsl/discovery/wsl-distro-holder-types'
-import type { WslHostUninstallStopDependencies } from '../wsl/wsl-host-uninstall-server-stop'
+import type { WslHostUninstallStopDependencies } from '../wsl/host-lifecycle/wsl-host-uninstall-server-stop'
 import {
   releaseWslHoldersForUninstall,
   runWslHolderUninstallPreflight,
