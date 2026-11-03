@@ -1,7 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { readRemoteUrl } from '../git/remote-url-probe'
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import {
+  ghAccountBindingsEqual,
+  normalizeGhAccountBinding,
+  type GhAccountBinding
+} from '../../shared/github/account-binding'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
@@ -46,10 +50,23 @@ export async function withGitHubRepoExecution<T>(
   repoPath: string,
   connectionId: string | null | undefined,
   options: LocalGitExecOptions,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  expectedGhAccount?: GhAccountBinding | null
 ): Promise<T> {
   // Async descendants keep the selection through settlement, including detached cache work.
-  return operations.run(githubRepoContext(repoPath, connectionId, options), operation)
+  const context = githubRepoContext(repoPath, connectionId, options)
+  if (
+    expectedGhAccount !== undefined &&
+    !ghAccountBindingsEqual(
+      normalizeGhAccountBinding(context.ghAccount),
+      expectedGhAccount === null ? null : normalizeGhAccountBinding(expectedGhAccount)
+    )
+  ) {
+    throw new Error(
+      "The project's GitHub account changed. Try the action again with the current account."
+    )
+  }
+  return operations.run(context, operation)
 }
 
 export function githubRepoContext(

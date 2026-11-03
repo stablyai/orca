@@ -29,6 +29,10 @@ import {
   pluginWorkerPanelRequestParamsSchema
 } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import {
+  pluginWorkerHookParamsSchema,
+  runPluginWorkerHookHandlers
+} from '../../../shared/plugins/workers/plugin-worker-hooks'
+import {
   createPluginWorkerApiTables,
   createPluginWorkerOrcaApi,
   type PluginWorkerOrcaApi
@@ -183,6 +187,16 @@ export function createPluginWorkerRuntime(
     }
     if (request.method === WORKER_METHODS.panelRequest) {
       await answerPanelRequest(request)
+      return
+    }
+    if (request.method === WORKER_METHODS.runHook) {
+      try {
+        const { event, payload } = pluginWorkerHookParamsSchema.parse(request.params)
+        const handlers = tables.hooks.get(event) ?? []
+        send(pluginResult(request.id, await runPluginWorkerHookHandlers(handlers, payload)))
+      } catch (error) {
+        send(pluginFailure(request.id, pluginError('action_failed', toErrorMessage(error))))
+      }
       return
     }
     if (request.method === WORKER_METHODS.deliverEvent) {

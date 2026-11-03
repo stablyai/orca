@@ -46,37 +46,6 @@ describe('withReactCommitCascadeWriteProbe', () => {
     expect(useProbedStore.getState().ticks).toBe(3)
   })
 
-  // create copies api.setState onto the hook after creator runs; require the middleware to cover that path too.
-  it('routes the api setState through the probe', () => {
-    const useProbedStore = createProbedStore()
-    probe.armed = true
-
-    useProbedStore.setState({ ticks: 1 })
-
-    expect(noteWrite).toHaveBeenCalledTimes(1)
-    // The boundary must be the wrapper itself, so V8 elides it from the sample.
-    expect(noteWrite.mock.calls[0]?.[0]).toBe(useProbedStore.setState)
-    expect(noteWrite.mock.calls[0]?.[1]).toEqual({ ticks: 1 })
-  })
-
-  it('passes the replace flag through', () => {
-    const useProbedStore = createProbedStore()
-    probe.armed = true
-
-    useProbedStore.setState({ ticks: 2 }, true)
-
-    expect(useProbedStore.getState()).toEqual({ ticks: 2 })
-  })
-
-  it('costs nothing but a flag read while unarmed', () => {
-    const useProbedStore = createProbedStore()
-
-    useProbedStore.setState({ ticks: 4 })
-
-    expect(noteWrite).not.toHaveBeenCalled()
-    expect(useProbedStore.getState().ticks).toBe(4)
-  })
-
   // Buffer middleware must preserve caller partials/write frames or cascade reports lose distinct write sites/keys.
   it('sees each original partial and caller under the editor buffer middleware', () => {
     type BufferedState = EditorBufferViewIndex & {

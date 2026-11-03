@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
-import type * as RepoWorktrees from '../../repo-worktrees'
-import { listRepoWorktreeGraph } from '../../repo-worktrees'
+import type * as RepoWorktrees from '../../workspaces/catalog/repo-worktrees'
+import { listRepoWorktreeGraph } from '../../workspaces/catalog/repo-worktrees'
 import type * as ProjectGroupsModule from '../../../shared/project-groups'
 import {
   buildProjectGroupChildIndex,
@@ -18,10 +18,12 @@ import type { Project } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import { resolveAuthorizedPath } from './filesystem-auth'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 
-vi.mock('../../repo-worktrees', async () => {
-  const actual = await vi.importActual<typeof RepoWorktrees>('../../repo-worktrees')
+vi.mock('../../workspaces/catalog/repo-worktrees', async () => {
+  const actual = await vi.importActual<typeof RepoWorktrees>(
+    '../../workspaces/catalog/repo-worktrees'
+  )
   return { ...actual, listRepoWorktreeGraph: vi.fn(async () => []) }
 })
 

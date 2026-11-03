@@ -5,11 +5,11 @@ import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import { RESOLVED_WORKTREE_CACHE_TTL_MS } from '../orca-runtime-postlude'
-import { getWorktreeScanMutationRevision } from '../../local-worktree-scan-generation'
+import { getWorktreeScanMutationRevision } from '../../workspaces/catalog/local-worktree-scan-generation'
 import {
   resolveLocalProjectRuntimeForRepo,
   resolveLocalProjectRuntimesForRepos
-} from '../../project-runtime-git-options'
+} from '../../workspaces/execution-host/local-project-runtime-resolution'
 import {
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
@@ -36,9 +36,9 @@ import {
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
-import { withUnregisteredRemovalCheckouts } from '../../worktree-removal-listing'
-import { withoutInFlightWorktreeCreates } from '../../worktree-create-in-flight'
-import { preserveFolderUpgradeWorktreePath } from '../../folder-upgrade-worktree-path'
+import { withUnregisteredRemovalCheckouts } from '../../workspaces/removal/worktree-removal-listing'
+import { withoutInFlightWorktreeCreates } from '../../workspaces/creation/worktree-create-in-flight'
+import { preserveFolderUpgradeWorktreePath } from '../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { resolveWorktreeScanCacheTtlMs } from '../runtime-worktree-scan-cache'

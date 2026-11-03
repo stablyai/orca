@@ -12,6 +12,10 @@ import { updaterMessageText } from '@/lib/updater-message-copy'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
+import { UpdateDelaySetting } from './UpdateDelaySetting'
+import { formatUpdateDelayDate } from './update-delay-copy'
+import { useNow } from '@/hooks/use-now'
+import { isDelayedUpdatePending } from '../../../../shared/update-delay'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
 import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
@@ -31,6 +35,10 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const now = useNow(
+    60_000,
+    updateStatus.state === 'not-available' && Boolean(updateStatus.delayedUpdate)
+  )
   const updateCheckHint = getUpdateCheckHint()
   // Hide channel switching behind Option/Alt-click because it can downgrade to unvetted builds.
   const [channelSwitcherRevealed, setChannelSwitcherRevealed] = useState(false)
@@ -204,10 +212,25 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             </>
           )}
           {updateStatus.state === 'not-available' &&
-            translate(
-              'auto.components.settings.GeneralUpdateSettingsSection.f40d88390d',
-              'You’re on the latest version.'
-            )}
+            (updateStatus.delayedUpdate
+              ? isDelayedUpdatePending(updateStatus.delayedUpdate, now)
+                ? translate(
+                    'settings.updateDelay.upToDateWithHeld',
+                    'You’re up to date. A newer release is on hold until {{date}}.',
+                    {
+                      date: formatUpdateDelayDate(
+                        Date.parse(updateStatus.delayedUpdate.availableAt)
+                      )
+                    }
+                  )
+                : translate(
+                    'settings.updateDelay.heldReleaseReady',
+                    'A newer release is ready. Check for updates to get it.'
+                  )
+              : translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.f40d88390d',
+                  'You’re on the latest version.'
+                ))}
           {updateStatus.state === 'downloading' &&
             translate(
               'auto.components.settings.GeneralUpdateSettingsSection.2a48034c4c',
@@ -261,6 +284,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                     ))}
         </p>
       </SearchableSetting>
+      <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
     </section>

@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { agentMessageSenderCanOpen } from '../../../../shared/agent-session/agent-message-presentation'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import {
   agentMessageSendersShown,
@@ -15,18 +14,21 @@ import {
   unnamedSenderLabel,
   useAgentMessageSenderLabel
 } from './native-chat-agent-message-sender-label'
+import { useAgentMessageSenderOpens } from './native-chat-agent-message-sender-view'
 
-/** Open resolvable local senders; use plain names when chat context is absent or the sender belongs to another host. */
+/** Link a sender only where its one resolution can open something; otherwise a plain name. */
 export function NativeChatAgentMessageSenders({
   from,
   chatWorktreeId,
   target,
-  queued = false
+  queued = false,
+  dispatchId
 }: {
   from: AgentMessageSource
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   queued?: boolean
+  dispatchId?: string
 }): React.JSX.Element {
   const { shown, more } = agentMessageSendersShown(from)
   const owner = useNativeChatVisualOwner()
@@ -44,6 +46,7 @@ export function NativeChatAgentMessageSenders({
       {shown.map((sender, index) => (
         <Fragment key={sender.party.address}>
           <SenderName
+            dispatchId={dispatchId}
             from={from}
             sender={sender}
             chatWorktreeId={worktreeId}
@@ -64,20 +67,23 @@ export function NativeChatAgentMessageSenders({
 }
 
 function SenderName({
+  dispatchId,
   from,
   sender,
   chatWorktreeId,
   target,
   queued
 }: {
+  dispatchId?: string
   from: AgentMessageSource
   sender: AgentMessageSender
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   queued: boolean
 }): React.JSX.Element {
-  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target)
-  if (!agentMessageSenderCanOpen(sender, Boolean(chatWorktreeId)) || !chatWorktreeId) {
+  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
+  const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
+  if (!opens || !chatWorktreeId) {
     return (
       <span className={`max-w-48 truncate ${queued ? 'px-2' : 'px-2.5'}`} title={label}>
         {label}
@@ -93,9 +99,7 @@ function SenderName({
         queued ? label : translate('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
       onClick={() =>
-        void (target
-          ? openAgentMessageSender(from, sender, chatWorktreeId, target)
-          : openAgentMessageSender(from, sender, chatWorktreeId))
+        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
       }
     >
       <span className="max-w-48 truncate">{label}</span>

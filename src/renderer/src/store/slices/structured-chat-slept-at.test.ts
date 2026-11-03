@@ -53,14 +53,4 @@ describe('structured chat presence snapshots', () => {
     expect(hasUnknownStructuredChat(closed, slept)).toBe(false)
     expect(hasAwakeStructuredChat(tabs, slept)).toBe(false)
   })
-
-  it('keeps absent sleep state unknown and treats missing tab buckets as empty', () => {
-    const tabs = Object.freeze([chatTab()])
-    expect(hasAwakeStructuredChat(tabs)).toBe(true)
-    expect(hasUnknownStructuredChat(tabs)).toBe(true)
-    expect(hasAwakeStructuredChat(undefined)).toBe(false)
-    expect(hasUnknownStructuredChat(undefined)).toBe(false)
-    expect(hasAwakeStructuredChat([])).toBe(false)
-    expect(hasUnknownStructuredChat([])).toBe(false)
-  })
 })

@@ -11,11 +11,11 @@ import type {
   WatcherProcessCallback,
   WatcherProcessHooks
 } from './filesystem/watcher-process/parcel-watcher-process-subscription'
-import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
+import type { WorktreeBaseWatchTarget } from './worktrees/creation/worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 import { startGitCommonWatch } from './worktree-git-common-watch'
 
 vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({

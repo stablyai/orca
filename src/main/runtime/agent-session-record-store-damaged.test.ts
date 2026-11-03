@@ -5,7 +5,7 @@ import { openStructuredAgentSessionConversationJournal } from '../native-chat/ag
 import { readStructuredAgentSessionHistoryResult } from '../native-chat/agent-session-wire/structured-agent-session-history-result'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { nextAgentSessionFence } from '../../shared/agent-session/lifecycle/agent-session-next-fence'
 import { listStructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import { findConflictingStructuredAdoption } from '../native-chat/structured-agent-session-history-adoption'

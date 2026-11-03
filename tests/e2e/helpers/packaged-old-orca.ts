@@ -227,6 +227,7 @@ async function reserveLoopbackPort(): Promise<number> {
 
 // Spawn directly to capture readiness from process creation; Playwright can consume it before launch resolves.
 export async function launchPackagedServeHost(executablePath: string): Promise<PackagedServeHost> {
+  assertMacGuiLaunchAllowed()
   // Why /tmp on macOS: the released helper has a 103-byte Unix socket ceiling.
   const parent = process.platform === 'darwin' ? '/tmp' : os.tmpdir()
   const userDataDir = mkdtempSync(path.join(parent, 'orca-e2e-packaged-serve-'))
