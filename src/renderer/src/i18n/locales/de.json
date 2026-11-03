@@ -16856,7 +16856,8 @@
           "folderEmpty": "Der Ordnerpfad darf nicht leer sein",
           "folderOutsideWorkspace": "Der Ordner muss im aktuellen Workspace liegen",
           "nameTaken": "Eine Datei mit diesem Namen existiert bereits",
-          "createFailed": "Die Datei konnte nicht erstellt werden."
+          "createFailed": "Die Datei konnte nicht erstellt werden.",
+          "sshUnsupported": "Das Erstellen von Dateien in SSH-Workspaces wird noch nicht unterstützt."
         }
       },
       "diff": {

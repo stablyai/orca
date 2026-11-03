@@ -16183,7 +16183,8 @@
           "folderEmpty": "文件夹路径不能为空",
           "folderOutsideWorkspace": "文件夹必须位于当前工作区内",
           "nameTaken": "已存在同名文件",
-          "createFailed": "无法创建文件。"
+          "createFailed": "无法创建文件。",
+          "sshUnsupported": "SSH 工作区暂不支持创建文件。"
         }
       },
       "diff": {

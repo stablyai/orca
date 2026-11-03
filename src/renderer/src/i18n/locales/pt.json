@@ -13615,7 +13615,8 @@
           "folderEmpty": "O caminho da pasta não pode estar vazio",
           "folderOutsideWorkspace": "A pasta deve estar dentro do workspace atual",
           "nameTaken": "Já existe um arquivo com esse nome",
-          "createFailed": "Não foi possível criar o arquivo."
+          "createFailed": "Não foi possível criar o arquivo.",
+          "sshUnsupported": "A criação de arquivos em workspaces SSH ainda não é compatível."
         }
       },
       "skills": {

@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo } from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { dirname } from '@/lib/path'
@@ -8,7 +9,13 @@ import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from '@/lib/editor-file-operation-owner'
-import { createNamedFile, NamedFileExistsError, suggestUntitledName } from '@/lib/create-named-file'
+import {
+  createNamedFile,
+  isSshOwnedFileContext,
+  NamedFileExistsError,
+  suggestUntitledName
+} from '@/lib/create-named-file'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { NewFileDialog } from './NewFileDialog'
 
 /** Mounted while activeModal is 'new-file'; creates the file on the active workspace's own host. */
@@ -25,6 +32,7 @@ export default function NewFileModal(): React.JSX.Element | null {
       : null
   })
   const closeModal = useAppStore((s) => s.closeModal)
+  const mountedRef = useMountedRef()
 
   // Why: pinned at open so a worktree switch behind the dialog cannot redirect the write.
   const opened = useMemo(() => {
@@ -39,6 +47,7 @@ export default function NewFileModal(): React.JSX.Element | null {
       false
     )
     let disableBrowse = true
+    let sshOwned = false
     try {
       const context = getEditorFileOperationContext(
         state,
@@ -46,12 +55,27 @@ export default function NewFileModal(): React.JSX.Element | null {
         worktreePath
       )
       disableBrowse = context.target.kind !== 'local' || Boolean(context.connectionId)
+      sshOwned = isSshOwnedFileContext(context)
     } catch {
       // Unresolved owner: keep the local folder picker off; create will surface the owner error.
     }
-    return { worktreeId, worktreePath, operationProvenance, disableBrowse }
+    return { worktreeId, worktreePath, operationProvenance, disableBrowse, sshOwned }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot once per mount
   }, [])
+
+  const sshBlocked = opened?.sshOwned === true
+  useEffect(() => {
+    if (!sshBlocked) {
+      return
+    }
+    toast.error(
+      translate(
+        'auto.components.editor.NewFileDialog.sshUnsupported',
+        "Creating files in SSH workspaces isn't supported yet."
+      )
+    )
+    closeModal()
+  }, [closeModal, sshBlocked])
 
   const handleCreate = useCallback(
     async ({ name, folder }: { name: string; folder: string }): Promise<string | null> => {
@@ -69,17 +93,27 @@ export default function NewFileModal(): React.JSX.Element | null {
           { ...context, worktreePath: opened.worktreePath },
           folder,
           name,
-          () =>
+          () => {
+            // Why: Cancel before the write lands must stop it; after it, nothing may open or close.
+            if (!mountedRef.current) {
+              throw new Error('New file dialog closed')
+            }
             assertEditorFileOperationCurrent(
               useAppStore.getState(),
               opened.worktreeId,
               opened.operationProvenance
             )
+          }
         )
-        const groupId = state.activeGroupIdByWorktree[opened.worktreeId]
-        useAppStore
-          .getState()
-          .openFile(info, { preview: false, targetGroupId: groupId, focusEditor: true })
+        if (!mountedRef.current) {
+          return null
+        }
+        const latest = useAppStore.getState()
+        latest.openFile(info, {
+          preview: false,
+          targetGroupId: latest.activeGroupIdByWorktree[opened.worktreeId],
+          focusEditor: true
+        })
         closeModal()
         return null
       } catch (err) {
@@ -98,7 +132,7 @@ export default function NewFileModal(): React.JSX.Element | null {
         )
       }
     },
-    [closeModal, opened]
+    [closeModal, mountedRef, opened]
   )
 
   const suggestName = useCallback(
@@ -131,7 +165,7 @@ export default function NewFileModal(): React.JSX.Element | null {
     [opened]
   )
 
-  if (!opened) {
+  if (!opened || sshBlocked) {
     return null
   }
 

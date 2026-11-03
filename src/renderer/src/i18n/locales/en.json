@@ -17159,7 +17159,8 @@
           "folderEmpty": "Folder path cannot be empty",
           "folderOutsideWorkspace": "Folder must be inside the current workspace",
           "nameTaken": "A file with that name already exists",
-          "createFailed": "Couldn't create the file."
+          "createFailed": "Couldn't create the file.",
+          "sshUnsupported": "Creating files in SSH workspaces isn't supported yet."
         }
       },
       "diff": {

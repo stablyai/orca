@@ -45,6 +45,15 @@ export async function nextUntitledName(
   throw new Error(`Unable to find a free Untitled name after ${MAX_UNTITLED_ATTEMPTS} attempts.`)
 }
 
+/** Why: the filesystem layer refuses SSH-owned paths, so the dialog must not offer a create that cannot succeed. */
+export function isSshOwnedFileContext(
+  context: Pick<NamedFileContext, 'connectionId' | 'expectedExecutionHostId'>
+): boolean {
+  return (
+    Boolean(context.connectionId) || Boolean(context.expectedExecutionHostId?.startsWith('ssh:'))
+  )
+}
+
 /** Why: an empty or separator-bearing name must never reach the filesystem as a nested path. */
 export function hasPathSeparator(name: string): boolean {
   return /[/\\]/.test(name)
@@ -91,6 +100,8 @@ export async function createNamedFile(
     }
     throw error
   }
+  // Why: the write is async; a stale owner must not receive open metadata for a file it did not create.
+  assertOperationCurrent()
 
   const relativeDir = getRelativePathInsideRoot(dir, context.worktreePath) ?? ''
   const environmentId = runtimeTargetEnvironmentId(context.target)

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,13 +40,15 @@ export function NewFileDialog({
   const [submitting, setSubmitting] = useState(false)
   const [suggestedName, setSuggestedName] = useState('Untitled1')
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const nameInputId = useId()
+  const folderInputId = useId()
   const mountedRef = useMountedRef()
 
   useEffect(() => {
     let cancelled = false
     // Why: debounced so typing a path does not probe the filesystem per keystroke.
     const timer = setTimeout(() => {
-      void suggestName(folder.trim().replace(/[\\/]+$/, '')).then((next) => {
+      void suggestName(folder.trim()).then((next) => {
         if (!cancelled && next) {
           setSuggestedName(next)
         }
@@ -81,7 +83,7 @@ export function NewFileDialog({
       )
       return
     }
-    const trimmedFolder = folder.trim().replace(/[\\/]+$/, '')
+    const trimmedFolder = folder.trim()
     if (!trimmedFolder) {
       setError(
         translate('auto.components.editor.NewFileDialog.folderEmpty', 'Folder path cannot be empty')
@@ -136,10 +138,14 @@ export function NewFileDialog({
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+            <label
+              htmlFor={nameInputId}
+              className="text-[11px] font-medium text-muted-foreground mb-1 block"
+            >
               {translate('auto.components.editor.NewFileDialog.name', 'Name')}
             </label>
             <Input
+              id={nameInputId}
               ref={nameInputRef}
               value={name}
               onChange={(e) => {
@@ -153,11 +159,15 @@ export function NewFileDialog({
             />
           </div>
           <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+            <label
+              htmlFor={folderInputId}
+              className="text-[11px] font-medium text-muted-foreground mb-1 block"
+            >
               {translate('auto.components.editor.NewFileDialog.folder', 'Folder')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
+                id={folderInputId}
                 value={folder}
                 onChange={(e) => {
                   setFolder(e.target.value)

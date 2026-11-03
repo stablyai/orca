@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createNamedFile,
   hasPathSeparator,
+  isSshOwnedFileContext,
   NamedFileExistsError,
   nextUntitledName,
   suggestUntitledName
@@ -95,5 +96,32 @@ describe('suggestUntitledName', () => {
   it('matches the name createNamedFile would pick for a blank field', async () => {
     stubFs(['/repo/Untitled1'])
     await expect(suggestUntitledName(context, '/repo', () => undefined)).resolves.toBe('Untitled2')
+  })
+})
+
+describe('isSshOwnedFileContext', () => {
+  it('flags a direct SSH connection and an ssh execution host, not local ones', () => {
+    expect(isSshOwnedFileContext({ connectionId: 'conn-1' })).toBe(true)
+    expect(isSshOwnedFileContext({ expectedExecutionHostId: 'ssh:target-1' })).toBe(true)
+    expect(isSshOwnedFileContext({ expectedExecutionHostId: 'local' })).toBe(false)
+    expect(isSshOwnedFileContext({})).toBe(false)
+  })
+})
+
+describe('createNamedFile owner recheck', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('rechecks the owner after the write and rejects instead of returning open metadata', async () => {
+    const { createFile } = stubFs([])
+    let calls = 0
+    await expect(
+      createNamedFile(context, '/repo', 'a.txt', () => {
+        calls += 1
+        if (calls === 3) {
+          throw new Error('owner changed')
+        }
+      })
+    ).rejects.toThrow('owner changed')
+    expect(createFile).toHaveBeenCalledTimes(1)
   })
 })

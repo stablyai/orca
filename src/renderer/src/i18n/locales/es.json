@@ -16586,7 +16586,8 @@
           "folderEmpty": "La ruta de la carpeta no puede estar vacía",
           "folderOutsideWorkspace": "La carpeta debe estar dentro del espacio de trabajo actual",
           "nameTaken": "Ya existe un archivo con ese nombre",
-          "createFailed": "No se pudo crear el archivo."
+          "createFailed": "No se pudo crear el archivo.",
+          "sshUnsupported": "Crear archivos en espacios de trabajo SSH aún no es compatible."
         }
       },
       "diff": {

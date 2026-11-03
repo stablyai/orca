@@ -16810,7 +16810,8 @@
           "folderEmpty": "Le chemin du dossier ne peut pas être vide",
           "folderOutsideWorkspace": "Le dossier doit se trouver dans l'espace de travail actuel",
           "nameTaken": "Un fichier portant ce nom existe déjà",
-          "createFailed": "Impossible de créer le fichier."
+          "createFailed": "Impossible de créer le fichier.",
+          "sshUnsupported": "La création de fichiers dans les espaces de travail SSH n'est pas encore prise en charge."
         }
       },
       "diff": {

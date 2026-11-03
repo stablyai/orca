@@ -16842,7 +16842,8 @@
           "folderEmpty": "Klasör yolu boş olamaz",
           "folderOutsideWorkspace": "Klasör geçerli çalışma alanının içinde olmalıdır",
           "nameTaken": "Bu ada sahip bir dosya zaten var",
-          "createFailed": "Dosya oluşturulamadı."
+          "createFailed": "Dosya oluşturulamadı.",
+          "sshUnsupported": "SSH çalışma alanlarında dosya oluşturma henüz desteklenmiyor."
         }
       },
       "diff": {

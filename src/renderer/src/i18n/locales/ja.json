@@ -16194,7 +16194,8 @@
           "folderEmpty": "フォルダーのパスは空にできません",
           "folderOutsideWorkspace": "フォルダーは現在のワークスペース内にある必要があります",
           "nameTaken": "同じ名前のファイルが既に存在します",
-          "createFailed": "ファイルを作成できませんでした。"
+          "createFailed": "ファイルを作成できませんでした。",
+          "sshUnsupported": "SSH ワークスペースでのファイル作成はまだサポートされていません。"
         }
       },
       "diff": {

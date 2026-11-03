@@ -16631,7 +16631,8 @@
           "folderEmpty": "資料夾路徑不能為空",
           "folderOutsideWorkspace": "資料夾必須位於目前的工作區內",
           "nameTaken": "已存在同名檔案",
-          "createFailed": "無法建立檔案。"
+          "createFailed": "無法建立檔案。",
+          "sshUnsupported": "SSH 工作區暫不支援建立檔案。"
         }
       },
       "diff": {

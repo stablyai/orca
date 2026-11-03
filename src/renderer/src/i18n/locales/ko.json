@@ -16183,7 +16183,8 @@
           "folderEmpty": "폴더 경로는 비워 둘 수 없습니다",
           "folderOutsideWorkspace": "폴더는 현재 워크스페이스 안에 있어야 합니다",
           "nameTaken": "같은 이름의 파일이 이미 있습니다",
-          "createFailed": "파일을 만들지 못했습니다."
+          "createFailed": "파일을 만들지 못했습니다.",
+          "sshUnsupported": "SSH 워크스페이스에서는 아직 파일을 만들 수 없습니다."
         }
       },
       "diff": {
