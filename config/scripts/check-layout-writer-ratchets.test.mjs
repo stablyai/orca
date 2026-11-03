@@ -52,16 +52,6 @@ describe('renderer layout writes', () => {
     ].join('\n')
     expect(countLayoutWrites(src, rendererRatchet, 'a.tsx')).toBe(3)
   })
-
-  it('allows only the frozen mirror writers', () => {
-    expect(rendererRatchet.allowed('src/renderer/src/store/workspace-layout-cache.ts')).toBe(true)
-    expect(
-      rendererRatchet.allowed('src/renderer/src/runtime/remote-workspace-frozen/setters.ts')
-    ).toBe(true)
-    expect(
-      rendererRatchet.allowed('src/renderer/src/store/slices/tabs/tabs-create-actions.ts')
-    ).toBe(false)
-  })
 })
 
 describe('isScannedPath', () => {

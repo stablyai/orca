@@ -81,6 +81,8 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
   const sendLiveTerminalInputRef = ref<TerminalLiveInputSender>(async () => false)
   const scope = {
     sendTerminalUserInput: terminalInputSend.request,
+    sendTerminalOrderedInput: terminalInputSend.request,
+    terminalRefs: { current: new Map() },
     client,
     clientRef: ref(client),
     activeHandle: 'term-1',

@@ -23,7 +23,7 @@ vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
 vi.mock('../../../workspaces/execution-host/local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.runtimes
 }))
-import { resolveAuthorizedPath } from '../../filesystem/filesystem-auth'
+import { resolveAuthorizedPath } from '../../filesystem/access/filesystem-auth'
 import { runAsWslUserAct } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import {
   __resetCreatedWorktreeRootsForTests,

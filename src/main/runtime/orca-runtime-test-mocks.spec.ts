@@ -81,7 +81,7 @@ export const getEffectiveHooks = importedValues.exportedGetEffectiveHooks
 export const getEffectiveHooksFromConfig = importedValues.exportedGetEffectiveHooksFromConfig
 export const getRuntimeBrowserPageRegistry = importedValues.exportedGetRuntimeBrowserPageRegistry
 export const getTerminalPasteIngestMs = importedValues.exportedGetTerminalPasteIngestMs
-export const gitRunner = importedValues.exportedGitRunner
+
 export const hasHooksFile = importedValues.exportedHasHooksFile
 export const headlessBrowserTabsUnchanged = importedValues.exportedHeadlessBrowserTabsUnchanged
 export const homedir = importedValues.exportedHomedir

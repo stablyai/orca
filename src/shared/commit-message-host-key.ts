@@ -1,3 +1,5 @@
+import { getRepoExecutionHostId, parseRoutableExecutionHostId } from './execution-host'
+
 export const LOCAL_COMMIT_MESSAGE_HOST_KEY = 'local'
 export const UNKNOWN_COMMIT_MESSAGE_HOST_KEY = 'unknown'
 export const RUNTIME_COMMIT_MESSAGE_HOST_KEY_PREFIX = 'runtime:'
@@ -31,4 +33,19 @@ export function getCommitMessageModelDiscoveryHostKeyForScope(
     return scope
   }
   return getCommitMessageModelDiscoveryHostKey(scope)
+}
+
+/** The text-model host key for the host a repository's commands run on. */
+export function getRepoCommitMessageModelDiscoveryHostKey(repo: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): string {
+  const host = parseRoutableExecutionHostId(getRepoExecutionHostId(repo))
+  return getCommitMessageModelDiscoveryHostKeyForScope(
+    host?.kind === 'ssh'
+      ? host.targetId
+      : host?.kind === 'runtime'
+        ? `${RUNTIME_COMMIT_MESSAGE_HOST_KEY_PREFIX}${host.environmentId}`
+        : null
+  )
 }

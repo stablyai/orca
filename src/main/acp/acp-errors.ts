@@ -1,5 +1,9 @@
 import type { AuthMethod } from './generated/acp-protocol.generated'
 import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 
 export class AcpRpcError extends Error {
   constructor(
@@ -78,6 +82,18 @@ export class AcpConnectionClosedError extends Error {
   constructor(message = 'ACP connection closed') {
     super(message)
     this.name = 'AcpConnectionClosedError'
+  }
+}
+
+/** The agent's process ended on its own and its output drained with the call still unanswered.
+ *  Its stderr is the agent's own account, shown behind Details. */
+export class AcpAgentExitedError extends AcpConnectionClosedError {
+  constructor(message: string, stderr = '') {
+    super(message)
+    this.name = 'AcpAgentExitedError'
+    if (stderr) {
+      withProviderDiagnostic(this, providerDiagnostic(stderr, 'person'))
+    }
   }
 }
 

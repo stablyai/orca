@@ -82,8 +82,12 @@ export async function initializeAcpStructuredSession(
       replayed = input.lanes.finishLoad()
       attaching.translator.finishLoad()
     } catch (error) {
-      assertStarting()
-      acpReopenFailure(error, resume.sessionId, connection.closed || input.abandoned())
+      // An agent already exited, its output still draining, has no session to reopen.
+      acpReopenFailure(
+        error,
+        resume.sessionId,
+        connection.closed || connection.exited || input.abandoned()
+      )
     }
   }
   if (!started || !liveLane) {

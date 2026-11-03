@@ -26,7 +26,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/wsl-host-user-start', () => ({ startWslHostAndReloadProjects: start }))
 vi.mock('./HostRenameDialog', () => ({ HostRenameDialog: () => null }))
 vi.mock('./HostRemoveDialog', () => ({ HostRemoveDialog: () => null }))
-vi.mock('../settings/RuntimeRepairDialog', () => ({ RuntimeRepairDialog: () => null }))
+vi.mock('../runtime-access/RuntimeRepairDialog', () => ({ RuntimeRepairDialog: () => null }))
 vi.mock('./host-rename-remove', () => ({ resolveHostRemoval: () => null }))
 
 const row: HostHeaderRow = {

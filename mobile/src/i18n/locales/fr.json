@@ -1692,7 +1692,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Branche actuelle indisponible.",
-      "providerUnavailable": "Panneau de revue hébergée indisponible pour ce fournisseur."
+      "githubRemoteRequired": "Cet onglet nécessite un dépôt distant GitHub pour afficher les détails des pull requests. Pour les autres plateformes prises en charge, créez une revue depuis Modifications et ouvrez-la dans votre navigateur."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Échec du chargement des personnes",

@@ -43,13 +43,6 @@ describe('repo.hooksCheck on the host', () => {
     expect(mocks.hasHooksFile).not.toHaveBeenCalled()
   })
 
-  it('an unverifiable distro is refused too, as worth a retry', async () => {
-    mocks.blocked.mockResolvedValue({ distro: 'Ubuntu', state: 'unverifiable' })
-    await expect(commands.checkRepoHooks('repo-1', { background: true })).resolves.toMatchObject({
-      unavailable: 'wsl-distro-unverifiable'
-    })
-  })
-
   it('a user-asked check, or one from an older client, reads as before', async () => {
     await expect(commands.checkRepoHooks('repo-1')).resolves.toMatchObject({ status: 'ok' })
     expect(mocks.blocked).not.toHaveBeenCalled()

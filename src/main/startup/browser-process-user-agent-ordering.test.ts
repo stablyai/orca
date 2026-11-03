@@ -146,7 +146,7 @@ vi.mock('../host/electron-http-client')
 vi.mock('../network/http-client')
 vi.mock('../host/electron-speech-services')
 vi.mock('../speech/speech-runtime-service')
-vi.mock('../ipc/worktree-watcher-removal')
+vi.mock('../workspaces/removal/worktree-watcher-removal')
 vi.mock('../ipc/filesystem/watchers/filesystem-watcher', () => ({
   desktopWorktreeWatcherRemoval: {
     closeLocal: vi.fn(),

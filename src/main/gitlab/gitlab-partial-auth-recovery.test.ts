@@ -6,7 +6,15 @@ const { git, execute, scan, signature } = vi.hoisted(() => ({
   scan: vi.fn(),
   signature: vi.fn()
 }))
-vi.mock('../git/runner', () => ({ gitExecFileAsync: git, glabExecFileAsync: execute }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: git
+}))
+
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: execute
+}))
 vi.mock('../github/local-git-config-signature', () => ({ readLocalGitConfigSignature: signature }))
 vi.mock('../../shared/ansi-escape-sequences', async (original) => {
   const actual = await original<typeof Ansi>()
@@ -28,8 +36,8 @@ import {
   parseGlabAuthStatusHosts,
   KNOWN_HOSTS_CACHE_MAX_ENTRIES
 } from './gitlab-known-host-probe'
-import { PROBE_COALESCE_STALE_MS } from '../git/coalesced-probe'
-import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
+import { PROBE_COALESCE_STALE_MS } from '../git/remotes/coalesced-probe'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remotes/remote-ref-probe-cache'
 const completed = { code: 1, killed: false, signal: null, outputTruncated: false }
 const failure = (stderr = '', metadata = {}) =>
   Object.assign(new Error('auth failed'), completed, { stdout: '', stderr }, metadata)

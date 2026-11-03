@@ -7,6 +7,8 @@ import { agentSessionFailureWords } from '../../shared/agent-session/failures/ag
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
 import { AcpAgentError, AcpAuthRequiredError } from './acp-errors'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
+import { temporaryAcpStartupAnswer } from './acp-startup-outcome'
 
 const ACP_RESOURCE_NOT_FOUND = -32002
 const ACP_INTERNAL_ERROR = -32603
@@ -39,7 +41,13 @@ function sessionNotFoundDetail(data: unknown): string | null {
 
 /** A saved session the agent could not reopen fails in place; nothing replaces it in this chat. */
 export function acpReopenFailure(error: unknown, sessionId: string, over: boolean): never {
-  if (error instanceof AcpAuthRequiredError || over) {
+  // Sign-in failure, a temporary answer, a missed deadline or an abandoned start keeps its own error.
+  if (
+    error instanceof AcpAuthRequiredError ||
+    temporaryAcpStartupAnswer(error) ||
+    providerRequestTimeoutOf(error) ||
+    over
+  ) {
     throw error
   }
   if (isAcpSavedSessionMissing(error, sessionId)) {

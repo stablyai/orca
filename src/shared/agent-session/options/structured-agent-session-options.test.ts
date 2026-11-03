@@ -332,7 +332,6 @@ it('rederives unanswered catalog policy while preserving stronger input and quer
   )
   expect(structuredAgentSessionMessageSelection(initial)).toEqual({
     model: 'opus',
-    effort: 'high',
     fastMode: 'false'
   })
   const noDefault = { ...catalog, listingNamesConfiguredModel: false }

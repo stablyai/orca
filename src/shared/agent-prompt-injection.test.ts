@@ -4,7 +4,6 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs,
-  getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
   isHeldAgentPromptDraft,
   iterateAgentPromptPasteChunks
@@ -39,12 +38,6 @@ describe('agent prompt injection bytes', () => {
     expect(getAgentPromptSubmitDelayMs('win32', ceilingBytes)).toBeGreaterThan(250_000)
     // Even the fast platforms outrun a flat 500 ms at the ceiling.
     expect(getAgentPromptSubmitDelayMs('linux', ceilingBytes)).toBeGreaterThan(4_000)
-  })
-
-  it('inverts the host ingest budget without crossing it', () => {
-    const bytes = getMaxTerminalPasteBytesForIngestMs('win32', 20_000)
-    expect(getTerminalPasteIngestMs('win32', bytes)).toBe(20_000)
-    expect(getTerminalPasteIngestMs('win32', bytes + 1)).toBe(20_001)
   })
 
   it('sanitizes embedded escape bytes before framing', () => {

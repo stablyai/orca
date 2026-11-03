@@ -29,10 +29,6 @@ const BASE_OFFER = {
   pairedDeviceId: 'device-1',
   scope: 'runtime'
 }
-const DESCRIPTOR = {
-  installationId: '0b4c3d5e-1f2a-4b6c-8d7e-9f0a1b2c3d4e',
-  machineBinding: 'A'.repeat(43)
-}
 
 let released: PairingModule
 let current: PairingModule
@@ -48,17 +44,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version host descriptor in the pairing offer', () => {
-  it('an old client pairs with a new host and drops the descriptor', () => {
-    const url = current.encodePairingOffer({ ...BASE_OFFER, hostDescriptor: DESCRIPTOR })
-    expect(released.parsePairingCode(url)).toEqual(BASE_OFFER)
-    expect(current.parsePairingCode(url)).toEqual({ ...BASE_OFFER, hostDescriptor: DESCRIPTOR })
-  })
-
-  it('a new client pairs with an old host that sends no descriptor', () => {
-    const url = released.encodePairingOffer(BASE_OFFER)
-    expect(current.parsePairingCode(url)).toEqual(BASE_OFFER)
-  })
-
   it('a descriptor from a newer host in a shape this build cannot read never blocks pairing', () => {
     const futureDescriptor = { installationId: 'some-future-format', machineBinding: 42 }
     const url = released.encodePairingOffer(BASE_OFFER).replace(

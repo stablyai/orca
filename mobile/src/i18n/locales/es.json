@@ -1692,7 +1692,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "La rama actual no está disponible.",
-      "providerUnavailable": "El panel de revisión alojada no está disponible para este proveedor."
+      "githubRemoteRequired": "Esta pestaña necesita un remoto de GitHub para mostrar los detalles de las solicitudes de incorporación. Para otras plataformas compatibles, crea una revisión desde Cambios y ábrela en el navegador."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "No se pudieron cargar las personas",

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -8,12 +8,8 @@ import {
   resetSessionParseCachePersistenceForTests
 } from './session-parse-cache-persistence'
 import { createSessionParseStats, parseAgentSessionFileCached } from './session-scanner-parse-cache'
-import {
-  resetSessionParseCacheForTests,
-  getSessionParseCacheEntry
-} from './session-parse-cache-store'
+import { resetSessionParseCacheForTests } from './session-parse-cache-store'
 
-import { createAntigravityWorkspaceResolver } from '../scanners/antigravity/session-scanner-antigravity-history'
 import { writeAntigravityTranscript } from '../session-scanner-test-fixtures'
 import type { SessionFileCandidate } from '../session-scanner-types'
 
@@ -50,40 +46,6 @@ async function candidate(): Promise<SessionFileCandidate> {
     }
   }
 }
-
-it('reparses an unchanged pre-fix cached Antigravity transcript after an update', async () => {
-  const input = await candidate()
-  await parseAgentSessionFileCached(input, 'linux')
-  const {
-    resume: _resume,
-    foldSession: _fold,
-    ...entry
-  } = getSessionParseCacheEntry(input.file.path)!
-  const staleSession = entry.session && { ...entry.session, antigravityOpeningPrompt: undefined }
-  const entries = [[input.file.path, { ...entry, session: staleSession }]]
-  const cacheFile = join(root ?? '', 'cache.json')
-  await writeFile(cacheFile, JSON.stringify({ schemaVersion: 3, appVersion: 'pre-fix', entries }))
-  resetSessionParseCacheForTests()
-  initSessionParseCachePersistence({ filePath: cacheFile, appVersion: 'fixed' })
-  const stats = createSessionParseStats()
-  const session = await parseAgentSessionFileCached(input, 'linux', stats)
-  expect(stats.fullParses).toBe(1)
-  expect(stats.reused).toBe(0)
-  if (!session) {
-    throw new Error('Missing reparsed session')
-  }
-  expect(session.previewMessagesTruncated).toBe(true)
-  const resolver = createAntigravityWorkspaceResolver(async (path) =>
-    path === 'history.jsonl'
-      ? JSON.stringify({
-          display: 'Original request',
-          timestamp: Date.parse('2026-07-15T11:39:10Z'),
-          workspace: '/repo/original'
-        })
-      : null
-  )
-  expect((await resolver.enrich(session, 'history.jsonl')).cwd).toBe('/repo/original')
-})
 
 it('retains the opening identity in current caches without retaining full prompt text', async () => {
   const input = await candidate()

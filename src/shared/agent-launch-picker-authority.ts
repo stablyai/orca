@@ -9,7 +9,7 @@ export function agentPickerArgumentsKnown(
   }
   return (
     !entry.defaultsPending ||
-    (draft.arguments !== undefined &&
+    ((draft.arguments !== undefined || draft.pendingArguments !== undefined) &&
       entry.ownerKey !== undefined &&
       draft.argumentsOwner === entry.ownerKey)
   )
@@ -22,4 +22,23 @@ export function agentPickerArgumentsText(
   return agentPickerArgumentsKnown(entry, draft)
     ? ((draft.arguments === undefined ? entry.arguments : draft.arguments) ?? '')
     : undefined
+}
+
+export function currentAgentPickerDraft(
+  entry: AgentPickerEntry,
+  draft: AgentPickerDraft
+): AgentPickerDraft {
+  return (draft.arguments !== undefined || draft.pendingArguments !== undefined) &&
+    draft.argumentsOwner !== entry.ownerKey
+    ? { ...draft, argumentsOwner: entry.ownerKey }
+    : draft
+}
+
+export type AgentPickerRetainedSetup = {
+  target: AgentPickerEntry['draftTarget']
+  agent: AgentPickerEntry['agent']
+  preset?: { model: string; effort?: string }
+  source: AgentPickerDraft | undefined
+  draft: AgentPickerDraft
+  active: boolean
 }

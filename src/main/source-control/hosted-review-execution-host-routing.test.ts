@@ -67,11 +67,12 @@ vi.mock('../gitlab/gl-utils', () => ({
   glabRepoExecOptions: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-process-env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitOptionalLocksDisabledEnv: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
 vi.mock('../git/repo', () => ({
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock
@@ -82,11 +83,11 @@ vi.mock('../git/exact-ref-probe', () => ({
   isShowRefNoMatchError: vi.fn(() => false)
 }))
 
-vi.mock('../git/worktree-symlink-detection', () => ({
+vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', () => ({
   findExistingWorktreeSymlinkPaths: vi.fn(async () => [])
 }))
 
-vi.mock('../git/remote-url-probe', () => ({
+vi.mock('../git/remotes/remote-url-probe', () => ({
   assertRemoteUrlReadable: assertRemoteUrlReadableMock
 }))
 

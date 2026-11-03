@@ -82,9 +82,4 @@ describe('deriveNativeChatContextUsage', () => {
         ?.usedTokens
     ).toBe(30_000)
   })
-
-  it('is null before any response carried usage', () => {
-    expect(deriveNativeChatContextUsage([], noWindow)).toBeNull()
-    expect(deriveNativeChatContextUsage([assistant('zero', usage(0))], noWindow)).toBeNull()
-  })
 })

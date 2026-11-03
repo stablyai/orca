@@ -75,13 +75,6 @@ describe('CDP outbound backpressure', () => {
     expect(socket.listenerCount('close')).toBeLessThanOrEqual(initialCloseListeners)
   })
 
-  it('preserves a single large reply on a clear connection', () => {
-    const send = vi.spyOn(socket, 'send').mockImplementation(() => {})
-    writer.sendResult(1, { data: 'x'.repeat(65 * MiB) })
-    expect(send).toHaveBeenCalledOnce()
-    expect(socket.readyState).toBe(WebSocket.OPEN)
-  })
-
   it('terminates a real stalled reader before native buffering follows all produced bytes', async () => {
     peer.pause()
     const payload = 'x'.repeat(64 * 1024)

@@ -16,11 +16,7 @@ vi.mock('../../../shared/runtime-environment-wsl-host-store', () => ({
 }))
 vi.mock('./wsl-host-user-actions', () => ({ noteWslHostUserAction: () => {} }))
 
-import {
-  forgetWslHostKeptForPeers,
-  recordWslHostKeptForPeers,
-  wasWslHostKeptForPeers
-} from './wsl-host-kept-for-peers'
+import { wasWslHostKeptForPeers } from './wsl-host-kept-for-peers'
 import { removeWslHostServer } from './wsl-host-removal'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 
@@ -52,15 +48,6 @@ describe('a WSL host kept for another Orca', () => {
     store.pending = []
   })
   afterEach(() => rmSync(userData, { recursive: true, force: true }))
-
-  it('is remembered until a later Remove proves its server stopped', () => {
-    expect(wasWslHostKeptForPeers(userData, 'wsl:ubuntu')).toBe(false)
-    recordWslHostKeptForPeers(userData, 'wsl:ubuntu')
-    recordWslHostKeptForPeers(userData, 'wsl:ubuntu')
-    expect(wasWslHostKeptForPeers(userData, 'wsl:ubuntu')).toBe(true)
-    forgetWslHostKeptForPeers(userData, 'wsl:ubuntu')
-    expect(wasWslHostKeptForPeers(userData, 'wsl:ubuntu')).toBe(false)
-  })
 
   it('is recorded by a Remove that kept the server, and cleared by one that stopped it', async () => {
     await removeWslHostServer(

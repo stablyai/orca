@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
 import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
-import { getAgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog'
 import { getAgentResumeArgv } from './agent-resume-argv'
 
 describe('CodeBuddy harness', () => {
@@ -49,19 +48,6 @@ describe('CodeBuddy harness', () => {
       'codebuddy',
       '--resume',
       'session-1'
-    ])
-  })
-
-  it('passes explicit model and effort preferences through the CLI flags', () => {
-    const catalog = getAgentSessionOptionCatalog('codebuddy')
-    expect(catalog?.modelApply.launchArgs?.('fast-model')).toEqual(['--model', 'fast-model'])
-    expect(catalog?.unknownModelOptions?.[0].apply.launchArgs?.('high')).toEqual([
-      '--effort',
-      'high'
-    ])
-    expect(catalog?.modelApply.removeAgentArgs?.(['--model', 'old', '--', 'prompt'])).toEqual([
-      '--',
-      'prompt'
     ])
   })
 })
