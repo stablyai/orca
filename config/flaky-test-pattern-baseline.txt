@@ -498,7 +498,6 @@
 1 test-no-real-time-wait:src/renderer/src/lib/orca-yaml-trust-prompt-slot-eviction.test.ts
 1 test-no-real-time-wait:src/renderer/src/store/slices/github-pr-checks-fetch.test.ts
 2 test-no-real-time-wait:src/renderer/src/store/slices/workspace-cleanup-removal-preflight.test.ts
-2 test-no-real-time-wait:src/renderer/src/store/slices/worktrees-hydration-purge.test.ts
 1 test-no-real-time-wait:src/renderer/src/store/terminals/legacy-relay-bridged-tab-close.test.ts
 2 test-no-real-time-wait:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 3 test-no-real-time-wait:src/shared/darwin-process-table-capture.test.ts
