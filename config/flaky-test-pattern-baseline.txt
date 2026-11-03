@@ -1078,9 +1078,6 @@
 7 test-no-wall-clock:src/renderer/src/store/slices/linear-source-context-cache-scope.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/store-sleep-agent-status-retention.test.ts
 2 test-no-wall-clock:src/renderer/src/store/slices/store-sleep-exact-runtime-stop.test.ts
-2 test-no-wall-clock:src/renderer/src/store/slices/workspace-cleanup-agent-stop-preflight.test.ts
-4 test-no-wall-clock:src/renderer/src/store/slices/workspace-cleanup-local-evidence-invariants.test.ts
-2 test-no-wall-clock:src/renderer/src/store/slices/workspace-cleanup-removal-preflight.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/worktrees-always-force-delete.test.ts
 6 test-no-wall-clock:src/renderer/src/store/slices/worktrees-metadata-persistence.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/worktrees-terminal-reference-origins.test.ts
