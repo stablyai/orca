@@ -207,6 +207,7 @@ export function AgentLaunchSetupPanel({
         }}
       >
         <CommandInput
+          autoFocus
           disabled={modelDisabled}
           value={modelQuery}
           onValueChange={setModelQuery}

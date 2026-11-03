@@ -220,13 +220,14 @@ function DropdownMenuSub({ ...props }: React.ComponentProps<typeof DropdownMenuP
 }
 
 const dropdownMenuSubTriggerVariants = cva(
-  "flex cursor-default items-center gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[inset]:pl-8 data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14 data-[state=open]:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground",
+  "flex cursor-default items-center gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 font-normal outline-hidden select-none data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground",
   {
     variants: {
       variant: {
-        default: '',
+        default:
+          'focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14 data-[state=open]:text-accent-foreground',
         'launch-row':
-          'rounded-[7px] px-2 py-1.5 text-xs leading-5 font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
+          'group/launch-row gap-0 rounded-[7px] p-0 text-xs leading-5 font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
       }
     },
     defaultVariants: { variant: 'default' }

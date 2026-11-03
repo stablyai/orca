@@ -308,7 +308,10 @@ it.each(['claude', 'codex'] as const)(
     const configure = () =>
       document.querySelector<HTMLButtonElement>(`button[aria-label="Configure ${agent}"]`)!
     fireEvent.click(configure())
-    const panel = () => document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
+    const panel = () =>
+      document.querySelector<HTMLElement>(
+        '[data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"]'
+      )!
     fireEvent.click(panel().querySelector('[cmdk-item]')!)
     fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
     fireEvent.change(panel().querySelector('textarea')!, {

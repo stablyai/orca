@@ -1,5 +1,6 @@
 import { memo, useId, useRef, useState, type ComponentProps } from 'react'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenuItem,
   DropdownMenuShortcut,
@@ -233,14 +234,18 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
             }
           }}
         >
-          <AgentIcon agent={entry.agent} size={14} />
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-          {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-            <span className="text-xs text-muted-foreground">
-              {chatUnavailableLabel(unavailable.reason)}
+          <Button asChild variant="menu-launch" size="menu">
+            <span>
+              <AgentIcon agent={entry.agent} size={14} />
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+              {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
+                <span className="text-xs text-muted-foreground">
+                  {chatUnavailableLabel(unavailable.reason)}
+                </span>
+              ) : null}
             </span>
-          ) : null}
+          </Button>
           {trigger}
         </div>
       )}

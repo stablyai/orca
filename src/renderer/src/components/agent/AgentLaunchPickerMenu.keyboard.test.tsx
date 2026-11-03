@@ -70,6 +70,9 @@ it('moves one agent per Up/Down press, including after returning from its submen
   await waitFor(() => expect(document.activeElement).toBe(codex))
   await user.keyboard('{ArrowRight}')
   expect(screen.getByRole('menu', { name: 'Configure Codex' })).toBeTruthy()
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByPlaceholderText('Search Codex models…'))
+  )
   await user.keyboard('{Escape}')
   await waitFor(() =>
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Configure Codex' }))
@@ -78,6 +81,24 @@ it('moves one agent per Up/Down press, including after returning from its submen
   await waitFor(() => expect(document.activeElement).toBe(claude))
   expect(launched).not.toHaveBeenCalled()
 })
+
+it.each(['hover', 'click'] as const)(
+  'focuses model search when the chevron opens by %s',
+  async (method) => {
+    const { launched } = show()
+    const user = userEvent.setup({ skipHover: method === 'click' })
+    const segment = screen.getByRole('button', { name: 'Configure Codex' })
+    await user[method](segment)
+    const search = screen.getByPlaceholderText<HTMLInputElement>('Search Codex models…')
+    await waitFor(() => expect(document.activeElement).toBe(search))
+    fireEvent.pointerMove(segment, { pointerType: 'mouse' })
+    expect(document.activeElement).toBe(search)
+    await user.keyboard('missing')
+    expect(search.value).toBe('missing')
+    expect(screen.getByText('No models match your search.')).toBeTruthy()
+    expect(launched).not.toHaveBeenCalled()
+  }
+)
 
 it.each([false, true])(
   'closes a controlled=%s menu once after default launch',

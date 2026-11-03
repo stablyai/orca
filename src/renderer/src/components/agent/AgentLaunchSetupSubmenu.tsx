@@ -24,6 +24,10 @@ export function AgentLaunchSetupSubmenu({
 }) {
   const trigger = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
+  const focusSearch = () =>
+    content.current?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')?.focus({
+      preventScroll: true
+    })
   const close = () => {
     onOpenChange(false)
     trigger.current?.querySelector<HTMLButtonElement>('button')?.focus()
@@ -37,17 +41,16 @@ export function AgentLaunchSetupSubmenu({
         variant="launch-row"
         disabled={disabled}
         onPointerMove={(event) => {
+          event.preventDefault()
           const segment = event.currentTarget.querySelector('button')
-          if (!(event.target instanceof Node) || !segment?.contains(event.target)) {
-            event.preventDefault()
-            if (
-              !disabled &&
-              event.pointerType === 'mouse' &&
-              event.target instanceof Node &&
-              event.currentTarget.contains(event.target)
-            ) {
-              event.currentTarget.focus({ preventScroll: true })
-            }
+          if (
+            !disabled &&
+            event.pointerType === 'mouse' &&
+            event.target instanceof Node &&
+            event.currentTarget.contains(event.target) &&
+            !segment?.contains(event.target)
+          ) {
+            event.currentTarget.focus({ preventScroll: true })
           }
         }}
       >
@@ -60,7 +63,6 @@ export function AgentLaunchSetupSubmenu({
             aria-haspopup="menu"
             aria-expanded={open}
             disabled={disabled}
-            className="-my-1.5 -mr-2"
             onPointerEnter={(event) => {
               if (!disabled && event.pointerType === 'mouse') {
                 onOpenChange(true)
@@ -71,6 +73,7 @@ export function AgentLaunchSetupSubmenu({
               event.stopPropagation()
               trigger.current?.focus()
               onOpenChange(true)
+              focusSearch()
             }}
             onKeyDown={(event) => {
               event.stopPropagation()
@@ -97,6 +100,11 @@ export function AgentLaunchSetupSubmenu({
         collisionPadding={8}
         variant="picker"
         className="flex w-96 min-w-64 max-w-(--radix-dropdown-menu-content-available-width) max-h-(--radix-dropdown-menu-content-available-height) flex-col"
+        onFocusCapture={(event) => {
+          if (event.target === event.currentTarget) {
+            focusSearch()
+          }
+        }}
         onClick={(event) => event.stopPropagation()}
         onFocusOutside={(event) => {
           const row = trigger.current?.closest('[data-agent-launch-row]')
