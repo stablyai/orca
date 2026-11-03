@@ -1014,8 +1014,7 @@ jobs:
 
       # Run the entire directory; zero matches fail so new contracts cannot be omitted silently.
       - name: Old/new client and server compatibility journeys
-        # Cold historical checkouts compete for CPU and disk on the ARM runner.
-        run: pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 tests/e2e/cross-version-wire/
+        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
 
   managed_hook_node18:
     name: managed hooks on Node 18

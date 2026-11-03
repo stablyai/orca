@@ -164,7 +164,8 @@ async function runCheckoutProcess(
   repoRoot: string,
   program: string,
   args: string[],
-  deadline: number
+  deadline: number,
+  options: { input?: string; maxOutputBytes?: number } = {}
 ): Promise<string> {
   // Kept lazy so plain Node 24 contention children never load Vite's TS graph.
   const { runProcess } = await import('@orca/process-host')
@@ -173,7 +174,8 @@ async function runCheckoutProcess(
     args,
     cwd: repoRoot,
     timeoutMs: Math.max(1, deadline - Date.now()),
-    maxOutputBytes: CHECKOUT_MAX_OUTPUT_BYTES,
+    maxOutputBytes: options.maxOutputBytes ?? CHECKOUT_MAX_OUTPUT_BYTES,
+    input: options.input,
     terminationBarrier: true
   })
   if (result.code === 0 && !result.timedOut) {
@@ -183,6 +185,65 @@ async function runCheckoutProcess(
     ? `timed out after ${CHECKOUT_PROCESS_TIMEOUT_MS}ms`
     : result.stderr.trim() || `exited with ${result.code}`
   throw new Error(`${program} ${args[0] ?? ''} ${detail}`)
+}
+
+async function prefetchReleaseBlobs(
+  repoRoot: string,
+  commit: string,
+  paths: string[],
+  deadline: number
+): Promise<void> {
+  const objects = await runCheckoutProcess(
+    repoRoot,
+    'git',
+    [
+      'rev-list',
+      '--objects',
+      '--missing=print',
+      '--no-object-names',
+      '--no-walk',
+      commit,
+      '--',
+      ...paths
+    ],
+    deadline,
+    { maxOutputBytes: 8 * 1024 * 1024 }
+  )
+  const missing = objects
+    .split('\n')
+    .filter((line) => line.startsWith('?'))
+    .map((line) => line.slice(1))
+  if (missing.length === 0) {
+    return
+  }
+  const remotes = await runCheckoutProcess(
+    repoRoot,
+    'git',
+    ['config', '--get-regexp', '^remote\\..*\\.promisor$'],
+    deadline
+  )
+  const remote = /^remote\.(.+)\.promisor (?:true|1)$/m.exec(remotes)?.[1]
+  if (!remote) {
+    throw new Error('Historical release blobs are missing without a promisor remote')
+  }
+  // Archive otherwise fetches cold historical blobs individually in filtered CI clones.
+  await runCheckoutProcess(
+    repoRoot,
+    'git',
+    [
+      '-c',
+      'fetch.negotiationAlgorithm=noop',
+      'fetch',
+      '--quiet',
+      '--no-tags',
+      '--recurse-submodules=no',
+      '--filter=blob:none',
+      '--stdin',
+      remote
+    ],
+    deadline,
+    { input: `${missing.join('\n')}\n` }
+  )
 }
 
 function workspacePatternRoot(pattern: string): string {
@@ -257,20 +318,13 @@ export async function extractReleaseCheckoutTree(
   const deadline = Date.now() + CHECKOUT_PROCESS_TIMEOUT_MS
   const workspacePaths = await releaseWorkspaceArchivePaths(repoRoot, commit, deadline)
   const optionalPaths = await listReleasePaths(repoRoot, commit, OPTIONAL_ARCHIVE_PATHS, deadline)
+  const paths = [...ARCHIVE_PATHS, ...optionalPaths, ...workspacePaths]
+  await prefetchReleaseBlobs(repoRoot, commit, paths, deadline)
   try {
     await runCheckoutProcess(
       repoRoot,
       'git',
-      [
-        'archive',
-        '--format=tar',
-        `--output=${archive}`,
-        commit,
-        '--',
-        ...ARCHIVE_PATHS,
-        ...optionalPaths,
-        ...workspacePaths
-      ],
+      ['archive', '--format=tar', `--output=${archive}`, commit, '--', ...paths],
       deadline
     )
     await runCheckoutProcess(
