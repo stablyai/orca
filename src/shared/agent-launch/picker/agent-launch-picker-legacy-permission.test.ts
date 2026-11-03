@@ -100,6 +100,23 @@ it('stored permission bytes survive when the agent follows its own choice', () =
   ).toBe('--permission-mode default')
 })
 
+it('a per-launch own choice keeps the stored recipe the saved choice would lift (#37046)', () => {
+  // `own` replays the stored bytes verbatim, and an explicit `own` for this launch wins over the
+  // saved choice: the liftable recipe stays even when the saved choice would strip it.
+  const stale = {
+    agentPermissionDefault: 'auto' as const,
+    agentPermissionOverrides: { claude: 'auto' as const },
+    agentDefaultArgs: { claude: '--permission-mode default' }
+  }
+  expect(
+    projectAgentLaunchProfile('claude', stale, {
+      target: 'terminal',
+      shell: 'posix',
+      choices: { permissionMode: 'own' }
+    }).args
+  ).toBe('--permission-mode default')
+})
+
 it('unrecognized permission values are never guessed into a saved choice', () => {
   const stale = {
     agentPermissionDefault: 'auto' as const,

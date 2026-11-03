@@ -53,12 +53,19 @@ export function projectAgentLaunchProfile(
   // Why: a permission flag saved as Arguments text by an older client must not outvote the stored
   // choice forever (#37046): permission writes keep the two in step only on newer clients, so a
   // stale Orca recipe in the stored text otherwise replays its old mode on every launch. Text a
-  // caller passes for this launch stays authoritative, and an `own` choice keeps stored bytes.
+  // caller passes for this launch stays authoritative, and an `own` choice — saved or picked for
+  // this launch — keeps stored bytes.
   const storedChoice =
     input.userArgs === undefined && typed
       ? resolveAgentPermission(agent, settings).choice
       : undefined
-  if (input.target === 'terminal' && storedChoice !== undefined && storedChoice !== 'own') {
+  if (
+    input.target === 'terminal' &&
+    storedChoice !== undefined &&
+    storedChoice !== 'own' &&
+    // An explicit per-launch `own` resolves over the saved choice and inherits the stored bytes.
+    input.choices?.permissionMode !== 'own'
+  ) {
     userArgs = stripLiftableAgentPermissionArgs(agent, userArgs)
   }
   const composePermission = (
