@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { endpointScheme } from './host-endpoint'
 import { normalizePairingUrl } from '../../../src/shared/network/pairing-url'
 
@@ -35,12 +36,15 @@ function isValidValue(value: string): boolean {
 
 export function normalizeEndpointAuthHeaders(rows: unknown): NormalizeEndpointAuthHeadersResult {
   if (!Array.isArray(rows)) {
-    return { ok: false, error: 'Headers must be a list.' }
+    return { ok: false, error: translate('edgeAuth.listRequired', 'Headers must be a list.') }
   }
   const headers: EndpointAuthHeaders = {}
   for (const row of rows) {
     if (typeof row !== 'object' || row === null) {
-      return { ok: false, error: 'Each header must be a name/value pair.' }
+      return {
+        ok: false,
+        error: translate('edgeAuth.pairRequired', 'Each header must be a name/value pair.')
+      }
     }
     const rawName = 'name' in row ? row.name : undefined
     const rawValue = 'value' in row ? row.value : undefined
@@ -52,11 +56,18 @@ export function normalizeEndpointAuthHeaders(rows: unknown): NormalizeEndpointAu
     if (!isValidName(trimmedName)) {
       return {
         ok: false,
-        error: `Invalid header name: "${trimmedName.slice(0, MAX_INVALID_NAME_PREVIEW)}".`
+        error: translate('edgeAuth.invalidName', 'Invalid header name: "{{name}}".', {
+          name: trimmedName.slice(0, MAX_INVALID_NAME_PREVIEW)
+        })
       }
     }
     if (!isValidValue(trimmedValue)) {
-      return { ok: false, error: `Invalid value for header "${trimmedName}".` }
+      return {
+        ok: false,
+        error: translate('edgeAuth.invalidValue', 'Invalid value for header "{{name}}".', {
+          name: trimmedName
+        })
+      }
     }
     const duplicate = Object.keys(headers).find(
       (existing) => existing.toLowerCase() === trimmedName.toLowerCase()
@@ -73,7 +84,12 @@ export function normalizeEndpointAuthHeaders(rows: unknown): NormalizeEndpointAu
     })
   }
   if (Object.keys(headers).length > MAX_HEADERS) {
-    return { ok: false, error: `At most ${MAX_HEADERS} headers are supported.` }
+    return {
+      ok: false,
+      error: translate('edgeAuth.tooMany', 'At most {{limit}} headers are supported.', {
+        limit: MAX_HEADERS
+      })
+    }
   }
   return { ok: true, headers }
 }
@@ -114,7 +130,10 @@ export function checkEdgeAuthEndpoint(
   }
   return {
     blocked: true,
-    error: 'Edge authentication needs a wss:// address — headers are never sent over ws://.'
+    error: translate(
+      'edgeAuth.secureAddressRequired',
+      'Edge authentication needs a wss:// address — headers are never sent over ws://.'
+    )
   }
 }
 

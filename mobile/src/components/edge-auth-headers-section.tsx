@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 import {
   deleteEndpointAuthHeaders,
@@ -101,6 +102,7 @@ export function EdgeAuthHeadersSection({
   onRowsChange: (rows: EdgeAuthRow[]) => void
   scrollViewRef: { current: EdgeAuthScrollTarget | null }
 }) {
+  const t = useMobileTranslation()
   const focusedRowId = useRef<string | null>(null)
   const rowRefs = useRef(new Map<string, View>())
   const scrollFocusedRowIntoView = useCallback(() => {
@@ -136,14 +138,18 @@ export function EdgeAuthHeadersSection({
   )
   return (
     <View>
-      <Text style={styles.label}>Edge authentication</Text>
+      <Text style={styles.label}>{t('edgeAuth.title', 'Edge authentication')}</Text>
       <Text style={styles.hint}>
-        Optional headers sent on the connection handshake, for tunnels protected by edge
-        authentication (for example Cloudflare Access service tokens). Stored in this phone&apos;s
-        keychain, never in pairing links. Pair over LAN or Relay before configuring these headers.
-        If the secure host or port changes, save the address, then reopen this form to enter
-        credentials for it. Leave all rows blank for none.
-        {storedCount > 0 ? ` ${storedCount} header${storedCount === 1 ? '' : 's'} saved.` : ''}
+        {t(
+          'edgeAuth.hint',
+          "Optional headers sent on the connection handshake, for tunnels protected by edge authentication (for example Cloudflare Access service tokens). Stored in this phone's keychain, never in pairing links. Pair over LAN or Relay before configuring these headers. If the secure host or port changes, save the address, then reopen this form to enter credentials for it. Leave all rows blank for none."
+        )}
+        {storedCount > 0
+          ? ` ${t('edgeAuth.saved', '{{count}} headers saved.', {
+              count: storedCount,
+              defaultValue_one: '{{count}} header saved.'
+            })}`
+          : ''}
       </Text>
       {rows.map((row, index) => (
         <View
@@ -159,13 +165,13 @@ export function EdgeAuthHeadersSection({
         >
           <TextInput
             style={[styles.input, styles.authName]}
-            accessibilityLabel={`Header ${index + 1} name`}
+            accessibilityLabel={t('edgeAuth.name', 'Header {{index}} name', { index: index + 1 })}
             value={row.name}
             onFocus={() => focusRow(row.id)}
             onChangeText={(value) =>
               onRowsChange(rows.map((r) => (r.id === row.id ? { ...r, name: value } : r)))
             }
-            placeholder="CF-Access-Client-Id"
+            placeholder={t('edgeAuth.namePlaceholder', 'CF-Access-Client-Id')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -173,13 +179,13 @@ export function EdgeAuthHeadersSection({
           />
           <TextInput
             style={[styles.input, styles.authValue]}
-            accessibilityLabel={`Header ${index + 1} value`}
+            accessibilityLabel={t('edgeAuth.value', 'Header {{index}} value', { index: index + 1 })}
             value={row.value}
             onFocus={() => focusRow(row.id)}
             onChangeText={(value) =>
               onRowsChange(rows.map((r) => (r.id === row.id ? { ...r, value } : r)))
             }
-            placeholder="Secret value"
+            placeholder={t('edgeAuth.valuePlaceholder', 'Secret value')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -194,7 +200,9 @@ export function EdgeAuthHeadersSection({
               )
             }
             accessibilityRole="button"
-            accessibilityLabel={`Remove header ${index + 1}`}
+            accessibilityLabel={t('edgeAuth.remove', 'Remove header {{index}}', {
+              index: index + 1
+            })}
           >
             <Text style={styles.authRemoveText}>✕</Text>
           </Pressable>
@@ -204,9 +212,9 @@ export function EdgeAuthHeadersSection({
         style={styles.secondaryButton}
         onPress={() => onRowsChange([...rows, newEdgeAuthRow()])}
         accessibilityRole="button"
-        accessibilityLabel="Add header"
+        accessibilityLabel={t('edgeAuth.add', 'Add header')}
       >
-        <Text style={styles.secondaryButtonText}>Add header</Text>
+        <Text style={styles.secondaryButtonText}>{t('edgeAuth.add', 'Add header')}</Text>
       </Pressable>
       {error ? <Text style={styles.previewError}>{error}</Text> : null}
     </View>
