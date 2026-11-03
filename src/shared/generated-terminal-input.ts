@@ -28,6 +28,9 @@ export type GeneratedInputRequest = {
    *  owns it until explicit dismissal, across client reloads), and says so in its answer. Older
    *  hosts ignore it and the caller shows its own notice. */
   retainNotice?: boolean
+  /** One id per user action, bound across parts: the notice id a host keeps for this request and
+   *  any recovery registration of it. Only for hosts with the register capability. */
+  operationId?: string
 }
 
 /** Text over one remote request's budget travels as ordered parts the host joins before admitting. */

@@ -6,7 +6,7 @@ import {
   isExpectedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
-import { showGeneratedInputNotice } from './launch-agent-paste-timeout-notice'
+import { noticeGeneratedInputFailure } from './launch-agent-paste-timeout-notice'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
 
 export async function sendFollowupPromptWhenAgentReady(args: {
@@ -18,7 +18,7 @@ export async function sendFollowupPromptWhenAgentReady(args: {
   const { ptyId, agent, expectedProcess, prompt } = args
   const deadline = Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
   if (!(await waitForAgentForeground(ptyId, expectedProcess))) {
-    showGeneratedInputNotice({ agent, text: prompt })
+    noticeGeneratedInputFailure({ agent, text: prompt })
     return false
   }
   // Why: an agent in front may not read input yet; Kimi drops text typed before its composer is up (#10336).
@@ -35,7 +35,7 @@ export async function sendFollowupPromptWhenAgentReady(args: {
       requireConsumer: true
     })
   } catch {
-    showGeneratedInputNotice({ agent, text: prompt, certainty: 'unconfirmed' })
+    noticeGeneratedInputFailure({ agent, text: prompt, certainty: 'unconfirmed' })
     return false
   }
 }

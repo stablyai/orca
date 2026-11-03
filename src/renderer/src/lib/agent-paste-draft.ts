@@ -13,7 +13,8 @@ import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill
 import { createLegacyGeneratedInputSource } from './agent-draft-readiness'
 import { runGeneratedInputOperation } from '../../../shared/generated-input-operation'
 import { GeneratedInputLifetime } from '../../../shared/generated-input-lifetime'
-import { showGeneratedInputNotice } from './launch-agent-paste-timeout-notice'
+import { noticeGeneratedInputFailure } from './launch-agent-paste-timeout-notice'
+import { deliverKeepingNotice, type GeneratedSend } from './generated-paste-notice'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -158,7 +159,7 @@ function reportGeneratedPaste(
   if (args.onTimeout) {
     args.onTimeout(certainty, args.retained === true)
   } else if (!args.retained) {
-    showGeneratedInputNotice({ agent: args.agent, text: args.content, certainty })
+    noticeGeneratedInputFailure({ agent: args.agent, text: args.content, certainty })
   }
   return false
 }
@@ -176,28 +177,42 @@ export type GeneratedPaste = {
   signal?: AbortSignal
   /** Every frame needs the expected agent (or a wrapper with a child) in front. */
   requireConsumer?: boolean
-  /** The caller reports failures: a capable host keeps the notice instead and this is called. */
+  /** The caller reports failures: called when a runtime owner kept the notice instead, so the
+   *  caller shows none of its own. */
   onNoticeRetained?: () => void
 }
 
-/** A capable host admits and writes in one transaction; only an older host gets the client adapter. */
+/** A capable host admits and writes in one transaction; only an older host gets the client adapter.
+ *  A caller that reports failures has its notice kept by one runtime owner (see deliverKeepingNotice). */
 export async function deliverGeneratedPaste(paste: GeneratedPaste): Promise<GeneratedInputOutcome> {
-  const hosted = await sendGeneratedTerminalInput(
-    paste.ptyId,
-    {
-      text: paste.content,
-      submit: paste.submit,
-      agent: paste.agent ?? null,
-      inputKind: paste.inputKind,
-      intent: paste.intent,
-      timeoutMs: Math.max(0, paste.deadline - Date.now()),
-      ...(paste.requireConsumer ? { requireConsumer: true } : {}),
-      ...(paste.onNoticeRetained ? { retainNotice: true } : {})
-    },
-    paste.signal,
-    paste.onNoticeRetained
-  )
-  return hosted ?? (await pasteThroughLegacyHost(paste))
+  const send: GeneratedSend = async (extra, onReply) => {
+    const hosted = await sendGeneratedTerminalInput(
+      paste.ptyId,
+      {
+        text: paste.content,
+        submit: paste.submit,
+        agent: paste.agent ?? null,
+        inputKind: paste.inputKind,
+        intent: paste.intent,
+        timeoutMs: Math.max(0, paste.deadline - Date.now()),
+        ...(paste.requireConsumer ? { requireConsumer: true } : {}),
+        ...extra
+      },
+      paste.signal,
+      onReply
+    )
+    return hosted !== null
+      ? { outcome: hosted, hosted: true }
+      : { outcome: await pasteThroughLegacyHost(paste), hosted: false }
+  }
+  if (!paste.onNoticeRetained) {
+    return (await send({}, () => {})).outcome
+  }
+  const { outcome, kept } = await deliverKeepingNotice(paste, send)
+  if (kept) {
+    paste.onNoticeRetained()
+  }
+  return outcome
 }
 
 /** An older host: the same operation, with this client's evidence and the existing input route. */

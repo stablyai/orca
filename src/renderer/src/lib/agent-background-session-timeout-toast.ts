@@ -1,4 +1,4 @@
-import { showGeneratedInputNotice } from './launch-agent-paste-timeout-notice'
+import { noticeGeneratedInputFailure } from './launch-agent-paste-timeout-notice'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
@@ -10,7 +10,7 @@ export function showAutomationPromptNotSentToast(
   retained = false
 ): void {
   if (!retained) {
-    showGeneratedInputNotice({ agent, text, certainty })
+    noticeGeneratedInputFailure({ agent, text, certainty })
   }
   track('agent_error', {
     error_class: 'paste_readiness_timeout',

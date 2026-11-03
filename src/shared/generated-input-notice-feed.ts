@@ -14,7 +14,7 @@ export type { GeneratedInputNoticeDelta }
 
 const frameSchema = z.object({
   id: z.string().min(1),
-  agent: z.custom<TuiAgent>((value) => typeof value === 'string' && isTuiAgent(value)),
+  agent: z.custom<TuiAgent>((value) => typeof value === 'string' && isTuiAgent(value)).nullable(),
   handle: z.string(),
   worktreeId: z.string(),
   ptyId: z.string().nullable(),

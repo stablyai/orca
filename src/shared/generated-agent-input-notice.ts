@@ -6,7 +6,9 @@ import type { GeneratedInputOutcome } from './generated-terminal-input'
 /** Runtime-session notices recover generated text whose detached delivery failed. */
 export type GeneratedAgentInputNotice = {
   id: string
-  agent: TuiAgent
+  /** Null when the agent is unknown (named generically); such notices are only ever private to
+   *  their window, so older clients, which require an agent, never receive one. */
+  agent: TuiAgent | null
   text: string
   handle: string
   worktreeId: string

@@ -11,6 +11,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'connectionId'
   | 'signal'
   | 'clientId'
+  | 'noticeOrigin'
   | 'pairedDeviceId'
   | 'pairedDeviceParentId'
   | 'caller'
@@ -62,6 +63,7 @@ export function rpcContextFromTransport(
           )
         : undefined,
     clientId: options?.clientId,
+    noticeOrigin: options?.noticeOrigin,
     pairedDeviceId: options?.pairedDeviceId,
     pairedDeviceParentId: options?.pairedDeviceParentId,
     caller: resolveRpcCallerIdentity(options),

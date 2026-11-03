@@ -1,9 +1,28 @@
 import type { MouseEvent } from 'react'
 import { expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { showGeneratedInputNotice } from './launch-agent-paste-timeout-notice'
+import {
+  createPasteReadinessTimeoutNotice,
+  noticeGeneratedInputFailure,
+  showGeneratedInputNotice
+} from './launch-agent-paste-timeout-notice'
 
 vi.mock('sonner', () => ({ toast: { message: vi.fn() } }))
+const registered = vi.hoisted(() => ({ calls: [] as unknown[], keeps: true }))
+// This window's runtime: registration keeps the notice, or (keeps false) cannot.
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: async (_target: unknown, method: string, params: unknown) => {
+    registered.calls.push({ method, params })
+    if (!registered.keeps) {
+      throw new Error('no runtime')
+    }
+    return { retained: true }
+  },
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => ({ tabsByWorktree: { w: [{ id: 't', ptyId: 'pty-1' }] } }) }
+}))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: () => 'claude' }))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, args?: { agent: string }) =>
@@ -63,4 +82,43 @@ it('names an unsubmitted draft as notes, in its message and its Copy action', ()
   for (const [, options] of calls) {
     expect(options?.action).toMatchObject({ label: 'Copy notes' })
   }
+})
+
+// E4 and every send-less exit: the window's runtime keeps the notice (it survives a reload and is
+// shown through the notice feed); the toast is only the fallback when that runtime cannot.
+it.each([true, false])(
+  'keeps held keys as notes in the window runtime (runtime keeps: %s)',
+  async (keeps) => {
+    registered.calls = []
+    registered.keeps = keeps
+    vi.mocked(toast.message).mockClear()
+    createPasteReadinessTimeoutNotice({
+      worktreeId: 'w',
+      tabId: 't',
+      agent: 'claude',
+      submitted: false,
+      content: 'held\r\nkeys 😀'
+    }).onTimeout('not-sent')
+    await vi.waitFor(() => expect(registered.calls).toHaveLength(1))
+    expect(registered.calls[0]).toEqual({
+      method: 'terminal.generatedInputNotices.register',
+      params: expect.objectContaining({
+        text: 'held\r\nkeys 😀',
+        agent: 'claude',
+        certainty: 'not-sent',
+        submitted: false
+      })
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(toast.message).toHaveBeenCalledTimes(keeps ? 0 : 1)
+  }
+)
+
+it('keeps an unknown agent’s notice with no agent, for the generic name', async () => {
+  registered.calls = []
+  registered.keeps = true
+  noticeGeneratedInputFailure({ text: 'x' })
+  await vi.waitFor(() => expect(registered.calls).toHaveLength(1))
+  expect(registered.calls[0]).toMatchObject({ params: { agent: null, certainty: 'not-sent' } })
 })

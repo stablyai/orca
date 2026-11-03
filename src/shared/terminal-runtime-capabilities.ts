@@ -36,9 +36,16 @@ export const TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY = 'terminal.split-retry.v1'
 export const GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY =
   'terminal.generated-input-recovery.v1' as const
 
+/** The whole recovery contract: operation identity on sends, terminal.generatedInputNotices.register,
+ *  window-private notices and dismissal that outlasts a late completion. Without it a host is an
+ *  old recovery host: the initiating runtime keeps the notice. */
+export const GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY =
+  'terminal.generated-input-notices.register.v1' as const
+
 export const TERMINAL_RUNTIME_CAPABILITIES = [
   GENERATED_INPUT_RUNTIME_CAPABILITY,
   GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY,
+  GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY,
   TERMINAL_ORDERED_INPUT_CAPABILITY,
   TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',

@@ -9,7 +9,10 @@ import { generatedInputNoticeFrames } from '../../../../shared/generated-agent-i
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { deliverGeneratedTerminalInput } from '../../terminal/input/generated-terminal-input-delivery'
 import { GeneratedInputParts } from './generated-input-parts'
-import { captureGeneratedInputRecovery } from '../../generated-agent-input-notices'
+import {
+  GENERATED_INPUT_NOTICE_REGISTER_METHODS,
+  generatedInputNoticeViewer
+} from './generated-input-notice-register'
 
 let noticeSubscriptionSeq = 0
 const parts = new GeneratedInputParts()
@@ -28,7 +31,8 @@ export const GENERATED_INPUT_METHODS = [
         params.intent,
         params.inputKind,
         params.requireConsumer,
-        params.retainNotice
+        params.retainNotice,
+        params.operationId
       ])
       const staged = parts.accept(connectionId ?? 'inproc', params, binding)
       if (staged.kind === 'pending') {
@@ -57,7 +61,23 @@ export const GENERATED_INPUT_METHODS = [
         agent !== null &&
         (outcome === 'not-sent' || outcome === 'unconfirmed')
       if (noticeRetained) {
-        captureGeneratedInputRecovery(runtime, handle, agent, staged.text, params.submit)(outcome)
+        // The operation's own record: a recovery registration of the same id lands on it, and a
+        // dismissal made before this completion keeps it discarded.
+        const { retained } = runtime.generatedInputNotices.upsert({
+          ...(params.operationId ? { id: params.operationId } : {}),
+          origin: null,
+          proven: true,
+          text: staged.text,
+          agent,
+          certainty: outcome,
+          ...(params.submit ? {} : { submitted: false }),
+          handle,
+          ptyId: runtime.getTerminalPtyIdForHandle(handle),
+          worktreeId: runtime.getTerminalWorktreeIdForHandle(handle) ?? ''
+        })
+        if (!retained) {
+          return { delivery: { outcome } }
+        }
       }
       return { delivery: { outcome, ...(noticeRetained ? { noticeRetained: true as const } : {}) } }
     }
@@ -66,8 +86,8 @@ export const GENERATED_INPUT_METHODS = [
     name: 'terminal.dismissGeneratedInputNotice',
     permission: 'workspace',
     params: DismissGeneratedInputNoticeParams,
-    handler: async ({ id }, { runtime }) => {
-      runtime.generatedInputNotices.dismiss(id)
+    handler: async ({ id }, context) => {
+      context.runtime.generatedInputNotices.dismiss(id, generatedInputNoticeViewer(context))
       return { dismissed: true }
     }
   }),
@@ -75,22 +95,31 @@ export const GENERATED_INPUT_METHODS = [
     name: 'terminal.generatedInputNotices.subscribe',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    handler: async (_params, context, emit) => {
+      const { runtime, connectionId } = context
       const notices = runtime.generatedInputNotices
+      const viewer = generatedInputNoticeViewer(context)
+      // This window's renderer was replaced mid-request: its pending requests become notices.
+      if (context.noticeOrigin) {
+        notices.revealPending(context.noticeOrigin, connectionId)
+      }
+      // Revisions count what this subscriber may see, so a gap still means a lost message and
+      // another window's private change never looks like one.
+      let sent = notices.revision
       await new Promise<void>((resolve) => {
         // Listen before the client pages its snapshot, so no change between them is lost.
+        // Another window's private notice is filtered here, before any frame is built.
         const unsubscribe = notices.subscribe((change) => {
+          if (change.origin !== null && change.origin !== viewer) {
+            return
+          }
+          sent += 1
           if (change.kind === 'dismissed') {
-            emit({
-              type: 'dismissed',
-              session: notices.session,
-              revision: change.revision,
-              id: change.id
-            })
+            emit({ type: 'dismissed', session: notices.session, revision: sent, id: change.id })
             return
           }
           for (const frame of generatedInputNoticeFrames(change.notice).frames) {
-            emit({ type: 'notice', session: notices.session, revision: change.revision, frame })
+            emit({ type: 'notice', session: notices.session, revision: sent, frame })
           }
         })
         const subscriptionId = `generated-input-notices-${connectionId ?? 'inproc'}-${++noticeSubscriptionSeq}`
@@ -103,12 +132,7 @@ export const GENERATED_INPUT_METHODS = [
           },
           connectionId
         )
-        emit({
-          type: 'ready',
-          subscriptionId,
-          session: notices.session,
-          revision: notices.revision
-        })
+        emit({ type: 'ready', subscriptionId, session: notices.session, revision: sent })
       })
     }
   }),
@@ -117,8 +141,12 @@ export const GENERATED_INPUT_METHODS = [
     name: 'terminal.generatedInputNotices.page',
     permission: 'workspace',
     params: GeneratedInputNoticesPageParams,
-    handler: async ({ cursor, offset }, { runtime }) =>
-      runtime.generatedInputNotices.page(cursor, offset)
+    handler: async ({ cursor, offset }, context) =>
+      context.runtime.generatedInputNotices.page(
+        cursor,
+        offset,
+        generatedInputNoticeViewer(context)
+      )
   }),
   defineMethod({
     name: 'terminal.generatedInputNotices.unsubscribe',
@@ -131,5 +159,6 @@ export const GENERATED_INPUT_METHODS = [
       runtime.cleanupSubscription(subscriptionId)
       return { unsubscribed: true }
     }
-  })
+  }),
+  ...GENERATED_INPUT_NOTICE_REGISTER_METHODS
 ]

@@ -4,9 +4,10 @@ import { generatedInputAgentName } from '../../../shared/generated-agent-input-n
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { keepGeneratedInputNotice } from './generated-paste-notice'
 
 export function showGeneratedInputNotice(args: {
-  agent?: TuiAgent
+  agent?: TuiAgent | null
   text: string
   certainty?: 'not-sent' | 'unconfirmed'
   /** False for an unsubmitted draft, which the user knows as notes. */
@@ -61,6 +62,18 @@ export function showGeneratedInputNotice(args: {
   })
 }
 
+/** A producer's failure notice: kept by this window's runtime, which survives a reload and shows
+ *  it through the notice feed; shown here directly only when that runtime cannot keep it. */
+export function noticeGeneratedInputFailure(
+  args: Parameters<typeof showGeneratedInputNotice>[0]
+): void {
+  void keepGeneratedInputNotice(args).then((kept) => {
+    if (!kept) {
+      showGeneratedInputNotice(args)
+    }
+  })
+}
+
 export function createPasteReadinessTimeoutNotice(args: {
   worktreeId: string
   tabId: string
@@ -88,7 +101,7 @@ export function createPasteReadinessTimeoutNotice(args: {
       }
       notified = true
       if (!retained) {
-        showGeneratedInputNotice({
+        noticeGeneratedInputFailure({
           agent: args.agent,
           text: args.content,
           certainty,

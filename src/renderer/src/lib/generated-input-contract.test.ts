@@ -39,6 +39,10 @@ type Facts = {
   processAfterInspect: string | null
   /** Runs after each write the terminal takes (a dialog opening between chunks). */
   afterWrite: ((count: number) => void) | null
+  /** The host answers a send, but the answer never reaches this client. */
+  loseReply: boolean
+  /** The host keeps notices by operation id (terminal.generatedInputNotices.register). */
+  registers: boolean
 }
 const f = vi.hoisted((): Facts => ({
   capable: true,
@@ -54,7 +58,9 @@ const f = vi.hoisted((): Facts => ({
   handle: '',
   holdProcessRead: null,
   processAfterInspect: null,
-  afterWrite: null
+  afterWrite: null,
+  loseReply: false,
+  registers: true
 }))
 
 // The terminal's worktree as the catalog lists it; the rest of each module is real.
@@ -74,8 +80,14 @@ vi.mock('../../../main/git/worktrees/catalog/worktree-listing', async (importOri
       { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
     ])
 }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}), subscribe: () => () => {} } }))
-vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => ({ ptyIdsByTabId: {} }), subscribe: () => () => {} }
+}))
+vi.mock('./launch-agent-paste-timeout-notice', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  showGeneratedInputNotice: vi.fn(),
+  noticeGeneratedInputFailure: vi.fn()
+}))
 vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
   readPtyInputScreen: async () => f.grid,
   readPtyBracketedPasteMode: () => f.pasteMode
@@ -120,26 +132,34 @@ vi.mock('../../../shared/agent-input-dialog', async (importOriginal) => {
   return { ...actual, prepareTypedText: vi.fn(actual.prepareTypedText) }
 })
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: async () => f.capable,
+  runtimeEnvironmentSupportsCapability: async (_environment: string, capability: string) =>
+    capability === 'terminal.generated-input-notices.register.v1'
+      ? f.capable && f.registers
+      : f.capable,
   callRuntimeRpc: async (
     _target: unknown,
     method: string,
     params: Record<string, unknown>,
     options?: { signal?: AbortSignal }
   ) => {
-    if (method === 'terminal.sendGeneratedInput') {
-      const send = eraseRpcMethods(GENERATED_INPUT_METHODS).find(
-        (entry): entry is RpcMethod =>
-          entry.name === 'terminal.sendGeneratedInput' && !('stream' in entry)
-      )!
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only the runtime and connection id.
+    // The host's (and, for an older host, this window's own runtime's) generated-input methods.
+    const real = eraseRpcMethods(GENERATED_INPUT_METHODS).find(
+      (entry): entry is RpcMethod => entry.name === method && !('stream' in entry)
+    )
+    if (real) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only the runtime, connection and window identity.
       const context = {
         runtime: f.runtime,
         connectionId: 'contract',
+        noticeOrigin: 'desktop-window:1',
         // The caller's abort reaches the host's request context, as the transport delivers it.
         signal: options?.signal
       } as unknown as RpcContext
-      return await send.handler(send.params ? send.params.parse(params) : params, context)
+      const answer = await real.handler(real.params ? real.params.parse(params) : params, context)
+      if (f.loseReply && method === 'terminal.sendGeneratedInput') {
+        throw new Error('socket closed')
+      }
+      return answer
     }
     if (method === 'terminal.read') {
       if (!f.hostReadsScreen || !f.grid) {
@@ -154,12 +174,17 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   }
 }))
 
-const { deliverGeneratedPaste, pasteDraftToAgentPtyWhenReady, submitPromptToAgentPty } =
-  await import('./agent-paste-draft')
+const {
+  deliverGeneratedPaste,
+  pasteDraftToAgentPtyWhenReady,
+  pasteDraftWhenAgentReady,
+  submitPromptToAgentPty
+} = await import('./agent-paste-draft')
 const { sendPromptWithGuardedPasteAndEnter } = await import('./active-agent-note-send-delivery')
 const { sendFollowupPromptWhenAgentReady } = await import('./agent-followup-delivery')
 const { prepareTypedText } = await import('../../../shared/agent-input-dialog')
-const { showGeneratedInputNotice } = await import('./launch-agent-paste-timeout-notice')
+const { showGeneratedInputNotice, noticeGeneratedInputFailure } =
+  await import('./launch-agent-paste-timeout-notice')
 
 const DIALOG = [
   'Bypass Permissions',
@@ -181,6 +206,8 @@ async function setUp(agent: TuiAgent, capable: boolean): Promise<string> {
   f.holdProcessRead = null
   f.processAfterInspect = null
   f.afterWrite = null
+  f.loseReply = false
+  f.registers = true
   const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, agent)
   f.runtime = runtime
   f.handle = handle
@@ -558,15 +585,16 @@ describe.each([
     expect(f.writes.at(-1)).toBe('\r')
   })
 
-  // Q3: a capable host keeps the failed text's notice in its runtime session (it survives a
-  // renderer reload); this client then shows none of its own. An older host keeps none, so the
-  // client shows it, exactly once either way.
-  it('says a failed send once: the host keeps its notice, else this client shows it', async () => {
+  // Q3: a failed send's notice is kept by exactly one runtime owner and the client shows none of
+  // its own. A capable host keeps it, shared as today; an older host has no owner, so this
+  // window's runtime keeps it, private to the window.
+  it('says a failed send once: one owner keeps its notice, shown by no client toast', async () => {
     const ptyId = await setUp('claude', capable)
     f.process = 'claude'
     f.grid = { lines: DIALOG, alternateScreen: false }
     f.hostReadsScreen = true
     vi.mocked(showGeneratedInputNotice).mockClear()
+    vi.mocked(noticeGeneratedInputFailure).mockClear()
     const result = pasteDraftToAgentPtyWhenReady({
       ptyId,
       content: 'kept text',
@@ -579,9 +607,100 @@ describe.each([
     await vi.advanceTimersByTimeAsync(1100)
     await expect(result).resolves.toBe(false)
     expect(f.writes).toEqual([])
-    const hostNotices = f.runtime!.generatedInputNotices.page().frames
-    expect(hostNotices).toHaveLength(capable ? 1 : 0)
-    expect(showGeneratedInputNotice).toHaveBeenCalledTimes(capable ? 0 : 1)
+    const notices = f.runtime!.generatedInputNotices
+    // The window sees one notice; another client (the phone) sees it only when the host owns it.
+    expect(notices.page(0, 0, 'desktop-window:1').frames.map((frame) => frame.chunk)).toEqual([
+      'kept text'
+    ])
+    expect(notices.page(0, 0, 'device:phone').frames).toHaveLength(capable ? 1 : 0)
+    expect(showGeneratedInputNotice).not.toHaveBeenCalled()
+    expect(noticeGeneratedInputFailure).not.toHaveBeenCalled()
+  })
+
+  // E2, E5, E6 through the real producer: each failure is one notice in one owner, the window's
+  // own when the host did not keep it, and a lost reply finds the host's record by its id.
+  it.each(['lost reply', 'unknown agent', 'target gone'] as const)(
+    'keeps one notice for a %s, with its exact text',
+    async (exit) => {
+      if (exit === 'lost reply' && !capable) {
+        return
+      }
+      const ptyId = await setUp('claude', capable)
+      f.process = 'claude'
+      f.grid = { lines: DIALOG, alternateScreen: false }
+      f.hostReadsScreen = true
+      f.loseReply = exit === 'lost reply'
+      if (exit === 'target gone') {
+        f.runtime!.onPtyExit('pty-prompt', 0)
+      }
+      vi.mocked(noticeGeneratedInputFailure).mockClear()
+      const result = pasteDraftToAgentPtyWhenReady({
+        ptyId,
+        content: 'exact\r\ntext 😀',
+        ...(exit === 'unknown agent' ? {} : { agent: 'claude' as const }),
+        submit: true,
+        forcePaste: true,
+        intent: 'running',
+        timeoutMs: 1000
+      })
+      await vi.advanceTimersByTimeAsync(1100)
+      await expect(result).resolves.toBe(false)
+      const notices = f.runtime!.generatedInputNotices
+      const kept = notices.page(0, 0, 'desktop-window:1').frames
+      expect(kept.map(({ chunk, agent }) => ({ chunk, agent }))).toEqual([
+        { chunk: 'exact\r\ntext 😀', agent: exit === 'unknown agent' ? null : 'claude' }
+      ])
+      // Only a failure the host itself kept is shared; the others stay with this window.
+      expect(notices.page(0, 0, 'device:phone').frames).toHaveLength(exit === 'lost reply' ? 1 : 0)
+      expect(noticeGeneratedInputFailure).not.toHaveBeenCalled()
+    }
+  )
+
+  // A host that runs generated sends but keeps no notices by id is never asked to keep one; this
+  // window keeps it instead, still through that host's own send.
+  it.runIf(capable)('keeps the notice in the window for a host without registration', async () => {
+    const ptyId = await setUp('claude', capable)
+    f.registers = false
+    f.process = 'claude'
+    f.grid = { lines: DIALOG, alternateScreen: false }
+    f.hostReadsScreen = true
+    const result = pasteDraftToAgentPtyWhenReady({
+      ptyId,
+      content: 'old host',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true,
+      intent: 'running',
+      timeoutMs: 1000
+    })
+    await vi.advanceTimersByTimeAsync(1100)
+    await expect(result).resolves.toBe(false)
+    const notices = f.runtime!.generatedInputNotices
+    expect(notices.page(0, 0, 'desktop-window:1').frames.map(({ chunk }) => chunk)).toEqual([
+      'old host'
+    ])
+    expect(notices.page(0, 0, 'device:phone').frames).toEqual([])
+  })
+
+  // E1: no terminal ever bound for the tab, so no request was sent; the producer reports it.
+  it('reports a prompt whose tab never got a terminal, with its exact text', async () => {
+    await setUp('claude', capable)
+    vi.mocked(noticeGeneratedInputFailure).mockClear()
+    const result = pasteDraftWhenAgentReady({
+      tabId: 'never-bound',
+      content: 'exact\r\ntext',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true
+    })
+    await vi.advanceTimersByTimeAsync(9000)
+    await expect(result).resolves.toBe(false)
+    expect(noticeGeneratedInputFailure).toHaveBeenCalledExactlyOnceWith({
+      agent: 'claude',
+      text: 'exact\r\ntext',
+      certainty: 'not-sent'
+    })
+    expect(f.writes).toEqual([])
   })
 
   // Controls kept: inline ZCode delivers from its grid; a plain shell never receives the text.

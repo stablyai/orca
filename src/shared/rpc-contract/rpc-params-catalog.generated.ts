@@ -263,6 +263,7 @@ import {
   DismissGeneratedInputNoticeParams,
   GeneratedInputNoticesPageParams,
   GeneratedInputNoticesUnsubscribeParams,
+  RegisterGeneratedInputNoticeParams,
   TerminalSendGeneratedInputParams
 } from './generated-input-params'
 import {
@@ -1499,6 +1500,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.ensureAgentSession': EnsureAgentSessionParams,
   'terminal.focus': TerminalFocus,
   'terminal.generatedInputNotices.page': GeneratedInputNoticesPageParams,
+  'terminal.generatedInputNotices.register': RegisterGeneratedInputNoticeParams,
   'terminal.generatedInputNotices.subscribe': null,
   'terminal.generatedInputNotices.unsubscribe': GeneratedInputNoticesUnsubscribeParams,
   'terminal.getAutoRestoreFit': TerminalGetAutoRestoreFitParams,

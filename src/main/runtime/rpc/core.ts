@@ -101,6 +101,9 @@ export type RpcContext = {
   requestId?: string
   // Device-scoped handlers release owned state when that client disconnects.
   clientId?: string
+  // The logical desktop window behind a local renderer, stable across its reloads: the audience of
+  // that window's private generated-input notices.
+  noticeOrigin?: string
   // Key navigation by revocable device identity, never bearer token or socket id.
   pairedDeviceId?: string
   // Delegated phones use their parent desktop's workspaces.

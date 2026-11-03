@@ -82,6 +82,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         },
         {
           clientId: 'desktop-renderer',
+          noticeOrigin: `desktop-window:${event.sender.id}`,
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId: desktopSenders.connectionIdFor(event.sender),
@@ -123,6 +124,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           signal: controller.signal,
           clientId: 'desktop-renderer',
+          noticeOrigin: `desktop-window:${event.sender.id}`,
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId,
