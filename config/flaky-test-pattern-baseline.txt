@@ -1272,8 +1272,6 @@
 1 test-timeout-needs-reason:src/renderer/src/components/terminal-pane/issue-4631-terminal-hover-link-provider.repro.test.ts
 1 test-timeout-needs-reason:src/renderer/src/hooks/agent-hook-completion-notifications.test.ts
 1 test-timeout-needs-reason:src/renderer/src/lib/check-run-details-log-normalization-performance.test.ts
-1 test-timeout-needs-reason:src/renderer/src/web/web-preload-api-keybindings.test.ts
-2 test-timeout-needs-reason:src/renderer/src/web/web-preload-api-settings.test.ts
 1 test-timeout-needs-reason:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 2 test-timeout-needs-reason:src/shared/agent-status-store-in-place.test.ts
 1 test-timeout-needs-reason:src/shared/check-job-log-text-performance.test.ts
