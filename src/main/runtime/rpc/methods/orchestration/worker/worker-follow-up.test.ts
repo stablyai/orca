@@ -172,34 +172,75 @@ describe('a follow-up to a finished terminal worker', () => {
     ).resolves.toMatchObject({ workers: [] })
   })
 
-  it('a reopen reads the launch recipe recorded from what Orca itself launched (#37693)', async () => {
+  it('a reopen reads the whole launch recipe recorded from what Orca itself launched (#37693)', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
     // The conversation's pane kept no recipe of its own; only the start-time record survives.
     h.db.db
-      .prepare('UPDATE worker_terminal_resources SET resume_session = ? WHERE owner_dispatch_id = ?')
+      .prepare(
+        'UPDATE worker_terminal_resources SET resume_session = ? WHERE owner_dispatch_id = ?'
+      )
       .run(
-        JSON.stringify({ agent: 'claude', providerSession: { key: 'session_id', id: 's1' } }),
+        JSON.stringify({
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 's1' },
+          connectionId: null
+        }),
         dispatchId
       )
 
     recordWorkerLaunchRecipe(h.db, dispatchId, {
+      agentCommand: '/opt/custom/claude',
       agentArgs: '--dangerously-skip-permissions',
-      agentEnv: {}
+      agentEnv: { ORCA_TEST: '1' },
+      ompResumeFilePath: '/tmp/omp-resume.json'
     })
 
-    expect(readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))).toMatchObject({
+    // Every field a resume replays survives the round trip, not just the flags.
+    expect(
+      readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))
+    ).toMatchObject({
       agent: 'claude',
-      launchConfig: { agentArgs: '--dangerously-skip-permissions' }
+      launchConfig: {
+        agentCommand: '/opt/custom/claude',
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: { ORCA_TEST: '1' },
+        ompResumeFilePath: '/tmp/omp-resume.json'
+      }
     })
 
     // A repeat of the same recipe writes nothing new.
+    const once = h.db.getWorkerTerminalResourceByOwner(dispatchId)?.launch_recipe
     recordWorkerLaunchRecipe(h.db, dispatchId, {
+      agentCommand: '/opt/custom/claude',
       agentArgs: '--dangerously-skip-permissions',
-      agentEnv: {}
+      agentEnv: { ORCA_TEST: '1' },
+      ompResumeFilePath: '/tmp/omp-resume.json'
     })
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.launch_recipe).toBe(
-      JSON.stringify({ agentArgs: '--dangerously-skip-permissions', agentEnv: {} })
-    )
+    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.launch_recipe).toBe(once)
+  })
+
+  it('drops a recorded recipe whose fields are not strings', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    h.db.db
+      .prepare(
+        'UPDATE worker_terminal_resources SET resume_session = ? WHERE owner_dispatch_id = ?'
+      )
+      .run(
+        JSON.stringify({
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 's1' },
+          connectionId: null
+        }),
+        dispatchId
+      )
+    h.db.db
+      .prepare('UPDATE worker_terminal_resources SET launch_recipe = ? WHERE owner_dispatch_id = ?')
+      .run(JSON.stringify({ agentArgs: 42, agentEnv: 'nope', agentCommand: {} }), dispatchId)
+
+    expect(
+      readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))?.launchConfig
+    ).toEqual({ agentArgs: '', agentEnv: {} })
   })
 })
