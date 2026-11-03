@@ -16,6 +16,14 @@ const storeMock = vi.hoisted(() => ({
   } as Record<string, unknown>
 }))
 
+// Pinned off so the window-applied menu runs in a layout-owner test run too; one case turns it on.
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
+
 vi.mock('@/hooks/useShortcutLabel', () => ({
   formatShortcutLabel: () => '⌘D',
   useOptionalShortcutLabel: () => '⌘D'
@@ -102,6 +110,16 @@ vi.mock('./tab-move-to-pane-column', async (importOriginal) => ({
   moveTabToNewPaneColumn: moveMock.moveTabToNewPaneColumn
 }))
 
+vi.mock('./TerminalTabMoveIntoTabMenuSection', () => ({
+  TerminalTabMoveIntoTabMenuSection: ({
+    tabId,
+    worktreeId
+  }: {
+    tabId: string
+    worktreeId: string
+  }) => <div data-testid="move-into-tab" data-tab-id={tabId} data-worktree-id={worktreeId} />
+}))
+
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) => selector(storeMock.state),
@@ -177,6 +195,7 @@ function getLastSplitEvent(spy: ReturnType<typeof vi.spyOn>): CustomEvent {
 }
 
 beforeEach(() => {
+  layoutOwner.isMain = false
   moveMock.moveTabToNewPaneColumn.mockClear()
   storeMock.state = {
     keybindings: {},
@@ -266,6 +285,31 @@ describe('SortableTabContextMenu', () => {
       }
     }
   )
+
+  it('offers Move Into Tab for a terminal tab, but not for a chat-view or agent-session tab', () => {
+    const { container } = renderMenu()
+    expect(container.querySelector('[data-testid="move-into-tab"]')).toMatchObject({
+      dataset: { tabId: 'term-1', worktreeId: 'wt-1' }
+    })
+
+    const chatView = renderMenu({ isChatView: true })
+    expect(chatView.container.querySelector('[data-testid="move-into-tab"]')).toBeNull()
+
+    // A structured agent-session tab renders this menu with no terminal behind it.
+    const agentSession = renderMenu({
+      canSplitTerminal: false,
+      nativeChat: { sessionId: 'orca-chat-1', agent: 'codex' }
+    })
+    expect(agentSession.container.querySelector('[data-testid="move-into-tab"]')).toBeNull()
+  })
+
+  it('hides Move Into Tab in a layout-owner build, where main draws every move', () => {
+    layoutOwner.isMain = true
+
+    const { container } = renderMenu()
+
+    expect(container.querySelector('[data-testid="move-into-tab"]')).toBeNull()
+  })
 
   it('does not expose a native/terminal view switch', () => {
     const { container } = renderMenu()

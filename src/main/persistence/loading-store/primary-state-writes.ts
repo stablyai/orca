@@ -63,6 +63,9 @@ export class PrimaryStateWriteOperations {
         runtime.profileStateAuthority.assertWritable()
       }
       let mutation: DurableProfileStateMutation<T>
+      if (runtime.uncommittedDurableMutations === 0) {
+        runtime.committedLeafHolders = runtime.captureCommittedLeafHolders?.() ?? null
+      }
       try {
         mutation = this.runAdmittedMutationCallback(
           'mutate',
@@ -82,6 +85,7 @@ export class PrimaryStateWriteOperations {
       }
       runtime.writeGeneration++
       const requiredGeneration = runtime.writeGeneration
+      runtime.uncommittedDurableMutations++
       try {
         const captured = runtime.profileStateAuthority?.asynchronous
           ? await writeToDiskAsync(this)
@@ -103,6 +107,8 @@ export class PrimaryStateWriteOperations {
           }
         }
         throw error
+      } finally {
+        runtime.uncommittedDurableMutations--
       }
       return mutation.value
     })
