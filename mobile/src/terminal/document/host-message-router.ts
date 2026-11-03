@@ -9,6 +9,7 @@ import { resumeTerminalDataReplyAuthority } from './query-reply'
 import { repositionOverlay } from './selection-overlay'
 import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
+import { scheduleSizeDimRefresh, setDimDirListingSizes } from './dir-listing-size-dim'
 import { applyTerminalTheme } from './terminal-theme'
 import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
@@ -23,6 +24,7 @@ export type TerminalHostMessage = {
   initialData?: unknown
   terminalTheme?: Parameters<typeof applyTerminalTheme>[1]
   fontScale?: number
+  enabled?: boolean
   preserveScroll?: boolean
   oscLinks?: unknown
   kittyKeyboardFlags?: unknown
@@ -132,6 +134,10 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     }
   } else if (msg.type === 'set-theme') {
     applyTerminalTheme(scope, msg.terminalTheme)
+    // Size-dim overlays use the active theme background; re-tint after theme swaps.
+    scheduleSizeDimRefresh(scope)
+  } else if (msg.type === 'set-dim-dir-listing-sizes') {
+    setDimDirListingSizes(scope, !!msg.enabled)
   } else if (msg.type === 'cancel-select') {
     if (scope.selMode === 'select') {
       cancelSelect(scope)

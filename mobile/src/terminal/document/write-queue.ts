@@ -1,4 +1,5 @@
 import type { TerminalDocumentScope } from './document-scope'
+import { clearSizeDimDecorations, scheduleSizeDimRefresh } from './dir-listing-size-dim'
 import { C1_CSI, ESC } from './escape-introducers'
 
 // Force Claude’s status dot to text presentation on iOS WebKit.
@@ -87,6 +88,7 @@ export function disposeTermObservers(scope: TerminalDocumentScope) {
       disposables[i] && disposables[i].dispose && disposables[i].dispose!()
     } catch {}
   }
+  clearSizeDimDecorations(scope)
 }
 
 export function extractMouseModeScanTail(input: string) {
@@ -134,6 +136,7 @@ export function pumpWrites(scope: TerminalDocumentScope, gen: number): void {
       return
     }
     scope.writesDraining = false
+    scheduleSizeDimRefresh(scope)
     pumpWrites(scope, gen)
   })
 }
