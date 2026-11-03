@@ -33,12 +33,15 @@
   "settings": {
     "chat": {
       "launch": {
-        "on": "デフォルトでチャット UI はオンです",
-        "off": "デフォルトでチャット UI はオフです",
-        "description": "新規 Agent をチャット UI または CLI で開きます。以下で Agent ごとに選択できます。",
-        "toggle": "デフォルトでチャット UI を使用",
+        "on": "チャット UI はオンです",
+        "off": "チャット UI はオフです",
         "agents": "Agent ごとのデフォルト起動モード",
-        "agentsDescription": "各 Agent をチャット UI と CLI のどちらで開くか選択します。"
+        "agentsDescription": "各 Agent をチャット UI と CLI のどちらで開くか選択します。",
+        "chatDescription": "新しい Agent はデフォルトでチャットモードで起動します。",
+        "cliDescription": "新しい Agent はデフォルトで CLI として起動します。",
+        "turnOn": "オンにする",
+        "turnOff": "オフにする",
+        "toggle": "デフォルトでチャット UI を使用"
       },
       "permissionsAgentsLink": "設定 → Agent",
       "permissionsTitle": "新しいチャットの権限",

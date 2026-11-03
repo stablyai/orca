@@ -134,7 +134,7 @@ describe('Chat settings page', () => {
     expect(container.querySelector('#chat-appearance')).toBeTruthy()
     expect(container.querySelector('#chat-text-size')).toBeTruthy()
     expect(container.querySelector('#chat-names')).toBeTruthy()
-    expect(screen.getByRole('switch', { name: 'デフォルトでチャット UI を使用' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'オンにする' })).toBeTruthy()
   })
 
   it('shows shared launch choices above Appearance without changing existing settings', () => {
@@ -142,9 +142,8 @@ describe('Chat settings page', () => {
       agentDefaultSurface: 'terminal',
       nativeChatProviders: { claude: true }
     })
-    expect(
-      screen.getByRole('switch', { name: 'Use Chat UI by default' }).getAttribute('aria-checked')
-    ).toBe('false')
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeTruthy()
+    expect(screen.getByText('Chat UI is off')).toBeTruthy()
     expect(
       screen
         .getByRole('radiogroup', { name: 'Open Claude as' })

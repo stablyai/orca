@@ -50,17 +50,24 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Open agents as', () => {
-  it('reuses the default write from the Chat UI switch and retains per-agent choices', async () => {
+  it('reuses the default write from the Chat UI button and retains per-agent choices', async () => {
     presentation = 'switch'
     renderSection({ agentDefaultSurface: 'terminal', nativeChatProviders: { claude: false } })
-    const control = screen.getByRole('switch', { name: 'Use Chat UI by default' })
-    expect(control.getAttribute('aria-checked')).toBe('false')
+    const control = screen.getByRole('button', { name: 'Turn on' })
+    expect(screen.getByText('Chat UI is off')).toBeTruthy()
+    expect(screen.getByText('New agents will launch as CLI by default.')).toBeTruthy()
     fireEvent.click(control)
-    await waitFor(() => expect(control.getAttribute('aria-checked')).toBe('true'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Turn off' })).toBeTruthy())
     expect(settingsSet).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
     expect(persisted.nativeChatProviders).toEqual({ claude: false })
-    expect(screen.getByText('Chat UI is on by default')).toBeTruthy()
-    expect(toast.success).toHaveBeenCalledOnce()
+    expect(screen.getByText('Chat UI is on')).toBeTruthy()
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith(
+      'Agents now open as chats',
+      expect.objectContaining({
+        description: 'Claude stays in the terminal, as you set.',
+        action: expect.objectContaining({ label: 'Set all to Chat' })
+      })
+    )
   })
 
   it('sets only the default, names agents set to the other surface, and Set all makes them follow', async () => {

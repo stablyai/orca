@@ -512,12 +512,15 @@
   "settings": {
     "chat": {
       "launch": {
-        "on": "Chat UI is on by default",
-        "off": "Chat UI is off by default",
-        "description": "Choose Chat UI or CLI for new agents. Each agent can have its own choice below.",
-        "toggle": "Use Chat UI by default",
+        "on": "Chat UI is on",
+        "off": "Chat UI is off",
         "agents": "Default launch mode per agent",
-        "agentsDescription": "Choose whether each agent opens in Chat UI or its CLI."
+        "agentsDescription": "Choose whether each agent opens in Chat UI or its CLI.",
+        "chatDescription": "New agents will launch in chat mode by default.",
+        "cliDescription": "New agents will launch as CLI by default.",
+        "turnOn": "Turn on",
+        "turnOff": "Turn off",
+        "toggle": "Use Chat UI by default"
       },
       "permissionsAgentsLink": "Settings → Agents",
       "permissionsTitle": "Permissions for new chats",
@@ -21662,6 +21665,7 @@
       "undo": "To undo, run codex features enable daemon_auto_start.",
       "step2Warning": "Closes any open Codex sessions that share the server",
       "turnOff": "Turn off",
+      "toggle": "Use Chat UI by default",
       "turningOff": "Turning off…",
       "turnedOff": "Turned off",
       "turnOffFailed": "Orca couldn't turn this off.",

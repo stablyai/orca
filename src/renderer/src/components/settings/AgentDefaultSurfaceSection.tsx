@@ -19,7 +19,8 @@ import {
 import { ChatSurfacePreview, TerminalSurfacePreview } from './AgentDefaultSurfacePreviews'
 import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from './agents-search'
 import { Card, CardContent } from '../ui/card'
-import { SettingsSwitchRow } from './SettingsFormControls'
+import { SettingsRow } from './SettingsFormControls'
+import { Button } from '../ui/button'
 import {
   agentsKeepingOwnSurface,
   followAgentDefaultSurface,
@@ -207,22 +208,36 @@ export function AgentDefaultSurfaceSection({
     return (
       <Card>
         <CardContent>
-          <SettingsSwitchRow
+          <SettingsRow
             label={
               <span className="text-lg font-semibold">
                 {surface === 'chat'
-                  ? translate('settings.chat.launch.on', 'Chat UI is on by default')
-                  : translate('settings.chat.launch.off', 'Chat UI is off by default')}
+                  ? translate('settings.chat.launch.on', 'Chat UI is on')
+                  : translate('settings.chat.launch.off', 'Chat UI is off')}
               </span>
             }
-            description={translate(
-              'settings.chat.launch.description',
-              'Choose Chat UI or CLI for new agents. Each agent can have its own choice below.'
-            )}
-            checked={surface === 'chat'}
-            disabled={pending}
-            ariaLabel={translate('settings.chat.launch.toggle', 'Use Chat UI by default')}
-            onChange={() => choose(surface === 'chat' ? 'terminal' : 'chat')}
+            description={
+              surface === 'chat'
+                ? translate(
+                    'settings.chat.launch.chatDescription',
+                    'New agents will launch in chat mode by default.'
+                  )
+                : translate(
+                    'settings.chat.launch.cliDescription',
+                    'New agents will launch as CLI by default.'
+                  )
+            }
+            control={
+              <Button
+                variant={surface === 'chat' ? 'outline' : 'default'}
+                disabled={pending}
+                onClick={() => choose(surface === 'chat' ? 'terminal' : 'chat')}
+              >
+                {surface === 'chat'
+                  ? translate('settings.chat.launch.turnOff', 'Turn off')
+                  : translate('settings.chat.launch.turnOn', 'Turn on')}
+              </Button>
+            }
           />
         </CardContent>
       </Card>
