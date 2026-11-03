@@ -6,7 +6,7 @@ import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-type
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { agentSubagentsEqual } from '../../../shared/agent-status-subagent-snapshot'

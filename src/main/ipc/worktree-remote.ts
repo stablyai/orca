@@ -7,7 +7,7 @@ import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
 import type {
@@ -32,12 +32,12 @@ import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
-} from '../worktree-create-preparation'
+} from '../workspaces/creation/preparation/worktree-create-preparation'
 import { getBranchConflictKind, resolveDefaultBaseRefWithLocalGit } from '../git/repo'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
-import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -48,13 +48,16 @@ import type {
   RemoteTrackingBase
 } from '../runtime/orca-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
-import { getEffectiveHooks, loadHooks } from '../hooks'
-import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import { getEffectiveHooks, loadHooks } from '../workspace-hooks/hooks'
+import {
+  createSetupRunnerScript,
+  resolveSetupRunnerShell
+} from '../workspace-hooks/worktree-runner-script'
 import {
   getDefaultTabsLaunch,
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
-} from '../effective-hook-config'
+} from '../workspace-hooks/effective-hook-config'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
 
@@ -129,7 +132,7 @@ import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
   type WorktreeCreateTimingRecorder
-} from '../worktree-create-timing'
+} from '../workspaces/creation/worktree-create-timing'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -139,9 +142,9 @@ import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
-  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
-} from '../worktree-create-candidates'
+} from '../workspaces/creation/worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import {
   failedWorktreeCreationNeedsRetirement,
   getRetiredNameRegistryForRepo,
@@ -152,7 +155,7 @@ import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import {
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
-} from '../worktree-create-in-flight'
+} from '../workspaces/creation/worktree-create-in-flight'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   hostWorktreeTarget,
@@ -1701,7 +1704,7 @@ async function performLocalWorktreeCreate(
     if (setupScript && shouldLaunchSetup) {
       try {
         // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
-        setup = createSetupRunnerScript(
+        setup = await createSetupRunnerScript(
           repo,
           worktreePath,
           setupScript,

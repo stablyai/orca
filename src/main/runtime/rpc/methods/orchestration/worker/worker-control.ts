@@ -1,8 +1,8 @@
+import { exposeDispatchContext } from './dispatch-context-exposure'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import {
-  exposeDispatchContext,
   exposeObservation,
   exposeWorker,
   inspectWorkerTerminal,
@@ -236,6 +236,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         // Why: only a session caller is verified; terminal env could name anyone.
         orchestrationCaller?.address
       )
+      // Mail still queued as cards for the abandoned Dispatch must not run.
+      runtime.withdrawStaleChatMail([`dispatch:${params.dispatch}`])
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')

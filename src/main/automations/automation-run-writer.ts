@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PublishAutomationsChanged } from '../../shared/runtime-client-events'
 import type { AutomationDispatchResult, AutomationRun } from '../../shared/automations-types'
 

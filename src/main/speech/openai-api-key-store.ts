@@ -1,5 +1,5 @@
 import { getSecretStore } from '../../shared/secret-store'
-import { readCredentialFileProtection } from '../credential-file-protection'
+import { readCredentialFileProtection } from '../credentials/credential-file-protection'
 import {
   classifyUnenvelopedCredential,
   type SecretAtRestProtection

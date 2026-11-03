@@ -16,19 +16,21 @@ function notifyListeners(): void {
   }
 }
 
-function registerComposer(composer: HTMLElement): () => void {
-  composers.add(composer)
+function registerComposer(pane: HTMLElement, column: HTMLElement): () => void {
+  composers.add(column)
   composerResizes ??= new ResizeObserver(notifyListeners)
-  composerResizes.observe(composer)
+  composerResizes.observe(pane)
+  composerResizes.observe(column)
   notifyListeners()
   return () => {
-    composers.delete(composer)
-    composerResizes?.unobserve(composer)
+    composers.delete(column)
+    composerResizes?.unobserve(pane)
+    composerResizes?.unobserve(column)
     notifyListeners()
   }
 }
 
-/** Re-measure when a composer mounts, unmounts or resizes (a sidebar toggle resizes it). */
+/** Re-measure when a composer mounts, unmounts or resizes (a sidebar or chat width change). */
 export function subscribeToComposerLayout(listener: () => void): () => void {
   listeners.add(listener)
   return () => {
@@ -62,16 +64,22 @@ export function measureComposerClearance(
   return clearance
 }
 
-/** Keeps the notification cards off this composer's Send and Stop buttons. */
+/**
+ * Keeps the notification cards off this composer's Send and Stop buttons. Measures `columnRef`, the
+ * box the user sees, and observes it for chat width changes; also observes `paneRef`, whose resize
+ * reports a sidebar toggle moving a centred column that keeps its own size.
+ */
 export function useNotificationCardComposerClearance(
-  composerRef: RefObject<HTMLElement | null>,
+  paneRef: RefObject<HTMLElement | null>,
+  columnRef: RefObject<HTMLElement | null>,
   enabled: boolean
 ): void {
   useEffect(() => {
-    const composer = composerRef.current
-    if (!enabled || !composer) {
+    const pane = paneRef.current
+    const column = columnRef.current
+    if (!enabled || !pane || !column) {
       return
     }
-    return registerComposer(composer)
-  }, [composerRef, enabled])
+    return registerComposer(pane, column)
+  }, [paneRef, columnRef, enabled])
 }

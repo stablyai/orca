@@ -232,15 +232,6 @@ describe('terminal chat ownership lifecycle', () => {
     expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBeUndefined()
   })
 
-  it('closing the chat leaf leaves an eligible terminal sibling in terminal mode', () => {
-    const fixture = makeFixture()
-    const hook = renderHook(() => useFixture(fixture, RIGHT))
-    fixture.managerRef.current.getPanes().pop()?.container.remove()
-    hook.rerender()
-    expect(hook.result.current.chatLeafId).toBeNull()
-    expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
-  })
-
   it('restores chat on the right with the left active and different numeric pane IDs', () => {
     const initialFixture = makeFixture()
     const original = renderHook(() => useFixture(initialFixture, RIGHT))

@@ -15,7 +15,6 @@ import { openPluginNewFileFromSettings } from '../page/PluginContributionActionN
 import { openPluginPanelFromSettings } from '../page/PluginContributionActionPanel'
 import { languageDisplayName } from '../presentation/plugin-contributions'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
-import { pluginSyntaxSample } from './plugin-syntax-samples'
 
 /** Runs `act` over the workspace Settings came from, or says why it can't. */
 function fromSettingsToWorkspace(act: () => void): void {
@@ -27,11 +26,19 @@ function fromSettingsToWorkspace(act: () => void): void {
   act()
 }
 
-export function openPluginSampleFromSettings(sample: { extension: string; content: string }): void {
+/** The first file extension a plugin's grammars declare, which a blank file can show off. */
+export function firstSyntaxExtension(
+  syntaxes: readonly { extensions: readonly string[] }[]
+): string | null {
+  return syntaxes.find((syntax) => syntax.extensions.length > 0)?.extensions[0] ?? null
+}
+
+/** Opens a blank `untitled<extension>` so the plugin's grammar highlights as you type. */
+export function openPluginBlankFileFromSettings(extension: string): void {
   fromSettingsToWorkspace(() => {
     const state = useAppStore.getState()
     state.closeSettingsPage()
-    void state.openSampleFileInActiveWorkspace(sample)
+    void state.openBlankFileInActiveWorkspace(extension)
   })
 }
 
@@ -96,9 +103,9 @@ export function pluginTryAction(
       }
     }
   }
-  const sample = pluginSyntaxSample(contributes.syntaxes)
-  if (sample) {
-    return () => openPluginSampleFromSettings(sample)
+  const syntaxExtension = firstSyntaxExtension(contributes.syntaxes)
+  if (syntaxExtension) {
+    return () => openPluginBlankFileFromSettings(syntaxExtension)
   }
   if (contributes.languagePacks.length > 0) {
     return () => void tryLanguagePack(pluginKey)

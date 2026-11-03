@@ -2,18 +2,21 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
-import type { AgentSessionRewindFork } from '../../../shared/agent-session-rewind'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
+  loadTestJournal,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
+import { renderJournalState } from '../agent-session-journal/journal-reducer'
+import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -29,6 +32,11 @@ import {
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
+import {
+  appendRewindUsageLimitedTurn,
+  expectNoUsageLimitAutoContinue,
+  expectRestoredUsageLimitCancelled
+} from './structured-agent-session-rewind-usage-limit.test-fixture'
 
 const caller = { callerKey: 'desktop' }
 const SOURCE = '11111111-1111-4111-8111-111111111111'
@@ -161,9 +169,9 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function rewindSecondPrompt() {
+async function rewindSecondPrompt(uuid = 'prompt-2') {
   const fields = {
-    itemId: key('prompt-2'),
+    itemId: key(uuid),
     expectedEpoch: (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
   }
   return host.rewind(caller, {
@@ -260,7 +268,24 @@ describe('rewinding a chat whose agent forks', () => {
   })
 
   it('rolls back both history and handle when the receipt fails, then recovers the same fork', async () => {
+    host.deps.usageLimitAutoContinue = {
+      isEnabled: () => true,
+      isWorkspaceAsleep: () => false,
+      subscribe: () => () => {}
+    }
+    await store.setSessionTabVisibility(HOST_TEST_SESSION, true)
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    // The limited turn is past its reset and stays in the fork; the removed prompt superseded it.
+    const cut = await appendRewindUsageLimitedTurn(journal, HOST_TEST_NOW - 120_000)
+    sink.appendItem(
+      { provider: 'claude', sessionId: SOURCE, uuid: 'prompt-3' },
+      hostTestMessage('prompt-3'),
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+    const kept = (await host.journalSnapshot(HOST_TEST_SESSION)).items
+      .map((item) => item.itemId)
+      .slice(0, -1)
     const before = await host.journalSnapshot(HOST_TEST_SESSION)
     const makeReceipt = store.conversationReceipts.rewind.bind(store.conversationReceipts)
     const failed = vi
@@ -275,13 +300,14 @@ describe('rewinding a chat whose agent forks', () => {
           }
         }
       })
-    await expect(rewindSecondPrompt()).rejects.toThrow('commit failed')
+    await expect(rewindSecondPrompt('prompt-3')).rejects.toThrow('commit failed')
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
     expect(
       agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
         ?.handle.nativeId
     ).toBe(SOURCE)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
+    expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toBeUndefined()
     failed.mockRestore()
 
     await recoverStructuredRewind(
@@ -290,15 +316,23 @@ describe('rewinding a chat whose agent forks', () => {
       journal,
       store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
     )
-    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
-      key('prompt-1'),
-      key('answer-1')
-    ])
+    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(kept)
     expect(
       agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
         ?.handle.nativeId
-    ).toBe(FORK.sessionId)
+    ).toBe('33333333-3333-4333-8333-333333333333')
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
     expect(forkForRewind).toHaveBeenCalledTimes(1)
+    await expectRestoredUsageLimitCancelled(host, store, cut)
+    expect(
+      (await openTestAgentSessionRecordStore(directory)).getRecord(HOST_TEST_SESSION)
+        ?.usageLimitContinueCancel
+    ).toEqual(cut)
+    expect(
+      latestUsageLimitContinueIdentity(
+        renderJournalState(loadTestJournal(directory, HOST_TEST_SESSION)!.state)
+      )
+    ).toEqual(cut)
+    await expectNoUsageLimitAutoContinue(host)
   })
 })

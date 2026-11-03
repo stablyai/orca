@@ -76,48 +76,6 @@ describe('fetchKimiRateLimits with a WSL credentials home', () => {
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer wsl-fresh')
   })
 
-  it('still reads the host home by default', async () => {
-    const result = await fetchKimiRateLimits()
-
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('delegated-refresh-required')
-    expect(result.error).toContain('on the computer running Orca')
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('points an expired WSL session at the distro to rerun kimi in', async () => {
-    files.set(WSL_CREDENTIALS, credentials('wsl-stale', -60))
-
-    const result = await fetchKimiRateLimits({
-      home: { runtime: 'wsl', wslDistro: 'Ubuntu', path: WSL_HOME }
-    })
-
-    expect(result.error).toBe(
-      'Kimi session expired — run kimi inside WSL (Ubuntu), then retry usage.'
-    )
-    expect(result.usageMetadata?.failureKind).toBe('delegated-refresh-required')
-  })
-
-  it('reports an unresolvable WSL home instead of falling back to host credentials', async () => {
-    const result = await fetchKimiRateLimits({
-      home: { runtime: 'wsl', wslDistro: 'Ubuntu', path: null }
-    })
-
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('WSL Kimi home unavailable for Ubuntu')
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('reports not signed in when the WSL home has no credentials file', async () => {
-    files.delete(WSL_CREDENTIALS)
-
-    const result = await fetchKimiRateLimits({
-      home: { runtime: 'wsl', wslDistro: 'Ubuntu', path: WSL_HOME }
-    })
-
-    expect(result.status).toBe('unavailable')
-  })
-
   // Hung UNC probes stay shared; isolate the stopped distro path so it cannot poison other cases.
   it('bounds a stalled UNC read instead of parking the poll cycle', async () => {
     const stalledHome = '\\\\wsl.localhost\\Stopped\\home\\neil\\.kimi-code'

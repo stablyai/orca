@@ -1,10 +1,12 @@
 import { memo } from 'react'
-import { ArrowUpRight, ChevronRight, Terminal } from 'lucide-react'
+import { ArrowUpRight, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { cn } from '@/lib/utils'
 import type { ResourcePtyRow as PtyRow } from './resource-pty-view-model'
 import { ResourcePtyDetails, resourcePtyBindingLabel } from './ResourcePtyDetails'
 import { ptyTerminationReason } from './use-resource-pty-actions'
@@ -15,6 +17,8 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
   unverifiable,
   ending,
   error,
+  selected,
+  onSelect,
   onEnd,
   onNavigate
 }: {
@@ -23,6 +27,8 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
   unverifiable: boolean
   ending: boolean
   error?: string
+  selected: boolean
+  onSelect: (row: PtyRow) => void
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
@@ -43,9 +49,22 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
     : null
   const folder = !row.workspace ? row.session.cwd : null
   return (
-    <div data-resource-pty-row={row.identity} className="px-2 py-1">
+    <div
+      data-resource-pty-row={row.identity}
+      data-selected={selected}
+      className={cn('rounded-md px-2 py-1', selected && 'bg-accent text-accent-foreground')}
+    >
       <Collapsible>
         <div className="flex min-w-0 items-center gap-1">
+          <Checkbox
+            className="ml-1"
+            checked={selected}
+            disabled={ending || !!endUnavailable}
+            aria-label={translate('resourceManager.pty.selectNamed', 'Select {{terminal}}', {
+              terminal: row.label
+            })}
+            onCheckedChange={() => onSelect(row)}
+          />
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
@@ -60,7 +79,6 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
               )}
             >
               <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
-              <Terminal className="size-3 shrink-0 text-muted-foreground" />
               <span className="truncate text-xs">{row.label}</span>
             </Button>
           </CollapsibleTrigger>

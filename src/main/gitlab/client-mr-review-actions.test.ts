@@ -54,6 +54,11 @@ import {
   updateMRReviewers
 } from './client'
 import { resetGitLabMrMocks } from './client-mr-test-harness'
+import type { HostedReviewInfo } from '../../shared/hosted-review'
+import {
+  __resetHostedReviewBranchCacheForTests,
+  withHostedReviewBranchCache
+} from '../source-control/hosted-review-branch-cache'
 import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
 
 describe('stripGitLabDraftTitlePrefix', () => {
@@ -535,4 +540,65 @@ describe('gitlab client — MR operations', () => {
       )
     })
   })
+})
+
+describe('gitlab client — review lookups after a merge request write', () => {
+  const projectRef = { host: 'gitlab.example.internal', path: 'g/p' }
+  const identity = { repoPath: '/repo', executionHostId: 'local' as const, branch: 'feature' }
+  const open: HostedReviewInfo = {
+    provider: 'gitlab',
+    number: 6,
+    title: 'MR',
+    state: 'open',
+    url: 'https://gitlab.example.internal/g/p/-/merge_requests/6',
+    status: 'neutral',
+    updatedAt: '',
+    mergeable: 'UNKNOWN'
+  }
+  const writes = {
+    merge: () => mergeMR('/repo', 6, 'squash', undefined, null, projectRef),
+    close: () => closeMR('/repo', 6, undefined, null, projectRef),
+    reopen: () => reopenMR('/repo', 6, undefined, null, projectRef),
+    title: () => updateMR('/repo', 6, { title: 'Renamed' }, undefined, null, projectRef)
+  }
+
+  beforeEach(() => {
+    resetGitLabMrMocks({
+      glabExecFileAsyncMock,
+      glabApiWithHeadersMock,
+      getGlabKnownHostsMock,
+      getProjectRefMock,
+      resolveIssueSourceMock,
+      acquireMock,
+      releaseMock,
+      gitExecFileAsyncMock
+    })
+    __resetHostedReviewBranchCacheForTests()
+    glabExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+  })
+
+  // Issue #14377: "I press Squash and merge" in Orca, and the card stayed Open while a poll was in flight.
+  it.each(Object.entries(writes))(
+    '%s: the follow-up read starts after the write instead of joining an older poll',
+    async (_name, write) => {
+      const prePoll = Promise.withResolvers<HostedReviewInfo | null>()
+      const poll = withHostedReviewBranchCache(
+        identity,
+        { headOid: null, force: true },
+        () => prePoll.promise
+      )
+      await expect(write()).resolves.toEqual({ ok: true })
+      const changed = { ...open, state: 'merged' as const }
+      const afterWrite = vi.fn(async () => changed)
+      const followUp = withHostedReviewBranchCache(
+        identity,
+        { headOid: null, force: true },
+        afterWrite
+      )
+      prePoll.resolve(open)
+      await poll
+      await expect(followUp).resolves.toEqual(changed)
+      expect(afterWrite).toHaveBeenCalledTimes(1)
+    }
+  )
 })

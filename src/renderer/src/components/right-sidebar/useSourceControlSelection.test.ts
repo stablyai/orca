@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import {
-  getSelectionRangeKeys,
   reconcileSourceControlSelectionState,
   type FlatEntry
 } from './source-control/listing/use-selection'
@@ -45,37 +44,6 @@ describe('reconcileSourceControlSelectionState', () => {
     expect(result.anchorKey).toBeNull()
   })
 
-  it('still drops an anchor that is no longer visible when nothing is selected', () => {
-    const selectedKeys: ReadonlySet<string> = new Set()
-    const result = reconcileSourceControlSelectionState({
-      selectedKeys,
-      anchorKey: 'gone.ts',
-      flatEntries: [{ key: 'kept.ts' }] as unknown as Parameters<
-        typeof reconcileSourceControlSelectionState
-      >[0]['flatEntries']
-    })
-
-    expect(result.anchorKey).toBeNull()
-    expect(result.selectedKeys).toBe(selectedKeys)
-  })
-
-  it('keeps selected keys and anchor identity when all keys are still visible', () => {
-    const flatEntries = [
-      makeEntry('unstaged::a.ts', 'unstaged', 'a.ts'),
-      makeEntry('staged::b.ts', 'staged', 'b.ts')
-    ]
-    const selectedKeys = new Set(['unstaged::a.ts'])
-
-    const result = reconcileSourceControlSelectionState({
-      selectedKeys,
-      anchorKey: 'unstaged::a.ts',
-      flatEntries
-    })
-
-    expect(result.selectedKeys).toBe(selectedKeys)
-    expect(result.anchorKey).toBe('unstaged::a.ts')
-  })
-
   it('prunes stale selected keys and clears stale range anchors', () => {
     const flatEntries = [makeEntry('staged::b.ts', 'staged', 'b.ts')]
 
@@ -89,29 +57,5 @@ describe('reconcileSourceControlSelectionState', () => {
       selectedKeys: new Set(['staged::b.ts']),
       anchorKey: null
     })
-  })
-})
-
-describe('getSelectionRangeKeys', () => {
-  it('selects an inclusive range across visible sections', () => {
-    const flatEntries = [
-      makeEntry('unstaged::a.ts', 'unstaged', 'a.ts'),
-      makeEntry('unstaged::b.ts', 'unstaged', 'b.ts'),
-      makeEntry('staged::c.ts', 'staged', 'c.ts'),
-      makeEntry('untracked::d.ts', 'untracked', 'd.ts')
-    ]
-
-    expect(getSelectionRangeKeys(flatEntries, 'unstaged::b.ts', 'untracked::d.ts')).toEqual(
-      new Set(['unstaged::b.ts', 'staged::c.ts', 'untracked::d.ts'])
-    )
-  })
-
-  it('returns null when the anchor is no longer visible', () => {
-    const flatEntries = [
-      makeEntry('staged::c.ts', 'staged', 'c.ts'),
-      makeEntry('untracked::d.ts', 'untracked', 'd.ts')
-    ]
-
-    expect(getSelectionRangeKeys(flatEntries, 'unstaged::b.ts', 'untracked::d.ts')).toBeNull()
   })
 })

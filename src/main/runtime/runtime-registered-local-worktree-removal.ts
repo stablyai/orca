@@ -13,7 +13,7 @@ import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from '../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
-import { runHook, getEffectiveHooks } from '../hooks'
+import { runHook, getEffectiveHooks } from '../workspace-hooks/hooks'
 import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
@@ -284,12 +284,15 @@ export async function finishRuntimeLocalWorktreeRemoval(
     // Removal overtakes earlier scans; invalidate their catalogs.
     runWorktreeChangeInvalidators(repo.id)
     completed = true
+    try {
+      await cleanupRemovedWorktreePushTarget(args)
+    } finally {
+      args.finishRemoval(removalResult, true, refreshed.head)
+    }
+    return removalResult ?? {}
   } finally {
     await gate.finish(completed)
   }
-  await cleanupRemovedWorktreePushTarget(args)
-  args.finishRemoval(removalResult, true, refreshed.head)
-  return removalResult ?? {}
 }
 
 export async function cleanupRemovedWorktreePushTarget(

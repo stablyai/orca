@@ -24,11 +24,14 @@ export function WslDriveProjectGitRow({
   projectId,
   repoPath,
   resolution,
+  acceptsNewWork,
   updateProject
 }: {
   projectId: string
   repoPath: string
   resolution: ProjectExecutionRuntimeResolution
+  /** False in serve-only, after a live block or with the setting off: no new conversion. */
+  acceptsNewWork: boolean
   updateProject: (
     projectId: string,
     updates: ProjectUpdateArgs['updates']
@@ -51,6 +54,10 @@ export function WslDriveProjectGitRow({
         control={null}
       />
     )
+  }
+  // The converted state above always shows, since its preference still applies; the offer does not.
+  if (!acceptsNewWork) {
+    return null
   }
   const check = async (): Promise<void> => {
     setStep({ kind: 'checking' })

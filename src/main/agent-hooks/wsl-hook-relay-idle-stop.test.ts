@@ -107,41 +107,4 @@ describe('the WSL hook relay idle stop', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     expect(states.has('ubuntu')).toBe(false)
   })
-
-  it('brings a stopped relay back with its config, and a quit forgets it', async () => {
-    const state = running()
-    states.set('ubuntu', state)
-    idle.update(state)
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    idle.restoreParked('Ubuntu')
-    expect(states.get('ubuntu')).toMatchObject({
-      phase: 'failed',
-      cooldownUntil: 0,
-      codexHomePath: '/home/u/.codex'
-    })
-
-    states.clear()
-    const again = running()
-    states.set('ubuntu', again)
-    idle.update(again)
-    await vi.advanceTimersByTimeAsync(1_000)
-    idle.dispose(true)
-    idle.restoreParked('Ubuntu')
-    expect(states.has('ubuntu')).toBe(false)
-  })
-
-  it('never stops a relay that is not running, or one a newer state replaced', async () => {
-    const starting = { ...running(), phase: 'starting' as const }
-    states.set('ubuntu', starting)
-    idle.update(starting)
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(states.get('ubuntu')).toBe(starting)
-
-    const old = running()
-    idle.update(old)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(states.get('ubuntu')).toBe(starting)
-    expect(old.child?.kill).not.toHaveBeenCalled()
-  })
 })

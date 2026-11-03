@@ -1,6 +1,6 @@
 import { worktreeCreateGit } from '../git/worktree-create-git-executor'
-import { shouldRunSetupForCreate } from '../effective-hook-config'
-import { getEffectiveHooks } from '../hooks'
+import { shouldRunSetupForCreate } from '../workspace-hooks/effective-hook-config'
+import { getEffectiveHooks } from '../workspace-hooks/hooks'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -13,7 +13,7 @@ import { resolveDefaultBaseRefWithLocalGit } from '../git/repo'
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { computeWorkspaceRoot, getWorktreePathSettings } from '../ipc/worktree-logic'
-import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
@@ -29,14 +29,14 @@ import {
   holdInFlightWorktreeCreate,
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
-} from '../worktree-create-in-flight'
+} from '../workspaces/creation/worktree-create-in-flight'
 import { resolveRuntimeSetupDecision } from './runtime-local-worktree-setup'
 import { WorktreeCreateSetupChoiceRefusedError } from './worktree-create-setup-choice-refusal'
-import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import type { PreparationRearmHolder } from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   localWorktreeCreateExecutionHost,
   type WorktreeCreateTimingRecorder
-} from '../worktree-create-timing'
+} from '../workspaces/creation/worktree-create-timing'
 
 type RuntimeLocalWorktreeCreateArgs<T> = {
   request: RuntimeManagedWorktreeCreateArgs

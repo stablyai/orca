@@ -98,7 +98,8 @@ async function startOrcadRuntime(
   const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
-  const { startOrcadManagedAgentHooks } = await import('./orcad-managed-agent-hooks')
+  const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
+    await import('./orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/agent-status-observed-pane-identity')
 
@@ -155,7 +156,7 @@ async function startOrcadRuntime(
   // Subscribe before hooks start so early turns are counted.
   const { startOrcadStats } = await import('./orcad-stats')
   const stats = startOrcadStats(runtimeUserDataPath, agentHookServer, registerCleanup)
-  await agentHookServer.start({
+  await startOrcadAgentHookServer(agentHookServer, {
     env: 'production',
     userDataPath: runtimeUserDataPath,
     statusHooksEnabled: isAgentStatusHooksEnabled(profileStore.getSettings())

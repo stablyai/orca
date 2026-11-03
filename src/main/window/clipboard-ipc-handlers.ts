@@ -9,7 +9,7 @@ import {
 import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem/filesystem-auth'
 import { resolveDesktopAuthorizedPath } from '../ipc/local-file-access-resolution'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
@@ -54,7 +54,7 @@ import {
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
 import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
-import { agentSessionPastedImageName } from '../../shared/agent-session-attachments'
+import { agentSessionPastedImageName } from '../../shared/agent-session/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 let trustedClipboardRendererWebContentsId: number | null = null

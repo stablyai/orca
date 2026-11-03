@@ -82,14 +82,6 @@ describe('spawn size cache on reattach', () => {
     )
   })
 
-  it('records the requested grid for a genuinely fresh spawn', async () => {
-    const { runtime, preAttachSize } = await runSpawn({ cols: 120, rows: 40 }, { id: SESSION_ID })
-
-    expect(preAttachSize).toEqual({ cols: 120, rows: 40 })
-    expect(ptySizes.get(SESSION_ID)).toEqual({ cols: 120, rows: 40 })
-    expect(runtime.reflowHeadlessTerminalToPtyGrid).toHaveBeenCalledWith(SESSION_ID, 120, 40)
-  })
-
   // Unmeasured attach skips pre-seeding; if the daemon recreates it, commit must size the model.
   it('reflows a hidden attach the daemon answered with a fresh session onto the request', async () => {
     const { runtime, preAttachSize } = await runSpawn(

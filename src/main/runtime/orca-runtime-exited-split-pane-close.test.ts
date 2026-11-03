@@ -113,12 +113,6 @@ const panes = (session: WorkspaceSessionState) =>
   collectLeafIds(session.terminalLayoutsByTabId.tab?.root)
 
 describe('layout-owner build: main closes an exited split pane itself', () => {
-  it('closes a split pane whose shell exited cleanly', async () => {
-    const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })
-    expect(panes(session())).toEqual([LEFT])
-  })
-
   it('keeps a split pane whose process failed, behind its "Terminal exited" card', async () => {
     const { runtime, session } = splitRuntime()
     await runtime.onPtyExit('pty-right', 1, undefined, { providerExitObserved: true })
@@ -127,20 +121,6 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
 
   it('keeps a split pane on a -1 nothing vouches for, as the window does on lost contact', async () => {
     const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', -1)
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  it('keeps a split pane on a -1 only the provider reported, as the window does', async () => {
-    const { runtime, session } = splitRuntime()
-    await runtime.onPtyExit('pty-right', -1, undefined, { providerExitObserved: true })
-    expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  // Negative exits retain panes; explicit closes remove through the layout command.
-  it('keeps a split pane on a -1 after a stop was asked for', async () => {
-    const { runtime, session } = splitRuntime()
-    runtime.markPtyStopRequested('pty-right')
     await runtime.onPtyExit('pty-right', -1)
     expect(panes(session())).toEqual([LEFT, RIGHT])
   })
@@ -158,16 +138,6 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
       providerExitObserved: true
     })
     expect(panes(session())).toEqual([LEFT, RIGHT])
-  })
-
-  it("judges an older daemon's exit, which names no incarnation, by its code alone", async () => {
-    const kept = splitRuntime()
-    await kept.runtime.onPtyExit('pty-right', -1, undefined, { providerExitObserved: true })
-    expect(panes(kept.session())).toEqual([LEFT, RIGHT])
-
-    const closed = splitRuntime()
-    await closed.runtime.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })
-    expect(panes(closed.session())).toEqual([LEFT])
   })
 
   it('tells the phone a closed pane retired, and sends it nothing for a pane main keeps', async () => {

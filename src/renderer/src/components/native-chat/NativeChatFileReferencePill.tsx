@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
-import { isNativeChatPastedTextPath } from './native-chat-image-paste'
+import { isNativeChatPastedTextPath } from '../../../../shared/native-chat/native-chat-image-label'
 import {
   nativeChatPasteNotSavedNotice,
   nativeChatPastedTextId,

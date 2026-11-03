@@ -29,15 +29,11 @@ export function isTerseAgentFollowUpPrompt(prompt: string): boolean {
 }
 
 function taskTitleFromPrompt(prompt: string): string | null {
-  if (isOrcaDispatchPrompt(prompt)) {
-    const preview = getAgentRowPrimaryText({ prompt })
-    return preview || null
-  }
-  const trimmed = prompt.trim()
-  if (!trimmed || isTerseAgentFollowUpPrompt(trimmed)) {
+  const title = getAgentRowPrimaryText({ prompt })
+  if (!title || (!isOrcaDispatchPrompt(prompt) && isTerseAgentFollowUpPrompt(title))) {
     return null
   }
-  return trimmed
+  return title
 }
 
 function bestTaskPromptFromHistory(history: readonly AgentStateHistoryEntry[]): string | null {

@@ -1,14 +1,19 @@
 import type { AgentProcessVerdict } from '../../../../shared/agent-process-presence'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { readAgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -23,7 +28,7 @@ import {
   openTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { prepareStructuredAgentSessionCreateForWorktree } from './structured-agent-session-create'
 
@@ -317,6 +322,42 @@ describe('committed adopting create RPC replay', () => {
       expect(store.getRecord(SESSION)).toBeFalsy()
       expect(sessionAdapter.acquire).not.toHaveBeenCalled()
     }
+    // createSupport asks create's question before anything closes, leaving out the panes the
+    // client closes first; for any other pane it refuses as create does.
+    const support = (closingPaneKeys?: string[]) =>
+      dispatcher.dispatch(
+        {
+          id: 'support',
+          authToken: 'token',
+          method: 'agentSession.createSupport',
+          params: {
+            worktree: `id:${WORKSPACE}`,
+            agent: 'codex',
+            resumeFrom: {
+              providerSessionId: THREAD,
+              ...(closingPaneKeys ? { closingPaneKeys } : {})
+            }
+          }
+        },
+        {
+          ...CLIENT,
+          clientCapabilities: [
+            ...CLIENT.clientCapabilities,
+            STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+          ]
+        }
+      )
+    expect(await support([SOURCE_PANE])).toMatchObject({ ok: true, result: { supported: true } })
+    const created = await call(dispatcher, historyParams, CLIENT, unary)
+    const createResult = created?.ok ? created.result : undefined
+    const createRefusal = readAgentSessionRefusalReference(
+      typeof createResult === 'object' && createResult !== null && 'refusal' in createResult
+        ? createResult.refusal
+        : undefined
+    )
+    expect(createRefusal).toMatchObject({ code: 'agent_session_conflict' })
+    // As the client reads it: the thrown error carries the response.
+    expect(readAgentSessionErrorRefusal({ response: await support() })).toEqual(createRefusal)
     writerVerdict = 'exited'
     const params = createParams()
 
@@ -439,18 +480,23 @@ describe('committed adopting create RPC replay', () => {
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
     expect(internal.publishStructuredAgentSessionTab).toHaveBeenCalledTimes(2)
     expect(selectAccountHome).toHaveBeenCalledTimes(1)
-    // The switched-out terminal is checked before the owner is named; an unavailable scan refuses.
+    // A missing source row admits the holder check; a failed store read reports unavailable preparation.
     const another = await call(dispatcher, createParams(OPERATION, 'another-chat'))
     expect(another).toMatchObject({
       ok: true,
-      result: { ok: false, refusal: { details: { reason: 'conversationHeldElsewhere' } } }
+      result: {
+        ok: false,
+        refusal: unary
+          ? { details: { reason: 'conversationHeldElsewhere' } }
+          : { code: 'structured_agent_session_unsupported' }
+      }
     })
     expect(JSON.stringify(another).includes(`"owner"`)).toBe(unary)
 
     // Only an exact committed replay bypasses an unavailable writer scan.
     const freshRefusal = unary
       ? { code: 'agent_session_identity_required' }
-      : { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+      : { code: 'structured_agent_session_unsupported' }
     const otherOperation = createParams(`${Date.now()}-00000000000000000000000000000002`)
     expect(await call(dispatcher, otherOperation)).toMatchObject({
       ok: true,

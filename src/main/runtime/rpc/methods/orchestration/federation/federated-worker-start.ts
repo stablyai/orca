@@ -1,4 +1,4 @@
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
 import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import {
@@ -11,10 +11,7 @@ import {
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../../../../../shared/orchestration-rpc-contract'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { WorkerStartInput } from '../worker/worker-start-schema'
 import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
@@ -36,25 +33,14 @@ import {
 } from './federated-worker-start-receipts'
 import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
 import { withWorkerStartNext } from '../receipt-next'
+import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
+import {
+  recordWorkerLaunchObservation,
+  workerLaunchAgent
+} from '../../../../orchestration/worker-launch-observation'
 
-export async function startFederatedWorker(args: {
-  params: WorkerStartInput
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  /** Called only once preflight passes, so a refused start binds no new Run. */
-  bindRunId: () => string
-  task?: { id: string; spec: string; status: string }
-  taskDeps: string[] | undefined
-  orchestrationMutation?: {
-    callerFingerprint: string
-    requestId: string
-    method: string
-    payloadHash: string
-  }
-  /** The coordinator's resolved session, when it is one; recorded as the Dispatch creator. */
-  callerSession?: OrchestrationSessionCaller
-}): Promise<unknown> {
+export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
@@ -170,6 +156,7 @@ export async function startFederatedWorker(args: {
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
   let readyResult: unknown
+  let launch = requestedLaunch
   try {
     const remote = parseRemoteFederatedWorkerStartReceipt(
       await runtime.callOrchestrationWorkerServer(
@@ -214,27 +201,14 @@ export async function startFederatedWorker(args: {
         'The worker server returned a different Dispatch attachment.'
       )
     }
-    const launch = resolveFederatedWorkerLaunchReceipt(
+    recordWorkerLaunchObservation(db, started.dispatch.id, remote.launch)
+    launch = resolveFederatedWorkerLaunchReceipt(
       remote.launch,
       requestedLaunch,
       remote.state === 'ready'
     )
     if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
-      db.updateFederatedDispatchResources({
-        dispatchId: started.dispatch.id,
-        remoteRuntimeEpoch: remote.runtimeEpoch,
-        worktreeId: remote.worktreeId,
-        terminalHandle: remote.terminalHandle
-      })
-      db.recordWorkerStage({
-        dispatchId: started.dispatch.id,
-        stage: 'remote_input_accepted',
-        worktreeId: remote.worktreeId,
-        terminalHandle: remote.terminalHandle,
-        setupState: remote.setup?.state,
-        effects: remote.effects,
-        residualResources: remote.residualResources
-      })
+      recordReadyFederatedDispatch(db, started.dispatch.id, remote)
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)
       const reportsTurnStops = status.capabilities?.includes(
@@ -254,7 +228,13 @@ export async function startFederatedWorker(args: {
           effects: remote.effects ?? [],
           residualResources: remote.residualResources ?? []
         },
-        reportsTurnStops ? undefined : { name: server.name, dispatchId: started.dispatch.id }
+        reportsTurnStops
+          ? undefined
+          : {
+              name: server.name,
+              dispatchId: started.dispatch.id,
+              cli: params.from ? runtime.getTerminalOrchestrationCliCommand(params.from) : 'orca'
+            }
       )
     } else if (remote.state === 'outcome_unknown') {
       const worker = db.markWorkerStartUnknown(
@@ -291,7 +271,8 @@ export async function startFederatedWorker(args: {
     recordStart({
       dispatchId: started.dispatch.id,
       workerAddress: `dispatch:${started.dispatch.id}`,
-      task: taskForRemote.spec
+      task: taskForRemote.spec,
+      agent: workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
     })
   }
   return readyResult

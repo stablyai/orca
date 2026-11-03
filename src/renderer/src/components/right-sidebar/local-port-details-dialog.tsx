@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { addressForPort } from '@/lib/workspace-port-urls'
+import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
 

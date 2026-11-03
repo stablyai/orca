@@ -781,22 +781,33 @@ describe('orchestration worker-start CLI contract', () => {
     ).not.toContain('orchestration worker-retain')
   })
 
-  it('keeps a worker started with --keep-open open after it finishes', async () => {
+  it.each([
+    ['--keep-open', ['keep-open', true]],
+    ['a new top-level workspace', ['worktree', 'new-top-level']],
+    ['a new child workspace', ['worktree', 'new-child']]
+  ] as const)('keeps a worker started with %s open after it finishes', async (_, flag) => {
     callMock.mockImplementation(async (method: string) =>
       method === 'orchestration.workerStart'
         ? { result: { taskId: 'task_1', dispatchId: 'ctx_1', state: 'ready', effects: [] } }
         : { result: { dispatchId: 'ctx_1', state: 'retained', processAction: 'none' } }
     )
     await invokeWorkerStart(
-      new Map<string, string | boolean>([
-        ['task', 'task_1'],
-        ['agent', 'codex'],
-        ['keep-open', true]
-      ]),
+      new Map<string, string | boolean>([['task', 'task_1'], ['agent', 'codex'], flag]),
       false
     )
     expect(callMock).toHaveBeenLastCalledWith('orchestration.workerRetain', { dispatch: 'ctx_1' })
     expect(printedText()).toContain('keptOpen=true')
+  })
+
+  it('lets a worker in the current workspace close on its own', async () => {
+    callMock.mockResolvedValue({ result: { dispatchId: 'ctx_1', state: 'ready', effects: [] } })
+    const flags: [string, string][] = [
+      ['task', 'task_1'],
+      ['agent', 'codex'],
+      ['worktree', 'current']
+    ]
+    await invokeWorkerStart(new Map<string, string | boolean>(flags), false)
+    expect(callMock).not.toHaveBeenCalledWith('orchestration.workerRetain', expect.anything())
   })
 
   it.each([

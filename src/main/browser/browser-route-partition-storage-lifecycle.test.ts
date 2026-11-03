@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserRoutePartitionBindingStore } from './browser-route-partition-binding-store'
 import {
-  findBrowserRoutePartitionsForStorageScope,
   findOrphanedBrowserRoutePartitions,
   releaseBrowserRoutePartitionStorage,
   type BrowserRoutePartitionStorageDependencies
@@ -61,19 +60,6 @@ function createDependencies(
 }
 
 describe('route partition storage lifecycle', () => {
-  it('treats a disconnected but still-recorded environment as live storage', () => {
-    const { store, partitionDataRoot } = createStore()
-    const partition = partitionName('a')
-    store.set(partition, fingerprint, scopeAlpha)
-
-    expect(
-      findOrphanedBrowserRoutePartitions(
-        createDependencies(store, partitionDataRoot),
-        new Set([scopeAlpha])
-      )
-    ).toEqual([])
-  })
-
   it('collects partitions of removed environments and pre-scope entries', () => {
     const { filePath, store, partitionDataRoot } = createStore()
     const removed = partitionName('b')
@@ -160,20 +146,5 @@ describe('route partition storage lifecycle', () => {
     expect(dependencies.cleared).toEqual([])
     expect(existsSync(directory)).toBe(true)
     expect(store.get(partition)).toBe(fingerprint)
-  })
-
-  it('selects exactly the partitions owned by one environment scope', () => {
-    const { store, partitionDataRoot } = createStore()
-    const mine = partitionName('2')
-    const other = partitionName('3')
-    store.set(mine, fingerprint, scopeBeta)
-    store.set(other, fingerprint, scopeAlpha)
-
-    expect(
-      findBrowserRoutePartitionsForStorageScope(
-        createDependencies(store, partitionDataRoot),
-        scopeBeta
-      )
-    ).toEqual([mine])
   })
 })

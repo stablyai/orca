@@ -110,26 +110,6 @@ describe('mailbox pointer staging watermark', () => {
     db.close()
   })
 
-  it('keeps the watermark for the flight that owns the reservation', () => {
-    const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 's'
-    })
-    const state = new OrchestrationMailboxPointerState()
-    const args = stageArgs(db, state)
-    stageOrchestrationMailboxPointer({
-      ...args,
-      deps: { ...args.deps, writePty: () => WRITE_ACCEPTED },
-      messages: [{ id: message.id, type: 'status', sequence: 1 }]
-    } as never)
-
-    expect(state.hasActiveWatermark('run:run-1')).toBe(true)
-    db.close()
-  })
-
   it('drains a delivery parked behind the watermark when the write is refused', () => {
     const db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({

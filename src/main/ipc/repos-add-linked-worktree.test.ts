@@ -51,7 +51,7 @@ vi.mock('../git/repo', () => ({
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('../repo-icon-autodetect', () => ({
+vi.mock('../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: detectRepoIconAndUpstreamMock
 }))
 
@@ -59,7 +59,7 @@ vi.mock('./registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 

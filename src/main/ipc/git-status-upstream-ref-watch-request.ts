@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
@@ -7,7 +7,7 @@ import {
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree
 } from './local-worktree-runtime-options'
-import { setWorktreeGitStatusRefWatch } from './worktree-base-directory-watcher'
+import { setWorktreeGitStatusRefWatch } from './worktrees/creation/worktree-base-directory-watcher'
 import type { GitStatusRefBindingRequest } from './worktree-git-status-ref-watch'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'

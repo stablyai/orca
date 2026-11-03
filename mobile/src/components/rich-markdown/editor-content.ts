@@ -1,5 +1,6 @@
 import { blockMarkdown } from './html-block-markdown'
 import { markdownToHtml } from './markdown-to-html'
+import { WORKSPACE_IMAGE_PATH_ATTRIBUTE } from './markdown-inline-render'
 import { post } from './host-bridge'
 import { editorElement } from './editor-surface'
 import type { RichMarkdownEditorScope } from './document-scope'
@@ -49,6 +50,7 @@ export function emitChange(scope: RichMarkdownEditorScope) {
   }
   scope.clearTimer(scope.inputTimer)
   syncTaskCheckboxes(scope)
+  showWorkspaceImages(scope)
   const pendingGeneration = scope.documentGeneration
   scope.lastMarkdown = currentMarkdown(scope)
   post(scope, { type: 'change', markdown: scope.lastMarkdown, generation: pendingGeneration })
@@ -62,9 +64,33 @@ export function setMarkdown(scope: RichMarkdownEditorScope, markdown: string, ge
   scope.savedSelectionRange = null
   scope.selectionDroppedOnBlur = false
   scope.lastMarkdown = String(markdown || '')
+  scope.workspaceImageSources.clear()
   editorElement(scope).innerHTML = markdownToHtml(scope, scope.lastMarkdown)
   syncTaskCheckboxes(scope)
   scope.suppressInput = false
+  showWorkspaceImages(scope)
+}
+
+// Edits reuse each render's loads (undo and paste bring back images with no source); a failed path waits for the next render.
+function showWorkspaceImages(scope: RichMarkdownEditorScope) {
+  editorElement(scope)
+    .querySelectorAll<HTMLImageElement>(`img[${WORKSPACE_IMAGE_PATH_ATTRIBUTE}]:not([src])`)
+    .forEach((image) => {
+      const path = image.getAttribute(WORKSPACE_IMAGE_PATH_ATTRIBUTE) ?? ''
+      let source = scope.workspaceImageSources.get(path)
+      if (!source) {
+        source = scope.loadImageSource(path)
+        scope.workspaceImageSources.set(path, source)
+      }
+      source.then(
+        (src) => {
+          if (!scope.stopped && !image.hasAttribute('src')) {
+            image.src = src
+          }
+        },
+        () => {}
+      )
+    })
 }
 
 // Cancel pending callback to release scope and prevent change after unmount/content replacement; currently nothing schedules timer, but cancellation must accompany future use.

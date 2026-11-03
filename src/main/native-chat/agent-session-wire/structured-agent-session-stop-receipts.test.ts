@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -64,13 +64,8 @@ it('does not treat completed submission history as a send in an empty reinitiali
 })
 
 function stopEvents(): { sequence: number; event: JournalStopEvent }[] {
-  const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
-  if (!since.ok) {
-    throw new Error(`expected rows, got reset ${since.reset}`)
-  }
-  return since.rows.flatMap((row) =>
-    row.kind === 'tombstone' && row.stopEvent ? [{ sequence: row.seq, event: row.stopEvent }] : []
-  )
+  const mark = journal().stopMarks.latest()
+  return mark ? [{ sequence: mark.sequence, event: mark.event }] : []
 }
 
 async function turnRow(turnId: string, state: 'running' | 'interrupted'): Promise<void> {

@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileDiffReviewScreenView } from '../components/MobileDiffReviewScreenView'
-import { firstReviewParam, normalizeReviewFilterParam } from './mobile-diff-review-screen-model'
-import { normalizeReviewAreaParam } from './mobile-diff-review-positioning'
+import { firstReviewParam } from './mobile-diff-review-screen-model'
+import { normalizeReviewAreaParam, scopeForTargetArea } from './mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
@@ -15,16 +15,20 @@ export function MobileDiffReviewRouteScreen() {
     hostId?: string | string[]
     worktreeId?: string | string[]
     name?: string | string[]
-    scope?: string | string[]
     file?: string | string[]
     area?: string | string[]
+    commit?: string | string[]
+    line?: string | string[]
   }>()
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
   const name = firstReviewParam(params.name)
-  const initialFilter = normalizeReviewFilterParam(firstReviewParam(params.scope))
   const initialFile = firstReviewParam(params.file)
   const initialArea = normalizeReviewAreaParam(firstReviewParam(params.area))
+  const initialFilter = initialArea ? scopeForTargetArea(initialArea) : 'all'
+  const commitOid = firstReviewParam(params.commit) || null
+  const lineParam = Number.parseInt(firstReviewParam(params.line), 10)
+  const initialLine = Number.isInteger(lineParam) && lineParam > 0 ? lineParam : null
   const initialTarget = useMemo(
     () => (initialFile && initialArea ? { filePath: initialFile, area: initialArea } : null),
     [initialArea, initialFile]
@@ -53,6 +57,8 @@ export function MobileDiffReviewRouteScreen() {
     name,
     initialFilter,
     initialTarget,
+    commitOid,
+    initialLine,
     onOpenSession: openSession,
     onReconnect: forceReconnect
   })

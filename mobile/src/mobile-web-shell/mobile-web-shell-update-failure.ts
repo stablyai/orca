@@ -2,12 +2,12 @@ import type { MobileWebBundleErrorCode } from '../../../src/shared/mobile-web-bu
 import {
   isMobileWebBundleTransportFailure,
   readMobileWebBundleErrorCode
-} from '../transport/mobile-web-bundle-operations'
+} from '../transport/web-bundle/mobile-web-bundle-operations'
 import type { MobileWebShellBlockedVerdict } from './mobile-web-shell-session-contract'
 import {
   MOBILE_WEB_BUNDLE_FETCH_REFUSALS,
   MobileWebBundleFetchError
-} from '../transport/mobile-web-bundle-fetch-refusal'
+} from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
 import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
 
 // Record closed codes only; error text can contain asset paths, hashes or transport endpoints.

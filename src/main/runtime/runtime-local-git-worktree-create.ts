@@ -15,16 +15,16 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeLocalWorktreeCreateBase } from './runtime-local-worktree-create-base'
-import { isGeneratedWorktreeCreateName } from '../worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
-} from '../worktree-create-preparation'
+} from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   failedWorktreeCreationNeedsRetirement,
   retireGeneratedWorktreeName
 } from '../worktree-name-retirement'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
 
 export type RuntimeLocalBaseRefRefresh = {
   /** Awaits the deferred refresh started before naming, if any. */

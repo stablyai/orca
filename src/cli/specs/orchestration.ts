@@ -134,7 +134,10 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show messages across (or for) recipients',
     usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full'],
-    identityFlagRoles: { terminal: 'target' }
+    identityFlagRoles: { terminal: 'target' },
+    notes: [
+      'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.'
+    ]
   },
   {
     path: ['orchestration', 'task-create'],
@@ -162,7 +165,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'run', 'from'],
     identityFlagRoles: { from: 'caller' },
-    notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
+    notes: [
+      'Rows show id, status, and title; --full adds each spec and result, where --brief collapses whitespace and caps each spec at 160 characters.'
+    ]
   },
   {
     path: ['orchestration', 'task-update'],

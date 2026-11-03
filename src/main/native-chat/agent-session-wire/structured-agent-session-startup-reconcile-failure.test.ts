@@ -1,10 +1,10 @@
 import { cp, readdir, readFile, rm } from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
-import type * as AgentSessionRecordRows from '../../runtime/agent-session-record-rows'
+import type * as AgentSessionRecordRows from '../../runtime/agent-session/records/agent-session-record-rows'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { journalDatabasePath } from '../agent-session-journal/journal-host-database'
 import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../agent-session-journal/journal-open-failure'
 import {
@@ -32,7 +32,7 @@ import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-
 
 const writes = vi.hoisted(() => ({ failing: false }))
 
-vi.mock('../../runtime/agent-session-record-rows', async (importOriginal) => {
+vi.mock('../../runtime/agent-session/records/agent-session-record-rows', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentSessionRecordRows>()
   return {
     ...actual,

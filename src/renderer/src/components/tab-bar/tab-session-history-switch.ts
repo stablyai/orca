@@ -44,7 +44,7 @@ import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault-session-refresh'
 import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session-launch-plan'
 import { resolveHostCapabilities } from '@/lib/agent-launch-route-input'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 

@@ -11,21 +11,21 @@ import {
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { scheduleNativeChatVisualsSweep } from '../native-chat/native-chat-visuals-sweep'
 import type { InstalledRuntime } from './agent-session/structured-agent-session-runtime-teardown'
-import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
-import type { OpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
-import { installAgentSessionAttachments } from './structured-agent-session-attachment-wiring'
+import { AgentSessionRecoveryCapsule } from './agent-session/records/agent-session-recovery-capsule'
+import type { OpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
+import { installAgentSessionAttachments } from './agent-session/structured-agent-session-attachment-wiring'
 import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
-} from './structured-agent-session-owner-probe'
+} from './agent-session/structured-agent-session-owner-probe'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
-import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
-import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
+import { createStructuredAgentSessionLifecycleDelivery } from './agent-session/structured-agent-session-lifecycle-delivery'
+import { createStructuredAgentSessionDispatchFollowUps } from './agent-session/structured-agent-session-dispatch-followups'
 import { modelCatalogHostDeps } from './structured-agent-model-catalog-wiring'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
@@ -75,6 +75,7 @@ export async function installOnJournal(
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
     journalDatabase,
     claimKeyId: deps.claimKeyId,
+    usageLimitAutoContinue: deps.usageLimitAutoContinue,
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
     resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -86,10 +87,13 @@ export async function installOnJournal(
       ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }
       : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
+    ...(deps.queuedAgentMessageOwed ? { queuedAgentMessageOwed: deps.queuedAgentMessageOwed } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
+    ...(deps.launchAccountHome ? { launchAccountHome: deps.launchAccountHome } : {}),
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(await modelCatalogHostDeps({
+      host: () => host,
       store,
       agents,
       registrations: STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,

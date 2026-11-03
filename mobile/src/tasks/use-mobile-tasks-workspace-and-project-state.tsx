@@ -1,4 +1,4 @@
-import { useBottomDrawerFollowUp } from '../components/use-bottom-drawer-follow-up'
+import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
 import type { WorkspaceSshRecord } from './workspace-ssh-gate'
 import {
@@ -84,6 +84,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [mutatingStatus, setMutatingStatus] = useState(false)
   const [linearStates, setLinearStates] = useState<LinearState[]>([])
   const [linearStatesLoading, setLinearStatesLoading] = useState(false)
+  const [linearStatesError, setLinearStatesError] = useState('')
   const [linearCommentDraft, setLinearCommentDraft] = useState('')
   const [linearSubIssueTitle, setLinearSubIssueTitle] = useState('')
   const [taskStateHydrated, setTaskStateHydrated] = useState(false)
@@ -224,6 +225,8 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setLinearStates,
     linearStatesLoading,
     setLinearStatesLoading,
+    linearStatesError,
+    setLinearStatesError,
     linearCommentDraft,
     setLinearCommentDraft,
     linearSubIssueTitle,

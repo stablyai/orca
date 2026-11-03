@@ -24,7 +24,7 @@ import { resolveImportedFolderProjectLink } from '../../shared/imported-folder-p
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../folder-repo-git-conversion'
 import type { RuntimeStore } from './runtime-store-contract'
 import { readAllWorktreeMetaForRepo } from '../persistence/host-qualified-worktree-meta'

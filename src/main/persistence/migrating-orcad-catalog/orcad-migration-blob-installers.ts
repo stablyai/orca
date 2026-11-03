@@ -9,7 +9,7 @@ import {
   parseOrcadMigrationTerminalRestoreHintsText,
   type OrcadMigrationTerminalRestoreHint
 } from '../../../shared/orcad-migration/orcad-migration-terminal-restore-hints'
-import { syncDirectoryDurablySync } from '../../durable-file-write'
+import { syncDirectoryDurablySync } from '../../filesystem/durable-file-write'
 import {
   getOrcadMigrationReceivedBlobPath,
   stagedOrcadMigrationBlobFiles

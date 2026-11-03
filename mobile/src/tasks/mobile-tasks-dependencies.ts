@@ -48,8 +48,6 @@ export {
 export { classifyConnection } from '../transport/connection-health'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
-export { BottomDrawer } from '../components/BottomDrawer'
-export { BottomDrawerModalHost } from '../components/bottom-drawer-modal-host'
 export { ConfirmModal } from '../components/ConfirmModal'
 export { MobileMarkdown } from '../components/MobileMarkdown'
 export { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -124,7 +122,6 @@ export { colors, radii, spacing, typography } from '../theme/mobile-theme'
 export type { MobileColorScheme } from '../theme/mobile-theme'
 export { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 export { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-export { triggerMediumImpact } from '../platform/haptics'
 export {
   CROSS_REPO_DISPLAY_LIMIT,
   getTaskPagePerRepoLimit,

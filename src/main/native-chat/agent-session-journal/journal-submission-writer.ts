@@ -1,9 +1,11 @@
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import { journalQueueReopenRowBuilder } from './journal-stop-and-resume-rows'
 import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
+import { QueuedMessageNotOwedError } from './queued-message-consume-error'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder, journalSubmissionRowBuilder } from './journal-row-builders'
@@ -17,6 +19,7 @@ import type {
 
 export type JournalSubmissionWriterDeps = {
   state: () => JournalReducerState
+  reopenFloor: () => AgentJournalCursor | null
   identity: AgentSessionJournalIdentity
   rowWriter: JournalRowWriter
   queuedMessages: JournalQueuedMessages
@@ -41,17 +44,27 @@ export class JournalSubmissionWriter {
     return rowWriter
       .enqueueRows(
         () => {
+          const floor = this.deps.reopenFloor()
+          const reopen =
+            floor?.epoch === state().epoch
+              ? [journalQueueReopenRowBuilder(state, input.fence, floor.sequence)]
+              : []
           if (!consume) {
-            return [submission]
+            return [...reopen, submission]
           }
           queuedMessages.assertConsumable({
             ...consume,
             consumedAs: input.clientMessageId,
             fingerprint: input.payloadFingerprint
           })
+          // Asked on the write lane, so nothing it depends on can change before the handoff row lands.
+          const owed = consume.owed?.() ?? 'owed'
+          if (owed !== 'owed') {
+            throw new QueuedMessageNotOwedError(consume.messageId, owed)
+          }
           // Adopt legacy cards in the handoff transaction.
           card = queuedMessages.plan([{ messageId: consume.messageId }])
-          return [...card.rows, submission]
+          return [...reopen, ...card.rows, submission]
         },
         {
           write: (db, row) => {

@@ -1,3 +1,4 @@
+import { abbreviateOrchestrationText } from '../../../shared/orchestration-task-summary'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
@@ -64,16 +65,17 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       run: { id: string; objective: string } | null
+      next?: string
     }>('orchestration.runCurrent', { from })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
-        fields: (r) => (r.run ? runFields(r.run) : { runId: null })
+        fields: (r) => (r.run ? { ...runFields(r.run), next: r.next } : { runId: null })
       })
       return
     }
     printResult(result, json, (r) =>
       r.run
-        ? `${r.run.id} ${r.run.objective}`
+        ? withReceiptNext(`${r.run.id} ${r.run.objective}`, r)
         : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
     )
   },
@@ -94,7 +96,8 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
         fields: (r) => ({
           runs: r.runs.map((run) => {
             const { runId, ...rest } = runFields(run)
-            return { id: runId, ...rest }
+            // Objectives are caller-written and unbounded; --full prints them whole.
+            return { id: runId, ...rest, objective: abbreviateOrchestrationText(run.objective) }
           }),
           nextCursor: r.nextCursor ?? undefined
         })

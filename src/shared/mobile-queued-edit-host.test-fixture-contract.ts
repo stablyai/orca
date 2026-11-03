@@ -1,11 +1,11 @@
-import type { AgentJournalMessageItem } from './agent-session-journal-types'
-import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
+import type { AgentJournalMessageItem } from './agent-session/journal/agent-session-journal-types'
+import type { AgentSessionExecutionOptions } from './agent-session/options/agent-session-execution-options'
+import type { AgentSessionQueuedMessage } from './agent-session/requests/agent-session-queued-message-wire'
 import type {
-  AgentSessionQueuedMessage,
   AgentSessionSlashCommand,
   AgentSessionCommandsResult,
   AgentSessionSubscribeEvent
-} from './agent-session-wire'
+} from './agent-session/agent-session-wire'
 
 type StoredQueuedMessage = {
   messageId: string

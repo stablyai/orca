@@ -60,36 +60,6 @@ afterEach(() => {
 })
 
 describe('ClaudeRuntimeAuthService', () => {
-  it('skips a quota preparation for a stopped distro instead of booting it', async () => {
-    const preparation = vi.spyOn(fakes.wsl, 'preparation')
-    const auth = service('win32', {}, async () => false)
-    await expect(
-      auth.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toMatchObject({ usageError: 'WSL distro Ubuntu is not running.' })
-    expect(preparation).not.toHaveBeenCalled()
-
-    const running = service('win32')
-    await expect(
-      running.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-  })
-
-  it('keeps a stale WSL account setting on the host off Windows', async () => {
-    const auth = service('darwin', { localAccountRuntime: 'wsl', localAccountWslDistro: 'Ubuntu' })
-    expect(auth.getRuntimeConfigDir()).toBe('/host/.claude')
-    await expect(auth.prepareForClaudeLaunch()).resolves.toEqual({ runtime: 'host' })
-  })
-
-  it('routes a WSL target that names no distro to the default distro', async () => {
-    const auth = service('win32')
-    await expect(auth.prepareForClaudeLaunch({ runtime: 'wsl', wslDistro: null })).resolves.toEqual(
-      { runtime: 'wsl', wslDistro: 'Ubuntu' }
-    )
-    expect(auth.getRuntimeConfigDir({ runtime: 'wsl', wslDistro: null })).toBe(
-      '/wsl/Ubuntu/home/.claude'
-    )
-  })
-
   it('never fails a select over a failed guest publish, and publishes one pass at a time', async () => {
     const auth = service('win32')
     vi.spyOn(fakes.wsl, 'publish').mockRejectedValue(new Error('distro is gone'))

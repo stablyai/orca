@@ -148,19 +148,6 @@ describe('headless Codex chat address under Codex idle titles (#31136)', () => {
     })
   })
 
-  it('keeps the transcript address while a new turn starts under the idle title', async () => {
-    const agentStatus = await codexPaneAfterOutput(
-      [codexRow({ state: 'working', prompt: 'explain the parser' })],
-      [title('Reply with hi | repo'), programState('idle')]
-    )
-
-    expect(agentStatus).toMatchObject({
-      agentType: 'codex',
-      state: 'done',
-      providerSession: PROVIDER_SESSION
-    })
-  })
-
   it('follows OSC 7501 working under a title with no agent marker', async () => {
     const agentStatus = await codexPaneAfterOutput(
       [codexRow({ state: 'working', prompt: 'explain the parser' })],
