@@ -5,7 +5,7 @@ import { getPRForBranch } from '../github/client'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync } from '../git/runner'
 import { foldGitRefNameCase } from '../git/repo-branch-conflict'
-import { listWorktrees } from '../git/worktree'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
 import { computeValidatedBranchName } from '../ipc/worktree-branch-name'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import {

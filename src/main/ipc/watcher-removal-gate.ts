@@ -1,4 +1,4 @@
-import { canonicalWorktreePath } from '../git/worktree-path-comparison'
+import { canonicalWorktreePath } from '../git/worktrees/catalog/worktree-path-comparison'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison

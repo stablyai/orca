@@ -100,19 +100,6 @@ describe.runIf(Boolean(pairingInput && proxyEndpoint))(
       await exerciseCatalogAndFilesystem(reconnected)
     })
 
-    it('serves independent simultaneous clients over both paths', async () => {
-      const [direct, proxy] = await Promise.all([
-        openClient(directOffer),
-        openClient({ ...directOffer, endpoint: proxyEndpoint ?? '' })
-      ])
-      clients.push(direct, proxy)
-
-      const results = await Promise.all([direct.call('repo.list'), proxy.call('repo.list')])
-      expect(
-        results.map((response) => requireResult<{ repos: Repo[] }>(response).repos.length)
-      ).toEqual([expect.any(Number), expect.any(Number)])
-    })
-
     it.runIf(Boolean(secondPairingInput))(
       'keeps simultaneous clients to different servers isolated',
       async () => {

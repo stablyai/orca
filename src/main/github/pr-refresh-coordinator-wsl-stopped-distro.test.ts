@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WslUncAccessGateModule from '../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGateModule from '../wsl/filesystem/wsl-unc-access-gate'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
@@ -18,7 +18,7 @@ vi.mock('./github-api-repository', () =>
 )
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGateModule>()),
   blockedWslDistroForPath: gate.blockedWslDistroForPath,
   wslDistroForPath: gate.wslDistroForPath
@@ -50,7 +50,7 @@ describe('PR refresh for a stopped WSL distro (E9)', () => {
 
   it("drains outside a user act that scheduled it, so a stopped distro's queue is not admitted", async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    const { isWslUserActFor, runAsWslUserAct } = await import('../wsl/wsl-user-act-scope')
+    const { isWslUserActFor, runAsWslUserAct } = await import('../wsl/discovery/wsl-user-act-scope')
     const drainedInsideAct: boolean[] = []
     gate.blockedWslDistroForPath.mockImplementation(async () => {
       drainedInsideAct.push(isWslUserActFor('Ubuntu'))

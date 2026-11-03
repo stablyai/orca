@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useMemo } from 'react'
 import type React from 'react'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -11,7 +12,7 @@ import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAi
 import { RepositorySourceControlAiHostedReviewDefaults } from './RepositorySourceControlAiHostedReviewDefaults'
 import { normalizeRepoAiDraft } from './repository-source-control-ai-draft'
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
-import { getSettingOwnershipSummary } from '../../setting-ownership'
+import { getSettingOwnershipSummary } from '../../page/setting-ownership'
 import { translate } from '@/i18n/i18n'
 
 type RepositorySourceControlAiSectionProps = {
@@ -24,11 +25,20 @@ export function RepositorySourceControlAiSection({
   repo,
   updateRepo
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
-  const settings = useAppStore((state) => state.settings)
+  const settings = useAppStore(
+    useShallow(
+      (state) =>
+        state.settings && {
+          sourceControlAi: state.settings.sourceControlAi,
+          commitMessageAi: state.settings.commitMessageAi,
+          defaultTuiAgent: state.settings.defaultTuiAgent
+        }
+    )
+  )
   const ownership = getSettingOwnershipSummary('repositorySourceControlAi')
-  const source = normalizeSourceControlAiSettings(
-    settings?.sourceControlAi,
-    settings?.commitMessageAi
+  const source = useMemo(
+    () => normalizeSourceControlAiSettings(settings?.sourceControlAi, settings?.commitMessageAi),
+    [settings?.sourceControlAi, settings?.commitMessageAi]
   )
   const persistedRepoAi = useMemo(
     () => normalizeRepoAiDraft(repo.sourceControlAi),

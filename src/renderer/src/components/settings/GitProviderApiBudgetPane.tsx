@@ -1,6 +1,6 @@
 import { useAppStore } from '../../store'
-import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch } from './settings-search'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { matchesSettingsSearch } from './search/settings-search'
 import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
 import { GitLabRateLimitPanel } from '../gitlab/gitlab-rate-limit-display'
 import { translate } from '@/i18n/i18n'

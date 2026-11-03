@@ -1,4 +1,5 @@
 import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
+import type { HostedReviewState } from './hosted-review'
 import { resolveProviderCheckState } from './provider-check-summary'
 import type { WorkspaceAttachment } from './worktree/types'
 import {
@@ -9,11 +10,18 @@ import {
 
 export type WorkspaceReviewCheckDetails = {
   stale?: boolean
-  review?: { provider: string; number: number; url?: string; status?: CheckStatus }
+  review?: {
+    provider: string
+    number: number
+    url?: string
+    state?: HostedReviewState
+    status?: CheckStatus
+  }
 }
 
 export type WorkspaceReviewChecksSummary = Omit<ProviderCheckSummary, 'state'> & {
   state: ProviderCheckSummary['state'] | 'unknown'
+  reviewState?: HostedReviewState
   known: number
   unknown: number
   stale: number
@@ -35,6 +43,7 @@ export function summarizeWorkspaceReviewChecks(
     pending: 0,
     neutral: 0
   }
+  const reviewStates = new Set<HostedReviewState | undefined>()
   for (const item of reviews) {
     const detail = details[getWorkspaceAttachmentKey(item)]
     const review = detail?.review
@@ -46,14 +55,15 @@ export function summarizeWorkspaceReviewChecks(
         (review.url &&
           getWorkspaceAttachmentUrlScope(item) ===
             getWorkspaceAttachmentUrlScope({ ...item, url: review.url })))
+    reviewStates.add(matches ? review.state : undefined)
+    if (matches && detail?.stale) {
+      summary.stale += 1
+    }
     if (!matches || !review.status) {
       summary.unknown += 1
       continue
     }
     summary.known += 1
-    if (detail?.stale) {
-      summary.stale += 1
-    }
     if (review.status === 'failure') {
       summary.failed += 1
     } else if (review.status === 'pending') {
@@ -63,6 +73,13 @@ export function summarizeWorkspaceReviewChecks(
     } else {
       summary.neutral += 1
     }
+  }
+  if (reviewStates.size === 1) {
+    summary.reviewState = reviewStates.values().next().value
+  } else if (reviewStates.has('open') || reviewStates.has('draft')) {
+    summary.reviewState = 'open'
+  } else if (reviewStates.size > 1 && !reviewStates.has(undefined)) {
+    summary.reviewState = 'closed'
   }
   const state = resolveProviderCheckState(summary)
   // Missing or stale reviews cannot certify the workspace green; known failures still count.

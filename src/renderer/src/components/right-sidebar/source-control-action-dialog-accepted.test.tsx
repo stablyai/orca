@@ -11,6 +11,7 @@ import { mountSourceDialog } from './source-control-action-dialog.test-fixture'
 const initialState = useAppStore.getState()
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   clearHostAgentMenuSettingsForTests()
   useAppStore.setState(initialState, true)
   setLocalRuntimeCapabilitiesForTests(null)

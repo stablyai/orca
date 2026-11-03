@@ -7,7 +7,7 @@ import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import type { CursorAccountStatus } from '../../../../shared/rate-limit-types'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 const CURSOR_USAGE_DASHBOARD_URL = 'https://cursor.com/dashboard/spending'

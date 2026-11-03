@@ -25,7 +25,7 @@ describe('per-job path classification', () => {
       classifyPrJobs([
         unit,
         'config/scripts/process-host-build-dist.test.mjs',
-        'src/main/ai-vault/session-parse-cache-persistence.test.ts',
+        'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
         'src/shared/worktree/id.test.ts'
       ])
     ).toMatchObject(expected)
@@ -34,7 +34,7 @@ describe('per-job path classification', () => {
       'src/main/codex/app-server/codex-app-server-client-other.test.ts',
       'src/main/codex/app-server/codex-app-server-client.test-fixture.ts',
       'src/main/codex/codex-index-heal-binary-contract.test.ts',
-      'src/main/pty/codex-no-daemon-binary-contract.test.ts',
+      'src/main/pty/shell-startup/codex-no-daemon-binary-contract.test.ts',
       'src/main/codex/codex-hook-file-entry-binary-contract.test.ts',
       'src/main/agent-launch/trust/agent-trust-presets.test.ts',
       '.github/workflows/pr.yml'

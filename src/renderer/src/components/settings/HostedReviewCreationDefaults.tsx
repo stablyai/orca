@@ -1,6 +1,6 @@
 import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import { Label } from '../ui/label'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 
 type HostedReviewDefaultKey = keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>
