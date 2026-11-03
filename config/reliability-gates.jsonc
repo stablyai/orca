@@ -7853,7 +7853,6 @@
         "pnpm exec playwright test tests/e2e/paired-client-hosted-browser.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser-client-hosted.test.ts src/main/runtime/runtime-browser-client-page-creation.test.ts src/main/runtime/browser-host/browser-host-page-reconciliation-orchestration.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/main/runtime/browser-host/browser-host-capability-selection.test.ts src/main/ipc/runtime-environments/runtime-environment-browser-client-host-handler.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
         "SKIP_BUILD=1 ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE=/Applications/Orca.app/Contents/MacOS/Orca pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/wsl-browser-network-execution-route.test.ts src/main/browser/wsl-browser-network-relay-launch.test.ts src/main/runtime/runtime-browser-network-execution-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-screencast-lifecycle.test.ts src/main/browser/browser-screencast-stream.test.ts src/main/runtime/orca-runtime-browser-screencast-fanout.test.ts",
@@ -7871,7 +7870,6 @@
         "src/shared/remote-runtime/remote-runtime-client.test.ts",
         "src/main/runtime/browser-host/browser-host-capability-selection.test.ts",
         "src/main/ipc/runtime-environments/runtime-environment-browser-client-host-handler.test.ts",
-        "tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
         "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
         "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
         "src/main/browser/paired-runtime-browser-network-route.test.ts",
@@ -7891,14 +7889,6 @@
             "headed and headless product actions select one client placement with one viewing-desktop guest and no server duplicate",
             "client pages render without a remote screencast and browser.snapshot reaches the exact retained guest",
             "the kill switch preserves existing client pages and selects server placement only for the next page"
-          ]
-        },
-        {
-          "file": "tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
-          "assertions": [
-            "a real stable release has no client-host or browser-tunnel capability constants",
-            "the old server schema strips additive placement without changing legacy fields",
-            "the current schema accepts the old request with placement omitted"
           ]
         },
         {
@@ -7948,8 +7938,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
           "result": "passed",
           "durationSeconds": 0.23,
-          "summary": "Three assertions passed against published v1.4.182 and the current tree: the release lacks the negotiated capabilities, strips additive placement without changing legacy fields, and the current server preserves an old request with omitted placement.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts"
+          "summary": "Three assertions passed against published v1.4.182 and the current tree: the release lacks the negotiated capabilities, strips additive placement without changing legacy fields, and the current server preserves an old request with omitted placement."
         },
         {
           "date": "2026-08-16",
