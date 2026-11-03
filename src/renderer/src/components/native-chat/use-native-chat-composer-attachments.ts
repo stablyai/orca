@@ -1,3 +1,4 @@
+import { currentDraftScope } from './native-chat-launch-draft-source'
 import type {
   UseNativeChatComposerAttachmentsArgs,
   NativeChatComposerAttachments
@@ -98,7 +99,9 @@ export function useNativeChatComposerAttachments({
   // Uploads outlive conversation switches; target only this scope’s editor or stored draft.
   const scopeEditor = useCallback(
     () =>
-      mountedRef.current && destinationScope() === attachmentScopeKey ? textareaRef.current : null,
+      mountedRef.current && destinationScope() === currentDraftScope(attachmentScopeKey)
+        ? textareaRef.current
+        : null,
     [attachmentScopeKey, destinationScope, mountedRef, textareaRef]
   )
   useLayoutEffect(() => {

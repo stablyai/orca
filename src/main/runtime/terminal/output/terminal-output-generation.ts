@@ -160,7 +160,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       this.terminalFileUriHostnameByPtyId.delete(ptyId)
       const pty = this.ptysById.get(ptyId)
       if (pty) {
-        pty.wslDistro = null
+        this.terminalIdentity.setPtyWslDistro(pty, null)
       }
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
         // The replaced process's live facet says nothing about its successor.
@@ -211,5 +211,9 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     listener: (data: string, meta?: RuntimeTerminalDataMeta) => void
   ): () => void {
     return this.terminalStreamConsumers.subscribe(ptyId, listener)
+  }
+
+  readRecentTerminalOutput(ptyId: string): string | undefined {
+    return this.recentPtyOutputById.get(ptyId)?.read()
   }
 }

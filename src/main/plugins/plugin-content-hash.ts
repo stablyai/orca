@@ -11,9 +11,11 @@ export const MAX_PLUGIN_TOTAL_BYTES = 50 * 1024 * 1024
 
 type PluginFile = { path: string; size: number }
 
-// Why dev only: an author's folder holds generated types and installed packages that never ship;
-// installed trees keep hashing everything, so nothing they run escapes the content hash.
-export const DEV_FOLDER_SKIPPED_ROOT_ENTRIES: ReadonlySet<string> = new Set([
+// Why dev only: an author's folder holds generated types, Git data and installed packages, at any
+// depth (a nested build/node_modules too); installed trees keep hashing everything but the root
+// .git, so nothing they run escapes the content hash.
+export const DEV_FOLDER_SKIPPED_DIRECTORIES: ReadonlySet<string> = new Set([
+  '.git',
   '.orca',
   'node_modules'
 ])
@@ -33,7 +35,7 @@ async function collectFiles(
   // localeCompare varies by locale/ICU; content identities must match across hosts.
   entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0))
   for (const entry of entries) {
-    if (dir === root && (entry.name === '.git' || skipped.has(entry.name))) {
+    if ((dir === root && entry.name === '.git') || skipped.has(entry.name)) {
       continue
     }
     const segmentError = pluginPathSegmentError(entry.name)
@@ -97,7 +99,7 @@ export async function hashPluginTree(
   const files: PluginFile[] = []
   try {
     const counters = { entries: 0, bytes: 0 }
-    const skipped = options.devFolder ? DEV_FOLDER_SKIPPED_ROOT_ENTRIES : new Set<string>()
+    const skipped = options.devFolder ? DEV_FOLDER_SKIPPED_DIRECTORIES : new Set<string>()
     const error = await collectFiles(root, root, files, counters, skipped)
     if (error) {
       return { ok: false, error }

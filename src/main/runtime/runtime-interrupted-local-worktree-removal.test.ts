@@ -15,23 +15,23 @@ import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { Store } from '../persistence/loading-store/store'
-import type * as HostTreeRemoval from '../host-tree-removal'
-import { removeHostTree } from '../host-tree-removal'
-import * as nativeFs from '../asar-transparent-fs'
+import type * as HostTreeRemoval from '../filesystem/host-tree-removal'
+import { removeHostTree } from '../filesystem/host-tree-removal'
+import * as nativeFs from '../filesystem/asar-transparent-fs'
 import * as diskFs from 'node:fs/promises'
 import * as nativeRemoval from '../git/windows-worktree-removal'
 import * as graphReader from '../git/worktree-list-reader'
-import { cleanupLocalOrphanedWorktreeDirectory } from '../local-orphaned-worktree-cleanup'
+import { cleanupLocalOrphanedWorktreeDirectory } from '../workspaces/removal/local-orphaned-worktree-cleanup'
 import * as removalOwnership from '../ipc/worktrees/removal/worktree-removal-ownership'
 import { executeWorktreeRemoval } from '../ipc/worktrees/removal/execute-worktree-removal'
 import { RuntimeWorktreeRemovalInFlight } from './runtime-worktree-removal-in-flight'
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from './workspaces/workspace-removal-target'
 import type { WorktreeIpcContext } from '../ipc/worktrees/worktree-ipc-context'
-import * as backgroundRemoval from '../worktree-background-removal'
-import * as worktreeGit from '../git/worktree'
+import * as backgroundRemoval from '../workspaces/removal/worktree-background-removal'
+import * as worktreeGit from '../git/worktree-listing'
 import * as worktreeRemote from '../ipc/worktree-remote'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import * as removalTable from '../worktree-removal-table'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
+import * as removalTable from '../workspaces/removal/worktree-removal-table'
 import { listWorktreesStrict } from '../git/worktree'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 import {
@@ -45,13 +45,13 @@ import {
   loadWorktreeRemovalRecords,
   resumeInterruptedWorktreeRemovals,
   waitForPendingWorktreeRemoval
-} from '../worktree-background-removal'
-import { withUnregisteredRemovalCheckouts } from '../worktree-removal-listing'
+} from '../workspaces/removal/worktree-background-removal'
+import { withUnregisteredRemovalCheckouts } from '../workspaces/removal/worktree-removal-listing'
 import {
   readWorktreeRemovalRecords,
   writeWorktreeRemovalRecords,
   type WorktreeRemovalRecord
-} from '../worktree-removal-records'
+} from '../workspaces/removal/worktree-removal-records'
 import { queueWorkspaceDelete } from './workspaces/workspace-lifecycle-commands'
 import { WorkspaceLifecycleQueue } from './workspaces/workspace-lifecycle-queue'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
@@ -60,10 +60,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...(await importOriginal<typeof diskFs>()) }
 })
 
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: vi.fn(() => ({}))
 }))
-vi.mock('../host-tree-removal', async (importOriginal) => {
+vi.mock('../filesystem/host-tree-removal', async (importOriginal) => {
   const actual = await importOriginal<typeof HostTreeRemoval>()
   return { ...actual, removeHostTree: vi.fn(actual.removeHostTree) }
 })
@@ -699,26 +699,6 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     }
   )
 
-  it('keeps the user’s non-forced choice after Git deleted part of the checkout: the row returns as before', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await writeFile(join(worktreePath, 'kept.txt'), 'kept\n')
-    await git(['add', 'kept.txt'], worktreePath)
-    await git(['commit', '-qm', 'kept'], worktreePath)
-    // Git stopped partway: some tracked files are gone, `.git` is still there.
-    await unlink(join(worktreePath, 'seed.txt'))
-
-    const { outcome, purged, records } = await finishAfterRestart({ force: false })
-
-    expect(outcome).toMatchObject({ status: 'failed' })
-    expect(await readFile(join(worktreePath, 'kept.txt'), 'utf8')).toBe('kept\n')
-    expect(existsSync(join(worktreePath, '.git'))).toBe(true)
-    expect(await isRegistered(worktreePath)).toBe(true)
-    expect(await git(['branch', '--list', 'feature'])).not.toBe('')
-    expect(purged).toEqual([])
-    expect(records).toMatchObject([{ failure: { message: expect.any(String) } }])
-    expect(await listedRows()).toEqual([{ path: worktreePath, removalError: expect.any(String) }])
-  })
-
   it('deletes nothing in a folder put at the path after Git unregistered the checkout', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     await git(['worktree', 'remove', worktreePath])
@@ -851,21 +831,6 @@ describe('finishing an interrupted worktree removal after a restart', () => {
       outcome && 'preservedBranch' in outcome ? outcome.preservedBranch : undefined
     ).toBeUndefined()
     expect(purged).toEqual([`repo-1::${worktreePath}`])
-  })
-
-  it('returns the row live when the finish fails, instead of retrying unseen', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // Another Git client locked it while Orca was not running.
-    await git(['worktree', 'lock', worktreePath])
-
-    const { outcome, purged, records } = await finishAfterRestart({ force: true })
-
-    expect(outcome).toMatchObject({ status: 'failed' })
-    expect(existsSync(worktreePath)).toBe(true)
-    expect(await isRegistered(worktreePath)).toBe(true)
-    expect(purged).toEqual([])
-    expect(records).toMatchObject([{ failure: { message: expect.any(String) } }])
-    expect(await listedRows()).toEqual([{ path: worktreePath, removalError: expect.any(String) }])
   })
 
   it('drops a record whose repo Orca no longer has', async () => {

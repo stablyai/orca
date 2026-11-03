@@ -19,7 +19,7 @@ const { fsCalls, removeHostTreeMock } = vi.hoisted(() => ({
   removeHostTreeMock: vi.fn<(dir: string) => Promise<void>>()
 }))
 
-vi.mock('./host-tree-removal', () => ({ removeHostTree: removeHostTreeMock }))
+vi.mock('./filesystem/host-tree-removal', () => ({ removeHostTree: removeHostTreeMock }))
 
 // Count real filesystem calls so the measured I/O still reaches disk.
 vi.mock('node:fs/promises', async () => {

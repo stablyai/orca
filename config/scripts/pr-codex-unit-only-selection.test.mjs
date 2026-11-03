@@ -3,7 +3,7 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 describe('per-job path classification', () => {
   it('keeps the client-only unit suite out of real Codex binary checks', () => {
-    const unit = 'src/main/codex/codex-app-server-client.test.ts'
+    const unit = 'src/main/codex/app-server/codex-app-server-client.test.ts'
     const expected = {
       should_run: true,
       static_analysis: true,
@@ -30,13 +30,13 @@ describe('per-job path classification', () => {
       ])
     ).toMatchObject(expected)
     for (const file of [
-      'src/main/codex/codex-app-server-client.ts',
-      'src/main/codex/codex-app-server-client-other.test.ts',
-      'src/main/codex/codex-app-server-client.test-fixture.ts',
+      'src/main/codex/app-server/codex-app-server-client.ts',
+      'src/main/codex/app-server/codex-app-server-client-other.test.ts',
+      'src/main/codex/app-server/codex-app-server-client.test-fixture.ts',
       'src/main/codex/codex-index-heal-binary-contract.test.ts',
       'src/main/pty/codex-no-daemon-binary-contract.test.ts',
       'src/main/codex/codex-hook-file-entry-binary-contract.test.ts',
-      'src/main/agent-trust-presets.test.ts',
+      'src/main/agent-launch/trust/agent-trust-presets.test.ts',
       '.github/workflows/pr.yml'
     ]) {
       expect(classifyPrJobs([unit, file]).codex_index_heal_contract, file).toBe(true)

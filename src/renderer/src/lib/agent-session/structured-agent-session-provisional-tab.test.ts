@@ -63,12 +63,12 @@ vi.mock('sonner', () => ({ toast: { info: mocks.toast, error: vi.fn() } }))
 vi.mock('../focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 import {
   clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts,
-  nativeChatComposerDraftWritesSettled,
   readNativeChatComposerDraft,
   structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/native-chat-composer-draft-load'
+import { nativeChatComposerDraftWritesSettled } from '@/components/native-chat/native-chat-composer-draft-persistence'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests

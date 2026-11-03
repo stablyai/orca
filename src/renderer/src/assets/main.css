@@ -465,7 +465,7 @@
   --git-decoration-renamed: #007acc;
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
-  --git-decoration-ignored: #8c8c8c;
+  --git-decoration-ignored: #737373;
   --diff-added: var(--git-decoration-added);
   --diff-removed: var(--git-decoration-deleted);
   --diff-added-background: color-mix(in srgb, var(--diff-added) 13%, transparent);
@@ -500,7 +500,7 @@
   --git-decoration-renamed: #73c991;
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
-  --git-decoration-ignored: #6e6e6e;
+  --git-decoration-ignored: #808080;
   --diff-added: var(--git-decoration-added);
   --diff-removed: var(--git-decoration-deleted);
   --diff-added-background: color-mix(in srgb, var(--diff-added) 16%, transparent);
@@ -1033,7 +1033,8 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   border-radius: 1px;
-  background: var(--split-divider);
+  /* Set only when Settings changed the divider color from its default. */
+  background: var(--split-divider-setting, var(--split-divider));
   transition: background 100ms ease;
 }
 
@@ -1527,6 +1528,13 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
+/* #15971: the wash matches the pill's fill, so its border carries the shape; 80% keeps >=3:1 wherever the validated foreground is >=4.5:1. */
+@scope ([data-worktree-card-surface][data-worktree-card-active='primary']) to ([data-worktree-lineage-children]) {
+  [data-variant='hostContext'] {
+    border-color: color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent);
+  }
+}
+
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
@@ -1826,6 +1834,16 @@ html.native-shell .app-layout {
 
 .agent-working-spinner {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+}
+
+/* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
+[data-animation-offscreen],
+[data-animation-offscreen] * {
+  animation-play-state: paused;
+}
+
+.agent-working-spinner[data-animation-offscreen] {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2680,6 +2698,39 @@ html.native-shell .app-layout {
 .animate-waveform {
   animation: waveform 1.4s ease-in-out infinite;
   transform-origin: center;
+}
+
+.tab-entry-omnibox > input:focus:placeholder-shown:not(:read-only) {
+  caret-color: transparent;
+}
+
+.tab-entry-omnibox:has(> input:focus:placeholder-shown:not(:read-only))::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(var(--spacing) * 3);
+  top: 50%;
+  width: 2px;
+  height: 1em;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, currentColor 85%, transparent);
+  pointer-events: none;
+  animation: tab-entry-caret 850ms step-end infinite;
+}
+
+@keyframes tab-entry-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-entry-omnibox::after {
+    animation: none !important;
+  }
 }
 
 /* CLI feature tip — terminal cursor inside the agent-control command. */

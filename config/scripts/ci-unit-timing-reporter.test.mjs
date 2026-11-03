@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { importUnitTimingReports } from './ci-unit-timing-import.mjs'
+import { importUnitTimingReports, importUnitTimingRuns } from './ci-unit-timing-import.mjs'
 import UnitTimingReporter, {
   buildUnitPhaseReport,
   moduleDuration,
@@ -92,6 +92,23 @@ describe('unit worker timing evidence', () => {
       metric: 'module-duration-v1',
       timings: { a: 200, b: 100 }
     })
+  })
+
+  it('averages each file over several complete runs and rejects repeated or mixed runs', () => {
+    const run = (runId, a, b) => [
+      { ...report(1, { a }), runId },
+      { ...report(2, { b }), runId }
+    ]
+    expect(importUnitTimingRuns([run('r1', 100, 300), run('r2', 200, 500)])).toMatchObject({
+      runIds: ['r1', 'r2'],
+      overheadMs: 0,
+      timings: { a: 150, b: 400 }
+    })
+    expect(() => importUnitTimingRuns([run('r1', 100, 300), run('r1', 100, 300)])).toThrow(
+      'distinct'
+    )
+    const otherNode = run('r2', 200, 500).map((entry) => ({ ...entry, nodeVersion: '26.6.0' }))
+    expect(() => importUnitTimingRuns([run('r1', 100, 300), otherNode])).toThrow('distinct')
   })
 
   it('preserves Bun provenance and rejects mixing Bun and Node timing sets', () => {

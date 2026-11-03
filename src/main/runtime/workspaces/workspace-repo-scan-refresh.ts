@@ -7,7 +7,7 @@ import {
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from '../orca-runtime-postlude'
-import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../workspaces/execution-host/project-runtime-git-options'
 import { withTimeoutResult } from '../runtime-async-boundaries'
 import { readRepoWorktreeAdminFingerprint } from '../repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'

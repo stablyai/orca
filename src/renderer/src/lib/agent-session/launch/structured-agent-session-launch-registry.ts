@@ -1,5 +1,4 @@
 import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
-export { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
 import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
@@ -239,8 +238,3 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   }
   return changed
 }
-
-export {
-  markStructuredAgentSessionLaunchCancelled,
-  markStructuredAgentSessionLaunchCancelledSilently
-} from './structured-agent-session-launch-cancel'

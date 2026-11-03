@@ -316,6 +316,7 @@
     "scanIssues": {
       "issuesOmitted": "Outros problemas da verificação foram omitidos.",
       "sessionMetadataUnreadable": "Não foi possível ler os metadados das sessões nesta verificação.",
+      "transcriptTooLarge": "Uma conversa de {{label}} é grande demais para carregar no Histórico de sessões. Tente retomá-la diretamente no {{label}}.",
       "openCodeScannerUnavailable": "O histórico do OpenCode foi ignorado porque seu verificador em segundo plano não pôde ser iniciado; o aplicativo continua respondendo.",
       "openCodeScanIncomplete": "A verificação do histórico do OpenCode não foi concluída: {{detail}}",
       "openCodeWslReaderPreparing": "Preparando o leitor SQLite do WSL. Atualize o Vault após a conclusão da configuração.",
@@ -594,7 +595,10 @@
       "title": "Executar {{distro}} como host (recomendado)",
       "why": "Git, arquivos e terminais passam a rodar nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "accept": "Executar como host",
-      "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral."
+      "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral.",
+      "existingTitle": "Adicionar no host {{distro}} (recomendado)",
+      "existingWhy": "{{distro}} já roda como host, então Git, arquivos e terminais rodam nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
+      "existingAccept": "Adicionar no host"
     }
   },
   "tray": {
@@ -1279,7 +1283,7 @@
         "inheritFont": "Mesma fonte do IDE",
         "fontPreviewLabel": "Prévia da fonte do chat",
         "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
-        "title": "Chat",
+        "title": "Interface de chat",
         "textSize": "Tamanho do texto",
         "textSizeDescription": "Mensagens, atividade das ferramentas e caixa de mensagem. {{increase}} / {{decrease}} em um chat também alteram este tamanho.",
         "codeTextSize": "Tamanho do texto de código",
@@ -1596,6 +1600,8 @@
       "claudeRemoveFolder": "O Orca exclui deste computador a pasta do Claude desta conta e seu login. O histórico de chat compartilhado com Padrão do sistema é mantido. Se esta conta estiver selecionada, o próximo Claude que você iniciar usará Padrão do sistema."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Operação do Git em outro lugar",
+      "remoteOperationInAnotherWorkspace": "Outro espaço de trabalho está executando uma operação do Git, como push, pull ou force push. Aguarde a conclusão antes de usar esta ação para que as operações não se sobreponham.",
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",
@@ -2675,7 +2681,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "A sessão estruturada do agente ainda não está disponível. Tente novamente em um momento.",
         "gone": "Este chat não está mais neste host, então não pode ser reaberto aqui.",
-        "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado."
+        "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado.",
+        "worktreeDeleted": "A worktree foi excluída.",
+        "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Receitas de raiz provisionada não suportam sparse checkout."
@@ -2685,7 +2693,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Arquivos fora do espaço de trabalho ainda não podem ser pré-visualizados em um servidor pareado.",
           "webClientUnavailable": "Prévias de documentos não estão disponíveis no cliente web."
         }
       },
@@ -3066,7 +3073,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Nenhuma outra conta",
-            "9332ba8684": "Alternar para",
             "d450654fa2": "Conta do Claude",
             "11e2354daf": "Runtime de uso do Claude",
             "3dd7ddfae1": "Abrir detalhes do Claude e alternador de conta",
@@ -4010,6 +4016,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Não foi possível salvar o local das contas. Tente novamente.",
           "c2d2751587": "Remover Conta",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "Remover Conta do Claude?",
@@ -7733,7 +7740,6 @@
           "9d3e56ca36": "Aplicar Alterações",
           "f96688b6bc": "Cancelar",
           "b7ddae600c": "Concluído",
-          "e4bda7ce6f": "Nenhuma configuração do Ghostty encontrada neste sistema.",
           "b58d4c9051": "Chaves não suportadas",
           "674b5ccd6b": "Nenhuma configuração nova para importar — suas configurações atuais já correspondem.",
           "a4c5dec640": "Configurações a atualizar",
@@ -9954,6 +9960,7 @@
                 "failingChecks_one": "{{count}} verificação com falha",
                 "failingChecks_other": "{{count}} verificações com falha",
                 "failingChecks_many": "{{count}} verificações com falha",
+                "pipelineFailed": "{{name}} falhou",
                 "pendingChecks_one": "{{count}} verificação pendente",
                 "pendingChecks_other": "{{count}} verificações pendentes",
                 "pendingChecks_many": "{{count}} verificações pendentes",
@@ -11396,11 +11403,7 @@
           "dbe2d18972": "Mais ações de {{value0}}",
           "openInOrcaBrowser": "Abrir no navegador do Orca",
           "2c67730e07": "Abrir no Orca",
-          "e42941631a": "Ver no Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Editar issue",
-          "b22f058067": "Ver no GitHub",
-          "e97d8f2876": "Issue #{{value0}}",
           "moreIssueActions": "Mais ações da issue",
           "copyLink": "Copiar link",
           "copyLinkSuccess": "{{value0}} copiado",
@@ -11423,8 +11426,6 @@
           "cliCreatedFromShell": "Criado via `orca worktree create`",
           "cliStartupAgent": "Iniciado com {{value0}}",
           "cliCreated": "Criado pela CLI do Orca",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Ver no Jira",
           "linkedJira": "Jira {{value0}} vinculado"
         },
         "LinearAgentSkillSetupPrompt": {
@@ -16789,8 +16790,6 @@
         "25690a3855": "Iniciar espaço de trabalho a partir do PR",
         "a459866967": "Retomar espaço de trabalho anexado ao PR",
         "347034903a": "Copiar link do GitHub",
-        "5a01ca7253": "Falha ao sincronizar o estado visualizado com o GitHub.",
-        "996a1897d2": "Não foi possível sincronizar o estado visualizado para este pull request.",
         "e0b15c793f": "Falha ao copiar o link do GitHub",
         "992e799227": "Link do GitHub copiado",
         "61bfc81ada": "Não foi possível abrir o espaço de trabalho anexado a este pull request.",
@@ -20445,6 +20444,7 @@
       "failureWords": {
         "theAgent": "O agente",
         "providerStartFailed": "{{agent}} parou antes de terminar de iniciar.",
+        "savedConversationMissing": "{{agent}} não conseguiu encontrar a conversa salva deste chat.",
         "runCommandAgain": "Execute /{{command}} novamente.",
         "sendToTryAgain": "Envie sua mensagem para tentar novamente.",
         "sendAgainToTryOnceMore": "Envie sua mensagem novamente para fazer outra tentativa.",
@@ -20494,6 +20494,7 @@
         "attachmentNotAFile": "Uma imagem nesta mensagem não é um arquivo, por isso a mensagem não foi enviada.",
         "attachmentNoSource": "Uma imagem nesta mensagem não tem um arquivo para enviar, por isso a mensagem não foi enviada.",
         "attachmentInvalid": "Um anexo nesta mensagem não pode ser enviado ao agente.",
+        "attachmentsExpired": "Expirado: {{names}}.",
         "attachmentUnreadable": "Não foi possível ler um anexo nesta mensagem, por isso a mensagem não foi enviada.",
         "emptyMessage": "Esta mensagem está vazia, por isso não foi enviada.",
         "commandUnavailable": "Este comando não está disponível em chats de {{agent}}, por isso não foi enviado.",
@@ -20585,6 +20586,7 @@
         "recordFailed": "O Orca não conseguiu salvar isto no histórico do chat.",
         "attachmentExpired": "Este anexo expirou.",
         "reattachFile": "Remova-o e anexe-o novamente.",
+        "reattachFiles": "Remova-os e anexe-os novamente.",
         "conversationCleared": "Esta conversa foi limpa.",
         "openCurrentConversation": "Abra a conversa atual para continuar.",
         "clearUnfinished": "O último /clear não terminou.",
@@ -20641,7 +20643,8 @@
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
-        "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder."
+        "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder.",
+        "exitUnconfirmed": "O {{agent}} está executando esta conversa em outro terminal. Saia dele lá ou feche esse terminal e tente novamente."
       },
       "loadingEarlierMessages": "Carregando mensagens anteriores…",
       "prompt": {
@@ -20682,6 +20685,8 @@
         "unnamedSender": "um agente",
         "messageFromCoordinator": "Mensagem do coordenador",
         "startedWorker": "Worker iniciado",
+        "handedOffToAgent": "Entregue a um agente",
+        "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarefa do coordenador",
         "updateFromWorker": "Atualização do worker"
       },
@@ -21269,6 +21274,7 @@
       "detectingAgents": "Detectando Agentes neste host do espaço de trabalho…",
       "detectionFailed": "Não foi possível detectar Agentes neste host do espaço de trabalho.",
       "noAgents": "Nenhum Agente ativado foi detectado neste host do espaço de trabalho.",
+      "onlySourceFamilyDetected": "Neste host do espaço de trabalho só há Agentes disponíveis que compartilham o limite de uso com {{agent}}. Ative ou instale um Agente diferente.",
       "context": "Contexto",
       "modeFocused": "Transferência focada (Recomendado)",
       "modeFocusedDescription": "Usa o status mais recente e o espaço de trabalho atual, lendo detalhes de transcrições mais antigas somente quando necessário.",
@@ -21389,7 +21395,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Agente [Opcional]",
-      "createDescription": "Escolha o projeto e o nome do espaço de trabalho. Selecione um agente se quiser iniciar um."
+      "createDescription": "Escolha o projeto e o nome do espaço de trabalho. Selecione um agente se quiser iniciar um.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Escolha se deseja executar a configuração antes de criar este espaço de trabalho.",
+        "cancel": "Cancelar",
+        "retry": "Tentar novamente",
+        "setupScript": "Script de configuração",
+        "defaultTabCommands": "Comandos das abas padrão",
+        "setupAndDefaultTabs": "Configuração e comandos das abas padrão",
+        "askRunSetup": "Executar a configuração agora?",
+        "askRunDefaultTabs": "Executar os comandos das abas padrão agora?",
+        "askRunSetupAndDefaultTabs": "Executar a configuração e os comandos das abas padrão agora?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "configurações locais"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Outra alteração de issue está em andamento."
@@ -21477,6 +21499,9 @@
         "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
         "keepOpen": "Manter aberto"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Executa no WSL: {{distro}} (Linux)"
     }
   },
   "csv": {
@@ -22068,7 +22093,8 @@
       "showLinked_many": "Mostrar {{count}} revisões e tarefas vinculadas",
       "linkedCount_one": "{{count}} vinculado",
       "linkedCount_other": "{{count}} vinculados",
-      "linkedCount_many": "{{count}} vinculados"
+      "linkedCount_many": "{{count}} vinculados",
+      "labels": "Rótulos: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Atualize o runtime remoto para alterar os links do espaço de trabalho",
@@ -22598,6 +22624,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: não há backup legível, então começará vazio.",
+      "sectionKeptCurrent": "{{section}}: suas execuções atuais serão mantidas",
       "sectionRestored": "{{section}}: restaurado a partir do backup salvo em {{time}}.",
       "projectsForgotten": "O Orca vai esquecer seus projetos e os detalhes dos espaços de trabalho deles. Os arquivos no disco não são alterados.",
       "newerProjectsRemoved": "Os projetos adicionados depois desse backup serão removidos do Orca, junto com os detalhes dos espaços de trabalho deles. Os arquivos no disco não são alterados.",
@@ -22640,7 +22667,7 @@
       "noneFound": "(nada encontrado)",
       "sqlitePath": "Caminho do SQLite: {{path}}",
       "sectionsDamaged": "Parte do estado salvo deste perfil está danificada: {{sections}}. Todo o restante está intacto.",
-      "repairCommand": "Feche o Orca e execute `{{command}}` para substituir apenas as partes danificadas a partir dos backups e manter todo o restante. O Orca guarda uma cópia do arquivo danificado.",
+      "repairCommand": "Pare o Orca e execute `{{command}}` para reparar apenas as partes danificadas e manter todo o resto. O Orca guarda uma cópia do arquivo danificado.",
       "restoreWholeBackup": "Para restaurar um backup completo em vez disso, execute `{{exportsCommand}}` e depois `{{rollbackCommand}}`.",
       "sqliteUnreadable": "O Orca não consegue abrir o perfil ativo com segurança porque seu estado SQLite está ilegível.",
       "legacyJsonPath": "Caminho do JSON legado: {{path}}",
@@ -22935,7 +22962,9 @@
     "toggleArguments": "Mostrar ou ocultar argumentos",
     "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
     "searchAgentModels": "Pesquisar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos"
+    "legacyModelCount": "{{total}} modelos",
+    "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
+    "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos"
   },
   "wslMove": {
     "entry": {
@@ -22965,7 +22994,8 @@
       "changed": "Foi movido antes e depois alterado aqui por uma versão anterior do Orca. Não será movido novamente.",
       "chatsStay": "Os chats existentes ficam neste computador. Novos chats neste projeto começam no host WSL.",
       "browserLoginsConflict": "Os logins do navegador não serão levados, porque o perfil do navegador do host já está em uso. Entre novamente nas abas do navegador do host após a movimentação.",
-      "browserLoginsNotCarried": "Os logins do navegador não serão levados para este host. Entre novamente nas abas do navegador dele após a movimentação."
+      "browserLoginsNotCarried": "Os logins do navegador não serão levados para este host. Entre novamente nas abas do navegador dele após a movimentação.",
+      "why": "O trabalho passa a rodar dentro do Linux, junto aos seus arquivos, então terminais, Git e alterações de arquivos ficam mais rápidos e confiáveis. Seus projetos não mudam, e você pode trazer qualquer projeto de volta com “Usar novamente neste computador”."
     },
     "cancel": "Cancelar",
     "progress": {
@@ -23340,12 +23370,14 @@
       "serveSimUnavailable": "serve-sim não está disponível.",
       "serveSimNoEndpoints": "serve-sim não retornou endpoints de streaming.",
       "serveSimEndpointUnreachable": "serve-sim foi iniciado, mas seu endpoint de streaming não está acessível.",
+      "deviceHubInputBlocked": "O Device Hub do Xcode assumiu a entrada deste simulador, então toques e digitação não chegarão até ele. Feche o Device Hub e conecte o simulador novamente.",
       "androidSdkMissing": "Android SDK não encontrado. Instale o Android Studio e defina ANDROID_HOME.",
       "adbUnavailable": "adb não está disponível.",
       "noAndroidDevices": "Nenhum dispositivo Android ou AVD encontrado. Crie um no Android Studio.",
       "androidDeviceNotRunning": "O dispositivo Android \"{{device}}\" não está em execução. Inicie-o primeiro.",
       "unknownDeviceOrAvd": "\"{{device}}\" não é um dispositivo em execução nem um AVD conhecido.",
       "avdBootTimeout": "O AVD \"{{avdName}}\" não terminou de inicializar a tempo.",
+      "avdExitedBeforeBoot": "O AVD \"{{avdName}}\" parou antes de terminar de inicializar: {{detail}}",
       "scrcpyDownloadFailed": "Não foi possível baixar o servidor scrcpy: {{detail}}",
       "scrcpyServerInvalid": "O servidor scrcpy baixado era inválido ou estava incompleto."
     },

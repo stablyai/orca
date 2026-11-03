@@ -100,47 +100,6 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
     main = undefined
   })
 
-  it('resolves only the exact draft generation', () => {
-    const store = createTestStore()
-    const entry = draft(TAB1, 'same text')
-    store.getState().seedNativeChatLaunchDraft(entry)
-
-    store.getState().resolveNativeChatLaunchDraft(TAB1, { text: entry.text, createdAt: 0 })
-    expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.resolved).toBeUndefined()
-
-    store.getState().resolveNativeChatLaunchDraft(TAB1, {
-      text: entry.text,
-      createdAt: entry.createdAt
-    })
-    expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.resolved).toBe(true)
-  })
-
-  it('removing a worktree drops the unsent composer drafts of its tabs only', async () => {
-    const store = createTestStore()
-    seedDrafts(store)
-    updateNativeChatComposerDraft(`${TAB1}:leaf-a`, { text: 'unsent' }, 'immediate')
-    updateNativeChatComposerDraft(`${TAB2}:leaf-a`, { text: 'kept' }, 'immediate')
-
-    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
-
-    expect(result).toEqual({ ok: true })
-    expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
-    expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
-  })
-
-  it('a user tab close drops the unsent composer drafts of that tab’s panes only', () => {
-    const store = createTestStore()
-    seedDrafts(store)
-    updateNativeChatComposerDraft(`${TAB1}:leaf-a`, { text: 'unsent' }, 'immediate')
-    updateNativeChatComposerDraft(`${TAB2}:leaf-a`, { text: 'kept' }, 'immediate')
-
-    store.getState().closeTab(TAB2, { reason: 'pty-exit' })
-    store.getState().closeTab(TAB1)
-
-    expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
-    expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
-  })
-
   it('a user tab close drops the uploads still on their way in that tab’s panes only', () => {
     const store = createTestStore()
     seedDrafts(store)

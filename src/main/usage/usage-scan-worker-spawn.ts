@@ -4,7 +4,10 @@ import {
 } from '../claude-usage/transcript-file-discovery'
 import { existsSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
-import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
 import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-usage/types'
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'

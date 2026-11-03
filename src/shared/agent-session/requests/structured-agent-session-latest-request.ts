@@ -40,7 +40,7 @@ export type StructuredAgentSessionLatestRequest = {
 /** Commands and steers have no independent request; their turns own any response. */
 export function isStructuredAgentSessionNonRequestRow(
   item: Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'turnScope'>,
-  commandTurnItemIds: ReadonlySet<string>
+  commandTurnItemIds: Pick<ReadonlySet<string>, 'has'>
 ): boolean {
   return (
     commandTurnItemIds.has(item.itemId) ||

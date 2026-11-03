@@ -26,7 +26,7 @@ import { terminalShellOverrideRefusal } from './terminal-shell-override-host-sup
 import {
   resolvePlainTerminalProjectRuntime,
   resolvePlainTerminalPtyOptions
-} from '../local-project-runtime-resolution'
+} from '../workspaces/execution-host/local-project-runtime-resolution'
 import {
   agentLaunchPlatformForScope,
   agentLaunchProjectRuntime,

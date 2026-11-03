@@ -15,7 +15,7 @@ export type PluginHostMethodSpec<
   /** Minor that deprecated it; it keeps working until the next major. */
   deprecatedSince?: number
   /** Machine-readable resource boundary enforced by the host binding. */
-  scope: 'active-workspace' | 'explicit-terminal' | 'plugin-private' | 'desktop'
+  scope: 'active-workspace' | 'any-workspace' | 'explicit-terminal' | 'plugin-private' | 'desktop'
   /** Null: no capability; consent and the surface still gate the call. */
   capability: PluginCapabilityKind | null
   /** Runs only on transient user activation in the calling frame, checked by the frame host. */

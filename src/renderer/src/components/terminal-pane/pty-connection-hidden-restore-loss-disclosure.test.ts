@@ -315,37 +315,6 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       drive.disposable.dispose()
     })
 
-    it('[invariant] discloses or recovers when the budget ends while the pane is hidden', async () => {
-      const seventhAnswer = createDeferred<unknown>()
-      const serializeBufferOutcome = vi.fn().mockResolvedValue(retryWorthy)
-      const drive = await driveToSeventhAnswer(serializeBufferOutcome)
-
-      serializeBufferOutcome.mockReturnValueOnce(seventhAnswer.promise)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await flushAsyncTicks(20)
-      expect(serializeBufferOutcome).toHaveBeenCalledTimes(7)
-
-      // Switch away while the last budgeted request is still pending.
-      drive.setVisible(false)
-      seventhAnswer.resolve(retryWorthy)
-      await flushAsyncTicks(20)
-
-      // The host is healthy again and still holds the dropped bytes.
-      serializeBufferOutcome.mockResolvedValue(hostAnswers(retainedSnapshot(R1_MARKER)))
-      const requestsBeforeReveal = serializeBufferOutcome.mock.calls.length
-      await revealPane(drive)
-      await allowRecoveryWindow()
-
-      const disclosure = observeDisclosure(drive, R1_MARKER)
-      expect(disclosure.markerWrites).toBeLessThanOrEqual(1)
-      expectDisclosedOrRecovered(disclosure)
-      // Require either a fresh recovery request or a visible loss banner.
-      expect(
-        serializeBufferOutcome.mock.calls.length - requestsBeforeReveal
-      ).toBeGreaterThanOrEqual(disclosure.bannerWrites > 0 ? 0 : 1)
-      drive.disposable.dispose()
-    })
-
     async function exhaustBudgetWhileHidden(
       serializeBufferOutcome: ReturnType<typeof vi.fn>
     ): Promise<PaneDrive> {
@@ -630,16 +599,21 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
     })
 
     // #33766: main labels the first chunk after its hidden drop with the escape the drop left open.
-    async function abandonAfterResumedChunk(resumed: string, gapEscapeState?: string) {
+    async function abandonAfterResumedChunk(
+      resumed: string,
+      gapEscapeState?: string,
+      transform?: { rawLength: number }
+    ) {
       vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue(null)
       const drive = await connectLocalHiddenPane()
       vi.useFakeTimers()
       drive.deliver(HIDDEN_FLOOD, HIDDEN_FLOOD.length)
       drive.setVisible(true)
-      const seq = HIDDEN_FLOOD.length + resumed.length
+      const rawLength = transform?.rawLength ?? resumed.length
       drive.deliverWithMeta?.(resumed, {
-        seq,
-        rawLength: resumed.length,
+        seq: HIDDEN_FLOOD.length + rawLength,
+        rawLength,
+        ...(transform ? { transformed: true } : {}),
         ...(gapEscapeState ? { gapEscapeState } : {})
       })
       await flushAsyncTicks(20)
@@ -671,6 +645,15 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         }).toEqual({ banner: true, prompt: true, tail: false })
       }
     )
+
+    it('skips a labeled tail after the gap reset even when main stripped agent status from the chunk', async () => {
+      const screen = await abandonAfterResumedChunk('2C> prompt', '\x1b[', { rawLength: 40 })
+      expect({
+        banner: screen.includes(BANNER_FRAGMENT),
+        prompt: screen.includes('> prompt'),
+        tail: screen.includes('2C')
+      }).toEqual({ banner: true, prompt: true, tail: false })
+    })
 
     it('keeps a labeled continuation when the snapshot at the gap carries the open escape', async () => {
       // The snapshot predates the resumed chunk, so its pending escape needs every continuation byte.

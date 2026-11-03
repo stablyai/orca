@@ -180,7 +180,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       // Why: park/reconnect/remount doesn't advance the recovery epoch, so invalidate this xterm or its delayed retry could hit the next instance.
       session.terminalRecoveryInstance.unregister()
       session.unregisterUndeliverableWriteHandler()
-      session.unsubscribeRemoteDesktopActivationClaim()
+      session.unsubscribeFitOverrideChange()
       session.cancelHiddenOutputSnapshotScrollRestore()
       session.liveScrollbackRestore?.dispose()
       session.liveScrollbackRestore = null

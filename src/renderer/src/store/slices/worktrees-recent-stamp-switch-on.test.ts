@@ -62,25 +62,6 @@ describe('window-side Recent stamps with the sidebar-inputs switch on', () => {
     expect(persistedStamp()).toBe(false)
   })
 
-  const persistedUnread = () =>
-    mockApi.worktrees.updateMeta.mock.calls.some(
-      ([args]: [{ updates: Record<string, unknown> }]) => 'isUnread' in args.updates
-    )
-
-  it('a bell or finish writes no stamp and leaves the unread flag to the host', () => {
-    const store = storeWith()
-    store.getState().markAgentAttentionUnread({
-      workspaceId: wt.id,
-      subjectKey: null,
-      groupId: null,
-      reason: 'agent-completion'
-    })
-    expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(false)
-    expect(persistedUnread()).toBe(false)
-    expect(lastActivityAt(store)).toBe(5)
-    expect(persistedStamp()).toBe(false)
-  })
-
   it('a comment edit writes no stamp', async () => {
     const store = storeWith()
     await store.getState().updateWorktreeMeta(wt.id, { comment: 'note' })

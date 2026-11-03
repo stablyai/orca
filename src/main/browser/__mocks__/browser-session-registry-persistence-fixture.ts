@@ -164,21 +164,26 @@ export function installModuleMocks(
     isScopedStagedCookieImport: vi.fn(() => false),
     removeCookieImportScopeMarker: vi.fn()
   }))
+  const renameFileWithWindowsRetryMock = vi.fn((source: string, target: string) => {
+    const sourceKey = fsKey(source)
+    const targetKey = fsKey(target)
+    if (!fsState.present.has(sourceKey)) {
+      throw new Error('ENOENT')
+    }
+    const value = fsState.files.get(sourceKey)
+    fsState.present.delete(sourceKey)
+    fsState.files.delete(sourceKey)
+    fsState.present.add(targetKey)
+    if (value !== undefined) {
+      fsState.files.set(targetKey, value)
+    }
+  })
+  vi.doMock('../../../shared/windows-retry-file-operations', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    renameFileWithWindowsRetry: renameFileWithWindowsRetryMock
+  }))
   vi.doMock('../../codex-accounts/fs-utils', () => ({
-    renameFileWithWindowsRetry: vi.fn((source: string, target: string) => {
-      const sourceKey = fsKey(source)
-      const targetKey = fsKey(target)
-      if (!fsState.present.has(sourceKey)) {
-        throw new Error('ENOENT')
-      }
-      const value = fsState.files.get(sourceKey)
-      fsState.present.delete(sourceKey)
-      fsState.files.delete(sourceKey)
-      fsState.present.add(targetKey)
-      if (value !== undefined) {
-        fsState.files.set(targetKey, value)
-      }
-    }),
+    renameFileWithWindowsRetry: renameFileWithWindowsRetryMock,
     writeFileAtomically: vi.fn((pathValue: string, data: string) => {
       const key = fsKey(pathValue)
       fsState.files.set(key, data)

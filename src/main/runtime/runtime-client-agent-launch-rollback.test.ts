@@ -19,7 +19,7 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({

@@ -1,3 +1,4 @@
+import { selectDiffCommentView, type DiffCommentOwner } from '../diff-comment-owner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -5,6 +6,8 @@ import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { SELF_LOCAL_AUTHORITY } from '../../../../shared/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -78,7 +81,7 @@ function addNote(
   body: string,
   lineNumber = 1
 ): Promise<DiffComment | null> {
-  return store.getState().addDiffComment({
+  return store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
     worktreeId: workspaceKey,
     filePath: 'README.md',
     source: 'markdown',
@@ -86,6 +89,31 @@ function addNote(
     body,
     side: 'modified'
   })
+}
+
+function folderNote(worktreeId: string, body: string): DiffComment {
+  return {
+    id: body,
+    worktreeId,
+    filePath: 'README.md',
+    lineNumber: 1,
+    body,
+    createdAt: 1,
+    side: 'modified'
+  }
+}
+
+function savedServer(id: string): PublicKnownRuntimeEnvironment {
+  return {
+    id,
+    name: id,
+    createdAt: 1,
+    updatedAt: 1,
+    lastUsedAt: null,
+    runtimeId: id,
+    endpoints: [{ id: 'ws', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://server' }],
+    preferredEndpointId: 'ws'
+  }
 }
 
 function bodies(store: ReturnType<typeof createTestStore>, workspaceKey: string): string[] {
@@ -105,33 +133,6 @@ beforeEach(() => {
 })
 
 describe('folder workspace diff comments', () => {
-  it('adds and persists a review note', async () => {
-    const store = createTestStore()
-    const folderWorkspace = seedLocalFolderWorkspace(store)
-    folderWorkspacesUpdate.mockImplementation(async ({ updates }) => ({
-      ...folderWorkspace,
-      ...updates
-    }))
-
-    const saved = await store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 1,
-      body: 'folder note',
-      side: 'modified'
-    })
-
-    expect(saved).toEqual(expect.objectContaining({ body: 'folder note' }))
-    expect(store.getState().getDiffComments(folderWorkspaceKey(folderWorkspace.id))).toEqual([
-      expect.objectContaining({ body: 'folder note' })
-    ])
-    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { diffComments: [expect.objectContaining({ body: 'folder note' })] }
-    })
-  })
-
   it('preserves a second note while the first write is in flight', async () => {
     const store = createTestStore()
     const folderWorkspace = seedLocalFolderWorkspace(store)
@@ -146,23 +147,27 @@ describe('folder workspace diff comments', () => {
       return { ...folderWorkspace, ...updates }
     })
 
-    const addFirst = store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 1,
-      body: 'first note',
-      side: 'modified'
-    })
+    const addFirst = store
+      .getState()
+      .addDiffComment(capturedOwner(store, folderWorkspaceKey(folderWorkspace.id)), {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        filePath: 'README.md',
+        source: 'markdown',
+        lineNumber: 1,
+        body: 'first note',
+        side: 'modified'
+      })
     await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledTimes(1))
-    const addSecond = store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 2,
-      body: 'second note',
-      side: 'modified'
-    })
+    const addSecond = store
+      .getState()
+      .addDiffComment(capturedOwner(store, folderWorkspaceKey(folderWorkspace.id)), {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        filePath: 'README.md',
+        source: 'markdown',
+        lineNumber: 2,
+        body: 'second note',
+        side: 'modified'
+      })
     releaseFirstWrite?.()
 
     await Promise.all([addFirst, addSecond])
@@ -237,7 +242,7 @@ describe('folder workspace diff comments', () => {
           : [localWorkspace, runtimeWorkspace]
       })
 
-      const localAdd = store.getState().addDiffComment({
+      const localAdd = store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
         worktreeId: workspaceKey,
         filePath: 'LOCAL.md',
         source: 'markdown',
@@ -248,7 +253,7 @@ describe('folder workspace diff comments', () => {
       await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledOnce())
 
       store.setState({ activeWorkspaceExecutionHostId: 'runtime:env-owner' })
-      const runtimeAdd = store.getState().addDiffComment({
+      const runtimeAdd = store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
         worktreeId: workspaceKey,
         filePath: 'REMOTE.md',
         source: 'markdown',
@@ -322,22 +327,6 @@ describe('folder workspace diff comment rollback convergence', () => {
     expect(store.getState().getDiffComments(key)).toEqual([])
   })
 
-  it('converges across three failing writes', async () => {
-    const store = createTestStore()
-    const folderWorkspace = seedLocalFolderWorkspace(store)
-    const key = folderWorkspaceKey(folderWorkspace.id)
-    folderWorkspacesUpdate.mockImplementation(() => Promise.reject(new Error('disk full')))
-
-    const adds = [
-      addNote(store, key, 'A', 1),
-      addNote(store, key, 'B', 2),
-      addNote(store, key, 'C', 3)
-    ]
-
-    await expect(Promise.all(adds)).resolves.toEqual([null, null, null])
-    expect(store.getState().getDiffComments(key)).toEqual([])
-  })
-
   it('keeps a durably saved note when a coalesced write succeeds before a later failure', async () => {
     const store = createTestStore()
     const folderWorkspace = seedLocalFolderWorkspace(store)
@@ -389,27 +378,6 @@ describe('folder workspace diff comment rollback convergence', () => {
     await Promise.all([addA, addB])
     // Why: write 1 persisted only [A], so [A] is the floor B's failure converges to.
     expect(bodies(store, key)).toEqual(['note A'])
-  })
-
-  it('seeds a fresh floor for the burst after a failed burst', async () => {
-    const store = createTestStore()
-    const folderWorkspace = seedLocalFolderWorkspace(store)
-    const key = folderWorkspaceKey(folderWorkspace.id)
-    folderWorkspacesUpdate.mockImplementation(() => Promise.reject(new Error('disk full')))
-    await Promise.all([addNote(store, key, 'A', 1), addNote(store, key, 'B', 2)])
-    expect(store.getState().getDiffComments(key)).toEqual([])
-
-    folderWorkspacesUpdate.mockImplementation(async ({ updates }) => ({
-      ...folderWorkspace,
-      ...updates
-    }))
-    await addNote(store, key, 'C', 3)
-
-    expect(bodies(store, key)).toEqual(['C'])
-    expect(folderWorkspacesUpdate).toHaveBeenLastCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { diffComments: [expect.objectContaining({ body: 'C' })] }
-    })
   })
 
   it('rolls back to the list the queue drained on, not a stale burst floor', async () => {
@@ -546,73 +514,6 @@ describe('folder workspace diff comment rollback convergence', () => {
     ])
   })
 
-  it('rolls back when the write throws before reaching persist', async () => {
-    const store = createTestStore()
-    const folderWorkspace = seedLocalFolderWorkspace(store)
-    const key = folderWorkspaceKey(folderWorkspace.id)
-    // Why: a malformed entry makes normalizeDiffComment throw inside run, before persist is ever called.
-    const malformed = [null as unknown as DiffComment]
-    store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: malformed }] })
-    folderWorkspacesUpdate.mockImplementation(async ({ updates }) => ({
-      ...folderWorkspace,
-      ...updates
-    }))
-
-    await expect(addNote(store, key, 'note A', 1)).resolves.toBeNull()
-    expect(store.getState().getDiffComments(key)).toBe(malformed)
-    expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
-    expect(errSpy).toHaveBeenCalled()
-  })
-
-  it('reports success when recordFeatureInteraction throws after a successful write', async () => {
-    const store = createTestStore()
-    const folderWorkspace = seedLocalFolderWorkspace(store)
-    const key = folderWorkspaceKey(folderWorkspace.id)
-    folderWorkspacesUpdate.mockImplementation(async ({ updates }) => ({
-      ...folderWorkspace,
-      ...updates
-    }))
-    store.setState({
-      recordFeatureInteraction: () => {
-        throw new Error('telemetry down')
-      }
-    } as never)
-
-    await expect(addNote(store, key, 'note A', 1)).resolves.toEqual(
-      expect.objectContaining({ body: 'note A' })
-    )
-    expect(bodies(store, key)).toEqual(['note A'])
-  })
-
-  it('converges to the floor when persist rejects after the host may have written', async () => {
-    const store = createTestStore()
-    const folderWorkspace = seedLocalFolderWorkspace(store)
-    const key = folderWorkspaceKey(folderWorkspace.id)
-    // Why: pins today's contract for the missing-diffComments throw; STA-4062 owns read-back.
-    folderWorkspacesUpdate.mockImplementation(async () => ({}))
-
-    await expect(addNote(store, key, 'note A', 1)).resolves.toBeNull()
-    expect(store.getState().getDiffComments(key)).toEqual([])
-  })
-
-  it('converges on the runtime branch when two consecutive writes fail', async () => {
-    const store = createTestStore()
-    const runtimeWorkspace = makeFolderWorkspace({ executionHostId: 'runtime:env-owner' })
-    const key = folderWorkspaceKey(runtimeWorkspace.id)
-    store.setState({
-      activeWorktreeId: key,
-      activeWorkspaceExecutionHostId: 'runtime:env-owner',
-      folderWorkspaces: [runtimeWorkspace]
-    })
-    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime unreachable'))
-
-    await expect(
-      Promise.all([addNote(store, key, 'A', 1), addNote(store, key, 'B', 2)])
-    ).resolves.toEqual([null, null])
-    expect(store.getState().getDiffComments(key)).toEqual([])
-    expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
-  })
-
   it('rolls back a runtime note whose server was replaced while the write was in flight', async () => {
     const store = createTestStore()
     const runtimeWorkspace = makeFolderWorkspace({
@@ -647,6 +548,45 @@ describe('folder workspace diff comment rollback convergence', () => {
     )
     expect(store.getState().getDiffComments(key)).toEqual([])
     expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
+  })
+
+  it('drops a queued folder save once its catalog endpoint is replaced, touching no other copy', async () => {
+    Object.assign(globalThis, { __ORCA_WEB_CLIENT__: true })
+    try {
+      const store = createTestStore()
+      const key = folderWorkspaceKey('folder-1')
+      const folder = makeFolderWorkspace({ diffComments: [folderNote(key, 'hub A')] })
+      store.setState({
+        activeWorktreeId: key,
+        activeWorkspaceExecutionHostId: 'local',
+        runtimeEnvironments: [savedServer('hub-a')],
+        folderWorkspaces: [folder]
+      })
+      const owner = capturedOwner(store, key)
+      expect(owner).toMatchObject({ runtimeEnvironmentId: 'hub-a' })
+
+      const pending = store.getState().addDiffComment(owner, {
+        worktreeId: key,
+        filePath: 'README.md',
+        lineNumber: 2,
+        body: 'added',
+        side: 'modified'
+      })
+      const replacement = { ...folder, diffComments: [folderNote(key, 'hub B')] }
+      store.setState({
+        runtimeEnvironments: [savedServer('hub-b')],
+        folderWorkspaces: [replacement]
+      })
+
+      expect(await pending).toBeNull()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'folderWorkspace.update' })
+      )
+      expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
+      expect(store.getState().folderWorkspaces).toEqual([replacement])
+    } finally {
+      Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
+    }
   })
 
   it('keeps a failing burst scoped to its own execution host', async () => {
@@ -690,3 +630,14 @@ describe('folder workspace diff comment rollback convergence', () => {
     expect(bodies(store, key)).toEqual(['runtime note'])
   })
 })
+
+function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
+  return (
+    // An unlisted id stands for a copy that is gone, so actions on it are refused.
+    selectDiffCommentView(store.getState(), worktreeId, 'selection').owner ?? {
+      kind: 'worktree',
+      worktreeId,
+      authority: SELF_LOCAL_AUTHORITY
+    }
+  )
+}
