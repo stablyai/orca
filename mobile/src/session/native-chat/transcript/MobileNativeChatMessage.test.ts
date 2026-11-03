@@ -47,6 +47,11 @@ describe('MobileNativeChatMessage', () => {
     const message = orchestrationMailFixture({ body: 'The **result** is ready.' })
     try {
       const tree = render(message)
+      expect(findAllByHostType(tree.root, 'MobileMarkdown')).toHaveLength(0)
+      const toggle = findAllByHostType(tree.root, 'Pressable').find(
+        (node) => node.props.accessibilityState?.expanded === false
+      )!
+      act(() => toggle.props.onPress())
       const markdown = findAllByHostType(tree.root, 'MobileMarkdown')
       expect(markdown.map((node) => node.props.content)).toContain(
         'Review complete\n\nThe **result** is ready.'
@@ -58,6 +63,11 @@ describe('MobileNativeChatMessage', () => {
       expect(mobileNativeChatDisplayCopyText(message)).toBe(
         'Review complete\n\nThe **result** is ready.'
       )
+      const refold = findAllByHostType(tree.root, 'Pressable').find(
+        (node) => node.props.accessibilityState?.expanded === true && node !== toggle
+      )!
+      act(() => refold.props.onPress())
+      expect(findAllByHostType(tree.root, 'MobileMarkdown')).toHaveLength(0)
     } finally {
       await activateMobileUiLocale('en')
     }
@@ -175,6 +185,11 @@ describe('MobileNativeChatMessage', () => {
         `Asked: Do you prefer tea or coffee?CoffeeResolved · Answered on ${device}`
       )
       expect(drawn).toContain(`AllowResolved · Answered on ${device}`)
+      expect(markdownIn(renderer!.root)).not.toContain('Worker assignment')
+      const toggle = findAllByHostType(renderer!.root, 'Pressable').find(
+        (node) => node.props.accessibilityLabel === 'Started worker'
+      )!
+      act(() => toggle.props.onPress())
       expect(markdownIn(renderer!.root)[0]).toBe('Worker assignment')
     }
   )
@@ -203,7 +218,12 @@ describe('MobileNativeChatMessage', () => {
       })!
       await activateMobileUiLocale(locale)
       try {
-        expect(textIn(render(message).root)).toContain(title)
+        const tree = render(message)
+        expect(textIn(tree.root)).toContain(title)
+        const toggle = findAllByHostType(tree.root, 'Pressable').find(
+          (node) => node.props.accessibilityLabel === title
+        )
+        expect(toggle !== undefined).toBe(task !== '')
       } finally {
         await activateMobileUiLocale('en')
       }

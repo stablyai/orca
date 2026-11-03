@@ -174,7 +174,7 @@ export const expanded = defineFixture({
   render: cards,
   interact: (frame) => {
     for (const button of frame.querySelectorAll('button')) {
-      if (button.textContent === 'Show more') {
+      if (button.getAttribute('aria-expanded') === 'false') {
         button.click()
       }
     }

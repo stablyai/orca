@@ -1,9 +1,12 @@
 import { memo, useContext, useState, useRef, useLayoutEffect } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ArrowUpRight, Bot } from 'lucide-react-native'
+import { ArrowUpRight, Bot, ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
-import { agentMessageSendersShown } from '../../../../../src/shared/agent-session/agent-session-message-source'
+import {
+  agentMessageSendersShown,
+  orchestrationMailNotice
+} from '../../../../../src/shared/agent-session/agent-session-message-source'
 import {
   AGENT_MESSAGE_FOLDED_LINES,
   agentMessageHeading,
@@ -22,8 +25,8 @@ import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButt
 import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { styles as markdownStyles } from '../../../components/mobile-markdown-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
+import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
+import { styles } from './mobile-agent-message-card-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
   MobileAgentMessageOpenContext,
@@ -34,7 +37,102 @@ import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { CHAT_PROSE_SCALE } from './mobile-native-chat-message-styles'
 
-export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAgentMessageCard({
+export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAgentMessageCard(
+  props: React.ComponentProps<typeof PreviewAgentMessageCard>
+) {
+  return props.message.agentStart || orchestrationMailNotice(props.from) ? (
+    <CompactAgentMessageCard {...props} />
+  ) : (
+    <PreviewAgentMessageCard {...props} />
+  )
+})
+
+function CompactAgentMessageCard({
+  message,
+  from,
+  fontScale,
+  attachments,
+  onOpenFile,
+  onLongPress,
+  status
+}: React.ComponentProps<typeof PreviewAgentMessageCard>) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const text = mobileNativeChatDisplayCopyText(message)
+  const [open, setOpen] = useMobileNativeChatDisclosure(`agent-message:${message.id}`, false)
+  const headings: Record<AgentMessageHeading, string> = {
+    started: t('chat.agentMessage.startedWorker', 'Started worker'),
+    'handed-off': t('chat.agentMessage.handedOffToAgent', 'Handed off to agent'),
+    'started-agent': t('chat.agentMessage.startedAgent', 'Started agent'),
+    task: t('chat.agentMessage.taskFromCoordinator', 'Task from coordinator'),
+    coordinator: t('chat.agentMessage.messageFromCoordinator', 'Message from coordinator'),
+    worker: t('chat.agentMessage.updateFromWorker', 'Update from worker'),
+    generic: t('chat.agentMessage.messageFrom', 'Message from')
+  }
+  const heading = headings[agentMessageHeading(from, message)]
+  const expandable =
+    agentMessageCanCopy(text) || message.blocks.some((block) => block.type === 'image-ref')
+  const Chevron = open ? ChevronUp : ChevronDown
+  return (
+    <View style={styles.compactCard} testID="agent-message-card">
+      <View style={styles.compactHeader}>
+        {expandable ? (
+          <Pressable
+            style={styles.headerToggle}
+            accessibilityRole="button"
+            accessibilityLabel={heading}
+            accessibilityState={{ expanded: open }}
+            onPress={() => setOpen(!open)}
+            onLongPress={onLongPress}
+          />
+        ) : null}
+        <View pointerEvents="none">
+          <SenderAvatar compact sender={agentMessagePrimarySender(from)} />
+        </View>
+        <Text pointerEvents="none" numberOfLines={1} style={[styles.meta, styles.compactHeading]}>
+          {heading}
+        </Text>
+        <Senders compact from={from} />
+        {agentMessageCanCopy(text) ? (
+          <MobileSourceCopyButton
+            text={text}
+            accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
+          />
+        ) : null}
+        {expandable ? (
+          <View pointerEvents="none">
+            <Chevron size={14} color={colors.textMuted} />
+          </View>
+        ) : null}
+      </View>
+      {expandable && open ? (
+        <View style={styles.compactBody}>
+          {attachments}
+          <MobileMarkdown
+            content={text}
+            rangeSelectable
+            textScale={CHAT_PROSE_SCALE * fontScale}
+            onOpenFile={onOpenFile}
+            onLongPress={onLongPress}
+          />
+          {status}
+          <Pressable
+            style={({ pressed }) => [styles.refold, pressed && pressedStyle]}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: true }}
+            onPress={() => setOpen(false)}
+          >
+            <Text style={styles.toggle}>
+              {t('chat.nativeChatUserMessageFold.showLess', 'Show less')}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+const PreviewAgentMessageCard = memo(function PreviewAgentMessageCard({
   message,
   from,
   fontScale,
@@ -156,10 +254,16 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   )
 })
 
-function SenderAvatar({ sender }: { sender: AgentMessageSource['senders'][number] | undefined }) {
+function SenderAvatar({
+  sender,
+  compact = false
+}: {
+  sender: AgentMessageSource['senders'][number] | undefined
+  compact?: boolean
+}) {
   const view = useMobileAgentMessageView(sender)
   return (
-    <View style={styles.avatar}>
+    <View style={[styles.avatar, compact && styles.compactAvatar]}>
       {view.agentType ? (
         <MobileAgentIcon agentId={view.agentType} size={16} />
       ) : (
@@ -174,15 +278,15 @@ function SenderAvatar({ sender }: { sender: AgentMessageSource['senders'][number
   )
 }
 
-function Senders({ from }: { from: AgentMessageSource }) {
+function Senders({ from, compact = false }: { from: AgentMessageSource; compact?: boolean }) {
   const open = useContext(MobileAgentMessageOpenContext)
   const t = useMobileTranslation()
   const { shown, more } = agentMessageSendersShown(from)
   const occurrences = new Map<string, number>()
   return (
-    <View style={styles.senders}>
+    <View pointerEvents="box-none" style={[styles.senders, compact && styles.compactSenders]}>
       {shown.length === 0 ? (
-        <Text style={styles.name}>
+        <Text numberOfLines={compact ? 1 : undefined} style={styles.name}>
           {t('session.agentMessageAttribution.unnamedSender', 'an agent')}
         </Text>
       ) : null}
@@ -191,7 +295,13 @@ function Senders({ from }: { from: AgentMessageSource }) {
         const occurrence = occurrences.get(identity) ?? 0
         occurrences.set(identity, occurrence + 1)
         return (
-          <SenderName key={`${identity}:${occurrence}`} sender={sender} from={from} open={open} />
+          <SenderName
+            key={`${identity}:${occurrence}`}
+            sender={sender}
+            from={from}
+            open={open}
+            compact={compact}
+          />
         )
       })}
       {more > 0 ? <Text style={styles.meta}>+{more}</Text> : null}
@@ -202,8 +312,10 @@ function Senders({ from }: { from: AgentMessageSource }) {
 function SenderName({
   sender,
   from,
-  open
+  open,
+  compact
 }: {
+  compact: boolean
   sender: AgentMessageSource['senders'][number]
   from: AgentMessageSource
   open: React.ContextType<typeof MobileAgentMessageOpenContext>
@@ -219,58 +331,17 @@ function SenderName({
       disabled={!canOpen}
       accessibilityRole={canOpen ? 'button' : undefined}
       onPress={() => open?.(from, sender)}
-      style={({ pressed }) => [styles.sender, pressed && pressedStyle]}
+      pointerEvents={canOpen ? 'auto' : 'none'}
+      style={({ pressed }) => [
+        styles.sender,
+        compact && styles.compactSender,
+        pressed && pressedStyle
+      ]}
     >
-      <Text style={styles.name}>{name}</Text>
+      <Text numberOfLines={compact ? 1 : undefined} style={styles.name}>
+        {name}
+      </Text>
       {canOpen ? <ArrowUpRight size={14} color={colors.textPrimary} /> : null}
     </Pressable>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  card: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel
-  },
-  content: { flex: 1, minWidth: 0, gap: spacing.xs },
-  heading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  meta: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
-  senders: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  sender: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  name: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    flexShrink: 1
-  },
-  toggle: { color: colors.textMuted, fontSize: typography.metaSize, paddingVertical: spacing.xs },
-  body: { position: 'absolute', left: 0, right: 0, top: 0 },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  glyph: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgPanel
-  }
-}))

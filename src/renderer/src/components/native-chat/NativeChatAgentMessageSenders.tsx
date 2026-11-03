@@ -22,11 +22,13 @@ export function NativeChatAgentMessageSenders({
   chatWorktreeId,
   target,
   queued = false,
-  dispatchId
+  dispatchId,
+  compact = false
 }: {
   from: AgentMessageSource
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
+  compact?: boolean
   queued?: boolean
   dispatchId?: string
 }): React.JSX.Element {
@@ -35,13 +37,15 @@ export function NativeChatAgentMessageSenders({
   const worktreeId = owner?.worktreeId ?? chatWorktreeId
   return (
     <div
-      className={`flex min-w-0 max-w-full flex-wrap items-center ${queued ? 'text-xs text-chat-foreground-faint' : '-ml-2.5 text-sm text-foreground'}`}
+      className={`flex min-w-0 max-w-full ${compact ? 'flex-nowrap' : 'flex-wrap'} items-center ${queued ? 'text-xs text-chat-foreground-faint' : compact ? 'text-sm text-foreground' : '-ml-2.5 text-sm text-foreground'}`}
     >
       <span>
         {queued ? translate('components.native-chat.queuedMessages.fromSender', 'From') : null}
       </span>
       {shown.length === 0 ? (
-        <span className={queued ? 'px-2' : 'px-2.5'}>{unnamedSenderLabel()}</span>
+        <span className={compact ? 'min-w-0 truncate' : queued ? 'px-2' : 'px-2.5'}>
+          {unnamedSenderLabel()}
+        </span>
       ) : null}
       {shown.map((sender, index) => (
         <Fragment key={sender.party.address}>
@@ -52,16 +56,17 @@ export function NativeChatAgentMessageSenders({
             chatWorktreeId={worktreeId}
             target={owner?.target ?? target}
             queued={queued}
+            compact={compact}
           />
           {/* Pulled back over the name's padding, so it reads "A, B". */}
           {index < shown.length - 1 ? (
-            <span aria-hidden className={queued ? '-ml-2' : '-ml-2.5'}>
+            <span aria-hidden className={compact ? 'mr-1' : queued ? '-ml-2' : '-ml-2.5'}>
               ,
             </span>
           ) : null}
         </Fragment>
       ))}
-      {more > 0 ? <span>+{more}</span> : null}
+      {more > 0 ? <span className="shrink-0">+{more}</span> : null}
     </div>
   )
 }
@@ -72,7 +77,8 @@ function SenderName({
   sender,
   chatWorktreeId,
   target,
-  queued
+  queued,
+  compact
 }: {
   dispatchId?: string
   from: AgentMessageSource
@@ -80,12 +86,16 @@ function SenderName({
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   queued: boolean
+  compact: boolean
 }): React.JSX.Element {
   const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
-      <span className={`min-w-0 max-w-full truncate ${queued ? 'px-2' : 'px-2.5'}`} title={label}>
+      <span
+        className={`min-w-0 max-w-full truncate ${compact ? '' : queued ? 'px-2' : 'px-2.5'}`}
+        title={label}
+      >
         {label}
       </span>
     )
@@ -94,8 +104,8 @@ function SenderName({
     <Button
       type="button"
       variant={queued ? 'link' : 'ghost'}
-      size={queued ? 'xs' : 'sm'}
-      className="min-w-0 max-w-full"
+      size={compact ? 'inline' : queued ? 'xs' : 'sm'}
+      className={`min-w-0 max-w-full ${compact ? 'shrink' : ''}`}
       title={
         queued ? label : translate('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
