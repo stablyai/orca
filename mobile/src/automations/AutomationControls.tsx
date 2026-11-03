@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
-import { hubStyles } from '../source-control/mobile-source-control-hub-styles'
 import { pressedStyle } from '../theme/mobile-theme'
 import { automationStyles as styles } from './automation-styles'
 import { FieldTextInput } from '../components/composer-input/FieldTextInput'
@@ -129,7 +128,7 @@ export function AutomationTabs(props: {
     <MobileSegmentedControl
       fill
       tabs
-      style={hubStyles.segments}
+      style={styles.tabs}
       segments={[
         { value: 'automations', label: t('automations.mobile.automations', 'Automations') },
         { value: 'runs', label: t('automations.mobile.runs', 'Runs') }
