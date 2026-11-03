@@ -297,18 +297,6 @@ function agentSessionRefusalErrorResponse(
 
 export const computerErrorData = computerUseErrorRecoveryData
 
-// BrowserError.code uses the browser namespace, separate from the runtime message-code allowlist.
-export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string'
-  ) {
-    return errorResponse(id, meta, (error as { code: string }).code, error.message)
-  }
-  return mapRuntimeError(id, meta, error)
-}
-
 // EmulatorError.code likewise uses its own namespace rather than generic runtime_error.
 export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   if (
