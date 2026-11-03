@@ -37,6 +37,14 @@ export function SessionLinkControl({
     link?.state === 'active' &&
     snapshot &&
     link.participants.some((p) => sessionLinkWaitingFor(snapshot.events, p.sessionId))
+  const status =
+    link?.state === 'paused'
+      ? t('components.sessionLink.paused', 'Paused')
+      : link?.state === 'ended'
+        ? t('components.sessionLink.endedShort', 'Ended')
+        : waiting
+          ? t('components.sessionLink.waitingShort', 'Waiting')
+          : null
   const control = (action: 'pause' | 'resume' | 'stop' | 'end') => {
     if (link) {
       void state.mutate('orchestration.linkControl', { id: link.id, action, version: link.version })
@@ -48,9 +56,10 @@ export function SessionLinkControl({
         <Link2 className="size-3" />
         <span className="truncate">
           {link
-            ? `${t('components.sessionLink.linked', 'Linked with')} ${partner?.name ?? partner?.agent ?? ''}${link.state === 'paused' ? ` · ${t('components.sessionLink.paused', 'Paused')}` : link.state === 'ended' ? ` · ${t('components.sessionLink.endedShort', 'Ended')}` : waiting ? ` · ${t('components.sessionLink.waitingShort', 'Waiting')}` : ''}`
+            ? `${t('components.sessionLink.linked', 'Linked with')} ${partner?.name ?? partner?.agent ?? ''}`
             : t('components.sessionLink.workTogether', 'Work together…')}
         </span>
+        {status ? <span className="shrink-0">· {status}</span> : null}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent surface="security" scrollable className="sm:max-w-2xl">
