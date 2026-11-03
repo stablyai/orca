@@ -114,7 +114,7 @@ function WorkspaceStatusPickerContent({ visible }: { visible: boolean }): React.
         value={query}
         onValueChange={setQuery}
       />
-      <CommandList className="p-2">
+      <CommandList>
         <CommandEmpty>
           {translate('auto.components.cmd.j.workspaceStatusPicker.empty', 'No matching statuses.')}
         </CommandEmpty>
@@ -126,7 +126,6 @@ function WorkspaceStatusPickerContent({ visible }: { visible: boolean }): React.
               value={status.id}
               keywords={[status.label]}
               onSelect={() => handleSelect(status.id)}
-              className="gap-2.5 px-3 py-2"
             >
               <meta.icon className={cn('size-4', meta.tone)} />
               <span className="min-w-0 flex-1 truncate">{status.label}</span>

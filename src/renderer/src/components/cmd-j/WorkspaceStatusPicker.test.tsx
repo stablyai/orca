@@ -5,14 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-statuses'
 import WorkspaceStatusPicker from './WorkspaceStatusPicker'
 
-const mocks = vi.hoisted(() => ({
-  closeModal: vi.fn(),
-  updateWorktreeMeta: vi.fn(),
-  toastError: vi.fn(),
-  captureReturnFocus: vi.fn(),
-  worktree: { value: null as Record<string, unknown> | null },
-  state: {} as Record<string, unknown>
-}))
+const mocks = vi.hoisted(() => {
+  const worktree: { value: Record<string, unknown> | null } = { value: null }
+  const state: Record<string, unknown> = {}
+  return {
+    closeModal: vi.fn(),
+    updateWorktreeMeta: vi.fn(),
+    toastError: vi.fn(),
+    captureReturnFocus: vi.fn(),
+    worktree,
+    state
+  }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
@@ -31,13 +35,16 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 function openPicker(worktree: Record<string, unknown>, extraState: Record<string, unknown> = {}) {
   mocks.worktree.value = { id: 'repo::/wt', ...worktree }
-  mocks.state = {
+  for (const key of Object.keys(mocks.state)) {
+    delete mocks.state[key]
+  }
+  Object.assign(mocks.state, {
     activeModal: 'workspace-status-picker',
     closeModal: mocks.closeModal,
     updateWorktreeMeta: mocks.updateWorktreeMeta,
     workspaceStatuses: DEFAULT_WORKSPACE_STATUSES,
     ...extraState
-  }
+  })
 }
 
 const optionLabels = () => screen.getAllByRole('option').map((option) => option.textContent)
