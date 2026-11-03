@@ -39,12 +39,12 @@ export const homeListStyles = themedStyleSheet(() => ({
   title: { fontSize: 17, lineHeight: 22, color: colors.textPrimary },
   subtitle: { fontSize: 15, lineHeight: 20, color: colors.textSecondary, marginTop: 1 },
   detail: { fontSize: 15, lineHeight: 20, color: colors.textMuted, marginTop: 3 },
+  // Centred on the whole row; the row itself top-aligns so the status column tracks the title.
   trailing: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
     gap: 6,
-    height: 22,
-    marginTop: 12,
     paddingLeft: 10,
     paddingRight: 14
   },
