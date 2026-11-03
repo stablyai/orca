@@ -12,8 +12,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { commitStagedOrcadMigrationCatalogDurably } from '../../runtime/orcad-migration-catalog-import'
-import { readHistoryMeta } from '../../terminal-history'
-import { getHistoryRoot } from '../../terminal-history-paths'
+import { readHistoryMeta } from '../../pty/history/terminal-history'
+import { getHistoryRoot } from '../../pty/history/terminal-history-paths'
 import { DORMANT_WORKTREE_ID, manifest } from './persistence-orcad-migration-catalog-fixture'
 import {
   ZSH,

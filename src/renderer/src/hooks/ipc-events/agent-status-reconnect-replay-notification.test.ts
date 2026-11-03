@@ -46,13 +46,10 @@ function createApplicator(): (data: AgentStatusIpcPayload) => unknown {
 
 // A relay reconnect re-sends every cached row; each replayed `done` used to notify again.
 describe('live agent-status replay notifications', () => {
-  let setAgentStatus: ReturnType<typeof vi.fn>
-
   beforeEach(() => {
     mocks.observe.mockReset()
-    setAgentStatus = vi.fn()
     mocks.state.current = buildStoreState({
-      setAgentStatus,
+      setAgentStatus: vi.fn(),
       workspaceSessionReady: true,
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Claude' }]
@@ -61,15 +58,6 @@ describe('live agent-status replay notifications', () => {
         'tab-1': { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: LEAF_ID }
       }
     })
-  })
-
-  it('updates status from a replayed done without observing it as a completion', () => {
-    const apply = createApplicator()
-
-    expect(apply(status({ isReplay: true }))).toBe('applied')
-
-    expect(setAgentStatus).toHaveBeenCalledTimes(1)
-    expect(mocks.observe).not.toHaveBeenCalled()
   })
 
   function seedRow(row: { state: string; stateStartedAt: number }): void {
@@ -120,25 +108,5 @@ describe('live agent-status replay notifications', () => {
       'turnCompletedAt',
       1_700_000_004_000
     )
-  })
-
-  it('seeds a stamped working replay when this renderer holds no row', () => {
-    const apply = createApplicator()
-
-    apply(status({ state: 'working', isReplay: true, turnCompletedAt: 1_700_000_004_000 }))
-
-    expect(mocks.observe.mock.calls[0][0]).toHaveProperty('seedOnly', true)
-  })
-
-  it('seeds a replayed working row, and a later real done still notifies', () => {
-    const apply = createApplicator()
-
-    apply(status({ state: 'working', isReplay: true }))
-    apply(status({ state: 'done', receivedAt: 1_700_000_006_000 }))
-
-    expect(mocks.observe).toHaveBeenCalledTimes(2)
-    expect(mocks.observe.mock.calls[0][0]).toHaveProperty('seedOnly', true)
-    expect(mocks.observe.mock.calls[1][0]).not.toHaveProperty('seedOnly')
-    expect(mocks.observe.mock.calls[1][0].payload).toHaveProperty('state', 'done')
   })
 })

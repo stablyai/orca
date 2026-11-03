@@ -143,10 +143,7 @@ function isSessionField(field: string): field is keyof WorkspaceSessionState {
   return Object.hasOwn(WORKSPACE_SESSION_FIELD_OWNERSHIP, field)
 }
 
-/**
- * This desktop's focus, which names nothing on the host: the host keeps its own, and a host that
- * already has one refuses a manifest naming another (`orcad_migration_dormant_focus_conflict`).
- */
+/** This desktop's focus, which names nothing on the host: the host keeps its own. */
 export function withoutDesktopFocus(session: WorkspaceSessionState): WorkspaceSessionState {
   const { activeWorkspaceKey: _key, activeWorkspaceExecutionHostId: _host, ...rest } = session
   return { ...rest, activeRepoId: null, activeWorktreeId: null, activeTabId: null }

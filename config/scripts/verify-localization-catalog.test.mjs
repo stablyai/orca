@@ -183,6 +183,68 @@ describe('verify-localization-catalog', () => {
     await expect(verifyLocalizationCatalog(root)).resolves.toBe(1)
   })
 
+  it('requires both English forms of a native plural call', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText:
+        "import { translate } from '@/i18n/i18n'\nexport const files = (count: number) => translate('auto.example.files', '{{count}} files', { count, defaultValue_one: 'One file' })\nexport const selected = (count: number) => translate('auto.example.selected', '{{count}} selected', { count })\n",
+      enCatalog: { auto: { example: { selected: '{{count}} selected' } } }
+    })
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    } finally {
+      report.mockRestore()
+    }
+    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(0)
+
+    expect(readJson(path.join(localesDir, 'en.json'))).toEqual({
+      auto: {
+        example: {
+          selected: '{{count}} selected',
+          files_one: 'One file',
+          files_other: '{{count}} files'
+        }
+      }
+    })
+  })
+
+  it('commits CLDR plural forms a locale lacks beside its _other form', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText: 'export {}\n',
+      enCatalog: {
+        files_one: 'One file',
+        files_other: '{{count}} files',
+        name: 'Name'
+      }
+    })
+    const frenchPath = path.join(localesDir, 'fr.json')
+    writeJson(frenchPath, { files_other: '{{count}} fichiers', name: 'Nom' })
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    } finally {
+      report.mockRestore()
+    }
+    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(0)
+
+    expect(Object.entries(readJson(frenchPath))).toEqual([
+      ['files_other', '{{count}} fichiers'],
+      ['files_one', '{{count}} fichiers'],
+      ['files_many', '{{count}} fichiers'],
+      ['name', 'Nom']
+    ])
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(0)
+
+    // Only an English form without {{count}} lets the locale add it; dropping it is still a mismatch.
+    writeJson(frenchPath, { files_other: 'fichiers', files_one: 'fichier', files_many: 'fichiers' })
+    const mismatch = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    } finally {
+      mismatch.mockRestore()
+    }
+  })
+
   it('reports partial plugin catalog gaps but rejects malformed interpolation', async () => {
     const { root } = makeProject({
       sourceText: 'export {}\n',

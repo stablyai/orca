@@ -58,6 +58,7 @@ class BrowserSessionRegistry {
   private defaultPartition = ORCA_BROWSER_PARTITION
   // Why: profiles change from IPC, the CLI and managed-profile owners; open windows and paired clients only learn of it here.
   onProfilesChanged: (() => void) | null = null
+  onProfileDeleted: ((profileId: string) => Promise<void>) | null = null
 
   constructor() {
     this.resetDefaultProfile()
@@ -294,7 +295,7 @@ class BrowserSessionRegistry {
     this.persistMeta(
       forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
     )
-    await retireDeletedBrowserSessionProfile(profile)
+    await retireDeletedBrowserSessionProfile(profile, () => this.onProfileDeleted?.(profileId))
     return true
   }
 

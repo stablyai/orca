@@ -1,14 +1,17 @@
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 // Expire unconsumed keyboard requests so navigating away cannot reopen the menu on a later mount.
 const OPEN_REQUEST_TTL_MS = 5000
 
 export function DiffNotesSendMenu({
+  owner,
   worktreeId,
   groupId,
   comments,
@@ -22,6 +25,8 @@ export function DiffNotesSendMenu({
   align = 'end',
   respondToOpenRequest = false
 }: {
+  /** The copy `comments` were read from, so delivered notes clear there. */
+  owner: DiffCommentOwner | null
   worktreeId: string
   groupId: string
   comments: readonly DiffComment[]
@@ -36,6 +41,7 @@ export function DiffNotesSendMenu({
   // Enable on exactly one instance per worktree to avoid opening multiple menus for one shortcut.
   respondToOpenRequest?: boolean
 }): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
   const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
@@ -75,10 +81,12 @@ export function DiffNotesSendMenu({
       },
       allNotesScope
     ]
-  }, [canSendFileScope, unsentFileNotes, unsentNotes])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [canSendFileScope, unsentFileNotes, unsentNotes, languageRevision])
 
   return (
     <NotesSendMenu
+      owner={owner}
       worktreeId={worktreeId}
       groupId={groupId}
       modeIdParts={['diff-notes', worktreeId, groupId, filePath ?? 'all']}
@@ -94,7 +102,7 @@ export function DiffNotesSendMenu({
       openRequestNonce={openRequestNonce}
       openRequestExpiresAt={openRequestExpiresAt}
       onOpenRequestHandled={handleOpenRequestHandled}
-      onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+      onDelivered={(notes) => void (owner && clearDeliveredDiffComments(owner, notes))}
     />
   )
 }

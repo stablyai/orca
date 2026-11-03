@@ -14,7 +14,9 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   stat: statMock
 }))
 
-vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
+  killWithDescendantSweep: vi.fn()
+}))
 
 const close = vi.fn(async () => {})
 const spawnSubprocess = vi.fn(() => createMockSubprocess())
@@ -188,7 +190,12 @@ describe('TerminalHost cwd readability verdict', () => {
     host = new TerminalHost({
       spawnSubprocess: async (opts) => {
         if (opts.cwd) {
-          await validateWorkingDirectoryAsync(opts.cwd, { signal: opts.cancelSignal })
+          try {
+            await validateWorkingDirectoryAsync(opts.cwd, { signal: opts.cancelSignal })
+          } catch (error) {
+            opts.onCreationDisposition?.({ kind: 'no-fork' })
+            throw error
+          }
         }
         return createMockSubprocess()
       }

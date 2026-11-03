@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type {
   DashboardCard,
   DashboardCardTerminalInput
@@ -15,18 +16,24 @@ vi.mock('./AgentTerminalPreview', () => ({
   AgentTerminalPreview: ({
     ptyId,
     terminalInput,
-    className
+    className,
+    onBrowserForeground
   }: {
     ptyId: string
     terminalInput?: DashboardCardTerminalInput | null
     className?: string
+    onBrowserForeground?: () => void
   }) => (
     <div
       data-testid="preview"
       data-pty-id={ptyId}
       data-terminal-input={terminalInput === null ? 'null' : JSON.stringify(terminalInput)}
       className={className}
-    />
+    >
+      {onBrowserForeground ? (
+        <button onClick={onBrowserForeground}>Completed browser handoff</button>
+      ) : null}
+    </div>
   )
 }))
 
@@ -80,6 +87,16 @@ describe('AgentTerminalDialog', () => {
       'data-terminal-input',
       JSON.stringify(TERMINAL_INPUT)
     )
+  })
+
+  it.each([
+    ['interrupted', 'Interrupted'],
+    ['failed', 'Failed'],
+    ['unconfirmed', 'Couldn’t confirm']
+  ] as const)('keeps an acknowledged %s verdict in the terminal header', (verdict, label) => {
+    const statusCard = { ...card({ dotState: 'done', bucket: 'idle', unseen: false }), verdict }
+    render(<AgentTerminalPanel card={statusCard} onOpenChange={() => {}} onReveal={() => {}} />)
+    expect(screen.getByText(new RegExp(label))).toBeInTheDocument()
   })
 
   it('passes null when the card carries no profile, so the preview routes by client OS', () => {
@@ -193,3 +210,40 @@ describe('AgentTerminalDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })
+
+it.each([false, true])(
+  'restores dialog focus only without a confirmed host handoff (%s)',
+  async (handoff) => {
+    function Host() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Launch preview</button>
+          <button id="browser-destination">Browser destination</button>
+          <AgentTerminalDialog
+            card={open ? card() : null}
+            onOpenChange={setOpen}
+            onReveal={() => {}}
+            onBrowserForeground={
+              handoff ? () => document.getElementById('browser-destination')?.focus() : undefined
+            }
+          />
+        </>
+      )
+    }
+    render(<Host />)
+    const launch = screen.getByRole('button', { name: 'Launch preview' })
+    launch.focus()
+    fireEvent.click(launch)
+    await waitFor(() => expect(screen.getByTestId('preview')).toBeInTheDocument())
+    fireEvent.click(
+      screen.getByRole('button', { name: handoff ? 'Completed browser handoff' : 'Close' })
+    )
+    await waitFor(() => expect(screen.queryByTestId('preview')).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        handoff ? document.getElementById('browser-destination') : launch
+      )
+    )
+  }
+)

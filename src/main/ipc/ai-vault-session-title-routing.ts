@@ -7,7 +7,7 @@ import {
   parseRoutableExecutionHostId,
   requestedExecutionHostScope
 } from '../../shared/execution-host'
-import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
+import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-titles/session-title-resolver'
 
 export type RuntimeAiVaultSessionTitleResolver = (
   environmentId: string,

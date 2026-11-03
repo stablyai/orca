@@ -106,7 +106,7 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-60"
+        className="min-w-60"
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(e) => {

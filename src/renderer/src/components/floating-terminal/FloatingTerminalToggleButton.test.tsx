@@ -1,4 +1,5 @@
 import type * as ReactModule from 'react'
+import type * as ReactI18nextModule from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY } from './floating-terminal-trigger-position'
 
@@ -52,6 +53,11 @@ vi.mock('react', async () => {
     }
   }
 })
+
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactI18nextModule>()),
+  useTranslation: () => ({})
+}))
 
 vi.mock('lucide-react', () => ({
   PanelsTopLeft: function PanelsTopLeft() {

@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { EMPTY_FORM, type EditingTarget } from '../settings/ssh-target-draft'
+import { EMPTY_FORM, type EditingTarget } from '../settings/ssh/targets/ssh-target-draft'
 import type { SshConfigHostSummary } from '../../../../shared/ssh-types'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import {
@@ -14,6 +14,7 @@ import { AddRemoteHostSshConfigPicker } from './AddRemoteHostSshConfigPicker'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { AddRemoteHostServerFormPanel } from './AddRemoteHostServerFormPanel'
 import { AddWslHostDialogBody } from './AddWslHostDialogBody'
+import { remoteServerPairingFailureMessage } from '@/lib/remote-server-pairing-error-copy'
 import {
   addAllSshConfigHostsToOrca,
   loadSshConfigHostsForPicker,
@@ -271,7 +272,7 @@ export function AddRemoteHostDialog({
       if (!result.ok) {
         toast.error(
           result.kind === 'environment-save-failed'
-            ? result.message
+            ? remoteServerPairingFailureMessage(result)
             : translateRemotePairingFailureDescription(
                 result.kind,
                 parsedServerLink.value.displayEndpoint

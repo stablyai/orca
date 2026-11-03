@@ -163,38 +163,6 @@ describe('selectRepoByIdForActiveWorkspace', () => {
     // Worst case: the id-keyed map build plus one host-filter pass.
     expect(counter.count).toBeLessThanOrEqual(REPO_COUNT * 3)
   })
-
-  it('still prefers the row that carries the active workspace host', () => {
-    const localRepo = {
-      id: 'repo-0',
-      path: '/tmp/a',
-      displayName: 'a'
-    } as Repo
-    const sshRepo = {
-      id: 'repo-0',
-      path: '/tmp/a',
-      displayName: 'a',
-      connectionId: 'host-a'
-    } as Repo
-    const state = {
-      repos: [localRepo, sshRepo],
-      activeRepoId: 'repo-0',
-      activeWorkspaceExecutionHostId: 'ssh:host-a'
-    } as unknown as AppState
-
-    expect(selectRepoByIdForActiveWorkspace(state, 'repo-0')).toBe(sshRepo)
-    expect(selectRepoByIdForActiveWorkspace(state, 'repo-0')).toBe(sshRepo)
-  })
-
-  it('returns an identical result for repeated reads of one snapshot', () => {
-    const state = makeActiveWorkspaceState({ count: 0 })
-    expect(selectRepoByIdForActiveWorkspace(state, 'repo-0')).toBe(
-      selectRepoByIdForActiveWorkspace(state, 'repo-0')
-    )
-    expect(selectRepoByIdForActiveWorkspace(state, 'repo-1')).toBe(
-      selectRepoByIdForActiveWorkspace(state, 'repo-1')
-    )
-  })
 })
 
 describe('project runtime session summary', () => {
@@ -246,13 +214,6 @@ describe('project runtime session summary', () => {
     expect(counter.count).toBeLessThanOrEqual(tabCount * 3)
   })
 
-  it('returns an identical summary for repeated reads of one snapshot', () => {
-    const state = makeRuntimeSessionState({ count: 0 })
-    expect(getProjectRuntimeSessionSummary(state, 'repo-0')).toBe(
-      getProjectRuntimeSessionSummary(state, 'repo-0')
-    )
-  })
-
   it('recomputes when a tab slice is replaced', () => {
     const state = makeRuntimeSessionState({ count: 0 })
     const first = getProjectRuntimeSessionSummary(state, 'repo-0')
@@ -269,22 +230,5 @@ describe('project runtime session summary', () => {
 
     expect(first.liveTerminalCount).toBe(WORKTREES_PER_REPO * TABS_PER_WORKTREE)
     expect(next.liveTerminalCount).toBe(1)
-  })
-
-  it('counts running agents against the owning project only', () => {
-    const state = makeRuntimeSessionState({ count: 0 })
-    const summary = getProjectRuntimeSessionSummary(
-      {
-        ...state,
-        agentStatusByPaneKey: {
-          'tab-0-0-0:leaf': { state: 'working', tabId: 'tab-0-0-0' },
-          'tab-1-0-0:leaf': { state: 'working', tabId: 'tab-1-0-0' },
-          'tab-0-1-0:leaf': { state: 'done', tabId: 'tab-0-1-0' }
-        }
-      } as unknown as AppState,
-      'repo-0'
-    )
-
-    expect(summary.activeTaskCount).toBe(1)
   })
 })

@@ -18,6 +18,7 @@ export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
   factory: RuntimeBrowserCommandsFactory
   isAvailable(): boolean
+  supportsGoogleCookieClear?(): boolean
   stop(): Promise<void>
 }
 
@@ -144,9 +145,10 @@ async function startProvider(
 
 async function startElectronServeProvider(
   executablePath: string,
+  userDataPath: string,
   signal?: AbortSignal
 ): Promise<OrcadBrowserProvider> {
-  const processHandle = new ElectronServeBrowserProcess(executablePath)
+  const processHandle = new ElectronServeBrowserProcess(executablePath, userDataPath)
   try {
     await processHandle.start(signal)
   } catch (error) {
@@ -166,6 +168,7 @@ async function startElectronServeProvider(
   })
   return {
     kind: 'electron',
+    supportsGoogleCookieClear: () => processHandle.supportsGoogleCookieClear(),
     factory: (host) => processHandle.createCommands(host),
     isAvailable: () => processHandle.isAvailable(),
     stop: async () => {
@@ -200,7 +203,11 @@ export async function resolveOrcadBrowserProvider(
   if (installedElectronExecutable) {
     try {
       setRuntimeBrowserUnavailableCause(null)
-      return await startElectronServeProvider(installedElectronExecutable, options.signal)
+      return await startElectronServeProvider(
+        installedElectronExecutable,
+        options.userDataPath,
+        options.signal
+      )
     } catch (error) {
       if (error instanceof OrcadBrowserCleanupError) {
         throw error

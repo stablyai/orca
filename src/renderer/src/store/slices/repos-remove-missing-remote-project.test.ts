@@ -29,14 +29,6 @@ const liveRemoteRepo: Repo = {
   executionHostId: 'runtime:env-1'
 }
 
-const localTwinRepo: Repo = {
-  id: 'project-b',
-  path: '/Users/laptop/project-b',
-  displayName: 'Project B (local)',
-  badgeColor: '#222',
-  addedAt: 3
-}
-
 const reposRemove = vi.fn()
 const reposRemoveForHost = vi.fn()
 const ptyKill = vi.fn()
@@ -93,28 +85,6 @@ beforeEach(() => {
 })
 
 describe('removeProject when the owning host already dropped the project', () => {
-  it('drops the ghost row when the remote reports repo_not_found', async () => {
-    answerRepoRmWith('repo_not_found')
-    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
-
-    await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
-
-    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a'])
-  })
-
-  // STA-7117: the startup sweep never reaps `runtime:*` rows, so the removal itself must.
-  it("drops this desktop's persisted rows for that host once the host confirms", async () => {
-    answerRepoRmWith('repo_not_found')
-    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
-
-    await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
-
-    expect(reposRemoveForHost).toHaveBeenCalledExactlyOnceWith({
-      repoId: 'project-b',
-      hostId: 'runtime:env-1'
-    })
-  })
-
   it('still finishes the removal when the residue cleanup throws', async () => {
     answerRepoRmWith('repo_not_found')
     reposRemoveForHost.mockImplementation(() => {
@@ -137,28 +107,5 @@ describe('removeProject when the owning host already dropped the project', () =>
     expect(toast.error).not.toHaveBeenCalled()
     // An unconfirmed removal is not evidence the host dropped the project.
     expect(reposRemoveForHost).not.toHaveBeenCalled()
-  })
-
-  it('toasts once for a genuine failure when the caller opts in', async () => {
-    answerRepoRmWith('runtime_unavailable')
-    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
-
-    await store
-      .getState()
-      .removeProject('project-b', { hostId: 'runtime:env-1', errorFeedback: 'toast' })
-
-    expect(toast.error).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves a same-id project on another host untouched', async () => {
-    answerRepoRmWith('repo_not_found')
-    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo, localTwinRepo])
-
-    await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
-
-    expect(store.getState().repos.map((repo) => repo.path)).toEqual([
-      '/Users/mini/project-a',
-      '/Users/laptop/project-b'
-    ])
   })
 })

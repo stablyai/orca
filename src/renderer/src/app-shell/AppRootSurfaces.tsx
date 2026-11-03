@@ -1,8 +1,8 @@
+import { useTranslation } from 'react-i18next'
 import { ModalBoundary, OverlayBoundary } from './app-root-surface-boundaries'
 import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLanguageLoading'
 import { useLanguageReadiness } from '../i18n/language-readiness'
-import { NotificationCardStack } from '../components/NotificationCardStack'
-import { Suspense } from 'react'
+import { memo, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
@@ -12,9 +12,8 @@ import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/MarkdownTemplatePicker'
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
-import { StarNagCard } from '../components/StarNagCard'
-import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeRuntimeModal'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
+import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeRuntimeModal'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
@@ -23,6 +22,7 @@ import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
+import { AppNotificationCards } from './AppNotificationCards'
 import { usePreloadWorktreeJumpPalette, WorktreeJumpPalette } from './worktree-jump-palette-preload'
 import {
   selectAppRootSurfacePetEnabled,
@@ -49,7 +49,9 @@ const AddProjectFromFolderDialog = lazy(
 )
 const DiagramViewerModal = lazy(() => import('../components/editor/DiagramViewerModal'))
 const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
-const NodeDistMirrorDialog = lazy(() => import('../components/settings/NodeDistMirrorDialog'))
+const NodeDistMirrorDialog = lazy(
+  () => import('../components/settings/advanced/network/NodeDistMirrorDialog')
+)
 const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
 )
@@ -63,20 +65,12 @@ const DictationController = lazy(() =>
   }))
 )
 const SshPassphraseDialog = lazy(() =>
-  import('../components/settings/SshPassphraseDialog').then((module) => ({
+  import('../components/ssh-authentication/SshPassphraseDialog').then((module) => ({
     default: module.SshPassphraseDialog
   }))
 )
-const UpdateCard = lazy(() =>
-  import('../components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
-)
-const UnexpectedSignoutCard = lazy(() =>
-  import('../components/UnexpectedSignoutCard').then((module) => ({
-    default: module.UnexpectedSignoutCard
-  }))
-)
 const RemoteServerUpdateDialog = lazy(
-  () => import('../components/settings/RemoteServerUpdateDialog')
+  () => import('../components/settings/runtime-environments/updates/RemoteServerUpdateDialog')
 )
 const ContextualTourOverlay = lazy(() =>
   import('../components/contextual-tours/ContextualTourOverlay').then((module) => ({
@@ -108,12 +102,14 @@ function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
   return true
 }
 
-/** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. */
-export function AppRootSurfaces(props: {
+/** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. Memoized so active-workspace App renders skip every root overlay. */
+export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   floatingWorkspace: FloatingWorkspacePanelState
   onboardingGate: OnboardingGate
 }): React.JSX.Element {
   const { floatingWorkspace, onboardingGate } = props
+  // Memoized: subscribe so a language change still repaints its labels.
+  useTranslation()
   const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
@@ -284,23 +280,12 @@ export function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
-      <NotificationCardStack>
-        {shouldMountUpdateCard ? (
-          <Suspense fallback={null}>
-            <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
-              <UpdateCard />
-            </OverlayBoundary>
-          </Suspense>
-        ) : null}
-        <Suspense fallback={null}>
-          <OverlayBoundary boundaryId="overlay.unexpected-signout" resetKey={activeView}>
-            <UnexpectedSignoutCard />
-          </OverlayBoundary>
-        </Suspense>
-        <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
-          <StarNagCard />
-        </OverlayBoundary>
-      </NotificationCardStack>
+      <AppNotificationCards
+        activeView={activeView}
+        shouldMountUpdateCard={shouldMountUpdateCard}
+        chatUiHereCornerCardOpen={onboardingGate.chatUiHereCornerCardOpen}
+        onChatUiHereCornerCardClose={() => onboardingGate.setChatUiHereCornerCardOpen(false)}
+      />
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
         <NativeChatResumeOnRestartModal />
       </OverlayBoundary>
@@ -398,4 +383,4 @@ export function AppRootSurfaces(props: {
       </Suspense>
     </>
   )
-}
+})

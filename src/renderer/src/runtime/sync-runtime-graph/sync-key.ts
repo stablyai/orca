@@ -140,6 +140,24 @@ export function getRuntimeMobileSessionSyncKey(
   }
 }
 
+function editorDraftsEqual(
+  a: ReadonlyMap<string, string>,
+  b: ReadonlyMap<string, string>
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const [fileId, content] of a) {
+    if (b.get(fileId) !== content) {
+      return false
+    }
+  }
+  return true
+}
+
 export function runtimeMobileSessionSyncKeysEqual(
   a: RuntimeMobileSessionSyncKey,
   b: RuntimeMobileSessionSyncKey
@@ -168,6 +186,6 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.tabsProjection === b.tabsProjection &&
     a.openFilesProjection === b.openFilesProjection &&
     a.browserProjection === b.browserProjection &&
-    a.editorDraftsProjection === b.editorDraftsProjection
+    editorDraftsEqual(a.editorDraftsProjection, b.editorDraftsProjection)
   )
 }

@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -47,124 +47,125 @@ function createStore(settings: Record<string, unknown> = {}): Store {
   } as Store
 }
 
+const CONFIG_PATH = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
+const USER_THEMES = '/Users/alice/.config/ghostty/themes'
+
+function mockFiles(files: Record<string, string>): void {
+  statMock.mockImplementation(async (p: string) => {
+    if (p in files) {
+      return { isFile: () => true, size: files[p].length }
+    }
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+  })
+  readFileMock.mockImplementation(async (p: string) => files[p])
+}
+
 describe('previewGhosttyImport theme references', () => {
-  it('resolves a theme reference into color overrides', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    const themePath = '/Users/alice/.config/ghostty/themes/Tomorrow Night Bright'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath || p === themePath) {
-        return { isFile: () => true, size: 128 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockImplementation(async (p: string) => {
-      if (p === themePath) {
-        return 'palette = 1=#d54e53\nbackground = #000000\nforeground = #eaeaea\n'
-      }
-      return 'theme = Tomorrow Night Bright\nfont-size = 14\n'
+  it('imports a theme file as a custom theme and keeps explicit colors as overrides', async () => {
+    mockFiles({
+      [CONFIG_PATH]: 'theme = Tomorrow Night Bright\nbackground = #101010\nfont-size = 14\n',
+      [`${USER_THEMES}/Tomorrow Night Bright`]:
+        'palette = 1=#d54e53\nbackground = #000000\nforeground = #eaeaea\nfont-size = 30\n'
     })
 
-    const result = await previewGhosttyImport(createStore())
+    const result = await previewGhosttyImport(
+      createStore({ terminalColorOverrides: { red: '#ff0000' } })
+    )
 
-    expect(result.diff).toEqual({
+    const [theme] = result.diff.terminalCustomThemes ?? []
+    expect(theme).toMatchObject({
+      id: 'ghostty:tomorrow-night-bright',
+      name: 'Tomorrow Night Bright',
+      source: 'ghostty',
+      mode: 'dark',
+      terminal: { red: '#d54e53', background: '#000000', foreground: '#eaeaea', cursor: '#eaeaea' }
+    })
+    expect(result.diff).toMatchObject({
       terminalFontSize: 14,
-      terminalColorOverrides: {
-        red: '#d54e53',
-        background: '#000000',
-        foreground: '#eaeaea'
-      }
+      terminalThemeDark: 'custom:ghostty:tomorrow-night-bright',
+      terminalUseSeparateLightTheme: false,
+      // Overrides from an earlier import must not tint the newly selected theme.
+      terminalColorOverrides: { background: '#101010' }
     })
+    expect(result.terminalThemes).toEqual({ dark: 'Tomorrow Night Bright' })
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('lets explicit config colors override theme colors', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    const themePath = '/Users/alice/.config/ghostty/themes/night'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath || p === themePath) {
-        return { isFile: () => true, size: 128 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockImplementation(async (p: string) => {
-      if (p === themePath) {
-        return 'palette = 1=#d54e53\npalette = 2=#b9ca4a\nbackground = #000000\n'
-      }
-      return 'theme = night\nbackground = #101010\npalette = 1=#ff0000\n'
+  it('maps a light/dark pair to both slots, falling back to Orca built-ins by name', async () => {
+    mockFiles({
+      [CONFIG_PATH]: 'theme = dark:night , light: catppuccin-latte.conf\npalette = 2=#00ff00\n',
+      [`${USER_THEMES}/night`]: 'background = #000000\nforeground = #ffffff\n'
     })
 
     const result = await previewGhosttyImport(createStore())
 
-    expect(result.diff).toEqual({
-      terminalColorOverrides: {
-        red: '#ff0000',
-        green: '#b9ca4a',
-        background: '#101010'
-      }
+    expect(result.diff).toMatchObject({
+      terminalThemeDark: 'custom:ghostty:night',
+      terminalThemeLight: 'Catppuccin Latte',
+      terminalUseSeparateLightTheme: true,
+      terminalColorOverrides: { green: '#00ff00' },
+      terminalColorOverridesLight: { green: '#00ff00' }
     })
-    expect(result.unsupportedKeys).toEqual([])
+    expect(result.terminalThemes).toEqual({ dark: 'night', light: 'Catppuccin Latte' })
+  })
+
+  it('reports unresolved names and incomplete pairs without touching theme settings', async () => {
+    mockFiles({ [CONFIG_PATH]: 'theme = No Such Theme\n' })
+    const missing = await previewGhosttyImport(createStore())
+    expect(missing.diff).toEqual({})
+    expect(missing.terminalThemes).toBeUndefined()
+    expect(missing.unsupportedKeys).toEqual(['theme (No Such Theme: not found)'])
+
+    mockFiles({ [CONFIG_PATH]: 'theme = light:Catppuccin Latte\n' })
+    const half = await previewGhosttyImport(createStore())
+    expect(half.diff).toEqual({})
+    expect(half.unsupportedKeys).toEqual([
+      'theme (light:/dark: pairs need both a light and a dark theme)'
+    ])
+  })
+
+  it('keeps same-named theme files from different folders apart and imports their divider colors', async () => {
+    mockFiles({
+      [CONFIG_PATH]: 'theme = light:/Users/alice/a/theme,dark:/Users/alice/b/theme\n',
+      '/Users/alice/a/theme':
+        'background = #ffffff\nforeground = #000000\nsplit-divider-color = #cccccc\n',
+      '/Users/alice/b/theme':
+        'background = #000000\nforeground = #ffffff\nsplit-divider-color = #333333\n'
+    })
+
+    const result = await previewGhosttyImport(createStore())
+
+    expect(result.diff).toMatchObject({
+      terminalThemeDark: 'custom:ghostty:theme',
+      terminalThemeLight: 'custom:ghostty:theme-light',
+      terminalDividerColorDark: '#333333',
+      terminalDividerColorLight: '#cccccc'
+    })
+  })
+
+  it('reports nothing to change when the same theme is imported again', async () => {
+    mockFiles({
+      [CONFIG_PATH]: 'theme = night\n',
+      [`${USER_THEMES}/night`]: 'background = #000000\nforeground = #ffffff\n'
+    })
+    const first = await previewGhosttyImport(createStore())
+
+    const second = await previewGhosttyImport(createStore({ ...first.diff }))
+
+    expect(second.diff).toEqual({})
   })
 
   it('resolves an absolute theme path without probing theme search dirs', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
     const themePath = '/Users/alice/themes/work'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath || p === themePath) {
-        return { isFile: () => true, size: 128 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockImplementation(async (p: string) => {
-      if (p === themePath) {
-        return 'background = #202020\nforeground = #f0f0f0\n'
-      }
-      return `theme = ${themePath}\n`
+    mockFiles({
+      [CONFIG_PATH]: `theme = ${themePath}\n`,
+      [themePath]: 'background = #f0f0f0\nforeground = #202020\n'
     })
 
     const result = await previewGhosttyImport(createStore())
 
-    expect(result.diff).toEqual({
-      terminalColorOverrides: {
-        background: '#202020',
-        foreground: '#f0f0f0'
-      }
-    })
-    expect(statMock).toHaveBeenCalledWith(themePath)
-    expect(statMock).not.toHaveBeenCalledWith(
-      '/Users/alice/.config/ghostty/themes/Users/alice/themes/work'
-    )
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('marks an unresolvable theme as unsupported', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath) {
-        return { isFile: () => true, size: 128 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('theme = Missing Theme\n')
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual(['theme (theme file not found)'])
-  })
-
-  it('marks light:/dark: theme pairs as unsupported', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath) {
-        return { isFile: () => true, size: 128 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('theme = light:Tomorrow,dark:Tomorrow Night\n')
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual(['theme (light:/dark: pairs not supported)'])
+    expect(result.diff.terminalThemeDark).toBe('custom:ghostty:work')
+    expect(result.diff.terminalCustomThemes?.[0]?.mode).toBe('light')
+    expect(statMock).not.toHaveBeenCalledWith(`${USER_THEMES}/Users/alice/themes/work`)
   })
 })

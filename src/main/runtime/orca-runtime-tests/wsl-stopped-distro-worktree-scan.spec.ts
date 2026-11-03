@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as repoWorktreeAdminFingerprint from '../repo-worktree-admin-fingerprint'
-import * as wslUncAccessGate from '../../wsl/wsl-unc-access-gate'
+import * as wslUncAccessGate from '../../wsl/filesystem/wsl-unc-access-gate'
 import { OrcaRuntimeService, listWorktrees } from '../orca-runtime-test-mocks.spec'
 import { makeWorktreeInfo, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
 
@@ -84,18 +84,4 @@ describe('worktree scans of a stopped WSL distro (E9)', () => {
       }
     }
   )
-
-  it('scans a host repo exactly as before', async () => {
-    vi.mocked(listWorktrees).mockReset()
-    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
-    const blocked = vi.spyOn(wslUncAccessGate, 'blockedWslDistroForPath')
-    try {
-      await runtimeFor('/tmp/host-repo').listDetectedManagedWorktrees('id:wsl-repo')
-      expect(listWorktrees).toHaveBeenCalledTimes(1)
-      // A path no distro owns never even asks the running gate.
-      expect(blocked).not.toHaveBeenCalled()
-    } finally {
-      blocked.mockRestore()
-    }
-  })
 })

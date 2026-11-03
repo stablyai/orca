@@ -1,6 +1,8 @@
+import type { RuntimeAccountController } from './runtime-account-controller'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import {
   agentLaunchQuotingShell,
   remoteExecutionPlatform,
@@ -24,9 +26,9 @@ import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-i
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
 import {
-  resolveLocalProjectRuntimeForWorktreeId,
+  resolvePlainTerminalProjectRuntime,
   resolvePlainTerminalPtyOptions
-} from '../local-project-runtime-resolution'
+} from '../workspaces/execution-host/local-project-runtime-resolution'
 import {
   agentLaunchPlatformForScope,
   agentLaunchProjectRuntime,
@@ -53,7 +55,8 @@ type AgentTerminalPlanHost = {
 export async function resolveAgentTerminalCreateOptions(
   workspace: TerminalWorkspaceLaunchScope,
   opts: TerminalCreateOptions,
-  host: AgentTerminalPlanHost
+  host: AgentTerminalPlanHost,
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
 ): Promise<TerminalCreateOptions> {
   const store = host.store ?? undefined
   // Preserve raw commands such as codex exec; Settings defaults apply only to unmanaged repo-backed bare agents.
@@ -83,7 +86,13 @@ export async function resolveAgentTerminalCreateOptions(
       opts.shellOverride && store
         ? plannedAgent || opts.launchRuntime
           ? agentLaunchProjectRuntime(store, workspace, plannedAgent ?? opts.launchAgent)
-          : resolveLocalProjectRuntimeForWorktreeId(store, workspace.id)
+          : resolvePlainTerminalProjectRuntime(
+              store,
+              workspace.id,
+              workspace,
+              opts.tabId,
+              workspace.connectionId
+            )
         : undefined,
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
     workspacePath: workspace.path
@@ -121,7 +130,8 @@ export async function resolveAgentTerminalCreateOptions(
           plannedAgent,
           store.getSettings(),
           runtime,
-          host
+          host,
+          sessionOptions
         )
       : opts
   if (!launch.launchAgent) {
@@ -157,7 +167,8 @@ async function buildRuntimeAgentTerminalStartupOptions(
   agent: TuiAgent,
   settings: ReturnType<RuntimeStore['getSettings']>,
   runtime: AgentLaunchRuntime,
-  host: AgentTerminalPlanHost
+  host: AgentTerminalPlanHost,
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
 ): Promise<TerminalCreateOptions> {
   // Repo display metadata may belong to another host; use the already-resolved PTY route for launch.
   const isRemote = Boolean(workspace.connectionId)
@@ -175,7 +186,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
         isRemote,
         ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
         shell: agentLaunchQuotingShell(runtime),
-        sessionOptions: host.toSessionOptions(opts.launchPreferences),
+        sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
       }),
       opts.env?.PATH
@@ -258,7 +269,9 @@ function resolveQoderLaunchCommand(
       store,
       store.getSettings(),
       workspace.id,
-      launch.shellOverride
+      launch.shellOverride,
+      workspace,
+      launch.tabId
     )
   }
   // Where the process runs: a `\\wsl$` cwd first, then a WSL shell, as the spawn decides it.
@@ -271,4 +284,22 @@ function resolveQoderLaunchCommand(
     context: wsl ? { wslDistro: wsl.distro } : {},
     shell: agentLaunchQuotingShell(fact)
   })
+}
+
+export async function prepareHostAgentTerminalLaunch(
+  workspace: TerminalWorkspaceLaunchScope,
+  opts: TerminalCreateOptions,
+  resolvedLaunch: TerminalCreateOptions,
+  accounts: Pick<RuntimeAccountController, 'prepareHostAgentLaunch' | 'hostLaunchEnvFor'>
+): Promise<TerminalCreateOptions> {
+  const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
+  // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
+  if (workspace.connectionId) {
+    return launch
+  }
+  if (launch.launchAgent) {
+    await accounts.prepareHostAgentLaunch(launch.launchAgent)
+  }
+  const hostLaunchEnv = accounts.hostLaunchEnvFor(launch.launchAgent)
+  return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
 }

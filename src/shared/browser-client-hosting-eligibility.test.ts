@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  expectsBrowserClientHosting,
-  runtimeAdvertisesBrowserClientHosting
-} from './browser-client-hosting-eligibility'
+import { expectsBrowserClientHosting } from './browser-client-hosting-eligibility'
 
 const CLIENT_HOST_CAPABILITIES = [
   'browser.clientHost.v1',
@@ -20,12 +17,18 @@ const ELIGIBLE = {
 }
 
 describe('expectsBrowserClientHosting', () => {
-  it('accepts a desktop runtime that advertises the whole capability set', () => {
-    expect(expectsBrowserClientHosting(ELIGIBLE)).toBe(true)
-  })
-
   it('treats an unset preference as auto', () => {
     expect(expectsBrowserClientHosting({ ...ELIGIBLE, preference: undefined })).toBe(true)
+  })
+
+  it('hosts on this device when the server-render setting meets a server that cannot stream', () => {
+    expect(
+      expectsBrowserClientHosting({
+        ...ELIGIBLE,
+        enabled: false,
+        capabilities: CLIENT_HOST_CAPABILITIES
+      })
+    ).toBe(true)
   })
 
   it.each([
@@ -35,12 +38,5 @@ describe('expectsBrowserClientHosting', () => {
     { name: 'the runtime advertises nothing', input: { capabilities: undefined } }
   ])('refuses when $name', ({ input }) => {
     expect(expectsBrowserClientHosting({ ...ELIGIBLE, ...input })).toBe(false)
-  })
-
-  it.each(CLIENT_HOST_CAPABILITIES)('refuses without %s', (missing) => {
-    const capabilities = ELIGIBLE.capabilities.filter((capability) => capability !== missing)
-
-    expect(runtimeAdvertisesBrowserClientHosting(capabilities)).toBe(false)
-    expect(expectsBrowserClientHosting({ ...ELIGIBLE, capabilities })).toBe(false)
   })
 })

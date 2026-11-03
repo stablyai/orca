@@ -4,9 +4,16 @@ import { vi } from 'vitest'
 // Headless React: hooks are stubbed so TabBar can be invoked as a plain function.
 export async function stubHeadlessReact(): Promise<Record<string, unknown>> {
   const actual = await vi.importActual<typeof ReactModule>('react')
+  const contextDefaults = new WeakMap<object, unknown>()
   return {
     ...actual,
     memo: <T>(component: T) => component,
+    createContext: <T>(defaultValue: T) => {
+      const context = actual.createContext(defaultValue)
+      contextDefaults.set(context, defaultValue)
+      return context
+    },
+    useContext: (context: ReactModule.Context<unknown>) => contextDefaults.get(context),
     useEffect: () => {},
     useLayoutEffect: () => {},
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,

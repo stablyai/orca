@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   selectRefreshedNetworkAddress,
   type MobileNetworkInterface
-} from '../settings/mobile-network-interface-selection'
+} from '../settings/mobile/pairing/mobile-network-interface-selection'
 import {
   useMobilePairingCustomAddress,
   useMobilePairingCustomAddresses

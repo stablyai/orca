@@ -1,7 +1,9 @@
-import * as path from 'node:path'
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
 import { getLargeDiffRenderLimit } from '../../../shared/large-diff-render-limit'
-import { PREVIEWABLE_BINARY_MIME_TYPES } from './previewable-binary-mime-types'
+import {
+  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
+  filePreviewExtension
+} from '../../../shared/file-preview-kind'
 
 export function buildDiffResult(
   originalContent: string,
@@ -14,7 +16,7 @@ export function buildDiffResult(
 ): GitDiffResult {
   if (originalIsBinary || modifiedIsBinary) {
     const mimeType = filePath
-      ? PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
+      ? IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(filePath)]
       : undefined
     const sides = originalIsBinary
       ? { originalIsBinary: true as const, modifiedIsBinary }

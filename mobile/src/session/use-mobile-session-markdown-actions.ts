@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
 import { Keyboard, Platform } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
+import { useSessionLeaveGuard } from './session-leave-guard'
 import { markdownTabSave } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
@@ -24,9 +27,11 @@ export type MobileSessionMarkdownActionsScope = Pick<
   | 'markdownSaveInFlightRef'
   | 'showToast'
   | 'readMarkdownTab'
+  | 'dictationLeaveHold'
 >
 
 export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActionsScope) {
+  const t = useMobileTranslation()
   const {
     hostId,
     worktreeId,
@@ -41,7 +46,8 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     markdownSaveSeqRef,
     markdownSaveInFlightRef,
     showToast,
-    readMarkdownTab
+    readMarkdownTab,
+    dictationLeaveHold: { hold: holdLeaveForDictation, holdsLeave: dictationHoldsLeave }
   } = scope
   const clipboard = useClipboardWriter()
   const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
@@ -73,11 +79,11 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         await clipboard.writeText(current.localContent)
       } catch {
         triggerError()
-        showToast("Couldn't copy", 1500)
+        showToast(translate('session.useMarkdownActions.copyFailed', "Couldn't copy"), 1500)
         return
       }
       triggerSuccess()
-      showToast('Copied')
+      showToast(translate('common.copied', 'Copied'))
     },
     [clipboard, markdownDocs, showToast]
   )
@@ -86,10 +92,13 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       try {
         await clipboard.writeText(tab.relativePath || tab.filePath)
-        showToast('Path copied')
+        showToast(translate('session.useMarkdownActions.pathCopied', 'Path copied'))
       } catch {
         triggerError()
-        showToast("Couldn't copy path", 1500)
+        showToast(
+          translate('session.useMarkdownActions.copyPathFailed', "Couldn't copy path"),
+          1500
+        )
       }
     },
     [clipboard, showToast]
@@ -100,11 +109,15 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     for (const [tabId, doc] of markdownDocs) {
       if (doc.status === 'ready' && doc.isDirty) {
         const tab = sessionTabs.find((candidate) => candidate.id === tabId)
-        drafts.push({ tabId, title: tab?.title || 'Markdown', content: doc.localContent })
+        drafts.push({
+          tabId,
+          title: tab?.title || t('session.useMarkdownActions.markdownTitle', 'Markdown'),
+          content: doc.localContent
+        })
       }
     }
     return drafts
-  }, [markdownDocs, sessionTabs])
+  }, [markdownDocs, sessionTabs, t])
 
   const leaveSession = useCallback(() => {
     if (router.canGoBack()) {
@@ -116,6 +129,9 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
   }, [hostId, router])
 
   const requestLeaveSession = useCallback(() => {
+    if (holdLeaveForDictation()) {
+      return
+    }
     const dirtyDrafts = getDirtyMarkdownDrafts()
     if (dirtyDrafts.length === 0) {
       leaveSession()
@@ -123,18 +139,19 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     }
     Keyboard.dismiss()
     setLeaveDrafts(dirtyDrafts)
-  }, [getDirtyMarkdownDrafts, leaveSession])
+  }, [getDirtyMarkdownDrafts, holdLeaveForDictation, leaveSession])
 
-  // Native always claims Back to avoid root exit; the web shell already pops, so only dirty drafts need a claim.
+  // Native always claims Back to avoid root exit; the web shell already pops, so only dirty drafts and dictation need a claim.
   const hasDirtyDraft = getDirtyMarkdownDrafts().length > 0
   useBackClaim(
-    Platform.OS === 'web' && !hasDirtyDraft
+    Platform.OS === 'web' && !hasDirtyDraft && !dictationHoldsLeave
       ? null
       : () => {
           requestLeaveSession()
           return true
         }
   )
+  useSessionLeaveGuard(dictationHoldsLeave ? holdLeaveForDictation : null)
 
   const discardMarkdownLocalContent = useCallback(
     (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
@@ -214,10 +231,13 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         })
         markdownSaveSeqRef.current.delete(tab.id)
         triggerSuccess()
-        showToast('Saved')
+        showToast(translate('session.useMarkdownActions.saved', 'Saved'))
       } catch (error) {
         triggerError()
-        const message = error instanceof Error ? error.message : 'Save failed'
+        const message =
+          error instanceof Error
+            ? error.message
+            : translate('session.useMarkdownActions.saveFailed', 'Save failed')
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }
@@ -230,7 +250,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
             ...existing,
             localRevision: (existing.localRevision ?? 0) + 1,
             saving: false,
-            saveError: message || 'Save failed'
+            saveError: message || translate('session.useMarkdownActions.saveFailed', 'Save failed')
           })
         })
       } finally {

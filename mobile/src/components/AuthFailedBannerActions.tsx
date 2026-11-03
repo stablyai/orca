@@ -1,5 +1,6 @@
 import { Pressable, Text } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 
@@ -15,19 +16,33 @@ export function AuthFailedBannerActions({
   onRepair: () => void
   onRemove: () => void
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <>
       {canRetry && (
-        <Pressable style={styles.action} onPress={onRetry}>
-          <Text style={styles.actionText}>Retry</Text>
+        <Pressable
+          style={({ pressed }) => [styles.action, pressed && pressedStyle]}
+          onPress={onRetry}
+        >
+          <Text style={styles.actionText}>{t('common.retry', 'Retry')}</Text>
         </Pressable>
       )}
-      <Pressable style={styles.action} onPress={onRepair}>
-        <Text style={styles.actionText}>Re-pair</Text>
+      <Pressable
+        style={({ pressed }) => [styles.action, pressed && pressedStyle]}
+        onPress={onRepair}
+      >
+        <Text style={styles.actionText}>
+          {t('components.authFailedBannerActions.repair', 'Re-pair')}
+        </Text>
       </Pressable>
-      <Pressable style={styles.action} onPress={onRemove}>
-        <Text style={[styles.actionText, { color: colors.statusRed }]}>Remove</Text>
+      <Pressable
+        style={({ pressed }) => [styles.action, pressed && pressedStyle]}
+        onPress={onRemove}
+      >
+        <Text style={[styles.actionText, { color: colors.statusRed }]}>
+          {t('common.remove', 'Remove')}
+        </Text>
       </Pressable>
     </>
   )

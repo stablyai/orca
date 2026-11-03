@@ -7,7 +7,7 @@ import {
   type AgentSessionAttachmentPathUploadResult,
   type AgentSessionAttachmentUploadCommitResult,
   type AgentSessionAttachmentUploadTarget
-} from '../../../../shared/agent-session-attachments'
+} from '../../../../shared/agent-session/agent-session-attachments'
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
 import { takeBrowserAttachmentFile } from '@/lib/browser-attachment-files'
 import { callEnvironmentEnvelope } from './web-runtime-calls'

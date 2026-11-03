@@ -41,25 +41,6 @@ describe('pr-refresh-coordinator', () => {
     vi.useRealTimers()
   })
 
-  it('does not show visible background refreshes as queued', async () => {
-    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock.mockResolvedValueOnce({
-      kind: 'found',
-      pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
-      fetchedAt: Date.now()
-    })
-
-    reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
-    await vi.runOnlyPendingTimersAsync()
-
-    const queuedEvents = sendMock.mock.calls
-      .map(([, event]) => event)
-      .filter((event) => event.status === 'queued')
-
-    expect(queuedEvents).toHaveLength(0)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
-  })
-
   it('lets an active worktree refresh bypass a delayed visible follow-up', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')

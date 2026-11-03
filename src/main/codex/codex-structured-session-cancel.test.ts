@@ -16,11 +16,11 @@ const processWork = vi.hoisted(() => {
     terminateWindowsProcessTree: vi.fn(never)
   }
 })
-vi.mock('../pty-descendant-termination', async (importOriginal) => ({
+vi.mock('../pty/process-retirement/pty-descendant-termination', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   captureDescendantSnapshot: processWork.captureDescendantSnapshot
 }))
-vi.mock('../pty-descendant-exit-verification', async (importOriginal) => ({
+vi.mock('../pty/process-retirement/pty-descendant-exit-verification', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   terminateDescendantSnapshotAndWait: processWork.terminateDescendantSnapshotAndWait,
   terminateDescendantSnapshotWithVerdict: processWork.terminateDescendantSnapshotWithVerdict
@@ -29,14 +29,12 @@ vi.mock('../providers/windows-foreground-process-rows', async (importOriginal) =
   ...(await importOriginal<Record<string, unknown>>()),
   queryWindowsProcessDescendants: processWork.queryWindowsProcessDescendants
 }))
-vi.mock('../windows-process-tree-kill', async (importOriginal) => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   terminateWindowsProcessTree: processWork.terminateWindowsProcessTree
 }))
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type {
   CodexAppServerConnection,
@@ -45,14 +43,14 @@ import type {
 import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
-} from './codex-app-server-connection'
-import { CodexAppServerUnsupportedError } from './codex-app-server-session'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredSessionAdapterDeps,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+} from './app-server/codex-app-server-connection'
+import { CodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredSessionAdapterDeps,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 const USER_MESSAGE: AgentJournalMessageItem = {

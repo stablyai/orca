@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,7 +19,7 @@ vi.mock('../provider-process/managed-provider-process', () => ({
     throw new Error('no spawn in this test')
   }
 }))
-vi.mock('../agent-cli-version-probe', async (importOriginal) => ({
+vi.mock('../agent-launch/preflight/agent-cli-version-probe', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   checkAgentCliVersion: async (input: { program: string }) => {
     spawned.commands.push(input.program)
@@ -30,20 +31,22 @@ function context(): StructuredAgentModelCatalogContext {
   const unused = async (): Promise<never> => {
     throw new Error('building a probe resolves nothing')
   }
+  const deps: StructuredAgentSessionRuntimeDeps = {
+    stateDirectory: '/state',
+    hostId: 'local',
+    claimKeyId: 'catalog-test',
+    resolveWorkspacePath: unused,
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'system' }),
+    logger: { warn: vi.fn(), error: vi.fn() }
+  }
   return {
-    deps: {
-      stateDirectory: '/state',
-      hostId: 'local',
-      claimKeyId: 'catalog-test',
-      resolveWorkspacePath: unused,
-      resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-      logger: { warn: vi.fn(), error: vi.fn() }
-    },
+    deps,
     environment: {
       resolveBaseEnvironment: unused,
       resolveAgentEnvironment: unused,
-      refreshAfterMissingProgram: unused
+      refreshAfterMissingProgram: unused,
+      bindCatalogSources: () => () => {}
     }
   }
 }
@@ -138,7 +141,8 @@ describe('the model catalog contract on every registration', () => {
       environment: {
         resolveBaseEnvironment: env,
         resolveAgentEnvironment: env,
-        refreshAfterMissingProgram: async () => {}
+        refreshAfterMissingProgram: async () => {},
+        bindCatalogSources: () => () => {}
       }
     })
     const variables = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME', grok: 'GROK_HOME' }
@@ -177,15 +181,22 @@ describe('the model catalog contract on every registration', () => {
           ...context().deps,
           stateDirectory: '/state',
           resolveLaunchArgs: () => [],
-          resolveClaudeCommand: (options) => resolveCliCommand(installed('claude'), options),
-          resolveCodexCommand: (options) => resolveCliCommand(installed('codex'), options),
+          resolveClaudeCommand: (options) => ({
+            command: resolveCliCommand(installed('claude'), options),
+            prefixArgs: []
+          }),
+          resolveCodexCommand: (options) => ({
+            command: resolveCliCommand(installed('codex'), options),
+            prefixArgs: []
+          }),
           resolveClaudeAuthPolicy: () => ({ account: 'system' as const }),
           resolveAgentCommandSettings: () => settings
         },
         environment: {
           resolveBaseEnvironment: env,
           resolveAgentEnvironment: env,
-          refreshAfterMissingProgram: refresh
+          refreshAfterMissingProgram: refresh,
+          bindCatalogSources: () => () => {}
         }
       })
       for (const [agent, variable] of Object.entries(agents)) {

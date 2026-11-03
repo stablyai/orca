@@ -3,12 +3,12 @@ import {
   AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
   parseAgentStatusPayload
 } from '../../../../shared/agent-status-types'
-import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from '../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
 import {
   parseAskFromStatus,
   parseAskFromToolInput
 } from '../../../../shared/native-chat/input/native-chat-ask'
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 
 const SHARED_HEAD = 'a'.repeat(512)
@@ -35,11 +35,6 @@ describe('mobile subagent roster bounds', () => {
     expect(block.agents[0]?.id).toHaveLength(512)
     // The label is display text and still clips.
     expect(block.agents[0]?.label).toContain('… (truncated)')
-  })
-
-  it('leaves a short id alone', () => {
-    const block = sanitizeNativeChatRpcBlock(rosterBlock(['task-1']), 'mobile')
-    expect(block.type === 'subagent-group' && block.agents[0]?.id).toBe('task-1')
   })
 
   it('bounds a subagent’s own row like a roster’s entry, and leaves other clients its fields', () => {

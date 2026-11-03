@@ -20,7 +20,7 @@ import {
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
@@ -112,6 +112,8 @@ export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteVie
 
 export type AgentLaunchRouteArgs = {
   agent: TuiAgent
+  /** Invocation preference; host admission can still fall back to Terminal. */
+  preferredSurface?: 'chat'
   workspace: ProspectiveWorkspace
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
@@ -209,6 +211,7 @@ export function buildAgentLaunchRouteInput(
   return {
     agent,
     settings: store.settings,
+    preferredSurface: args.preferredSurface,
     executionHostId,
     hostCapabilities,
     ...(parseExecutionHostId(executionHostId)?.kind === 'runtime'
@@ -228,15 +231,18 @@ export function buildAgentLaunchRouteInput(
       executionHostId
     ),
     // Only custom cwd forces a terminal; workspace-root cwd follows the same rule as host agent-launch-mode.ts.
-    startsOutsideWorkspaceRoot: requestsCwdOutsideWorkspaceRootForWorkspace({
-      workspaceId: workspace.worktreeId,
-      requestedCwd: tuiCustomization?.cwd,
-      workspacePath: workspace.worktreeId
-        ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
-        : undefined,
-      resolveFolderWorkspacePath: (folderWorkspaceId) =>
-        selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
-    }),
+    startsOutsideWorkspaceRoot: tuiCustomization?.cwd?.trim()
+      ? requestsCwdOutsideWorkspaceRootForWorkspace({
+          workspaceId: workspace.worktreeId,
+          requestedCwd: tuiCustomization?.cwd,
+          workspacePath: workspace.worktreeId
+            ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
+            : undefined,
+          resolveFolderWorkspacePath: (folderWorkspaceId) =>
+            selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)
+              ?.folderPath
+        })
+      : false,
     ...hostStructuredAgentsInput(store, executionHostId)
   }
 }

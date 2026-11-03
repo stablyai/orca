@@ -15,7 +15,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeResolvedWorktreeCache } from '../../runtime/runtime-resolved-worktree-cache'
 import type { ResolvedWorktree } from '../../runtime/runtime-worktree-path-identity'
-import { getWorktreeScanMutationRevision } from '../../local-worktree-scan-generation'
+import { getWorktreeScanMutationRevision } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { getPtyIdForPaneKey } from './pane/key-state'
@@ -40,8 +40,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -297,7 +299,7 @@ describe('registerPtyHandlers', () => {
     })
     await handlers.get('pty:clearPendingPaneSerializer')!(null, { paneKey, gen })
   })
-  it('seeds restore records from a cold-restore payload including its checkpoint title', async () => {
+  it("seeds restore history from a cold-restore payload but not the dead process's title", async () => {
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({
         id: 'pty-cold-restore-records',
@@ -335,8 +337,7 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
     expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-cold-restore-records', {
-      text: 'cold restored history\r\n',
-      lastTitle: 'checkpoint-title'
+      text: 'cold restored history\r\n'
     })
   })
   it('seeds restore records for a runtime-controller created terminal (headless reattach)', async () => {

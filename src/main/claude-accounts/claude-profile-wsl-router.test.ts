@@ -1,3 +1,4 @@
+import type { BlockedWslDistro } from '../wsl/filesystem/wsl-unc-access-gate'
 import { spawnSync } from 'node:child_process'
 import {
   existsSync,
@@ -14,7 +15,7 @@ import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
-import type { WslSpec } from '../wsl/wsl-runner'
+import type { WslSpec } from '../wsl/execution/wsl-runner'
 import type * as WslPaths from '../../shared/wsl-paths'
 
 const guest = vi.hoisted(
@@ -28,11 +29,17 @@ vi.mock('../../shared/wsl-paths', async (original) => ({
   ...(await original<typeof WslPaths>()),
   toWindowsWslPath: (linuxPath: string) => linuxPath
 }))
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: async (distro: string) => `\\\\wsl.localhost\\${distro}${guest.home}`,
   listRunningWslDistrosAsync: async () => ['Ubuntu']
 }))
-vi.mock('../wsl/wsl-runner', () => ({
+const gate = vi.hoisted(() => ({
+  blocked: vi.fn(
+    async (_path: string, _distro?: string | null): Promise<BlockedWslDistro | null> => null
+  )
+}))
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: gate.blocked }))
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: async (spec: WslSpec) => {
     if (guest.failure) {
       return { ...guest.failure, stderr: '', timedOut: false }
@@ -114,6 +121,13 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     )
     guest.failure = { code: 3, stdout: '' }
     await expect(f.router.publish('Ubuntu')).rejects.toThrow('WSL Ubuntu: exited with code 3')
+  })
+
+  it('never publishes at startup to a distro a list still names while it stops (E9)', async () => {
+    const f = fixture()
+    gate.blocked.mockResolvedValueOnce({ distro: 'Ubuntu', state: 'stopped' })
+    expect(await f.router.runningDistros()).toEqual([])
+    expect(gate.blocked).toHaveBeenCalledWith('', 'Ubuntu')
   })
 
   it('publishes and launches the saved account across distro casing without changing guest spelling', async () => {

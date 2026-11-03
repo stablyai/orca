@@ -13,6 +13,7 @@ import {
   type OpenTabSearchResult
 } from './open-tab-search'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -38,6 +39,7 @@ export function useOpenTabSearch({
   worktreeId,
   retainedResultId
 }: UseOpenTabSearchOptions): OpenTabSearchSnapshot {
+  const languageRevision = useUiLanguageRevision()
   // Why null while disabled: a closed menu stays stable across store churn.
   const state = useAppStore(
     useShallow((store) => (enabled ? selectOpenTabSearchEntryState(store, worktreeId) : null))
@@ -67,7 +69,8 @@ export function useOpenTabSearch({
             context
           })
         : EMPTY_RESULTS,
-    [context, deferredQuery, entries]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- simulator titles translate the default label.
+    [context, deferredQuery, entries, languageRevision]
   )
 
   return useMemo(

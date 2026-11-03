@@ -66,9 +66,9 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
 
   /** Closes the page's DevTools wherever they are: docked in the pane or in their own window. */
   protected closeGuestDevTools(guest: Electron.WebContents): void {
-    if (this.devToolsDock.isDocked(guest.id)) {
-      void this.devToolsDock.close(guest.id)
-    } else if (!guest.isDestroyed()) {
+    const docked = this.devToolsDock.isDocked(guest.id)
+    void this.devToolsDock.close(guest.id)
+    if (!docked && !guest.isDestroyed()) {
       guest.closeDevTools()
     }
   }

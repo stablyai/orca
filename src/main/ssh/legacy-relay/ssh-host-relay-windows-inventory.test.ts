@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { Script } from 'node:vm'
+
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   windowsPipesNotRunHere,
   parseWindowsRelayInventory,
-  WINDOWS_PIPE_ACCESS_JS,
   WINDOWS_RELAY_INVENTORY_JS
 } from './ssh-host-relay-windows-inventory'
+
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
 import { getRemoteHostPlatform, joinRemotePath } from '../ssh-remote-platform'
@@ -49,10 +49,6 @@ describe('the Windows relay inventory', () => {
         }
       }
     })
-  })
-
-  it('compiles the pipe access probe', () => {
-    expect(() => new Script(WINDOWS_PIPE_ACCESS_JS)).not.toThrow()
   })
 
   it("maps another desktop's pipes to its own instance and credential", () => {

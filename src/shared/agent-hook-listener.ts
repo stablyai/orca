@@ -1,6 +1,6 @@
 import { readHookAgentProcess } from './agent-process-presence'
-import { resolveAgentStatusIdentity } from './agent-status-identity'
-import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
+import { isInheritedHookStatus } from './agent-hook-presence-transition'
+import { readHookProcessAdmission } from './agent-hook-owner-presence'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import {
@@ -8,7 +8,7 @@ import {
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
 } from './claude-compact-completion'
-import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
+import { isProcessExitSessionEnd, parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import {
@@ -28,14 +28,11 @@ import {
 } from './agent-hook-listener/opencode-session-registry'
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
-import { readPaneProviderSession } from './agent-hook-listener/pane-provider-session'
+import {
+  hasSeparateHookSessionAdmission,
+  readPaneSessionContext
+} from './agent-hook-listener/pane-provider-session'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
-const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
-  'prompt_input_exit',
-  'logout',
-  'other',
-  'bypass_permissions_disabled'
-])
 
 export function normalizeHookPayload(
   state: HookListenerState,
@@ -45,6 +42,7 @@ export function normalizeHookPayload(
   options: {
     deferCompactOwnershipToClient?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
+    bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
     admitOpenCodeTui?: (
       identity: Pick<
         AgentHookEventPayload,
@@ -59,6 +57,7 @@ export function normalizeHookPayload(
   }
   const {
     record,
+    eventName,
     paneKey: stampedPaneKey,
     hookPayloadRecord,
     tabId: stampedTabId,
@@ -68,13 +67,8 @@ export function normalizeHookPayload(
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
-  const eventName =
-    readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
-    hookPayloadRecord.hook_event_name ??
-    hookPayloadRecord.hookEventName ??
-    // Only jcode posts lifecycle under event; other providers may use that field for unrelated data.
-    (source === 'jcode' ? hookPayloadRecord.event : undefined)
-  const providerSession = readPaneProviderSession(state, source, stampedPaneKey, hookPayloadRecord)
+  const sessions = readPaneSessionContext(state, source, envelope, eventName)
+  const { providerSession, statusAdmissionSession } = sessions
   if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
     return null
   }
@@ -143,33 +137,31 @@ export function normalizeHookPayload(
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
   const agentProcess = readHookAgentProcess(source, record.agentProcess)
-  const previousReceivedAt =
-    previousStatus &&
-    'receivedAt' in previousStatus &&
-    typeof previousStatus.receivedAt === 'number'
-      ? previousStatus.receivedAt
-      : previousStatus?.hostEvidenceObservedAt
-  // Reject before provider folds mutate the pane's prompt, tool and child caches.
+  const admissionStatus =
+    hasSeparateHookSessionAdmission(source) && options.bindingStatusByPaneKey
+      ? options.bindingStatusByPaneKey.get(paneKey)
+      : previousStatus
+  // A relay's provider view lags its committed rows; process evidence reads the committed one.
+  const processAdmission = readHookProcessAdmission(
+    state,
+    options.bindingStatusByPaneKey ?? state.lastStatusByPaneKey,
+    { paneKey, worktreeId, process: agentProcess }
+  )
   if (
-    previousStatus &&
-    previousReceivedAt !== undefined &&
-    sameAgentStatusTerminalOwner(
-      { connectionId: previousStatus.connectionId ?? null, worktreeId: previousStatus.worktreeId },
-      { connectionId: null, worktreeId }
-    ) &&
-    resolveAgentStatusIdentity({
-      existing: {
-        agentType: previousStatus.payload.agentType,
-        state: previousStatus.payload.state,
-        updatedAt: previousReceivedAt,
-        restoredUnconfirmed: previousStatus.restoredUnconfirmed,
-        agentPresence: previousStatus.providerSessionOnly ? undefined : previousStatus.agentPresence
+    processAdmission.refused ||
+    isInheritedHookStatus(
+      {
+        paneKey,
+        worktreeId,
+        connectionId: null,
+        providerSession: providerSession ?? undefined,
+        statusAdmissionSession,
+        agentPresence: agentProcess ? { agent: source, process: agentProcess } : undefined,
+        payload: { agentType: source, state: 'working', prompt: '' }
       },
-      incoming: source,
-      incomingProcess: agentProcess,
-      incomingSession: providerSession?.id,
-      now: Date.now()
-    }).inheritedFromActivePane
+      admissionStatus,
+      processAdmission.verdict
+    )
   ) {
     return null
   }
@@ -209,15 +201,7 @@ export function normalizeHookPayload(
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
-  const sessionEndReason = readString(hookPayloadRecord, 'reason')
-  if (
-    eventName === 'SessionEnd' &&
-    agentPresence &&
-    !readString(hookPayloadRecord, 'agent_id') &&
-    // Only known process-exit reasons prove session death; /clear, /resume and unknown reasons do not.
-    sessionEndReason !== undefined &&
-    CLAUDE_EXIT_SESSION_END_REASONS.has(sessionEndReason)
-  ) {
+  if (agentPresence && isProcessExitSessionEnd(eventName, hookPayloadRecord)) {
     const payload =
       previousStatus?.payload ??
       normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
@@ -308,6 +292,7 @@ export function normalizeHookPayload(
         }
       : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(statusAdmissionSession ? { statusAdmissionSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...dispatched.hostTurnSignals,
     payload: transportPayload

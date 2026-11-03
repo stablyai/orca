@@ -108,6 +108,7 @@ export function decodeSnapshotInfo(
     kittyKeyboardFlags?: unknown
     alternateScreen?: unknown
     terminalOwner?: unknown
+    lastTitle?: unknown
     scrollbackRows?: unknown
   }>(payload)
   if (!raw) {
@@ -125,6 +126,7 @@ export function decodeSnapshotInfo(
         ? raw.alternateScreen
         : undefined,
     terminalOwner: raw.terminalOwner === 'shell' ? raw.terminalOwner : undefined,
+    lastTitle: typeof raw.lastTitle === 'string' ? raw.lastTitle : undefined,
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
     truncated: raw.truncated === true,
     unavailable: parseTerminalSnapshotUnavailableReason(raw.unavailable),

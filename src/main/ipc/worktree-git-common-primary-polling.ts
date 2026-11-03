@@ -4,7 +4,7 @@ import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 import { PRIMARY_CHECKOUT_METADATA_FILES } from './worktree-git-common-metadata-files'
 
 type PrimaryMetadataSnapshot = {

@@ -8,7 +8,7 @@ import type {
   ConnectorAgent,
   ExternalConversationLink
 } from '../../shared/external-conversation-link'
-import { judgeIdleAgentTurn } from '../agent-turn-idle-verdict'
+import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
@@ -98,7 +98,8 @@ export class ConversationEvents {
         deliver: (item) => this.told(item),
         setTimer: (run, delayMs) => this.deps.setTimer(run, delayMs),
         started: (item) => this.started(item),
-        stopped: (item) => this.ended(item, agentMainAgentVerdict(item.row))
+        stopped: (item) => this.ended(item, agentMainAgentVerdict(item.row)),
+        everyLeadTurn: true
       })
       const unsubscribe = this.deps.onAgentPaneChange((change) => {
         this.settleRejected(change.paneKey)

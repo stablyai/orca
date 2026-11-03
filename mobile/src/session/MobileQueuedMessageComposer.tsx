@@ -13,6 +13,7 @@ import { prepareQueuedMessageEditText } from '../../../src/shared/queued-message
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { createUuidV4 } from '../../../src/shared/uuid-v4'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function MobileQueuedMessageComposer({
   editor,
@@ -22,6 +23,7 @@ export function MobileQueuedMessageComposer({
   attribution: string | null
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const context = useContext(MobileQueuedMessageComposerContext)
   const inputRef = useRef<TextInput>(null)
   const emptyHandle = useRef<string | null>(null)
@@ -60,13 +62,26 @@ export function MobileQueuedMessageComposer({
     if (acceptsText(text)) {
       return false
     }
-    context?.onError("Commands can't be saved in a queued message.")
+    context?.onError(
+      t(
+        'session.queuedMessageComposer.commandsNotAllowed',
+        "Commands can't be saved in a queued message."
+      )
+    )
     return true
   }
   return (
     <View testID="queued-card-editor">
       <Text style={{ color: colors.textMuted }}>
-        Editing message{attribution ? ` · ${attribution}` : ''}
+        {attribution
+          ? t(
+              'session.queuedMessageComposer.editingAttributed',
+              'Editing message · {{attribution}}',
+              {
+                attribution
+              }
+            )
+          : t('session.queuedMessageComposer.editing', 'Editing message')}
       </Text>
       <MobileNativeChatComposer
         inputRef={inputRef}
@@ -114,6 +129,8 @@ export function MobileQueuedMessageComposer({
         isAttaching={images.isAttaching}
         onMicPress={context?.onMicPress}
         micActive={context?.micActive}
+        micStarting={context?.micStarting}
+        micProcessing={context?.micProcessing}
         dictationMode={context?.dictationMode}
         onMicPressIn={context?.onMicPressIn}
         onMicPressOut={context?.onMicPressOut}

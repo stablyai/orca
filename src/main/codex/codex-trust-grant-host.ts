@@ -4,14 +4,14 @@ import {
   buildWslCodexIdentityProbe,
   WSL_CODEX_AVAILABILITY_TIMEOUT_MS
 } from '../codex-accounts/wsl-codex-command'
-import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
+import type { CodexHookTrustGrantRequest } from './app-server/codex-app-server-client'
 import {
   binaryStampsMatch,
   readCodexTrustGrantLedgerHome,
   type CodexTrustGrantBinaryStamp,
   type CodexTrustGrantLedgerHome
 } from './codex-trust-grant-ledger'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { resolveWslInteropSpawnCwd } from '../wsl/execution/wsl-interop-spawn-directory'
 
 // Allow cold-distro and login-shell startup while bounding launch preparation.
 const WSL_GRANT_TIMEOUT_MS = 30_000

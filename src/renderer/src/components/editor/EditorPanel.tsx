@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { detectLanguage } from '@/lib/language-detect'
 import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
@@ -29,6 +31,9 @@ import {
 } from './editor-artifact-upload'
 import { useEditorPanelSave } from './useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
+import { useFileCustomEditors } from '@/store/plugin-custom-editors'
+import { applyCustomEditorToggle } from './custom-editor-toggle'
+import { runAfterEditorFramesFlush } from './editor-pending-flush'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -82,8 +87,9 @@ function EditorPanelInner({
     [activeFile]
   )
   const editorDrafts = useAppStore(editorDraftSelector)
-  const settings = useAppStore((s) => s.settings)
-  const markdownReviewNotesEnabled = isMarkdownReviewNotesEnabled(settings)
+  const diffDefaultView = useAppStore((s) => s.settings?.diffDefaultView)
+  const customEditors = useFileCustomEditors(activeFileId, activeFile?.filePath)
+  const markdownReviewNotesEnabled = useAppStore((s) => isMarkdownReviewNotesEnabled(s.settings))
   const panelRef = useRef<HTMLDivElement>(null)
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
@@ -108,13 +114,13 @@ function EditorPanelInner({
     },
     [clearCopiedPathToastResetTimer]
   )
-  const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
-  const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
+  const [sideBySide, setSideBySide] = useState(diffDefaultView === 'side-by-side')
+  const [prevDiffView, setPrevDiffView] = useState(diffDefaultView)
 
-  if (settings?.diffDefaultView !== prevDiffView) {
-    setPrevDiffView(settings?.diffDefaultView)
-    if (settings?.diffDefaultView !== undefined) {
-      setSideBySide(settings.diffDefaultView === 'side-by-side')
+  if (diffDefaultView !== prevDiffView) {
+    setPrevDiffView(diffDefaultView)
+    if (diffDefaultView !== undefined) {
+      setSideBySide(diffDefaultView === 'side-by-side')
     }
   }
 
@@ -196,7 +202,8 @@ function EditorPanelInner({
       return
     }
     try {
-      await window.api.ui.writeClipboardText(copyState.copyText)
+      const owner = getOpenFileRevealOwner(useAppStore.getState(), activeFile)
+      await window.api.ui.writeClipboardText(formatClipboardFilePath(copyState.copyText, owner))
       if (!pathCopyMountedRef.current) {
         return
       }
@@ -228,7 +235,8 @@ function EditorPanelInner({
     markdownViewMode,
     markdownRichModeSizeOverridden,
     isChangesMode,
-    canOpenWorkspaceFileBrowser
+    canOpenWorkspaceFileBrowser,
+    ...customEditors
   })
 
   const handleOpenPreviewToSide = (): void => {
@@ -249,7 +257,7 @@ function EditorPanelInner({
     if (!model.openFileState.canOpen) {
       return
     }
-    openFile({
+    const openedFileId = openFile({
       filePath: activeFile.filePath,
       relativePath: activeFile.relativePath,
       worktreeId: activeFile.worktreeId,
@@ -258,11 +266,17 @@ function EditorPanelInner({
       mode: 'edit'
     })
     if (preferredMarkdownViewMode) {
-      setEditorViewMode(activeFile.filePath, 'edit')
-      setMarkdownViewMode(activeFile.filePath, preferredMarkdownViewMode)
+      setEditorViewMode(openedFileId, 'edit')
+      setMarkdownViewMode(openedFileId, preferredMarkdownViewMode)
     }
   }
   const handleEditorToggleChange = (next: EditorToggleValue): void => {
+    // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
+    runAfterEditorFramesFlush(useAppStore.getState(), [activeFile.id], () =>
+      applyEditorToggle(next)
+    )
+  }
+  const applyEditorToggle = (next: EditorToggleValue): void => {
     const fileId = activeFile.id
     if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
       handleOpenDiffTargetFile('rich')
@@ -273,8 +287,9 @@ function EditorPanelInner({
       return
     }
     setEditorViewMode(fileId, 'edit')
-    if (next !== 'edit') {
-      setMarkdownViewMode(fileId, next)
+    const markdownMode = applyCustomEditorToggle(fileId, next, model.customEditors.length > 0)
+    if (markdownMode) {
+      setMarkdownViewMode(fileId, markdownMode)
     }
   }
   const handleOpenMarkdownPreview = (): void => {

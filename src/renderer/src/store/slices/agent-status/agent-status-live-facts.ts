@@ -3,7 +3,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isSmartSortRelevantAgentChange } from '../../../../../shared/sidebar-list/smart-sort-agent-change'
 import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
@@ -62,7 +62,9 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
   const attributionChanged =
     existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
   const sortRelevantChange =
-    isSmartSortRelevantAgentChange(existing, entry, updatedAt) || commandCodeNewTurn
+    isSmartSortRelevantAgentChange(existing, entry, updatedAt) ||
+    commandCodeNewTurn ||
+    existing?.firstStateStartedAt !== entry.firstStateStartedAt
   const doneRetentionFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&

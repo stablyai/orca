@@ -1,10 +1,13 @@
-import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { getPosixOmpShellWrapper } from '../pty/shell-startup/omp-shell-wrapper'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-account-shell'
 import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
-import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
-import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
+import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../pty/shell-startup/bash-prompt-command-composition'
+import {
+  BASH_FEATURE_CHANNEL_BLOCK,
+  SHELL_STARTUP_IDENTITY_MARKER_BLOCK
+} from '../pty/shell-startup/shell-templates'
 
 export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper
@@ -15,6 +18,12 @@ __orca_ready_marker=""
 __orca_has_feature ready && __orca_ready_marker=1
 unset _orca_shell_features
 unset -f __orca_has_feature
+# A system bashrc may already run ble.sh; it never exports this state, so exported copies are inherited.
+for __orca_ble_var in _ble_attached _ble_decode_bind_state; do
+  [[ -n "\${!__orca_ble_var+set}" ]] || continue
+  case "$(declare -p "$__orca_ble_var" 2>/dev/null)" in "declare -x"*) unset "$__orca_ble_var" ;; esac
+done
+unset __orca_ble_var
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -106,8 +115,17 @@ __orca_osc133_epilogue() {
   trap '__orca_osc133_preexec' DEBUG
   # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
   if [[ -n "$__orca_ready_marker" ]]; then
-    PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready\\a\\]'
-    __orca_ready_marker=""
+    # Attached ble.sh (0.3+) discards Bash's own prompt output and owns the TTY, so print directly.
+    if [[ -n "\${_ble_attached-}" ]]; then
+      # Its first render runs this before the key decoder attaches; wait for a later prompt.
+      if [[ "\${_ble_decode_bind_state:-none}" != none ]]; then
+        printf "\\033]777;orca-shell-ready\\007"
+        __orca_ready_marker=""
+      fi
+    else
+      PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready\\a\\]'
+      __orca_ready_marker=""
+    fi
   fi
 }
 ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}

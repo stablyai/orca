@@ -32,6 +32,8 @@ export function planOrcadUpdate(input: {
   candidateVersion: string
   census: OrcadTerminalCensus
   candidateDaemonProtocol: OrcadDaemonProtocolFacts
+  /** Daemon generations the candidate found alive on the host; consulted only when the census cannot name them. */
+  hostDaemonProtocols?: readonly number[]
   force?: OrcadUpdateForce
 }): OrcadUpdateDecision {
   if (input.record.active === input.candidateVersion) {
@@ -54,16 +56,20 @@ export function planOrcadUpdate(input: {
         'then update.'
     }
   }
-  const crossing = assessOrcadLiveDaemonCrossing(input.census, input.candidateDaemonProtocol)
+  const crossing = assessOrcadLiveDaemonCrossing(
+    input.census,
+    input.candidateDaemonProtocol,
+    input.hostDaemonProtocols
+  )
   // Force can accept mixed builds, never unreachable terminals.
   if (crossing.state === 'strands-live-terminals') {
     return {
       action: 'defer',
       code: 'orcad_update_strands_live_terminals',
       reason:
-        `A live terminal daemon speaks ${describeDaemonProtocols(crossing.unattachable)}, ` +
+        `A terminal daemon on this host speaks ${describeDaemonProtocols(crossing.unattachable)}, ` +
         `which orcad ${input.candidateVersion} cannot attach to. Restarting now would leave ` +
-        'its running terminals unreachable. Update when no terminals are running.'
+        'any terminals it runs unreachable. Update when no terminals are running.'
     }
   }
   const { liveSessions } = input.census
@@ -224,8 +230,8 @@ export function assessOrcadRollback(input: {
       safety: 'unsafe',
       code: 'orcad_rollback_strands_live_terminals',
       reason:
-        `A live terminal daemon speaks ${describeDaemonProtocols(crossing.unattachable)}, ` +
-        `which ${target} does not list. Rolling back now would leave its running terminals ` +
+        `A terminal daemon on this host speaks ${describeDaemonProtocols(crossing.unattachable)}, ` +
+        `which ${target} does not list. Rolling back now would leave any terminals it runs ` +
         'unreachable. Roll back when no terminals are running, or deploy forward.'
     }
   }

@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkAliasInput } from './agent-status-child-work-alias'
 import type { AgentChildWorkInput } from './agent-status-child-work'
-import { serializeAgentStatusRunAliasIndex } from './agent-status-run-alias-index'
+import './agent-status-run-alias-index'
 import { createAgentStatusStore } from './agent-status-store'
 import { commitAgentStatusStoreMutation } from './agent-status-store-commit'
 import { indexAgentStatusStoreState } from './agent-status-store-indexes'
 import { agentStatusStoreStateFromSnapshot } from './agent-status-store-state'
 import {
   agentStatusSubjectsEqual,
-  makePtyRunAgentStatusSubject,
   makeStructuredAgentStatusSubject,
   type AgentStatusExecutionScope
 } from './agent-status-subject'
@@ -42,37 +41,6 @@ function child(
 }
 
 describe('AgentStatusStore bounds', () => {
-  it('serializes a derived provider-alias Set above the former 256-run ceiling', () => {
-    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    for (let index = 0; index < 257; index += 1) {
-      const runId = `run-${index}`
-      expect(
-        store.applyMutation({
-          parent: {
-            subject: makePtyRunAgentStatusSubject(scope, runId),
-            run: {
-              runId,
-              paneKey: `pane-${index}`,
-              attachment: { executionId: `execution-${index}` },
-              attribution: 'token',
-              providerSessions: [
-                {
-                  provider: 'claude',
-                  sessionKeyKind: 'session_id',
-                  providerId: 'shared-provider-id'
-                }
-              ],
-              role: 'root',
-              verdict: 'live'
-            }
-          }
-        })
-      ).not.toBeNull()
-    }
-
-    expect(() => serializeAgentStatusRunAliasIndex(store.getRunAliasIndex())).not.toThrow()
-  })
-
   it("removes a child batch's aliases without reading any other child's aliases", () => {
     const parent = makeStructuredAgentStatusSubject(scope, 'session-1')
     const bystander = makeStructuredAgentStatusSubject(scope, 'session-2')

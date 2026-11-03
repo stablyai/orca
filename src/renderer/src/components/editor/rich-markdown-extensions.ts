@@ -1,16 +1,22 @@
 import { createMarkdownTokenizerStart } from './markdown-tokenizer-start'
-import type { AnyExtension } from '@tiptap/core'
+import {
+  getRenderedAttributes,
+  mergeAttributes,
+  type AnyExtension,
+  type Editor
+} from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { RichMarkdownTrailingParagraph } from './rich-markdown-trailing-paragraph'
-import Link from '@tiptap/extension-link'
+import { RichMarkdownLink } from './rich-markdown-link-mark'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
-import { TaskItem } from '@tiptap/extension-list'
+import { RichMarkdownTaskItem } from './rich-markdown-task-item'
 import { RichMarkdownTable } from './rich-markdown-table'
 import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { createRichMarkdownExtension } from './rich-markdown-extension'
+import { RichMarkdownClipboardLinkOrigin } from './rich-markdown-clipboard-link-origin'
 import { createLowlight, common } from 'lowlight'
 import {
   acquireLocalImageSrcLease,
@@ -92,11 +98,12 @@ export function createRichMarkdownExtensions({
       lowlight,
       defaultLanguage: null
     }),
-    Link.configure({
+    RichMarkdownLink.configure({
       openOnClick: false,
       autolink: true,
       linkOnPaste: true
     }),
+    RichMarkdownClipboardLinkOrigin,
     // Load local images through IPC/blob URLs so dev-server cross-origin restrictions cannot block file URLs.
     Image.extend({
       addStorage() {
@@ -108,7 +115,9 @@ export function createRichMarkdownExtensions({
         }
       },
       addNodeView() {
-        return ({ node, HTMLAttributes }) => {
+        // The extensionManager.attributes getter recomputes across all extensions; resolve it once per editor.
+        let imageAttributes: Editor['extensionManager']['attributes'] | undefined
+        return ({ node, HTMLAttributes, editor }) => {
           // A wrapper prevents native image-byte dragging from conflicting with ProseMirror’s schema-node relocation.
           const dom = document.createElement('span')
           // Keep the image wrapper inline so it cannot break surrounding text onto separate lines.
@@ -118,11 +127,27 @@ export function createRichMarkdownExtensions({
 
           const img = document.createElement('img')
           img.draggable = false
-          for (const [key, value] of Object.entries(HTMLAttributes)) {
-            if (key !== 'src' && value != null && value !== false) {
-              img.setAttribute(key, String(value))
+          let renderedAttributeNames = new Set<string>()
+          const syncImageAttributes = (attributes: Record<string, unknown>): void => {
+            const nextNames = new Set<string>()
+            for (const [key, value] of Object.entries(attributes)) {
+              if (key === 'src' || key === 'draggable' || value == null || value === false) {
+                continue
+              }
+              nextNames.add(key)
+              const renderedValue = String(value)
+              if (img.getAttribute(key) !== renderedValue) {
+                img.setAttribute(key, renderedValue)
+              }
             }
+            for (const key of renderedAttributeNames) {
+              if (!nextNames.has(key)) {
+                img.removeAttribute(key)
+              }
+            }
+            renderedAttributeNames = nextNames
           }
+          syncImageAttributes(mergeAttributes(this.options.HTMLAttributes, HTMLAttributes))
           dom.appendChild(img)
 
           let currentSrc = node.attrs.src as string | undefined
@@ -185,6 +210,17 @@ export function createRichMarkdownExtensions({
               if (updatedNode.type.name !== 'image') {
                 return false
               }
+              syncImageAttributes(
+                mergeAttributes(
+                  this.options.HTMLAttributes,
+                  getRenderedAttributes(
+                    updatedNode,
+                    (imageAttributes ??= editor.extensionManager.attributes.filter(
+                      (attribute) => attribute.type === 'image'
+                    ))
+                  )
+                )
+              )
               const newSrc = updatedNode.attrs.src as string | undefined
               const nextContextVersion = getImageContextVersion(this.storage)
               if (newSrc !== currentSrc || nextContextVersion !== currentContextVersion) {
@@ -211,7 +247,7 @@ export function createRichMarkdownExtensions({
     }),
     RichMarkdownOrderedList,
     RichMarkdownTaskList,
-    TaskItem.configure({
+    RichMarkdownTaskItem.configure({
       nested: true
     }),
     ...createOrcaDetailsExtensions(),

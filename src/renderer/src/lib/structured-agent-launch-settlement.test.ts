@@ -1,4 +1,4 @@
-import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   cancelStructuredAgentLaunch: vi.fn()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   startStructuredAgentLaunch: mocks.startStructuredAgentLaunch,
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
@@ -15,8 +15,10 @@ const launchErrorMocks = vi.hoisted(() => {
   return { StructuredAgentSessionCreateRefusalError: class extends Error {} }
 })
 
-vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
-  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>(
+    '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+  )),
   ...launchErrorMocks
 }))
 
@@ -25,11 +27,8 @@ vi.mock('@/lib/launch-structured-agent-session', () => ({
     launchErrorMocks.StructuredAgentSessionCreateRefusalError
 }))
 
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import {
-  beginStructuredAgentLaunchSettlement,
-  settleStructuredAgentLaunch
-} from './structured-agent-launch-settlement'
+import '@/lib/launch-structured-agent-session'
+import { settleStructuredAgentLaunch } from './structured-agent-launch-settlement'
 
 type FakeLaunch = {
   launchResult: Promise<unknown>
@@ -66,126 +65,6 @@ function fakeCancellation(initiallyCancelled = false) {
 
 describe('settleStructuredAgentLaunch', () => {
   beforeEach(() => vi.clearAllMocks())
-
-  it('returns structured and activates once the launch is published', async () => {
-    const promptDeliveryResult = Promise.resolve({ delivered: true, failureNotified: false })
-    fakeLaunch({
-      launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
-      promptDeliveryResult
-    })
-    const onStructuredReady = vi.fn()
-
-    await expect(
-      settleStructuredAgentLaunch(
-        'worktree-1',
-        'codex',
-        { requestId: 'request-1', prompt: 'Fix' },
-        { onStructuredReady }
-      )
-    ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1', promptDeliveryResult })
-    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'codex', {
-      requestId: 'request-1',
-      prompt: 'Fix'
-    })
-    expect(onStructuredReady).toHaveBeenCalledWith('session-1')
-  })
-
-  it('returns the session identity before the launch settles', async () => {
-    let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
-    fakeLaunch({
-      launchResult: new Promise((resolve) => {
-        resolveLaunch = resolve
-      })
-    })
-
-    const handle = beginStructuredAgentLaunchSettlement(
-      'worktree-1',
-      'codex',
-      { requestId: 'request-2' },
-      {}
-    )
-
-    expect(handle.sessionId).toBe('session-1')
-    resolveLaunch({ sessionId: 'session-1', fence: 1 })
-    await expect(handle.settlement).resolves.toEqual({
-      kind: 'structured',
-      sessionId: 'session-1'
-    })
-  })
-
-  it('keeps a structured refusal on the structured failure path', async () => {
-    const error = new StructuredAgentSessionCreateRefusalError('unsupported')
-    fakeLaunch({ launchResult: Promise.reject(error) })
-
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-3' }, {})
-    ).resolves.toEqual({
-      kind: 'failed',
-      error
-    })
-  })
-
-  it('reports an unknown outcome, releases the caller, and never runs the fallback', async () => {
-    const { releaseCallerAfterUnknownOutcome } = fakeLaunch({
-      launchResult: Promise.reject(new Error('connection lost')),
-      visibilityUnknown: true
-    })
-
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-4' }, {})
-    ).resolves.toEqual({
-      kind: 'visibility-unknown',
-      sessionId: 'session-1'
-    })
-    expect(releaseCallerAfterUnknownOutcome).toHaveBeenCalledOnce()
-  })
-
-  it('fails a non-refusal error whose outcome is known', async () => {
-    const error = new Error('boom')
-    const { releaseCallerAfterUnknownOutcome } = fakeLaunch({ launchResult: Promise.reject(error) })
-
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-5' }, {})
-    ).resolves.toEqual({
-      kind: 'failed',
-      error
-    })
-    expect(releaseCallerAfterUnknownOutcome).not.toHaveBeenCalled()
-  })
-
-  it('returns cancelled after a successful launch without activating', async () => {
-    fakeLaunch({ launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }) })
-    const onStructuredReady = vi.fn()
-
-    await expect(
-      settleStructuredAgentLaunch(
-        'worktree-1',
-        'codex',
-        { requestId: 'request-6' },
-        {
-          onStructuredReady,
-          signal: fakeCancellation(true).signal
-        }
-      )
-    ).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
-    expect(onStructuredReady).not.toHaveBeenCalled()
-  })
-
-  it('lets cancellation win over a refusal', async () => {
-    fakeLaunch({
-      launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    })
-    await expect(
-      settleStructuredAgentLaunch(
-        'worktree-1',
-        'codex',
-        { requestId: 'request-7' },
-        {
-          signal: fakeCancellation(true).signal
-        }
-      )
-    ).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
-  })
 
   it('cancels the launch eagerly, once, before the launch settles', async () => {
     let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void

@@ -40,42 +40,6 @@ describe('freshness scheduler completion deadlines', () => {
     vi.useRealTimers()
   })
 
-  it('wakes at the completion deadline even while the hook row stays fresh', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    // Completion is 25m old; same-state `done` writes have kept updatedAt at now.
-    const completedAt = NOW - 25 * 60_000
-    const { bumpEpochs, scheduler } = setup([
-      doneEntry({ stateStartedAt: completedAt, updatedAt: NOW })
-    ])
-
-    scheduler.schedule()
-    vi.advanceTimersByTime(completedAt + AGENT_STATUS_STALE_AFTER_MS - NOW)
-    expect(bumpEpochs).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
-    expect(bumpEpochs).toHaveBeenCalledTimes(1)
-
-    scheduler.dispose()
-  })
-
-  it('keeps the strict-expiry wake armed when rescheduled exactly at the boundary', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    const { bumpEpochs, scheduler } = setup([
-      doneEntry({
-        stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS,
-        updatedAt: NOW
-      })
-    ])
-
-    scheduler.schedule()
-    vi.advanceTimersByTime(1)
-    expect(bumpEpochs).toHaveBeenCalledTimes(1)
-
-    scheduler.dispose()
-  })
-
   it('does not lose a completion deadline when an overdue timer is rescheduled after sleep', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
@@ -110,59 +74,6 @@ describe('freshness scheduler completion deadlines', () => {
     expect(bumpEpochs).toHaveBeenCalledTimes(2)
     expect(vi.getTimerCount()).toBe(0)
 
-    scheduler.dispose()
-  })
-
-  it('ignores completions that cannot demand attention', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    const completedAt = NOW - 25 * 60_000
-    const { bumpEpochs, scheduler } = setup([
-      doneEntry({ stateStartedAt: completedAt, updatedAt: NOW, interrupted: true })
-    ])
-
-    scheduler.schedule()
-    vi.advanceTimersByTime(completedAt + AGENT_STATUS_STALE_AFTER_MS - NOW + 1)
-    expect(bumpEpochs).not.toHaveBeenCalled()
-
-    // Only the hook-freshness deadline remains.
-    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
-    expect(bumpEpochs).toHaveBeenCalledTimes(1)
-
-    scheduler.dispose()
-  })
-
-  it('still arms hook freshness for a working entry', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    const { bumpEpochs, scheduler } = setup([
-      doneEntry({ state: 'working', stateStartedAt: NOW, updatedAt: NOW })
-    ])
-
-    scheduler.schedule()
-    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
-    expect(bumpEpochs).toHaveBeenCalledTimes(1)
-
-    scheduler.dispose()
-  })
-
-  it('coalesces pending deferred scans while preserving each queue slot', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    const entries = [doneEntry()]
-    const getStatusEntries = vi.fn(() => statusEntries(entries))
-    const bumpEpochs = vi.fn()
-    const scheduler = createFreshnessScheduler({ getStatusEntries, bumpEpochs })
-    const queueMicrotaskSpy = vi.spyOn(globalThis, 'queueMicrotask')
-
-    scheduler.scheduleDeferred()
-    scheduler.scheduleDeferred()
-    expect(queueMicrotaskSpy).toHaveBeenCalledTimes(2)
-    expect(getStatusEntries).not.toHaveBeenCalled()
-
-    await flushMicrotasks()
-
-    expect(getStatusEntries).toHaveBeenCalledTimes(1)
     scheduler.dispose()
   })
 

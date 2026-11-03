@@ -1,3 +1,4 @@
+import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import { AiVaultChatForkSourceSchema } from '../../shared/ai-vault-chat-fork-contract'
 import { z } from 'zod'
 import {
@@ -19,8 +20,8 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
 import { parseAiVaultListResult } from './session-list-result-validation'
-import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
-import { isGatedOffWslHost } from '../wsl/wsl-host-gate'
+import { parseAiVaultSessionTitlesResult } from './session-titles/session-title-result-validation'
+import { isGatedOffWslHost } from '../wsl/host-lifecycle/wsl-host-gate'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
@@ -110,7 +111,9 @@ export async function scanRuntimeAiVaultSessions(
             agent: 'codex',
             kind: 'scope',
             path: environmentId,
-            message: `Only the first ${AI_VAULT_SCOPE_PATHS_MAX_COUNT} project paths were scanned.`
+            ...aiVaultScanIssueText('scopePathsTruncated', {
+              params: { limit: AI_VAULT_SCOPE_PATHS_MAX_COUNT }
+            })
           }
         ]
       }

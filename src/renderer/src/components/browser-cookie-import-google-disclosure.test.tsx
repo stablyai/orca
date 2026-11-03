@@ -21,8 +21,8 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
 import { BrowserImportHintButton } from './browser-pane/assemble-chrome/BrowserImportHintButton'
 import { BrowserToolbarMenuDropdown } from './browser-pane/assemble-chrome/browser-toolbar-menu-dropdown'
-import { BrowserProfileRow } from './settings/BrowserProfileRow'
-import { BrowserUseCookieImportStep } from './settings/BrowserUseCookieImportStep'
+import { BrowserProfileRow } from './settings/browser/profiles/BrowserProfileRow'
+import { BrowserUseCookieImportStep } from './settings/browser/use/BrowserUseCookieImportStep'
 
 const DETECTED_BROWSERS = [
   {

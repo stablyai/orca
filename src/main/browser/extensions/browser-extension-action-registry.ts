@@ -82,6 +82,10 @@ export function getBrowserExtensionActionState(
   return state
 }
 
+export function forgetBrowserExtensionActionProfile(profileId: string): void {
+  stateByProfileId.delete(profileId)
+}
+
 /** A tab's action overrides end when it loads a new document or closes (Chrome semantics). */
 export function forgetBrowserExtensionActionTab(profileId: string, tabId: number): void {
   let changed = false

@@ -2,14 +2,14 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pairToolBlocks } from '../../../../../src/shared/native-chat/tools/native-chat-tool-pairs'
-import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat-turn-membership'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../../../transport/rpc-client'
-import { foldMobileNativeChatMessages } from '../../mobile-native-chat-render-data'
+import { foldMobileNativeChatMessages } from '../mobile-native-chat-render-data'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
-} from '../../use-mobile-native-chat-session'
+} from '../use-mobile-native-chat-session'
 
 function message(
   id: string,

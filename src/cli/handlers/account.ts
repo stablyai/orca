@@ -1,5 +1,4 @@
-import { spawn } from 'node:child_process'
-import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
+import { spawnProcess } from '@orca/process-host'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -16,11 +15,6 @@ import {
   resolveCliCommand,
   withCliRuntimeOnPath
 } from '../../shared/node-cli-command-resolution'
-import {
-  getSpawnArgsForWindows,
-  UnsafeWindowsBatchArgumentsError,
-  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
-} from '../../shared/windows-batch-spawn'
 import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
 import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
@@ -38,8 +32,15 @@ import {
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
 import { getWslAccountTarget } from './account-wsl-location'
-import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
+import {
+  addDataAccount,
+  listDataAccounts,
+  mutateDataAccount,
+  redactLoginAnswers,
+  rejectOpenCodeLoginFlagsForAgent
+} from './data-account-commands'
 import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
+import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
@@ -72,40 +73,25 @@ async function runAgentLoginInTerminal(
   json: boolean,
   session: InteractiveLoginSession
 ): Promise<void> {
+  if (command === 'opencode') {
+    command = await resolveOpenCodeLoginCommand(
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv }),
+      session
+    )
+  }
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const resolvedCommand = resolveCliCommand(command)
-    let spawnCmd: string
-    let spawnArgs: string[]
-    try {
-      ;({ spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args))
-    } catch (error) {
-      rejectPromise(
-        error instanceof UnsafeWindowsBatchArgumentsError
-          ? new RuntimeClientError(
-              'invalid_environment',
-              `Cannot run \`${command}\` from "${resolvedCommand}": the path contains characters ` +
-                `cmd.exe would reinterpret. Install it somewhere without ` +
-                `${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL} in the path.`
-            )
-          : error
-      )
-      return
-    }
     // Put the CLI's own Node ahead of newer version-manager bins to keep the command/runtime pair intact.
     const env = withCliRuntimeOnPath(
       resolvedCommand,
       addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     )
-    try {
-      assertWslDistroAllowed(spawnCmd, spawnArgs)
-    } catch (error) {
-      rejectPromise(error)
-      return
-    }
     const consoleStdio = stdioForWindowsInteractiveChild(json)
-    let child: ReturnType<typeof spawn>
+    let child: ReturnType<typeof spawnProcess>
     try {
-      child = spawn(spawnCmd, spawnArgs, {
+      child = spawnProcess({
+        program: resolvedCommand,
+        args,
         // Reserve stdout for JSON; keep interactive login on the terminal via stderr.
         stdio: consoleStdio.stdio,
         env
@@ -133,7 +119,7 @@ async function runAgentLoginInTerminal(
       rejectPromise(
         new RuntimeClientError(
           'internal',
-          `\`${command} ${args.join(' ')}\` exited with code ${code ?? 'null'}.`
+          `\`${[command, ...redactLoginAnswers(args)].join(' ')}\` exited with code ${code ?? 'null'}.`
         )
       )
     })
@@ -261,6 +247,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
+    rejectOpenCodeLoginFlagsForAgent(ctx, agent)
     if (agent === 'opencode' || agent === 'devin') {
       await addDataAccount(ctx, agent, runAgentLoginInTerminal)
       return

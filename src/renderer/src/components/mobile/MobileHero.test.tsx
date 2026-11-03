@@ -6,7 +6,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock(import('@/i18n/i18n'), async (importOriginal) => ({
+  ...(await importOriginal()),
   translate: (_key: string, fallback: string) => fallback
 }))
 
@@ -19,7 +20,7 @@ vi.mock('./NetworkInterfacePicker', () => ({
   NetworkInterfacePicker: () => null
 }))
 
-vi.mock('../settings/MobilePairingConnectionOptions', () => ({
+vi.mock('../settings/mobile/pairing/MobilePairingConnectionOptions', () => ({
   MobilePairingConnectionOptions: () => null
 }))
 
@@ -27,7 +28,7 @@ vi.mock('./WindowsFirewallNotice', () => ({
   WindowsFirewallNotice: () => null
 }))
 
-vi.mock('../settings/MachineNameField', () => ({
+vi.mock('../machine-identity/MachineNameField', () => ({
   MachineNameField: ({ id, className }: { id?: string; className?: string }) => (
     <div data-testid="machine-name-field" data-id={id} className={className} />
   )
@@ -76,8 +77,6 @@ describe('HeroFlow height', () => {
         onPlatformChange={vi.fn()}
         installQrUrl={null}
         installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
-        iosChannel="preview"
-        onIosChannelChange={vi.fn()}
         onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
@@ -124,8 +123,6 @@ describe('HeroFlow height', () => {
         onPlatformChange={vi.fn()}
         installQrUrl={null}
         installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
-        iosChannel="preview"
-        onIosChannelChange={vi.fn()}
         onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}

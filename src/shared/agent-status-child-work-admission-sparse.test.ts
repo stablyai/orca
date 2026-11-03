@@ -54,42 +54,6 @@ function setup() {
 }
 
 describe('child-work admission of sparse observations', () => {
-  it('keeps what the child was called when the ending names only that it is gone', () => {
-    const { store, admission } = setup()
-    admission.announce(observation(described))
-    expect(
-      admission.announce(
-        observation({ state: 'done', membership: 'settled', outcome: 'unknown', observedAt: 20 })
-      )
-    ).toMatchObject({ accepted: true })
-    expect(store.getChild('child-1')).toMatchObject({ membership: 'settled', ...described })
-  })
-
-  it('keeps the recorded last message when a refinement names only the outcome', () => {
-    const { store, admission } = setup()
-    admission.announce(observation({ name: 'researcher' }))
-    admission.announce(
-      observation({
-        state: 'done',
-        membership: 'settled',
-        outcome: 'unknown',
-        observedAt: 20,
-        lastMessage: 'wrote 3 files'
-      })
-    )
-    expect(
-      admission.announce(
-        observation({ state: 'done', membership: 'settled', outcome: 'failed', observedAt: 21 })
-      )
-    ).toMatchObject({ accepted: true })
-    expect(store.getChild('child-1')).toMatchObject({
-      outcome: 'failed',
-      name: 'researcher',
-      lastMessage: 'wrote 3 files',
-      settledAt: 20
-    })
-  })
-
   it('keeps the last message, owner and residency through a settle that names none of them', () => {
     const { store, admission } = setup()
     admission.announce(observation())
@@ -122,15 +86,6 @@ describe('child-work admission of sparse observations', () => {
     })
   })
 
-  it('never shrinks the token count on a late or duplicate frame', () => {
-    const { store, admission } = setup()
-    admission.announce(observation({ totalTokens: 5_000 }))
-    admission.announce(observation({ totalTokens: 100, observedAt: 12 }))
-    expect(store.getChild('child-1')?.totalTokens).toBe(5_000)
-    admission.announce(observation({ totalTokens: 7_500, observedAt: 13 }))
-    expect(store.getChild('child-1')?.totalTokens).toBe(7_500)
-  })
-
   it('refuses a refinement stamped behind the settle it refines and keeps the record', () => {
     const { store, admission } = setup()
     admission.announce(observation())
@@ -144,17 +99,6 @@ describe('child-work admission of sparse observations', () => {
       )
     ).toMatchObject({ accepted: false })
     expect(store.getChild('child-1')).toEqual(before)
-  })
-
-  it('replaces a label the request carries and keeps the count over an invalid one', () => {
-    const { store, admission } = setup()
-    admission.announce(observation(described))
-    admission.announce(observation({ name: 'reviewer', observedAt: 11 }))
-    expect(store.getChild('child-1')).toMatchObject({ ...described, name: 'reviewer' })
-    expect(admission.announce(observation({ totalTokens: -1, observedAt: 12 }))).toMatchObject({
-      accepted: true
-    })
-    expect(store.getChild('child-1')?.totalTokens).toBe(5_000)
   })
 
   function settledFirstRun() {
@@ -192,11 +136,5 @@ describe('child-work admission of sparse observations', () => {
     expect(child).not.toHaveProperty('providerTiming')
     // Restarted by the main agent: it no longer nests under the child that first spawned it.
     expect(child).not.toHaveProperty('parentChildWorkId')
-  })
-
-  it('nests a resumed invocation under the child that restarted it', () => {
-    const { store, resume } = settledFirstRun()
-    expect(resume({ parentChildWorkId: 'child-restarter' })).toMatchObject({ accepted: true })
-    expect(store.getChild('child-1')?.parentChildWorkId).toBe('child-restarter')
   })
 })

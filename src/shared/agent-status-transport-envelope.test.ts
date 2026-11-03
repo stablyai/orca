@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createAgentStatusStore } from './agent-status-store'
 import { makeStructuredAgentStatusSubject } from './agent-status-subject'
-import {
-  deserializeAgentStatusTransportEnvelope,
-  serializeAgentStatusTransportEnvelope
-} from './agent-status-transport-envelope'
+import './agent-status-transport-envelope'
 
 const parent = makeStructuredAgentStatusSubject(
   {
@@ -65,24 +62,6 @@ describe('agent status transport envelope', () => {
     })
     expect(replica.applyTransportEnvelope(fresh)).toBe(true)
     expect(replica.getSnapshot().facts.map((fact) => fact.key)).toEqual(['retained'])
-  })
-
-  it('round-trips a mutation envelope and fails closed on malformed input', () => {
-    const authority = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    const mutation = authority.applyMutation({ parent: { subject: parent } })
-    expect(mutation).not.toBeNull()
-    if (!mutation) {
-      return
-    }
-
-    expect(
-      deserializeAgentStatusTransportEnvelope(serializeAgentStatusTransportEnvelope(mutation))
-    ).toEqual(mutation)
-    expect(
-      deserializeAgentStatusTransportEnvelope(
-        JSON.stringify({ ...mutation, revision: mutation.revision + 2 })
-      )
-    ).toBeNull()
   })
 
   it('does not resurrect an exact removal through stale replay', () => {

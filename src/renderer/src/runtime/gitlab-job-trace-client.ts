@@ -7,6 +7,7 @@ import type { GitLabProjectRef } from '../../../shared/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 import { gitLabApiFor, JOB_TRACE_TIMEOUT_MS } from './gitlab-owner-api'
 import { withGitLabIpcTimeout } from './gitlab-ipc-timeout'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 /** Load GitLab job logs as provider-neutral details; null permits other-provider fallback, while GitLab failures throw for caller error UI. */
 export async function loadGitLabJobLogDetails(args: {
@@ -35,7 +36,7 @@ export async function loadGitLabJobLogDetails(args: {
   )
   if (!result?.ok) {
     throw new Error(
-      result?.error?.trim() ||
+      (result ? codeHostErrorText(result) : undefined)?.trim() ||
         translate(
           'auto.runtime.gitlabJobTraceClient.loadFailed',
           'Failed to load the GitLab job log.'

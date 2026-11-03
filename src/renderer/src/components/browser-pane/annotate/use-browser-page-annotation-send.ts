@@ -22,6 +22,8 @@ export function useBrowserPageAnnotationSend({
 }): {
   browserAnnotations: BrowserPageAnnotation[]
   browserAnnotationsPrompt: string
+  includePageDetails: boolean
+  handleIncludePageDetailsChange: (include: boolean) => void
   browserAnnotationsCopied: boolean
   annotationBannerSendOpen: boolean
   annotationTraySendOpen: boolean
@@ -33,7 +35,8 @@ export function useBrowserPageAnnotationSend({
   handleUpdateBrowserAnnotation: (
     annotationId: string,
     comment: string,
-    intent: BrowserAnnotationIntent
+    intent: BrowserAnnotationIntent,
+    imagePaths: string[]
   ) => void
   handleBrowserAnnotationsSentToAgent: () => void
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
@@ -46,9 +49,13 @@ export function useBrowserPageAnnotationSend({
   const browserAnnotationsRef = useRef(browserAnnotations)
   const [browserAnnotationsCopied, setBrowserAnnotationsCopied] = useState(false)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const [includePageDetails, setIncludePageDetails] = useState(false)
   const copyPrompt = useMemo(
-    () => formatBrowserAnnotationsAsMarkdown(browserAnnotations),
-    [browserAnnotations]
+    () =>
+      formatBrowserAnnotationsAsMarkdown(browserAnnotations, {
+        includeDiagnostics: includePageDetails
+      }),
+    [browserAnnotations, includePageDetails]
   )
   // Annotations another send holds are left out of the next one.
   const inFlightVersion = useNotesInFlightVersion()
@@ -57,8 +64,11 @@ export function useBrowserPageAnnotationSend({
     return browserAnnotations.filter((annotation) => !isNoteInFlight(annotation))
   }, [browserAnnotations, inFlightVersion])
   const browserAnnotationsPrompt = useMemo(
-    () => formatBrowserAnnotationsAsMarkdown(sendableAnnotations),
-    [sendableAnnotations]
+    () =>
+      formatBrowserAnnotationsAsMarkdown(sendableAnnotations, {
+        includeDiagnostics: includePageDetails
+      }),
+    [sendableAnnotations, includePageDetails]
   )
   const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
   const closeAgentSendPopoverTargetMode = useAppStore((s) => s.closeAgentSendPopoverTargetMode)
@@ -122,6 +132,30 @@ export function useBrowserPageAnnotationSend({
     clearBrowserPageAnnotations(browserTabId)
   }, [browserTabId, clearBrowserPageAnnotations, recordFeatureInteraction])
 
+  const openAnnotationSendTargetMode = useCallback(
+    (modeId: string, prompt: string): void => {
+      openAgentSendPopoverTargetMode({
+        id: modeId,
+        worktreeId,
+        source: 'browser-annotations',
+        prompt,
+        label: translate(
+          'auto.components.browser.pane.BrowserPane.27d863542c',
+          'Browser annotations'
+        ),
+        launchSource: 'notes_send',
+        onPromptDelivered: handleBrowserAnnotationsSentToAgent,
+        onPromptHandedOff: handleBrowserAnnotationsHandedOff
+      })
+    },
+    [
+      handleBrowserAnnotationsSentToAgent,
+      handleBrowserAnnotationsHandedOff,
+      openAgentSendPopoverTargetMode,
+      worktreeId
+    ]
+  )
+
   const handleAnnotationSendOpenChange = useCallback(
     (modeId: string, open: boolean): void => {
       if (open) {
@@ -129,30 +163,33 @@ export function useBrowserPageAnnotationSend({
         if (!browserAnnotationsPrompt) {
           return
         }
-        openAgentSendPopoverTargetMode({
-          id: modeId,
-          worktreeId,
-          source: 'browser-annotations',
-          prompt: browserAnnotationsPrompt,
-          label: translate(
-            'auto.components.browser.pane.BrowserPane.27d863542c',
-            'Browser annotations'
-          ),
-          launchSource: 'notes_send',
-          onPromptDelivered: handleBrowserAnnotationsSentToAgent,
-          onPromptHandedOff: handleBrowserAnnotationsHandedOff
-        })
+        openAnnotationSendTargetMode(modeId, browserAnnotationsPrompt)
       } else {
         closeAgentSendPopoverTargetMode(modeId)
       }
     },
+    [browserAnnotationsPrompt, closeAgentSendPopoverTargetMode, openAnnotationSendTargetMode]
+  )
+
+  const handleIncludePageDetailsChange = useCallback(
+    (include: boolean): void => {
+      setIncludePageDetails(include)
+      const openModeId =
+        annotationBannerSendOpen || annotationTraySendOpen ? activeAgentSendTargetModeId : null
+      // The sidebar agent picker holds the prompt it was opened with.
+      if (openModeId && sendableAnnotations.length > 0) {
+        openAnnotationSendTargetMode(
+          openModeId,
+          formatBrowserAnnotationsAsMarkdown(sendableAnnotations, { includeDiagnostics: include })
+        )
+      }
+    },
     [
-      browserAnnotationsPrompt,
-      handleBrowserAnnotationsSentToAgent,
-      handleBrowserAnnotationsHandedOff,
-      closeAgentSendPopoverTargetMode,
-      openAgentSendPopoverTargetMode,
-      worktreeId
+      activeAgentSendTargetModeId,
+      annotationBannerSendOpen,
+      annotationTraySendOpen,
+      openAnnotationSendTargetMode,
+      sendableAnnotations
     ]
   )
 
@@ -187,8 +224,13 @@ export function useBrowserPageAnnotationSend({
   )
 
   const handleUpdateBrowserAnnotation = useCallback(
-    (annotationId: string, comment: string, intent: BrowserAnnotationIntent): void => {
-      updateBrowserPageAnnotation(browserTabId, annotationId, { comment, intent })
+    (
+      annotationId: string,
+      comment: string,
+      intent: BrowserAnnotationIntent,
+      imagePaths: string[]
+    ): void => {
+      updateBrowserPageAnnotation(browserTabId, annotationId, { comment, intent, imagePaths })
       recordFeatureInteraction('browser-annotations')
     },
     [browserTabId, recordFeatureInteraction, updateBrowserPageAnnotation]
@@ -197,6 +239,8 @@ export function useBrowserPageAnnotationSend({
   return {
     browserAnnotations,
     browserAnnotationsPrompt,
+    includePageDetails,
+    handleIncludePageDetailsChange,
     browserAnnotationsCopied,
     annotationBannerSendOpen,
     annotationTraySendOpen,

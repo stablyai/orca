@@ -7,7 +7,7 @@ const { removeHostTreeMock } = vi.hoisted(() => ({
   removeHostTreeMock: vi.fn<(dir: string) => Promise<void>>()
 }))
 
-vi.mock('../host-tree-removal', () => ({
+vi.mock('../filesystem/host-tree-removal', () => ({
   removeHostTree: removeHostTreeMock
 }))
 

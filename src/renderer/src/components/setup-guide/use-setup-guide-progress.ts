@@ -169,9 +169,9 @@ export function useSetupGuideProgress(
 
     async function refreshSetupScriptState(): Promise<void> {
       for (const repo of orderedGitRepos) {
-        const hooksResult = await checkRuntimeHooks(getRepoExecutionHostId(repo), repo.id).catch(
-          () => null
-        )
+        const hooksResult = await checkRuntimeHooks(getRepoExecutionHostId(repo), repo.id, {
+          background: true
+        }).catch(() => null)
         if (stale) {
           return
         }

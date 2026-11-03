@@ -5,13 +5,15 @@ import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
 } from './native-chat-composer-types'
 import type * as RuntimeTerminalInspectionModule from '@/runtime/runtime-terminal-inspection'
+import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
+import { clearPendingSendCacheForTests } from './native-chat-pending'
 
 type RuntimeTerminalInspection = typeof RuntimeTerminalInspectionModule
 
@@ -49,6 +51,7 @@ vi.mock('./NativeChatComposer', async () => {
             fieldRef.current?.focus()
             return true
           },
+          insertAgentReferences: () => false,
           insertTypedText: composer.typed,
           acceptsText: () => true,
           appendText: () => {},
@@ -174,6 +177,45 @@ afterEach(() => {
   } finally {
     vi.useRealTimers()
   }
+})
+
+describe('queued follow-ups through transcript recovery', () => {
+  it.each(['error', 'ready'] as const)(
+    'keeps a send after the current reply when a read error is presented as %s',
+    async (status) => {
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      clearPendingSendCacheForTests()
+      setStatus({ state: 'working', lastAssistantMessage: 'Current reply' })
+      const input = {
+        messages: [userTurn],
+        sessionId: 'session-hidden',
+        agent: 'claude' as const,
+        hookState: 'working' as const,
+        stateStartedAt: Date.now()
+      }
+      retained.session = {
+        ...retained.session!,
+        ...mergeNativeChatLiveSession({ ...input, error: 'Read failed' }),
+        status,
+        readPhase: 'error'
+      }
+      renderPane()
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('composer-send'))
+      })
+      act(() => {
+        retained.session = {
+          ...retained.session!,
+          ...mergeNativeChatLiveSession(input),
+          readPhase: 'ready'
+        }
+        setStatus({ state: 'working', lastAssistantMessage: 'Current reply continues' })
+      })
+      const text = document.body.textContent!
+      expect(text).toContain('Current')
+      expect(text.indexOf(MESSAGE)).toBeGreaterThan(text.indexOf('Current'))
+    }
+  )
 })
 
 describe('a prompt card hides the composer without unmounting it', () => {

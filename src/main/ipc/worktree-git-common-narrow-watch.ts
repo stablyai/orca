@@ -2,12 +2,12 @@ import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { subscribeViaWatcherProcess } from './filesystem/watcher-process/parcel-watcher-process'
 import { isWatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
-import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
+import type { WorktreeBaseWatchTarget } from './worktrees/creation/worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 import { createSingleFlight } from './single-flight-promise'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
 import { startGitCommonPolling } from './worktree-git-common-polling'

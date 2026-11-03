@@ -65,28 +65,41 @@ function classifyRemoteQuestion(
 }
 
 export function answerRemoteQuestion(this: OrchestrationDb, params: RemoteAnswerParams): void {
-  if (classifyRemoteQuestion.call(this, params) === 'settled') {
+  if (classifyRemoteQuestion.call(this, params) !== 'settled') {
+    const changes = this.db
+      .prepare(
+        `UPDATE remote_questions
+         SET status = 'answered', answer_message_id = ?, answer_body = ?,
+             answered_at = datetime('now')
+         WHERE message_id = ? AND status = 'pending'`
+      )
+      .run(params.answerMessageId, params.body, params.messageId).changes
+    // Reclassify a lost UPDATE race so concurrent answer/close is reported honestly.
+    if (changes === 0 && classifyRemoteQuestion.call(this, params) !== 'settled') {
+      throw new OrchestrationError(
+        'answer_conflict',
+        `Remote Question ${params.messageId} could not be answered.`
+      )
+    }
+  }
+  storeRemoteAnswerMail.call(this, params)
+}
+
+/** The answer is the worker's Dispatch mail on its execution host, as at a local Run home. */
+function storeRemoteAnswerMail(this: OrchestrationDb, params: RemoteAnswerParams): void {
+  const homeRunId = this.getRemoteDispatchAttachment(params.dispatchId)?.home_run_id
+  if (!homeRunId || this.getMessageById(params.answerMessageId)) {
     return
   }
-  const changes = this.db
-    .prepare(
-      `UPDATE remote_questions
-       SET status = 'answered', answer_message_id = ?, answer_body = ?,
-           answered_at = datetime('now')
-       WHERE message_id = ? AND status = 'pending'`
-    )
-    .run(params.answerMessageId, params.body, params.messageId).changes
-  if (changes > 0) {
-    return
-  }
-  // Reclassify a lost UPDATE race so concurrent answer/close is reported honestly.
-  if (classifyRemoteQuestion.call(this, params) === 'settled') {
-    return
-  }
-  throw new OrchestrationError(
-    'answer_conflict',
-    `Remote Question ${params.messageId} could not be answered.`
-  )
+  this.insertMessage({
+    id: params.answerMessageId,
+    runId: homeRunId,
+    from: `run:${homeRunId}`,
+    to: `dispatch:${params.dispatchId}`,
+    subject: 'Re: Question',
+    body: params.body,
+    threadId: params.messageId
+  })
 }
 
 export function setRemoteWorkerImportSequence(

@@ -1,5 +1,5 @@
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
-import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
@@ -61,8 +61,10 @@ export async function resolveWorktreeStartupDraftAgent(
   const sshConnectionId = getRepoSshConnectionId(repo)
   try {
     // Sparse launch environments may lack host detection dependencies.
+    // Disabled agents cannot be picked here, so background detection never probes them (#34635).
     detected = await detectAgentsOnHost(
-      sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' }
+      sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' },
+      { disabledTuiAgents: settings.disabledTuiAgents }
     )
   } catch {
     detected = []

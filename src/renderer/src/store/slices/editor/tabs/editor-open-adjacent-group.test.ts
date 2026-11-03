@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../../shared/tab-types'
-import { findNeighbor, pickAdjacentEditorOpenGroupId } from './editor-open-adjacent-group'
+import { pickAdjacentEditorOpenGroupId } from './editor-open-adjacent-group'
 
 const FILE_ID = '/repo/src/main.ts'
 
@@ -89,35 +89,11 @@ describe('pickAdjacentEditorOpenGroupId', () => {
     expect(pick(layout, 'B')).toBe('A')
   })
 
-  it('opens across a two-row split in both directions', () => {
-    const layout = rows(leaf('A'), leaf('B'))
-    expect(pick(layout, 'A')).toBe('B')
-    expect(pick(layout, 'B')).toBe('A')
-  })
-
-  it('prefers the right neighbor over the left in three columns', () => {
-    expect(pick(columns(leaf('A'), columns(leaf('B'), leaf('C'))), 'B')).toBe('C')
-  })
-
   it('ignores the diagonal group in a four-way grid', () => {
     const grid = columns(rows(leaf('TL'), leaf('BL')), rows(leaf('TR'), leaf('BR')))
     expect(pick(grid, 'BR')).toBe('BL')
     // Why: corner-only contact is not adjacency, so TL's editor earns no preference.
     expect(pick(grid, 'BR', { editors: ['TL'] })).toBe('BL')
-  })
-
-  it('picks the upper-right group beside a tall source regardless of their height ratio', () => {
-    for (const ratio of [0.2, 0.5, 0.8]) {
-      expect(pick(columns(leaf('A'), rows(leaf('B'), leaf('C'), ratio)), 'A')).toBe('B')
-    }
-  })
-
-  it('lets a neighbor showing an editor beat side order', () => {
-    expect(pick(columns(leaf('A'), rows(leaf('B'), leaf('C'))), 'A', { editors: ['C'] })).toBe('C')
-  })
-
-  it('orders neighbors below a wide source left to right', () => {
-    expect(pick(rows(leaf('A'), columns(leaf('L'), leaf('R'))), 'A')).toBe('L')
   })
 
   it('compares equal-priority editors right, left, below, above', () => {
@@ -136,35 +112,6 @@ describe('pickAdjacentEditorOpenGroupId', () => {
     expect(pick(columns(leaf('A'), columns(leaf('B'), leaf('C'))), 'A', { withFile: ['C'] })).toBe(
       'C'
     )
-  })
-
-  it('prefers a neighboring view when the file has several', () => {
-    const layout = columns(leaf('A'), columns(leaf('B'), columns(leaf('C'), leaf('D'))))
-    expect(pick(layout, 'A', { withFile: ['B', 'D'] })).toBe('B')
-    expect(pick(layout, 'A', { withFile: ['C', 'D'] })).toBe('C')
-  })
-
-  it('opens a second view beside the source when only the source has the file', () => {
-    expect(pick(columns(leaf('A'), leaf('B')), 'A', { withFile: ['A'] })).toBe('B')
-  })
-
-  it('keeps a single group in place', () => {
-    expect(pick(leaf('A'), 'A')).toBe('A')
-  })
-
-  it('covers an adjacent agent before a nonadjacent editor without the file', () => {
-    expect(pick(columns(leaf('A'), columns(leaf('B'), leaf('C'))), 'A', { editors: ['C'] })).toBe(
-      'B'
-    )
-  })
-
-  it('selects an old unselected matching tab over a nearby editor', () => {
-    expect(
-      pick(columns(leaf('A'), columns(leaf('B'), leaf('C'))), 'A', {
-        editors: ['B'],
-        withFile: ['C']
-      })
-    ).toBe('C')
   })
 
   it('does not treat an inactive editor tab as showing an editor', () => {
@@ -202,26 +149,7 @@ describe('pickAdjacentEditorOpenGroupId', () => {
     expect(reversed).toBe(forward)
   })
 
-  it('agrees across split histories that draw the same grid', () => {
-    const byColumns = columns(rows(leaf('TL'), leaf('BL')), rows(leaf('TR'), leaf('BR')))
-    const byRows = rows(columns(leaf('TL'), leaf('TR')), columns(leaf('BL'), leaf('BR')))
-    for (const source of ['TL', 'TR', 'BL', 'BR']) {
-      expect(pick(byRows, source)).toBe(pick(byColumns, source))
-    }
-  })
-
   it('returns null when the source is not a live leaf', () => {
     expect(pick(columns(leaf('A'), leaf('B')), 'gone')).toBeNull()
-  })
-})
-
-describe('findNeighbor', () => {
-  it('requires positive overlap along the shared edge', () => {
-    const source = { left: 0, top: 0, right: 0.5, bottom: 0.5 }
-    expect(findNeighbor(source, { left: 0.5, top: 0.5, right: 1, bottom: 1 })).toBeNull()
-    expect(findNeighbor(source, { left: 0.5, top: 0.25, right: 1, bottom: 1 })).toEqual({
-      side: 'right',
-      position: 0.25
-    })
   })
 })

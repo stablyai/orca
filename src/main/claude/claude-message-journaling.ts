@@ -1,6 +1,9 @@
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
@@ -15,11 +18,12 @@ import {
   claudeToolUses,
   readClaudeMessageEnvelope,
   type ClaudeToolUse
-} from './claude-structured-item-translation'
+} from './structured/journal/claude-structured-item-translation'
+import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
 import {
   appendUnmodeledContent,
   type ClaudeProviderFrameFallback
-} from './claude-structured-provider-fallback'
+} from './structured/launch/claude-structured-provider-fallback'
 import type { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import type { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import type { ClaudeStreamedThinking } from './claude-streamed-thinking'
@@ -27,7 +31,7 @@ import type { ClaudeProvisionalRowCorrections } from './claude-provisional-row-c
 import type { ClaudeSubagentIdentities } from './claude-subagent-identities'
 import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
-import type { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import type { ClaudeAssistantFailures } from './claude-assistant-failures'
 import type { ClaudeUsageLimits } from './claude-usage-limits'
 import type { ClaudeThreadGoal } from './claude-thread-goal'
 
@@ -44,7 +48,7 @@ export type ClaudeMessageJournalContext = {
   /** Stamp producer identity and retain rows needing later identity corrections. */
   corrections: ClaudeProvisionalRowCorrections
   turn: ClaudeOpenTurn
-  authenticationFailures: ClaudeAuthenticationFailures
+  assistantFailures: ClaudeAssistantFailures
   usageLimits: ClaudeUsageLimits
   threadGoal: ClaudeThreadGoal
 }
@@ -55,7 +59,8 @@ export function journalClaudeMessage(
   startsTurn: boolean,
   observedAt: number,
   /** Host clock on the submission that produced this send, when known. */
-  requestedAt?: number
+  requestedAt?: number,
+  clientMessageId?: string
 ): boolean {
   const envelope = readClaudeMessageEnvelope(message)
   if (!envelope) {
@@ -103,7 +108,7 @@ export function journalClaudeMessage(
   }
   const usageLimit = ctx.usageLimits.assistant(message, ctx.turn)
   const body =
-    ctx.authenticationFailures.assistant(message) ??
+    ctx.assistantFailures.assistant(message) ??
     usageLimit ??
     ctx.threadGoal.report(message, claudeMessageIdentity(envelope), observedAt) ??
     messageBody ??
@@ -123,6 +128,15 @@ export function journalClaudeMessage(
     } else {
       ctx.sink.appendItem(identity, body, { ...stamp(identity, body), lifecycle: true })
     }
+    changed = true
+  }
+  const stopHookFeedback = claudeEnvelopeStopHookFeedbackRow(envelope)
+  if (stopHookFeedback) {
+    ctx.turn.ensureOpen(message, source, observedAt)
+    ctx.sink.appendItem(identity, stopHookFeedback, {
+      ...stamp(identity, stopHookFeedback),
+      lifecycle: true
+    })
     changed = true
   }
   for (const tool of claudeToolUses(outputEnvelope)) {
@@ -188,7 +202,10 @@ export function journalClaudeMessage(
   })
   if (sendEchoTurn) {
     ctx.turn.allowReopen()
-    ctx.turn.open(sendEchoTurn, observedAt)
+    // Output can open the send's turn before its echo confirms delivery.
+    if (!clientMessageId || ctx.turn.userItemId !== agentJournalSubmissionKey(clientMessageId)) {
+      ctx.turn.open(sendEchoTurn, observedAt)
+    }
   }
   if (changed) {
     ctx.sink.publish()

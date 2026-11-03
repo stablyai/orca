@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Allow Orca to use the camera for QR code scanning.",
+    "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your LAN.",
+    "NSMicrophoneUsageDescription": "Allow Orca to use your microphone for voice dictation sent to your paired desktop for transcription.",
+    "NSPhotoLibraryUsageDescription": "Allow Orca to attach photos from your library to a terminal session on your paired desktop."
+  }
+}

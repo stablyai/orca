@@ -4,13 +4,12 @@ import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-
 // Recover earlier-process queued sends before any handover; running commands block input.
 
 import { beginStructuredAgentSessionInputHandover } from './structured-agent-session-input-handover'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import {
   oldestQueuedSubmission,
-  recordStructuredAgentSessionStartFailure,
+  recordStructuredAgentSessionDeliveryFailure,
   startThatFailedWhileQueued
 } from './structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionPendingHandover } from './structured-agent-session-handover'
@@ -22,6 +21,7 @@ import { structuredAgentSessionEndedChildFailure } from './structured-agent-sess
 import { waitsForCodexTurnOptions } from './structured-agent-session-message-options'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import { DeliveryProgress } from './structured-agent-session-delivery-progress'
+import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
 
 export type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
 
@@ -62,10 +62,7 @@ export class StructuredAgentSessionDeliveryLoop {
       return Promise.resolve()
     }
     this.running.get(sessionId)?.woke()
-    this.deps.deliveryOrder.reconcile(
-      sessionId,
-      this.deps.sessions.get(sessionId)?.journal.submissions() ?? []
-    )
+    this.deps.deliveryOrder.reconcile(sessionId, this.deps.sessions.get(sessionId)?.journal)
     if (this.running.has(sessionId)) {
       return this.runs.get(sessionId) ?? Promise.resolve()
     }
@@ -188,9 +185,9 @@ export class StructuredAgentSessionDeliveryLoop {
     if (!(await this.deps.closeWhatTheUserClosed(sessionId))) {
       return this.stop(sessionId)
     }
-    const oldest = oldestQueuedSubmission(session)
     // Commands block while their child lives; ended command commits wake delivery again.
     const work = this.deps.currentWork(sessionId)
+    const oldest = selectableStructuredSubmission(session.journal, work)
     if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
       return this.stop(sessionId)
     }
@@ -264,7 +261,13 @@ export class StructuredAgentSessionDeliveryLoop {
       }
     }
     if (
-      waitsForCodexTurnOptions(this.deps.record(sessionId), session.journal, next, awaitedChild)
+      waitsForCodexTurnOptions(
+        this.deps.record(sessionId),
+        session.journal,
+        next,
+        awaitedChild,
+        this.deps.adapter
+      )
     ) {
       return this.stop(sessionId)
     }
@@ -286,15 +289,10 @@ export class StructuredAgentSessionDeliveryLoop {
   ): Promise<'continue'> {
     const session = this.deps.sessions.get(sessionId)
     if (session) {
-      await recordStructuredAgentSessionStartFailure(
+      await recordStructuredAgentSessionDeliveryFailure(
         { journal: session.journal, fence: this.deps.conversationFence(sessionId) },
-        {
-          startKey: failure.startKey,
-          ...structuredAgentSessionStartFailure(
-            failure.cause,
-            this.deps.failureTextContext(sessionId)
-          )
-        },
+        failure,
+        this.deps.failureTextContext(sessionId),
         clientMessageId
       )
     }

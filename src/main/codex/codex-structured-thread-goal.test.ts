@@ -4,6 +4,7 @@ import { CodexAppliedSettings } from './codex-structured-applied-settings'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { changeCodexThreadGoal, codexThreadGoalRequests } from './codex-structured-thread-goal'
 import type { CodexSession } from './codex-structured-session-state'
+import { waitsForCodexTurnOptions } from '../native-chat/agent-session-wire/structured-agent-session-message-options'
 
 const THREAD = 'thread-1'
 
@@ -177,7 +178,7 @@ describe('direct goal settings application', () => {
       await import('./codex-structured-session-adapter-fixture')
     const codex = fakeCodex()
     const adapter = adapterFor(codex, {}, [], { requestTimeoutMs: timeout })
-    await acquireReadyCodexForTest(adapter, {
+    const acquisition = await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn'
@@ -196,8 +197,120 @@ describe('direct goal settings application', () => {
         executionOptions: { model, ...(effort ? { effort } : {}) }
       })
     const state = acquiredSettingsTestSeam(adapter)
-    return { codex, adapter, apply, goal, settings: state.settings, state }
+    return { codex, adapter, apply, goal, settings: state.settings, state, acquisition }
   }
+
+  it('keeps literal goal settings separate from exact applied turn proof and recovers on a successful turn', async () => {
+    const { codex, adapter, apply, goal, acquisition } = await fixture()
+    const choices = { model: 'unlisted-model-a', effort: 'high' }
+    const dispatch = () =>
+      adapter.dispatch({
+        sessionId: 'session-1',
+        fence: 7,
+        clientMessageId: `message-${codex.connections[0].calls.length}`,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Continue' }] },
+        executionOptions: choices
+      })
+    const held = (options = choices) =>
+      waitsForCodexTurnOptions(
+        { provider: 'codex', sessionId: 'session-1' },
+        {
+          newestTurn: () => ({ turnId: 'goal-turn', state: 'running' }),
+          itemBody: () => ({
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'Continue' }]
+          })
+        },
+        {
+          clientMessageId: 'follow-up',
+          fence: 7,
+          payloadFingerprint: 'fingerprint',
+          dispatchState: 'pending',
+          providerItemId: null,
+          reason: null,
+          submittedAt: 1,
+          resolvedAt: null,
+          options
+        },
+        { fence: 7, generation: acquisition.acquisitionGeneration, phase: 'ready' },
+        adapter
+      )
+    const proof = () =>
+      adapter.readAppliedInputOptions({
+        sessionId: 'session-1',
+        fence: 7,
+        acquisitionGeneration: acquisition.acquisitionGeneration,
+        next: choices
+      })
+    try {
+      expect(await dispatch()).toMatchObject({ state: 'admitted' })
+      expect(proof()?.active).toMatchObject(choices)
+      codex.routes['thread/settings/update'] = (params) => {
+        apply(String(params?.model), String(params?.effort))
+        return {}
+      }
+      expect(await goal('unlisted-model-b', 'low')).toEqual({ ok: true })
+      expect(
+        codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
+      ).toEqual([
+        {
+          method: 'thread/settings/update',
+          params: { threadId: 'thread-abc', model: 'unlisted-model-b', effort: 'low' }
+        }
+      ])
+      const appliedGoal = { model: 'unlisted-model-b', effort: 'low' }
+      expect(proof()).toEqual({ active: appliedGoal, next: choices })
+      apply('observation-only', 'medium')
+      expect(proof()).toEqual({ active: appliedGoal, next: choices })
+      codex.routes['thread/settings/update'] = () => {
+        throw new CodexAppServerRequestError('thread/settings/update', -32602, 'invalid model')
+      }
+      expect(await goal('refused-model', 'high')).toMatchObject({ ok: false })
+      expect(proof()).toEqual({ active: appliedGoal, next: choices })
+      expect(
+        codex.connections[0].calls.filter((call) => call.method === 'thread/goal/set')
+      ).toHaveLength(1)
+      apply('observation-only-c', 'medium')
+      const callsBeforeEquivalent = codex.connections[0].calls.filter(
+        (call) => call.method === 'thread/settings/update'
+      ).length
+      expect(await goal('observation-only-c', 'medium')).toEqual({ ok: true })
+      expect(proof()).toEqual({ active: appliedGoal, next: choices })
+      expect(held(appliedGoal)).toBe(false)
+      expect(held({ model: 'observation-only-c', effort: 'medium' })).toBe(true)
+      expect(
+        codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
+      ).toHaveLength(callsBeforeEquivalent)
+      codex.routes['thread/settings/update'] = () => {
+        throw new Error('reply lost after settings enqueue')
+      }
+      expect(await goal('uncertain-model', 'low')).toMatchObject({ ok: false })
+      expect(proof()).toEqual({ active: { effort: 'low' }, next: choices })
+      expect(held()).toBe(true)
+      expect(await dispatch()).toMatchObject({ state: 'admitted' })
+      expect(proof()).toEqual({ active: choices, next: choices })
+      codex.routes['thread/settings/update'] = () => {
+        throw new CodexAppServerRequestError('thread/settings/update', -32601, 'method not found')
+      }
+      expect(await goal('unlisted-model-b', 'low')).toEqual({ ok: true })
+      expect(proof()).toEqual({ active: choices, next: choices })
+      const callsBeforeCached = codex.connections[0].calls.filter(
+        (call) => call.method === 'thread/settings/update'
+      ).length
+      expect(await goal('unlisted-model-b', 'low')).toEqual({ ok: true })
+      expect(proof()).toEqual({ active: choices, next: choices })
+      expect(held()).toBe(false)
+      expect(held(appliedGoal)).toBe(true)
+      expect(
+        codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
+      ).toHaveLength(callsBeforeCached)
+      expect(await dispatch()).toMatchObject({ state: 'admitted' })
+      expect(proof()).toEqual({ active: choices, next: choices })
+    } finally {
+      await adapter.closeAll()
+    }
+  })
 
   it('retains authoritative A after a definitely rejected turn B, so a no-op Resume A needs no notification', async () => {
     const { codex, adapter, goal } = await fixture()

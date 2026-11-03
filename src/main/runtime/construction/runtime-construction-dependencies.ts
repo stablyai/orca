@@ -35,7 +35,7 @@ export type RuntimeConstructionDependencies = {
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
-  getAgentProviderSessionSnapshot?: () => AgentStatusIpcPayload[]
+  getAgentProviderSessionSnapshot?: (tabId?: string) => AgentStatusIpcPayload[]
   getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   subscribeAgentProviderSessionChanges?: (
     listener: (sessions: readonly { paneKey: string; sessionId: string }[]) => void
@@ -72,6 +72,8 @@ export type RuntimeConstructionDependencies = {
   prepareCodexCatalogProbeHome?: (homePath: string) => void
   buildAgentHookPtyEnv?: () => Record<string, string>
   getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
+  /** Live headless-model depth; a host with no renderer to reveal from needs only its PTY provider's live window. */
+  headlessTerminalScrollbackRows?: number
   agentSessionClaimSigner?: AgentSessionClaimSigner
   skillTransactionRecovery?: Promise<unknown>
   applySessionSearchSettings?: SessionSearchSettingsApply

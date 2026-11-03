@@ -1,14 +1,22 @@
+import type * as GitExecFileModule from './command-runner/git-exec-file'
+import type * as GhExecFileModule from './command-runner/gh-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunnerModule from './runner'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const ghExecFileAsyncMock = vi.hoisted(() => vi.fn())
 
-vi.mock('./runner', async () => {
-  const actual = await vi.importActual<typeof RunnerModule>('./runner')
+vi.mock('./command-runner/git-exec-file', async () => {
+  const actual = await vi.importActual<typeof GitExecFileModule>('./command-runner/git-exec-file')
   return {
     ...actual,
-    gitExecFileAsync: gitExecFileAsyncMock,
+    gitExecFileAsync: gitExecFileAsyncMock
+  }
+})
+
+vi.mock('./command-runner/gh-exec-file', async () => {
+  const actual = await vi.importActual<typeof GhExecFileModule>('./command-runner/gh-exec-file')
+  return {
+    ...actual,
     ghExecFileAsync: ghExecFileAsyncMock
   }
 })
@@ -73,6 +81,14 @@ describe('resolveLocalGitUsername', () => {
     currentBranch = ''
 
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--list') {
+        return {
+          stdout: Object.entries(gitConfig)
+            .map(([key, value]) => `${key}\n${value}\0`)
+            .join(''),
+          stderr: ''
+        }
+      }
       if (args[0] === 'config' && args[1] === '--get') {
         const value = gitConfig[args[2]]
         if (value !== undefined) {
@@ -144,10 +160,8 @@ describe('resolveLocalGitUsername', () => {
       authoritative: true
     })
     expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
-      ['config', '--get', 'github.user'],
-      ['config', '--get', 'user.username'],
-      ['remote'],
-      ['config', '--get', 'user.name']
+      ['config', '--list', '-z'],
+      ['remote']
     ])
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })

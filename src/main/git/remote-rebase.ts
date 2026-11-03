@@ -8,9 +8,9 @@ import {
 } from '../../shared/git-rebase-source'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
-import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
+import { withLocalGitCapabilityCacheForExecution } from './command-runner/git-capability-state'
 import { gitExecFileAsync } from './runner'
-import { runWithGitReadCacheInvalidation } from './status'
+import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
 export async function gitPullRebaseFromBase(
   worktreePath: string,
@@ -30,8 +30,7 @@ async function gitPullRebaseFromBaseUnlocked(
   await runWithGitReadCacheInvalidation(async () => {
     const operationOptions = {
       ...gitOptionsForWorktree(worktreePath, options),
-      terminationBarrier: true,
-      captureWslLoginShellOutput: true
+      terminationBarrier: true
     }
     let rebaseRef: string | null = null
     try {

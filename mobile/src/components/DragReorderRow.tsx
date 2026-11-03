@@ -3,25 +3,37 @@ import { StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { GripVertical } from 'lucide-react-native'
 import Animated, {
+  Easing,
+  interpolateColor,
   runOnJS,
   useAnimatedStyle,
   useAnimatedReaction,
   useSharedValue,
   withSpring,
+  withTiming,
   type DerivedValue,
   type SharedValue
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerMediumImpact } from '../platform/haptics'
 import {
   type DragReorderLayout,
   orderedKeysFromDragReorderPositions,
   type DragReorderPositions
 } from './drag-reorder-positions'
-const ROW_SPRING = { damping: 28, stiffness: 350 }
+// Critically damped: Reanimated 4's default mass of 4 made the old damping/stiffness pair wobble.
+const ROW_SPRING = { dampingRatio: 1, duration: 250 } as const
 const LONG_PRESS_ACTIVATION_MS = 200
+const LIFT_MS = 150
+
+// Built per call: a module-level easing would run before a test's Reanimated mock can serve it.
+function liftTo(value: 0 | 1) {
+  'worklet'
+  return withTiming(value, { duration: LIFT_MS, easing: Easing.out(Easing.cubic) })
+}
 
 export type DragSharedState = {
   layout: DerivedValue<DragReorderLayout & { measurementKey: string; ready: boolean }>
@@ -69,6 +81,7 @@ export function DragReorderRow({
   renderContent: (handle: ReactNode) => ReactNode
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     layout,
     initialPositions,
@@ -82,8 +95,11 @@ export function DragReorderRow({
   } = shared
   // Read on the JS thread: capturing the live `colors` in a worklet would freeze it.
   const activeBackground = colors.bgRaised
-  const restingBackground = colors.bgPanel
+  // Settings rows rest on their ListGroup's surface.
+  const restingBackground = colors.sheetGroup
 
+  // 0 rests, 1 is picked up: the lift eases in and out instead of snapping.
+  const lift = useSharedValue(0)
   const pan = Gesture.Pan()
     .enabled(ready && movable && !disabled)
     .activateAfterLongPress(LONG_PRESS_ACTIVATION_MS)
@@ -96,6 +112,7 @@ export function DragReorderRow({
       dragPointerAbsY.value = event.absoluteY
       activeTop.value = dragStartTop.value
       activeKey.value = rowKey
+      lift.value = liftTo(1)
       runOnJS(onDragActiveChange)(true)
       runOnJS(triggerMediumImpact)()
     })
@@ -112,6 +129,7 @@ export function DragReorderRow({
         return
       }
       activeKey.value = null
+      lift.value = liftTo(0)
       if (success) {
         const orderedKeys = orderedKeysFromDragReorderPositions(positions.value)
         runOnJS(onCommit)(orderedKeys, rowKey, true)
@@ -140,28 +158,24 @@ export function DragReorderRow({
     },
     [ready, layout, measurementKey, activeKey, rowKey, activeTop, rowTop]
   )
+  // Rows sit at the top and move by transform, so a drag never lays the list out per frame.
   const rowStyle = useAnimatedStyle(() => {
     const placed = ready && layout.value.ready && layout.value.measurementKey === measurementKey
-    const placement = { position: placed ? ('absolute' as const) : ('relative' as const) }
-    if (activeKey.value === rowKey) {
-      return {
-        ...placement,
-        top: placed ? activeTop.value : 0,
-        zIndex: 2,
-        elevation: presentation === 'settings' ? 4 : 0,
-        shadowOpacity: presentation === 'settings' ? 0.3 : 0,
-        backgroundColor: presentation === 'settings' ? activeBackground : undefined,
-        transform: [{ scale: presentation === 'settings' ? 1.02 : 1 }]
-      }
-    }
+    const active = activeKey.value === rowKey
+    const raised = presentation === 'settings' ? lift.value : 0
+    const y = !placed ? 0 : active ? activeTop.value : rowTop.value
     return {
-      ...placement,
-      top: placed ? rowTop.value : 0,
-      zIndex: 0,
-      elevation: 0,
-      shadowOpacity: 0,
-      backgroundColor: presentation === 'settings' ? restingBackground : undefined,
-      transform: [{ scale: 1 }]
+      position: placed ? ('absolute' as const) : ('relative' as const),
+      top: 0,
+      // Stay above neighbours while the lift eases off.
+      zIndex: active || lift.value > 0 ? 2 : 0,
+      elevation: 4 * raised,
+      shadowOpacity: 0.3 * raised,
+      backgroundColor:
+        presentation === 'settings'
+          ? interpolateColor(lift.value, [0, 1], [restingBackground, activeBackground])
+          : undefined,
+      transform: [{ translateY: y }, { scale: 1 + 0.02 * raised }]
     }
   }, [
     layout,
@@ -172,6 +186,7 @@ export function DragReorderRow({
     measurementKey,
     presentation,
     rowTop,
+    lift,
     activeBackground,
     restingBackground
   ])
@@ -183,11 +198,14 @@ export function DragReorderRow({
         accessible
         accessibilityRole="button"
         accessibilityState={{ disabled }}
-        accessibilityLabel="Drag to reorder"
-        accessibilityHint="Use the move up and move down actions to reorder without dragging"
+        accessibilityLabel={t('components.dragReorderRow.dragToReorder', 'Drag to reorder')}
+        accessibilityHint={t(
+          'components.dragReorderRow.reorderHint',
+          'Use the move up and move down actions to reorder without dragging'
+        )}
         accessibilityActions={[
-          { name: 'moveUp', label: 'Move up' },
-          { name: 'moveDown', label: 'Move down' }
+          { name: 'moveUp', label: t('components.dragReorderRow.moveUp', 'Move up') },
+          { name: 'moveDown', label: t('components.dragReorderRow.moveDown', 'Move down') }
         ]}
         onAccessibilityAction={(event) => {
           if (disabled) {
