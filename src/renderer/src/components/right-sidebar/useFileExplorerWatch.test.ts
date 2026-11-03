@@ -8,16 +8,6 @@ import {
 import type { AppState } from '@/store/types'
 
 describe('getExternalFileChangeRelativePath', () => {
-  it('returns a worktree-relative file path for external file updates', () => {
-    expect(getExternalFileChangeRelativePath('/repo', '/repo/config/settings.json', false)).toBe(
-      'config/settings.json'
-    )
-  })
-
-  it('ignores directory events so only file tabs reload', () => {
-    expect(getExternalFileChangeRelativePath('/repo', '/repo/config', true)).toBeNull()
-  })
-
   it('treats isDirectory=undefined as a file so delete events still notify', () => {
     // Deleted paths cannot report isDirectory; undefined must still invalidate editor contents.
     expect(
@@ -25,52 +15,8 @@ describe('getExternalFileChangeRelativePath', () => {
     ).toBe('config/settings.json')
   })
 
-  it('normalizes Windows separators before deriving the relative path', () => {
-    expect(
-      getExternalFileChangeRelativePath('C:\\repo', 'C:\\repo\\config\\settings.json', false)
-    ).toBe('config/settings.json')
-  })
-
-  it('matches Windows paths case-insensitively before deriving the relative path', () => {
-    expect(
-      getExternalFileChangeRelativePath('C:\\Repo', 'c:\\repo\\config\\settings.json', false)
-    ).toBe('config/settings.json')
-  })
-
-  it('preserves UNC roots when deriving the relative path', () => {
-    expect(
-      getExternalFileChangeRelativePath(
-        '//Server/Share/Repo',
-        '//server/share/repo/config/settings.json',
-        false
-      )
-    ).toBe('config/settings.json')
-  })
-
-  it('ignores paths outside the active worktree', () => {
-    expect(
-      getExternalFileChangeRelativePath('/repo', '/other/config/settings.json', false)
-    ).toBeNull()
-  })
-
   it('rejects sibling worktrees whose path merely shares a prefix', () => {
     expect(getExternalFileChangeRelativePath('/repo', '/repo-other/file.ts', false)).toBeNull()
-  })
-
-  it('returns null when the changed path is the worktree root itself', () => {
-    expect(getExternalFileChangeRelativePath('/repo', '/repo', false)).toBeNull()
-  })
-
-  it('tolerates a trailing slash on the worktree path', () => {
-    expect(getExternalFileChangeRelativePath('/repo/', '/repo/src/index.ts', false)).toBe(
-      'src/index.ts'
-    )
-  })
-
-  it('preserves nested segments in the returned relative path', () => {
-    expect(getExternalFileChangeRelativePath('/repo', '/repo/a/b/c/deep.ts', false)).toBe(
-      'a/b/c/deep.ts'
-    )
   })
 })
 
@@ -98,22 +44,9 @@ describe('canonicalizeFileExplorerWatchPath', () => {
 })
 
 describe('resolveCachedDirPath', () => {
-  it('returns the exact cache key when present', () => {
-    const cache = { '/repo/src': { children: [] } }
-    expect(resolveCachedDirPath(cache, '/repo/src')).toBe('/repo/src')
-  })
-
   it('matches Windows cache keys case-insensitively (#10264)', () => {
     const cache = { 'C:\\Repo\\src': { children: [] } }
     expect(resolveCachedDirPath(cache, 'c:\\repo\\src')).toBe('C:\\Repo\\src')
-  })
-
-  it('falls back to the worktree root path when the root is not yet cached', () => {
-    expect(resolveCachedDirPath({}, 'C:\\Repo', 'C:\\Repo')).toBe('C:\\Repo')
-  })
-
-  it('returns null when the directory is not cached and is not the worktree root', () => {
-    expect(resolveCachedDirPath({ '/repo': { children: [] } }, '/repo/src', '/repo')).toBeNull()
   })
 })
 

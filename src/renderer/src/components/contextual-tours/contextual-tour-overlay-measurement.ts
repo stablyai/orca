@@ -1,5 +1,9 @@
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
-import type { ContextualTour, ContextualTourId } from '../../../../shared/contextual-tours'
+import type {
+  ContextualTour,
+  ContextualTourId,
+  ContextualTourStepAction
+} from '../../../../shared/contextual-tours'
 import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
 import { useAppStore } from '@/store'
 import {
@@ -11,6 +15,7 @@ import {
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
+import { getLocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 import { translate } from '@/i18n/i18n'
 
 export type ContextualTourMeasurementAction =
@@ -27,46 +32,6 @@ export type ContextualTourOverlayMeasurementResult =
       renderState: ActiveTourRenderState
       telemetryTotalSteps: number
     }
-
-// Key translated thunks by stable step IDs so insertions cannot shift copy and language resolves at render time.
-const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => string }> = {
-  'automations-intro': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
-        'What is an automation?'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
-        'Automations run agent work on a schedule. Add an automation by clicking this button.'
-      )
-  },
-  'client-hosted-browser-intro': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.title',
-        'This page renders on your desktop'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.body',
-        'Remote browser tabs now render on this device. Network traffic still goes through the remote host.'
-      )
-  },
-  'automations-results': {
-    title: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
-        'Find the results'
-      ),
-    body: () =>
-      translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
-        'Runs show when automations ran, what happened, and where to inspect their output.'
-      )
-  }
-}
 
 export function getContextualTourDisplayProgress(args: {
   tour: ContextualTour
@@ -128,13 +93,6 @@ export function measureContextualTourOverlayRenderState(args: {
   )
   const activeStep = args.tour.steps[args.activeStepIndex]
   const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
-  const localizedCopy = activeStep?.id ? LOCALIZED_STEP_COPY[activeStep.id] : undefined
-  const localizedTitle = localizedCopy ? localizedCopy.title() : activeStep?.title
-  const localizedBody = localizedCopy
-    ? localizedCopy.body()
-    : activeStep
-      ? getContextualTourStepCopy(activeStep)
-      : undefined
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
     visibleStepIndexes,
@@ -161,6 +119,7 @@ export function measureContextualTourOverlayRenderState(args: {
     return { kind: 'cancel' }
   }
 
+  const localizedCopy = getLocalizedContextualTourStepCopy(activeStep.id)
   const sidebarAlreadyVisible =
     activeStep.primaryAction?.kind === 'show-worktrees' && args.sidebarOpen
   const primaryAction = sidebarAlreadyVisible
@@ -171,8 +130,10 @@ export function measureContextualTourOverlayRenderState(args: {
           'Next'
         )
       } as const)
-    : activeStep.primaryAction
-  const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
+    : withLocalizedLabel(activeStep.primaryAction, localizedCopy?.primaryActionLabel)
+  const secondaryAction = sidebarAlreadyVisible
+    ? undefined
+    : withLocalizedLabel(activeStep.secondaryAction, localizedCopy?.secondaryActionLabel)
 
   return {
     kind: 'render',
@@ -181,9 +142,9 @@ export function measureContextualTourOverlayRenderState(args: {
       rect: target.rect,
       targetElement: target.element,
       progress,
-      title: localizedTitle ?? activeStep.title,
+      title: localizedCopy?.title ?? activeStep.title,
       body: formatContextualTourStepCopy(
-        localizedBody ?? getContextualTourStepCopy(activeStep),
+        localizedCopy?.body ?? getContextualTourStepCopy(activeStep),
         args.keybindings
       ),
       control: activeStep.control,
@@ -267,6 +228,13 @@ export function getContextualTourCleanupOutcome(
   return useAppStore.getState().lastCompletedContextualTourId === activeTourId
     ? 'completed'
     : 'cancelled'
+}
+
+function withLocalizedLabel(
+  action: ContextualTourStepAction | undefined,
+  label: string | undefined
+): ContextualTourStepAction | undefined {
+  return action && label ? { ...action, label } : action
 }
 
 function formatContextualTourStepCopy(

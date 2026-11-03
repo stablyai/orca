@@ -3,12 +3,12 @@ import {
   mergeMatchRanges,
   normalizePaletteText,
   type MatchRange
-} from './palette-match/normalized-text'
+} from '../../../shared/palette-match/normalized-text'
 import {
   createPaletteFallbackRank,
   type PaletteDocumentRank
-} from './palette-match/palette-document'
-import type { PaletteQueryToken } from './palette-match/palette-query'
+} from '../../../shared/palette-match/palette-document'
+import type { PaletteQueryToken } from '../../../shared/palette-match/palette-query'
 import type { AgentMetadata } from './workspace-tab-agent-metadata'
 
 /** Keep agent-text fallback last and outside token coverage; it preserves snippet search until structured evidence/performance contracts exist. */

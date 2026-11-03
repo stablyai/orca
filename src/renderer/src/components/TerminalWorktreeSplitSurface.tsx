@@ -11,6 +11,7 @@ import {
 } from './browser-pane/host-guest/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
+import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
 import type { WorkspaceGridViewCellRect } from '@/lib/workspace-grid-view-cell-rects'
 import { WorkspaceGridViewCellHeader } from './workspace-grid-view/WorkspaceGridViewCellHeader'
 import {
@@ -30,6 +31,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   isFocused = isVisible,
   gridViewCellRect = null,
   shouldMeasureHiddenWorktree,
+  prewarmStage,
   shouldColdParkTerminalPanes,
   isForceParked,
   activityTerminalPortals,
@@ -46,6 +48,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   /** Set while this workspace is one cell of the grid view. */
   gridViewCellRect?: WorkspaceGridViewCellRect | null
   shouldMeasureHiddenWorktree: boolean
+  /** Hover intent: mount, then lay out, then render the revealable terminals while hidden. */
+  prewarmStage: TerminalPrewarmStage | null
   shouldColdParkTerminalPanes: boolean
   isForceParked: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
@@ -55,7 +59,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
-    shouldMeasureHiddenWorktree,
+    // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
+    shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',
     needsBrowserGuestPaint
   })
 
@@ -78,6 +83,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       data-workspace-grid-view-cell={gridViewCell ? worktreeId : undefined}
       inert={!isVisible}
       aria-hidden={!isVisible}
+      data-workspace-surface-id={worktreeId}
       onPointerDownCapture={
         gridViewCell && !isFocused
           ? (event) => focusWorkspaceGridViewCellOnPointerDown(event.target, worktreeId)
@@ -111,6 +117,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         isVisible={isVisible}
         isFocused={isFocused}
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+        hiddenTerminalPrewarm={prewarmStage === 'mount' ? null : prewarmStage}
         shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
         isForceParked={isForceParked}
         activityTerminalPortals={activityTerminalPortals}

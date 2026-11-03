@@ -1,7 +1,7 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session-record.test-fixture'
+} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 /** Placement must discard structured sessions created before a throw, because callers receive no placement to tear down. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -88,7 +88,7 @@ describe('a worker launch that throws after its session exists', () => {
         taskId: 'task_1',
         params: WorkerStartParams.parse({ from: 'term_coord', task: 'task_1' }),
         requestedWorktree: 'id:wt_existing',
-        creationWorktree: undefined,
+        creationTarget: undefined,
         resolvedWorktree: { id: 'wt_existing', repoId: 'repo_1' },
         mode: STRUCTURED,
         agent: 'claude',

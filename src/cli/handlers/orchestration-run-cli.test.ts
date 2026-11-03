@@ -18,6 +18,7 @@ import {
   formatRunRemovedWorkLine
 } from './orchestration/removed-work-format'
 import { okFixture, queueFixtures } from '../test-fixtures'
+import { ORCHESTRATION_RETAINED_RUN_BINDINGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -35,6 +36,9 @@ describe('lightweight Run CLI handlers', () => {
     queueFixtures(
       callMock,
       okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
+      okFixture('req_status', {
+        capabilities: [ORCHESTRATION_RETAINED_RUN_BINDINGS_RUNTIME_CAPABILITY]
+      }),
       okFixture('req_run', {
         run: { id: 'run_1', objective: 'Coordinate work', consumer_generation: 1 }
       })
@@ -55,7 +59,7 @@ describe('lightweight Run CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'terminal.resolveIdentity', {
       terminal: 'term_coord'
     })
-    expect(callMock).toHaveBeenCalledTimes(2)
+    expect(callMock).toHaveBeenCalledTimes(3)
   })
 
   it('reuses the same explicit binding path for run-use and run-current', async () => {
@@ -84,6 +88,26 @@ describe('lightweight Run CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'orchestration.runCurrent', {
       from: 'term_coord'
     })
+  })
+
+  it('prints the next step run-current returns for a caller that also works a Dispatch', async () => {
+    callMock.mockResolvedValue({
+      result: { run: { id: 'run_1', objective: 'Work' }, next: 'You work Dispatch ctx_1.' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await ORCHESTRATION_HANDLERS['orchestration run-current']({
+      flags: new Map([['from', 'term_coord']]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(JSON.parse(String(log.mock.calls[0][0])).result).toMatchObject({
+      runId: 'run_1',
+      next: 'You work Dispatch ctx_1.'
+    })
+    log.mockRestore()
   })
 
   it('passes Run pagination flags to the runtime', async () => {
@@ -116,7 +140,7 @@ describe('lightweight Run CLI handlers', () => {
     } as never)
 
     expect(callMock).toHaveBeenCalledWith('orchestration.runList', {
-      limit: 100,
+      limit: 10,
       cursor: undefined
     })
   })

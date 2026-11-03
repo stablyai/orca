@@ -11,7 +11,6 @@ import {
   runTerminalViewportFitPass
 } from './mobile-terminal-viewport-resubscribe'
 import { updateTerminalCwdFromStreamEvent } from './mobile-session-route-helpers'
-import type { MobileDisplayMode } from './mobile-session-route-types'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
 
 const snapshotByteBudget = mobileTerminalSnapshotByteBudget()
@@ -24,8 +23,7 @@ export function useMobileSessionTerminalSubscription(
     clientId,
     setTerminalModes,
     terminalCwdRef,
-    viewportRef,
-    viewportMeasuredRef,
+    getTerminalPaneViewport,
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
@@ -36,7 +34,6 @@ export function useMobileSessionTerminalSubscription(
     activeHandleRef,
     subscribeSeqRef,
     layoutSeqRef,
-    terminalFrameRef,
     scheduleDelayedAction,
     showToast,
     markNativeChatInputLeaseReady,
@@ -48,6 +45,8 @@ export function useMobileSessionTerminalSubscription(
   } = scope
   const subscribeToTerminal = useCallback(
     (handle: string): boolean => {
+      const { viewportRef, viewportMeasuredRef, terminalFrameRef } =
+        getTerminalPaneViewport?.(handle) ?? scope
       const diagnostics = terminalDiagnosticsRef.current
       const logSkippedGate = (reason: string) =>
         diagnostics.streamSkipped(handle, reason, handle === activeHandleRef.current)
@@ -123,6 +122,16 @@ export function useMobileSessionTerminalSubscription(
           signalTerminalInventoryRecovery()
         }
       })
+
+      const adoptDisplayMode = (displayMode: unknown) => {
+        if (displayMode !== 'auto' && displayMode !== 'phone' && displayMode !== 'desktop') {
+          return
+        }
+        // Reuse mode Map on no-op frames so every stream pass cannot rerender the route.
+        setTerminalModes((prev) =>
+          prev.get(handle) === displayMode ? prev : new Map(prev).set(handle, displayMode)
+        )
+      }
 
       // Send viewport in subscribe so host fitting precedes snapshot serialization without a focus/fit race.
       const stopStream = subscribeMobileTerminalSafely(
@@ -202,15 +211,10 @@ export function useMobileSessionTerminalSubscription(
               return
             }
             const frame = terminalFrameRef.current
-            ref.init({ cols, rows, initialData, preserveScroll: true, oscLinks, frame })
+            const kittyFlags = data.kittyKeyboardFlags
+            ref.init({ cols, rows, initialData, preserveScroll: true, oscLinks, kittyFlags, frame })
             initializedHandlesRef.current.add(handle)
-            if (data.displayMode) {
-              const displayMode = data.displayMode as MobileDisplayMode
-              // Reuse mode Map on no-op frames so every stream pass cannot rerender the route.
-              setTerminalModes((prev) =>
-                prev.get(handle) === displayMode ? prev : new Map(prev).set(handle, displayMode)
-              )
-            }
+            adoptDisplayMode(data.displayMode)
             // Refit after DOM settles because init can see transient scrollWidth.
             lifetime.scheduleSettledFit(ref)
             // Measure viewport-less subscriptions after init, then retry within the bounded per-handle budget.
@@ -274,18 +278,13 @@ export function useMobileSessionTerminalSubscription(
                 initialData: serialized,
                 preserveScroll: true,
                 oscLinks,
+                kittyFlags: data.kittyKeyboardFlags,
                 frame: terminalFrameRef.current
               })
             } else {
               getTerminalRef(handle)?.resize(cols, rows, terminalFrameRef.current)
             }
-            if (data.displayMode) {
-              const displayMode = data.displayMode as MobileDisplayMode
-              // Reuse mode Map on no-op frames so every stream pass cannot rerender the route.
-              setTerminalModes((prev) =>
-                prev.get(handle) === displayMode ? prev : new Map(prev).set(handle, displayMode)
-              )
-            }
+            adoptDisplayMode(data.displayMode)
             lifetime.scheduleSettledFit(getTerminalRef(handle))
           }
         },

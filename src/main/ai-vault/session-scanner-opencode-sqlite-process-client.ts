@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { spawnProcess } from '@orca/process-host'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import type { WorkerRequestTransport } from '../lazy-worker-thread-host'
+import type { WorkerRequestTransport } from '../worker-threads/worker-thread-transport'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import {
   createOpenCodeSqliteLineDecoder,
@@ -19,6 +19,8 @@ export type OpenCodeSqliteProcessOptions = {
   requestTimeoutMs?: number
   idleTeardownMs?: number
   beforeSpawn?: (signal: AbortSignal) => Promise<void>
+  /** The child exited without being retired, e.g. its WSL distro stopped under it. */
+  onUnexpectedExit?: () => void
 }
 
 function createProcessTransport(options: OpenCodeSqliteProcessOptions): WorkerRequestTransport {
@@ -68,6 +70,7 @@ function createProcessTransport(options: OpenCodeSqliteProcessOptions): WorkerRe
   child.stderr.on('error', fault)
   child.on('exit', (code) => {
     if (!retired) {
+      options.onUnexpectedExit?.()
       events.emit('exit', code ?? 1)
     }
   })

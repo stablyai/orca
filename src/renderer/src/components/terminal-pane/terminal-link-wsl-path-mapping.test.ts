@@ -67,7 +67,8 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(statMock).toHaveBeenCalledWith({
       filePath: mappedPath,
       connectionId: undefined,
-      access: { kind: 'user-file' }
+      access: { kind: 'user-file' },
+      wakeWslDistro: true
     })
     expect(openFileMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: mappedPath }), {
       forceContentReload: true

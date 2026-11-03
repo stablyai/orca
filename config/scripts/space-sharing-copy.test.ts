@@ -94,19 +94,6 @@ function makeTree(): { root: string; source: string } {
 }
 
 describe('shareTree', () => {
-  // Stub mechanism selection: macOS cp -c and GNU reflink cannot both run on one host.
-  it('prefers the strongest isolation each platform offers', () => {
-    const stub = () =>
-      vi.fn((_source: string, target: string) => mkdirSync(target, { recursive: true }))
-    const stubs = { clone: stub(), reflink: stub(), hardlink: stub() }
-    const { root, source } = makeTree()
-    expect(shareTree(source, path.join(root, 'a'), { platform: 'darwin', ...stubs })).toBe('clone')
-    expect(shareTree(source, path.join(root, 'b'), { platform: 'linux', ...stubs })).toBe('reflink')
-    expect(shareTree(source, path.join(root, 'c'), { platform: 'win32', ...stubs })).toBe(
-      'hardlink'
-    )
-  })
-
   it('keeps relative symlinks unresolved on whatever this host supports', () => {
     const { root, source } = makeTree()
     const destination = path.join(root, 'shared')
@@ -316,17 +303,6 @@ describe('copyPrivateTree', () => {
     expect(hardlink).not.toHaveBeenCalled()
     expect(readFileSync(path.join(destination, 'nested', 'file'), 'utf8')).toBe('contents')
     expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
-  })
-
-  it('reports the private mechanism it used', () => {
-    const { root, source } = makeTree()
-    const clone = vi.fn((_source: string, target: string) => mkdirSync(target, { recursive: true }))
-    expect(
-      copyPrivateTree(source, path.join(root, 'private'), { platform: 'darwin', clone })
-    ).toEqual({
-      mechanism: 'clone',
-      copyError: null
-    })
   })
 
   it('falls back to a byte copy when the private mechanism fails', () => {

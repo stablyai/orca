@@ -43,14 +43,6 @@ async function expandConnectionTest(): Promise<void> {
   )
 }
 
-it('keeps the target form collapsed by default', async () => {
-  await act(async () => root.render(<LocalNetworkConnectionTest />))
-
-  expect(container.textContent).toContain('Test connection')
-  expect(container.textContent).toContain('No successful test saved.')
-  expect(container.querySelector('form')).toBeNull()
-})
-
 it('saves and displays the last successful target-specific test', async () => {
   testConnectionMock.mockResolvedValue({
     ok: true,

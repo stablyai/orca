@@ -284,6 +284,54 @@ test('a killed managed orcad comes back with its terminal, and starts fresh afte
   }
 })
 
+// Slim images ship no ps, and after a reboot the slot's recorded PID often names a new process (#34149).
+test('after a reboot on a host without ps, a recycled server PID does not keep the server down', async (// oxlint-disable-next-line no-empty-pattern -- This test owns its isolated app and host.
+{}, testInfo) => {
+  test.skip(
+    HOST !== 'docker' || !TEMPLATE_SOURCE,
+    `Set ${ORCAD_CONVERT_HOST_ENV}=docker and ORCA_E2E_ORCAD_CONVERT_TEMPLATE`
+  )
+  // Deploys a real server, then reconnects after a simulated reboot.
+  test.setTimeout(10 * 60_000)
+  const target = startDockerSshHostTarget(testInfo)
+  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  let app: ElectronApplication | null = null
+  try {
+    const launched = await session.launch()
+    app = launched.app
+    const page = launched.page
+    await waitForSessionReady(page)
+    const { targetId, environmentId } = await connectManagedHost(page, target)
+    await page.evaluate((targetId) => window.api.ssh.disconnect({ targetId }), targetId)
+
+    execDockerSshHostTargetCommand(target, "pkill -KILL -f '/root/[.]orca-remote/' || true")
+    await expect.poll(() => runningOrcadPids(target), { timeout: 60_000 }).toEqual([])
+    const marker = String(800_000 + Math.floor(Math.random() * 100_000))
+    // The stale pid file now names a live process of the same user that is not orcad.
+    execDockerSshHostTargetCommand(
+      target,
+      `setsid sleep ${marker} </dev/null >/dev/null 2>&1 & ` +
+        'for f in /root/.orca-remote/orcad-*/.orcad-pid; do echo $! > "$f"; done; ' +
+        'mv "$(command -v ps)" /usr/local/ps-hidden'
+    )
+    await expect.poll(() => processAlive(target, marker), { timeout: 10_000 }).toBe(true)
+
+    const connected = JSON.parse(await reconnect(page, targetId))
+    expect(connected).toMatchObject({ kind: 'managed', environmentId })
+    expect(connected).not.toHaveProperty('serving')
+    expect(await callEnvironment(page, environmentId, 'terminal.list', {})).toMatchObject({
+      ok: true
+    })
+    expect(processAlive(target, marker)).toBe(true)
+  } finally {
+    if (app) {
+      await session.close(app)
+    }
+    await session.dispose()
+    cleanupDockerSshHostTarget(target)
+  }
+})
+
 test('a new desktop on the same build starts a server that was killed with its daemon', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
   test.skip(

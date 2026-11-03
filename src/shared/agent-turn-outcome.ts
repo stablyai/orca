@@ -1,4 +1,4 @@
-import type { AgentJournalTurnLifecycleState } from './agent-session-journal-types'
+import type { AgentJournalTurnLifecycleState } from './agent-session/journal/agent-session-journal-types'
 
 /** Keep recorded provider/Stop/supersede verdicts separate from host lifecycle state. cancellation is requested, failure is a provider fault, superseded names no sender. Derive interruption/unconfirmed on read, never journal them. Absent/newer arms mean unknown, never success. */
 export const AGENT_JOURNAL_TURN_OUTCOMES = [

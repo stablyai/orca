@@ -1,3 +1,4 @@
+import type { WorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
 import type { DispatchPreambleSendOptions } from './preamble'
 
 export type WorktreeDrift = {
@@ -33,13 +34,12 @@ export type CoordinatorRuntime = {
   getTerminalPaneKey?(handle: string): string | null
   // Omitted by lightweight fakes; absence uses the fail-closed default.
   getNestedWorkerMaxDepth?(): number
-  // Omitted by lightweight fakes; absence keeps the default heartbeat interval.
-  getOrchestrationHeartbeatMinutes?(): number | null
   // Automatic dispatch must persist the same authenticated pane/process authority as manual dispatch.
   getOrchestrationDispatchAuthority?(handle: string): {
     paneKey: string | null
     processIncarnation: string | null
     launchTokenHash: string | null
+    hostScope?: WorkerTerminalHostScope
   } | null
   // The worker's native/WSL pane determines its packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-dev' | 'orca-ide'

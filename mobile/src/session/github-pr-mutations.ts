@@ -1,6 +1,7 @@
 import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
 import {
   githubPrAutoMergeSet,
+  githubPrBodySet,
   githubPrChecksRerun,
   githubPrIssueCommentAdd,
   githubPrIssueCommentDelete,
@@ -24,6 +25,7 @@ import {
   type GitHubPrRepoSlug
 } from './github-pr-repo-slug'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { translate } from '../i18n/mobile-i18n'
 
 export type { GitHubPrMutationOutcome } from './github-pr-mutation-outcome'
 
@@ -61,7 +63,22 @@ export function fetchUpdatePRTitle(
           prRepo: args.prRepo
         })
       ),
-    'Failed to update title.'
+    translate('session.githubPrMutations.titleUpdateFailed', 'Failed to update title.')
+  )
+}
+
+export function fetchUpdatePRBody(
+  client: RpcOperationSender,
+  worktreeId: string,
+  args: { prNumber: number; body: string; prRepo?: GitHubPrRepoSlug | null }
+): Promise<GitHubPrMutationOutcome> {
+  const params = { prNumber: args.prNumber, updates: { body: args.body } }
+  const method = githubPrBodySet.operation.method
+  return settleGithubPrMutation(githubPrBodySet, () =>
+    githubPrBodySet.request(
+      client,
+      githubPrRequestParams(method, worktreeId, params, { prRepo: args.prRepo })
+    )
   )
 }
 
@@ -245,7 +262,10 @@ export function fetchResolveReviewThread(
           { prRepo: args.prRepo }
         )
       ),
-    'Failed to update review thread.'
+    translate(
+      'session.githubPrMutations.reviewThreadUpdateFailed',
+      'Failed to update review thread.'
+    )
   )
 }
 

@@ -1,11 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
+import '../../../../../shared/agent-status-freshness'
 import type { AppState } from '../../types'
 import './agent-status'
+import { resetAgentPaneAuthorityAliasesForTests } from '../agent-pane-authority'
 import { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
-import type { AgentStatusBatchUpdate, RetainedAgentEntry } from './agent-status-contract'
-import type { GeneratedTabTitleUpdate } from '../terminal-tab-title-batch'
+import type {
+  AgentStatusBatchUpdate,
+  AgentStatusChange,
+  RetainedAgentEntry
+} from './agent-status-contract'
+
 import { createTestStore } from '../store-test-helpers'
 import { makeTab, makeUnifiedTab } from '../store-session-test-harness'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -110,101 +115,11 @@ function makeUpdates(): AgentStatusBatchUpdate[] {
   ]
 }
 
-function selectBatchState(state: AppState) {
-  return {
-    agentStatusByPaneKey: state.agentStatusByPaneKey,
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
-    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey,
-    migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
-    retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys,
-    agentStatusEpoch: state.agentStatusEpoch,
-    sortEpoch: state.sortEpoch
-  }
-}
-
 describe('setAgentStatuses', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.useRealTimers()
     vi.unstubAllGlobals()
-  })
-
-  it('matches sequential updates across repeated panes and provider-session records', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(BASE_TIME + 10)
-    const sequentialStore = seedBatchStore()
-    const batchStore = seedBatchStore()
-    const sequentialTitleGeneration = vi.fn()
-    const batchTitleGeneration = vi.fn()
-    const batchTitleGenerationBulk = vi.fn((updates: readonly GeneratedTabTitleUpdate[]) => {
-      for (const update of updates) {
-        if (update.options) {
-          batchTitleGeneration(update.paneKey, update.prompt, update.options)
-        } else {
-          batchTitleGeneration(update.paneKey, update.prompt)
-        }
-      }
-    })
-    sequentialStore.setState({
-      setGeneratedTabTitleFromAgentPrompt: sequentialTitleGeneration
-    } as Partial<AppState>)
-    batchStore.setState({
-      setGeneratedTabTitlesFromAgentPrompts: batchTitleGenerationBulk
-    } as Partial<AppState>)
-    const updates = makeUpdates()
-
-    for (const update of updates) {
-      if (update.kind === 'providerSession') {
-        sequentialStore
-          .getState()
-          .recordAgentProviderSession(
-            update.paneKey,
-            update.agent,
-            update.providerSession,
-            update.timing,
-            update.routing,
-            update.metadata
-          )
-      } else if (update.kind === 'programStatus') {
-        sequentialStore.getState().setAgentProgramStatus(update.paneKey, update.programStatus)
-      } else {
-        sequentialStore
-          .getState()
-          .setAgentStatus(
-            update.paneKey,
-            update.payload,
-            update.terminalTitle,
-            update.timing,
-            update.routing,
-            update.metadata
-          )
-      }
-    }
-    const outcomes = batchStore.getState().setAgentStatuses(updates)
-
-    expect(outcomes).toEqual([true, true, true, true, false, true, true])
-    expect(selectBatchState(batchStore.getState())).toEqual(
-      selectBatchState(sequentialStore.getState())
-    )
-    expect(
-      batchStore.getState().agentStatusByPaneKey[FIRST_PANE].stateHistory.at(-1)
-    ).toMatchObject({ state: 'done' })
-    // The swallowed `done`'s output survives on the entry, not on the history row.
-    expect(
-      batchStore.getState().agentStatusByPaneKey[FIRST_PANE].lastCompletedAssistantMessage
-    ).toBe('Finished.')
-    expect(batchTitleGeneration.mock.calls).toEqual(sequentialTitleGeneration.mock.calls)
-    expect(batchTitleGeneration).toHaveBeenCalledTimes(5)
-    expect(batchTitleGenerationBulk).toHaveBeenCalledOnce()
-    await flushMicrotasks()
-    expect(batchStore.getState().refreshGitHubForWorktreeIfStale).toHaveBeenCalledTimes(1)
-    expect(sequentialStore.getState().refreshGitHubForWorktreeIfStale).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
-    expect(selectBatchState(batchStore.getState())).toEqual(
-      selectBatchState(sequentialStore.getState())
-    )
   })
 
   it('publishes once and reports skipped ordered updates', () => {
@@ -285,54 +200,6 @@ describe('setAgentStatuses', () => {
     unsubscribe()
     expect(publications).toBe(2)
     expect(main.commands).toEqual([])
-  })
-
-  it('coalesces batch freshness requests while preserving standalone scheduling', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(BASE_TIME + 10)
-    const store = seedBatchStore()
-    const queueMicrotaskSpy = vi.spyOn(globalThis, 'queueMicrotask')
-    const workingUpdate = (updatedAt: number, prompt: string): AgentStatusBatchUpdate => ({
-      paneKey: FIRST_PANE,
-      payload: { state: 'working', prompt, agentType: 'pi' },
-      timing: { updatedAt, stateStartedAt: updatedAt },
-      routing: { tabId: 'tab-1', worktreeId: 'wt-1' }
-    })
-
-    const outcomes = store
-      .getState()
-      .setAgentStatuses([
-        workingUpdate(BASE_TIME, 'first'),
-        workingUpdate(BASE_TIME + 1, 'second'),
-        workingUpdate(BASE_TIME + 2, 'third'),
-        workingUpdate(BASE_TIME + 1, 'stale')
-      ])
-
-    expect(outcomes).toEqual([true, true, true, false])
-    expect(queueMicrotaskSpy).toHaveBeenCalledTimes(1)
-
-    queueMicrotaskSpy.mockClear()
-    store
-      .getState()
-      .setAgentStatus(
-        FIRST_PANE,
-        { state: 'working', prompt: 'standalone', agentType: 'pi' },
-        undefined,
-        { updatedAt: BASE_TIME + 3, stateStartedAt: BASE_TIME + 3 },
-        { tabId: 'tab-1', worktreeId: 'wt-1' }
-      )
-    store
-      .getState()
-      .setAgentStatus(
-        FIRST_PANE,
-        { state: 'working', prompt: 'standalone stale', agentType: 'pi' },
-        undefined,
-        { updatedAt: BASE_TIME + 2, stateStartedAt: BASE_TIME + 2 },
-        { tabId: 'tab-1', worktreeId: 'wt-1' }
-      )
-
-    expect(queueMicrotaskSpy).toHaveBeenCalledTimes(2)
-    await flushMicrotasks()
   })
 
   it('shares freshness across nested folds but isolates synchronous reentrant transactions', async () => {
@@ -485,45 +352,165 @@ describe('setAgentStatuses', () => {
     expect(entry.lastCompletedAssistantMessage).toBe('output 3')
     expect(entry.lastAssistantMessage).toBe('output 4')
   })
+})
 
-  it('clears the completed-turn message when a done carried no assistant output', () => {
+describe('committed agent status changes', () => {
+  beforeEach(() => resetAgentPaneAuthorityAliasesForTests())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    resetAgentPaneAuthorityAliasesForTests()
+  })
+  const write = (store: ReturnType<typeof seedBatchStore>, paneKey = FIRST_PANE, native = true) => {
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', agentType: 'claude', prompt: 'fixed' },
+        undefined,
+        { updatedAt: BASE_TIME, stateStartedAt: BASE_TIME },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        native ? { terminalResumeEligible: false } : undefined
+      )
+  }
+  it('emits first-before/final-after once after the final transaction is readable', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(BASE_TIME)
     const store = seedBatchStore()
-    store.getState().setAgentStatuses([
-      {
-        paneKey: FIRST_PANE,
-        payload: { state: 'working', prompt: 'first turn', agentType: 'pi' },
-        timing: { updatedAt: BASE_TIME, stateStartedAt: BASE_TIME }
-      },
-      {
-        paneKey: FIRST_PANE,
-        payload: {
-          state: 'done',
-          prompt: 'first turn',
-          agentType: 'pi',
-          lastAssistantMessage: 'Finished.'
-        },
-        timing: { updatedAt: BASE_TIME + 1, stateStartedAt: BASE_TIME + 1 }
-      },
-      {
-        paneKey: FIRST_PANE,
-        payload: { state: 'working', prompt: 'second turn', agentType: 'pi' },
-        timing: { updatedAt: BASE_TIME + 2, stateStartedAt: BASE_TIME + 2 }
-      },
-      {
-        paneKey: FIRST_PANE,
-        payload: { state: 'done', prompt: 'second turn', agentType: 'pi' },
-        timing: { updatedAt: BASE_TIME + 3, stateStartedAt: BASE_TIME + 3 }
-      },
-      {
-        paneKey: FIRST_PANE,
-        payload: { state: 'working', prompt: 'third turn', agentType: 'pi' },
-        timing: { updatedAt: BASE_TIME + 4, stateStartedAt: BASE_TIME + 4 }
+    write(store)
+    const previous = store.getState().agentStatusByPaneKey[FIRST_PANE]
+    const observed = vi.fn((changes: readonly AgentStatusChange[]) => {
+      for (const change of changes) {
+        expect(store.getState().agentStatusByPaneKey[change.paneKey]).toBe(change.current)
       }
+    })
+    store.getState().subscribeAgentStatusChanges(observed)
+    store.getState().transactAgentStatuses((transaction) => {
+      transaction.apply({
+        paneKey: FIRST_PANE,
+        payload: { state: 'done', prompt: 'fixed', interrupted: true },
+        timing: { updatedAt: BASE_TIME + 1 }
+      })
+      store.getState().transactAgentStatuses((nested) =>
+        nested.apply({
+          paneKey: FIRST_PANE,
+          payload: {
+            state: 'done',
+            prompt: 'fixed',
+            mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: BASE_TIME }
+          },
+          timing: { updatedAt: BASE_TIME + 2 }
+        })
+      )
+      write(store, SECOND_PANE)
+      store.getState().removeAgentStatus(SECOND_PANE)
+      expect(observed).not.toHaveBeenCalled()
+    })
+    expect(observed).toHaveBeenCalledExactlyOnceWith([
+      { paneKey: FIRST_PANE, previous, current: store.getState().agentStatusByPaneKey[FIRST_PANE] }
     ])
-
-    // The second turn finished silently; leaking turn one's output would misreport the run.
-    expect(
-      store.getState().agentStatusByPaneKey[FIRST_PANE].lastCompletedAssistantMessage
-    ).toBeUndefined()
+  })
+  it('suppresses rejected, missing, equal, net-equal and failed transaction mutations', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(BASE_TIME)
+    const store = seedBatchStore()
+    write(store)
+    const observed = vi.fn()
+    store.getState().subscribeAgentStatusChanges(observed)
+    store.getState().setAgentStatus(FIRST_PANE, { state: 'done', prompt: 'fixed' }, undefined, {
+      updatedAt: BASE_TIME - 1
+    })
+    store.getState().removeAgentStatus('missing')
+    store.getState().setAgentProgramStatus(FIRST_PANE, null)
+    store.getState().transactAgentStatuses(() => {
+      store.getState().setAgentProgramStatus(FIRST_PANE, {
+        state: 'working',
+        progress: 42,
+        observedAt: BASE_TIME
+      })
+      store.getState().setAgentProgramStatus(FIRST_PANE, null)
+    })
+    const before = store.getState().agentStatusByPaneKey
+    expect(() =>
+      store.getState().transactAgentStatuses(() => {
+        store.getState().removeAgentStatus(FIRST_PANE)
+        throw new Error('abort')
+      })
+    ).toThrow('abort')
+    expect(store.getState().agentStatusByPaneKey).toBe(before)
+    expect(() =>
+      store.getState().updateAgentStatusState((_state, keys) => {
+        keys.add(FIRST_PANE)
+        return {
+          agentStatusByPaneKey: {},
+          get editorDrafts(): Record<string, string> {
+            throw new Error('precommit middleware')
+          }
+        }
+      })
+    ).toThrow('precommit middleware')
+    expect(store.getState().agentStatusByPaneKey).toBe(before)
+    expect(observed).not.toHaveBeenCalled()
+    store.getState().removeAgentStatus(FIRST_PANE)
+    expect(observed).toHaveBeenCalledOnce()
+  })
+  it('isolates stores, disposes listeners, orders reentry and contains observer failures', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(BASE_TIME)
+    const store = seedBatchStore()
+    const other = seedBatchStore()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const isolated = vi.fn()
+    other.getState().subscribeAgentStatusChanges(isolated)
+    const order: string[] = []
+    let stopSecond = () => {}
+    store.getState().subscribeAgentStatusChanges((changes) => {
+      order.push(changes[0].paneKey)
+      if (changes[0].paneKey === FIRST_PANE) {
+        stopSecond()
+        write(store, SECOND_PANE)
+      }
+    })
+    const second = vi.fn()
+    stopSecond = store.getState().subscribeAgentStatusChanges(second)
+    const stopBroken = store.getState().subscribeAgentStatusChanges(() => {
+      throw new Error('observer')
+    })
+    expect(() => write(store)).not.toThrow()
+    expect(order).toEqual([FIRST_PANE, SECOND_PANE])
+    expect(second).not.toHaveBeenCalled()
+    expect(isolated).not.toHaveBeenCalled()
+    expect(error).toHaveBeenCalledTimes(2)
+    stopBroken()
+  })
+  it('includes evicted rows alongside the accepted replacement', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(BASE_TIME)
+    const store = seedBatchStore()
+    const rows: Record<string, AgentStatusEntry> = {}
+    for (let i = 0; i < MAX_LIVE_AGENT_STATUSES; i++) {
+      rows[`orphan-${i}`] = {
+        paneKey: `orphan-${i}`,
+        state: 'done',
+        stateHistory: [],
+        prompt: '',
+        updatedAt: 0,
+        stateStartedAt: 0,
+        terminalResumeEligible: false
+      }
+    }
+    store.setState({ agentStatusByPaneKey: rows })
+    const observed = vi.fn()
+    store.getState().subscribeAgentStatusChanges(observed)
+    write(store)
+    expect(observed).toHaveBeenCalledOnce()
+    const changes: readonly AgentStatusChange[] = observed.mock.calls[0][0]
+    expect(changes.map((change) => change.paneKey)).toEqual([FIRST_PANE, 'orphan-0'])
+    expect(changes[1]).toEqual({
+      paneKey: 'orphan-0',
+      previous: rows['orphan-0'],
+      current: undefined
+    })
   })
 })

@@ -6,7 +6,10 @@ import {
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import type {
+  PublicKnownRuntimeEnvironment,
+  RuntimeEnvironmentRemoval
+} from '../../shared/runtime-environments'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../shared/runtime-environment-diagnostics'
 import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../shared/runtime-environment-catalog-channel'
@@ -16,6 +19,8 @@ import {
 } from '../../shared/wsl-orcad-account-notice'
 import {
   subscribeRuntimeEnvironmentFromPreload,
+  subscribeCrewAttemptFromPreload,
+  cancelRuntimeEnvironmentSubscriptionFromPreload,
   type RuntimeEnvironmentSubscriptionHandle
 } from '../runtime-environment-subscriptions'
 import type { PreloadApi } from '../api-types'
@@ -60,7 +65,7 @@ export const runtimeEnvironmentsApi = {
     ipcRenderer.invoke('runtimeEnvironments:repairFromPairingCode', args),
   resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
     ipcRenderer.invoke('runtimeEnvironments:resolve', args),
-  remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>
+  remove: (args: { selector: string }): Promise<RuntimeEnvironmentRemoval> =>
     ipcRenderer.invoke('runtimeEnvironments:remove', args),
   disconnect: (args: {
     selector: string
@@ -118,7 +123,9 @@ export const runtimeEnvironmentsApi = {
     expectedEnvironmentRuntimeId?: string
   }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   cancelSubscription: (args: { subscriptionId: string }): Promise<void> =>
-    ipcRenderer.invoke('runtimeEnvironments:unsubscribe', args).then(() => undefined),
+    cancelRuntimeEnvironmentSubscriptionFromPreload(ipcRenderer, args.subscriptionId),
+  subscribeCrewAttempt: (args, callbacks) =>
+    subscribeCrewAttemptFromPreload(ipcRenderer, args, callbacks),
   subscribe: async (
     args: {
       subscriptionId?: string

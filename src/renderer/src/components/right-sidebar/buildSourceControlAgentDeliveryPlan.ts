@@ -1,10 +1,14 @@
+import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import { checkSourceControlAgentActionLaunch } from '@/lib/source-control-agent-action-launch-check'
 import { useAppStore } from '@/store'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
 
 type BuildSourceControlAgentDeliveryPlanArgs = {
+  settings?: GlobalSettings | null
+  agentLaunchPreferences?: AgentLaunchPreferences
   selectedAgent: TuiAgent | null
   commandInput: string
   agentArgs?: string | undefined
@@ -16,6 +20,8 @@ type BuildSourceControlAgentDeliveryPlanArgs = {
 }
 
 export function buildSourceControlAgentDeliveryPlan({
+  settings = useAppStore.getState().settings,
+  agentLaunchPreferences,
   selectedAgent,
   commandInput,
   agentArgs,
@@ -27,13 +33,12 @@ export function buildSourceControlAgentDeliveryPlan({
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
   }
-  const settings = useAppStore.getState().settings
   const result = checkSourceControlAgentActionLaunch({
     agent: selectedAgent,
     commandInput,
     agentArgs,
     detectedAgents,
-    disabledAgents: settings?.disabledTuiAgents,
+    disabledAgents: (agentLaunchPreferences ?? settings)?.disabledTuiAgents,
     cmdOverrides: settings?.agentCmdOverrides,
     terminalWindowsShell: settings?.terminalWindowsShell,
     platform: launchPlatform,

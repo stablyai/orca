@@ -1,3 +1,4 @@
+import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
 import React from 'react'
 import { Info, RefreshCw, RotateCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
@@ -13,20 +14,19 @@ import {
 } from '@/components/ui/select'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type {
-  SourceControlActionRecipe,
-  SourceControlLaunchActionId
-} from '../../../../shared/source-control-ai-actions'
+import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import { SourceControlAgentCliArgsField } from './SourceControlAgentCliArgsField'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { describeSourceControlActionModel } from '../settings/source-control-action-model-copy'
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 import { translate } from '@/i18n/i18n'
+import { selectedSourceControlActionPreferences } from '../../../../shared/source-control-action-launch-preferences'
 
 /** Expose only delivery errors the user can fix before launch. */
 export type SourceControlAgentActionDeliveryPlanState =
@@ -41,11 +41,12 @@ type SourceControlAgentActionDialogFormProps = {
   selectedAgent: TuiAgent | null
   hasEnabledAgents: boolean
   detecting: boolean
+  surfaceRows: AgentComboboxSurfaceRows
   statusCopy: string | null
   agentArgs: string
   /** False when the launch would be structured native chat; the field is then absent, not disabled. */
   agentArgsApply: boolean
-  recipe: SourceControlActionRecipe
+  recipe: SelectedSourceControlActionRecipe
   commandTemplate: string
   savedCommandInputTemplate?: string | null
   saveLaunchRecipe: boolean
@@ -56,9 +57,10 @@ type SourceControlAgentActionDialogFormProps = {
   canSaveAgentDefault: boolean
   deliveryPlan: SourceControlAgentActionDeliveryPlanState
   canStart: boolean
+  isCreateAccepted?: boolean
   isStarting: boolean
   startLabel: string
-  onSelectedAgentChange: (agent: TuiAgent | null) => void
+  onAgentPick: (agent: TuiAgent) => void
   onAgentArgsChange: (value: string) => void
   onCommandTemplateChange: (value: string) => void
   onSaveLaunchRecipeChange: (value: boolean) => void
@@ -89,6 +91,7 @@ export function SourceControlAgentActionDialogForm({
   selectedAgent,
   hasEnabledAgents,
   detecting,
+  surfaceRows,
   statusCopy,
   agentArgs,
   agentArgsApply,
@@ -103,9 +106,10 @@ export function SourceControlAgentActionDialogForm({
   canSaveAgentDefault,
   deliveryPlan,
   canStart,
+  isCreateAccepted = false,
   isStarting,
   startLabel,
-  onSelectedAgentChange,
+  onAgentPick,
   onAgentArgsChange,
   onCommandTemplateChange,
   onSaveLaunchRecipeChange,
@@ -117,6 +121,9 @@ export function SourceControlAgentActionDialogForm({
   const defaultCommandTemplate = savedCommandInputTemplate ?? '{basePrompt}'
   const commandTemplateIncludesBasePrompt = commandTemplate.includes('{basePrompt}')
   const selectedRecipe = recipe
+  const selectedPreferences = selectedAgent
+    ? selectedSourceControlActionPreferences(selectedRecipe, selectedAgent)
+    : undefined
   const selectedSaveTarget = sourceControlLaunchSaveTargetFromValue(saveTargetValue, repo)
   // Copy describes only the selected save target, which is the only one start/save writes.
   const selectedLaunchRecipeAlreadySaved = Boolean(
@@ -154,7 +161,9 @@ export function SourceControlAgentActionDialogForm({
             <AgentCombobox
               agents={agentOptions}
               value={selectedAgent}
-              onValueChange={onSelectedAgentChange}
+              onValueChange={onAgentPick}
+              surfaceRows={surfaceRows}
+              disabled={!surfaceRows.selection.ready}
               allowNarrowTrigger
               triggerClassName="w-full"
             />
@@ -187,9 +196,9 @@ export function SourceControlAgentActionDialogForm({
               <TriangleAlert className="mt-px size-3 shrink-0" />
               <span>{statusCopy}</span>
             </p>
-          ) : selectedAgent && selectedRecipe.launchPreferences?.agentId === selectedAgent ? (
+          ) : selectedAgent && selectedPreferences ? (
             <p className="text-[11px] text-muted-foreground">
-              {describeSourceControlActionModel(selectedAgent, selectedRecipe.launchPreferences)}
+              {describeSourceControlActionModel(selectedAgent, selectedPreferences)}
             </p>
           ) : null}
         </div>
@@ -235,7 +244,7 @@ export function SourceControlAgentActionDialogForm({
             rows={7}
             value={commandTemplate}
             onChange={(event) => onCommandTemplateChange(event.target.value)}
-            className="box-border min-h-[6.5rem] min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+            className="box-border min-h-[6.5rem] min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
             spellCheck={false}
           />
           <SourceControlActionVariableChips
@@ -351,7 +360,13 @@ export function SourceControlAgentActionDialogForm({
       </div>
 
       <DialogFooter className="flex-wrap gap-2 sm:justify-end">
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={isCreateAccepted}
+          onClick={onCancel}
+        >
           {translate(
             'auto.components.right.sidebar.SourceControlAgentActionDialogForm.ea4788705e',
             'Cancel'

@@ -12,7 +12,6 @@ import {
 import { ConflictTriageStrip, PRTriageStrip } from './checks-panel/triage-strip'
 import { getFailedChecksForDetails } from './checks-panel/check-details-model'
 import { ChecksList } from './checks-panel/checks-list'
-import { isMutablePRConversationComment } from './checks-panel/comment-controls'
 import { PRCommentsList } from './checks-panel/comments-list'
 import { CheckJobLogTail } from './check-job-log-tail'
 
@@ -126,6 +125,7 @@ describe('MergeConflictNotice', () => {
     expect(markup).toContain('Resolve')
     expect(markup).toContain('lucide-sparkles')
     expect(markup).not.toContain('Resolve with AI')
+    expect((markup.match(/<button/g) ?? []).length).toBe(1)
   })
 
   it('renders a conflict resolve action for merge requests without PR data', () => {
@@ -140,6 +140,57 @@ describe('MergeConflictNotice', () => {
     expect(markup).toContain('Conflicts block this MR')
     expect(markup).toContain('Resolve')
     expect(markup).toContain('lucide-sparkles')
+  })
+
+  it.each(['PR', 'MR'] as const)(
+    'shows both Resolve and Fix for a conflicting %s with failed checks or pipeline',
+    (reviewKind) => {
+      const failedCheck: PRCheckDetail = {
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        url: null
+      }
+      const markup = renderToStaticMarkup(
+        React.createElement(PRTriageStrip, {
+          review: makePR(),
+          reviewKind,
+          checks: reviewKind === 'PR' ? [failedCheck] : [],
+          pipelineCheck: reviewKind === 'MR' ? failedCheck : null,
+          isResolvingConflictsWithAI: false,
+          onResolveConflictsWithAI: () => {},
+          isFixingChecksWithAI: false,
+          onFixChecksWithAI: () => {}
+        })
+      )
+
+      expect(markup).toContain(`Conflicts block this ${reviewKind}`)
+      expect(markup).toContain(reviewKind === 'PR' ? '1 failing check' : 'verify failed')
+      expect(markup).toMatch(/<button[^>]*>.*?Resolve<\/button>/)
+      expect(markup).toMatch(/<button[^>]*>.*?Fix<\/button>/)
+      expect((markup.match(/<button/g) ?? []).length).toBe(2)
+      expect(markup).not.toContain('No blocking PR action')
+    }
+  )
+
+  it('keeps conflicts actionable without offering a fix for checks requiring approval', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PRTriageStrip, {
+        review: makePR(),
+        checks: [
+          { name: 'approval', status: 'completed', conclusion: 'action_required', url: null }
+        ],
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {},
+        isFixingChecksWithAI: false,
+        onFixChecksWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('Conflicts block this PR')
+    expect(markup).toContain('Resolve')
+    expect(markup).not.toContain('failing check')
+    expect((markup.match(/<button/g) ?? []).length).toBe(1)
   })
 
   it('renders the CI fix action for failing non-conflict checks', () => {
@@ -250,6 +301,25 @@ describe('PRTriageStrip check counts', () => {
     )
   }
 
+  it('counts failures requiring approval while offering Fix for a broken check', () => {
+    const checks: PRCheckDetail[] = [
+      { name: 'verify', status: 'completed', conclusion: 'failure', url: null },
+      { name: 'approval', status: 'completed', conclusion: 'action_required', url: null }
+    ]
+    const stripMarkup = renderStrip(checks)
+    const listMarkup = renderWithTooltips(
+      React.createElement(ChecksList, {
+        checks,
+        checksLoading: false,
+        checkDetailsContextKey: 'repo:42'
+      })
+    )
+
+    expect(stripMarkup).toContain('2 failing checks')
+    expect(listMarkup).toContain('2 failing')
+    expect(stripMarkup).toMatch(/<button[^>]*>.*?Fix<\/button>/)
+  })
+
   it('shows a completed check with no conclusion as unresolved instead of pending', () => {
     const markup = renderStrip([
       { name: 'legacy', status: 'completed', conclusion: null, url: null }
@@ -275,43 +345,6 @@ describe('PRTriageStrip check counts', () => {
 
     expect(markup).toContain('No blocking PR action')
     expect(markup).not.toContain('unresolved')
-  })
-})
-
-describe('isMutablePRConversationComment', () => {
-  it('allows top-level conversation comments but not review threads or summaries', () => {
-    expect(
-      isMutablePRConversationComment({
-        id: 12,
-        author: 'alice',
-        authorAvatarUrl: '',
-        body: 'Looks good',
-        createdAt: '2026-05-14T00:00:00Z',
-        url: 'https://github.com/acme/widgets/pull/42#issuecomment-12'
-      })
-    ).toBe(true)
-    expect(
-      isMutablePRConversationComment({
-        id: 34,
-        author: 'alice',
-        authorAvatarUrl: '',
-        body: 'Inline note',
-        createdAt: '2026-05-14T00:00:00Z',
-        url: 'https://github.com/acme/widgets/pull/42#discussion_r34',
-        threadId: 'thread-1',
-        path: 'src/a.ts'
-      })
-    ).toBe(false)
-    expect(
-      isMutablePRConversationComment({
-        id: 99,
-        author: 'alice',
-        authorAvatarUrl: '',
-        body: 'LGTM',
-        createdAt: '2026-05-14T00:00:00Z',
-        url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-99'
-      })
-    ).toBe(false)
   })
 })
 

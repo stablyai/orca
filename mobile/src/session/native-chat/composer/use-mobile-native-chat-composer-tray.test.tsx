@@ -4,11 +4,21 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentChildWorkView } from '../../../../../src/shared/agent-status-child-work-view'
-import type { AgentSessionBackgroundTaskState } from '../../../../../src/shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../../src/shared/agent-session/agent-session-background-task-wire'
 import { agentChildRowContextForSessionStream } from '../../../../../src/shared/agent-child-row-stream-context'
 import { structuredSessionBackgroundTasksView } from '../../../../../src/shared/structured-session-background-tasks-view'
 import { useMobileNativeChatComposerTray } from './use-mobile-native-chat-composer-tray'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
+
+vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
 
 vi.mock('react-native', () => ({
   Dimensions: { get: () => ({ width: 430, height: 900 }) },
@@ -47,9 +57,11 @@ vi.mock('../../../hooks/use-now', () => ({ useNow: () => 100_000 }))
 
 const CARD = {
   messageId: 'waiting-1',
+  position: 1,
   text: 'next',
+  line: 'next',
   state: 'waiting' as const,
-  paused: false,
+  hold: 'turn' as const,
   needsAttention: false,
   caption: null,
   attribution: null
@@ -196,3 +208,7 @@ describe('useMobileNativeChatComposerTray', () => {
     expect(duplicateKeys).toEqual([])
   })
 })
+
+vi.mock('../../MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

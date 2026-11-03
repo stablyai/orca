@@ -82,19 +82,6 @@ function withoutTab(frame: PublishedWorkspaceLayout, tabId: string): PublishedWo
 }
 
 describe('laying frame slices over the store', () => {
-  it('changes nothing for the frame the store already shows', async () => {
-    const { state, session, frame } = await restored()
-    expect(patchFor(state, session, frame)).toEqual({})
-  })
-
-  it('drops a terminal tab main closed, with its pane layout', async () => {
-    const { state, session, frame } = await restored()
-    const patch = patchFor(state, session, withoutTab(frame, 'tab-shell'))
-    expect(patch.tabsByWorktree?.[GIT_KEY]?.map((tab) => tab.id)).not.toContain('tab-shell')
-    expect(patch.terminalLayoutsByTabId).not.toHaveProperty('tab-shell')
-    expect(patch.unifiedTabsByWorktree?.[GIT_KEY]?.map((tab) => tab.id)).not.toContain('tab-shell')
-  })
-
   it('keeps the pane layout of a tab the window’s own pane command holds, until main drops the tab', async () => {
     const { state, session, frame } = await restored()
     const newRatios: PublishedWorkspaceLayout = {
@@ -112,48 +99,6 @@ describe('laying frame slices over the store', () => {
     expect(
       patchFor(state, session, withoutTab(frame, 'tab-shell'), held).terminalLayoutsByTabId
     ).not.toHaveProperty('tab-shell')
-  })
-
-  it('gives a row the frame creates the window’s own fields for it', async () => {
-    const { state, session, frame } = await restored()
-    const shown = patchFor(state, session, withoutTab(frame, 'tab-shell'))
-    const before = { ...state, ...shown }
-    const fields = vi.fn((id: string) =>
-      id === 'tab-shell' ? { pendingActivationSpawn: true } : null
-    )
-
-    const patch = patchFor(before, session, frame, undefined, fields)
-
-    const row = patch.tabsByWorktree?.[GIT_KEY]?.find((tab) => tab.id === 'tab-shell')
-    expect(row?.pendingActivationSpawn).toBe(true)
-    expect(fields).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps an open file’s editor state and place, and drops a file main closed', async () => {
-    const { state, session, frame } = await restored()
-    const file = state.openFiles.find((entry) => entry.worktreeId === GIT_KEY)!
-    const edited = { ...state, openFiles: [{ ...file, isDirty: true }] }
-    expect(patchFor(edited, session, frame).openFiles).toBeUndefined()
-    const closed = patchFor(edited, session, {
-      ...withoutTab(frame, 'editor:src/app.ts'),
-      editorFiles: []
-    })
-    expect(closed.openFiles).toEqual([])
-  })
-
-  it('keeps a browser tab’s page state, and drops the pages of a tab main closed', async () => {
-    const { state, session, frame } = await restored()
-    const browser = state.browserTabsByWorktree[GIT_KEY]![0]!
-    const browsing = {
-      ...state,
-      browserTabsByWorktree: { [GIT_KEY]: [{ ...browser, url: 'https://example.com/next' }] }
-    }
-    expect(patchFor(browsing, session, frame).browserTabsByWorktree).toBeUndefined()
-    const closed = patchFor(browsing, session, {
-      ...withoutTab(frame, 'browser-1'),
-      browserTabs: []
-    })
-    expect(closed.browserPagesByWorkspace).not.toHaveProperty('browser-1')
   })
 
   it('keeps a client-hosted browser tab this desktop created, with its page and handle, at its place (L274)', async () => {

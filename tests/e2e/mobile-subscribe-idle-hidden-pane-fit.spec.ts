@@ -18,7 +18,7 @@ import { pairedRuntimeConnectionFromOffer } from '../../src/shared/paired-runtim
 import {
   sendRemoteRuntimeRequest,
   subscribeRemoteRuntimeRequest
-} from '../../src/shared/remote-runtime-client'
+} from '../../src/shared/remote-runtime/remote-runtime-client'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,

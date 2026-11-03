@@ -29,8 +29,18 @@ describe('resolveBrowserChromeShortcutScope', () => {
 
   it('limits a floating browser to chords aimed at its own overlay', () => {
     expect(
-      resolveBrowserChromeShortcutScope({ ...focusedWorkspaceBrowser, isFloatingWorkspace: true })
+      resolveBrowserChromeShortcutScope({
+        ...focusedWorkspaceBrowser,
+        isFloatingWorkspace: true,
+        groupId: 'group-b'
+      })
     ).toBe('owned-target')
+  })
+
+  it('marks a floating browser in its focused split so the page takes focus', () => {
+    expect(
+      resolveBrowserChromeShortcutScope({ ...focusedWorkspaceBrowser, isFloatingWorkspace: true })
+    ).toBe('owned-target-focused')
   })
 
   it('answers nothing while the browser is not showing', () => {

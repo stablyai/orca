@@ -7,8 +7,8 @@ import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { OrcaRuntimeWithNotifySshStateChanged } from './workspaces/workspace-host-notifications'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
-import type { PreparationRearmHolder } from '../worktree-create-preparation'
-import type { RuntimeWorkspaceCreateEvents } from '../workspace-create-telemetry'
+import type { PreparationRearmHolder } from '../workspaces/creation/preparation/worktree-create-preparation'
+import type { RuntimeWorkspaceCreateEvents } from '../workspaces/creation/workspace-create-telemetry'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
@@ -39,7 +39,7 @@ class StartupRuntime extends OrcaRuntimeService {
     return this.repoLookup(selector)
   }
 
-  protected override resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+  protected override resolveGitWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     return this.lookup(selector)
   }
 }
@@ -285,7 +285,7 @@ describe('workspace activation and metadata reentry', () => {
       super(store)
     }
 
-    override async resolveWorktreeSelector(): Promise<ResolvedWorktree> {
+    override async resolveGitWorktreeSelector(): Promise<ResolvedWorktree> {
       return this.selectedWorktree
     }
 

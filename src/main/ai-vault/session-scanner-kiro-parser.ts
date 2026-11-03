@@ -2,12 +2,14 @@ import { basename } from 'node:path'
 import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { kiroTranscriptPathForMetadata } from '../../shared/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
 import { addSessionContent } from './session-scanner-messages'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
+import type { SkippedTranscriptRecord } from './session-transcript-record-budget'
 import {
   arrayValue,
   asRecord,
@@ -30,9 +32,7 @@ export function isKiroSessionMetadataPath(filePath: string): boolean {
   return KIRO_SESSION_FILE_PATTERN.test(basename(filePath))
 }
 
-export function kiroTranscriptPathForMetadata(filePath: string): string {
-  return filePath.endsWith('.json') ? `${filePath}l` : ''
-}
+export { kiroTranscriptPathForMetadata }
 
 /** Translate Kiro kind/data blocks into preview content blocks. */
 function toPreviewBlocks(content: unknown): Record<string, unknown>[] {
@@ -127,7 +127,8 @@ function createKiroAccumulator(
 export async function parseKiroSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void
 ): Promise<AiVaultSession | null> {
   const accumulator = createKiroAccumulator(
     file,
@@ -139,11 +140,12 @@ export async function parseKiroSessionFile(
   }
   try {
     // Stream transcripts because embedded tool output can be megabytes.
-    const { trailingPartialLine } = await consumeCompleteJsonlLines({
+    const { trailingPartialLine, skippedRecords } = await consumeCompleteJsonlLines({
       path: kiroTranscriptPathForMetadata(file.path),
       start: 0,
       onLine: (line) => consumeKiroTranscriptLine(accumulator, line)
     })
+    onSkippedRecords?.(skippedRecords)
     // Accept complete final records without a newline; malformed partial writes are ignored by the parser.
     if (trailingPartialLine) {
       consumeKiroTranscriptLine(accumulator, trailingPartialLine)

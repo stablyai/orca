@@ -9,6 +9,15 @@ import type {
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex-state'
+
+/** Ingest-only fields, stripped before the row is stored. */
+export type IncomingAgentHookEvent = AgentHookEventPayload & {
+  authorityRestartId?: string
+  codexRosterAuthority?: CodexRemoteRosterAuthority
+  /** The relay echoed this link's current binding for the pane on the owner it proved. */
+  rooted?: true
+}
 
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   /** Live acknowledgement of the matching renderer retirement; never cached. */
@@ -35,6 +44,7 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
   | 'authorityRestartId'
+  | 'statusAdmissionSession'
   | 'launchToken'
   | 'hostTurnRevision'
   | 'promptInteractionKey'

@@ -10,7 +10,7 @@ import { DeviceRegistry } from './device-registry'
 import { FILE_METHODS } from './rpc/methods/files'
 import { E2EEChannel } from './rpc/e2ee-channel'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from '../../shared/e2ee-crypto'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { DirEntry } from '../../shared/filesystem-entry-types'
 import { RUNTIME_RPC_REPLY_TOO_LARGE_CODE } from './runtime-rpc/runtime-rpc-reply-size-limit'
 

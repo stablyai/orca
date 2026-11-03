@@ -13,11 +13,13 @@ import {
   type QuickOpenQueryTarget
 } from '../../../shared/quick-open-query-target'
 import { hostAbsentRefusal } from './terminal-pane/host-file-refusal'
+import { hostSavesGrantedFiles } from '@/runtime/runtime-terminal-artifact-grant'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
 } from './right-sidebar/file-explorer-operation-owner'
+import { translate } from '@/i18n/i18n'
 
 export async function openQuickOpenFile(
   selectedPath: string,
@@ -65,7 +67,7 @@ export async function openQuickOpenFile(
       const literalStats = await statUserOpenedPath(context, literalPath)
       assertCurrent()
       if (literalStats.isDirectory) {
-        throw new Error('Choose a file rather than a directory.')
+        throw new Error(chooseFileNotDirectoryMessage())
       }
       filePath = literalPath
       relativePath = literalStats.escapesWorktree
@@ -79,6 +81,7 @@ export async function openQuickOpenFile(
     }
   }
   let terminalArtifactGrantId: string | undefined
+  let grantReadOnly = false
   if (target.kind === 'environment' && isAbsolute) {
     let literal: RuntimeTerminalPathResolution | undefined
     if (rawQuery && rawQuery.trim() !== selectedPath) {
@@ -104,6 +107,9 @@ export async function openQuickOpenFile(
     if (resolved.openTarget?.kind === 'absolute-file') {
       // Why: a host file outside its workspaces is readable only through the grant it issued.
       terminalArtifactGrantId = resolved.openTarget.grantId
+      grantReadOnly =
+        resolved.openTarget.readOnly === true ||
+        !(await hostSavesGrantedFiles(target.environmentId))
       filePath = resolved.openTarget.absolutePath
       relativePath = filePath
     } else if (
@@ -117,7 +123,12 @@ export async function openQuickOpenFile(
       !resolved.absolutePath ||
       resolved.relativePath === null
     ) {
-      throw new Error('The host could not open this file path.')
+      throw new Error(
+        translate(
+          'auto.components.QuickOpen.hostCouldNotOpenPath',
+          'The host could not open this file path.'
+        )
+      )
     } else {
       filePath = resolved.absolutePath
       relativePath = resolved.relativePath
@@ -129,7 +140,7 @@ export async function openQuickOpenFile(
       relativePath = filePath
     }
     if (stats.isDirectory) {
-      throw new Error('Choose a file rather than a directory.')
+      throw new Error(chooseFileNotDirectoryMessage())
     }
   }
   assertCurrent()
@@ -142,7 +153,9 @@ export async function openQuickOpenFile(
     ...(route.connectionId && getRelativePathInsideRoot(filePath, root) === null
       ? { externalSshTargetId: route.connectionId }
       : {}),
-    ...(terminalArtifactGrantId ? { terminalArtifactGrantId, readOnly: true } : {}),
+    ...(terminalArtifactGrantId
+      ? { terminalArtifactGrantId, ...(grantReadOnly ? { readOnly: true } : {}) }
+      : {}),
     language: detectLanguage(filePath),
     mode: 'edit'
   })
@@ -158,4 +171,11 @@ export async function openQuickOpenFile(
       fileId
     )
   }
+}
+
+function chooseFileNotDirectoryMessage(): string {
+  return translate(
+    'auto.components.QuickOpen.chooseFileNotDirectory',
+    'Choose a file rather than a directory.'
+  )
 }

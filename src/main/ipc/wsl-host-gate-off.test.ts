@@ -53,7 +53,7 @@ vi.mock('../wsl/wsl-host-e2e-fake-connector', async (importOriginal) => ({
   createFakeWslHostConnector: mocks.createFakeConnector
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: vi.fn(async () => ({ id: 'status', ok: false, error: {} })),
   subscribeRemoteRuntimeRequest: vi.fn()
 }))
@@ -126,7 +126,8 @@ describe('WSL hosts with the internal gate closed', () => {
     getWorkspaceSessionHostIds: () => [],
     updateSettings: vi.fn(),
     removeWorkspaceSessionHost: vi.fn(),
-    setRemoteLayoutSnapshot: vi.fn()
+    setRemoteLayoutSnapshot: vi.fn(),
+    setHostRepoCatalogSnapshot: vi.fn()
   }
 
   beforeEach(() => {
@@ -202,6 +203,7 @@ describe('WSL hosts with the internal gate closed', () => {
   })
 
   it('creates the WSL host service only once the gate is open', () => {
+    vi.stubEnv('MODE', 'e2e')
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
     vi.stubEnv(
       'ORCA_E2E_FAKE_WSL_HOSTS',
@@ -225,8 +227,13 @@ describe('WSL hosts with the internal gate closed', () => {
     expect(registeredWslHostChannels().sort()).toEqual([...WSL_HOST_HANDLER_CHANNELS].sort())
   })
 
-  it('registers nothing with the gate open on a non-Windows host without the fake', () => {
+  it.each([
+    ['without the fake', ''],
+    ['with the fake outside an e2e build', JSON.stringify({ distros: [], pairingCode: 'x' })]
+  ])('registers nothing with the gate open on a non-Windows host %s', (_label, fake) => {
+    vi.stubEnv('MODE', 'production')
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+    vi.stubEnv('ORCA_E2E_FAKE_WSL_HOSTS', fake)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
     try {
@@ -238,6 +245,7 @@ describe('WSL hosts with the internal gate closed', () => {
     }
 
     expect(getWslHostService()).toBeNull()
+    expect(mocks.createFakeConnector).not.toHaveBeenCalled()
     expect(registeredWslHostChannels()).toEqual([])
     expect(store.onSettingsChanged).not.toHaveBeenCalled()
   })

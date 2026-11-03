@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { reviewCommentMarkdown } from './review-comment-markdown'
 import { CommentReactions } from '@/components/github/CommentReactions'
 import { isBotPRComment } from '../../../../../shared/pr-comment-audience'
 import type { GitHubReactionContent, PRComment } from '../../../../../shared/github/comment-types'
@@ -14,11 +15,11 @@ import {
   CommentLocationLabel,
   CommentMoreMenu,
   CopyButton,
-  isMutablePRConversationComment,
   PRCommentActionBadge,
   QueueForAgentButton,
   ResolveButton
 } from './comment-controls'
+import { isMutablePRConversationComment } from '../../../../../shared/github/pr-comment-mutability'
 
 export function CommentRow({
   comment,
@@ -322,7 +323,11 @@ export function CommentRow({
           </div>
         ) : (
           <div className={isReply ? presentation.commentBodyReply : presentation.commentBody}>
-            <CommentMarkdown content={comment.body} className={presentation.commentBodyMarkdown} />
+            <CommentMarkdown
+              content={comment.body}
+              className={presentation.commentBodyMarkdown}
+              extension={reviewCommentMarkdown}
+            />
             <CommentReactions
               reactions={comment.reactions}
               onReactionChange={

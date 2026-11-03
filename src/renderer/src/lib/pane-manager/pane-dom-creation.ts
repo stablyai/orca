@@ -5,12 +5,12 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import type { ILink, ITerminalOptions } from '@xterm/xterm'
 import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
-import { TERMINAL_HTTP_URL_REGEX } from '../../components/terminal-pane/terminal-http-url-extraction'
+import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal-http-url-extraction'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
-import { buildDefaultTerminalOptions } from './pane-terminal-options'
+import { PANE_TERMINAL_VT_EXTENSIONS, buildDefaultTerminalOptions } from './pane-terminal-options'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
@@ -42,9 +42,15 @@ export function createPaneDOM(
   container.appendChild(xtermContainer)
 
   const userOpts = options.terminalOptions?.(id) ?? {}
+  const defaultOpts = buildDefaultTerminalOptions()
   const terminalOpts: ITerminalOptions = {
-    ...buildDefaultTerminalOptions(),
-    ...userOpts
+    ...defaultOpts,
+    ...userOpts,
+    vtExtensions: {
+      ...defaultOpts.vtExtensions,
+      ...userOpts.vtExtensions,
+      ...PANE_TERMINAL_VT_EXTENSIONS
+    }
   }
 
   const terminal = new Terminal(terminalOpts)

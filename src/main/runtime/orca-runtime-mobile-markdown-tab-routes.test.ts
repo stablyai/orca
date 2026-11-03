@@ -8,7 +8,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { hashMarkdownContent } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionMarkdownTab } from '../../shared/runtime-types'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,

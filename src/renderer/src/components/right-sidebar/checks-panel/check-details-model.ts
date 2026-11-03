@@ -1,4 +1,6 @@
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
+import { getCheckConclusion } from '../../../../../shared/pr-check-status-label'
+import { getIntlLocale } from '@/i18n/i18n'
 
 export type CheckDetailsLoadState = {
   requestId?: number
@@ -34,47 +36,11 @@ export function getCheckDetailsKey(
   return `${contextKey}::${getCheckIdentityKey(check, index)}`
 }
 
-export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
-  return check.conclusion ?? 'pending'
-}
-
 export function isFailedCheck(check: PRCheckDetail): boolean {
   // action_required blocks merge; counting it as passing would contradict auto-merge readiness.
   return ['failure', 'cancelled', 'timed_out', 'action_required'].includes(
     getCheckConclusion(check)
   )
-}
-
-export function getCheckStatusLabel(check: PRCheckDetail): string {
-  const conclusion = getCheckConclusion(check)
-  if (conclusion === 'success') {
-    return 'Successful'
-  }
-  if (conclusion === 'failure') {
-    return 'Failed'
-  }
-  if (conclusion === 'cancelled') {
-    return 'Cancelled'
-  }
-  if (conclusion === 'timed_out') {
-    return 'Timed out'
-  }
-  if (conclusion === 'action_required') {
-    return 'Action required'
-  }
-  if (conclusion === 'neutral') {
-    return 'Neutral'
-  }
-  if (conclusion === 'skipped') {
-    return 'Skipped'
-  }
-  if (check.status === 'queued') {
-    return 'Queued'
-  }
-  if (check.status === 'in_progress') {
-    return 'In progress'
-  }
-  return 'Pending'
 }
 
 export function formatCheckTimestamp(input: string | null | undefined): string | null {
@@ -85,7 +51,7 @@ export function formatCheckTimestamp(input: string | null | undefined): string |
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

@@ -1,10 +1,11 @@
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UnsentSendHold } from '../agent-session-journal/journal-unsent-send-hold'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -19,7 +20,7 @@ import type {
 } from './structured-agent-session-host-types'
 
 export type StructuredAgentSessionDeliveryLoopDeps = {
-  startFlights?: Pick<StructuredAgentSessionStartFlights, 'has'>
+  startFlights?: Pick<StructuredAgentSessionStartFlights, 'get'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   adapter: StructuredAgentSessionAdapter
@@ -29,8 +30,13 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   trackStart: <T>(start: Promise<T>) => Promise<T>
   startProviderChild: (sessionId: string, startedFor: string) => StructuredAgentSessionStartClaim
   /** Retire mismatched login/permission children under serialization. */
-  retireOutgrownChild: (sessionId: string, continuingId?: string) => Promise<void>
+  retireOutgrownChild: (
+    sessionId: string,
+    continuingId?: string,
+    next?: AgentJournalSubmission
+  ) => Promise<void>
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
+  stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
   retainedWork?: (sessionId: string, continuingId: string) => boolean
   readiness: (
     sessionId: string,

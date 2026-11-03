@@ -2,11 +2,12 @@ import { app, nativeTheme } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { StarNagService } from '../star-nag/service'
-import { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { browserManager } from '../browser/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/browser-client-page-automation-runtime'
+import { BrowserExpectedUrlMismatch } from '../../shared/browser-expected-url'
 import { BrowserClientPageCommandError } from '../browser/browser-client-page-command-failure'
 import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagnostics'
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
@@ -27,12 +28,16 @@ import {
 } from './main-process-runtime-service'
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
-import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
+import {
+  collectWorktreeTrashSweepRoots,
+  sweepStaleWorktreeTrash
+} from '../workspaces/removal/worktree-trash'
 import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
+import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
@@ -74,7 +79,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
         { signal, caller: { kind: 'local-cli' } }
       )
       if (!response.ok) {
-        throw new BrowserClientPageCommandError(response.error.code)
+        const mismatch = BrowserExpectedUrlMismatch.safeParse(response.error.data)
+        throw new BrowserClientPageCommandError(response.error.code, {
+          expectedUrlMismatch: mismatch.success ? mismatch.data : undefined
+        })
       }
       return response.result
     }
@@ -102,6 +110,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     void pruneDesktopOrcadArtifactCache(app.getPath('userData')).catch((error) => {
       console.warn('[orcad-artifacts] Failed to bound the slot cache:', error)
     })
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // The startup pass ran before browser sessions and any window existed, so `browser-cookies` paused.
+  runAfterFirstWindowShown(() => {
+    void runGatedWslMoveDesktopRewritePass({ userDataPath: app.getPath('userData') })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Wait for shell PATH before probing Codex; start reconciliation early so first launch can share it.

@@ -1,16 +1,17 @@
-import type { TaskPageJiraCreationMetadataModel } from '../../use-task-page-jira-creation-metadata'
+import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page/github/task-page-github-work-item-mutation-keys'
 import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
-import { deriveAdvertisedTotalPages } from '@/components/task-page/task-page-work-item-pagination'
+import { deriveAdvertisedTotalPages } from '../../../../../shared/work-item-empty-page'
 import {
   GITHUB_PR_TASK_GRID_CLASS,
   GITHUB_TASK_GRID_CLASS,
-  PR_CHECKS_EAGER_PREFETCH_LIMIT,
-  getTaskPageRepoSourceContext
+  PR_CHECKS_EAGER_PREFETCH_LIMIT
 } from '../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
@@ -39,7 +40,8 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     },
     [activeGithubTaskKind]
   )
-  const currentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+  const rawCurrentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+  const currentPageItems = useGitHubTaskItems(rawCurrentPageItems)
   const typeFilteredCurrentPageItems = useMemo(
     () => applyTypeFilter(currentPageItems),
     [applyTypeFilter, currentPageItems]

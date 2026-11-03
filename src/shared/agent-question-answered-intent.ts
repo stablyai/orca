@@ -1,5 +1,5 @@
 import type { AgentType } from './agent-status-types'
-import { askOptionsHavePreview } from './native-chat-ask'
+import { askOptionsHavePreview } from './native-chat/input/native-chat-ask'
 
 /** Main revalidates the renderer's submit snapshot against cached status so racing real hooks outrank inference. */
 export type AgentQuestionAnsweredInferenceRequest = {

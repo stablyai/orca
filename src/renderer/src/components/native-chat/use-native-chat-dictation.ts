@@ -22,8 +22,7 @@ export function useNativeChatDictation(
     dictationState === 'starting' ||
     dictationState === 'listening' ||
     dictationState === 'stopping'
-  const dictationDisabled =
-    !isDictating && (disabled || voiceSettings?.enabled !== true || !voiceSettings.sttModel)
+  const dictationDisabled = !isDictating && (disabled || voiceSettings?.enabled !== true)
   const focusForDictation = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   const toggleDictation = useCallback(() => {
     if (isDictating) {

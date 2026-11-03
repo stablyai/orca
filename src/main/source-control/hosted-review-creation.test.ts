@@ -286,7 +286,8 @@ describe('createHostedReview', () => {
     ).resolves.toEqual({
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: push this branch before creating a pull request.'
+      error: 'Create PR failed: push this branch before creating a pull request.',
+      reason: 'needs_push'
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
@@ -313,7 +314,8 @@ describe('createHostedReview', () => {
     ).resolves.toEqual({
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: switch back to the selected branch before creating a pull request.'
+      error: 'Create PR failed: switch back to the selected branch before creating a pull request.',
+      reason: 'branch_changed'
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
@@ -344,7 +346,9 @@ describe('createHostedReview', () => {
       ok: false,
       code: 'validation',
       error:
-        'Create PR failed: the base branch "stacked-parent" hasn\'t been pushed to the remote. Choose a pushed base or push it first.'
+        'Create PR failed: the base branch "stacked-parent" hasn\'t been pushed to the remote. Choose a pushed base or push it first.',
+      reason: 'base_not_on_remote',
+      base: 'stacked-parent'
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
@@ -583,6 +587,7 @@ describe('createHostedReview', () => {
       ok: false,
       code: 'already_exists',
       error: 'A pull request already exists for this branch.',
+      reason: 'existing_review',
       existingReview: {
         number: 31,
         url: 'https://github.com/acme/orca/pull/31'

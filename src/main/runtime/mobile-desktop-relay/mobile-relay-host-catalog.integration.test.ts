@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,7 +9,7 @@ import { z } from 'zod'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
@@ -22,6 +24,22 @@ import {
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../../git/worktree', () => {
   const worktrees = [

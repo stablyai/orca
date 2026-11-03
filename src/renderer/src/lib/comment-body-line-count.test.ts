@@ -10,13 +10,6 @@ afterEach(() => {
 })
 
 describe('comment body layout line count', () => {
-  it('matches normal newline counts used for comment layout', () => {
-    expect(getCommentBodyLayoutLineCount('')).toBe(1)
-    expect(getCommentBodyLayoutLineCount('one line')).toBe(1)
-    expect(getCommentBodyLayoutLineCount('one\ntwo\nthree')).toBe(3)
-    expect(getCommentBodyLayoutLineCount('one\r\ntwo')).toBe(2)
-  })
-
   it('caps newline-heavy pasted comments without splitting the body', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')

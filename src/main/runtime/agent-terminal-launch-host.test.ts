@@ -1,3 +1,5 @@
+import { mergeWorktree } from '../ipc/worktree-metadata-merge'
+import type { Repo } from '../../shared/repo-types'
 // #11163: colliding repo ids on two hosts once selected the wrong launch settings.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,12 +15,26 @@ import { OrcaRuntimeService } from './orca-runtime'
 const REMOTE_PATH = '/srv/app-feature'
 
 type RuntimeInternals = {
-  resolveWorktreeSelector: (selector: string) => Promise<unknown>
-  buildStartupForAgent: (repo: unknown, agent: unknown, prompt: string) => unknown
-  createTerminal: (selector: string, opts: unknown) => Promise<unknown>
+  resolveGitWorktreeSelector: (selector: string) => Promise<unknown>
+  buildStartupForAgent: (
+    repo: unknown,
+    agent: unknown,
+    prompt: string,
+    args?: unknown,
+    options?: unknown
+  ) => unknown
+  createTerminal: (
+    selector: string,
+    opts: unknown,
+    created?: unknown,
+    resolved?: unknown
+  ) => Promise<unknown>
 }
 
-function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string) {
+function makeRuntime(
+  repos: readonly Pick<Repo, 'id' | 'path' | 'connectionId'>[],
+  hostId?: string
+) {
   const store = {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/tmp/workspaces' }),
     getProjectHostSetups: () => [],
@@ -27,7 +43,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
   }
   const runtime = new OrcaRuntimeService(store as never)
   const internals = runtime as unknown as RuntimeInternals
-  vi.spyOn(internals, 'resolveWorktreeSelector').mockResolvedValue({
+  vi.spyOn(internals, 'resolveGitWorktreeSelector').mockResolvedValue({
     id: 'repo-shared::/srv/app-feature',
     repoId: 'repo-shared',
     path: REMOTE_PATH,
@@ -42,6 +58,48 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
 }
 
 describe('launchAgentTerminal execution host', () => {
+  it('carries the resolved same-path target through launch scope and terminal creation', async () => {
+    const local: Repo = {
+      id: 'repo-shared',
+      path: '/same',
+      displayName: 'Local',
+      addedAt: 1,
+      badgeColor: '#000'
+    }
+    const remote: Repo = { ...local, connectionId: 'builder' }
+    const { runtime, buildStartup } = makeRuntime([local, remote], 'ssh:builder')
+    const git = { path: '/same', head: 'abc', branch: 'main', isMainWorktree: true, isBare: false }
+    const worktree = {
+      ...mergeWorktree(remote.id, git, undefined),
+      hostId: 'ssh:builder' as const,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      git
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the private selector is replaced solely to prove the internal evidence prevents another lookup.
+    const internals = runtime as unknown as RuntimeInternals
+    vi.spyOn(internals, 'resolveGitWorktreeSelector').mockRejectedValue(
+      new Error('bare selector was repeated')
+    )
+    await runtime.launchAgentTerminal(
+      `id:${worktree.id}`,
+      { agent: 'codex', prompt: 'Review' },
+      { worktree, repo: remote }
+    )
+    expect(buildStartup.mock.calls[0]?.[0]).toEqual(remote)
+    expect(buildStartup.mock.calls[0]?.[4]).toMatchObject({
+      launchScope: { connectionId: 'builder', repo: remote, path: '/same' }
+    })
+    expect(internals.createTerminal).toHaveBeenCalledWith(
+      `id:${worktree.id}`,
+      expect.any(Object),
+      undefined,
+      worktree,
+      undefined
+    )
+  })
+
   beforeEach(() => {
     vi.restoreAllMocks()
   })

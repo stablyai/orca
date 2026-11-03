@@ -12,3 +12,14 @@ export function notifyTerminalInputNotSent(tabId: string): void {
     { id: `terminal-input-not-sent:${tabId}` }
   )
 }
+
+/** Keys typed while a terminal was still starting were dropped so they could not reach the wrong shell. */
+export function notifyTerminalTypingDiscardedBeforeBind(tabId: string): void {
+  toast.info(
+    translate(
+      'terminal.typingBeforeStartNotSent',
+      'Some keys typed while the terminal was starting were not sent.'
+    ),
+    { id: `terminal-typing-discarded-before-bind:${tabId}` }
+  )
+}

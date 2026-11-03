@@ -1,5 +1,5 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { renderJournalState, type JournalReducerState } from './journal-reducer'
 
 /** Only a committed journal owner can certify reuse across public reads. */
@@ -11,6 +11,7 @@ export function createJournalPublicReader() {
         sequence: number
         revision: string
         normalizationKey?: string
+        view?: ReturnType<typeof readJournalPublicView>
       }
     | undefined
   return (raw: JournalReducerState, display: JournalReducerState, revision: string) => {
@@ -24,10 +25,10 @@ export function createJournalPublicReader() {
       current = { raw, epoch, sequence, revision }
     }
     const source = current
-    return readJournalPublicView(
+    return (source.view ??= readJournalPublicView(
       display,
       () => (source.normalizationKey ??= journalNormalizationKey(display))
-    )
+    ))
   }
 }
 

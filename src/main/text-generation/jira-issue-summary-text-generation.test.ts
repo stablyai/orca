@@ -1,3 +1,4 @@
+import { sourceShapedKimiOutput } from '../../shared/__fixtures__/kimi-generation-source-shaped'
 import { describe, expect, it } from 'vitest'
 import { ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
@@ -27,17 +28,21 @@ function remoteTarget(execute: (plan: CommitMessagePlan) => Promise<string>) {
 }
 
 describe('generateJiraIssueSummaryFromContext', () => {
-  it('sanitizes agent output into a single-line summary', async () => {
+  it.each(['custom', 'kimi'] as const)('%s Jira summary', async (agentId) => {
     const result = await generateJiraIssueSummaryFromContext(
       { description: 'Login crashes when retried offline.' },
-      { agentId: 'custom', model: '', customAgentCommand: 'agent' },
-      remoteTarget(async () => '"Fix offline login retry crash"\nextra commentary')
+      { agentId, model: agentId === 'kimi' ? 'default' : '', customAgentCommand: 'agent' },
+      remoteTarget(async () =>
+        agentId === 'kimi'
+          ? sourceShapedKimiOutput('"Fix offline login retry crash"\nextra commentary')
+          : '"Fix offline login retry crash"\nextra commentary'
+      )
     )
 
     expect(result).toEqual({
       success: true,
       summary: 'Fix offline login retry crash',
-      agentLabel: 'agent'
+      agentLabel: agentId === 'kimi' ? 'Kimi' : 'agent'
     })
   })
 
@@ -76,7 +81,7 @@ describe('generateJiraIssueSummaryFromContext', () => {
       remoteTarget(async () => '""\n')
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'Generated summary was empty after sanitization.'
     })
@@ -168,13 +173,64 @@ it.each(['local', 'remote'] as const)(
             })
       expect(result.success).toBe(true)
       expect(calls).toHaveLength(2)
-      expect(calls[1]).toEqual({
-        ...calls[0],
-        args: calls[0].args.filter((arg) => arg !== '--strict-mcp-config')
-      })
+      // The retry loads managed MCP servers, so it denies their tools; nothing else changes.
+      const retryArgs = calls[0].args.filter((arg) => arg !== '--strict-mcp-config')
+      retryArgs.splice(retryArgs.indexOf('--permission-mode'), 0, '--disallowedTools', 'mcp__*')
+      expect(calls[1]).toEqual({ ...calls[0], args: retryArgs })
     }
   }
 )
+
+it('keeps the picked model and a non-plan mode on an old CLI under enterprise MCP', async () => {
+  const calls: CommitMessagePlan[] = []
+  const params = { agentId: 'claude' as const, model: 'haiku' }
+  const result = await generateCommitMessage({
+    context: { branch: 'main', stagedSummary: 'M file', stagedPatch: '+fix' },
+    params,
+    target: {
+      kind: 'remote',
+      cwd: '/repo',
+      missingBinaryLocation: 'remote PATH',
+      // Answers like CLI 2.0.30 with a managed MCP config.
+      execute: async (plan) => {
+        calls.push(plan)
+        const stderr = plan.args.includes('dontAsk')
+          ? "error: option '--permission-mode <mode>' argument 'dontAsk' is invalid. Allowed choices are acceptEdits, bypassPermissions, default, plan.\n"
+          : plan.args.includes('--strict-mcp-config')
+            ? 'You cannot use --strict-mcp-config when an enterprise MCP config is present'
+            : ''
+        return {
+          stdout: stderr ? '' : 'Fix crash',
+          stderr,
+          exitCode: stderr ? 1 : 0,
+          timedOut: false
+        }
+      }
+    },
+    spawnAgent: () => {
+      throw new Error('A remote target spawns nothing locally')
+    }
+  })
+  expect(result).toMatchObject({ success: true, message: 'Fix crash' })
+  const prompt = calls[0].stdinPayload ?? ''
+  const expected = [
+    planCommitMessageGeneration(params, prompt),
+    planCommitMessageGeneration(params, prompt, { legacyToolPolicy: true }),
+    planCommitMessageGeneration(params, prompt, { legacyToolPolicy: true, strictMcp: false })
+  ].map((planned) => (planned.ok ? planned.plan : null))
+  expect(calls).toEqual(expected)
+  for (const plan of calls) {
+    expect(plan.args[plan.args.indexOf('--model') + 1]).toBe('haiku')
+    expect(plan.args).not.toContain('plan')
+  }
+  expect(calls[2].args[calls[2].args.indexOf('--permission-mode') + 1]).toBe('default')
+  // Every rebuilt attempt keeps its read grant.
+  expect(calls.map((plan) => plan.args[plan.args.indexOf('--allowedTools') + 1])).toEqual([
+    'Read,Grep,Glob',
+    'Read(//**),Grep(//**),Glob(//**)',
+    'Read(//**),Grep(//**),Glob(//**)'
+  ])
+})
 
 it('preserves Jira custom output and OpenCode one-attempt behavior', async () => {
   expect(

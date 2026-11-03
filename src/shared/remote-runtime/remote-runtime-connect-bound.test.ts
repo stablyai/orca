@@ -2,7 +2,7 @@ import { pairedRuntimeConnectionFromOffer } from '../paired-runtime-connection'
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateKeyPair, publicKeyToBase64 } from '../e2ee-crypto'
-import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { isRecoverableRemoteRuntimeConnectionError } from './remote-runtime-client-error-classification'
 import {
   REMOTE_RUNTIME_CONNECT_TIMEOUT_MS,

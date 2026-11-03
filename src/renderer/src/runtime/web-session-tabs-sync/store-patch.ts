@@ -1,3 +1,4 @@
+import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
 import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
@@ -22,6 +23,7 @@ import {
   hostWorkingClientBoundaryByPaneKey,
   type WebSessionTabsSyncState
 } from './state'
+import { reportVisibleTabPickToHost } from '../web-session-visible-tab-pick-report'
 import {
   createHostSessionMirrorSettle,
   type HostSessionMirrorPatchVerdict,
@@ -30,10 +32,16 @@ import {
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
-  buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+  buildPatch: (
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
+  ) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
   hostMirrorVerdict: HostSessionMirrorPatchVerdict,
   agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
-  allowCompletionNotification = false
+  allowCompletionNotification = false,
+  affectedWorkspaces = hostMirrorVerdict.frames
+    .filter(({ decision }) => decision.apply)
+    .map(({ worktreeId }) => worktreeId)
 ): HostSessionMirrorSettle {
   let mirroredAgentStatusChanged = false
   // Zustand commits before notifying subscribers, so a completed producer has landed even if a subscriber throws.
@@ -51,9 +59,10 @@ export function applyWebSessionTabsStorePatch(
   }[] = []
 
   const runStorePatch = (
-    state: AppState
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
-    const patch = buildPatch(state)
+    const patch = buildPatch(state, changedAgentPaneKeys)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
@@ -176,12 +185,18 @@ export function applyWebSessionTabsStorePatch(
         }
       }
     }
+    for (const key of new Set(affectedWorkspaces)) {
+      retireRemovedNativeChatDraftPositions(
+        state.unifiedTabsByWorktree[key] ?? [],
+        (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
+      )
+    }
     patchCommitted = true
     return patch
   }
 
   try {
-    useAppStore.setState(runStorePatch)
+    useAppStore.getState().updateAgentStatusState(runStorePatch)
   } catch (error) {
     if (!patchCommitted) {
       throw error
@@ -195,6 +210,7 @@ export function applyWebSessionTabsStorePatch(
         toRuntimeExecutionHostId(environmentId),
         publishedStructuredSessions([source])
       )
+      reportVisibleTabPickToHost(environmentId, source)
     }
   }
   const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)

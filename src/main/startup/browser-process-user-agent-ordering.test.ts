@@ -75,14 +75,16 @@ vi.mock('./configure-process', () => ({
   optOutOfHiddenPageWakeUpThrottling: vi.fn(),
   patchPackagedProcessPath: vi.fn()
 }))
-vi.mock('../serve-update-handoff', () => ({ installServeSupervisorDisconnectQuit: vi.fn() }))
+vi.mock('../updater/serve-update-handoff', () => ({
+  installServeSupervisorDisconnectQuit: vi.fn()
+}))
 vi.mock('./main-process-error-guards', () => ({
   installUncaughtPipeErrorGuard: vi.fn(),
   installUnhandledRejectionLogging: vi.fn()
 }))
 vi.mock('./hydrate-shell-path')
 vi.mock('../runtime/remote-server-updater', () => ({ configureRemoteServerUpdater: vi.fn() }))
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   getRemoteServerUpdaterSnapshot: vi.fn(),
   checkForRemoteServerUpdate: vi.fn(),
   downloadRemoteServerUpdate: vi.fn(),
@@ -153,7 +155,7 @@ vi.mock('../ipc/filesystem/watchers/filesystem-watcher', () => ({
   }
 }))
 vi.mock('../network/proxy-settings')
-vi.mock('../persistence', () => ({
+vi.mock('../persistence/loading-store/user-data-path', () => ({
   initDataPath: () => mocks.events.push('init-data-path'),
   getCanonicalUserDataPath: () => '/canonical-user-data'
 }))
@@ -163,7 +165,7 @@ vi.mock('../persistence/profile-state/profile-state-access', () => ({
     return mocks.admission()
   }
 }))
-vi.mock('../macos-press-and-hold-default')
+vi.mock('../window/desktop-integration/macos-press-and-hold-default')
 vi.mock('../ai-vault/session-parse-cache-persistence')
 vi.mock('../orca-profiles/profile-index-store', () => ({ initOrcaProfilePaths: vi.fn() }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
@@ -295,7 +297,9 @@ describe('browser process user-agent startup ordering', () => {
     expect(writeIndex).toBeLessThan(continuationIndex)
     expect(getBrowserProcessUserAgentIdentity()).toEqual({
       mode: 'clean',
-      userAgent: mocks.userAgent()
+      userAgent: mocks.userAgent(),
+      electronUserAgent:
+        'Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Orca Development/0.0.0 Chrome/150.0.0.0 Electron/43.0.0 Safari/537.36'
     })
     expect(mocks.userAgent()).not.toMatch(/Electron/)
     expect(mocks.userAgent()).not.toMatch(/Orca|Development/)
@@ -375,7 +379,8 @@ it('defers a Linux desktop startup failure until Electron is ready', async () =>
 
     resolveReady?.()
     await ready
-    await Promise.resolve()
+    // The dialog waits for the async system-language catalog after ready.
+    await vi.waitFor(() => expect(mocks.app.exit).toHaveBeenCalled())
     expect(mocks.showErrorBox).toHaveBeenCalledWith(
       'Orca could not start',
       expect.stringContaining('Linux pre-ready failure')

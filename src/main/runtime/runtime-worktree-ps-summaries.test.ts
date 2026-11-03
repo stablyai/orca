@@ -45,6 +45,38 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     ])
   })
 
+  it("sends a renamed workspace's older ids so phone history still finds its sessions", () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only these fields for a git row.
+    const worktree = {
+      id: 'repo-1::/workspace/app',
+      repoId: 'repo-1',
+      path: '/workspace/app',
+      branch: 'feature',
+      isArchived: false,
+      isMainWorktree: false,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      lastActivityAt: 0
+    } as unknown as ResolvedWorktree
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the summary builder reads only these store methods.
+    const store = {
+      getRepos: () => [],
+      getWorktreeMeta: () => ({ priorWorktreeIds: ['repo-1::/workspace/old-app'] }),
+      getAllWorktreeMeta: () => ({}),
+      getFolderWorkspaces: () => [],
+      getProjectGroups: () => []
+    } as unknown as RuntimeStore
+
+    const summary = buildRuntimeWorktreePsSummaries({
+      store,
+      resolvedWorktrees: [worktree],
+      platformByRepoId: new Map()
+    }).get(worktree.id)
+
+    expect(summary?.priorWorktreeIds).toEqual(['repo-1::/workspace/old-app'])
+  })
+
   it('carries the error of a failed delete the host still lists', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only these fields for a git row.
     const worktree = {
@@ -131,7 +163,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     const summary = (id: string) => summaries.get(id)
 
     expect(summary('main')?.defaultBranch).toBe(true)
-    expect(summary('folder-root')?.defaultBranch).toBe(true)
+    expect(summary('folder-root')?.defaultBranch).toBe(false)
     expect(summary('main-detached')?.defaultBranch).toBe(false)
     expect(summary('main-detached')?.detachedHead).toBe(true)
     expect(summary('provisioned')?.defaultBranch).toBe(false)

@@ -3,7 +3,7 @@ import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-ur
 import {
   compareWorkspacePorts,
   enrichPort,
-  normalizeWorkspacePortProbes,
+  resolveWorkspacePortProbes,
   reconcileAdvertisedUrls
 } from './local-workspace-port-attribution'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
@@ -35,9 +35,12 @@ export async function scanWorkspacePorts(
   try {
     const { ports: rawPorts, metadataAvailable } = await scanPlatformListeningPorts(options)
     recordWorkspacePortScanSuccess()
-    const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
+    const { probes: normalizedWorktrees, complete } = await resolveWorkspacePortProbes(
+      worktrees,
+      options.requireMetadata
+    )
     // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
-    if (metadataAvailable) {
+    if (metadataAvailable && complete) {
       reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
     }
     const ports = rawPorts

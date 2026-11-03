@@ -110,6 +110,7 @@ async function probeWslAvailability(): Promise<WslProbeFailure | null> {
   if (status.code === 0) {
     return null
   }
+  // Known E9 exception: this `--exec` can start a stopped default distro, but only on a missing kernel.
   if (MISSING_WSL2_KERNEL_EXIT_CODES.has(status.code) && (await defaultGuestRuns())) {
     return null
   }

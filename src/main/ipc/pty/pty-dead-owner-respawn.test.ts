@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { withDurableRuntimeStore } from '../../runtime/runtime-durable-store-fixture'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SessionNotFoundError } from '../../daemon/daemon-errors'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -8,187 +8,201 @@ import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider } from './provider/registry'
 import { isHiddenRendererPty } from './delivery/pty-hidden-delivery-gate'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  it('restores hidden delivery before respawning an absent caller session', async () => {
-    const worktreeId = 'repo-1::/tmp/proven-absent-owner'
-    const cwd = '/tmp/proven-absent-owner'
-    const tabId = 'tab-proven-absent-owner'
-    const leafId = '78787878-7878-4878-8878-787878787878'
-    const paneKey = makePaneKey(tabId, leafId)
-    const providerSpawn = vi.fn(
-      async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
-        if (options.attachOnly) {
-          throw new SessionNotFoundError('pty-proven-absent-owner')
+  it.each([false, true])(
+    'reattaches a live removed folder or respawns an absent caller (%s)',
+    async (live) => {
+      const livePtyId = live ? 'pty-live-removed-folder' : 'pty-proven-absent-owner'
+      const worktreeId = live ? 'folder:removed' : 'repo-1::/tmp/proven-absent-owner'
+      const cwd = '/tmp/proven-absent-owner'
+      const tabId = 'tab-proven-absent-owner'
+      const leafId = '78787878-7878-4878-8878-787878787878'
+      const paneKey = makePaneKey(tabId, leafId)
+      const providerSpawn = vi.fn(
+        async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
+          if (options.attachOnly && !live) {
+            throw new SessionNotFoundError(livePtyId)
+          }
+          expect(options.sessionId).toBe(livePtyId)
+          if (!live) {
+            expect(isHiddenRendererPty(livePtyId)).toBe(true)
+          }
+          return {
+            id: livePtyId,
+            incarnationId: live ? 'inc-proven-absent-owner' : 'inc-fresh-proven',
+            ...(live ? { isReattach: true } : {})
+          }
         }
-        expect(options.sessionId).toBe('pty-proven-absent-owner')
-        expect(isHiddenRendererPty('pty-proven-absent-owner')).toBe(true)
-        return { id: 'pty-proven-absent-owner', incarnationId: 'inc-fresh-proven' }
+      )
+      setLocalPtyProvider({
+        spawn: providerSpawn,
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        sendSignal: vi.fn(),
+        getCwd: vi.fn(),
+        getInitialCwd: vi.fn(),
+        clearBuffer: vi.fn(),
+        acknowledgeDataEvent: vi.fn(),
+        hasChildProcesses: vi.fn(),
+        getForegroundProcess: vi.fn(),
+        serialize: vi.fn(),
+        revive: vi.fn(),
+        onData: vi.fn(() => () => {}),
+        onReplay: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {}),
+        listProcesses: vi.fn(async () => []),
+        attach: vi.fn(),
+        getDefaultShell: vi.fn(),
+        getProfiles: vi.fn()
+      } as never)
+      let session = {
+        tabsByWorktree: {
+          [worktreeId]: [{ id: tabId, worktreeId, ptyId: livePtyId }]
+        },
+        terminalLayoutsByTabId: {
+          [tabId]: {
+            root: { type: 'leaf' as const, leafId },
+            activeLeafId: leafId,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [leafId]: livePtyId }
+          }
+        },
+        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-proven-absent-owner' }
       }
-    )
-    setLocalPtyProvider({
-      spawn: providerSpawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      kill: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    let session = {
-      tabsByWorktree: {
-        [worktreeId]: [{ id: tabId, worktreeId, ptyId: 'pty-proven-absent-owner' }]
-      },
-      terminalLayoutsByTabId: {
-        [tabId]: {
-          root: { type: 'leaf' as const, leafId },
-          activeLeafId: leafId,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [leafId]: 'pty-proven-absent-owner' }
-        }
-      },
-      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-proven-absent-owner' }
-    }
-    const store = withDurableRuntimeStore({
-      getWorkspaceSession: vi.fn(() => session),
-      setWorkspaceSession: vi.fn((next) => {
-        session = next
-      }),
-      flushOrThrow: vi.fn(),
-      persistPtyBinding: vi.fn(),
-      getFolderWorkspace: vi.fn(() => undefined),
-      getFolderWorkspaces: vi.fn(() => []),
-      getProjectGroups: vi.fn(() => []),
-      getRepos: vi.fn(() => [])
-    })
-    const runtime = {
-      setPtyController: vi.fn(),
-      resolveTerminalPane: vi.fn(() => {
-        throw new Error('terminal_not_found')
-      }),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'term-proven-absent'),
-      preAllocateHandleForPty: vi.fn(() => 'term-proven-absent'),
-      registerPreAllocatedHandleForPty: vi.fn(),
-      beginPtyRegistration: vi.fn(),
-      cancelPendingPtyRegistration: vi.fn(),
-      assertPtyRegistrationAllowed: vi.fn(),
-      registerPty: vi.fn(),
-      noteTerminalSpawnCommand: vi.fn(),
-      seedHeadlessTerminal: vi.fn(),
-      onPtySpawned: vi.fn(),
-      onPtyExit: vi.fn(),
-      onPtyData: vi.fn()
-    }
-
-    registerPtyHandlers(
-      mainWindow as never,
-      runtime as never,
-      undefined,
-      undefined,
-      undefined,
-      store as never
-    )
-
-    const mounted = await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24,
-      cwd,
-      command: 'codex resume proven-absent-session',
-      sessionId: 'pty-proven-absent-owner',
-      initiallyHidden: true,
-      worktreeId,
-      tabId,
-      leafId,
-      env: {
-        ORCA_PANE_KEY: paneKey,
-        ORCA_TAB_ID: tabId,
-        ORCA_WORKTREE_ID: worktreeId
-      }
-    })
-
-    expect(mounted).toMatchObject({ id: 'pty-proven-absent-owner' })
-    expect(providerSpawn).toHaveBeenCalledTimes(2)
-    expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
-      command: 'codex resume proven-absent-session'
-    })
-    // Proven owner absence keeps the -1 sentinel; synthesizing zero would misreport a clean shell exit.
-    expect(runtime.onPtyExit).toHaveBeenCalledWith(
-      'pty-proven-absent-owner',
-      -1,
-      'inc-proven-absent-owner',
-      { hostExitConfirmed: true }
-    )
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // The dead binding stays until the fresh spawn's one bind swaps it.
-      expect(store.setWorkspaceSession).not.toHaveBeenCalled()
-      const [swap] = vi.mocked(store.persistPtyBinding).mock.calls[0] ?? []
-      expect(typeof swap === 'function' ? swap() : swap).toMatchObject({
-        ptyId: 'pty-proven-absent-owner'
+      const store = withDurableRuntimeStore({
+        getWorkspaceSession: vi.fn(() => session),
+        setWorkspaceSession: vi.fn((next) => {
+          session = next
+        }),
+        flushOrThrow: vi.fn(),
+        persistPtyBinding: vi.fn(),
+        getFolderWorkspace: vi.fn(() => undefined),
+        getFolderWorkspaces: vi.fn(() => []),
+        getProjectGroups: vi.fn(() => []),
+        getRepos: vi.fn(() => [])
       })
-    } else {
-      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-      expect(store.flushOrThrow).toHaveBeenCalledOnce()
+      const runtime = {
+        setPtyController: vi.fn(),
+        resolveTerminalPane: vi.fn(() => {
+          throw new Error('terminal_not_found')
+        }),
+        createPreAllocatedTerminalHandle: vi.fn(() => 'term-proven-absent'),
+        preAllocateHandleForPty: vi.fn(() => 'term-proven-absent'),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        beginPtyRegistration: vi.fn(),
+        cancelPendingPtyRegistration: vi.fn(),
+        assertPtyRegistrationAllowed: vi.fn(),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        seedHeadlessTerminal: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+
+      const mounted = await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd,
+        command: 'codex resume proven-absent-session',
+        sessionId: livePtyId,
+        initiallyHidden: true,
+        worktreeId,
+        tabId,
+        leafId,
+        env: {
+          ORCA_PANE_KEY: paneKey,
+          ORCA_TAB_ID: tabId,
+          ORCA_WORKTREE_ID: worktreeId
+        }
+      })
+
+      expect(mounted).toMatchObject({ id: livePtyId })
+      if (live) {
+        expect(providerSpawn).toHaveBeenCalledTimes(1)
+        expect(providerSpawn.mock.calls[0]?.[0]).toMatchObject({ attachOnly: true })
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+        return
+      }
+      expect(providerSpawn).toHaveBeenCalledTimes(2)
+      expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
+        command: 'codex resume proven-absent-session'
+      })
+      // The registry that owns the PTY answered, so this exit is confirmed — but the code stays the
+      // -1 sentinel; a synthesized zero would be indistinguishable from a clean shell exit.
+      expect(runtime.onPtyExit).toHaveBeenCalledWith(livePtyId, -1, 'inc-proven-absent-owner', {
+        hostExitConfirmed: true
+      })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // The dead binding stays until the fresh spawn's one bind swaps it.
+        expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+        const [swap] = vi.mocked(store.persistPtyBinding).mock.calls[0] ?? []
+        expect(typeof swap === 'function' ? swap() : swap).toMatchObject({
+          ptyId: livePtyId
+        })
+      } else {
+        expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
+        expect(store.flushOrThrow).toHaveBeenCalledOnce()
+      }
     }
-  })
+  )
   it('does not poll after the routed provider confirms absence', async () => {
     const worktreeId = 'repo-1::/tmp/probe-blip-owner'
     const cwd = '/tmp/probe-blip-owner'

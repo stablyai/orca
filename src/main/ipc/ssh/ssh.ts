@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { awaitSignInForCredentialHosts } from './ssh-sign-in-requirement'
 import {
@@ -8,7 +8,7 @@ import {
 } from './ssh-host-user-disconnect'
 import { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
-import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
+import { quitTeardownStartGate } from '../../startup/quit/quit-teardown-start-gate'
 import {
   getSshTargetRegistryStore,
   setSshConnectionManagerResolver,

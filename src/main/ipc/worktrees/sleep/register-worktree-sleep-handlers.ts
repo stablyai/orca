@@ -28,11 +28,14 @@ export function registerWorktreeSleepHandlers(context: WorktreeIpcContext): void
     context.runtime.noteWorkspaceReopened(worktreeId)
   )
   // Main resumes the session before the renderer attaches its spawn.
-  ipcMain.handle('worktrees:resumeSleptPane', (_event, pane: unknown) => {
+  ipcMain.handle('worktrees:resumeSleptPane', (_event, pane: unknown, automatic: unknown) => {
     if (!isRestoredPane(pane)) {
       throw new Error('invalid_pane')
     }
-    return context.runtime.resumeSleptPane(pane)
+    if (automatic !== undefined && typeof automatic !== 'boolean') {
+      throw new Error('invalid_automatic')
+    }
+    return context.runtime.resumeSleptPane(pane, automatic)
   })
   ipcMain.handle(
     'worktrees:retireStrandedSleepRecord',

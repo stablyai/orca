@@ -168,6 +168,9 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'contributor-a\ncontributor-b\n', stderr: '' }
       }
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '', stderr: '' }
+      }
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
@@ -189,19 +192,19 @@ describe('getPullRequestDraftContext', () => {
 
     await getPullRequestDraftContext(execGit, createContextInput())
 
-    expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(0)
     const showRefCalls = execGit.mock.calls.filter(([args]) => args[0] === 'show-ref')
-    const exactRefs = showRefCalls
-      .filter(([args]) => args.includes('--verify'))
-      .map(([args]) => args.at(-1))
-    expect(exactRefs).toEqual(
-      expect.arrayContaining([
-        'refs/remotes/origin/main',
-        'refs/remotes/upstream/main',
-        'refs/remotes/contributor-a/main',
-        'refs/remotes/contributor-b/main'
-      ])
-    )
+    expect(showRefCalls.some(([args]) => args.includes('--verify'))).toBe(false)
+    const exactProbes = execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')
+    expect(exactProbes).toHaveLength(1)
+    expect(exactProbes[0][0]).toEqual([
+      'for-each-ref',
+      '--format=%(refname)',
+      '--',
+      'refs/remotes/origin/main',
+      'refs/remotes/upstream/main',
+      'refs/remotes/contributor-a/main',
+      'refs/remotes/contributor-b/main'
+    ])
     expect(showRefCalls.some(([args]) => args.join(' ') === 'show-ref -- main')).toBe(true)
 
     expect(execGit).not.toHaveBeenCalledWith(
@@ -290,10 +293,8 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'foo/bar\n', stderr: '' }
       }
-      if (args[0] === 'show-ref') {
-        return args.at(-1) === 'refs/remotes/foo/bar/feature/fix'
-          ? { stdout: '' }
-          : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/foo/bar/feature/fix\n' }
       }
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
@@ -319,7 +320,6 @@ describe('getPullRequestDraftContext', () => {
       ['fetch', '--no-tags', 'foo/bar', '+refs/heads/feature/fix:refs/remotes/foo/bar/feature/fix'],
       expect.any(Object)
     )
-    expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(0)
   })
 
   it('preserves Git-valid punctuation in configured remote names', async () => {
@@ -609,10 +609,8 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n', stderr: '' }
       }
-      if (args[0] === 'show-ref') {
-        return args.at(-1) === 'refs/remotes/origin/main'
-          ? { stdout: '', stderr: '' }
-          : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
       if (args[0] === 'fetch' || args[0] === 'branch') {
         return { stdout: '', stderr: '' }
@@ -633,9 +631,6 @@ describe('getPullRequestDraftContext', () => {
       ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
       expect.any(Object)
     )
-    expect(
-      execGit.mock.calls.filter(([args]) => args[0] === 'show-ref' && args.includes('--verify'))
-    ).toHaveLength(3)
-    expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(0)
+    expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(1)
   })
 })

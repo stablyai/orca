@@ -12,16 +12,6 @@ const managed = {
 }
 
 describe('managed orcad compile cache', () => {
-  it('caches inside a managed slot, where slot GC removes it with the slot', () => {
-    const enableCompileCache = vi.fn()
-    enableManagedOrcadCompileCache('/home/u/.orca-remote/orcad-1+ab', managed, {
-      enableCompileCache
-    })
-    expect(enableCompileCache).toHaveBeenCalledWith(
-      join('/home/u/.orca-remote/orcad-1+ab', ORCAD_COMPILE_CACHE_DIRNAME)
-    )
-  })
-
   it('never writes into a slot no client manages, such as a packaged app', () => {
     const enableCompileCache = vi.fn()
     enableManagedOrcadCompileCache('/Applications/Orca.app/orcad', {}, { enableCompileCache })

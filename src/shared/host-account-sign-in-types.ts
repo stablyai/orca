@@ -37,10 +37,21 @@ export type HostAccountSignInStatus = {
   revision: number
   phase: HostAccountSignInPhase
   prompt?: HostAccountSignInPrompt
+  /** English text; older clients show it as-is. */
   error?: string
+  /** Set when `error` is Orca's own HOST_ACCOUNT_SIGN_IN_FAILURE_COPY text; absent from older hosts. */
+  errorCode?: string
   claude?: ClaudeRateLimitAccountsState
   codex?: CodexRateLimitAccountsState
 }
+
+// One English table for sign-in failures Orca names itself; the login's own errors stay uncoded.
+export const HOST_ACCOUNT_SIGN_IN_FAILURE_COPY = {
+  ownerSilent: 'The device that started this sign-in stopped answering.',
+  superseded: 'An account change on this host stopped the sign-in. Start it again.'
+} as const
+
+export type HostAccountSignInFailureCode = keyof typeof HOST_ACCOUNT_SIGN_IN_FAILURE_COPY
 
 export const HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES: ReadonlySet<HostAccountSignInPhase> = new Set([
   'signedIn',

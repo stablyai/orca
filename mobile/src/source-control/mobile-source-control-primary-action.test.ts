@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  buildMobileBranchRemoteAction,
   buildMobileSourceControlPrimaryAction,
   type MobileSourceControlPrimaryActionArgs,
   type MobileSourceControlPrimaryActionHandlers
@@ -35,8 +36,6 @@ function args(overrides: Partial<MobileSourceControlPrimaryActionArgs> = {}) {
     unstagedCount: 0,
     commitMessage: '',
     busyAction: null,
-    openingPath: null,
-    openingBranchPath: null,
     branchCompareResult: null,
     handlers: handlers(),
     ...overrides
@@ -44,7 +43,7 @@ function args(overrides: Partial<MobileSourceControlPrimaryActionArgs> = {}) {
 }
 
 describe('buildMobileSourceControlPrimaryAction', () => {
-  it('selects Stage All for unstaged work and dispatches the stage runner', () => {
+  it('selects Stage all for unstaged work and dispatches the stage runner', () => {
     const h = handlers()
     const action = buildMobileSourceControlPrimaryAction(
       args({
@@ -53,7 +52,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         handlers: h
       })
     )
-    expect(action.label).toBe('Stage All')
+    expect(action.label).toBe('Stage all')
     expect(action.disabled).toBe(false)
     action.onPress()
     expect(h.stageAll).toHaveBeenCalledTimes(1)
@@ -68,7 +67,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         handlers: h
       })
     )
-    expect(action.label).toBe('Commit')
+    expect(action.label).toBe('Commit 1 file')
     expect(action.disabled).toBe(false)
     action.onPress()
     expect(h.commit).toHaveBeenCalledTimes(1)
@@ -90,6 +89,17 @@ describe('buildMobileSourceControlPrimaryAction', () => {
     )
     expect(detached.label).toBe('Commit')
     expect(detached.disabled).toBe(true)
+  })
+
+  it('does not republish a branch whose review is already merged, like desktop', () => {
+    const action = buildMobileSourceControlPrimaryAction(
+      args({
+        status: status({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } }),
+        review: { prState: 'merged', isPRStateLoading: false, reviewNumber: 7, pushTarget: null }
+      })
+    )
+    expect(action.disabled).toBe(true)
+    expect(action.accessibilityHint).toBe('Nothing to commit. The review is already merged.')
   })
 
   it('dispatches force push with lease when the shared decision requires it', () => {
@@ -129,6 +139,33 @@ describe('buildMobileSourceControlPrimaryAction', () => {
     ])
   })
 
+  it('leaves a force push to desktop when the review has its own push target', () => {
+    const h = handlers()
+    const action = buildMobileSourceControlPrimaryAction(
+      args({
+        status: status({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 2,
+            behind: 2,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
+        review: {
+          prState: 'open',
+          isPRStateLoading: false,
+          reviewNumber: 7,
+          pushTarget: { remoteName: 'fork', branchName: 'feature' }
+        },
+        handlers: h
+      })
+    )
+    expect(action.requiresForceWithLease).toBe(true)
+    expect(action.disabled).toBe(true)
+    action.onPress()
+    expect(h.runActionSheetGitSequence).not.toHaveBeenCalled()
+  })
+
   it('disables the button for unresolved entries even during a conflict operation', () => {
     const action = buildMobileSourceControlPrimaryAction(
       args({
@@ -138,7 +175,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         commitMessage: 'Resolve'
       })
     )
-    expect(action.label).toBe('Commit')
+    expect(action.label).toBe('Commit 1 file')
     expect(action.disabled).toBe(true)
     expect(action.accessibilityHint).toBe('Resolve conflicts before committing.')
   })
@@ -153,5 +190,32 @@ describe('buildMobileSourceControlPrimaryAction', () => {
       })
     )
     expect(action.disabled).toBe(false)
+  })
+})
+
+describe('buildMobileBranchRemoteAction', () => {
+  it('offers the branch remote step past local changes, forcing after a rebase', async () => {
+    const h = handlers()
+    const rebased = buildMobileBranchRemoteAction(
+      args({
+        status: status({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 3,
+            behind: 3,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
+        stagedCount: 1,
+        commitMessage: 'wip',
+        handlers: h
+      })
+    )
+    expect(rebased?.label).toBe('Force Push')
+    await rebased?.run()
+    expect(h.runActionSheetGitSequence).toHaveBeenCalledWith('force-push', [
+      { method: 'git.push', params: { forceWithLease: true } }
+    ])
+    expect(buildMobileBranchRemoteAction(args())).toBeNull()
   })
 })

@@ -46,7 +46,10 @@ describe('handler group manifest', () => {
   it('routes every command exported by a handler module', async () => {
     const routes = buildHandlerRoutes(HANDLER_GROUPS)
     const unroutable: string[] = []
-    for (const file of listHandlerModules(HANDLERS_DIR)) {
+    for (const file of [
+      ...listHandlerModules(HANDLERS_DIR),
+      ...listHandlerModules(join(__dirname, 'browser'))
+    ]) {
       const exports: Record<string, unknown> = await import(file)
       for (const [name, value] of Object.entries(exports)) {
         if (!HANDLER_RECORD_EXPORT.test(name) || !isHandlerRecord(value)) {

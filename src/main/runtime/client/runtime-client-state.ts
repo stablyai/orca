@@ -18,7 +18,7 @@ import type { RuntimeClientSettingsUpdate } from '../runtime-client-settings-sha
 import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch-settings'
 import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 import type { TerminalQuickCommandMutation } from '../../../shared/terminal-quick-commands'
-import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat-session-options'
+import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
 import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
 import type { Automation } from '../../../shared/automations-types'

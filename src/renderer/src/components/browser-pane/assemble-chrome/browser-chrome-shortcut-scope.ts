@@ -20,9 +20,13 @@ export function resolveBrowserChromeShortcutScope({
   if (!isActive || !isWorktreeFocused) {
     return 'inactive'
   }
+  const inFocusedGroup = focusedGroupId !== undefined && groupId === focusedGroupId
   // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
-  if (isFloatingWorkspace || focusedGroupId === undefined) {
+  if (isFloatingWorkspace) {
+    return inFocusedGroup ? 'owned-target-focused' : 'owned-target'
+  }
+  if (focusedGroupId === undefined) {
     return 'owned-target'
   }
-  return groupId === focusedGroupId ? 'focused' : 'inactive'
+  return inFocusedGroup ? 'focused' : 'inactive'
 }

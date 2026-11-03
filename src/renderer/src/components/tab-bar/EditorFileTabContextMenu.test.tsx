@@ -4,36 +4,36 @@ const shortcutLabelMock = vi.hoisted(() => vi.fn())
 const revealInFileManager = vi.hoisted(() => vi.fn())
 const storeSettings = vi.hoisted((): { activeRuntimeEnvironmentId?: string } => ({}))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
-    return { type: 'DropdownMenu', props }
+vi.mock('@/components/ui/context-menu', () => ({
+  ContextMenu: function ContextMenu(props: { children?: unknown }) {
+    return { type: 'ContextMenu', props }
   },
-  DropdownMenuContent: function DropdownMenuContent(props: { children?: unknown }) {
-    return { type: 'DropdownMenuContent', props }
+  ContextMenuContent: function ContextMenuContent(props: { children?: unknown }) {
+    return { type: 'ContextMenuContent', props }
   },
-  DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown }) {
-    return { type: 'DropdownMenuItem', props }
+  ContextMenuItem: function ContextMenuItem(props: { children?: unknown }) {
+    return { type: 'ContextMenuItem', props }
   },
-  DropdownMenuSeparator: function DropdownMenuSeparator() {
-    return { type: 'DropdownMenuSeparator', props: {} }
+  ContextMenuSeparator: function ContextMenuSeparator() {
+    return { type: 'ContextMenuSeparator', props: {} }
   },
-  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
-    return { type: 'DropdownMenuShortcut', props }
+  ContextMenuShortcut: function ContextMenuShortcut(props: { children?: unknown }) {
+    return { type: 'ContextMenuShortcut', props }
   },
-  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
-    return { type: 'DropdownMenuLabel', props }
+  ContextMenuLabel: function ContextMenuLabel(props: { children?: unknown }) {
+    return { type: 'ContextMenuLabel', props }
   },
-  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSub', props }
+  ContextMenuSub: function ContextMenuSub(props: { children?: unknown }) {
+    return { type: 'ContextMenuSub', props }
   },
-  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSubContent', props }
+  ContextMenuSubContent: function ContextMenuSubContent(props: { children?: unknown }) {
+    return { type: 'ContextMenuSubContent', props }
   },
-  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSubTrigger', props }
+  ContextMenuSubTrigger: function ContextMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'ContextMenuSubTrigger', props }
   },
-  DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
-    return { type: 'DropdownMenuTrigger', props }
+  ContextMenuTrigger: function ContextMenuTrigger(props: { children?: unknown }) {
+    return { type: 'ContextMenuTrigger', props }
   }
 }))
 
@@ -211,17 +211,22 @@ async function renderMenu(
     externalSshTargetId?: string
     mode?: 'edit' | 'check-details'
     unifiedTabId?: string
+    filePath?: string
   } = {}
 ): Promise<unknown> {
-  const { runtimeEnvironmentId, externalSshTargetId, mode = 'edit', ...props } = overrides
+  const {
+    runtimeEnvironmentId,
+    externalSshTargetId,
+    mode = 'edit',
+    filePath = '/repo/foo.ts',
+    ...props
+  } = overrides
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
-    open: true,
-    menuPoint: { x: 0, y: 0 },
     file: {
       id: 'file-1',
       tabId: 'tab-1',
-      filePath: '/repo/foo.ts',
+      filePath,
       relativePath: 'foo.ts',
       worktreeId: 'wt-1',
       language: 'typescript',
@@ -242,7 +247,6 @@ async function renderMenu(
     resolvedLanguage: 'typescript',
     repoConnectionId: null,
     skipMenuFocusRestoreRef: { current: false },
-    onOpenChange: vi.fn(),
     onActivate: vi.fn(),
     onOpenRenameInput: vi.fn(),
     onTogglePin: vi.fn(),
@@ -260,7 +264,7 @@ async function renderRevealItem(
   overrides?: Parameters<typeof renderMenu>[0]
 ): Promise<ReactElementLike> {
   const tree = expandNode(await renderMenu(overrides))
-  return findElementsByType(tree, 'DropdownMenuItem').find((item) =>
+  return findElementsByType(tree, 'ContextMenuItem').find((item) =>
     extractText(item.props.children).includes('Reveal in Finder')
   )!
 }
@@ -296,7 +300,7 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
       const onActivate = vi.fn()
       vi.stubGlobal('window', { api: { ui: { writeClipboardText } } })
       const tree = expandNode(await renderMenu({ unifiedTabId, onActivate }))
-      const item = findElementsByType(tree, 'DropdownMenuItem').find(
+      const item = findElementsByType(tree, 'ContextMenuItem').find(
         (candidate) => extractText(candidate.props.children) === 'Copy Tab ID'
       )
       const onSelect = item?.props.onSelect
@@ -313,10 +317,10 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     const onActivate = vi.fn()
     const onOpenRenameInput = vi.fn()
     const tree = expandNode(await renderMenu({ onActivate, onOpenRenameInput }))
-    const rename = findElementsByType(tree, 'DropdownMenuItem').find((item) =>
+    const rename = findElementsByType(tree, 'ContextMenuItem').find((item) =>
       extractText(item.props.children).includes('Rename')
     )!
-    const content = findElementsByType(tree, 'DropdownMenuContent')[0]!
+    const content = findElementsByType(tree, 'ContextMenuContent')[0]!
     ;(rename.props.onSelect as () => void)()
     expect(onActivate).not.toHaveBeenCalled()
     expect(onOpenRenameInput).not.toHaveBeenCalled()
@@ -332,7 +336,7 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
 
   it('renders assigned shortcuts next to Rename, Close, and Close All Editor Tabs', async () => {
     const tree = expandNode(await renderMenu())
-    const menuItems = findElementsByType(tree, 'DropdownMenuItem')
+    const menuItems = findElementsByType(tree, 'ContextMenuItem')
 
     const renameItem = menuItems.find((item) => extractText(item.props.children).includes('Rename'))
     const closeItem = menuItems.find((item) => extractText(item.props.children) === 'Close⌘W')
@@ -351,17 +355,17 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     ]
 
     for (const [item, expectedLabel] of shortcutExpectations) {
-      const shortcut = findElementsByType(item, 'DropdownMenuShortcut')
+      const shortcut = findElementsByType(item, 'ContextMenuShortcut')
       expect(shortcut).toHaveLength(1)
       expect(extractText(shortcut[0].props.children)).toBe(expectedLabel)
     }
 
-    expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(3)
+    expect(findElementsByType(tree, 'ContextMenuShortcut')).toHaveLength(3)
   })
 
   it('keeps Close Others without directional close items', async () => {
     const tree = expandNode(await renderMenu())
-    const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
+    const labels = findElementsByType(tree, 'ContextMenuItem').map((item) =>
       extractText(item.props.children)
     )
 
@@ -375,13 +379,13 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
 
     const tree = expandNode(await renderMenu())
 
-    const closeAllItem = findElementsByType(tree, 'DropdownMenuItem').find((item) =>
+    const closeAllItem = findElementsByType(tree, 'ContextMenuItem').find((item) =>
       extractText(item.props.children).includes('Close All Editor Tabs')
     )
 
     expect(closeAllItem).toBeTruthy()
-    expect(findElementsByType(closeAllItem, 'DropdownMenuShortcut')).toHaveLength(0)
-    expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(0)
+    expect(findElementsByType(closeAllItem, 'ContextMenuShortcut')).toHaveLength(0)
+    expect(findElementsByType(tree, 'ContextMenuShortcut')).toHaveLength(0)
   })
 })
 
@@ -428,11 +432,31 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
     expect(extractText(reveal.props.children)).toContain('Local only')
   })
 
+  it('copies a local Windows path with native separators', async () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', {
+      api: {
+        ui: { writeClipboardText },
+        platform: { get: () => ({ platform: 'win32' }) }
+      }
+    })
+    const tree = expandNode(await renderMenu({ filePath: 'C:/repo/foo.ts' }))
+    const copyPath = findElementsByType(tree, 'ContextMenuItem').find(
+      (item) => extractText(item.props.children) === 'Copy Path'
+    )
+    const onSelect = copyPath?.props.onSelect
+    if (typeof onSelect !== 'function') {
+      throw new Error('Missing Copy Path action')
+    }
+    onSelect()
+    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('C:\\repo\\foo.ts')
+  })
+
   it.each(['check-details'] as const)(
     'offers no path actions and no trailing separator for a %s tab, which has no file on disk',
     async (mode) => {
       const tree = expandNode(await renderMenu({ mode }))
-      const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
+      const labels = findElementsByType(tree, 'ContextMenuItem').map((item) =>
         extractText(item.props.children)
       )
 
@@ -441,8 +465,8 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
       ).toEqual([])
       // The two separators that framed the path group go with it.
       const fileTree = expandNode(await renderMenu())
-      expect(findElementsByType(tree, 'DropdownMenuSeparator')).toHaveLength(
-        findElementsByType(fileTree, 'DropdownMenuSeparator').length - 2
+      expect(findElementsByType(tree, 'ContextMenuSeparator')).toHaveLength(
+        findElementsByType(fileTree, 'ContextMenuSeparator').length - 2
       )
     }
   )

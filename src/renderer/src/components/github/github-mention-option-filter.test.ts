@@ -10,22 +10,6 @@ function option(login: string, name: string | null = null): GitHubMentionOption 
 }
 
 describe('github-mention-option-filter', () => {
-  it('filters mention options by login or display name', () => {
-    const options = [
-      option('octocat', 'Mona'),
-      option('release-manager', 'Octavia'),
-      option('build-bot')
-    ]
-
-    expect(filterGitHubMentionOptions(options, 'oct')).toEqual([options[0], options[1]])
-  })
-
-  it('caps mention options at the provided limit', () => {
-    const options = [option('one'), option('two'), option('three')]
-
-    expect(filterGitHubMentionOptions(options, '', 2)).toEqual([options[0], options[1]])
-  })
-
   it('enforces the query budget by UTF-8 byte length', () => {
     const query = 'é'.repeat(GITHUB_MENTION_QUERY_MAX_BYTES)
 

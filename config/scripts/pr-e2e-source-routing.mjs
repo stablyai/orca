@@ -7,6 +7,11 @@ import {
 } from './pr-code-change-scope.mjs'
 import { MANAGED_SSH_E2E_SPEC_PREFIX } from './ci-e2e-job-selection.mjs'
 import { LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
+import { PR_BROWSER_E2E_SOURCE_ROUTES } from './pr-browser-e2e-source-routes.mjs'
+import { PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES } from './pr-editor-preview-e2e-source-routes.mjs'
+import { PR_FEATURE_AREA_E2E_SOURCE_ROUTES } from './pr-feature-area-e2e-source-routes.mjs'
+import { PR_PLUGIN_E2E_SOURCE_ROUTES } from './pr-plugin-e2e-source-routes.mjs'
+import { PR_WSL_E2E_SOURCE_ROUTES } from './pr-wsl-e2e-source-routes.mjs'
 
 const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupportSource(file)
 
@@ -33,6 +38,11 @@ const ENABLED_AUTOMATION_MOVE =
   /^src\/(?:main\/(?:persistence\/(?:migrating-orcad-catalog\/orcad-(?:source-automation-state|source-dormant-state|source-dependency-census|destination-automation-state)|scheduling-automations\/automation-schedule-operations)|automations\/(?:run-target-resolution|automation-dispatch-request|orcad-fenced-automation)|ssh\/orcad-migration-(?:moved-automations|source-retention))|shared\/orcad-migration\/orcad-migration-(?:dormant-automation-validation|source-cutover))\.ts$/
 
 export const PR_E2E_SOURCE_ROUTES = [
+  ...PR_BROWSER_E2E_SOURCE_ROUTES,
+  ...PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES,
+  ...PR_FEATURE_AREA_E2E_SOURCE_ROUTES,
+  ...PR_PLUGIN_E2E_SOURCE_ROUTES,
+  ...PR_WSL_E2E_SOURCE_ROUTES,
   {
     id: 'ssh.orcad-editor-ownership',
     specs: ['tests/e2e/ssh-orcad-editor-ownership.spec.ts'],
@@ -180,7 +190,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:ssh\/orcad-(?:update-plan|runtime-maintenance|installed-activation|remote-deploy)|managed-server\/lifecycle\/orcad-(?:managed-update-|managed-auto-update|runtime-status))|renderer\/src\/components\/settings\/(?:managed-server-|use-managed-server-lifecycle))/.test(
+        /^src\/(?:main\/(?:ssh\/orcad-(?:update-plan|runtime-maintenance|installed-activation|remote-deploy)|managed-server\/lifecycle\/orcad-(?:managed-update-|managed-auto-update|runtime-status|managed-version-gc)|managed-server\/install\/(?:orcad-remote-gc|remote-install-gc)|wsl\/wsl-orcad-deploy\.ts)|renderer\/src\/components\/settings\/(?:managed-server-|use-managed-server-lifecycle))/.test(
           file
         ))
   },
@@ -367,7 +377,6 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: [
       'tests/e2e/ssh-orcad-paired-phone-projects.spec.ts',
       'tests/e2e/ssh-orcad-pairing-repair.spec.ts',
-      'tests/e2e/ssh-orcad-retained-upgrade-state.spec.ts',
       'tests/e2e/ssh-orcad-shared-home-machines.spec.ts',
       'tests/e2e/ssh-orcad-shared-login-migration.spec.ts',
       'tests/e2e/ssh-orcad-terminal-network-outage.spec.ts',
@@ -389,18 +398,6 @@ export const PR_E2E_SOURCE_ROUTES = [
         /^src\/main\/(?:browser\/(?:ssh-browser-network-execution-route|browser-network-deferred-socket|browser-network-execution-route|system-ssh-socks-client-socket)|ssh\/system-transport\/system-ssh-dynamic-forward-process)\.ts$/.test(
           file
         ))
-  },
-  {
-    id: 'terminal.windows-wsl-launch-and-paste',
-    specs: [
-      'tests/e2e/golden-tab-bar-agent-launch.spec.ts',
-      'tests/e2e/terminal-windows-shell-paste-ownership.spec.ts'
-    ],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:config\/scripts\/(?:verify-wsl-e2e-participation|verify-playwright-participation)\.mjs$|src\/main\/(?:wsl[/-]|pty\/.*wsl|providers\/wsl)|src\/shared\/(?:wsl-|windows-terminal-shell|shell-argument-quoting)|src\/renderer\/src\/.*(?:terminal-paste|pty-paste)|tests\/e2e\/(?:golden-tab-bar-agent-launch\.spec|terminal-windows-shell-paste-ownership\.spec|terminal-inline-images-windows\.spec|helpers\/(?:wsl-golden-stub-agent|golden-stub-agent))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))/.test(
-        file
-      )
   },
   {
     id: 'terminal-input.ime-and-synthetic-forwarding',
@@ -520,25 +517,6 @@ export const PR_E2E_SOURCE_ROUTES = [
       /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:remote-pane-layout-push|TerminalPane)\.tsx?|src\/renderer\/src\/lib\/terminal-layout-equality\.ts|src\/renderer\/src\/runtime\/web-session-tabs-sync\/use-web-session-tabs-sync\.ts|src\/renderer\/src\/store\/slices\/terminals\.ts)$/.test(
         file
       )
-  },
-  {
-    // Client-rendered host rows need two real Electron apps; omit high-churn ipc/runtime/useIpcEvents/preload seams covered by main-process integration.
-    id: 'client-hosted-browser.host-strip',
-    specs: ['tests/e2e/paired-client-hosted-browser-host-strip.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/.*(?:[Cc]lient-?[Hh]osted-?[Bb]rowser|BrowserPaneOverlayLayer)/.test(file)
-  },
-  {
-    // Restart survival also depends on adoption, lease/reconciliation and tab snapshots; include orca-runtime.ts despite churn because it publishes the hold flag.
-    id: 'client-hosted-browser.restart-survival',
-    specs: ['tests/e2e/paired-client-hosted-browser-restart-survival.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      (file === 'src/main/runtime/browser/browser-commands.ts' ||
-        /^src\/.*(?:[Cc]lient-?[Hh]osted|browser-host-(?:lease|page|client-page)|browser-client-(?:host|page)|runtime-browser-(?:client-)?page|session-tabs-sync|host-session-snapshot-authority|orca-runtime\.ts|\/runtime-(?:status|types)\.ts)/.test(
-          file
-        ))
   },
   {
     // Connector code only: the shared launcher, writer and hook store it reuses already have their own routes.

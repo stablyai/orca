@@ -2,6 +2,22 @@ import { Duplex } from 'node:stream'
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 
+/** How long a closed channel's guest gets to exit on stdin EOF before wsl.exe is killed. */
+export const WSL_CHANNEL_CLOSE_GRACE_MS = 2_000
+
+// wsl.exe children inside their close grace; quit kills them so none outlives Orca.
+const closingChildren = new Set<PipedChildProcess>()
+
+/** App quit: no grace left, so a guest still running after close must not keep wsl.exe up. */
+export function killWslChannelsInCloseGrace(): void {
+  for (const child of closingChildren) {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill()
+    }
+  }
+  closingChildren.clear()
+}
+
 /** Expose wsl.exe stdio as an SSH-style channel; exit reports status and close follows stdio teardown. */
 export function wrapWslCommandProcess(child: PipedChildProcess): RemoteCommandChannel {
   // Only the child emits close, once after exit status, like ssh2.
@@ -58,9 +74,27 @@ export function wrapWslCommandProcess(child: PipedChildProcess): RemoteCommandCh
     stdin: child.stdin,
     stderr: child.stderr,
     close: () => {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill()
+      if (child.exitCode !== null || child.signalCode !== null) {
+        return
       }
+      // EOF first: a guest that exits on its own ends its WSL session; a killed wsl.exe can leave
+      // the session behind (a lingering wslhost.exe), which keeps an idle distro running.
+      child.stdin.end()
+      closingChildren.add(child)
+      const timer = setTimeout(() => {
+        // Quit may already have killed it.
+        if (!closingChildren.delete(child)) {
+          return
+        }
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill()
+        }
+      }, WSL_CHANNEL_CLOSE_GRACE_MS)
+      timer.unref?.()
+      child.once('exit', () => {
+        clearTimeout(timer)
+        closingChildren.delete(child)
+      })
     }
   })
   return channel

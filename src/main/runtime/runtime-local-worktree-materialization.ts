@@ -21,7 +21,7 @@ import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktre
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 import { attributedSparsePresetId } from '../ipc/sparse-preset-attribution'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
 import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 export async function materializeRuntimeLocalWorktree<T>(args: {
@@ -85,7 +85,9 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
       orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
       baseRef: metadataBaseRef,
-      ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
+      ...(checkoutExistingBranch || request.branchIntent === 'open-existing-v2'
+        ? { preserveBranchOnDelete: true }
+        : {}),
       ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
       ...(sparseDirectories.length > 0
         ? {

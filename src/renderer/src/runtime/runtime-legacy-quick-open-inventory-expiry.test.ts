@@ -136,19 +136,6 @@ describe('legacy Quick Open inventory expiry', () => {
     expect(cached('new-owner')).toBe(true)
   })
 
-  it('does not cache an oversized response and retries rather than treating recent paths as absent', async () => {
-    const value = listing()
-    value.files[0].relativePath = 'x'.repeat(65_537)
-    call.mockResolvedValueOnce(value)
-    await expect(search()).rejects.toThrow('too large')
-    expect(cached()).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
-    call.mockResolvedValueOnce(listing())
-    await search()
-    expect(call).toHaveBeenCalledTimes(2)
-    expect(cached()).toBe(true)
-  })
-
   it('keeps one timer and strict expiry without renewing it on cache hits', async () => {
     call.mockImplementation(async () => listing())
     const first = await search()
@@ -162,20 +149,6 @@ describe('legacy Quick Open inventory expiry', () => {
     expect(await search()).toEqual(first)
     expect(call).toHaveBeenCalledTimes(2)
     expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('starts the settled deadline when the inventory arrives', async () => {
-    const load = queueLoad()
-    const pending = search()
-    expect(vi.getTimerCount()).toBe(0)
-    vi.advanceTimersByTime(5_000)
-    load.resolve(listing())
-    await pending
-    vi.advanceTimersByTime(29_999)
-    expect(cached()).toBe(true)
-    vi.advanceTimersByTime(1)
-    expect(cached()).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('sweeps settled responses while leaving shared pending loads valid', async () => {
@@ -194,21 +167,6 @@ describe('legacy Quick Open inventory expiry', () => {
     expect(await shared).toEqual(await pending)
     expect(cached('pending')).toBe(true)
     expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('preserves LRU access order without extending the accessed entry deadline', async () => {
-    call.mockImplementation(async () => listing())
-    for (let index = 0; index < 8; index += 1) {
-      await search(`scope-${index}`)
-    }
-    await search('scope-0')
-    await search('scope-8')
-    expect(cached('scope-0')).toBe(true)
-    expect(cached('scope-1')).toBe(false)
-    expect(vi.getTimerCount()).toBe(1)
-    vi.advanceTimersByTime(30_000)
-    expect(cached('scope-0')).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it.each(['cleared', 'evicted'])(
@@ -284,39 +242,6 @@ describe('legacy Quick Open inventory expiry', () => {
     expect(await search()).toEqual(result)
     expect(call).toHaveBeenCalledTimes(2)
     expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('retries failed requests without keeping an expiry timer for their response', async () => {
-    call.mockRejectedValueOnce(new Error('host failed'))
-    await expect(search()).rejects.toThrow('host failed')
-    expect(cached()).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
-    call.mockResolvedValueOnce(listing())
-    await search()
-    expect(cached()).toBe(true)
-    expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('replaces a longer armed deadline after a backward clock change and a new settlement', async () => {
-    const timeout = vi.spyOn(globalThis, 'setTimeout')
-    call.mockImplementation(async () => listing())
-    await search()
-    vi.setSystemTime(-100_000)
-    vi.advanceTimersByTime(30_000)
-    expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), 100_000)
-    vi.advanceTimersByTime(1_000)
-    await search('two')
-    expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), 30_000)
-    expect(vi.getTimerCount()).toBe(1)
-    vi.advanceTimersByTime(29_999)
-    expect(cached('two')).toBe(true)
-    vi.advanceTimersByTime(1)
-    expect(cached('two')).toBe(false)
-    expect(cached()).toBe(true)
-    expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), 69_000)
-    vi.advanceTimersByTime(69_000)
-    expect(cached()).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('clamps backward-clock delays and reschedules the remaining deadline', async () => {

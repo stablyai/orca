@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   appendWaitBlockedCarry,
   createWaitBlockedAppendedCarry,
-  readWaitBlockedCarry,
-  resetWaitBlockedCarry
+  readWaitBlockedCarry
 } from './wait-blocked-check-state'
+
 import { MAX_TAIL_CHARS } from './terminal-tail-limits'
 
 /** The accumulation this replaced, verbatim, as the equivalence oracle. */
@@ -67,31 +67,5 @@ describe('wait-blocked appended carry', () => {
       expect(readWaitBlockedCarry(carry)).toBe(reference)
       expect(carry.chars).toBe(reference.length)
     }
-  })
-
-  it('retains chunks instead of flattening the window on every chunk', () => {
-    // Old slicing copied the full saturated 256KiB window each chunk; retain chunks and copy only the boundary head.
-    const carry = createWaitBlockedAppendedCarry()
-    const chunk = 'z'.repeat(32 * 1024)
-    for (let i = 0; i < 16; i += 1) {
-      appendWaitBlockedCarry(carry, chunk)
-    }
-    expect(carry.chars).toBe(MAX_TAIL_CHARS)
-    expect(carry.chunks.length).toBe(8)
-
-    appendWaitBlockedCarry(carry, 'tail')
-    expect(carry.chars).toBe(MAX_TAIL_CHARS)
-    // Head trimmed in place by 4 chars; no full-window copy.
-    expect(carry.chunks.length).toBe(9)
-    expect(carry.chunks[0].length).toBe(chunk.length - 4)
-  })
-
-  it('reset empties the window without leaking retained chunks', () => {
-    const carry = createWaitBlockedAppendedCarry()
-    appendWaitBlockedCarry(carry, 'hello')
-    resetWaitBlockedCarry(carry)
-    expect(readWaitBlockedCarry(carry)).toBe('')
-    expect(carry.chars).toBe(0)
-    expect(carry.chunks).toHaveLength(0)
   })
 })

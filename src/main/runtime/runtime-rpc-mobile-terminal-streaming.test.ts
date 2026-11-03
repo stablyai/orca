@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktree-listing'
 import { z } from 'zod'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
@@ -9,7 +11,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -26,6 +28,22 @@ import {
 } from './runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import { committingSpawn } from './bind-first-pane.test-fixture'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../git/worktree', () => {
   const worktrees = [

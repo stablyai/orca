@@ -1,7 +1,7 @@
 import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
-import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 import { createDraftPasteReadyScanner } from '../../../shared/draft-paste-ready-scanner'
 

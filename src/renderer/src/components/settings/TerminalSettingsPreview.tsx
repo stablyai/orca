@@ -8,7 +8,7 @@ import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-op
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
@@ -90,6 +90,8 @@ export function TerminalSettingsPreview({
       settings.terminalUseSeparateLightTheme,
       settings.terminalDividerColorDark,
       settings.terminalDividerColorLight,
+      settings.terminalColorOverrides,
+      settings.terminalColorOverridesLight,
       systemPrefersDark
     ]
   )
@@ -98,12 +100,7 @@ export function TerminalSettingsPreview({
   const composedTheme = useMemo(
     () => composeActiveTerminalTheme(appearance.theme, settings),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [
-      appearance,
-      settings.terminalColorOverrides,
-      settings.terminalBackgroundOpacity,
-      settings.terminalCursorOpacity
-    ]
+    [appearance, settings.terminalBackgroundOpacity, settings.terminalCursorOpacity]
   )
 
   const dividerThicknessPx = clampNumber(settings.terminalDividerThicknessPx, 1, 32)

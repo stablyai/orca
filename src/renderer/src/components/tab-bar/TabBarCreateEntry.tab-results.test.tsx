@@ -4,14 +4,14 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
+import { buildPaletteTabDocument } from '../../../../shared/palette-match/tab-document'
 import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import type { OpenTabSearchResult } from './open-tab-search'
 import type { OpenTabSearchEntries } from './open-tab-search-entries'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { TabEntryOption } from './tab-create-entry-action'
-import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 
 // Stub only create options; preserve real tab search and selection routing.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))

@@ -8,10 +8,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
-import {
-  resolveLaunchedAgentExitEvidence,
-  resolveTabAgentFromSignals
-} from './tab-agent-from-signals'
+import '../../../shared/tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
@@ -41,109 +38,6 @@ async function setPaneForeground(entry: PaneForegroundAgentEntry): Promise<void>
     useAppStore.getState().setPaneForegroundAgent(PANE_KEY, entry)
   })
 }
-
-describe('resolveTabAgentFromSignals process identity', () => {
-  it('ranks the recognized foreground process above title and launch bootstrap', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '✦ Gemini CLI',
-        hookAgent: null,
-        processAgent: 'aider',
-        launchAgent: 'codex'
-      })
-    ).toBe('aider')
-  })
-
-  it('keeps live hook identity above process identity', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: 'Terminal 1',
-        hookAgent: 'claude',
-        processAgent: 'aider',
-        launchAgent: undefined
-      })
-    ).toBe('claude')
-  })
-
-  it('suppresses launch identity on shell-foreground evidence despite a stale agent title', () => {
-    // Local OSC 133;D proves exit even if a dead TUI leaves its title unchanged.
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '✳ Claude Code',
-        hookAgent: null,
-        processAgent: null,
-        processShellForeground: true,
-        launchAgent: 'claude'
-      })
-    ).toBeNull()
-  })
-
-  it('suppresses stuck-title identity once shell foreground is proven on a manual pane', () => {
-    // Shell-foreground evidence replaces the old foreground probe for dead TUIs with stuck titles.
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '✳ Claude Code',
-        hookAgent: null,
-        processAgent: null,
-        processShellForeground: true,
-        launchAgent: undefined
-      })
-    ).toBeNull()
-  })
-
-  it('keeps remote title identity even when a shell-foreground flag is passed', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: true,
-        title: '✳ Claude Code',
-        hookAgent: null,
-        processAgent: null,
-        processShellForeground: true,
-        launchAgent: undefined
-      })
-    ).toBe('claude')
-  })
-
-  it('keeps launch identity while the recognized process is still in the foreground', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: 'zsh',
-        hookAgent: null,
-        processAgent: 'codex',
-        launchAgent: 'codex'
-      })
-    ).toBe('codex')
-  })
-})
-
-describe('resolveLaunchedAgentExitEvidence shell-foreground gate', () => {
-  const baseArgs = {
-    title: '✳ Claude Code',
-    hasObservedAgentSignal: true,
-    hookAgent: null,
-    hasCompletedHook: false,
-    processShellForeground: true
-  }
-
-  it('counts shell-foreground proof as local launched-agent exit evidence', () => {
-    expect(resolveLaunchedAgentExitEvidence({ ...baseArgs, isRemote: false })).toBe(true)
-  })
-
-  it('never counts a shell-foreground flag as remote launched-agent exit evidence', () => {
-    expect(resolveLaunchedAgentExitEvidence({ ...baseArgs, isRemote: true })).toBe(false)
-  })
-})
 
 describe('useTabAgent process signals', () => {
   const clearTabLaunchAgent = vi.fn()

@@ -4,7 +4,7 @@ import {
   type DesktopBrowserBridgeRequest,
   type DesktopBrowserBridgeResultParams
 } from '../../../shared/desktop-browser-bridge-protocol'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { DesktopBrowserBridgeOutcome } from './desktop-browser-bridge-executor'
 
@@ -136,7 +136,8 @@ export class DesktopBrowserBridgeConnection {
           ok: false,
           error: {
             code: outcome.error.code.slice(0, MAX_ERROR_CODE_LENGTH),
-            message: outcome.error.message.slice(0, MAX_ERROR_MESSAGE_LENGTH)
+            message: outcome.error.message.slice(0, MAX_ERROR_MESSAGE_LENGTH),
+            ...(outcome.error.data === undefined ? {} : { data: outcome.error.data })
           }
         }
     if (await this.sendResult(sendRequest, params)) {

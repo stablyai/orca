@@ -137,7 +137,7 @@ describe('cold-activation deferral stranding', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('precondition: both seeded tabs are deferrable under the real coverage predicate', async () => {
+  it('drains a plan installed by the gate-open pass without the active worktree changing', async () => {
     await seedDeferrableWorktree()
     const [first, second] = useAppStore.getState().tabsByWorktree[WORKTREE_ID]!
     expect(
@@ -154,10 +154,6 @@ describe('cold-activation deferral stranding', () => {
         terminalProviderHasAuthoritativeSnapshot
       )
     ).toBe(true)
-  })
-
-  it('drains a plan installed by the gate-open pass without the active worktree changing', async () => {
-    await seedDeferrableWorktree()
     vi.useFakeTimers()
     const { result, rerender } = renderHook((props: HarnessProps) => useStrandingHarness(props), {
       initialProps: { worktreeId: WORKTREE_ID, gateOpen: false }

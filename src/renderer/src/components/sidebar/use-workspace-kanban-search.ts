@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useMemo, useState } from 'react'
-import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {

@@ -1,11 +1,10 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
+import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
-import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { getAppliedSizeReadE2eDelayMs } from '../pty-applied-size-read-e2e-delay'
@@ -19,7 +18,7 @@ import {
   type PanePtyResizeHoldFlushDetail
 } from '@/lib/pane-manager/pane-pty-resize-hold'
 
-import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
+import { installForegroundGridDriftProbe } from './foreground-grid-drift-probe'
 import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
@@ -77,6 +76,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     if (session.captureAgentPreReadyInput?.(data, wasUserInput)) {
       session.clearPendingTerminalInputIntent()
       return
+    }
+    if (!wasUserInput && !isPassiveTerminalInputReport(data)) {
+      session.noteTerminalInputForPty(currentPtyId)
     }
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
     const inputKind = wasUserInput ? 'driving' : 'query-reply'
@@ -214,6 +216,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   )
 
   session.onResizeDisposable = session.pane.terminal.onResize(({ cols, rows }) => {
+    session.foregroundGridDriftProbeSettled = false
     if (session.suppressStructuralReplayPtyResize || session.suppressViewportClaimTerminalResize) {
       return
     }
@@ -274,43 +277,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       }
     }
   }
-  session.pendingForegroundGridDriftCheckRaf = null
-  session.lastForegroundGridDriftCheckAt = Number.NEGATIVE_INFINITY
-  session.scheduleForegroundGridDriftCheck = (force = false): void => {
-    if (
-      session.disposed ||
-      !session.deps.isVisibleRef.current ||
-      session.shouldSuppressDesktopPtyResize() ||
-      session.pendingForegroundGridDriftCheckRaf !== null ||
-      (!force && session.terminalSelectionFitGuard?.isActive())
-    ) {
-      return
-    }
-    const now = performance.now()
-    if (
-      !force &&
-      now - session.lastForegroundGridDriftCheckAt < FOREGROUND_GRID_DRIFT_CHECK_MIN_MS
-    ) {
-      return
-    }
-    session.lastForegroundGridDriftCheckAt = now
-    session.pendingForegroundGridDriftCheckRaf = requestAnimationFrame(() => {
-      session.pendingForegroundGridDriftCheckRaf = null
-      if (
-        session.disposed ||
-        !session.deps.isVisibleRef.current ||
-        session.shouldSuppressDesktopPtyResize() ||
-        session.terminalSelectionFitGuard?.isActive() ||
-        !session.terminalGridDriftedFromFit()
-      ) {
-        return
-      }
-      requestStablePaneFit(session.pane as ManagedPaneInternal, () =>
-        session.ptySizeReassertion.request({ fit: false })
-      )
-    })
-  }
-
+  installForegroundGridDriftProbe(session)
   session.readPaneSize = () => readPaneSize(session)
   initializePaneGeometry(session)
 }

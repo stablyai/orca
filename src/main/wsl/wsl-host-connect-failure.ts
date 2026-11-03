@@ -1,5 +1,5 @@
 import { errorMessage } from '../../shared/error-message'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import {
   WslDistroNotRunningError,

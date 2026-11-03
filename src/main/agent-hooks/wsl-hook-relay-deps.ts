@@ -1,4 +1,4 @@
-import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from '../claude/agent-view-mod-source'
+import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from '../claude/agent-view/agent-view-mod-source'
 import { bindRemoteClaudeInterruptReconciliation } from '../ssh/ssh-agent-hook-interrupt-reconciliation'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -6,6 +6,12 @@ import { readFileSync } from 'node:fs'
 import { isAgentStatusHooksEnabled } from './managed-agent-hook-controls'
 import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import { agentHookServer } from './server'
+import {
+  createLocalPtyInventoryReader,
+  createWslBridgePaneRootReader
+} from './local-tmux-managed-pty'
+import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
+import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import { getOpenCode2PluginSource, getOpenCodePluginSource } from '../opencode/hook-service'
@@ -19,9 +25,15 @@ import {
   spawnWslRelayProcess
 } from './wsl-hook-relay-launch'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
-import { listWslDistrosAsync } from '../wsl'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { resolveWslDefaultDistro as resolveSharedWslDefaultDistro } from '../wsl/wsl-default-distro'
+import { deferUntilWslDistroRunning, isWslDistroRunning } from '../wsl-background-distro-gate'
 import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
+import { wslBridgePtyPresence, type WslBridgePtyPresence } from './wsl-bridge-pty-presence'
+import {
+  readDaemonBridgeSessions,
+  type DaemonBridgeSessionVerdict
+} from './wsl-bridge-daemon-sessions'
+import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
 
 // Concurrent wsl.exe spawns can trigger transient E_UNEXPECTED failures.
 export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000
@@ -49,11 +61,17 @@ export type WslHookRelayManagerDeps = {
   listDistros: () => Promise<string[]>
   /** Recovery must not boot a distro the user shut down. */
   isDistroRunning: typeof isWslDistroRunning
+  deferUntilRunning: typeof deferUntilWslDistroRunning
+  /** Starting a relay runs wsl.exe; only a running distro, or a user act's, may get one (E9). */
+  blockedForExec: typeof blockedWslDistroForExec
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  beginRelaySession?: (connectionId: string) => void
   receiveClaudeAgentView?: (body: unknown) => unknown
+  /** The guest root a distro's bridge PTY recorded at launch, for that relay's acquisition proof. */
+  resolvePaneRoot?: (connectionId: string, distro: string, paneKey: string) => Promise<unknown>
   bindInterruptReconciliation?: (
     mux: Parameters<typeof bindRemoteClaudeInterruptReconciliation>[1],
     connectionId: string,
@@ -66,6 +84,11 @@ export type WslHookRelayManagerDeps = {
   pluginSources: () => PluginSources
   warn: (message: string) => void
   transientRetryDelayMs: number
+  /** Live bridge terminals per distro; a relay idles out only when its distro has none. */
+  bridgePtyPresence: Pick<WslBridgePtyPresence, 'count' | 'onChange'>
+  /** Whether the terminal daemon still runs a bridge session there, mounted or not. */
+  daemonBridgeSessions: (distro: string) => Promise<DaemonBridgeSessionVerdict>
+  idleStopMs?: number
 }
 
 /** Read the hooks setting live for spawn, reattach, and crash recovery. */
@@ -77,6 +100,14 @@ export function isWslHookRelayAllowed(deps: WslHookRelayManagerDeps): boolean {
   )
 }
 
+const readBridgePaneRoot = createWslBridgePaneRootReader(
+  createLocalPtyInventoryReader({
+    getPtyId: getPtyIdForPaneKey,
+    listProcesses: () => getLocalPtyProvider().listProcesses()
+  }),
+  getPtyIdForPaneKey
+)
+
 export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   platform: () => process.platform,
   remoteHooksEnabled: () => isWslAgentHookRelayEnabled(),
@@ -87,10 +118,18 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     const source = agentHookServer.endpointFilePath
     return source ? createHash('sha256').update(source).digest('hex').slice(0, 12) : null
   },
+  bridgePtyPresence: wslBridgePtyPresence,
+  daemonBridgeSessions: readDaemonBridgeSessions,
   resolveBundle: resolveWslHookRelayBundle,
   readBundle: (jsPath) => readFileSync(jsPath),
-  listDistros: () => listWslDistrosAsync(),
+  // The exec gate's resolver: inside a user act it returns the act's own default.
+  listDistros: async () => {
+    const distro = await resolveSharedWslDefaultDistro()
+    return typeof distro === 'string' ? [distro] : []
+  },
   isDistroRunning: isWslDistroRunning,
+  deferUntilRunning: deferUntilWslDistroRunning,
+  blockedForExec: blockedWslDistroForExec,
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,
@@ -104,6 +143,9 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: envelope is the wire-deserialized notification; ingestRemote independently re-validates paneKey's type before trusting anything here.
     return agentHookServer.ingestRemote(capped as IngestEnvelope, connectionId)
   },
+  beginRelaySession: (connectionId) => agentHookServer.beginRemoteRelaySession(connectionId),
+  resolvePaneRoot: (connectionId, distro, paneKey) =>
+    readBridgePaneRoot(agentHookServer.relayPaneRootIssuer(connectionId), distro, paneKey),
   bindInterruptReconciliation: (mux, connectionId, isCurrent) =>
     bindRemoteClaudeInterruptReconciliation(agentHookServer, mux, connectionId, isCurrent),
   installHooks: installRemoteManagedAgentHooks,

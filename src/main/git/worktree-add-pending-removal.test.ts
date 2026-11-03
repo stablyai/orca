@@ -19,7 +19,7 @@ import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 import {
   _resetPendingWorktreeRemovalsForTests,
   startBackgroundWorktreeRemoval
-} from '../worktree-background-removal'
+} from '../workspaces/removal/worktree-background-removal'
 
 registerWorktreeSuiteHooks()
 

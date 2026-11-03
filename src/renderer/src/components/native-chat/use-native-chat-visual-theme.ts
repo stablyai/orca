@@ -2,7 +2,7 @@ import { useEffect, useState, type RefObject } from 'react'
 import {
   NATIVE_CHAT_VISUAL_THEME_TOKENS,
   type NativeChatVisualTheme
-} from '../../../../shared/native-chat-visual-shell'
+} from '../../../../shared/native-chat/native-chat-visual-shell'
 
 // Visuals inherit the chat’s appearance scope, which can differ from the app root.
 const SCOPED_SOURCES: Partial<Record<string, readonly string[]>> = {

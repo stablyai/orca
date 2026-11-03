@@ -13,6 +13,7 @@ import {
   type SeveredDaemonRestartResult
 } from '../../daemon/daemon-host-image-state'
 import { getAllDaemonAdapters, getCurrentDaemonAdapter } from '../../daemon/daemon-provider-routing'
+import { isHoldingForNewerProtocolDaemon } from '../../daemon/daemon-newer-protocol-hold'
 import {
   getDaemonFolderAccessMismatch,
   refreshDaemonFolderAccessProbe,
@@ -29,7 +30,8 @@ import type { DaemonSessionInfo } from '../../daemon/daemon-session-info'
 import type { DaemonAsyncIoStatus } from '../../../shared/daemon-async-io-health'
 
 // Poll beyond the daemon's 5s SIGTERM-to-SIGKILL ladder to avoid false refusal reports.
-const MAX_POLL_ATTEMPTS = 65
+// A window, not an attempt count: a wedged generation fails each listing only after the request timeout.
+const POLL_WINDOW_MS = 6_500
 const POLL_INTERVAL_MS = 100
 
 function sleep(ms: number): Promise<void> {
@@ -56,7 +58,10 @@ function readCurrentDaemonIdentity(): DaemonEndpointIdentity | null {
   return provider ? getCurrentDaemonAdapter(provider).getDaemonIdentity() : null
 }
 
-async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
+// A generation that failed to list may still own sessions, so its silence is not "none".
+async function listSessionsOfEveryAdapter(
+  adapters: DaemonPtyAdapter[]
+): Promise<{ sessions: DaemonSessionInfo[]; unlistedVersions: Set<number> }> {
   const results = await Promise.allSettled(
     adapters.map(async (adapter) => {
       const sessions = await adapter.listSessions()
@@ -66,7 +71,45 @@ async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSess
       }))
     })
   )
-  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  return {
+    sessions: results.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])),
+    unlistedVersions: new Set(
+      adapters
+        .filter((_, index) => results[index].status === 'rejected')
+        .map((adapter) => adapter.protocolVersion)
+    )
+  }
+}
+
+// With no adapter (failed startup) or a held newer-build daemon, unlisted sessions can survive.
+function listedEveryGeneration(
+  adapters: DaemonPtyAdapter[],
+  unlistedVersions: Set<number>
+): boolean {
+  return adapters.length > 0 && unlistedVersions.size === 0 && !isHoldingForNewerProtocolDaemon()
+}
+
+async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
+  return (await listSessionsOfEveryAdapter(adapters)).sessions
+}
+
+// Kill all counts only its first listing; a session started since (CLI, automation) would outlive the quit.
+// Polls so the tab sweep's exact kills can settle.
+export async function confirmNoDaemonSessionsRemain(): Promise<boolean> {
+  const adapters = getDaemonAdapters()
+  // Why: neither can change within the poll window, so waiting it out only delays the refusal.
+  if (!listedEveryGeneration(adapters, new Set())) {
+    return false
+  }
+  const pollDeadline = Date.now() + POLL_WINDOW_MS
+  do {
+    const { sessions, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)
+    if (sessions.length === 0 && listedEveryGeneration(adapters, unlistedVersions)) {
+      return true
+    }
+    await sleep(POLL_INTERVAL_MS)
+  } while (Date.now() < pollDeadline)
+  return false
 }
 
 export function registerDaemonManagementHandlers(): void {
@@ -158,15 +201,19 @@ export function registerDaemonManagementHandlers(): void {
       killedCount: number
       remainingCount: number
       killedSessionIds: string[]
+      listingIncomplete?: boolean
     }> => {
       const adapters = getDaemonAdapters()
       // Exclude panes respawned after the user requested killAll.
-      const initial = await collectSessions(adapters)
+      const { sessions: initial, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)
       const initialIds = new Set(initial.map((s) => s.sessionId))
       const initialCount = initial.length
+      const incomplete = listedEveryGeneration(adapters, unlistedVersions)
+        ? {}
+        : { listingIncomplete: true }
 
       if (initialCount === 0) {
-        return { killedCount: 0, remainingCount: 0, killedSessionIds: [] }
+        return { killedCount: 0, remainingCount: 0, killedSessionIds: [], ...incomplete }
       }
 
       // Each session owns its kill ladder; one rejection must not abort the others.
@@ -182,29 +229,37 @@ export function registerDaemonManagementHandlers(): void {
         })
       )
 
-      let remainingOriginalCount = initialCount
       let remainingOriginalIds = initialIds
-      for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
+      const pollDeadline = Date.now() + POLL_WINDOW_MS
+      while (Date.now() < pollDeadline) {
         await sleep(POLL_INTERVAL_MS)
-        const current = await collectSessions(adapters)
+        const polled = await listSessionsOfEveryAdapter(adapters)
+        const listedIds = new Set(polled.sessions.map((session) => session.sessionId))
+        // Per generation: an answer proves its own sessions' state; a failed one keeps the last confirmed state.
         remainingOriginalIds = new Set(
-          current
-            .filter((session) => initialIds.has(session.sessionId))
+          initial
+            .filter(
+              (session) =>
+                remainingOriginalIds.has(session.sessionId) &&
+                (polled.unlistedVersions.has(session.protocolVersion) ||
+                  listedIds.has(session.sessionId))
+            )
             .map((session) => session.sessionId)
         )
-        remainingOriginalCount = remainingOriginalIds.size
-        if (remainingOriginalCount === 0) {
+        if (remainingOriginalIds.size === 0) {
           break
         }
       }
 
+      const remainingOriginalCount = remainingOriginalIds.size
       const killedCount = initialCount - remainingOriginalCount
       return {
         killedCount,
         remainingCount: remainingOriginalCount,
         killedSessionIds: [...initialIds].filter(
           (sessionId) => !remainingOriginalIds.has(sessionId)
-        )
+        ),
+        ...incomplete
       }
     }
   )

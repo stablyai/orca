@@ -6,7 +6,9 @@ vi.mock('electron', async () =>
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -45,6 +47,7 @@ function createSpawnRefusingWindow(platform: NodeJS.Platform = 'darwin') {
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn()
@@ -105,26 +108,6 @@ describe('renderer launch-failed recovery', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
-  })
-
-  it('backs off instead of opening the crash-loop breaker after 3 quick failures', async () => {
-    const { load } = createSpawnRefusingWindow()
-    const { onRendererRecoveryExhausted } = open()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(load).toHaveBeenCalledTimes(1)
-
-    // Spread retries across backoff instead of exhausting the breaker in ~750ms.
-    await vi.advanceTimersByTimeAsync(250)
-    expect(load).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(999)
-    expect(load).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(load).toHaveBeenCalledTimes(3)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(load).toHaveBeenCalledTimes(4)
-    await vi.advanceTimersByTimeAsync(4_000)
-    expect(load).toHaveBeenCalledTimes(5)
-    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
   })
 
   it('recovers in place once spawn headroom returns, without any prompt', async () => {

@@ -5,13 +5,14 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { ensurePrivateDir } from './daemon-private-file-modes'
 import { scheduleTerminalHistoryPermissionRepair } from './terminal-history-permission-repair'
 import { getDaemonLogFilePath } from '../observability/logs-directory'
+import { daemonRuntimeDirFor } from './daemon-runtime-dir'
 import { DaemonClient } from './client'
 import { daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 import { PROTOCOL_VERSION, type ListSessionsResult } from './types'
 
 export function getDaemonRuntimeDir(): string {
-  const dir = join(getAppEnvironment().getPath('userData'), 'daemon')
+  const dir = daemonRuntimeDirFor(getAppEnvironment().getPath('userData'))
   ensurePrivateDir(dir)
   return dir
 }

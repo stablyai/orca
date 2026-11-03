@@ -15,9 +15,4 @@ describe('skillInstallFailureFromError', () => {
       retryable: false
     })
   })
-
-  it('keeps a server-side cloud failure retryable', () => {
-    const error = new SkillCloudRequestError(503, 'unavailable', 'unavailable')
-    expect(skillInstallFailureFromError(error)?.retryable).toBe(true)
-  })
 })

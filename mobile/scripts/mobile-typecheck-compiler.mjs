@@ -1,8 +1,7 @@
-import { runProcessSync } from '@orca/process-host'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolvePinnedBunExecutable } from '../../config/scripts/pinned-bun-executable.mjs'
 import {
+  resolveTypecheckBunExecutable,
   resolveTypecheckCommand,
   selectTypecheckCompiler
 } from '../../config/scripts/run-typecheck-projects-in-parallel.mjs'
@@ -17,7 +16,8 @@ export function resolveMobileTypecheckCommand(project, cwd = process.cwd()) {
   }
   const selection = selectTypecheckCompiler(requested, {
     root,
-    resolveBunExecutable: (repoRoot) => resolvePinnedBunExecutable(repoRoot, runProcessSync)
+    resolveBunExecutable: resolveTypecheckBunExecutable,
+    fallbackHint: 'set ORCA_MOBILE_TYPECHECK_COMPILER=native'
   })
   const command = resolveTypecheckCommand(resolve(cwd, project), {
     ...selection,

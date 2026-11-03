@@ -167,3 +167,15 @@ export function isCursorAgentTitle(title: string | null | undefined): boolean {
 export function shouldSuppressCursorNativeTitle(lastEmittedTitle: string | null): boolean {
   return lastEmittedTitle !== null && isCursorAgentTitle(lastEmittedTitle)
 }
+
+// Collapse only Grok’s spinner - phrase - grok frame; both delimiters exclude Claude/Codex task mentions.
+// Keep unspun session titles unchanged and accept spinner + grok so our collapsed label stays idempotent.
+const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
+const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
+
+export function isGrokRotatingWorkingTitle(title: string): boolean {
+  if (!containsBrailleSpinner(title)) {
+    return false
+  }
+  return GROK_ROTATING_FRAME_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
+}

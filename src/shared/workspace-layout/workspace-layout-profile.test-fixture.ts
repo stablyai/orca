@@ -1,6 +1,6 @@
 // Real-shaped stored partitions: the desktop's own, a relay-fallback SSH host's, a remote server's.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -8,7 +8,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import { toRemoteRuntimePtyId } from '../remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../ssh-pty-id'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import {

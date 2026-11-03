@@ -22,6 +22,7 @@ export function TerminalSplitWorkspaceSurfaces({
     effectiveParkedTerminalWorktreeIds,
     forceParkedTerminalWorktreeIds,
     getEffectiveLayoutForWorktree,
+    prewarmLeasesRef,
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
@@ -80,6 +81,11 @@ export function TerminalSplitWorkspaceSurfaces({
               isFocused={isVisible && workspace.id === renderedActiveWorktreeId}
               gridViewCellRect={isGridViewVisible ? gridViewCellRectFor(workspace.id) : null}
               shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+              prewarmStage={
+                shouldMeasureHiddenWorktree
+                  ? (prewarmLeasesRef.current.get(workspace.id) ?? null)
+                  : null
+              }
               shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
               isForceParked={forceParkedTerminalWorktreeIds.has(workspace.id)}
               activityTerminalPortals={activityTerminalPortals}

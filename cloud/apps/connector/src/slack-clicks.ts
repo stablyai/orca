@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 const BlockActionsSchema = z.looseObject({
   type: z.literal('block_actions'),
+  api_app_id: z.string().min(1),
   team: z.looseObject({ id: z.string().min(1) }),
   user: z.looseObject({ id: z.string().min(1) }),
   channel: z.looseObject({ id: z.string().min(1) }),
@@ -14,6 +15,8 @@ const BlockActionsSchema = z.looseObject({
 // A press of an answer button on a prompt card. What it answers is found from the message it is
 // on; the button only says which option.
 export type SlackClick = {
+  // The app Slack delivered it for; must be the app whose URL received it.
+  appId: string
   teamId: string
   channelId: string
   userId: string
@@ -38,6 +41,7 @@ export function readSlackClick(rawBody: string): SlackClick | 'ignored' | 'inval
     return 'ignored'
   }
   return {
+    appId: parsed.data.api_app_id,
     teamId: parsed.data.team.id,
     channelId: parsed.data.channel.id,
     userId: parsed.data.user.id,

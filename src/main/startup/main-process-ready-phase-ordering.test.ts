@@ -34,6 +34,7 @@ vi.mock('./main-process-runtime-launch', () => ({
 }))
 
 const { initializeMainProcessReady } = await import('./main-process-ready')
+const { mainProcessState } = await import('./main-process-state')
 
 describe('ready-phase concurrency', () => {
   beforeEach(() => {
@@ -85,5 +86,38 @@ describe('ready-phase concurrency', () => {
     releaseI18n?.()
     await ready
     expect(settled).toBe(true)
+  })
+
+  it('waits for the startup WSL move rewrite before runtime services and the window', async () => {
+    let finishRewrite: () => void = () => {}
+    mainProcessState.wslMoveStartupRewriteReady = new Promise<void>((resolve) => {
+      finishRewrite = () => {
+        phaseEvents.push('wsl-move-rewrite-done')
+        resolve()
+      }
+    })
+    const options = {
+      openMainWindow: vi.fn(),
+      handleMacAppActivation: vi.fn()
+    } as unknown as Parameters<typeof initializeMainProcessReady>[0]
+
+    const ready = initializeMainProcessReady(options)
+    for (let tick = 0; tick < 8; tick += 1) {
+      await Promise.resolve()
+    }
+    expect(phaseEvents).toEqual(['foundation'])
+
+    finishRewrite()
+    for (let tick = 0; tick < 8; tick += 1) {
+      await Promise.resolve()
+    }
+    releaseI18n?.()
+    await ready
+    mainProcessState.wslMoveStartupRewriteReady = Promise.resolve()
+    expect(phaseEvents.slice(0, 3)).toEqual([
+      'foundation',
+      'wsl-move-rewrite-done',
+      'runtime-services'
+    ])
   })
 })

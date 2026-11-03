@@ -1,12 +1,11 @@
+import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import { buildFixBrokenChecksPrompt } from '@/components/pr-checks-fix-prompt'
-import {
-  saveSourceControlActionRecipe,
-  type SourceControlAiWriteTarget
-} from '../../../../../shared/source-control-ai-recipe-save'
+import { buildFixBrokenChecksPrompt } from '../../../../../shared/pr-checks-fix-prompt'
+import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control-ai-recipe-save'
+import { saveSourceControlAiActionRecipeForTarget } from '../../right-sidebar/source-control/ai/recipe-persistence'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
@@ -21,33 +20,23 @@ export async function saveFixChecksActionDefault(
   target: SourceControlAiWriteTarget,
   actionId: SourceControlLaunchActionId,
   recipe: SourceControlActionRecipe,
-  updateSettings: StoreState['updateSettings'],
+  updateSettings: StoreState['updateSettingsOrThrow'],
   updateRepo: StoreState['updateRepo']
 ): Promise<void> {
-  const state = useAppStore.getState()
-  const latestSettings = state.settings
-  if (!latestSettings) {
-    throw new Error('Settings are not loaded.')
-  }
-  const latestRepo =
-    target.type === 'repo'
-      ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
-      : null
-  const result = saveSourceControlActionRecipe({
+  await saveSourceControlAiActionRecipeForTarget({
+    getStoreState: useAppStore.getState,
+    updateSettings,
+    updateRepo,
     target,
-    settings: latestSettings,
-    repo: latestRepo,
     actionId,
     recipe
   })
-  if ('sourceControlAi' in result) {
-    await updateSettings({ sourceControlAi: result.sourceControlAi })
-    return
-  }
-  await updateRepo(result.target.repoId, result.update)
 }
 
 export async function startFixChecksFromDialog(args: {
+  signal?: AbortSignal
+  onCreateAccepted?: () => void
+  onFailureNotified?: () => void
   targetRepoId: string | null
   item: GitHubWorkItem
   agent: Parameters<typeof launchWorkItemDirect>[0]['agentOverride']
@@ -55,20 +44,27 @@ export async function startFixChecksFromDialog(args: {
   /** Omitted when CLI arguments do not apply, so the launch resolves the global Agents setting. */
   agentArgs?: string
   sessionOptions?: Readonly<Record<string, string>>
+  launchChoice?: Parameters<typeof launchWorkItemDirect>[0]['launchChoice']
+  agentLaunchPreferences?: Parameters<typeof launchWorkItemDirect>[0]['agentLaunchPreferences']
   sessionOptionsYieldToAgentArgs?: true
-}): Promise<boolean> {
+}): Promise<DirectWorkItemLaunchResult> {
   if (!args.targetRepoId) {
     return false
   }
   return await launchWorkItemDirect({
+    signal: args.signal,
+    onCreateAccepted: args.onCreateAccepted,
+    onFailureNotified: args.onFailureNotified,
     item: { ...args.item, repoId: args.targetRepoId, pasteContent: args.commandInput },
     repoId: args.targetRepoId,
     launchSource: 'task_page',
     telemetrySource: 'sidebar',
     promptDelivery: 'submit-after-ready',
     agentOverride: args.agent,
+    agentLaunchPreferences: args.agentLaunchPreferences,
     agentArgs: args.agentArgs,
     ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
+    ...(args.launchChoice ? { launchChoice: args.launchChoice } : {}),
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     openModalFallback: () => {
       toast.error(
@@ -115,6 +111,7 @@ export async function fixBrokenPullRequestChecks(args: {
       basePrompt,
       launchSource: 'task_page',
       telemetrySource: 'sidebar',
+      onSetupRequired: () => args.setFixChecksComposerPrompt(basePrompt),
       openModalFallback: () => {
         args.setFixChecksComposerPrompt(basePrompt)
       }

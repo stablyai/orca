@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentLaunchSettingsMutationUpdates } from './agent-launch-settings'
-import { structuredLaunchSeedOptions } from './native-chat-session-option-defaults'
+import { structuredLaunchSeedOptions } from './native-chat/input/native-chat-session-option-defaults'
 import { resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 import { AgentLaunchSettingsMutation } from './rpc-contract/agent-launch-settings-params'
 

@@ -13,6 +13,9 @@ const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
 const CASTING_RULE = 'typescript/consistent-type-assertions'
 const CASTING_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*typescript\/consistent-type-assertions/
+// Interpolated so this line is not itself a casting directive the gate would scan.
+const CASTING_SUPPRESSION_FORM = `// oxlint-disable-next-line ${CASTING_RULE} -- SAFETY: <why this cast is sound>`
+const CASTING_HINT = `Use a type annotation, \`satisfies\`, or a type guard instead (\`as const\` is allowed). If a cast is unavoidable, put \`${CASTING_SUPPRESSION_FORM}\` on the line above it.`
 const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
 const REACT_DOCTOR_DISABLE_PATTERN =
@@ -76,7 +79,7 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     'react-doctor(no-adjust-state-on-prop-change)',
     new Set([
       'src/renderer/src/components/task-page/github/use-task-page-github-issue-draft.ts',
-      'src/renderer/src/components/use-task-page-jira-creation-state.ts'
+      'src/renderer/src/components/task-page/jira/use-task-page-jira-creation-state.ts'
     ])
   ],
   [
@@ -193,6 +196,7 @@ export function collectAddedLineRanges(
     const source = renamedSources.get(file)
     const paths = source ? [source, file] : [file]
     const diff = runGit(root, [
+      '--literal-pathspecs',
       'diff',
       '--find-renames',
       '--unified=0',
@@ -426,14 +430,18 @@ function printDiagnostic(diagnostic, root) {
   const file = normalizedDiagnosticPath(root, diagnostic.filename)
   const line = diagnostic.labels?.[0]?.span?.line ?? 1
   const code = diagnostic.code ?? 'oxlint'
+  const message =
+    code === 'typescript(consistent-type-assertions)'
+      ? `${diagnostic.message} ${CASTING_HINT}`
+      : diagnostic.message
   console.error(
-    `::error file=${annotationValue(file)},line=${line},title=${annotationValue(code)}::${annotationValue(diagnostic.message)}`
+    `::error file=${annotationValue(file)},line=${line},title=${annotationValue(code)}::${annotationValue(message)}`
   )
-  console.error(`${file}:${line} ${code}: ${diagnostic.message}`)
+  console.error(`${file}:${line} ${code}: ${message}`)
 }
 
 // Why: only the casting scan enforces `assertionStyle: never`, so under the root config an
-// `as` cast is legal and the SAFETY: directive AGENTS.md mandates reads as unused. The untyped
+// `as` cast is legal and the required SAFETY: directive reads as unused. The untyped
 // scan reports that as a warning, which the gate counts, so exempt exactly those directives.
 export function isCastingDirectiveUnusedWarning(diagnostic, root) {
   if (!/^Unused (?:oxlint|eslint)-disable/.test(diagnostic.message ?? '')) {
@@ -481,7 +489,7 @@ export function isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scanLab
   )
 }
 
-// Why: oxlint cannot see the AGENTS.md requirement that every casting suppression carry a
+// Why: oxlint cannot require that every casting suppression carry a
 // line-specific SAFETY: rationale, so the directive text itself is checked over added lines.
 export function findCastingDirectivesMissingSafety(root, rangesByFile) {
   const findings = []
@@ -502,7 +510,7 @@ export function findCastingDirectivesMissingSafety(root, rangesByFile) {
           findings.push({
             filename: file,
             code: `${CASTING_RULE} (missing SAFETY:)`,
-            message: `Suppressing ${CASTING_RULE} requires a line-specific "SAFETY:" explanation.`,
+            message: `Suppressing ${CASTING_RULE} requires a line-specific "SAFETY:" explanation, e.g. \`${CASTING_SUPPRESSION_FORM}\`.`,
             labels: [{ span: { line } }]
           })
         }

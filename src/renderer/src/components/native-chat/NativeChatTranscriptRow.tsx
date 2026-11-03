@@ -9,12 +9,12 @@ import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import { NativeChatSubagentSectionHead } from './NativeChatSubagentSectionHead'
 import { NativeChatSubagentEntries } from './NativeChatSubagentRun'
 import type { NativeChatSubagentDisclosure } from './native-chat-subagent-sections'
-import type { NativeChatTaskListPredecessors } from '../../../../shared/native-chat-task-list-history'
+import type { NativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
-import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/structured-agent-session-live-turn'
+import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { NativeChatNewRowsMarker } from './NativeChatNewRowsMarker'
 import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
 
@@ -30,6 +30,7 @@ export type NativeChatTranscriptRowContext = {
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
   allowFileUriLinks: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   onToggleExpandedTurn: (turnKey: string) => void
@@ -134,6 +135,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           subagentDisclosure={context.subagentDisclosure}
           inSubagentSection={slot.depth > 0}
           runtimeContext={context.runtimeContext}
+          structuredAttachments={context.structuredAttachments}
           rewind={
             nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
             (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))

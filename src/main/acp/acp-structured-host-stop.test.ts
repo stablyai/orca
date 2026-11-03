@@ -1,7 +1,7 @@
 import { deferred } from './acp-scripted-agent.test-support'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { withNativeChatCutTurnNotices } from '../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import {
   closeProviderTimelineRigs,
   providerTurnId

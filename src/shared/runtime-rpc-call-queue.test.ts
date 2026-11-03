@@ -76,6 +76,30 @@ describe('runtime RPC call queue', () => {
     await expect(Promise.all(waits)).resolves.toEqual(Array(8).fill('listed'))
   })
 
+  it('keeps terminal input moving while byte-range reads fill their own small lane', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const release: (() => void)[] = []
+    const reads = Array.from({ length: 6 }, () =>
+      queue.enqueue('web-runtime', 'files.readChunk', async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return 'chunk'
+      })
+    )
+    // Two at a time, however many viewers ask.
+    await vi.waitFor(() => expect(release).toHaveLength(2))
+
+    const send = queue.enqueue('web-runtime', 'terminal.send', async () => 'sent')
+    await expect(send).resolves.toBe('sent')
+    expect(release).toHaveLength(2)
+
+    for (let finished = 0; finished < 6; finished += 1) {
+      await vi.waitFor(() => expect(release.length).toBeGreaterThan(0))
+      expect(release.length).toBeLessThanOrEqual(2)
+      release.shift()?.()
+    }
+    await expect(Promise.all(reads)).resolves.toEqual(Array(6).fill('chunk'))
+  })
+
   it('frees the queue slot when a runtime call throws synchronously', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1)
     const first = queue.enqueue('web-runtime', 'status.get', () => {

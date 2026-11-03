@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import {
   addMobileDiffComment,
-  formatMobileDiffReviewPrompt,
   normalizeMobileDiffComments,
   removeDeliveredMobileDiffComments,
   removeMobileDiffComments
@@ -114,23 +113,6 @@ describe('mobile diff comments', () => {
         [delivered]
       )
     ).toEqual([comment({ id: 'a', body: 'new note' }), comment({ id: 'b' })])
-  })
-
-  it('wraps sent review notes in the mobile agent prompt', () => {
-    expect(formatMobileDiffReviewPrompt([comment({ id: 'a' })])).toBe(
-      [
-        'You are reviewing the current worktree. Address the following mobile review notes.',
-        '',
-        'File: src/app.ts',
-        'Line: 4',
-        'User comment: "check this"',
-        '',
-        'After applying fixes:',
-        '1. Summarize changed files.',
-        '2. Run relevant tests.',
-        '3. Tell me if anything remains risky.'
-      ].join('\n')
-    )
   })
 
   it('keeps review metadata while normalizing persisted notes', () => {

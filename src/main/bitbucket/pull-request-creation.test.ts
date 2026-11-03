@@ -131,7 +131,7 @@ describe('Bitbucket pull request creation', () => {
 
     const result = await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')
 
-    expect(result).toMatchObject({ ok: false, code: 'auth_required' })
+    expect(result).toMatchObject({ ok: false, code: 'auth_required', reason: 'auth_required' })
     expect(!result.ok && result.error).toContain('Settings')
   })
 

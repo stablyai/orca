@@ -35,14 +35,6 @@ export function normalizeAntigravityEvent(
     }
     state.antigravitySubagentParentByPaneKey.delete(paneKey)
   }
-  const toolName = readAntigravityToolCall(hookPayload).toolName
-  if (
-    conversationId &&
-    (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
-    isAntigravitySubagentTool(toolName)
-  ) {
-    state.antigravitySubagentParentByPaneKey.set(paneKey, conversationId)
-  }
   if (eventName === 'PreInvocation') {
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
   } else if (
@@ -54,7 +46,18 @@ export function normalizeAntigravityEvent(
     return null
   }
 
+  const toolName = readAntigravityToolCall(hookPayload).toolName
+  if (
+    conversationId &&
+    (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
+    isAntigravitySubagentTool(toolName)
+  ) {
+    state.antigravitySubagentParentByPaneKey.set(paneKey, conversationId)
+  }
+
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
+  // agy ends the parent's turn with fullyIdle=false while its helpers run; they hold the pane open.
+  const heldOpenByHelpers = stopStillBusy && state.antigravitySubagentParentByPaneKey.has(paneKey)
   const stateName =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
       ? 'waiting'
@@ -95,7 +98,8 @@ export function normalizeAntigravityEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    mainAgent: heldOpenByHelpers ? { state: 'done', stateStartedAt: Date.now() } : undefined
   })
   // Stop between tools can report fullyIdle=false; only an idle Stop is terminal.
   if (eventName === 'Stop' && !stopStillBusy) {

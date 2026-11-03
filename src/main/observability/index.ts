@@ -24,6 +24,7 @@ import {
 } from './diagnostic-bundle-upload'
 import { setActiveSink, startSpan } from './tracer'
 import { setSecurePathHardeningReporter } from '../../shared/secure-path-hardening-report'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 const CI_ENV_VARS = [
   'CI',
@@ -96,6 +97,8 @@ export function resolveObservabilityConsent(): ObservabilityConsent {
 
 export { getTraceFilePath } from './logs-directory'
 
+const SHUTDOWN_FLUSH_TIMEOUT_MS = 500
+
 let sink: LocalFileSink | null = null
 let consent: ObservabilityConsent | null = null
 
@@ -139,13 +142,9 @@ function installSecurePathHardeningReporter(): void {
   })
 }
 
-/** Flush for exits that bypass shutdown. */
-export function flushObservability(): void {
-  try {
-    sink?.flush()
-  } catch {
-    // Nothing is left to report to.
-  }
+/** For exits that bypass shutdown. */
+export function closeObservabilityOnExit(): void {
+  sink?.close()
 }
 
 export async function shutdownObservability(): Promise<void> {
@@ -153,7 +152,9 @@ export async function shutdownObservability(): Promise<void> {
   // Stop new tracer writes before closing and flushing the sink.
   setActiveSink(null)
   if (sink) {
-    sink.close()
+    // Keep an orderly quit's in-flight batch; a stalled disk costs quit this long, never a hang.
+    await withTimeout(sink.flushAsync(), SHUTDOWN_FLUSH_TIMEOUT_MS, undefined)
+    sink?.close()
     sink = null
   }
   consent = null
@@ -181,16 +182,14 @@ export function getDiagnosticsStatus(): DiagnosticsStatus {
 }
 
 /** Never include install_id: bundles use independent submission IDs. */
-export function collectDiagnosticBundle(
+export async function collectDiagnosticBundle(
   meta: Pick<
     CollectBundleOptions,
     'appVersion' | 'platform' | 'arch' | 'osRelease' | 'orcaChannel' | 'lookbackMinutes'
   >
-): CollectedBundle {
+): Promise<CollectedBundle> {
   // Flush before collection so the bundle includes the user’s latest action.
-  if (sink) {
-    sink.flush()
-  }
+  await sink?.flushAsync()
   return _collectBundle({
     traceFilePath: getTraceFilePath(),
     maxFiles: DEFAULT_MAX_FILES,

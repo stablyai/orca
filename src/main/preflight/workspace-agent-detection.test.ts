@@ -27,6 +27,12 @@ const { detectInstalledMock, refreshMock } = vi.hoisted(() => ({
   refreshMock: vi.fn()
 }))
 
+// These cases cover a running distro; the E9 stopped-distro gate has its own suite.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: async () => {},
+  runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
+}))
+
 vi.mock('./agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledMock,
   refreshShellPathAndDetectAgents: refreshMock,
@@ -155,7 +161,8 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       }
     })
     expect(detectInstalledMock).toHaveBeenCalledWith(
-      wslContext('Ubuntu-24.04', 'prospective', 'project-override')
+      wslContext('Ubuntu-24.04', 'prospective', 'project-override'),
+      undefined
     )
   })
 
@@ -262,7 +269,7 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
     })
   })
-  it("keeps a folder's repo runtime when only its group names another host", () => {
+  it("keeps an explicitly local folder's repo runtime when its group names another host", () => {
     _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
     const s = store({
       repos: [
@@ -270,7 +277,7 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       ],
       projects: [project('p1', ['r1'], { kind: 'wsl', distro: 'Ubuntu' })],
       projectGroups: [{ ...GROUP, executionHostId: 'runtime:paired' }],
-      folderWorkspaces: [{ ...FOLDER, folderPath: 'C:\\work' }]
+      folderWorkspaces: [{ ...FOLDER, folderPath: 'C:\\work', executionHostId: 'local' }]
     })
     expect(resolveFor(s, folderWorkspaceKey('f1'))).toMatchObject({
       kind: 'local',
@@ -341,7 +348,8 @@ describe('preflight.detectAgents resolves the workspace on the host', () => {
       params: { worktreeId: `r1::${WSL_REPO_PATH}` }
     })
     expect(detectInstalledMock).toHaveBeenCalledWith(
-      wslContext('Ubuntu-24.04', 'r1', 'project-override')
+      wslContext('Ubuntu-24.04', 'r1', 'project-override'),
+      undefined
     )
     expect(response).toMatchObject({ ok: true, result: ['claude', 'codex'] })
   })

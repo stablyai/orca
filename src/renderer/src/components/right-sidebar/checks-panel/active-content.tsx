@@ -1,7 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
-import { toast } from 'sonner'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import HostedReviewActions from '../HostedReviewActions'
 import { GitHubPRStackMap } from '../GitHubPRStackMap'
@@ -9,10 +8,8 @@ import { SourceControlAgentActionDialog } from '../SourceControlAgentActionDialo
 import { ChecksPanelUpdatedAtMetadata } from '../checks-panel-updated-at-metadata'
 import { getChecksPanelRefreshErrorBannerLine } from '../github-refresh-error-copy'
 import { resolveChecksPanelHostedReviewModifierDestination } from '../checks-panel-hosted-review-click-routing'
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control-launch-agent-selection'
-import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
-import { getBrokenChecks } from '../../pr-checks-fix-prompt'
+import { getBrokenChecks, isBrokenCheck } from '../../../../../shared/pr-checks-fix-prompt'
 import { PRTriageStrip } from './triage-strip'
 import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary'
 import { ChecksList } from './checks-list'
@@ -50,17 +47,15 @@ export function ChecksPanelActiveContent({
     commentsLoading,
     commentsSelectionClearRequest,
     conflictDetailsRefreshing,
-    consumeClaimedCommentResolutionAfterDeliveryRef,
     detachedHeadDisplay,
     editingTitle,
     getGitLabProjectRef,
+    gitLabPipelineCheck,
     handleAddPRComment,
     handleCancelEdit,
     handleDeleteComment,
     handleEditComment,
     handleFixChecksWithAI,
-    handleLaunchAborted,
-    handleLaunchAccepted,
     handleLinkAnotherReview,
     handleLoadCheckDetails,
     handleOpenPR,
@@ -79,6 +74,7 @@ export function ChecksPanelActiveContent({
     isRefreshing,
     isResolvingConflictsWithAI,
     linkedGitLabMR,
+    manualRefreshError,
     pendingCommentResolutionRef,
     pr,
     prRefreshState,
@@ -100,21 +96,28 @@ export function ChecksPanelActiveContent({
     return null
   }
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
+  // A failed GitLab parent leads even when its partial job list passes; failed jobs keep their Fix.
   const shouldShowReviewTriageStrip =
-    activeConflictReview !== null || getBrokenChecks(checks).length > 0
+    activeConflictReview !== null ||
+    (gitLabPipelineCheck !== null && isBrokenCheck(gitLabPipelineCheck)) ||
+    getBrokenChecks(checks).length > 0
   const hostedReviewModifierHintDestination = resolveChecksPanelHostedReviewModifierDestination(
     settings,
     Boolean(activeWorktreeId)
   )
+  // A classified GitHub failure says more than a manual one, so it wins; one banner either way.
+  const refreshError =
+    (activeReview.provider === 'github' && prRefreshState?.status === 'error'
+      ? getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)
+      : null) ?? manualRefreshError
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
-      {/* Show background GitHub failures above cached PR data so outages cannot look like a healthy panel. */}
-      {activeReview?.provider === 'github' && prRefreshState?.status === 'error' ? (
+      {refreshError ? (
         <div
           role="alert"
           className="border-b border-border/50 bg-destructive/10 px-3 py-2 text-xs text-destructive"
         >
-          {getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)}
+          {refreshError}
         </div>
       ) : null}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
@@ -204,6 +207,7 @@ export function ChecksPanelActiveContent({
           review={activeConflictReview ?? activeReview}
           reviewKind={reviewShortLabel}
           checks={checks}
+          pipelineCheck={gitLabPipelineCheck}
           isResolvingConflictsWithAI={isResolvingConflictsWithAI}
           onResolveConflictsWithAI={() => void handleResolveConflictsWithAI()}
           resolveConflictsDisabled={Boolean(aiActionDisabledReason)}
@@ -225,10 +229,11 @@ export function ChecksPanelActiveContent({
         </>
       )}
       {/* Conflicts can prevent checks running; do not claim no checks are configured before resolving them. */}
-      {!(activeConflictReview && checks.length === 0 && !checksLoading) && (
+      {!(activeConflictReview && checks.length === 0 && !gitLabPipelineCheck && !checksLoading) && (
         <ChecksList
           checks={checks}
-          checksError={checksError}
+          pipelineCheck={gitLabPipelineCheck}
+          checksError={manualRefreshError ? null : checksError}
           checksLoading={checksLoading}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
@@ -238,7 +243,7 @@ export function ChecksPanelActiveContent({
       )}
       <PRCommentsList
         comments={comments}
-        commentsError={commentsError}
+        commentsError={manualRefreshError ? null : commentsError}
         commentsLoading={commentsLoading}
         reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}
@@ -295,62 +300,8 @@ export function ChecksPanelActiveContent({
         promptDelivery="submit-after-ready"
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource={agentComposerState?.launchSource ?? 'task_page'}
-        savedAgentId={
-          agentComposerState
-            ? readSourceControlLaunchRecipeAgentId(
-                resolveSourceControlActionRecipe({
-                  settings,
-                  repo,
-                  actionId: agentComposerState.actionId
-                })
-              )
-            : null
-        }
-        savedCommandInputTemplate={
-          agentComposerState
-            ? (resolveSourceControlActionRecipe({
-                settings,
-                repo,
-                actionId: agentComposerState.actionId
-              }).commandInputTemplate ?? null)
-            : null
-        }
-        savedAgentArgs={
-          agentComposerState
-            ? (resolveSourceControlActionRecipe({
-                settings,
-                repo,
-                actionId: agentComposerState.actionId
-              }).agentArgs ?? null)
-            : null
-        }
         onSaveAgentDefault={saveLaunchActionDefault}
-        // Claim the ack payload when the tab exists; host writes still wait for prompt delivery.
-        onLaunchAccepted={handleLaunchAccepted}
-        onLaunchAborted={handleLaunchAborted}
-        onLaunched={() => {
-          // Successful prompt delivery is required before host replies or resolves.
-          consumeClaimedCommentResolutionAfterDeliveryRef.current()
-          if (agentComposerState?.actionId === 'resolveConflicts') {
-            toast.success(
-              translate(
-                'auto.components.right.sidebar.ChecksPanel.a0181a8d76',
-                'Started an AI agent for the conflicts.'
-              )
-            )
-            return
-          }
-          if (agentComposerState?.actionId === 'resolveComments') {
-            // resolveSelectedThreadsAfterLaunch emits the resolve/reply toast.
-            return
-          }
-          toast.success(
-            translate(
-              'auto.components.right.sidebar.ChecksPanel.2ef90c9819',
-              'Started an AI agent for the broken checks.'
-            )
-          )
-        }}
+        {...agentComposerState?.launchContext}
       />
     </div>
   )

@@ -1,4 +1,4 @@
-import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -171,7 +171,7 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
   const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
   assertRuntimeStatusCompatible(status)
   // Switch already proved compatibility; avoid the heavier generic RPC re-probe during hydration.
-  markRuntimeEnvironmentCompatible(environmentId)
+  markRuntimeEnvironmentCompatible(environmentId, status)
 }
 
 export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => ({

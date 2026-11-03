@@ -1,5 +1,5 @@
 import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { paneTerminalFact, type RuntimePtyRegistryView } from '../../runtime-leaf-record-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

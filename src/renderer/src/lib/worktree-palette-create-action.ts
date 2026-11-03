@@ -1,4 +1,4 @@
-import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../shared/palette-match/worktree-palette-query-bounds'
 
 export const CREATE_WORKTREE_ITEM_ID = '__create_worktree__'
 

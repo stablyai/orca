@@ -73,11 +73,6 @@ function createRuntimeFileCommands(rootPath: string) {
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
-    resolveWorktreeSelector: vi.fn(async () => ({
-      id: 'wt-1',
-      repoId: 'repo-1',
-      path: rootPath
-    })),
     resolveRuntimeFileTarget: vi.fn(async () => ({
       worktree: {
         id: 'wt-1',
@@ -185,6 +180,38 @@ describe('RuntimeFileCommands file watching', () => {
     watcher.emit('close')
     await closePromise
     expect(settled).toBe(true)
+  })
+
+  it('shares one Windows watch across clients without stopping survivors', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const watcher = createWindowsWatcher(() => watcher.emit('close'))
+    let emitChange = () => undefined
+    watchMock.mockImplementation((_rootPath, _options, callback) => {
+      emitChange = callback
+      return watcher
+    })
+    resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const { commands } = createRuntimeFileCommands('C:\\repo')
+    const callbacks = Array.from({ length: 2 }, () => vi.fn())
+    const releases = await Promise.all(
+      callbacks.map((callback) => commands.watchFileExplorer('id:wt-1', callback))
+    )
+    expect(watchMock).toHaveBeenCalledOnce()
+
+    await releases[0]()
+    expect(watcher.close).not.toHaveBeenCalled()
+    emitChange()
+    await vi.advanceTimersByTimeAsync(WINDOWS_RUNTIME_FILE_WATCH_LEADING_MS)
+    expect(callbacks[0]).not.toHaveBeenCalled()
+    for (const callback of callbacks.slice(1)) {
+      expect(callback).toHaveBeenCalledExactlyOnceWith([
+        { kind: 'overflow', absolutePath: 'C:\\repo' }
+      ])
+    }
+    await Promise.all(releases.slice(1).map((release) => release()))
+    expect(watcher.close).toHaveBeenCalledOnce()
+    expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(0)
   })
 
   it('treats a Windows watcher error before cleanup as physical close', async () => {

@@ -11,7 +11,7 @@ import {
   TEARDOWN_CURRENT,
   turnItem
 } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
-import { AgentSessionRecoveryCapsule } from '../../../src/main/runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../../src/main/runtime/agent-session/records/agent-session-recovery-capsule'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // A release whose marker parser still requires the chat's newest message id.

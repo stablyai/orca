@@ -2,9 +2,9 @@ import { resolve } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { TaskSourceContext } from '../../shared/task-source-context'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { LocalGitExecOptions } from '../gitlab/gitlab-project-ref-resolution'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 
 export type GitLabRepoSelectorArgs = {

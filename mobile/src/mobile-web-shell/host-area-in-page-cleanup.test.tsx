@@ -1,9 +1,11 @@
 // Keep the real bridge host alive while leaving an in-page workspace: its unmount must release terminal streams and audio without native screen teardown.
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { createContext } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
   View: 'View',
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   Keyboard: { dismiss: () => {} },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'ios' }
@@ -22,9 +24,26 @@ vi.mock('../terminal/terminal-copy-gutter-preference', () => ({
   useTerminalCopyTrimsGutter: () => ({ current: false })
 }))
 vi.mock('../session/mobile-session-styles', () => ({ styles: { container: {}, kavInner: {} } }))
+vi.mock('../transport/use-workspace-client', () => ({
+  WorkspaceServerContext: createContext(undefined)
+}))
+vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => null }))
+vi.mock('../session/MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () => null }))
+vi.mock('../layout/responsive-layout', () => ({
+  useResponsiveLayout: () => ({ isLandscapePhone: false })
+}))
+vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
+vi.mock('../session/use-session-title-card', () => ({
+  useSessionTitleCard: () => ({ active: false, visual: null, tabId: null, missingTab: false })
+}))
 vi.mock('../session/MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('../session/MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('../session/MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
+vi.mock('../session/MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
+vi.mock('expo-router', async () => {
+  const { useEffect } = await import('react')
+  return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) }
+})
 vi.mock('expo-keep-awake', () => ({
   activateKeepAwakeAsync: () => Promise.resolve(),
   deactivateKeepAwake: () => Promise.resolve()
@@ -166,8 +185,12 @@ describe('leaving a workspace inside the host-area page', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the accessory hook reads the listed scope and actual foundation callbacks.
       const accessoryScope = { ...scope, ...foundation } as unknown as AccessoryScope
       const accessory = useMobileSessionAccessorySelection(accessoryScope)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual surface reads this ref callback; its presentation children are stubbed.
-      const controller = accessory as unknown as SurfaceController
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual surface reads the root ref, tabs and sheet visibility; its presentation children are stubbed.
+      const controller = {
+        ...accessory,
+        visibleTabs: [],
+        bulkCloseConfirm: { visible: false }
+      } as unknown as SurfaceController
       return <MobileSessionSurface controller={controller} />
     }
     const mounted: { tree: ReactTestRenderer | null } = { tree: null }

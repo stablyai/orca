@@ -41,14 +41,17 @@ export default function ChecksPanel(): React.JSX.Element {
     resolutionModel,
     useChecksPanelCommentMutations(resolutionModel)
   )
-  const queueModel = Object.assign(mutationModel, useChecksPanelAiQueue(mutationModel))
   const acknowledgementModel = Object.assign(
-    queueModel,
-    useChecksPanelAiAcknowledgement(queueModel)
+    mutationModel,
+    useChecksPanelAiAcknowledgement(mutationModel)
+  )
+  const queueModel = Object.assign(
+    acknowledgementModel,
+    useChecksPanelAiQueue(acknowledgementModel)
   )
   const reviewActionsModel = Object.assign(
-    acknowledgementModel,
-    useChecksPanelCheckAndReviewActions(acknowledgementModel)
+    queueModel,
+    useChecksPanelCheckAndReviewActions(queueModel)
   )
   const branchActionsModel = Object.assign(
     reviewActionsModel,

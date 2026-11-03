@@ -1,5 +1,19 @@
+import { usePluginTerminalThemes } from '@/store/plugin-themes'
+import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { parseCustomTerminalThemeSelection } from '../../../../shared/terminal-custom-themes'
+import {
+  terminalCustomThemeRemoval,
+  type TerminalCustomThemeRemoval
+} from '../../../../shared/terminal-theme-selection'
+import {
+  hasTerminalColorOverrides,
+  TERMINAL_COLOR_OVERRIDES_SETTING,
+  type TerminalThemeSlot
+} from '../../../../shared/terminal-color-overrides'
 import {
   ColorField,
   SettingsSegmentedControl,
@@ -16,21 +30,31 @@ import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT,
   getAvailableTerminalThemeOptions,
-  resolveEffectiveTerminalAppearance
+  resolveEffectiveTerminalAppearance,
+  type TerminalThemeOption
 } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
-type TerminalThemeTarget = 'dark' | 'light'
+let lastEditedTerminalThemeTarget: TerminalThemeSlot | null = null
 
-let lastEditedTerminalThemeTarget: TerminalThemeTarget | null = null
-
-function rememberTerminalThemeTarget(target: TerminalThemeTarget): void {
+function rememberTerminalThemeTarget(target: TerminalThemeSlot): void {
   lastEditedTerminalThemeTarget = target
 }
 
 export function resetTerminalThemeTargetMemoryForTests(): void {
   lastEditedTerminalThemeTarget = null
+}
+
+// Why a queue: the store applies a write only once it is acknowledged, so each delete or undo must
+// read the list the previous one saved or a quick second delete would revive the first.
+let customThemeWrites: Promise<void> = Promise.resolve()
+
+function queueCustomThemeWrite(build: (settings: GlobalSettings) => Partial<GlobalSettings>): void {
+  customThemeWrites = customThemeWrites.then(() => {
+    const { settings, updateSettings } = useAppStore.getState()
+    return settings ? updateSettings(build(settings)) : undefined
+  })
 }
 
 function isCustomizedTheme(themeName: string, defaultThemeName: string): boolean {
@@ -41,8 +65,8 @@ function isCustomizedTheme(themeName: string, defaultThemeName: string): boolean
 function getInitialTerminalThemeTarget(
   settings: GlobalSettings,
   systemPrefersDark: boolean,
-  preferredTarget?: TerminalThemeTarget
-): TerminalThemeTarget {
+  preferredTarget?: TerminalThemeSlot
+): TerminalThemeSlot {
   if (preferredTarget) {
     return preferredTarget
   }
@@ -71,8 +95,8 @@ type TerminalThemeCatalogSectionProps = {
   importedHighlightSignal: number
   warpThemes: UseWarpThemeImportReturn
   showThemeImport: boolean
-  preferredTarget?: TerminalThemeTarget
-  advancedContent?: ReactNode
+  preferredTarget?: TerminalThemeSlot
+  renderAdvancedContent?: (colorOverrideSlot: TerminalThemeSlot) => ReactNode
 }
 
 export function TerminalThemeCatalogSection({
@@ -86,21 +110,49 @@ export function TerminalThemeCatalogSection({
   warpThemes,
   showThemeImport,
   preferredTarget,
-  advancedContent
+  renderAdvancedContent
 }: TerminalThemeCatalogSectionProps): React.JSX.Element {
-  const [target, setTargetState] = useState<TerminalThemeTarget>(() =>
+  const [target, setTargetState] = useState<TerminalThemeSlot>(() =>
     getInitialTerminalThemeTarget(settings, systemPrefersDark, preferredTarget)
   )
-  const setTarget = (nextTarget: TerminalThemeTarget): void => {
+  const setTarget = (nextTarget: TerminalThemeSlot): void => {
     rememberTerminalThemeTarget(nextTarget)
     setTargetState(nextTarget)
   }
-  const themeOptions = getAvailableTerminalThemeOptions(settings)
+  const pluginTerminalThemes = usePluginTerminalThemes()
+  const themeOptions = getAvailableTerminalThemeOptions(settings, pluginTerminalThemes)
   const isLightTarget = target === 'light'
   const matchDarkMode = !settings.terminalUseSeparateLightTheme
   const lightModeMatchesDark = isLightTarget && matchDarkMode
   const showCustomControls = !lightModeMatchesDark
+  // Light mode that matches dark paints the dark slot, so its overrides are the ones the preview shows.
+  const advancedContent = renderAdvancedContent?.(lightModeMatchesDark ? 'dark' : target)
   const selectedTheme = isLightTarget ? settings.terminalThemeLight : settings.terminalThemeDark
+  const deleteImportedTheme = (theme: TerminalThemeOption): void => {
+    const themeId = parseCustomTerminalThemeSelection(theme.value)
+    if (!themeId) {
+      return
+    }
+    let removal: TerminalCustomThemeRemoval | null = null
+    queueCustomThemeWrite((current) => {
+      removal = terminalCustomThemeRemoval(current, themeId)
+      return removal.updates
+    })
+    toast(
+      translate(
+        'auto.components.settings.TerminalThemeSections.deleted_imported_theme',
+        'Deleted "{{value0}}"',
+        { value0: theme.label }
+      ),
+      {
+        action: {
+          label: translate('auto.components.settings.TerminalThemeSections.undo', 'Undo'),
+          onClick: () => queueCustomThemeWrite((current) => removal?.undo(current) ?? {})
+        }
+      }
+    )
+  }
+
   const pickerTitle = isLightTarget
     ? translate('auto.components.settings.TerminalThemeSections.8273bc75d7', 'Light Theme')
     : translate('auto.components.settings.TerminalThemeSections.9499ad1dc4', 'Dark Theme')
@@ -251,21 +303,21 @@ export function TerminalThemeCatalogSection({
                   onQueryChange={setThemeSearch}
                   onSelectTheme={(theme) => {
                     rememberTerminalThemeTarget(target)
-                    // A selected theme must replace overrides or they mask the picker.
-                    const hasColorOverrides =
-                      Object.keys(settings.terminalColorOverrides ?? {}).length > 0
+                    // A selected theme must replace its slot's overrides or they mask the picker.
                     updateSettings(
-                      isLightTarget
-                        ? {
-                            terminalThemeLight: theme,
-                            ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
-                          }
-                        : {
-                            terminalThemeDark: theme,
-                            ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
-                          }
+                      withTerminalPluginPalettes(
+                        settings,
+                        {
+                          [isLightTarget ? 'terminalThemeLight' : 'terminalThemeDark']: theme,
+                          ...(hasTerminalColorOverrides(settings, target)
+                            ? { [TERMINAL_COLOR_OVERRIDES_SETTING[target]]: undefined }
+                            : {})
+                        },
+                        pluginTerminalThemes
+                      )
                     )
                   }}
+                  onDeleteImportedTheme={deleteImportedTheme}
                   importedHighlightSignal={importedHighlightSignal}
                 />
               </SearchableSetting>

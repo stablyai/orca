@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import { openHttpLink } from '@/lib/http-link-routing'
 import { formatCreateError } from '../create-pull-request-review-copy'
 import { stripBaseRef } from '../create-pull-request-base-ref-normalization'
 import { normalizeHostedReviewHeadRef } from '../../../../../shared/hosted-review-refs'
@@ -18,6 +17,7 @@ import {
   useChecksPanelCreatedReview,
   type ChecksPanelCreatedReviewInput
 } from './use-checks-panel-created-review'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
   Pick<
@@ -150,7 +150,12 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
         if (shouldPushBeforeCreate) {
           const ok = await pushBeforeCreatePullRequest()
           if (!ok) {
-            showCreateError('Push failed. Resolve the push error, then try again.')
+            showCreateError(
+              translate(
+                'sourceControl.createReviewFailure.pushFailed',
+                'Push failed. Resolve the push error, then try again.'
+              )
+            )
             return
           }
           pushed = true
@@ -178,7 +183,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             panelShowsReview
           )
           if (prCreationDefaults.openAfterCreate && foreground) {
-            openHttpLink(result.url, { worktreeId: activeWorktreeId })
+            openAppHttpLink(result.url, { worktreeId: activeWorktreeId })
           }
           if (activePullRequestGenerationKey) {
             updatePullRequestGenerationRecord(
@@ -209,7 +214,8 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
                   'Open on {{value0}}',
                   { value0: hostedReviewCreateCopy.providerName }
                 ),
-                onClick: () => window.api.shell.openUrl(result.existingReview!.url)
+                onClick: () =>
+                  openAppHttpLink(result.existingReview!.url, { worktreeId: activeWorktreeId })
               }
             }
           )
@@ -237,7 +243,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             )
           }
         }
-        showCreateError(formatCreateError(result, pushed, hostedReviewCreateCopy.shortLabel))
+        showCreateError(formatCreateError(result, pushed, hostedReviewCreateProvider))
       } catch (error) {
         showCreateError(
           error instanceof Error
@@ -268,7 +274,6 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       handlePullRequestCreated,
       hostedReviewCreateCopy.providerName,
       hostedReviewCreateCopy.reviewLabel,
-      hostedReviewCreateCopy.shortLabel,
       hostedReviewCreateCopy.titleLabel,
       hostedReviewCreateProvider,
       hostedReviewCreation?.blockedReason,

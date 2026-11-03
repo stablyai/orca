@@ -66,6 +66,7 @@ type AddRepoLocalStartStepProps = {
   nestedScanInProgress: boolean
   nestedScanId: string | null
   hostSelector?: ReactNode
+  notice?: ReactNode
   actionsDisabled?: boolean
   browseHostKind?: 'local' | 'runtime'
   offersServerSshHosts?: boolean
@@ -83,6 +84,7 @@ export function AddRepoLocalStartStep({
   nestedScanInProgress,
   nestedScanId,
   hostSelector,
+  notice,
   actionsDisabled = false,
   browseHostKind = 'local',
   offersServerSshHosts,
@@ -164,6 +166,7 @@ export function AddRepoLocalStartStep({
         onKeyDown={handleArrowNavigation}
       >
         {hostSelector}
+        {notice}
         <AddRepoPrimaryStartAction
           icon={primaryAction.icon}
           title={primaryAction.title}

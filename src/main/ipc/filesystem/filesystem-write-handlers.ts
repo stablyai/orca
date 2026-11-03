@@ -1,5 +1,5 @@
 import { ipcMain, shell } from 'electron'
-import { lstat } from 'node:fs/promises'
+import { lstat, rm, writeFile } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/connection/ssh-connection-generation'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
@@ -18,7 +18,10 @@ import type {
   FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from './local-disk-write-precondition'
+import { replaceLocalFileBytesIfUnchanged } from './local-disk-bytes-replace'
+import type { FileBytesWritePrecondition } from '../../../shared/file-bytes-write'
 import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
+import { TRASH_DELETE_FAILED_MESSAGE } from '../../../shared/trash-delete-failure'
 
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -60,6 +63,39 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
   )
 
   ipcMain.handle(
+    'fs:writeFileBytes',
+    async (
+      _event,
+      args: {
+        filePath: string
+        bytes: Uint8Array
+        connectionId?: string
+        access?: LocalFileAccess
+        diskPrecondition: FileBytesWritePrecondition
+      } & SshMutationExpectation
+    ): Promise<FileWriteResult> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
+      if (args.connectionId) {
+        throw new SshHostNotServedError(args.connectionId)
+      }
+      if (!(args.bytes instanceof Uint8Array)) {
+        throw new Error('Missing file content')
+      }
+      const filePath = await resolveLocalWriteRequestPath(args.filePath, args.access, store)
+      return replaceLocalFileBytesIfUnchanged(
+        filePath,
+        (tempPath) => writeFile(tempPath, args.bytes),
+        args.diskPrecondition ?? {}
+      )
+    }
+  )
+
+  ipcMain.handle(
     'fs:deletePath',
     async (
       _event,
@@ -67,6 +103,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         targetPath: string
         connectionId?: string
         recursive?: boolean
+        permanent?: boolean
       } & SshMutationExpectation
     ): Promise<void> => {
       assertSshMutationExpectation(
@@ -86,6 +123,10 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
       if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
         return
       }
+      if (args.permanent === true) {
+        await rm(windowsFsPath(targetPath), { recursive: args.recursive === true, force: true })
+        return
+      }
       // Concurrent external deletion must leave UI deletion idempotent.
       try {
         await shell.trashItem(targetPath)
@@ -93,7 +134,9 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         if (isENOENT(error)) {
           return
         }
-        throw error
+        // Tagged so the renderer can offer permanent deletion (e.g. drive with Recycle Bin disabled).
+        const reason = error instanceof Error ? error.message : String(error)
+        throw new Error(`${TRASH_DELETE_FAILED_MESSAGE}: ${reason}`)
       }
     }
   )

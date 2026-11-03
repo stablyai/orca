@@ -10,6 +10,9 @@ const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)('../dark-bui
 
 export const ORCAD_ENTRY_POINT = 'src/main/orcad/main.ts'
 export const ORCAD_LAUNCHER_ENTRY_POINT = 'src/main/orcad/launcher.ts'
+export const ORCAD_SERVER_BUILD_TARGET = 'node24'
+// Host entry points must load before Orca selects its bundled runtime.
+const ORCAD_COMPAT_BUILD_TARGET = 'node18'
 export const ORCAD_CHILD_ENTRY_POINTS = {
   watcher: 'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
@@ -17,6 +20,7 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
+  commandPathDirectoryWorker: 'src/main/ipc/command-path-directory-worker-entry.ts',
   sessionScanner: 'src/main/ai-vault/session-scanner-service-entry.ts',
   workerThreadChildProcess:
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts',
@@ -141,7 +145,7 @@ function buildOrcadEntryBundle(outfile, minify) {
     entryPoints: [join(root, ORCAD_ENTRY_POINT)],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_SERVER_BUILD_TARGET,
     format: 'cjs',
     outfile,
     external: ORCAD_EXTERNAL_MODULES,
@@ -164,7 +168,7 @@ export function buildOrcadCli(outfile) {
     entryPoints: [join(root, 'src/cli/index.ts')],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_COMPAT_BUILD_TARGET,
     format: 'cjs',
     outfile,
     plugins: ORCAD_BUNDLE_PLUGINS,
@@ -184,7 +188,7 @@ export function buildOrcadLauncher(outfile) {
     entryPoints: [join(root, ORCAD_LAUNCHER_ENTRY_POINT)],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_COMPAT_BUILD_TARGET,
     format: 'cjs',
     outfile,
     metafile: true,

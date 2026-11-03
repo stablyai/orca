@@ -18,6 +18,7 @@ it.each(['pty', 'leaf', 'unknown', 'disconnected'] as const)(
       tabs: new Map(),
       leaves: new Map(kind === 'leaf' ? [['leaf', { ptyId: pty.ptyId, connected: true }]] : []),
       ptysById: new Map([[pty.ptyId, pty]]),
+      getPtyAvailability: () => null,
       getLiveBrowserTabs: () => new Map(),
       getProviderSessionRows: () => [],
       getProviderSessionSnapshot: () => [],

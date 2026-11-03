@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
@@ -9,6 +9,7 @@ import {
   HIDDEN_OUTPUT_RESTORE_REMOTE_REARM_MAX
 } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { admitResumedAppChunk } from './resume-escape-admission'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { PendingHiddenOutputRestoreChunk } from './pending-hidden-output-restore-chunk'
@@ -37,6 +38,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
           discardPendingLiveChunksSalvagingQueries()
           return 'refetch'
         }
+        session.answerSnapshotCoveredPrimaryDeviceAttributes(chunk, snapshotSeq)
         // Why: advance the continuity point so reconciliation neither re-drops drained chunks as duplicates nor misreads the next live chunk as a gap.
         if (typeof chunk.seq === 'number' && session.restoredSnapshotExpectedStartSeq !== null) {
           session.restoredSnapshotExpectedStartSeq = Math.max(
@@ -45,7 +47,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
           )
         }
         if (data) {
-          session.writePtyOutputToXterm(data, true)
+          session.writePtyOutputToXterm(admitResumedAppChunk(session, data, chunk), true)
           session.recordRendererOrderedSeq(chunk)
         }
       }

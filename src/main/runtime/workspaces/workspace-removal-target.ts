@@ -6,13 +6,14 @@ import type {
   RuntimeWorktreeRemovalTarget
 } from '../runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from '../runtime-worktree-removal-target'
+import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
-import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
 import {
   dropRemovedWorktreeProcessState,
   pruneRemovedWorktreeSnapshots
-} from '../../worktree-removal-process-cleanup'
+} from '../../workspaces/removal/worktree-removal-process-cleanup'
 import { forgetFailedAgentLaunches } from '../../agent-launch/agent-launch-pane-attachment'
 import { closeClientHostedBrowserPagesForWorktree } from '../worktree-browser-client-page-close'
 import { teardownStops } from '../owned-session-teardown-policy'
@@ -32,15 +33,15 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/registered-worktree-roots-scoped-invalidation'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../../worktree-background-removal'
+} from '../../workspaces/removal/worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from '../runtime-interrupted-local-worktree-removal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { retryFailedRemovalUnlessRegistered } from '../../worktree-removal-leftover'
+import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import {
   resolveAgentTerminalCreateOptions,
@@ -63,7 +64,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     return resolveRuntimeWorktreeRemovalTarget({
       selector: worktreeSelector,
       store: this.store,
-      resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+      resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
       resolveExplicitWorktreeIdScoped: (worktreeId, hostId) =>
         this.resolveExplicitWorktreeIdScoped(worktreeId, hostId),
       ...(requiredHostId ? { requiredHostId } : {})
@@ -82,17 +83,18 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
 
   protected joinPendingWorktreeRemoval(
     worktreeId: string,
-    options: RemoveManagedWorktreeOptions
+    { hostId, deleteBranch }: RemoveManagedWorktreeOptions
   ): Promise<RemoveWorktreeResult> | undefined {
-    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(options.hostId)?.id)
+    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(hostId)?.id, deleteBranch)
   }
 
-  /** Finish a failed local removal only while Git still omits the path and the directory is gone; refuse while it exists. */
+  /** Failed intent schedules a retry; current Git/filesystem proof still controls every deletion. */
   protected async retryFailedRemoval(
     route: { kind: string },
     target: { id: string; path: string },
     registeredWorktrees: readonly GitWorktreeInfo[],
-    options: RemoveManagedWorktreeOptions
+    options: RemoveManagedWorktreeOptions,
+    localOptions: LocalProjectWorktreeGitOptions
   ): Promise<boolean> {
     const store = this.store
     if (route.kind !== 'local' || !store) {
@@ -100,16 +102,26 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     }
     const hostId = parseExecutionHostId(options.hostId)?.id
     const allowUnverifiedPtyStop = options.allowUnverifiedPtyStop === true
-    return retryFailedRemovalUnlessRegistered(target.id, target.path, registeredWorktrees, () =>
-      retryFailedWorktreeRemoval(target.id, hostId, (record) =>
-        interruptedLocalWorktreeRemovalJob(record, {
-          ...this.localRemovalJobHost(store),
-          stopPtys: () =>
-            this.stopPtysForDestructiveWorktreeRemoval(record.worktreeId, {
-              allowUnverifiedStop: allowUnverifiedPtyStop
-            })
-        })
-      )
+    return retryFailedRemovalUnlessRegistered(
+      target.id,
+      target.path,
+      registeredWorktrees,
+      localOptions,
+      () =>
+        retryFailedWorktreeRemoval(
+          target.id,
+          hostId,
+          (record) =>
+            interruptedLocalWorktreeRemovalJob(record, {
+              ...this.localRemovalJobHost(store),
+              stopPtys: () =>
+                this.stopPtysForDestructiveWorktreeRemoval(record.worktreeId, {
+                  allowUnverifiedStop: allowUnverifiedPtyStop
+                })
+            }),
+          options.force === true,
+          options.deleteBranch
+        )
     )
   }
 
@@ -304,8 +316,13 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     })
     const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
     // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
-    return workspace.connectionId
-      ? launch
-      : withHostAccountLaunchEnv(opts, launch, this.accounts.hostLaunchEnvFor(launch.launchAgent))
+    if (workspace.connectionId) {
+      return launch
+    }
+    if (launch.launchAgent) {
+      await this.accounts.prepareHostAgentLaunch(launch.launchAgent)
+    }
+    const hostLaunchEnv = this.accounts.hostLaunchEnvFor(launch.launchAgent)
+    return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
   }
 }

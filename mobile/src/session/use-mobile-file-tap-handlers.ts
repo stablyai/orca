@@ -1,8 +1,11 @@
+import { isCommittedChatAttachmentCandidate } from '../../../src/shared/native-chat-text-attachment-references'
+import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { triggerSelection } from '../platform/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
-import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
+import { openMobileNativeChatFileTap } from './native-chat/visual/mobile-native-chat-open-file'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
@@ -10,6 +13,7 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
   hostId: string
   worktreeId: string
   worktreeName?: string
+  structuredAttachments?: boolean
   nativeChatSessionId: string | null
   activeHandleRef: MutableRefObject<string | null>
   terminalCwdRef: MutableRefObject<Map<string, string>>
@@ -27,12 +31,7 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
 export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   options: MobileFileTapHandlerOptions<T>
 ): {
-  handleFileTap: (
-    handle: string,
-    pathText: string,
-    line: number | null,
-    column: number | null
-  ) => void
+  handleFileTap: (handle: string, candidates: readonly ParsedFileLinkLocation[]) => void
   handleNativeChatFileTap: (pathText: string) => void
 } {
   const {
@@ -44,6 +43,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getSessionTabs,
     hostId,
     nativeChatSessionId,
+    structuredAttachments,
     openBrowser,
     scheduleDelayedAction,
     reportChatTapFailure,
@@ -68,6 +68,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       getSessionTabs,
       hostId,
       nativeChatSessionId,
+      structuredAttachments,
       openBrowser,
       scheduleDelayedAction,
       reportChatTapFailure,
@@ -85,6 +86,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getSessionTabs,
     hostId,
     nativeChatSessionId,
+    structuredAttachments,
     openBrowser,
     router,
     scheduleDelayedAction,
@@ -96,9 +98,13 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   ])
 
   const handleFileTap = useCallback(
-    (handle: string, pathText: string, line: number | null, column: number | null) => {
+    (handle: string, candidates: readonly ParsedFileLinkLocation[]) => {
       const current = optionsRef.current
-      if (handle !== current.activeHandleRef.current || !current.client) {
+      if (
+        handle !== current.activeHandleRef.current ||
+        !current.client ||
+        candidates.length === 0
+      ) {
         return
       }
       const activationSeq = ++activationSeqRef.current
@@ -108,10 +114,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         worktreeId: current.worktreeId,
         worktreeName: current.worktreeName,
         terminalHandle: handle,
-        pathText,
         cwd: current.terminalCwdRef.current.get(handle) ?? null,
-        line,
-        column,
+        candidates,
         pushPreviewRoute: (href) => routerRef.current.push(href),
         openBrowser: current.openBrowser,
         triggerOpenFeedback: triggerSelection,
@@ -135,6 +139,18 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
 
   const handleNativeChatFileTap = useCallback((pathText: string) => {
     const current = optionsRef.current
+    if (current.structuredAttachments && isCommittedChatAttachmentCandidate(pathText)) {
+      ++activationSeqRef.current
+      routerRef.current.push(
+        createMobileFilePreviewHref({
+          hostId: current.hostId,
+          worktreeId: current.worktreeId,
+          source: 'chatAttachment',
+          absolutePath: pathText
+        })
+      )
+      return
+    }
     const sourceTerminalHandle = current.activeHandleRef.current
     const nativeChatSessionId = current.nativeChatSessionId
     const nativeChatTabId = current.getActiveSessionTabId()

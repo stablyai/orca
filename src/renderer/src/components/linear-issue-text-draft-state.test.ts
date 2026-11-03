@@ -5,22 +5,6 @@ import {
 } from './linear-issue-text-draft-state'
 
 describe('linear issue text draft state', () => {
-  it('creates drafts from the issue source values', () => {
-    expect(
-      createLinearIssueTextDraftState({
-        description: undefined,
-        id: 'issue-1',
-        title: 'Initial title'
-      })
-    ).toEqual({
-      description: '',
-      issueId: 'issue-1',
-      sourceDescription: '',
-      sourceTitle: 'Initial title',
-      title: 'Initial title'
-    })
-  })
-
   it('resets both drafts when the issue changes', () => {
     const state = createLinearIssueTextDraftState({
       description: 'Old body',

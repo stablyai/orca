@@ -6,7 +6,12 @@ import {
   wslHomeSessionDirs,
   type SessionHomeAgent
 } from '../ai-vault/session-scanner-roots'
-import { getWslHomeAsync, listRunningWslHomeDirsAsync, resolveWslGuestRealDirAsync } from '../wsl'
+import { resolveWslGuestRealDirAsync } from '../wsl'
+import {
+  listRunningWslHomeDirsUnlessStopped,
+  wslHomeUnlessStopped
+} from '../wsl/wsl-home-unless-stopped'
+import { admitWslTranscriptPath } from './wsl-transcript-running-admission'
 import {
   filterPathsToRunningWslDistrosAsync,
   filterPathsToWslDistros
@@ -48,7 +53,9 @@ async function snapshotHomeDirs(snapshot: WslTranscriptResolutionSnapshot): Prom
   if (snapshot.homeDirs) {
     return snapshot.homeDirs
   }
-  const homes = await Promise.all(snapshot.runningDistros.map((distro) => getWslHomeAsync(distro)))
+  const homes = await Promise.all(
+    snapshot.runningDistros.map((distro) => wslHomeUnlessStopped(distro))
+  )
   return homes.filter((home): home is string => home !== null)
 }
 
@@ -107,7 +114,16 @@ export function hostAdditionalCodexHomePaths(): string[] {
 }
 
 async function defaultListWslHomeDirs(): Promise<string[]> {
-  return listRunningWslHomeDirsAsync()
+  return listRunningWslHomeDirsUnlessStopped()
+}
+
+// `realpath` runs through `wsl.exe --exec`, which would boot a stopped distro.
+async function resolveGuestRealDirUnlessStopped(
+  distro: string,
+  guestDir: string
+): Promise<string | null> {
+  await admitWslTranscriptPath(toWindowsWslPath('/', distro))
+  return resolveWslGuestRealDirAsync(distro, guestDir)
 }
 
 function resolveWslHomeDirs(load?: () => Promise<string[]>): Promise<string[]> {
@@ -151,7 +167,7 @@ async function guestSymlinkTarget(
   const key = `${distro}\0${dir}`
   let entry = guestRealDirs.get(key)
   if (!entry || Date.now() >= entry.expiresAt) {
-    const resolve = deps.resolveGuestRealDir ?? resolveWslGuestRealDirAsync
+    const resolve = deps.resolveGuestRealDir ?? resolveGuestRealDirUnlessStopped
     entry = {
       realDir: resolve(distro, dir).catch(() => null),
       expiresAt: Date.now() + GUEST_REAL_DIR_TTL_MS
@@ -217,15 +233,15 @@ export async function toHostReadableTranscriptPath(
   }
   // Classify before probing: Win32 resolves /home on the current drive and may find a local look-alike.
   if (!needsWslHostTranslation(path, platform)) {
-    if (
-      platform === 'win32' &&
-      isWslUncPath(path) &&
-      (deps.wslSnapshot
-        ? filterPathsToWslDistros([path], deps.wslSnapshot.runningDistros)
-        : await filterPathsToRunningWslDistrosAsync([path])
-      ).length === 0
-    ) {
-      return null
+    if (platform === 'win32' && isWslUncPath(path)) {
+      if (deps.wslSnapshot) {
+        if (filterPathsToWslDistros([path], deps.wslSnapshot.runningDistros).length === 0) {
+          return null
+        }
+      } else {
+        // A stopped or unverifiable distro is a refusal the pane can show, never a missing file.
+        await admitWslTranscriptPath(path)
+      }
     }
     return (await pathExists(path)) ? path : null
   }

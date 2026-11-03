@@ -117,7 +117,14 @@ describe('discoverFiles containment for a stalled WSL root', () => {
         { agent: 'codex', rootDir: UNC_ROOT, files: [] },
         { agent: 'codex', rootDir: '/home/ada/.codex/sessions', files: [] }
       ])
-      expect(issues).toEqual([{ agent: 'codex', path: UNC_ROOT, message: SLOW_MESSAGE }])
+      expect(issues).toEqual([
+        {
+          agent: 'codex',
+          path: UNC_ROOT,
+          message: SLOW_MESSAGE,
+          messageCode: 'wslTranscriptFsSlow'
+        }
+      ])
     }
   })
 

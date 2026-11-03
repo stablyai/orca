@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -39,6 +39,10 @@ vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForWorktreeTabRegistration: vi.fn()
 }))
 
+vi.mock('../browser/browser-main-window-readiness', () => ({
+  whenBrowserMainWindowReady: async () => null
+}))
+
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
@@ -72,8 +76,9 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
           ]
         }))
       } as unknown as AgentBrowserBridge)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
   return {
-    resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAuthoritativeWindow: vi.fn(),

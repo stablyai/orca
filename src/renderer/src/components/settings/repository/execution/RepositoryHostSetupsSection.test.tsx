@@ -470,11 +470,11 @@ describe('RepositoryHostSetupsSection', () => {
     expect(pathInput).toBeTruthy()
     typeIntoInput(pathInput!, '/home/alice/orca')
 
-    const importButton = findButton('Import')
-    expect(importButton).toBeTruthy()
+    const addProjectButton = findButton('Add project')
+    expect(addProjectButton).toBeTruthy()
 
     await act(async () => {
-      importButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      addProjectButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(setupProjectExistingFolder).toHaveBeenCalledWith({

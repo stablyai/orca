@@ -68,6 +68,30 @@ function resolve(
 }
 
 describe('mobile AI Vault resume target guards', () => {
+  it('uses host correspondence to select the owning folder instead of the active route', () => {
+    const folder = worktree({
+      worktreeId: 'folder:linked',
+      repoId: 'folder-workspace:group',
+      workspaceKind: 'folder-workspace',
+      path: '/var/example'
+    })
+    const args = {
+      session: session({ cwd: '/private/var/example', cwdAliases: ['/var/example'] }),
+      activeWorktreeId: 'route',
+      worktrees: [worktree({ worktreeId: 'route', path: '/elsewhere' }), folder],
+      folderWorkspaces: [{ id: 'linked', projectGroupId: 'group', folderPath: '/var/example' }],
+      projectGroups: [{ id: 'group', parentGroupId: null, connectionId: null }]
+    }
+    expect(resolve(args)).toMatchObject({
+      status: 'ready',
+      worktreeId: 'folder:linked',
+      workspacePath: '/var/example'
+    })
+    expect(
+      resolve({ ...args, session: { ...args.session, executionHostId: 'ssh:other' } }).status
+    ).toBe('blocked')
+  })
+
   const repos = [
     { id: 'local-repo', path: '/Users/ada/repo', connectionId: null },
     { id: 'ssh-repo', path: '/home/ada/ssh-repo', connectionId: 'builder' },
@@ -361,5 +385,38 @@ describe('mobile AI Vault resume target guards', () => {
       repos
     })
     expect(target.status).toBe('blocked')
+  })
+
+  it('attaches a session to the workspace on the host that recorded it when paths collide', () => {
+    const target = resolve({
+      session: session({ executionHostId: 'ssh:builder', cwd: '/srv/app/src' }),
+      activeWorktreeId: null,
+      worktrees: [
+        worktree({ worktreeId: 'local-app', path: '/srv/app' }),
+        worktree({ worktreeId: 'ssh-app', repoId: 'ssh-repo', path: '/srv/app' })
+      ],
+      repos
+    })
+    expect(target.status === 'ready' ? target.worktreeId : target.message).toBe('ssh-app')
+  })
+
+  it('attaches an SSH folder session to its folder, whose worktree.ps row has no hostId', () => {
+    const target = resolve({
+      session: session({ executionHostId: 'ssh:folder-builder', cwd: '/home/ada/folder/src' }),
+      activeWorktreeId: 'route-wt',
+      worktrees: [
+        worktree({ worktreeId: 'route-wt', path: '/Users/ada/repo/main' }),
+        worktree({
+          worktreeId: 'folder:folder-ssh',
+          repoId: 'folder-workspace:group-local',
+          workspaceKind: 'folder-workspace',
+          path: '/home/ada/folder'
+        })
+      ],
+      repos,
+      folderWorkspaces,
+      projectGroups
+    })
+    expect(target.status === 'ready' ? target.worktreeId : target.message).toBe('folder:folder-ssh')
   })
 })

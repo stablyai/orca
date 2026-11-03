@@ -26,37 +26,45 @@ export async function removeFolderWorkspace(
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
   const ownerHost = parseExecutionHostId(removalHostId)
-  // Shared-root folder removal has no Git step to close shells; stop them before dropping metadata.
-  await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
-    // Fence by resolved repo ownership; same-ID metadata can describe another host's workspace.
-    const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
-    await killAllProcessesForWorktree(args.worktreeId, {
-      runtime,
-      resolvedWorktreeId: args.worktreeId,
-      ...(ownerHost?.kind === 'ssh' ? { resolvedConnectionId: ownerHost.targetId } : {}),
-      ...(ownerHost?.kind === 'runtime'
-        ? { resolvedRuntimeEnvironmentId: ownerHost.environmentId }
-        : {}),
-      localProvider: getLocalPtyProvider(),
-      onPtyStopped: clearProviderPtyState,
-      // PTY inventories cannot see structured sessions; close them before forgetting the workspace.
-      closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),
-      ...(externalHost ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
-    }).catch((err) => {
-      console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
-    })
-  })
-  await withWorktreeRemoveStageSpan('metadata_purge', 'folder', async () => {
-    removeWorktreeMetadataAndTransientState(
-      { store, runtime, entryPoint: 'folder-removal' },
-      args.worktreeId,
-      removalHostId,
-      args.snapshotPruneBatchId
-    )
-  })
-  preservedBranchCleanupByScope.delete(
-    preservedBranchCleanupScopeKey({ worktreeId: args.worktreeId, hostId: removalHostId })
+  const gate = await runtime.acquireFileWatcherRemoval(
+    repo.path,
+    ownerHost?.kind === 'ssh' ? ownerHost.targetId : undefined
   )
-  notifyWorktreesChanged(mainWindow, repoId)
-  return {}
+  try {
+    // Shared-root folder removal has no Git step to close shells; stop them before dropping metadata.
+    await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
+      // Fence by resolved repo ownership; same-ID metadata can describe another host's workspace.
+      const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
+      await killAllProcessesForWorktree(args.worktreeId, {
+        runtime,
+        resolvedWorktreeId: args.worktreeId,
+        ...(ownerHost?.kind === 'ssh' ? { resolvedConnectionId: ownerHost.targetId } : {}),
+        ...(ownerHost?.kind === 'runtime'
+          ? { resolvedRuntimeEnvironmentId: ownerHost.environmentId }
+          : {}),
+        localProvider: getLocalPtyProvider(),
+        onPtyStopped: clearProviderPtyState,
+        // PTY inventories cannot see structured sessions; close them before forgetting the workspace.
+        closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),
+        ...(externalHost ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
+      }).catch((err) => {
+        console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
+      })
+    })
+    await withWorktreeRemoveStageSpan('metadata_purge', 'folder', async () => {
+      removeWorktreeMetadataAndTransientState(
+        { store, runtime, entryPoint: 'folder-removal' },
+        args.worktreeId,
+        removalHostId,
+        args.snapshotPruneBatchId
+      )
+    })
+    preservedBranchCleanupByScope.delete(
+      preservedBranchCleanupScopeKey({ worktreeId: args.worktreeId, hostId: removalHostId })
+    )
+    notifyWorktreesChanged(mainWindow, repoId)
+    return {}
+  } finally {
+    await gate.finish(false)
+  }
 }

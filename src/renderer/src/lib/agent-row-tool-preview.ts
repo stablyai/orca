@@ -1,6 +1,10 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { AgentRowState } from '../../../shared/agent-row-decay-state'
 import { isProgramStatusRow } from './program-status/row'
+import {
+  agentToolPreviewInput,
+  formatAgentToolPreviewLine
+} from '../../../shared/agent-tool-preview'
 
 type ToolPreviewEntry = Pick<AgentStatusEntry, 'toolName' | 'toolInput'> &
   Partial<Pick<AgentStatusEntry, 'agentType' | 'programStatus' | 'observation'>>
@@ -10,29 +14,18 @@ export function showsAgentToolPreview(state: AgentRowState | null | undefined): 
   return state === 'working' || state === 'waiting'
 }
 
-/** Only OSC 7501 programs may show bare input as their message; an agent’s orphaned tool argument needs a tool name. */
 export function agentRowToolInput(
   entry: ToolPreviewEntry,
   state: AgentRowState | null | undefined
 ): string {
-  if (!showsAgentToolPreview(state)) {
-    return ''
-  }
-  const toolInput = entry.toolInput?.trim() ?? ''
-  return entry.toolName?.trim() || isProgramStatusRow(entry) ? toolInput : ''
+  return showsAgentToolPreview(state) ? agentToolPreviewInput(entry, isProgramStatusRow(entry)) : ''
 }
 
 export function formatAgentToolPreview(
   entry: ToolPreviewEntry,
   state: AgentRowState | null | undefined
 ): string {
-  if (!showsAgentToolPreview(state)) {
-    return ''
-  }
-  const toolName = entry.toolName?.trim() ?? ''
-  const toolInput = agentRowToolInput(entry, state)
-  if (toolName && toolInput) {
-    return `${toolName}: ${toolInput}`
-  }
-  return toolName || toolInput
+  return showsAgentToolPreview(state)
+    ? formatAgentToolPreviewLine(entry, isProgramStatusRow(entry))
+    : ''
 }

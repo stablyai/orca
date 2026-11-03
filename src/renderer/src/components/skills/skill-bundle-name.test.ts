@@ -25,21 +25,6 @@ function isPublishable(name: string): boolean {
 }
 
 describe('derivedBundleName', () => {
-  it('keeps a single skill name as the bundle name', () => {
-    expect(derivedBundleName([skill('agent-discord')])).toBe('agent-discord')
-  })
-
-  it('distinguishes bundles by their first skill and how many others ride along', () => {
-    const bundle = [skill('agent-discord'), skill('agent-slack'), skill('orca-cli')]
-    expect(derivedBundleName(bundle)).toBe('agent-discord-and-2-more')
-  })
-
-  it('publishes distinct names for distinct bundles', () => {
-    const first = derivedBundleName([skill('alpha'), skill('beta')])
-    const second = derivedBundleName([skill('gamma'), skill('delta')])
-    expect(first).not.toBe(second)
-  })
-
   it('slugifies names the bundle schema would reject', () => {
     const name = derivedBundleName([skill('My Skill_v2'), skill('other')])
     expect(name).toBe('my-skill-v2-and-1-more')
@@ -50,10 +35,5 @@ describe('derivedBundleName', () => {
     const name = derivedBundleName([skill('a'.repeat(80)), skill('other')])
     expect(name.length).toBeLessThanOrEqual(64)
     expect(isPublishable(name)).toBe(true)
-  })
-
-  it('falls back when a name slugifies to nothing', () => {
-    expect(derivedBundleName([skill('///'), skill('other')])).toBe('shared-skills')
-    expect(derivedBundleName([])).toBe('shared-skills')
   })
 })

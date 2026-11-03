@@ -278,7 +278,6 @@ describe('a link to this computer printed in a paired-server terminal', () => {
         relativePath: '/tmp/artifact.txt',
         worktreeId: 'wt-feat',
         runtimeEnvironmentId: 'env-1',
-        readOnly: true,
         terminalArtifactGrantId: 'g-1'
       }),
       { forceContentReload: true }

@@ -1,5 +1,5 @@
-import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
-import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 
 export class AgentSessionAcquisitionRefusal extends Error {
   readonly code = 'agent_session_operation_invalid'
@@ -44,8 +44,10 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'claudeAccountFolderMissing'
   | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
+  | 'cliMissing'
   | 'runtimeNotInstalled'
   | 'conversationOpenInTerminal'
+  | 'launchPreparationFailed'
 >
 
 /** First-hand proof that acquisition spawned no process. */
@@ -65,4 +67,11 @@ export class AgentSessionPreSpawnError extends Error {
 
 export function isAgentSessionPreSpawnError(error: unknown): error is AgentSessionPreSpawnError {
   return error instanceof Error && error.name === 'AgentSessionPreSpawnError'
+}
+
+/** Orca's own launch preparation on the host failed; a refusal it already named keeps its reason. */
+export function launchPreparationFailure(error: unknown): AgentSessionPreSpawnError {
+  return isAgentSessionPreSpawnError(error) && error.reason
+    ? error
+    : new AgentSessionPreSpawnError(error, { reason: 'launchPreparationFailed' })
 }

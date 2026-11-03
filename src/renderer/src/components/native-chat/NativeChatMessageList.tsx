@@ -11,13 +11,13 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/Comme
 import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
-import { structuredQuestionTranscript } from '../../../../shared/structured-agent-question-projection'
-import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat-task-list-history'
+import { desktopStructuredTranscript } from './structured-agent-session-message-projection'
+import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
+import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 import {
   NativeChatDisclosureContext,
@@ -57,16 +57,14 @@ import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
-import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
-import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
+import { isStructuredAgentSessionThinking } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
+import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
 import { transcriptTailRow } from './native-chat-transcript-tail-row'
-
-/** shown prompts have a card in this pane; unshown prompts require input in the agent’s terminal. */
-export type NativeChatAwaitingInput = 'shown' | 'unshown'
+import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 type NavigationRequest =
   | { kind: 'diff'; target: NativeChatDiffReveal }
@@ -92,10 +90,12 @@ export function NativeChatMessageList({
   awaitingInput = null,
   turnActivity,
   stopping = false,
-  runtimeContext
+  runtimeContext,
+  structuredAttachments = false
 }: {
   ref?: Parameters<typeof useNativeChatMessageListHandle>[0]
   session: NativeChatLiveSession
+  structuredAttachments?: boolean
   journalItems?: readonly AgentJournalRenderItem[]
   /** With the items, what places each row in its turn (structured lane). */
   journalSubmissions?: readonly AgentJournalSubmission[]
@@ -129,7 +129,8 @@ export function NativeChatMessageList({
   const revealedDiff = navigationRequest?.kind === 'diff' ? navigationRequest.target : null
   const railJump = navigationRequest?.kind === 'rail' ? navigationRequest : null
   const receipts = useMemo(
-    () => (journalItems ? structuredQuestionTranscript(journalItems).receipts : new Map()),
+    () =>
+      journalItems ? desktopStructuredTranscript.transcript(journalItems).receipts : new Map(),
     [journalItems]
   )
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -332,6 +333,7 @@ export function NativeChatMessageList({
   const rowContext = useNativeChatTranscriptRowContext({
     agent: session.agent,
     hostWork,
+    structuredAttachments,
     expandSignal,
     revealedDiff,
     taskListPredecessors,
@@ -348,7 +350,7 @@ export function NativeChatMessageList({
 
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
-      <div className="relative flex min-h-0 flex-1 flex-col bg-chat-canvas">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
         <div className="relative min-h-0 flex-1">
           <div
             ref={scrollRef}

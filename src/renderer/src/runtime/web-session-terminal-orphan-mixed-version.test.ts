@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
@@ -53,25 +53,6 @@ const missingSnapshot = {
   activeTabType: null,
   tabs: []
 }
-
-// Shapes a newer host can publish that this client's closed unions do not name.
-const newerAgentTab = {
-  type: 'agent-session',
-  id: 'agent-1',
-  title: 'Gemini',
-  sessionId: 'session-1',
-  agent: 'gemini',
-  isActive: false
-}
-const newerAgentStatus = {
-  state: 'future-state',
-  prompt: '',
-  updatedAt: 1,
-  stateStartedAt: 1,
-  paneKey: 'host-tab:leaf-1',
-  stateHistory: []
-}
-const newerTabKind = { type: 'notebook', id: 'nb-1', title: 'Notebook', isActive: false }
 
 describe('mixed-version web terminal orphan recovery', () => {
   beforeEach(() => {
@@ -191,114 +172,5 @@ describe('mixed-version web terminal orphan recovery', () => {
         })
       )
     }
-  })
-
-  // Wire-compat Rule 3: unknown newer-host labels must not reject snapshots and leave adopted terminals invisible on every retry.
-  it.each([
-    { name: 'a new agent-session provider', extend: (tabs: unknown[]) => [...tabs, newerAgentTab] },
-    {
-      name: 'a new agent status state',
-      extend: (tabs: unknown[]) => [{ ...(tabs[0] as object), agentStatus: newerAgentStatus }]
-    },
-    { name: 'a new tab kind', extend: (tabs: unknown[]) => [...tabs, newerTabKind] }
-  ])('completes adoption when a newer host publishes $name', async ({ extend }) => {
-    const liveTab = {
-      type: 'terminal' as const,
-      id: 'host-tab::leaf-1',
-      parentTabId: 'host-tab',
-      leafId: 'leaf-1',
-      title: 'Original',
-      isActive: true,
-      status: 'ready' as const,
-      terminal: 'term_live'
-    }
-    const projected: RuntimeMobileSessionTabsResult = {
-      ...missingSnapshot,
-      publicationEpoch: 'renderer:host:client-navigation',
-      snapshotVersion: 3,
-      activeTabId: liveTab.id,
-      activeTabType: 'terminal',
-      tabs: extend([liveTab]) as never
-    }
-    const call = vi.fn(async ({ method }: { method: string }) => {
-      if (method === 'terminal.list') {
-        return {
-          ok: true,
-          result: {
-            terminals: [
-              {
-                handle: 'term_live',
-                ptyId: 'pty-live',
-                incarnationId: 'inc-live',
-                orphaned: true,
-                worktreeId: worktree
-              }
-            ],
-            topologyRevisions: { [worktree]: 1 },
-            totalCount: 1,
-            truncated: false
-          }
-        }
-      }
-      if (method === 'terminal.adoptOrphans') {
-        const snapshot = { ...projected, publicationEpoch: 'renderer:host', snapshotVersion: 2 }
-        return { ok: true, result: { adopted: true, topologyRevision: 2, snapshot } }
-      }
-      return { ok: true, result: projected }
-    })
-
-    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
-      legacyRecoveryState(),
-      { ...projected, snapshotVersion: 2, tabs: [] },
-      'windows-2',
-      { call: call as never }
-    )
-
-    expect(recovered).toBe(projected)
-    expect(call.mock.calls.map(([request]) => request.method)).toEqual([
-      'terminal.list',
-      'terminal.adoptOrphans',
-      'session.tabs.list'
-    ])
-  })
-
-  it.each([
-    {
-      name: 'incarnation evidence is unavailable',
-      result: {
-        terminals: [{ handle: 'term_live', ptyId: 'pty-live', worktreeId: worktree }],
-        totalCount: 1,
-        truncated: false
-      }
-    },
-    {
-      name: 'a legacy unfiltered listing truncates before the candidate',
-      result: {
-        terminals: [{ handle: 'term_other', ptyId: 'pty-other', worktreeId: worktree }],
-        totalCount: 101,
-        truncated: true
-      }
-    }
-  ])('keeps the live candidate visible when $name', async ({ result }) => {
-    const call = vi.fn(async () => ({ ok: true as const, result }))
-
-    await expect(
-      recoverWebSessionTerminalOrphansBeforeApply(
-        legacyRecoveryState(),
-        missingSnapshot,
-        'windows-2',
-        { call: call as never }
-      )
-    ).resolves.toMatchObject({
-      tabs: [
-        expect.objectContaining({
-          parentTabId: 'host-tab',
-          leafId: 'leaf-1',
-          status: 'ready',
-          terminal: 'term_live'
-        })
-      ]
-    })
-    expect(call).toHaveBeenCalledOnce()
   })
 })

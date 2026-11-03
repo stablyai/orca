@@ -5,7 +5,7 @@ import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
-} from '@/components/github-pr-reviewer-display'
+} from '../../../../../shared/github/pr-reviewer-display'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { buildRequestedReviewUsers } from '@/components/github/work-item-state-presentation'
 import type {
@@ -16,6 +16,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ReviewerRequestArgs = {
   submitting: boolean
@@ -38,6 +39,7 @@ type ReviewerRequestArgs = {
     options: { sourceContext?: TaskSourceContext | null }
   ) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
 }
 
 export async function requestPRReviewers({
@@ -57,7 +59,8 @@ export async function requestPRReviewers({
   setLocalReviewRequests,
   setReviewerInput,
   patchWorkItem,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: ReviewerRequestArgs & {
   requestedLogins?: string[]
   reviewerInput: string
@@ -118,7 +121,7 @@ export async function requestPRReviewers({
     }
     if (!result.ok) {
       toast.error(
-        result.error ??
+        codeHostErrorText(result) ??
           translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
       )
       return
@@ -162,6 +165,8 @@ export async function requestPRReviewers({
     if (reviewerPanelMountedRef.current) {
       setSubmitting(false)
     }
+    // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+    onMutated()
   }
 }
 
@@ -179,7 +184,8 @@ export async function removePRReviewers({
   setLocalReviewRequests,
   setReviewerInput,
   patchWorkItem,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: ReviewerRequestArgs & {
   reviewersToRemove: string[]
 }): Promise<void> {
@@ -232,7 +238,7 @@ export async function removePRReviewers({
     }
     if (!result.ok) {
       toast.error(
-        result.error ??
+        codeHostErrorText(result) ??
           translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
       )
       return
@@ -275,5 +281,7 @@ export async function removePRReviewers({
     if (reviewerPanelMountedRef.current) {
       setSubmitting(false)
     }
+    // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+    onMutated()
   }
 }

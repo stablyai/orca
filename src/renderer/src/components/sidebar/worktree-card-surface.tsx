@@ -5,12 +5,12 @@ import { cn } from '@/lib/utils'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
-import { WorktreeCardParentContent } from './worktree-card-parent-content'
-import { buildWorktreeCardPresentation } from './worktree-card-presentation'
+import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from './use-worktree-card-controller'
+import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from './workspace-card/default-workspace-card'
+import { renderWorkspaceCardTemplate } from './workspace-card/render-workspace-card-template'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
-  const presentation = buildWorktreeCardPresentation(card)
   const {
     worktree,
     selectedWorktrees,
@@ -33,17 +33,32 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     isQueuedForDeletion,
     deleteLabel,
     handleClick,
+    handlePointerDown,
+    handlePointerEnter,
+    handlePointerLeave,
     handleDoubleClick,
     handleDragStart,
     handleDragEnd,
     handleContextMenuSelect,
     showRenameErrorDialog,
-    setShowRenameErrorDialog
+    setShowRenameErrorDialog,
+    contentIndent
   } = card
-  const { titleOnlyCard, cardStyle } = presentation
   const isSleeping = useIsSleepingWorktree(worktree.id)
-
-  const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />
+  const geometryFor = (statusLane: boolean) =>
+    getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
+  const { content: parentCardContent, frame } = renderWorkspaceCardTemplate(
+    card,
+    DEFAULT_WORKSPACE_CARD_TEMPLATE,
+    (templateFrame) => {
+      const { parentContentMarginLeft } = geometryFor(templateFrame.statusLane)
+      return parentContentMarginLeft < 0
+        ? { style: { marginLeft: `${parentContentMarginLeft}px` } }
+        : undefined
+    }
+  )
+  const { cardStyle } = geometryFor(frame.statusLane)
+  const titleOnlyCard = frame.singleLine
 
   const cardBody = (
     <div
@@ -77,6 +92,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
       onClick={handleClick}
+      onPointerDown={affiliateListMode ? undefined : handlePointerDown}
+      onPointerEnter={affiliateListMode ? undefined : handlePointerEnter}
+      onPointerLeave={affiliateListMode ? undefined : handlePointerLeave}
       onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}
       draggable={!affiliateListMode && nativeDragEnabled && !isDeleting && !titleRenaming}
       onDragStart={!affiliateListMode && nativeDragEnabled ? handleDragStart : undefined}
@@ -134,6 +152,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             open={showRenameErrorDialog}
             onOpenChange={setShowRenameErrorDialog}
             worktreeId={worktree.id}
+            executionHostId={worktree.hostId}
             worktreeName={worktree.displayName}
             error={worktree.firstAgentMessageRenameError}
           />

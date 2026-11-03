@@ -8,14 +8,14 @@ import type {
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 

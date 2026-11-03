@@ -5,9 +5,10 @@ import {
   CreateIntentParams,
   CreateSupportParams,
   ModelCatalogParams,
+  SendParams,
   RespondToQuestionParams
 } from './structured-agent-session-params'
-import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session-question-answer'
+import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session/agent-session-question-answer'
 
 const ENVELOPE = {
   sessionId: 'agent-session-0123456789abcdef0123456789abcdef',
@@ -64,6 +65,29 @@ describe('structured agent params', () => {
       }).success
     ).toBe(false)
   })
+  it('accepts an exact empty selection but rejects hidden keys and dual legacy options', () => {
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'send' }] }
+    const send = { envelope: { ...ENVELOPE, expectedRuntimeFence: 1 }, body }
+    const create = { envelope: ENVELOPE, worktree: 'wt', agent: 'codex' }
+    for (const selection of [
+      {},
+      { model: 'literal-alias', fastMode: 'false', serviceTier: 'priority' }
+    ]) {
+      expect(SendParams.safeParse({ ...send, selection }).success).toBe(true)
+      expect(
+        CreateIntentParams.safeParse({
+          ...create,
+          firstMessage: { clientMessageId: 'first', body, selection }
+        }).success
+      ).toBe(true)
+    }
+    expect(SendParams.safeParse({ ...send, selection: {}, options: {} }).success).toBe(false)
+    expect(SendParams.safeParse({ ...send, selection: { personality: 'friendly' } }).success).toBe(
+      false
+    )
+    expect(SendParams.safeParse(send).success).toBe(true)
+  })
+
   it.each(['claude', 'codex', 'grok', 'qwen-code'])('accept the agent id %s', (agent) => {
     expect(CreateSupportParams.safeParse({ worktree: 'wt', agent }).success).toBe(true)
     expect(ModelCatalogParams.safeParse({ agent }).success).toBe(true)

@@ -10,7 +10,7 @@ import { prepareOpenCodePtyLaunch } from '../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../pty/pi-process-owner-env'
 import { planCodexNoDaemonLaunch } from '../../pty/codex-no-daemon-launch-command'
-import { applyAgentWorkspaceTrustToSpawn } from '../../agent-workspace-trust-spawn'
+import { applyAgentWorkspaceTrustToSpawn } from '../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../providers/pty-provider-contract'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 import { getStartupTerminalIngressIntent } from '../terminal-startup-color-query-replies'
@@ -117,20 +117,6 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-  const openCodeLaunch = await prepareOpenCodePtyLaunch({
-    command: input.launchCommand,
-    agent: launchAgent,
-    env: input.env,
-    envToDelete: input.envToDelete,
-    cwd: input.cwd,
-    connectionId,
-    isFreshLaunch: !input.preAdoptedStablePane && input.launchCommand !== undefined,
-    ...(input.codexRuntime === 'wsl'
-      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
-      : {})
-  })
-  const env = openCodeLaunch.env
-  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const shell = resolveStartupShell(
     input.codexRuntime === 'wsl' ? 'linux' : process.platform,
     resolveLocalWindowsAgentStartupShell({
@@ -139,6 +125,21 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
     })
   )
+  const openCodeLaunch = await prepareOpenCodePtyLaunch({
+    command: input.launchCommand,
+    agent: launchAgent,
+    env: input.env,
+    envToDelete: input.envToDelete,
+    cwd: input.cwd,
+    connectionId,
+    isFreshLaunch: !input.preAdoptedStablePane && input.launchCommand !== undefined,
+    shell,
+    ...(input.codexRuntime === 'wsl'
+      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
+      : {})
+  })
+  const env = openCodeLaunch.env
+  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
     pluginDir && openCodeLaunch.command
       ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)

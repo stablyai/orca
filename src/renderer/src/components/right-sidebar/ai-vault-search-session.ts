@@ -1,6 +1,7 @@
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { withAiVaultSessionCwdAliases } from '../../../../shared/ai-vault-session-cwd-aliases'
 
 export function aiVaultSearchHitToSession(
   hit: AiVaultSearchHit,
@@ -30,6 +31,9 @@ export function aiVaultSearchHitToSession(
     subagentTranscriptCount: 0,
     resumeCommand: hit.resumeCommand ?? '',
     subagent: null,
+    ...(hit.accountHome !== undefined
+      ? { accountHome: hit.accountHome, accountWslDistro: hit.accountWslDistro }
+      : {}),
     ...(hit.structuredSession ? { structuredSession: hit.structuredSession } : {})
   }
 }
@@ -50,15 +54,19 @@ export function withAiVaultHistoryPreviews(
   }
   return hitSessions.map((hitSession) => {
     const row = historyByIdentity.get(previewIdentity(hitSession))
+    const hydrated =
+      row && (!hitSession.filePath || hitSession.filePath === row.filePath)
+        ? withAiVaultSessionCwdAliases(hitSession, row)
+        : hitSession
     return row && hitSession.previewMessages.length === 0
       ? {
-          ...hitSession,
+          ...hydrated,
           previewMessages: row.previewMessages,
           ...(row.previewMessagesTruncated ? { previewMessagesTruncated: true } : {}),
           ...(row.lastUserPrompt !== undefined ? { lastUserPrompt: row.lastUserPrompt } : {}),
           ...(row.firstUserPrompt !== undefined ? { firstUserPrompt: row.firstUserPrompt } : {})
         }
-      : hitSession
+      : hydrated
   })
 }
 

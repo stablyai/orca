@@ -15,7 +15,8 @@ export function buildWorktreePurgeSurfacePatch(
   s: AppState,
   omitters: WorktreePurgeOmitters,
   doomedTabIds: ReadonlySet<string>,
-  sleeping: WorktreePurgeSleepingMaps
+  sleeping: WorktreePurgeSleepingMaps,
+  changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const {
     omitByTabId,
@@ -25,7 +26,7 @@ export function buildWorktreePurgeSurfacePatch(
     omitByPageId,
     omitByFileId
   } = omitters
-  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
+  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey, changedPaneKeys)
   return {
     localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),

@@ -1,7 +1,6 @@
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelCommentResolutionState } from './use-checks-panel-comment-resolution'
-import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-acknowledgement'
 import type { ChecksPanelReviewDataState } from './use-checks-panel-review-data'
 import type { ChecksPanelCommentMutationState } from './use-checks-panel-comment-mutations'
 import type { ChecksPanelEntryRefreshAndTitleActionsState } from './use-checks-panel-entry-refresh-and-title-actions'
@@ -30,6 +29,7 @@ export type ChecksPanelActiveContentModel = Pick<
   | 'conflictDetailsRefreshing'
   | 'detachedHeadDisplay'
   | 'editingTitle'
+  | 'gitLabPipelineCheck'
   | 'isFixingChecksWithAI'
   | 'isRefreshing'
   | 'isResolvingConflictsWithAI'
@@ -62,12 +62,6 @@ export type ChecksPanelActiveContentModel = Pick<
     | 'handleResolve'
     | 'resolveCommentsWithAIDisabledReason'
   > &
-  Pick<
-    ChecksPanelAiAcknowledgementState,
-    | 'consumeClaimedCommentResolutionAfterDeliveryRef'
-    | 'handleLaunchAborted'
-    | 'handleLaunchAccepted'
-  > &
   Pick<ChecksPanelReviewDataState, 'getGitLabProjectRef' | 'handleLoadCheckDetails'> &
   Pick<
     ChecksPanelCommentMutationState,
@@ -93,7 +87,7 @@ export type ChecksPanelActiveContentModel = Pick<
     | 'handleOpenStackPR'
     | 'handleUnlinkReview'
   > &
-  Pick<ChecksPanelRefreshState, 'handleRefresh'> &
+  Pick<ChecksPanelRefreshState, 'handleRefresh' | 'manualRefreshError'> &
   Pick<ChecksPanelAiQueueState, 'handleResolveCommentsWithAI' | 'handleResolveConflictsWithAI'> &
   Pick<ChecksPanelReviewState, 'sourceControlAiActionsVisible'> &
   Pick<ChecksPanelComposerState, 'stateRequestKey'>

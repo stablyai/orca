@@ -1,4 +1,5 @@
-import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
+import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
+import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
 import {
   cleanGeneratedCommitMessage,
   stripPrefilledReasoningPreamble,
@@ -12,6 +13,7 @@ import {
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
 import { runLocalPlanForAgent } from './source-control-local-generation'
+import { emptyResultFailure } from './source-control-agent-failure'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
 import type {
   CommitMessageGenerationTarget,
@@ -33,15 +35,17 @@ export async function runGenerationRequest(input: {
   params: GenerateParams
   prompt: string
   target: CommitMessageGenerationTarget
-  emptyResultName: string
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
 }): Promise<InternalTextGenerationResult> {
-  const params = { ...input.params, backslash: commandBackslashMode(input.target) }
+  const params = {
+    ...input.params,
+    backslash: commandBackslashMode(input.target)
+  }
   const planned = planCommitMessageGeneration(params, input.prompt)
   if (!planned.ok) {
-    return { success: false, error: planned.error }
+    return { success: false, error: planned.error, ...textGenerationFailureCodeFields(planned) }
   }
   const plan = planned.plan
   const execute = (plan: CommitMessagePlan): Promise<InternalTextGenerationResult> =>
@@ -49,28 +53,30 @@ export async function runGenerationRequest(input: {
       ? runRemoteSourceControlPlan({
           plan,
           target: input.target,
-          emptyResultName: input.emptyResultName,
           operation: input.operation
         })
       : runLocalPlanForAgent({
           agentId: input.params.agentId,
           plan,
           target: input.target,
-          emptyResultName: input.emptyResultName,
           operation: input.operation,
           spawnAgent: input.spawnAgent,
           shouldExecute: input.shouldExecute
         })
-  let result = await runClaudeBackgroundAttempts({
+  let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,
-    run: (strictMcp): Promise<InternalTextGenerationResult> => {
-      if (strictMcp) {
+    run: (attempt): Promise<InternalTextGenerationResult> => {
+      if (attempt.strictMcp && !attempt.legacyToolPolicy) {
         return execute(plan)
       }
-      const retry = planCommitMessageGeneration(params, input.prompt, { strictMcp })
+      const retry = planCommitMessageGeneration(params, input.prompt, attempt)
       return retry.ok
         ? execute(retry.plan)
-        : Promise.resolve({ success: false, error: retry.error })
+        : Promise.resolve({
+            success: false,
+            error: retry.error,
+            ...textGenerationFailureCodeFields(retry)
+          })
     },
     failedExit: (outcome) => (outcome.success ? undefined : outcome.failureOutput)
   })
@@ -100,5 +106,5 @@ export async function runGenerationRequest(input: {
   const rawOutput = cleanGeneratedCommitMessage(answer)
   return rawOutput
     ? { ...result, rawOutput }
-    : { success: false, error: `${plan.label} returned an empty ${input.emptyResultName}.` }
+    : { success: false, ...emptyResultFailure(input.operation, plan.label) }
 }

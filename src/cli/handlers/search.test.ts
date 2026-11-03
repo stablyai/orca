@@ -155,7 +155,7 @@ describe('orca search over the runtime RPC', () => {
         filters: {
           agents: ['claude', 'codex'],
           scopePaths: ['/a', '/b'],
-          since: '2026-08-01T00:00:00Z',
+          since: '2026-08-01T00:00:00.000Z',
           sort: 'newest'
         }
       }

@@ -45,6 +45,8 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ).toEqual([
       '--prompt',
       'Name a branch for adding login',
+      '--output-format',
+      'stream-json',
       '--model',
       'kimi-code/kimi-for-coding'
     ])
@@ -68,13 +70,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
         'Write a concise commit message'
       ]
     )
-  })
-
-  it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.kimi?.models.map((m) => m.id)).toEqual([
-      'default',
-      'kimi-code/kimi-for-coding'
-    ])
   })
 
   it('omits Kimi --model for the config default and an empty model', () => {
@@ -161,40 +156,94 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
 
 describe('buildArgs (Claude)', () => {
   const spec = getCommitMessageAgentSpec('claude')!
+  const isolation = ['--strict-mcp-config', '--settings', '{"disableAllHooks":true}']
+  // Every built-in of the CLIs that refuse `--tools`/`dontAsk`, except the file tools.
+  const legacyDenied =
+    'Task,Bash,LS,ExitPlanMode,Edit,MultiEdit,Write,NotebookEdit,WebFetch,TodoWrite,WebSearch,BashOutput,KillBash,KillShell,SlashCommand,Skill,AskUserQuestion,LSP,ListMcpResourcesTool,ReadMcpResourceTool'
 
-  it('passes -p, output format, and model on every call', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'haiku' })
-    expect(args).toEqual([
+  // Plan mode made the CLI run Sonnet for `haiku`; an explicit non-plan mode also outranks settings.
+  it('passes the picked model with only file tools, granted anywhere, and no plan mode', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku' })).toEqual([
       '-p',
       '--output-format',
       'text',
       '--model',
       'haiku',
+      '--tools',
+      'Read,Grep,Glob',
+      '--allowedTools',
+      'Read,Grep,Glob',
       '--permission-mode',
-      'plan',
-      '--strict-mcp-config',
-      '--settings',
-      '{"disableAllHooks":true}'
+      'dontAsk',
+      ...isolation
     ])
-  })
-
-  it('appends --effort when a thinking level is supplied', () => {
-    const args = spec.buildArgs({
-      prompt: '',
-      model: 'sonnet',
-      thinkingLevel: 'high'
-    })
-    expect(args).toEqual([
+    expect(spec.buildArgs({ prompt: '', model: 'sonnet', thinkingLevel: 'high' })).toEqual([
       '-p',
       '--output-format',
       'text',
       '--model',
       'sonnet',
+      '--tools',
+      'Read,Grep,Glob',
+      '--allowedTools',
+      'Read,Grep,Glob',
       '--permission-mode',
-      'plan',
+      'dontAsk',
       '--effort',
       'high',
-      '--strict-mcp-config',
+      ...isolation
+    ])
+  })
+
+  it('denies MCP tools once managed servers load without strict mode', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku', strictMcp: false })).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--tools',
+      'Read,Grep,Glob',
+      '--allowedTools',
+      'Read,Grep,Glob',
+      '--disallowedTools',
+      'mcp__*',
+      '--permission-mode',
+      'dontAsk',
+      '--settings',
+      '{"disableAllHooks":true}'
+    ])
+  })
+
+  it('keeps the same tools, root-path grants and a non-plan mode in older CLI syntax', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku', legacyToolPolicy: true })).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--disallowedTools',
+      legacyDenied,
+      '--allowedTools',
+      'Read(//**),Grep(//**),Glob(//**)',
+      '--permission-mode',
+      'default',
+      ...isolation
+    ])
+    expect(
+      spec.buildArgs({ prompt: '', model: 'haiku', legacyToolPolicy: true, strictMcp: false })
+    ).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--disallowedTools',
+      legacyDenied,
+      '--allowedTools',
+      'Read(//**),Grep(//**),Glob(//**)',
+      '--permission-mode',
+      'default',
       '--settings',
       '{"disableAllHooks":true}'
     ])
@@ -274,8 +323,8 @@ describe('buildArgs (Jcode)', () => {
     expect(
       spec.modelDiscovery?.parse('claude-opus-5-5\nclaude-haiku-4-5\ngemini-2.5-pro\n')
     ).toEqual([
-      { id: 'claude-opus-5-5', label: 'Claude Opus 5 5' },
-      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4 5' },
+      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' }
     ])
   })
@@ -669,29 +718,18 @@ describe('buildArgs (OpenCode 2)', () => {
 describe('buildArgs (Antigravity)', () => {
   const spec = getCommitMessageAgentSpec('antigravity')!
 
-  it('runs agy with the prompt attached to --print, then --sandbox and --model flags', () => {
-    const args = spec.buildArgs({
-      prompt: 'real commit prompt',
-      model: 'Gemini 3.5 Flash (Medium)'
-    })
-    expect(args).toEqual([
-      '--print=real commit prompt',
+  it('runs agy in stream input mode with sandbox and model flags separate', () => {
+    expect(
+      spec.buildArgs({ prompt: 'real commit prompt', model: 'Gemini 3.5 Flash (Medium)' })
+    ).toEqual([
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
       '--sandbox',
       '--model',
       'Gemini 3.5 Flash (Medium)'
     ])
-    expect(spec.promptDelivery).toBe('argv')
-  })
-
-  it('binds a leading-dash prompt to --print instead of letting it parse as an option', () => {
-    const args = spec.buildArgs({ prompt: '-fix: something', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args[0]).toBe('--print=-fix: something')
-  })
-
-  // argv construction only: agy 1.2.1 still rejects a print value equal to a flag, even --print=--sandbox; real generation prompts are not bare flags.
-  it('still glues a prompt that collides with a flag name onto --print', () => {
-    const args = spec.buildArgs({ prompt: '--sandbox', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args[0]).toBe('--print=--sandbox')
+    expect(spec.promptDelivery).toBe('stdin')
   })
 
   it('uses dynamic model discovery via agy models', () => {
@@ -704,7 +742,12 @@ describe('buildArgs (Antigravity)', () => {
     expect(spec.defaultModelId).toBe('default')
     expect(
       spec.buildArgs({ prompt: 'Generate a commit message', model: spec.defaultModelId })
-    ).toEqual(['--print=Generate a commit message', '--sandbox'])
+    ).toEqual([
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
+      '--sandbox'
+    ])
   })
 
   it('passes only a nonempty requested effort', () => {
@@ -712,7 +755,9 @@ describe('buildArgs (Antigravity)', () => {
       '--effort'
     )
     expect(spec.buildArgs({ prompt: 'P', model: 'default', thinkingLevel: 'high' })).toEqual([
-      '--print=P',
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
       '--sandbox',
       '--effort',
       'high'

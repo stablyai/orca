@@ -62,11 +62,13 @@ function formatRollback(result: ProfileStateRollbackResult): string {
   ].join('\n')
 }
 
-function formatRepairedSection({
-  domain,
-  backupId,
-  backupCreatedAtMs
-}: NonNullable<ProfileStateRollbackResult['repairedSections']>[number]): string {
+function formatRepairedSection(
+  section: NonNullable<ProfileStateRollbackResult['repairedSections']>[number]
+): string {
+  if ('source' in section) {
+    return `repaired ${section.domain}: current runs kept`
+  }
+  const { domain, backupId, backupCreatedAtMs } = section
   if (backupId === null) {
     return `repaired ${domain}: no readable backup, starts empty`
   }
@@ -83,8 +85,8 @@ function rejectProfileStateRemoteSelection(flags: ReadonlyMap<string, string | b
 }
 
 async function requireStoppedRuntime(client: RuntimeClient): Promise<void> {
-  const status = await client.getCliStatus()
-  if (status.result.runtime.reachable || status.result.app.running) {
+  const status = await client.getOfflineRuntimeAdmission()
+  if (status.reachable || status.legacyPidRunning) {
     throw new RuntimeClientError(
       'runtime_error',
       'Stop Orca before profile-state rollback so no process can write the SQLite database.'

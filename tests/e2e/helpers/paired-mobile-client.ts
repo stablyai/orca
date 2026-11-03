@@ -6,7 +6,7 @@ import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription,
   type RemoteRuntimeSubscriptionCallbacks
-} from '../../../src/shared/remote-runtime-client'
+} from '../../../src/shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
 import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime/remote-runtime-passthrough-socket'
 import type { RuntimeCapability } from '../../../src/shared/protocol-version'
@@ -48,7 +48,12 @@ export type PairedMobileClient = {
 /** Raw frames over one authenticated phone socket, exactly as the app writes them. */
 export type PairedMobileSocket = {
   token: string
-  frames: { id?: string; ok?: boolean; result?: unknown; error?: { code: string } }[]
+  frames: {
+    id?: string
+    ok?: boolean
+    result?: unknown
+    error?: { code: string; message?: string }
+  }[]
   /** Terminal output text per stream id, decoded from binary frames. */
   output: Map<number, string>
   screencastFrames: BrowserScreencastFrame[]

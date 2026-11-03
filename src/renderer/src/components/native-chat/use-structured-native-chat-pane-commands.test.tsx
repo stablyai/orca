@@ -3,15 +3,72 @@
  */
 import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as I18n from '@/i18n/i18n'
+import type { AppState } from '@/store'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
+import type * as QuickCommandHosts from '@/hooks/use-terminal-quick-command-hosts'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { PreparedAgentSessionFork } from '../terminal-pane/terminal-agent-session-fork'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { nativeChatPaneHeader } from './NativeChatPaneHeader'
+import { emptyNativeChatContextMenuActions } from './use-native-chat-context-menu'
+import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 
-type ItemProps = { onSelect?: () => void; children?: ReactNode }
+type ItemProps = { disabled?: boolean; onSelect?: () => void; children?: ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
 const callRuntimeRpc = vi.hoisted(() => vi.fn())
+const menuActions = vi.hoisted(
+  (): {
+    runQuickCommand: ReturnType<typeof vi.fn>
+    runCli: ReturnType<typeof vi.fn>
+    refresh: ReturnType<typeof vi.fn>
+    fork: PreparedAgentSessionFork | null
+    commands: TerminalQuickCommand[]
+  } => ({
+    runQuickCommand: vi.fn(),
+    runCli: vi.fn(),
+    refresh: vi.fn(),
+    fork: null,
+    commands: [
+      {
+        id: 'shell',
+        label: 'Run checks',
+        scope: { type: 'global' },
+        command: 'pnpm check',
+        appendEnter: true
+      },
+      {
+        id: 'draft',
+        label: 'Draft commit',
+        scope: { type: 'global' },
+        command: 'git commit -m ',
+        appendEnter: false
+      },
+      {
+        id: 'agent',
+        label: 'Review changes',
+        scope: { type: 'repo', repoId: 'worktree-1' },
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review the diff'
+      }
+    ]
+  })
+)
+const handOff = vi.hoisted(() => ({
+  options: vi.fn(),
+  capability: vi.fn(),
+  dialog: vi.fn(),
+  focus: vi.fn(),
+  error: vi.fn()
+}))
+
 const paneActions = vi.hoisted(() => ({
   onSplitRight: vi.fn(() => true),
   onSplitDown: vi.fn(() => true),
@@ -19,10 +76,17 @@ const paneActions = vi.hoisted(() => ({
   closeLabel: 'Close Pane',
   onClosePane: vi.fn()
 }))
-const store = vi.hoisted(() => ({
-  keybindings: {},
-  groupsByWorktree: { 'worktree-1': [{ id: 'group-1' }] }
-}))
+const store = vi.hoisted(() => {
+  const agentStatusByPaneKey: Record<string, { providerSession?: { id: string } }> = {}
+  return {
+    keybindings: {},
+    repos: [
+      { id: 'worktree-1', path: '/work/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }
+    ],
+    agentStatusByPaneKey,
+    groupsByWorktree: { 'worktree-1': [{ id: 'group-1' }] }
+  }
+})
 
 vi.mock('@/components/ui/dropdown-menu', () => {
   const Pass = ({ children }: { children?: ReactNode }) => children
@@ -46,16 +110,74 @@ vi.mock('@/i18n/i18n', async (importOriginal) => ({
   ...(await importOriginal<typeof I18n>()),
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), message: vi.fn(), error: handOff.error } }))
 vi.mock('@/components/ui/tooltip', () => {
   const Pass = ({ children }: { children?: ReactNode }) => children
   return { Tooltip: Pass, TooltipTrigger: Pass, TooltipContent: () => null }
 })
+vi.mock('@/components/tab-bar/TabWorkspaceLayoutMenuSection', () => ({
+  TabWorkspaceLayoutMenuSection: () => null
+}))
+vi.mock('@/components/tab-bar/tab-move-to-pane-column', () => ({
+  canMoveTabToNewPaneColumn: () => false
+}))
 vi.mock('./use-structured-chat-pane-actions', () => ({
   useStructuredChatPaneActions: () => paneActions
 }))
+vi.mock('./NativeChatResumeInCliButton', () => ({ NativeChatResumeInCliButton: () => null }))
 vi.mock('@/store', () => ({
-  useAppStore: (select: (state: typeof store) => unknown) => select(store)
+  useAppStore: Object.assign(
+    (select: (state: Pick<AppState, 'keybindings' | 'unifiedTabsByWorktree'>) => unknown) =>
+      select({ ...store, unifiedTabsByWorktree: {} }),
+    { getState: () => store }
+  )
+}))
+vi.mock('@/hooks/use-terminal-quick-command-hosts', async (importOriginal) => ({
+  ...(await importOriginal<typeof QuickCommandHosts>()),
+  useTerminalQuickCommandHosts: () => ({
+    executionHostId: 'local',
+    hosts: [{ hostId: 'local', label: 'This computer', commands: menuActions.commands }],
+    refreshRemoteHost: menuActions.refresh,
+    remoteHostLoadFailed: false,
+    remoteHostPending: false
+  })
+}))
+vi.mock('@/lib/run-quick-command-in-new-tab', () => ({
+  runQuickCommandInNewTab: menuActions.runQuickCommand
+}))
+vi.mock('../tab-bar/tab-session-history-switch', () => ({
+  resolveTabSessionHistorySubject: () => ({
+    kind: 'chat',
+    sessionId: SESSION,
+    workspaceId: 'worktree-1',
+    request: { executionHostScope: 'local' }
+  })
+}))
+vi.mock('../tab-bar/native-chat-cli-fork-run', () => ({
+  useNativeChatCliForkPending: () => false,
+  runNativeChatCliFork: menuActions.runCli
+}))
+vi.mock('../terminal-pane/TerminalAgentSessionForkDialog', () => ({
+  TerminalAgentSessionForkDialog: ({ fork }: { fork: PreparedAgentSessionFork | null }) => {
+    menuActions.fork = fork
+    return <span>Fork dialog</span>
+  }
+}))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: handOff.options,
+  supportsStructuredAgentSessionContinuationContext: handOff.capability
+}))
+vi.mock('@/runtime/structured-conversation-name', () => ({
+  useStructuredChatTabConversationName: () => 'Fix the login bug'
+}))
+vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog', () => ({
+  AgentSessionContinuationDialog: (props: {
+    request: AgentSessionContinuationRequest | null
+    onOpenChange: (open: boolean) => void
+  }) => {
+    handOff.dialog(props)
+    return <button onClick={() => props.onOpenChange(false)}>Close hand-off</button>
+  }
 }))
 vi.mock('../../runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -77,29 +199,120 @@ function childrenText(children: ReactNode): string {
     .join('')
 }
 
-function StructuredChatTab({ owner = 'worktree-1' }: { owner?: string | null }): ReactNode {
-  const { menu } = useStructuredNativeChatPaneCommands({
+function StructuredChatTab({
+  inWorkspace = false,
+  epoch = 'epoch',
+  visible = true,
+  fallback = false,
+  messages,
+  terminalPane = false,
+  owner = 'worktree-1'
+}: {
+  inWorkspace?: boolean
+  epoch?: string
+  visible?: boolean
+  fallback?: boolean
+  messages?: readonly NativeChatMessage[]
+  terminalPane?: boolean
+  owner?: string | null
+}): ReactNode {
+  const pane = {
     tabId: 'chat-tab',
-    ownerWorktreeId: owner,
     groupId: 'group-1',
-    isVisible: true,
+    isVisible: visible,
+    isFocusedGroup: true,
+    sessionId: SESSION,
+    target: TARGET,
+    agent: 'codex' as const,
+    ...(terminalPane
+      ? {
+          contextMenuActions: {
+            ...emptyNativeChatContextMenuActions,
+            canContinueAgentSessionInNewSession: true
+          }
+        }
+      : {})
+  }
+  const handOffState = useNativeChatHandOff({
+    pane,
+    directory: inWorkspace
+      ? { worktreeId: 'wt-1', worktreePath: '/work/repo', runtimeEnvironmentId: 'env_1' }
+      : null,
+    messages:
+      messages ??
+      (fallback
+        ? [
+            {
+              id: 'recent',
+              role: 'user',
+              timestamp: 1,
+              source: 'transcript',
+              blocks: [{ type: 'text', text: 'Keep the task context' }]
+            },
+            {
+              id: 'start',
+              role: 'system',
+              timestamp: 2,
+              source: 'transcript',
+              agentStart: true,
+              blocks: [{ type: 'text', text: 'Do not export this worker assignment' }]
+            },
+            {
+              id: 'answer',
+              role: 'assistant',
+              timestamp: 3,
+              source: 'transcript',
+              blocks: [{ type: 'text', text: 'Keep the answer' }]
+            }
+          ]
+        : []),
+    epoch,
+    focusComposer: handOff.focus
+  })
+  const { menu } = useStructuredNativeChatPaneCommands({
+    pane,
+    handOff: handOffState,
+    sessionContext: { messages: messages ?? [], epoch },
+    ownerWorktreeId: owner,
     rootRef: createRef<HTMLDivElement>(),
     composerRef: createRef<NativeChatComposerHandle>(),
     questionAnswerInputRef: createRef<HTMLInputElement>(),
-    sessionId: SESSION,
-    target: TARGET
+    ...(inWorkspace
+      ? {
+          fileLinkContext: {
+            worktreeId: 'wt-1',
+            worktreePath: '/work/repo',
+            runtimeEnvironmentId: 'env_1'
+          }
+        }
+      : {})
   })
-  return menu
+  return (
+    <>
+      {nativeChatPaneHeader(pane, owner, 'dark', handOffState)}
+      {menu}
+      {handOffState.dialog}
+    </>
+  )
 }
 
 describe('a structured chat tab', () => {
   beforeEach(() => {
-    items.list = []
     vi.clearAllMocks()
     store.groupsByWorktree['worktree-1'] = [{ id: 'group-1' }]
+    handOff.capability.mockResolvedValue(true)
+    items.list = []
+    store.agentStatusByPaneKey = {}
+    menuActions.fork = null
+    paneActions.canClosePane = true
     callRuntimeRpc.mockReset().mockResolvedValue({ orcaSessionId: `orca_session_id:${SESSION}` })
     Object.assign(window, {
-      api: { ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) } }
+      api: {
+        ui: {
+          writeClipboardText: vi.fn().mockResolvedValue(undefined),
+          writeTerminalClipboardText: vi.fn().mockResolvedValue(undefined)
+        }
+      }
     })
   })
 
@@ -110,7 +323,7 @@ describe('a structured chat tab', () => {
     const markup = renderToStaticMarkup(<StructuredChatTab />)
     expect(markup).not.toContain('Move Tab to Split')
     expect(markup).not.toContain('Resume in New CLI')
-    expect(markup).not.toContain('Continue with Terminal Agent')
+    expect(markup).toContain('Continue with Terminal Agent')
     for (const [label, command] of [
       ['Split Chat Right', paneActions.onSplitRight],
       ['Split Chat Down', paneActions.onSplitDown]
@@ -120,10 +333,123 @@ describe('a structured chat tab', () => {
       item?.onSelect?.()
       expect(command).toHaveBeenCalledOnce()
     }
-    const close = items.list.find((entry) => childrenText(entry.children) === 'Close Pane')
-    expect(Boolean(close)).toBe(split)
+    const close = items.list.find((entry) => childrenText(entry.children).startsWith('Close Pane'))
+    expect(Boolean(close)).toBe(true)
     close?.onSelect?.()
-    expect(paneActions.onClosePane).toHaveBeenCalledTimes(split ? 1 : 0)
+    expect(paneActions.onClosePane).toHaveBeenCalledOnce()
+  })
+
+  it('orders standalone actions, runs both Quick Command kinds in new tabs, and hides them in terminal panes', async () => {
+    const view = render(<StructuredChatTab inWorkspace />)
+    const markup = view.container.textContent ?? ''
+    const labels = [
+      'Quick Commands',
+      'Hand Off to Another Agent',
+      'Fork Agent Session…',
+      'Copy Context',
+      'Continue with Terminal Agent',
+      'Split Chat Right',
+      'Copy Orca Session ID',
+      'Close Pane'
+    ]
+    const menuText = markup.slice(markup.indexOf('Quick Commands'))
+    expect(labels.map((label) => menuText.indexOf(label))).toEqual(
+      labels.map((label) => menuText.indexOf(label)).sort((a, b) => a - b)
+    )
+    for (const command of menuActions.commands) {
+      const item = items.list.findLast((entry) => childrenText(entry.children) === command.label)
+      expect(item).toBeDefined()
+      item?.onSelect?.()
+      expect(menuActions.runQuickCommand).toHaveBeenLastCalledWith({
+        command,
+        worktreeId: 'worktree-1',
+        groupId: 'group-1',
+        historyId: `local\0${command.id}`
+      })
+    }
+    // A new tab runs a shell command even without Enter, so the chat menu offers no Insert hint.
+    expect(menuText).not.toContain('Insert')
+    view.rerender(<StructuredChatTab terminalPane />)
+    expect(view.container.textContent).not.toContain('Quick Commands')
+    expect(view.container.textContent).not.toContain('Continue with Terminal Agent')
+  })
+
+  it('shows the provider session ID only after it is known and copies that ID', async () => {
+    const view = render(<StructuredChatTab />)
+    expect(view.container.textContent).not.toContain('Copy Session ID')
+    store.agentStatusByPaneKey[structuredAgentSessionPaneKey('chat-tab', SESSION)] = {
+      providerSession: { id: 'provider-session' }
+    }
+    view.rerender(<StructuredChatTab />)
+    const item = items.list.findLast((entry) => childrenText(entry.children) === 'Copy Session ID')
+    expect(item).toBeDefined()
+    await act(async () => item?.onSelect?.())
+    expect(window.api.ui.writeTerminalClipboardText).toHaveBeenCalledWith('provider-session')
+  })
+
+  it('uses the saved context for both Fork and Copy Context', async () => {
+    handOff.options.mockResolvedValue({
+      status: 'current',
+      capturedText: 'Saved conversation',
+      transcriptPath: '/saved.jsonl'
+    })
+    render(<StructuredChatTab />)
+    await act(async () =>
+      items.list
+        .findLast((entry) => childrenText(entry.children) === 'Fork Agent Session…')
+        ?.onSelect?.()
+    )
+    expect(handOff.options).toHaveBeenLastCalledWith(TARGET, 'agentSession.continuationContext', {
+      sessionId: SESSION,
+      workspaceId: 'worktree-1',
+      expectedCursor: { epoch: 'epoch', sequence: 0 }
+    })
+    expect(menuActions.fork?.prompt).toContain('Saved conversation')
+    expect(menuActions.fork?.agent).toBe('codex')
+    await act(async () =>
+      items.list.findLast((entry) => childrenText(entry.children) === 'Copy Context')?.onSelect?.()
+    )
+    expect(window.api.ui.writeTerminalClipboardText).toHaveBeenCalledWith('Saved conversation')
+    expect(handOff.options).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps Close tab hidden when the shared close command refuses it', () => {
+    paneActions.canClosePane = false
+    const markup = renderToStaticMarkup(<StructuredChatTab />)
+    expect(markup).not.toContain('Close Pane')
+  })
+
+  it('copies loaded messages on old hosts and discards context from a superseded conversation', async () => {
+    handOff.capability.mockResolvedValue(false)
+    const view = render(
+      <StructuredChatTab
+        messages={[
+          {
+            id: 'recent',
+            role: 'user',
+            timestamp: 1,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Keep this context' }]
+          }
+        ]}
+      />
+    )
+    await act(async () =>
+      items.list.findLast((entry) => childrenText(entry.children) === 'Copy Context')?.onSelect?.()
+    )
+    expect(window.api.ui.writeTerminalClipboardText).toHaveBeenCalledWith(
+      '[user] Keep this context'
+    )
+    handOff.capability.mockResolvedValue(true)
+    handOff.options.mockResolvedValue({ status: 'superseded' })
+    view.rerender(<StructuredChatTab />)
+    await act(async () =>
+      items.list
+        .findLast((entry) => childrenText(entry.children) === 'Fork Agent Session…')
+        ?.onSelect?.()
+    )
+    expect(menuActions.fork).toBeNull()
+    expect(window.api.ui.writeTerminalClipboardText).toHaveBeenCalledOnce()
   })
 
   it.each([null, ''])('keeps the session-ID fallback without a known owner: %s', (owner) => {
@@ -147,4 +473,303 @@ describe('a structured chat tab', () => {
       })
     )
   })
+
+  it('keeps header and menu hand-off requests, disabled states and empty-source failures identical', async () => {
+    const requests: AgentSessionContinuationRequest[] = []
+    const label = 'Hand Off to Another Agent'
+    const menuItem = () =>
+      items.list.findLast((candidate) => childrenText(candidate.children) === label)
+    const expectDisabled = (disabled: boolean) => {
+      expect(screen.getByRole('button', { name: label }).hasAttribute('disabled')).toBe(disabled)
+      expect(menuItem()?.disabled).toBe(disabled)
+    }
+    for (const entry of ['header', 'menu'] as const) {
+      vi.clearAllMocks()
+      items.list = []
+      const saved = Promise.withResolvers<{
+        status: 'current'
+        capturedText: string
+        transcriptPath: string
+      }>()
+      handOff.options.mockReturnValue(saved.promise)
+      const view = render(<StructuredChatTab fallback />)
+      expect(screen.queryByRole('button', { name: label })).toBeNull()
+      expect(menuItem()).toBeUndefined()
+      view.rerender(<StructuredChatTab inWorkspace fallback />)
+      expectDisabled(false)
+      const open = () =>
+        entry === 'header'
+          ? fireEvent.click(screen.getByRole('button', { name: label }))
+          : openMenuHandOff()
+      await act(async () => open())
+      expect(handOff.options).toHaveBeenCalledExactlyOnceWith(
+        TARGET,
+        'agentSession.continuationContext',
+        {
+          sessionId: SESSION,
+          workspaceId: 'wt-1',
+          expectedCursor: { epoch: 'epoch', sequence: 0 }
+        }
+      )
+      expect(handOff.dialog.mock.lastCall?.[0].request).toBeNull()
+      expectDisabled(true)
+      await act(async () =>
+        saved.resolve({
+          status: 'current',
+          capturedText: 'Saved chat context',
+          transcriptPath: '/work/codex.jsonl'
+        })
+      )
+      requests.push(handOff.dialog.mock.lastCall?.[0].request)
+      expectDisabled(true)
+      fireEvent.click(screen.getByText('Close hand-off'))
+      expectDisabled(false)
+      handOff.options.mockResolvedValue({ status: 'current', capturedText: '' })
+      await act(async () => open())
+      expect(screen.queryByText('Close hand-off')).toBeNull()
+      expect(handOff.error).toHaveBeenCalledExactlyOnceWith(
+        'No session context is available to continue in a new session.'
+      )
+      expect(handOff.focus).toHaveBeenCalledOnce()
+      expectDisabled(false)
+      view.unmount()
+    }
+    expect(requests[0]).toEqual({
+      source: {
+        sourceKind: 'chat',
+        sourceAgent: 'codex',
+        sourceTitle: 'Fix the login bug',
+        sourceWorkingDirectory: '/work/repo',
+        capturedText: 'Saved chat context',
+        transcriptPath: '/work/codex.jsonl'
+      },
+      worktreeId: 'wt-1',
+      workspacePath: '/work/repo',
+      initialCwd: '/work/repo',
+      groupId: 'group-1',
+      launchSource: 'native_chat'
+    })
+    expect(requests[1]).toEqual(requests[0])
+  })
+
+  it('keeps exactly the terminal pane hand-off row when chat shares that pane', () => {
+    renderToStaticMarkup(<StructuredChatTab inWorkspace terminalPane />)
+    expect(
+      items.list.filter(
+        (candidate) => childrenText(candidate.children) === 'Hand Off to Another Agent'
+      )
+    ).toHaveLength(1)
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
+  function openMenuHandOff() {
+    const item = items.list.findLast(
+      (candidate) => childrenText(candidate.children) === 'Hand Off to Another Agent'
+    )
+    expect(item).toBeDefined()
+    item?.onSelect?.()
+  }
+  it('retires menu preparation on dismiss and incoming source changes', async () => {
+    const delayed = Promise.withResolvers<{
+      status: 'current'
+      capturedText: string
+      transcriptPath: string
+    }>()
+    handOff.options.mockReturnValue(delayed.promise)
+    const view = render(<StructuredChatTab inWorkspace />)
+    await act(async () => openMenuHandOff())
+    fireEvent.click(screen.getByText('Close hand-off'))
+    await act(async () =>
+      delayed.resolve({
+        status: 'current',
+        capturedText: 'Saved chat context',
+        transcriptPath: '/discarded.jsonl'
+      })
+    )
+    expect(screen.queryByText('Close hand-off')).toBeNull()
+    const historical = Promise.withResolvers<{
+      status: 'current'
+      capturedText: string
+      transcriptPath: string
+    }>()
+    handOff.options.mockReturnValue(historical.promise)
+    await act(async () => openMenuHandOff())
+    view.rerender(<StructuredChatTab inWorkspace />)
+    expect(handOff.dialog.mock.lastCall?.[0].request).toBeNull()
+    expect(
+      items.list.findLast((item) => childrenText(item.children) === 'Hand Off to Another Agent')
+        ?.disabled
+    ).toBe(true)
+    await act(async () =>
+      historical.resolve({
+        status: 'current',
+        capturedText: 'Saved chat context',
+        transcriptPath: '/historical.jsonl'
+      })
+    )
+    await screen.findByText('Close hand-off')
+    view.rerender(<StructuredChatTab inWorkspace />)
+    expect(screen.getByText('Close hand-off')).toBeDefined()
+    fireEvent.click(screen.getByText('Close hand-off'))
+    const superseded = Promise.withResolvers<{
+      status: 'current'
+      capturedText: string
+      transcriptPath: string
+    }>()
+    handOff.options.mockReturnValue(superseded.promise)
+    await act(async () => openMenuHandOff())
+    view.rerender(<StructuredChatTab inWorkspace epoch="replacement" />)
+    await act(async () =>
+      superseded.resolve({
+        status: 'current',
+        capturedText: 'Saved chat context',
+        transcriptPath: '/superseded.jsonl'
+      })
+    )
+    expect(screen.queryByText('Close hand-off')).toBeNull()
+    view.rerender(<StructuredChatTab inWorkspace />)
+    handOff.options.mockResolvedValue({
+      status: 'current',
+      capturedText: 'Saved chat context',
+      transcriptPath: '/current.jsonl'
+    })
+    await act(async () => openMenuHandOff())
+    await screen.findByText('Close hand-off')
+    view.rerender(<StructuredChatTab inWorkspace visible={false} />)
+    view.rerender(<StructuredChatTab inWorkspace />)
+    expect(screen.queryByText('Close hand-off')).toBeNull()
+    await act(async () => openMenuHandOff())
+    fireEvent.click(screen.getByText('Close hand-off'))
+    const capability = Promise.withResolvers<boolean>()
+    handOff.capability.mockReturnValue(capability.promise)
+    await act(async () => openMenuHandOff())
+    handOff.options.mockClear()
+    view.unmount()
+    await act(async () => capability.resolve(true))
+    expect(handOff.options).not.toHaveBeenCalled()
+  })
+  it('falls back for an old host, reports empty context and discards superseded fallback', async () => {
+    handOff.capability.mockResolvedValue(false)
+    const view = render(<StructuredChatTab inWorkspace />)
+    await act(async () => openMenuHandOff())
+    expect(handOff.options).not.toHaveBeenCalled()
+    expect(handOff.error).toHaveBeenCalledOnce()
+    expect(handOff.focus).toHaveBeenCalledOnce()
+    view.rerender(<StructuredChatTab inWorkspace fallback />)
+    await act(async () => openMenuHandOff())
+    expect(handOff.dialog.mock.lastCall?.[0].request.source).toMatchObject({
+      capturedText: '[user] Keep the task context\n\n[assistant] Keep the answer',
+      transcriptPath: undefined
+    })
+    fireEvent.click(screen.getByText('Close hand-off'))
+    handOff.capability.mockResolvedValue(true)
+    handOff.options.mockResolvedValue({ status: 'current', transcriptPath: '/native.jsonl' })
+    await act(async () => openMenuHandOff())
+    expect(handOff.dialog.mock.lastCall?.[0].request.source).toMatchObject({
+      capturedText: '[user] Keep the task context\n\n[assistant] Keep the answer',
+      transcriptPath: undefined
+    })
+    fireEvent.click(screen.getByText('Close hand-off'))
+    handOff.options.mockResolvedValue({ status: 'current', capturedText: '' })
+    await act(async () => openMenuHandOff())
+    expect(screen.queryByText('Close hand-off')).toBeNull()
+    expect(handOff.error).toHaveBeenCalledTimes(2)
+    handOff.options.mockResolvedValue({ status: 'superseded' })
+    await act(async () => openMenuHandOff())
+    expect(screen.queryByText('Close hand-off')).toBeNull()
+  })
+  it('bounds loaded tool evidence when the host cannot prepare a saved handoff', async () => {
+    handOff.capability.mockResolvedValue(false)
+    render(
+      <StructuredChatTab
+        inWorkspace
+        messages={[
+          {
+            id: 'request',
+            role: 'user',
+            timestamp: 1,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Review the viewer' }]
+          },
+          {
+            id: 'tool',
+            role: 'assistant',
+            timestamp: 2,
+            source: 'transcript',
+            blocks: [
+              {
+                type: 'tool-call',
+                name: 'shell',
+                input: { command: 'pnpm test viewer.test.ts' },
+                callId: 'test'
+              },
+              {
+                type: 'tool-result',
+                output: `AssertionError\n${'a'.repeat(200_000)}\nTests: 2 failed`,
+                callId: 'test',
+                isError: true
+              }
+            ]
+          },
+          {
+            id: 'answer',
+            role: 'assistant',
+            timestamp: 3,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'The append resets reader position.' }]
+          }
+        ]}
+      />
+    )
+    await act(async () => openMenuHandOff())
+    const source: AgentSessionContinuationRequest['source'] =
+      handOff.dialog.mock.lastCall?.[0].request.source
+    expect(source.transcriptPath).toBeUndefined()
+    expect(source.capturedText.length).toBeLessThan(4_000)
+    expect(source.capturedText).toContain('[user] Review the viewer')
+    expect(source.capturedText).toContain('Tests: 2 failed')
+    expect(source.capturedText).toContain('[assistant] The append resets reader position.')
+    expect(source.capturedText).not.toContain('a'.repeat(2_000))
+  })
+
+  it.each([false, true])(
+    'retires a deadline click with useful fallback=%s before another click',
+    async (fallback) => {
+      vi.useFakeTimers()
+      const expired = Promise.withResolvers<boolean>()
+      const current = Promise.withResolvers<boolean>()
+      handOff.capability.mockReturnValueOnce(expired.promise).mockReturnValueOnce(current.promise)
+      handOff.options.mockResolvedValue({ status: 'current' })
+      render(<StructuredChatTab inWorkspace fallback={fallback} />)
+      await act(async () => {
+        openMenuHandOff()
+        openMenuHandOff()
+      })
+      expect(handOff.capability).toHaveBeenCalledOnce()
+      await act(async () => vi.advanceTimersByTimeAsync(30_000))
+      if (fallback) {
+        expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).toContain(
+          'Keep the task context'
+        )
+        expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).toContain(
+          'Keep the answer'
+        )
+        expect(handOff.dialog.mock.lastCall?.[0].request.source.capturedText).not.toContain(
+          'worker assignment'
+        )
+        fireEvent.click(screen.getByText('Close hand-off'))
+      } else {
+        expect(handOff.error).toHaveBeenCalledOnce()
+        expect(screen.queryByText('Close hand-off')).toBeNull()
+      }
+      await act(async () => openMenuHandOff())
+      await act(async () => expired.resolve(true))
+      expect(handOff.options).not.toHaveBeenCalled()
+      await act(async () => current.resolve(true))
+      expect(handOff.options).toHaveBeenCalledOnce()
+    }
+  )
 })

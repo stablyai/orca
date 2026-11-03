@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { useRef, useState } from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { ChatSettingsSection } from './ChatSettingsSection'
@@ -15,33 +15,32 @@ import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import type { SettingsTerminalModel } from './use-settings-terminal-model'
+import { useAppStore } from '@/store'
 
 vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (value: { settingsSearchQuery: string }) => unknown) =>
-    selector({ settingsSearchQuery: '' })
-}))
+beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ ensureNativeDetectedAgents: vi.fn(async () => []) })
+})
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
 })
 
 function NavigationHarness({
-  enabled,
   initialSection,
   targetSection = 'chat-code-text-size'
 }: {
-  enabled: boolean
   initialSection: string
   targetSection?: string
 }) {
   const [activeSectionId, setActiveSectionId] = useState(initialSection)
-  const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled }
+  const settings = getDefaultSettings('/tmp')
   const sections = buildSettingsNavigationMetadata({
     isMac: false,
     isWindows: false,
     isWebClient: false,
-    nativeChatEnabled: enabled,
     repos: []
   })
   const pendingNavSectionRef = useRef<string | null>('chat')
@@ -117,7 +116,7 @@ describe('Chat settings deep links', () => {
   it('activates Chat and scrolls to Inline visuals from another settings page', async () => {
     const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
     const { container } = render(
-      <NavigationHarness enabled initialSection="appearance" targetSection="chat-inline-visuals" />
+      <NavigationHarness initialSection="appearance" targetSection="chat-inline-visuals" />
     )
     await waitFor(() => {
       expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
@@ -131,20 +130,10 @@ describe('Chat settings deep links', () => {
     await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(visuals))
   })
 
-  it('activates Chat and renders the moved row for a deep link', async () => {
-    render(<NavigationHarness enabled initialSection="appearance" />)
-    await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-        'chat'
-      )
-    })
-    expect(screen.getByRole('spinbutton', { name: 'Code text size' })).toBeTruthy()
-  })
-
   it('activates Chat and scrolls to the separate naming section for its deep link', async () => {
     const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
     const { container } = render(
-      <NavigationHarness enabled initialSection="appearance" targetSection="chat-names" />
+      <NavigationHarness initialSection="appearance" targetSection="chat-names" />
     )
     await waitFor(() => {
       expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
@@ -158,23 +147,5 @@ describe('Chat settings deep links', () => {
       screen.getByRole('switch', { name: 'Name chats automatically' })
     )
     await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(names))
-  })
-
-  it('falls back through the existing navigation rule when a hidden Chat page is selected', async () => {
-    const { container } = render(<NavigationHarness enabled={false} initialSection="chat" />)
-    await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-        'agents'
-      )
-    })
-    expect(container.querySelector('#chat')).toBeNull()
-  })
-
-  it('keeps the current visible page for a deep link to hidden Chat', () => {
-    const { container } = render(<NavigationHarness enabled={false} initialSection="appearance" />)
-    expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-      'appearance'
-    )
-    expect(container.querySelector('#chat')).toBeNull()
   })
 })

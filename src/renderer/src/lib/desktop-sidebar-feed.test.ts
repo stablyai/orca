@@ -4,7 +4,10 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { SidebarInputsFeed } from '../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
 import { testDomain } from '../../../main/runtime/sidebar-inputs/sidebar-inputs-feed.test-fixture'
 import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/sidebar-inputs-feed-contract'
-import { makeRepo, makeWorktree } from '@/components/worktree-jump-palette-test-fixtures'
+import {
+  makeRepo,
+  makeWorktree
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { buildWorkspaceRows } from '../../../shared/sidebar-list/workspace-rows'
 
 function workspaceRow(id: string) {
@@ -91,17 +94,6 @@ describe('desktop sidebar feed', () => {
     await act(() => vi.advanceTimersByTimeAsync(0))
     const second = renderHook(() => reader.useDesktopSidebarFeed())
     expect(second.result.current?.domains.workspaces.size).toBe(2)
-  })
-
-  it('answers a refresh with an install from that read or later', async () => {
-    connectMain()
-    const reader = await load()
-    const installs: number[] = []
-    reader.onDesktopSidebarFeedInstalled((installed) => installs.push(installed.readId))
-    renderHook(() => reader.useDesktopSidebarFeed())
-    await vi.waitFor(() => expect(installs).toHaveLength(1))
-    const readId = reader.refreshDesktopSidebarFeed()
-    await vi.waitFor(() => expect(installs.at(-1)).toBeGreaterThanOrEqual(readId))
   })
 
   it('retries a failed first read on its own', async () => {

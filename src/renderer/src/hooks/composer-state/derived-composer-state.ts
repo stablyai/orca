@@ -9,14 +9,14 @@ import {
 } from '@/lib/github-links'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import {
-  getSetupConfig,
   getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider,
   getWorkspaceSeedName,
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
   renderIssueCommandTemplate
 } from '@/lib/new-workspace'
-import type { SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
+import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import { deriveWorkspaceSetupState } from '@/lib/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
@@ -123,27 +123,23 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
     [currentYamlHooks, selectedRepo, selectedRepoIsGit]
   )
-
-  const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
-
-  const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
-
-  const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
-
-  const resolvedSetupDecision =
-    setupDecision ??
-    (!setupConfig || setupPolicy === 'ask'
-      ? null
-      : setupPolicy === 'run-by-default'
-        ? 'run'
-        : 'skip')
-
   const isSetupCheckPending =
     selectedRepoIsGit &&
     Boolean(selectedRepoHookContextKey) &&
     checkedHooksContextKey !== selectedRepoHookContextKey
-
-  const shouldWaitForSetupCheck = Boolean(selectedRepo) && selectedRepoIsGit && isSetupCheckPending
+  const {
+    setupPolicy,
+    requiresExplicitSetupChoice,
+    resolvedSetupDecision,
+    shouldWaitForSetupCheck
+  } = deriveWorkspaceSetupState(
+    selectedRepo,
+    setupConfig,
+    setupDecision,
+    selectedRepoIsGit,
+    isSetupCheckPending
+  )
+  const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
 
   // Blank unseeded names need globally unique creature names; exclude retired paths too.
   const retiredNamesRefreshKey = useMemo(

@@ -93,6 +93,7 @@ export const createWorkItemFetchActions = (
     const ownerHostId = getGitHubWorkItemSourceHostId(repo, options?.sourceContext)
     const cacheScope = getGitHubWorkItemSourceCacheScope(repo, options?.sourceContext)
     const key = workItemsCacheKey(repoId, limit, query, cacheScope)
+    const binding = requestState.githubTaskCache.capture(repo, options?.sourceContext)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
       return cached.data ?? []
@@ -117,7 +118,8 @@ export const createWorkItemFetchActions = (
       const weakerThanRequested =
         (options?.force && !existing.force) ||
         (options?.noCache && !existing.noCache) ||
-        (options?.requireComplete && !existing.requireComplete)
+        (options?.requireComplete && !existing.requireComplete) ||
+        (options?.wakeWslDistro && !existing.wakeWslDistro)
       if (!weakerThanRequested) {
         return existing.promise
       }
@@ -136,7 +138,8 @@ export const createWorkItemFetchActions = (
         const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
-          ...(options?.noCache ? { noCache: true } : {})
+          ...(options?.noCache ? { noCache: true } : {}),
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
         })
         // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
         const repoHostId = getGitHubWorkItemRowHostId(
@@ -145,11 +148,17 @@ export const createWorkItemFetchActions = (
           repoPath,
           options?.sourceContext
         )
-        const items: GitHubWorkItem[] = envelope.items.map((item) => ({
-          ...item,
-          repoId,
-          ...(repoHostId ? { repoHostId } : {})
-        }))
+        // Older search rows can't undo an accepted task record; newer ones still show.
+        const items: GitHubWorkItem[] = [
+          ...get().githubTaskCache.acceptSearch(
+            envelope.items.map((item) => ({
+              ...item,
+              repoId,
+              ...(repoHostId ? { repoHostId } : {})
+            })),
+            binding
+          )
+        ]
         if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
           throw new Error('GitHub work-item fetch returned a partial result.')
         }
@@ -245,7 +254,8 @@ export const createWorkItemFetchActions = (
       requestId,
       force: Boolean(options?.force),
       noCache: Boolean(options?.noCache),
-      requireComplete: Boolean(options?.requireComplete)
+      requireComplete: Boolean(options?.requireComplete),
+      wakeWslDistro: Boolean(options?.wakeWslDistro)
     })
     return request
   }

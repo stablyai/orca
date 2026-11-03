@@ -1,4 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
+import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -6,7 +7,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   workspaceSessionOwnerPartitionForHost,
@@ -15,7 +16,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { scheduleSave } from './write-scheduling'
 import {
   hasPersistedWorkspaceSession,
@@ -97,7 +98,7 @@ export class MetadataLineageOperations {
 
   setWorktreeMeta(
     target: HostWorktreeTarget,
-    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentBaseMutation
   ): WorktreeMeta {
     return setWorktreeMetaForHostOperation(
       this[metadataLineageOperationsContext].runtime,

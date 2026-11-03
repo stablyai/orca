@@ -61,13 +61,3 @@ it('omits the toggles on a host with no sharing service so clients reach its nam
   expect(settings).not.toHaveProperty('agentSkillSharingEnabled')
   expect(() => runtime.assertAgentSkillSharingAllowed()).toThrow(SharingUnavailableOnHostError)
 })
-
-describe('publish capability settings schema', () => {
-  it('rejects the deprecated artifactsEnabled alias too', () => {
-    expect(SettingsUpdate.safeParse({ artifactsEnabled: true }).success).toBe(false)
-  })
-
-  it('still accepts an unrelated allowlisted setting', () => {
-    expect(SettingsUpdate.safeParse({ compactWorktreeCards: true }).success).toBe(true)
-  })
-})

@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   type NativeChatMcpIdentity,
   formatToolDuration,

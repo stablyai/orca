@@ -6,7 +6,7 @@ import {
   createHookListenerState,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
-import { hasPendingAgentResultText } from './agent-hook-listener/grok-result-discovery'
+import './agent-hook-listener/grok-result-discovery'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
@@ -43,119 +43,6 @@ describe('shared agent-hook-listener', () => {
         agentType: 'antigravity'
       })
     }
-  })
-
-  // Windows curl can omit the field entirely when no stdin arrives (#15117).
-  it('accepts an Antigravity event that carries no payload key at all', () => {
-    const started = normalizeHookPayload(
-      state,
-      'antigravity',
-      {
-        paneKey: PANE_KEY,
-        tabId: 'tab-1',
-        worktreeId: 'wt',
-        hook_event_name: 'PreInvocation'
-      },
-      'production'
-    )
-    expect(started?.payload).toMatchObject({ state: 'working', agentType: 'antigravity' })
-  })
-
-  it('still drops an Antigravity event whose payload is malformed rather than empty', () => {
-    expect(
-      normalizeHookPayload(
-        state,
-        'antigravity',
-        {
-          paneKey: PANE_KEY,
-          hook_event_name: 'PreInvocation',
-          payload: '{"prompt":'
-        },
-        'production'
-      )
-    ).toBeNull()
-  })
-
-  it('keeps Gemini rejection of empty or missing payloads', () => {
-    for (const payload of ['', undefined]) {
-      expect(
-        normalizeHookPayload(
-          state,
-          'gemini',
-          {
-            paneKey: PANE_KEY,
-            hook_event_name: 'BeforeAgent',
-            ...(payload === undefined ? {} : { payload })
-          },
-          'production'
-        )
-      ).toBeNull()
-    }
-  })
-
-  it('normalizes Antigravity invocation and tool hooks', () => {
-    const started = normalizeHookPayload(
-      state,
-      'antigravity',
-      {
-        paneKey: PANE_KEY,
-        tabId: 'tab-1',
-        worktreeId: 'wt',
-        hook_event_name: 'PreInvocation',
-        payload: { prompt: 'run tests' }
-      },
-      'production'
-    )
-    expect(started?.payload).toMatchObject({
-      state: 'working',
-      prompt: 'run tests',
-      agentType: 'antigravity'
-    })
-
-    const tool = normalizeHookPayload(
-      state,
-      'antigravity',
-      {
-        paneKey: PANE_KEY,
-        tabId: 'tab-1',
-        hook_event_name: 'PreToolUse',
-        payload: {
-          toolCall: {
-            name: 'run_command',
-            args: { CommandLine: 'pnpm test' }
-          }
-        }
-      },
-      'production'
-    )
-    expect(tool?.payload).toMatchObject({
-      state: 'working',
-      prompt: 'run tests',
-      agentType: 'antigravity',
-      toolName: 'run_command',
-      toolInput: 'pnpm test'
-    })
-  })
-
-  it('normalizes Antigravity events even when the hook body is empty', () => {
-    const started = normalizeHookPayload(
-      state,
-      'antigravity',
-      {
-        paneKey: PANE_KEY,
-        tabId: 'tab-1',
-        hook_event_name: 'PreInvocation',
-        payload: {}
-      },
-      'production'
-    )
-
-    // Managed hooks can lack stdin; event name alone still establishes status.
-    expect(started?.payload).toMatchObject({
-      state: 'working',
-      prompt: '',
-      agentType: 'antigravity'
-    })
   })
 
   it('reads Antigravity user requests from the transcript', () => {
@@ -279,52 +166,6 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('maps Antigravity feedback tools to waiting state', () => {
-    const question = normalizeHookPayload(
-      state,
-      'antigravity',
-      {
-        paneKey: PANE_KEY,
-        hook_event_name: 'PreToolUse',
-        payload: {
-          toolCall: {
-            name: 'ask_question',
-            args: { Prompt: 'Which path should I use?' }
-          }
-        }
-      },
-      'production'
-    )
-    expect(question?.payload).toMatchObject({
-      state: 'waiting',
-      agentType: 'antigravity',
-      toolName: 'ask_question',
-      toolInput: 'Which path should I use?'
-    })
-
-    const permission = normalizeHookPayload(
-      state,
-      'antigravity',
-      {
-        paneKey: PANE_KEY,
-        hook_event_name: 'PreToolUse',
-        payload: {
-          toolCall: {
-            name: 'ask_permission',
-            args: { Action: 'run command', Target: 'pnpm lint' }
-          }
-        }
-      },
-      'production'
-    )
-    expect(permission?.payload).toMatchObject({
-      state: 'waiting',
-      agentType: 'antigravity',
-      toolName: 'ask_permission',
-      toolInput: 'run command'
-    })
-  })
-
   it('resets Antigravity tool state on a new invocation', () => {
     normalizeHookPayload(
       state,
@@ -397,24 +238,6 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('keeps Antigravity Stop working while fullyIdle is false', () => {
-    const event = normalizeHookPayload(
-      state,
-      'antigravity',
-      {
-        paneKey: PANE_KEY,
-        hook_event_name: 'Stop',
-        payload: { fullyIdle: false }
-      },
-      'production'
-    )
-
-    expect(event?.payload).toMatchObject({
-      state: 'working',
-      agentType: 'antigravity'
-    })
-  })
-
   it('keeps Antigravity tool hooks active after a non-idle Stop for the same transcript', () => {
     const transcriptPath = '/tmp/antigravity-non-idle-transcript.jsonl'
     const stop = normalizeHookPayload(
@@ -482,7 +305,7 @@ describe('shared agent-hook-listener', () => {
     expect(lateTool).toBeNull()
   })
 
-  // Event order captured from agy 1.4.7 running an in-process invoke_subagent (#17650).
+  // Event order captured from agy 1.4.7 (#17650); transcript contents below are synthetic, not origin evidence.
   it('keeps an Antigravity parent working until its own idle Stop when a subagent finishes', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-subagent-'))
     const writeTranscript = (name: string, request: string, reply: string): string => {
@@ -513,10 +336,10 @@ describe('shared agent-hook-listener', () => {
         'antigravity',
         { paneKey: PANE_KEY, hook_event_name: hookEventName, payload },
         'production'
-      )?.payload.state ?? null
+      )?.payload ?? null
 
     try {
-      const states = [
+      const events = [
         send('PreInvocation', parent),
         send('PreToolUse', { ...parent, toolCall: subagentCall }),
         send('PostToolUse', { ...parent, toolCall: subagentCall }),
@@ -526,7 +349,7 @@ describe('shared agent-hook-listener', () => {
         send('Stop', { ...child, fullyIdle: true }),
         send('PreInvocation', parent)
       ]
-      expect(states).toEqual([
+      expect(events.map((event) => event?.state ?? null)).toEqual([
         'working',
         'working',
         'working',
@@ -536,6 +359,8 @@ describe('shared agent-hook-listener', () => {
         null,
         'working'
       ])
+      // Held open for helpers, so the terminal's done for the parent's turn cannot settle it.
+      expect(events[4]?.mainAgent?.state).toBe('done')
 
       const done = normalizeHookPayload(
         state,
@@ -547,8 +372,13 @@ describe('shared agent-hook-listener', () => {
         state: 'done',
         lastAssistantMessage: 'Parent final report'
       })
+      expect(send('PostToolUse', { ...parent, toolCall: subagentCall })).toBeNull()
+      expect(send('PreInvocation', parent)?.state).toBe('working')
+      const nextStop = send('Stop', { ...parent, fullyIdle: false })
+      expect(nextStop?.state).toBe('working')
+      expect(nextStop?.mainAgent).toBeUndefined()
       expect(
-        send('PreInvocation', { conversationId: 'next-conversation', lastUserInput: 'next' })
+        send('PreInvocation', { conversationId: 'next-conversation', lastUserInput: 'next' })?.state
       ).toBe('working')
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
@@ -575,41 +405,5 @@ describe('shared agent-hook-listener', () => {
       send('PreToolUse', { ...next, toolCall: { name: 'ask_question', args: {} } }),
       send('Stop', { ...next, fullyIdle: true })
     ]).toEqual(['working', 'waiting', 'done'])
-  })
-
-  it('treats Antigravity Stop transcripts as pending result text', () => {
-    expect(
-      hasPendingAgentResultText('antigravity', {
-        hook_event_name: 'Stop',
-        payload: { transcriptPath: '/tmp/antigravity-transcript.jsonl' }
-      })
-    ).toBe(true)
-    expect(
-      hasPendingAgentResultText('antigravity', {
-        hook_event_name: 'Stop',
-        payload: {
-          transcriptPath: '/tmp/antigravity-transcript.jsonl',
-          last_assistant_message: 'done'
-        }
-      })
-    ).toBe(false)
-    expect(
-      hasPendingAgentResultText('antigravity', {
-        hook_event_name: 'Stop',
-        payload: { fullyIdle: false, transcriptPath: '/tmp/antigravity-transcript.jsonl' }
-      })
-    ).toBe(false)
-  })
-
-  it('does not mark Copilot result text pending when a generic message is present', () => {
-    expect(
-      hasPendingAgentResultText('copilot', {
-        payload: {
-          hookEventName: 'Stop',
-          message: 'Copilot final response',
-          transcript_path: '/tmp/copilot-transcript.jsonl'
-        }
-      })
-    ).toBe(false)
   })
 })

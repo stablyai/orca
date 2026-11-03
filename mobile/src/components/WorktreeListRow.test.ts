@@ -301,6 +301,24 @@ describe('memoized worktree rows', () => {
     expect(agentStateDotRender).toHaveBeenLastCalledWith({ state: 'monitoring' })
   })
 
+  it('shows how long a silent agent row has gone without an update, keeping its task', async () => {
+    const minute = 60_000
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentRow, {
+          agent: agent({ stateStartedAt: 0, updatedAt: 200 * minute, hasLivePty: true }),
+          depth: 0,
+          now: 240 * minute,
+          unvisited: false
+        })
+      )
+    })
+    const texts = renderer!.root
+      .findAll((node) => String(node.type) === 'Text')
+      .map((node) => node.props.children)
+    expect(texts).toEqual(expect.arrayContaining(['Fix the list', 'No update in 40m']))
+  })
+
   it('passes workspace monitoring mode to the status indicator', async () => {
     await act(async () => {
       renderer = create(

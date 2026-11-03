@@ -3,9 +3,14 @@ import {
   toSecureCertificateEndpoint
 } from '../../shared/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-manager-types'
-import { BrowserManagerGuestPopupPolicy } from './browser-manager-guest-popup-policy'
+import { watchDecisionBlockedMainFrames } from './browser-session-request-decisions'
+import {
+  BrowserManagerGuestPopupPolicy,
+  isLocalFileLinkFromLocalPage
+} from './browser-manager-guest-popup-policy'
 import { allowPageUnload } from './browser-guest-unload-policy'
 import { initiatingFrameUrl } from './browser-external-app-launch'
+import { isSameExtensionNavigation } from '../../shared/browser-extension-url'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
@@ -22,6 +27,10 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         event.preventDefault()
         return false
       }
+      // Why: an extension page (admitted at attach) may move between its own pages, nowhere else.
+      if (url.startsWith('chrome-extension:') && isSameExtensionNavigation(guest.getURL(), url)) {
+        return true
+      }
       if (!normalizeBrowserNavigationUrl(url)) {
         // Initial-src validation does not cover later navigations.
         event.preventDefault()
@@ -32,8 +41,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     const willNavigateHandler = (event: Electron.Event, url: string): void => {
-      // Permit local file links without allowing web pages into the filesystem.
-      if (url.startsWith('file:') && guest.getURL().startsWith('file:')) {
+      if (isLocalFileLinkFromLocalPage(guest, url)) {
         return
       }
       navigationGuard(event, url)
@@ -127,7 +135,10 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       this.notifyBrowserGuestStateChanged(guest.id)
     }
 
+    let publishedUrl: string | null = null
+
     const didNavigateHandler = (_event: Electron.Event, url: string): void => {
+      publishedUrl = guest.getURL()
       this.pendingNavigationByGuestId.delete(guest.id)
       // Committing makes the hidden error obsolete; a later abort must not restore it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
@@ -137,11 +148,34 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       this.notifyBrowserGuestStateChanged(guest.id)
     }
 
+    const didNavigateInPageHandler = (
+      _event: Electron.Event,
+      _url: string,
+      isMainFrame: boolean
+    ): void => {
+      if (!isMainFrame) {
+        return
+      }
+      const address = guest.getURL()
+      // replaceState reports here even when the address stays the same.
+      if (address !== publishedUrl) {
+        publishedUrl = address
+        this.notifyBrowserGuestStateChanged(guest.id)
+      }
+    }
+
     guest.on('will-navigate', willNavigateHandler)
     guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
+    guest.on('did-navigate-in-page', didNavigateInPageHandler)
     guest.on('did-fail-load', didFailLoadHandler)
+    // Why emit: an extension-blocked guest main frame commits no error page, so Electron reports
+    // nothing; every did-fail-load reader (this policy, the pane, webNavigation) needs the failure.
+    const stopWatchingBlockedMainFrames = watchDecisionBlockedMainFrames(guest.id, (url) => {
+      const { processId, routingId } = guest.mainFrame
+      guest.emit('did-fail-load', {}, -20, 'ERR_BLOCKED_BY_CLIENT', url, true, processId, routingId)
+    })
     guest.on('will-prevent-unload', allowPageUnload)
     const handleDestroyed = (): void => {
       const browserTabId = this.tabIdByWebContentsId.get(guest.id)
@@ -155,6 +189,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     guest.on('destroyed', handleDestroyed)
 
     return () => {
+      stopWatchingBlockedMainFrames()
       try {
         guest.off('destroyed', handleDestroyed)
       } catch {
@@ -165,6 +200,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('will-redirect', willRedirectHandler)
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
+        guest.off('did-navigate-in-page', didNavigateInPageHandler)
         guest.off('did-fail-load', didFailLoadHandler)
         guest.off('will-prevent-unload', allowPageUnload)
       }

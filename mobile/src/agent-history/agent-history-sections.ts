@@ -16,7 +16,7 @@ export type MobileAgentHistorySection = {
   data: MobileAgentHistoryCard[]
 }
 
-// Host scopePaths only widen discovery, so narrow Workspace/Project by cwd prefix client-side (active path / same-repo siblings); All stays unfiltered.
+// Host scopePaths only widen discovery, so narrow Workspace/Project by cwd prefix client-side (desktop's scope paths); All stays unfiltered.
 // Mobile lacks project-key metadata; hideEmptySessions matches desktop default.
 export function buildMobileAgentHistorySections(
   sessions: readonly AiVaultSession[],

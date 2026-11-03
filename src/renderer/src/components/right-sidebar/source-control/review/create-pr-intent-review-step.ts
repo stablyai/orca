@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { resolveBlockedCreateReviewNoticeMessage } from '../../source-control-create-review-blocked-action'
+import { resolveCreatePrIntentRemoteStep } from '../../../../../../shared/source-control-create-review-intent'
 import {
-  resolveCreatePrIntentRemoteStep,
   shouldAttemptCreateHostedReviewForIntent,
   type CreatePrIntentRunToken
 } from './create-pr-intent-flow'

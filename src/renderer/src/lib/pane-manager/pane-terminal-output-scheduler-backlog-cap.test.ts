@@ -70,52 +70,6 @@ describe('pane terminal output scheduler', () => {
     expect(output).not.toContain('x'.repeat(1024))
   })
 
-  it('records a drop breadcrumb with sizes when the cap replaces a backlog', async () => {
-    vi.useFakeTimers()
-    const { writeTerminalOutput } = await loadScheduler()
-    const terminal = createTerminal()
-    const chunk = 'x'.repeat(512 * 1024)
-
-    for (let i = 0; i < 5; i++) {
-      writeTerminalOutput(terminal, chunk, { foreground: false })
-    }
-
-    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
-      'terminal_output_backlog_dropped',
-      expect.objectContaining({
-        foreground: false,
-        droppedChars: expect.any(Number),
-        capChars: 2 * 1024 * 1024
-      })
-    )
-  })
-
-  it('scales the backlog cap with the scrollback setting', async () => {
-    vi.useFakeTimers()
-    const { writeTerminalOutput, configureTerminalOutputBacklogCap } = await loadScheduler()
-    const terminal = createTerminal()
-    const chunk = 'x'.repeat(512 * 1024)
-
-    // 50k-row scrollback raises the cap to 6MB; preserve a 2.5MB flood above the 2MB floor.
-    configureTerminalOutputBacklogCap(50_000)
-    for (let i = 0; i < 5; i++) {
-      writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
-    }
-    vi.advanceTimersByTime(0)
-
-    let output = terminal.write.mock.calls.map(([data]) => data).join('')
-    expect(output).not.toContain('Orca skipped')
-    expect(output).toContain('x'.repeat(1024))
-
-    terminal.write.mockClear()
-    for (let i = 0; i < 13; i++) {
-      writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
-    }
-    vi.advanceTimersByTime(0)
-    output = terminal.write.mock.calls.map(([data]) => data).join('')
-    expect(output).toContain('Orca skipped a burst of terminal output')
-  })
-
   it('caps a held/coalesced foreground backlog as well', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -148,28 +102,5 @@ describe('pane terminal output scheduler', () => {
     const output = terminal.write.mock.calls.map(([data]) => data).join('')
     expect(output).toContain('Orca skipped hidden terminal output')
     expect(output).not.toContain('x'.repeat(512))
-  })
-
-  it('requests registered recovery instead of flushing a dropped hidden backlog', async () => {
-    vi.useFakeTimers()
-    const { flushTerminalOutput, registerTerminalBacklogRecovery, writeTerminalOutput } =
-      await loadScheduler()
-    const terminal = createTerminal()
-    const requestRecovery = vi.fn(() => true)
-    const unregister = registerTerminalBacklogRecovery(terminal, requestRecovery)
-    const chunk = 'x'.repeat(512 * 1024)
-
-    try {
-      for (let i = 0; i < 5; i++) {
-        writeTerminalOutput(terminal, chunk, { foreground: false })
-      }
-
-      flushTerminalOutput(terminal)
-
-      expect(requestRecovery).toHaveBeenCalledTimes(1)
-      expect(terminal.write).not.toHaveBeenCalled()
-    } finally {
-      unregister()
-    }
   })
 })

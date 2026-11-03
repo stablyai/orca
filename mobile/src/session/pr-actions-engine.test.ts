@@ -17,6 +17,8 @@ function makeEngine(mutations: Partial<PrActionMutations>) {
       mergePR: ok,
       setPRAutoMerge: ok,
       updatePRState: ok,
+      markReadyForReview: ok,
+      markDraft: ok,
       requestReviewers: ok,
       removeReviewers: ok,
       rerunChecks: ok,
@@ -68,6 +70,8 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
         mergePR: async () => ({ ok: false, error: 'socket hung up' }),
         setPRAutoMerge: async () => ({ ok: true }),
         updatePRState: async () => ({ ok: true }),
+        markReadyForReview: async () => ({ ok: true }),
+        markDraft: async () => ({ ok: true }),
         requestReviewers: async () => ({ ok: true }),
         removeReviewers: async () => ({ ok: true }),
         rerunChecks: async () => ({ ok: true })
@@ -81,12 +85,14 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
     expect(engine.busy).toBeNull()
   })
 
-  it('surfaces a refetch throw as error without rejecting the action promise', async () => {
+  it('keeps a successful write error-free when its reread throws', async () => {
     const engine = new PrActionsEngine({
       mutations: {
         mergePR: async () => ({ ok: true }),
         setPRAutoMerge: async () => ({ ok: true }),
         updatePRState: async () => ({ ok: true }),
+        markReadyForReview: async () => ({ ok: true }),
+        markDraft: async () => ({ ok: true }),
         requestReviewers: async () => ({ ok: true }),
         removeReviewers: async () => ({ ok: true }),
         rerunChecks: async () => ({ ok: true })
@@ -97,9 +103,35 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
       },
       onChange: () => {}
     })
-    await expect(engine.merge()).resolves.toBeUndefined()
-    expect(engine.error).toBe('refresh failed')
+    await expect(engine.merge()).resolves.toBe(true)
+    expect(engine.error).toBeNull()
     expect(engine.busy).toBeNull()
+  })
+
+  it('rereads after a failed write, once busy clears, and keeps the write error', async () => {
+    const busyAtRefetch: unknown[] = []
+    const engine: PrActionsEngine = new PrActionsEngine({
+      mutations: {
+        mergePR: async () => ({ ok: true }),
+        setPRAutoMerge: async () => ({ ok: true }),
+        updatePRState: async () => ({ ok: false, error: 'connection lost' }),
+        markReadyForReview: async () => ({ ok: true }),
+        markDraft: async () => ({ ok: true }),
+        requestReviewers: async () => ({ ok: true }),
+        removeReviewers: async () => ({ ok: true }),
+        rerunChecks: async () => ({ ok: true })
+      },
+      prNumber: 1,
+      refetch: async () => {
+        busyAtRefetch.push(engine.busy)
+        throw new Error('refresh failed')
+      },
+      onChange: () => {}
+    })
+    await engine.updateState('closed')
+    expect(busyAtRefetch).toEqual([null])
+    expect(engine.resolveState('open')).toBe('open')
+    expect(engine.error).toBe('connection lost')
   })
 
   it('does not notify on no-op setError(null) at action start', async () => {
@@ -109,6 +141,8 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
         mergePR: async () => ({ ok: true }),
         setPRAutoMerge: async () => ({ ok: true }),
         updatePRState: async () => ({ ok: true }),
+        markReadyForReview: async () => ({ ok: true }),
+        markDraft: async () => ({ ok: true }),
         requestReviewers: async () => ({ ok: true }),
         removeReviewers: async () => ({ ok: true }),
         rerunChecks: async () => ({ ok: true })
@@ -132,6 +166,8 @@ describe('PrActionsEngine — PR identity changes', () => {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => slow.promise,
       updatePRState: async () => ({ ok: true }),
+      markReadyForReview: async () => ({ ok: true }),
+      markDraft: async () => ({ ok: true }),
       requestReviewers: async () => ({ ok: true }),
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })
@@ -168,6 +204,8 @@ describe('PrActionsEngine — PR identity changes', () => {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => ({ ok: true }),
       updatePRState: async () => ({ ok: true }),
+      markReadyForReview: async () => ({ ok: true }),
+      markDraft: async () => ({ ok: true }),
       requestReviewers: async () => slow.promise,
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })
@@ -192,8 +230,9 @@ describe('PrActionsEngine — PR identity changes', () => {
     })
     expect(engine.resolveReviewerRequested('alice', false)).toBe(false)
 
-    slow.resolve({ ok: true })
+    slow.resolve({ ok: false, error: 'connection lost' })
     await action
+    expect(engine.error).toBeNull()
     expect(refetch).not.toHaveBeenCalled()
   })
 
@@ -203,6 +242,8 @@ describe('PrActionsEngine — PR identity changes', () => {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => slow.promise,
       updatePRState: async () => ({ ok: true }),
+      markReadyForReview: async () => ({ ok: true }),
+      markDraft: async () => ({ ok: true }),
       requestReviewers: async () => ({ ok: true }),
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })
