@@ -11,11 +11,11 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   runProcess: runProcessMock
 }))
-vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('./scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService
 }))
-vi.mock('./opencode-wsl-runtime-preparation', () => ({
+vi.mock('./scanners/opencode/reader-transport/opencode-wsl-runtime-preparation', () => ({
   prepareOpenCodeWslReaders: vi.fn(async () => [])
 }))
 

@@ -25,7 +25,7 @@ describe('per-job path classification', () => {
       classifyPrJobs([
         unit,
         'config/scripts/process-host-build-dist.test.mjs',
-        'src/main/ai-vault/session-parse-cache-persistence.test.ts',
+        'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
         'src/shared/worktree/id.test.ts'
       ])
     ).toMatchObject(expected)

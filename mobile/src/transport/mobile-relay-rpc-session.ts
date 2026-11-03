@@ -37,14 +37,13 @@ const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 let relayRpcSessionSequence = 0
 
-export type MobileRelayRpcSession = RpcClient &
-  RelayDialStageSource & {
-    // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
-    getAttachDeadlineAt(): number | null
-    getResumeExpiresAt(): number | null
-    getResumeConfirmation(): DeviceResumeConfirmed | null
-    getFailure(): Error | null
-  }
+export interface MobileRelayRpcSession extends RpcClient, RelayDialStageSource {
+  // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
+  getAttachDeadlineAt(): number | null
+  getResumeExpiresAt(): number | null
+  getResumeConfirmation(): DeviceResumeConfirmed | null
+  getFailure(): Error | null
+}
 
 export function connectMobileRelayRpcSession(args: {
   relay: MobileRelayEndpoint
@@ -184,7 +183,7 @@ export function connectMobileRelayRpcSession(args: {
     probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
-    sendProbe: () => state === 'connected' && sendFrame(livenessProbeFrame(pending.nextId())),
+    sendProbe: (_identity, id) => state === 'connected' && sendFrame(livenessProbeFrame(id)),
     onTimeout: (evidence) => {
       args.onLog?.({
         id: `relay-liveness-${logSessionId}-${++logSequence}`,
@@ -281,8 +280,11 @@ export function connectMobileRelayRpcSession(args: {
     } catch {
       return
     }
-    if (isRpcResponse(value) && !pending.settle(value)) {
-      streams.handleResponse(value)
+    if (isRpcResponse(value)) {
+      livenessWatchdog.noteProbeReply(livenessIdentity, value.id)
+      if (!pending.settle(value)) {
+        streams.handleResponse(value)
+      }
     }
   }
 

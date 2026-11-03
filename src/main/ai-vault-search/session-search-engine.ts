@@ -1,5 +1,5 @@
 import type SyncDatabase from '../sqlite/sync-database'
-import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptMessageRole } from '../ai-vault/transcripts/session-transcript-consumers'
 import { sliceAtCodeUnitLimit } from '../ai-vault/session-scanner-text-normalization'
 import {
   hasAiVaultSearchQueryOperators,

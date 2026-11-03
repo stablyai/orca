@@ -14,7 +14,7 @@ export async function applyOrcadSessionScannerIdleTimeout(): Promise<void> {
   const timeoutMs = orcadSessionScannerIdleTimeoutMs()
   if (timeoutMs !== null) {
     const { setAiVaultServiceIdleTimeoutMs } =
-      await import('../ai-vault/session-scanner-service-spawn')
+      await import('../ai-vault/scan-service/session-scanner-service-spawn')
     setAiVaultServiceIdleTimeoutMs(timeoutMs)
   }
 }

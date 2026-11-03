@@ -20,7 +20,7 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
 import { parseAiVaultListResult } from './session-list-result-validation'
-import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
+import { parseAiVaultSessionTitlesResult } from './session-titles/session-title-result-validation'
 import { isGatedOffWslHost } from '../wsl/host-lifecycle/wsl-host-gate'
 import type {
   AiVaultDeleteSessionArgs,
