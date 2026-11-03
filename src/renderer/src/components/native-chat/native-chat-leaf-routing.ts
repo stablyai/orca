@@ -87,6 +87,8 @@ export function resolveNativeChatLeafRoute(args: {
   chatLeafStillMounted: boolean
   activeLeafIsEligible: boolean
   chatLeafHasConfirmedAgentExit?: boolean
+  /** Suppress exitChat when a recent Chat UI send may race a false title exit. */
+  suppressExitChat?: boolean
 }): NativeChatLeafRoute {
   const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit
   if (!args.isChatViewMode) {
@@ -94,6 +96,16 @@ export function resolveNativeChatLeafRoute(args: {
   }
   if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
     // Missing reconnect evidence is not an agent exit; retain chat while its owning pane remains mounted.
+    return { chatLeafId: args.chatLeafId, exitChat: false }
+  }
+  // Why: run before eligible-sibling retarget so a false exit during the send
+  // grace window cannot steal Chat onto a sibling pane (#10098 / CodeRabbit).
+  if (
+    args.suppressExitChat &&
+    args.chatLeafId &&
+    args.chatLeafStillMounted &&
+    args.chatLeafHasConfirmedAgentExit
+  ) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
   // Hydration may temporarily lack an active pane; preserve mode until a concrete owner exists.

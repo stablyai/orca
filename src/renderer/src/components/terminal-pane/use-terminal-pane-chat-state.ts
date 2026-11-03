@@ -17,6 +17,13 @@ import {
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
 import { readTerminalCursorLineContext } from '../../../../shared/terminal-cursor-line-context'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal-composer-draft'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { shouldSuppressNativeChatExitForPane } from '../native-chat/native-chat-pending'
+import {
+  getNativeChatExitSuppressRemainingMs,
+  NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+} from '../native-chat/native-chat-exit-suppress'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
@@ -142,6 +149,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       resolveTitleAgentForLeaf
     ]
   )
+  const pendingConfirmedExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
       const state = useAppStore.getState()
@@ -168,6 +176,11 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         }
       }
       if (route.exitChat && unifiedTabId) {
+        // Why: exit routes null the leaf — record the pre-route owner for triage (#10098).
+        recordRendererCrashBreadcrumb('native_chat_exit_to_terminal', {
+          reason: 'leaf_route',
+          chatLeafId
+        })
         setTabViewMode(unifiedTabId, 'terminal')
       }
     },
@@ -189,6 +202,27 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       }
       const panes = managerRef.current?.getPanes() ?? []
       const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
+      const paneKey = makePaneKey(tabId, leafId)
+      const suppressExitChat = shouldSuppressNativeChatExitForPane(paneKey)
+      if (suppressExitChat) {
+        recordRendererCrashBreadcrumb('native_chat_agent_exit_suppressed', {
+          reason: 'recent_chat_send',
+          paneKey
+        })
+        // Why: re-evaluate after grace so a genuine exit is not stuck forever.
+        if (pendingConfirmedExitTimerRef.current) {
+          clearTimeout(pendingConfirmedExitTimerRef.current)
+        }
+        // Why: pending sends have no fixed end — fall back to the full grace.
+        const remainingMs = Math.max(
+          1,
+          getNativeChatExitSuppressRemainingMs(paneKey) || NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+        )
+        pendingConfirmedExitTimerRef.current = setTimeout(() => {
+          pendingConfirmedExitTimerRef.current = null
+          onAgentExitedRef.current(leafId)
+        }, remainingMs)
+      }
       applyNativeChatLeafRoute(
         resolveNativeChatLeafRoute({
           isChatViewMode,
@@ -196,15 +230,24 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
           activeLeafId,
           chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
           activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-          chatLeafHasConfirmedAgentExit: true
+          chatLeafHasConfirmedAgentExit: true,
+          suppressExitChat
         })
       )
     },
-    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode, managerRef]
+    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode, managerRef, tabId]
   )
   useEffect(() => {
     onAgentExitedRef.current = handleConfirmedAgentExit
   }, [handleConfirmedAgentExit, onAgentExitedRef])
+  useEffect(() => {
+    return () => {
+      if (pendingConfirmedExitTimerRef.current) {
+        clearTimeout(pendingConfirmedExitTimerRef.current)
+        pendingConfirmedExitTimerRef.current = null
+      }
+    }
+  }, [])
   const canToggleChatForLeaf = useCallback(
     (leafId: string | null): boolean => {
       // Scope the "always allow toggling back" rule to the leaf showing chat; must not make an unsupported sibling look eligible.
