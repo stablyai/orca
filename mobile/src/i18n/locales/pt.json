@@ -84,7 +84,6 @@
       "connecting": "Conectando…",
       "description": "Você abriu um link de pareamento do seu desktop. Confirme para adicioná-lo aos seus hosts.",
       "pairButton": "Parear",
-      "pairingFailed": "Falha no pareamento: {{error}}",
       "pairingLog": "Log de pareamento",
       "title": "Parear com este desktop?"
     },
@@ -100,7 +99,6 @@
       "openDesktopStep": "Abra o Orca no seu computador",
       "openMobileSettingsStep": "Vá para Configurações → Mobile",
       "openSettings": "Abrir Configurações",
-      "pairingFailed": "Falha no pareamento: {{error}}",
       "pairingLog": "Log de pareamento",
       "pasteCodeMessage": "Copie o código que aparece abaixo do QR no seu computador.",
       "pasteCodePlaceholder": "orca://pair?code=... ou cole o código",

@@ -8,6 +8,15 @@ const mocks = vi.hoisted(() => ({
   platform: { OS: 'ios' },
   cameraGranted: true
 }))
+vi.mock('./pairing/pairing-visuals', () => ({
+  SCAN_DECODE_BEAT_MS: 0,
+  PAIRING_SUCCESS_HOLD_MS: 0,
+  waitForBeat: () => Promise.resolve(),
+  ScanReticle: () => null,
+  Step: () => null,
+  PairingProgress: () => null
+}))
+vi.mock('./platform/haptics', () => ({ triggerSuccess: vi.fn() }))
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
@@ -15,12 +24,13 @@ vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Platform: mocks.platform,
   Linking: {},
+  AppState: { addEventListener: () => ({ remove() {} }) },
   StyleSheet: { create: (styles: unknown) => styles }
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ replace: mocks.replace, back: vi.fn() }) }))
 vi.mock('expo-camera', () => ({
   CameraView: 'CameraView',
-  useCameraPermissions: () => [{ granted: mocks.cameraGranted }, vi.fn()]
+  useCameraPermissions: () => [{ granted: mocks.cameraGranted }, vi.fn(), vi.fn(async () => ({}))]
 }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })

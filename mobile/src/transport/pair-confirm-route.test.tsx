@@ -42,6 +42,11 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
+  TextInput: 'TextInput',
+  KeyboardAvoidingView: 'KeyboardAvoidingView',
+  Keyboard: { addListener: () => ({ remove() {} }) },
+  Platform: { OS: 'ios' },
+  findNodeHandle: () => null,
   ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
   BackHandler: { addEventListener: () => ({ remove() {} }) }
@@ -56,6 +61,7 @@ vi.mock('expo-router', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon' }))
 vi.mock('./pre-profile-pairing-coordinator', () => ({ startPreProfilePairing: vi.fn() }))
+vi.mock('./endpoint-auth-headers-store', () => ({ writeEndpointAuthHeaders: vi.fn() }))
 vi.mock('./host-client-hooks', () => ({
   useRefreshHostClient: () => route.refreshHostClient
 }))
@@ -211,7 +217,8 @@ describe('pair confirmation route ownership', () => {
     await act(async () => {
       pending.reject(new Error('unreachable desktop'))
     })
-    expect(screenText()).toContain('unreachable desktop')
+    expect(screenText()).toContain('Could not finish pairing or save credentials.')
+    expect(screenText()).not.toContain('unreachable desktop')
 
     await renderCode(offerCode('second'))
     expect(screenText()).toContain('Pair with this desktop?')
@@ -256,4 +263,12 @@ describe('pair confirmation route ownership', () => {
     })
     expect(route.router.replace).toHaveBeenCalledWith('/h/same-host')
   })
+})
+
+it('provides a home action for an invalid pairing link', async () => {
+  await renderCode('invalid')
+  const label = renderer?.root.findAllByProps({ children: 'Back to home' })[0]
+  expect(label).toBeDefined()
+  await act(async () => label?.parent?.props.onPress())
+  expect(route.router.replace).toHaveBeenCalledWith('/')
 })

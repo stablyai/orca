@@ -82,7 +82,6 @@
       "connecting": "Verbindung wird hergestellt…",
       "description": "Ein Kopplungslink vom Desktop wurde geöffnet. Bestätigen, um diesen Desktop zu den Hosts hinzuzufügen.",
       "pairButton": "Koppeln",
-      "pairingFailed": "Kopplung fehlgeschlagen: {{error}}",
       "pairingLog": "Kopplungsprotokoll",
       "title": "Mit diesem Desktop koppeln?"
     },
@@ -98,7 +97,6 @@
       "openDesktopStep": "Orca auf dem Computer öffnen",
       "openMobileSettingsStep": "Einstellungen → Mobil öffnen",
       "openSettings": "Einstellungen öffnen",
-      "pairingFailed": "Kopplung fehlgeschlagen: {{error}}",
       "pairingLog": "Kopplungsprotokoll",
       "pasteCodeMessage": "Den Code kopieren, der auf dem Computer unter dem QR-Code angezeigt wird.",
       "pasteCodePlaceholder": "orca://pair?code=... oder den Code einfügen",

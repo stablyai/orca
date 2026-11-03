@@ -10,6 +10,15 @@ const mocks = vi.hoisted(() => ({
   code: '',
   platform: { OS: 'ios' }
 }))
+vi.mock('./pairing/pairing-visuals', () => ({
+  SCAN_DECODE_BEAT_MS: 0,
+  PAIRING_SUCCESS_HOLD_MS: 0,
+  waitForBeat: () => Promise.resolve(),
+  ScanReticle: () => null,
+  Step: () => null,
+  PairingProgress: () => null
+}))
+vi.mock('./platform/haptics', () => ({ triggerSuccess: vi.fn() }))
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',

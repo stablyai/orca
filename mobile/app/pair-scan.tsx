@@ -39,6 +39,7 @@ import {
   Step,
   waitForBeat
 } from '../src/pairing/pairing-visuals'
+import { PairScanRecovery } from '../src/pairing/pair-scan-recovery'
 import { triggerSuccess } from '../src/platform/haptics'
 
 // Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
@@ -216,7 +217,10 @@ export default function PairScanScreen() {
               "Couldn't connect within {{seconds}}s — see log below for where it stalled",
               { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
             )
-          : t('app.pairScan.secureFailure', 'Pairing failed. Check that Orca is reachable and the pairing link is current.')
+          : t(
+              'app.pairScan.secureFailure',
+              'Pairing failed. Check that Orca is reachable and the pairing link is current.'
+            )
       )
       processingRef.current = false
     }
@@ -382,52 +386,27 @@ export default function PairScanScreen() {
       )}
 
       {status === 'error' && (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-          {logs.length > 0 && (
-            <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title={t('app.pairScan.pairingLog', 'Pairing log')} />
-            </View>
-          )}
-          <View style={styles.errorActions}>
-            {failedSecureCode ? (
-              <Pressable
-                style={styles.secondaryButton}
-                accessibilityRole="button"
-                accessibilityLabel={t('edgeAuth.configure', 'Configure edge authentication')}
-                onPress={() => {
+        <PairScanRecovery
+          errorMessage={errorMessage}
+          logs={logs}
+          onConfigure={
+            failedSecureCode
+              ? () => {
                   activePairingAttemptRef.current?.dispose()
                   activePairingAttemptRef.current = null
-                  router.replace({ pathname: '/pair-confirm', params: { code: failedSecureCode } })
-                }}
-              >
-                <Text style={styles.secondaryButtonText}>{t('edgeAuth.configure', 'Configure edge authentication')}</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
-              onPress={retry}
-            >
-              <Text style={styles.primaryButtonText}>
-                {t('app.pairScan.tryAgain', 'Try Again')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                pressed && styles.pasteButtonPressed
-              ]}
-              onPress={() => {
-                retry()
-                setPasteVisible(true)
-              }}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {t('app.pairScan.pasteInstead', 'Paste code instead')}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+                  router.replace({
+                    pathname: '/pair-confirm',
+                    params: { code: failedSecureCode }
+                  })
+                }
+              : undefined
+          }
+          onRetry={retry}
+          onPaste={() => {
+            retry()
+            setPasteVisible(true)
+          }}
+        />
       )}
 
       <TextInputModal

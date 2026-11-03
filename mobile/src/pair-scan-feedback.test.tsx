@@ -42,6 +42,7 @@ vi.mock('./pairing/pairing-visuals', async () => {
 vi.mock('./platform/haptics', () => ({ triggerSuccess: () => {} }))
 vi.mock('react-native', () => ({
   View: 'View',
+  Platform: { OS: 'ios' },
   Text: 'Text',
   Pressable: 'Pressable',
   ActivityIndicator: 'ActivityIndicator',
@@ -155,7 +156,8 @@ it('shows pairing failure and retry after a pasted code without camera permissio
   await render()
   await paste()
   await act(async () => mocks.reject!(new Error('network unreachable')))
-  expect(screen()).toContain('Pairing failed: network unreachable')
+  expect(screen()).toContain('Pairing failed. Check that Orca is reachable')
+  expect(screen()).not.toContain('network unreachable')
   expect(screen()).toContain('Try Again')
   const retry = findAllByHostType(root(), 'Pressable').find((node) =>
     findAllByHostType(node, 'Text').some((text) => text.props.children === 'Try Again')

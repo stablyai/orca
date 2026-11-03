@@ -11,7 +11,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { resolvePairConfirmRouteState, type PairConfirmRouteState } from '../src/transport/pair-confirm-state'
+import {
+  resolvePairConfirmRouteState,
+  type PairConfirmRouteState
+} from '../src/transport/pair-confirm-state'
 import {
   startPairingWithEdgeAuth,
   type PairingEdgeAuthAttempt
@@ -21,7 +24,11 @@ import { useRefreshHostClient } from '../src/transport/host-client-hooks'
 import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { PAIRING_SUCCESS_HOLD_MS, PairingProgress, waitForBeat } from '../src/pairing/pairing-visuals'
+import {
+  PAIRING_SUCCESS_HOLD_MS,
+  PairingProgress,
+  waitForBeat
+} from '../src/pairing/pairing-visuals'
 import { triggerSuccess } from '../src/platform/haptics'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import {
@@ -150,7 +157,10 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
       if (!verified.credentialsSaved) {
         setStatus('error')
         setErrorMessage(
-          t('app.pairConfirm.edgeCredentialsFailed', 'The host was paired, but its edge credentials could not be saved. Retry saving, or enter them later in Edit Host.')
+          t(
+            'app.pairConfirm.edgeCredentialsFailed',
+            'The host was paired, but its edge credentials could not be saved. Retry saving, or enter them later in Edit Host.'
+          )
         )
         return
       }
@@ -172,8 +182,15 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
         setStatus('error')
         setErrorMessage(
           activeAttempt.current?.timedOut
-            ? t('app.pairConfirm.connectTimedOut', "Couldn't connect within {{seconds}}s — see log below for where it stalled", { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 })
-            : t('app.pairConfirm.edgePairingFailed', 'Could not finish pairing or save credentials. Check the connection and protected storage, then retry.')
+            ? t(
+                'app.pairConfirm.connectTimedOut',
+                "Couldn't connect within {{seconds}}s — see log below for where it stalled",
+                { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
+              )
+            : t(
+                'app.pairConfirm.edgePairingFailed',
+                'Could not finish pairing or save credentials. Check the connection and protected storage, then retry.'
+              )
         )
       }
     } finally {
@@ -211,8 +228,15 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
           ) : null}
           {showForm ? (
             <>
-              <Text style={styles.title}>{t('app.pairConfirm.title', 'Pair with this desktop?')}</Text>
-              <Text style={styles.subtitle}>{t('app.pairConfirm.description', 'You opened a pairing link from your desktop. Confirm to add it to your hosts.')}</Text>
+              <Text style={styles.title}>
+                {t('app.pairConfirm.title', 'Pair with this desktop?')}
+              </Text>
+              <Text style={styles.subtitle}>
+                {t(
+                  'app.pairConfirm.description',
+                  'You opened a pairing link from your desktop. Confirm to add it to your hosts.'
+                )}
+              </Text>
               {secure ? (
                 <EdgeAuthHeadersSection
                   rows={edgeAuth.authRows}
@@ -220,7 +244,10 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
                   error={edgeAuth.authNormalized.ok ? null : edgeAuth.authNormalized.error}
                   onRowsChange={edgeAuth.setAuthRows}
                   scrollViewRef={scrollTarget}
-                  hint={t('edgeAuth.pairingHint', "Optional headers for this secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link.")}
+                  hint={t(
+                    'edgeAuth.pairingHint',
+                    "Optional headers for this secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link."
+                  )}
                 />
               ) : null}
               <View style={styles.actionStack}>
@@ -231,7 +258,9 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
                   disabled={Boolean(secure && !edgeAuth.authNormalized.ok)}
                   onPress={confirm}
                 >
-                  <Text style={styles.primaryButtonText}>{t('app.pairConfirm.pairButton', 'Pair')}</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {t('app.pairConfirm.pairButton', 'Pair')}
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
@@ -245,40 +274,53 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
             </>
           ) : null}
           {status === 'connecting' ? (
-            <>
-              <PairingProgress
-                succeeded={paired}
-                connectingLabel={verifiedHost ? t('edgeAuth.saving', 'Saving credentials…') : t('app.pairConfirm.connecting', 'Connecting…')}
-                labelStyle={styles.connectingText}
-              />
-            </>
+            <PairingProgress
+              succeeded={paired}
+              connectingLabel={
+                verifiedHost
+                  ? t('edgeAuth.saving', 'Saving credentials…')
+                  : t('app.pairConfirm.connecting', 'Connecting…')
+              }
+              labelStyle={styles.connectingText}
+            />
           ) : null}
           {logs.length > 0 ? (
             <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title={t('app.pairConfirm.pairingLog', 'Pairing log')} />
+              <ConnectionLog
+                entries={logs}
+                title={t('app.pairConfirm.pairingLog', 'Pairing log')}
+              />
             </View>
           ) : null}
-          {verifiedHost && status !== 'connecting' ? (
+          {(verifiedHost || !offer) && status !== 'connecting' ? (
             <View style={styles.actionStack}>
-              <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  verifiedHost.credentialsSaved ? t('common.continue', 'Continue') : t('app.pairConfirm.retryCredentials', 'Retry saving credentials')
-                }
-                onPress={confirm}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {verifiedHost.credentialsSaved ? t('common.continue', 'Continue') : t('app.pairConfirm.retryCredentials', 'Retry saving credentials')}
-                </Text>
-              </Pressable>
+              {verifiedHost ? (
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    verifiedHost.credentialsSaved
+                      ? t('common.continue', 'Continue')
+                      : t('app.pairConfirm.retryCredentials', 'Retry saving credentials')
+                  }
+                  onPress={confirm}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {verifiedHost.credentialsSaved
+                      ? t('common.continue', 'Continue')
+                      : t('app.pairConfirm.retryCredentials', 'Retry saving credentials')}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
                 accessibilityRole="button"
                 accessibilityLabel={t('app.pairConfirm.backToHome', 'Back to home')}
                 onPress={cancel}
               >
-                <Text style={styles.secondaryButtonText}>{t('app.pairConfirm.backToHome', 'Back to home')}</Text>
+                <Text style={styles.secondaryButtonText}>
+                  {t('app.pairConfirm.backToHome', 'Back to home')}
+                </Text>
               </Pressable>
             </View>
           ) : null}
