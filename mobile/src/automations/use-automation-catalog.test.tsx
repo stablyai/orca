@@ -335,23 +335,18 @@ describe('host-owned automation reads', () => {
     async (listMs, statusMs) => {
       vi.useFakeTimers()
       const automation = savedAutomation()
-      const port = automationClient(
-        (method) =>
-          new Promise((resolve) => {
-            setTimeout(
-              () =>
-                resolve(
-                  method === 'status.get'
-                    ? { capabilities: ['catalog-ready'] }
-                    : {
-                        automations: [automation],
-                        items: [{ automationId: automation.id, selector: { kind: 'self' } }]
-                      }
-                ),
-              method === 'status.get' ? statusMs : listMs
-            )
-          })
-      )
+      const replies: { method: string; value: ReturnType<typeof deferred<unknown>> }[] = []
+      const port = automationClient((method) => {
+        const value = deferred<unknown>()
+        replies.push({ method, value })
+        return value.promise
+      })
+      const deliver = (index: number) => {
+        const reply = replies[index]!
+        reply.value.resolve(
+          reply.method === 'status.get' ? { capabilities: ['catalog-ready'] } : catalogReply()
+        )
+      }
       let state: ReturnType<typeof useAutomationCatalog> | null = null
       function Probe() {
         state = useAutomationCatalog(port.client, true)
@@ -360,7 +355,14 @@ describe('host-owned automation reads', () => {
       await act(async () => {
         tree = create(createElement(Probe))
       })
+      if (listMs === 0) {
+        await act(async () => deliver(0))
+      }
       await act(async () => vi.advanceTimersByTimeAsync(Math.max(listMs, statusMs)))
+      await act(async () => {
+        deliver(0)
+        deliver(1)
+      })
       const read = () => latest(() => state)
       expect(read().loaded).toBe(true)
       expect(read().rows[0]?.automation.id).toBe(automation.id)
