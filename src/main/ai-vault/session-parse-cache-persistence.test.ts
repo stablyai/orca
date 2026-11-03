@@ -272,7 +272,7 @@ describe('session parse cache persistence', () => {
       .run(
         transcript,
         candidate.file.mtimeMs,
-        candidate.file.sizeBytes,
+        candidate.file.sizeBytes ?? null,
         process.platform,
         null,
         JSON.stringify(session),
