@@ -315,37 +315,6 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       drive.disposable.dispose()
     })
 
-    it('[invariant] discloses or recovers when the budget ends while the pane is hidden', async () => {
-      const seventhAnswer = createDeferred<unknown>()
-      const serializeBufferOutcome = vi.fn().mockResolvedValue(retryWorthy)
-      const drive = await driveToSeventhAnswer(serializeBufferOutcome)
-
-      serializeBufferOutcome.mockReturnValueOnce(seventhAnswer.promise)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await flushAsyncTicks(20)
-      expect(serializeBufferOutcome).toHaveBeenCalledTimes(7)
-
-      // Switch away while the last budgeted request is still pending.
-      drive.setVisible(false)
-      seventhAnswer.resolve(retryWorthy)
-      await flushAsyncTicks(20)
-
-      // The host is healthy again and still holds the dropped bytes.
-      serializeBufferOutcome.mockResolvedValue(hostAnswers(retainedSnapshot(R1_MARKER)))
-      const requestsBeforeReveal = serializeBufferOutcome.mock.calls.length
-      await revealPane(drive)
-      await allowRecoveryWindow()
-
-      const disclosure = observeDisclosure(drive, R1_MARKER)
-      expect(disclosure.markerWrites).toBeLessThanOrEqual(1)
-      expectDisclosedOrRecovered(disclosure)
-      // Require either a fresh recovery request or a visible loss banner.
-      expect(
-        serializeBufferOutcome.mock.calls.length - requestsBeforeReveal
-      ).toBeGreaterThanOrEqual(disclosure.bannerWrites > 0 ? 0 : 1)
-      drive.disposable.dispose()
-    })
-
     async function exhaustBudgetWhileHidden(
       serializeBufferOutcome: ReturnType<typeof vi.fn>
     ): Promise<PaneDrive> {

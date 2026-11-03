@@ -22,8 +22,8 @@ import {
   listPreparations,
   startPreparation,
   takePreparation
-} from '../worktree-create-preparation-pool'
-import { hasPendingStalePreparationCleanup } from '../worktree-create-preparation-stale-cleanup'
+} from '../workspaces/creation/preparation/worktree-create-preparation-pool'
+import { hasPendingStalePreparationCleanup } from '../workspaces/creation/preparation/worktree-create-preparation-stale-cleanup'
 
 const tempRoots: string[] = []
 

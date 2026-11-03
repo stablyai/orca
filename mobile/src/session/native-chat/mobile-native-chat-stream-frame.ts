@@ -13,6 +13,8 @@ export type MobileNativeChatStreamFrame = {
   beforeOffset?: number
   // No transcript exists yet; render the empty window without treating it as settled history.
   pending?: boolean
+  // The page starts at the row named by the subscribe's resumeAfter.
+  resumed?: boolean
   error?: string
   message?: string
   // Provider turn boundary; hosts before #9121 omit it.
@@ -97,7 +99,8 @@ export function applyMobileNativeChatStreamFrame(args: {
   }
   const pending = frame.type === 'snapshot' && frame.pending === true
   const replayStartIndex =
-    frame.type === 'snapshot' && !replaceSnapshot && merger.list.length > 0
+    // A resumed page continues the cached list; any other first page is the new base.
+    frame.type === 'snapshot' && (!replaceSnapshot || frame.resumed) && merger.list.length > 0
       ? replayRetainedTailStart(merger, frame.messages, frame.hasMore)
       : null
   if (frame.type === 'replacement' || (frame.type === 'snapshot' && replayStartIndex === null)) {

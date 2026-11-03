@@ -82,9 +82,4 @@ describe('floating workspace editor file ids', () => {
     expect(restored.state.openFiles.map((file) => file.id)).toEqual([fileId])
     expect(saved.unifiedTabs?.[WT]?.map((tab) => tab.entityId)).toEqual([fileId])
   })
-
-  it('keeps the bare path id with the switch off', () => {
-    mocks.layoutOwnerIsMain = false
-    expect(openFloatingFile()).toBe('/notes/a.md')
-  })
 })

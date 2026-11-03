@@ -1,3 +1,5 @@
+import type { NativeChatSubagentChoices } from './native-chat-subagent-sections'
+import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
@@ -72,4 +74,24 @@ export function useNativeChatChildNavigator(sessionKey: string) {
   }, [sessionKey])
   const navigation = useMemo(() => ({ open }), [open])
   return { path, child: path.at(-1) ?? null, parent: path.at(-2) ?? null, back, navigation }
+}
+
+export function useNativeChatInlineSubagentChoices(
+  choices: NativeChatSubagentChoices,
+  rows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
+): NativeChatSubagentChoices {
+  const childNavigation = useNativeChatChildNavigation()
+  return useMemo(
+    () =>
+      childNavigation
+        ? {
+            ...choices,
+            sections: new Map([
+              ...Array.from(rows.keys(), (id) => [id, false] as const),
+              ...choices.sections
+            ])
+          }
+        : choices,
+    [childNavigation, choices, rows]
+  )
 }

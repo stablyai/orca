@@ -8,7 +8,7 @@ import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
 } from '../../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector

@@ -24,7 +24,7 @@ vi.mock('../cli/cli-installer', () => ({
   }
 }))
 
-vi.mock('../appimage-runtime-identity', () => ({
+vi.mock('../updater/linux-package/appimage-runtime-identity', () => ({
   resolveAppImageRuntimeIdentity: mocks.resolveAppImageRuntimeIdentity
 }))
 

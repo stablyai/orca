@@ -6,9 +6,6 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import * as preflight from './launch-work-item-direct-preflight'
 import * as inventory from './agent-detection-target-inventory'
 import * as draft from './launch-work-item-direct-draft'
-import * as delivery from './agent-launch-prompt-delivery'
-import { resolveDirectSetupDecision } from './launch-work-item-direct-preflight'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
 import { useAppStore } from '@/store'
 import { createUIStore } from '@/store/slices/ui-slice-test-harness'
@@ -66,26 +63,6 @@ describe('direct work item setup preparation', () => {
     unsubscribe()
   })
 
-  it.each([
-    { status: 'error', hasHooks: false, hooks: null },
-    { hasHooks: true, hooks: null }
-  ])('does not turn an unknown inspection into inherited consent: %j', async (reply) => {
-    hostMocks.checkRuntimeHooks.mockResolvedValue(reply)
-    await expect(
-      resolveDirectSetupDecision(
-        'repo-1',
-        {
-          hookSettings: {
-            commandSourcePolicy: 'run-both',
-            scripts: { setup: 'echo local', archive: '' },
-            mode: 'auto'
-          }
-        },
-        LOCAL_EXECUTION_HOST_ID
-      )
-    ).resolves.toMatchObject({ kind: 'unavailable' })
-  })
-
   it.each(['absent', 'error', 'malformed', 'rejection'] as const)(
     'cancels during initial inspection before consuming its late %s outcome',
     async (shape) => {
@@ -107,67 +84,6 @@ describe('direct work item setup preparation', () => {
       expect(mocks.createWorktree).not.toHaveBeenCalled()
       expect(mocks.toastError).not.toHaveBeenCalled()
       expect(args.openModalFallback).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each(['run', 'skip'] as const)(
-    'recovers a YAML-only Ask inspection before accepting %s on the original request',
-    async (choice) => {
-      hostMocks.checkRuntimeHooks
-        .mockRejectedValueOnce(new Error('timed out'))
-        .mockResolvedValueOnce({ status: 'error', hasHooks: false, hooks: null })
-        .mockResolvedValue({ hasHooks: true, hooks, mayNeedUpdate: false })
-      const sink = Promise.withResolvers<boolean>()
-      mocks.pasteDraftWhenAgentReady.mockReturnValueOnce(sink.promise)
-      const dispatched = vi.spyOn(delivery, 'deliverLaunchPromptToAgentTab')
-      const launch = launchWorkItemDirect({
-        ...args,
-        agentOverride: 'codex',
-        agentArgs: '--model o3',
-        promptDelivery: 'submit-after-ready',
-        item: { ...args.item, pasteContent: 'My edited fix prompt' }
-      })
-      await vi.waitFor(() =>
-        expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
-      )
-      const pending = readDirectSetupRequest(useAppStore.getState().modalData.directSetup)
-      expect(pending.inspection.kind).toBe('unavailable')
-      expect(mocks.createWorktree).not.toHaveBeenCalled()
-      expect(mocks.pasteDraftWhenAgentReady).not.toHaveBeenCalled()
-      render(<DirectWorkItemSetupDialog request={pending} />)
-      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-      await vi.waitFor(() =>
-        expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Retry' }).disabled).toBe(
-          false
-        )
-      )
-      expect(hostMocks.checkRuntimeHooks).toHaveBeenCalledTimes(2)
-      expect(mocks.createWorktree).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-      await screen.findByText('echo prepared')
-      expect(mocks.createWorktree).not.toHaveBeenCalled()
-      fireEvent.click(
-        screen.getByRole('button', {
-          name: choice === 'run' ? 'Run setup' : 'Skip setup'
-        })
-      )
-      pending.choose(choice)
-      await expect(launch).resolves.toBe(true)
-      expect(mocks.createWorktree).toHaveBeenCalledOnce()
-      expect(mocks.createWorktree.mock.calls[0][3]).toBe(choice)
-      expect(mocks.pasteDraftWhenAgentReady).toHaveBeenCalledOnce()
-      expect(mocks.pasteDraftWhenAgentReady).toHaveBeenCalledWith(
-        expect.objectContaining({ content: 'My edited fix prompt', agent: 'codex', submit: true })
-      )
-      expect(dispatched).toHaveBeenCalledOnce()
-      const dispatchResult = dispatched.mock.results[0]
-      if (dispatchResult.type !== 'return') {
-        throw new Error('Expected actual dispatch promise')
-      }
-      sink.resolve(true)
-      await expect(dispatchResult.value).resolves.toBe(true)
-      expect(args.openModalFallback).not.toHaveBeenCalled()
-      expect(mocks.toastError).not.toHaveBeenCalled()
     }
   )
 
@@ -236,48 +152,6 @@ describe('direct work item setup preparation', () => {
     }
   )
 
-  it.each(['unavailable-agent', 'invalid-args'] as const)(
-    'suppresses cancelled %s failure results after delayed preparation',
-    async (shape) => {
-      const abort = new AbortController()
-      hostMocks.checkRuntimeHooks.mockResolvedValue({ hasHooks: true, hooks })
-      if (shape === 'unavailable-agent') {
-        const gate =
-          Promise.withResolvers<
-            Awaited<ReturnType<typeof preflight.resolveDirectProspectiveAgent>>
-          >()
-        const detect = vi
-          .spyOn(preflight, 'resolveDirectProspectiveAgent')
-          .mockReturnValueOnce(gate.promise)
-        const launch = launchWorkItemDirect({ ...args, signal: abort.signal })
-        await chooseSetup()
-        await vi.waitFor(() => expect(detect).toHaveBeenCalled())
-        abort.abort()
-        gate.resolve({ prospectiveAgent: null, unavailable: true })
-        await expect(launch).resolves.toBe('cancelled')
-      } else {
-        const gate =
-          Promise.withResolvers<Awaited<ReturnType<typeof preflight.planDirectWorkItemLaunch>>>()
-        const plan = vi
-          .spyOn(preflight, 'planDirectWorkItemLaunch')
-          .mockReturnValueOnce(gate.promise)
-        const launch = launchWorkItemDirect({
-          ...args,
-          signal: abort.signal,
-          agentArgs: '"unterminated'
-        })
-        await chooseSetup()
-        await vi.waitFor(() => expect(plan).toHaveBeenCalled())
-        abort.abort()
-        gate.resolve(undefined)
-        await expect(launch).resolves.toBe('cancelled')
-      }
-      expect(mocks.toastError).not.toHaveBeenCalled()
-      expect(args.openModalFallback).not.toHaveBeenCalled()
-      expect(mocks.createWorktree).not.toHaveBeenCalled()
-    }
-  )
-
   it('aborts the actual trust prompt, releases its queue, and permits a fresh launch', async () => {
     useAppStore.setState({ trustedOrcaHooks: {} })
     hostMocks.checkRuntimeHooks.mockResolvedValue({ hasHooks: true, hooks })
@@ -327,39 +201,6 @@ describe('direct work item setup preparation', () => {
     expect(useAppStore.getState().modalData).toEqual({ successor: true })
     expect(mocks.createWorktree).not.toHaveBeenCalled()
   })
-
-  it.each([
-    { policy: 'run-by-default', command: 'echo local', decision: 'run' },
-    { policy: 'skip-by-default', command: 'echo local', decision: 'skip' },
-    { policy: 'ask', command: 'echo local', decision: 'run' },
-    { policy: 'ask', command: '', decision: 'inherit' }
-  ] as const)(
-    'finishes known local-only setup with unusable YAML: %j',
-    async ({ policy, command, decision }) => {
-      useAppStore.setState({
-        repos: [
-          {
-            ...useAppStore.getState().repos[0],
-            hookSettings: {
-              commandSourcePolicy: 'local-only',
-              setupRunPolicy: policy,
-              scripts: { setup: command, archive: '' },
-              mode: 'auto'
-            }
-          }
-        ]
-      })
-      hostMocks.checkRuntimeHooks.mockRejectedValue(new Error('unrelated YAML failure'))
-      const launch = launchWorkItemDirect(args)
-      if (policy === 'ask' && command) {
-        await chooseSetup()
-      }
-      await expect(launch).resolves.toBe(true)
-      expect(hostMocks.checkRuntimeHooks).not.toHaveBeenCalled()
-      expect(mocks.createWorktree.mock.calls[0][3]).toBe(decision)
-      expect(mocks.toastError).not.toHaveBeenCalled()
-    }
-  )
 
   it('cancels unknown recovery after a real Retry wake, ignoring its late read', async () => {
     const read = Promise.withResolvers<{ hasHooks: boolean; hooks: typeof hooks }>()

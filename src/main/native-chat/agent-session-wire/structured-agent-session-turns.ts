@@ -25,7 +25,10 @@ import {
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
+import {
+  isAgentSessionAttachmentExpiredError,
+  type AgentSessionAttachmentExpiredError
+} from '../agent-session-attachments/agent-session-attachment-claims'
 import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 export { performPrompt } from './structured-agent-session-turns-prompt'
@@ -70,14 +73,18 @@ function invalid(
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-export function agentSessionAttachmentExpiredRefusal(): {
+export function agentSessionAttachmentExpiredRefusal(error: AgentSessionAttachmentExpiredError): {
   ok: false
   refusal: AgentSessionWireRefusal
 } {
-  return invalid(
-    'attachmentExpired',
-    'A chat attachment in this message is no longer stored on the host, so it was not sent.'
-  )
+  return {
+    ok: false,
+    refusal: refuse(
+      'agent_session_operation_invalid',
+      { reason: 'attachmentExpired', expiredAttachments: error.expired },
+      'A chat attachment in this message is no longer stored on the host, so it was not sent.'
+    )
+  }
 }
 
 /** Accept once per ID; existing submissions replay without redelivery because unknown cannot prove non-delivery.
@@ -131,7 +138,7 @@ export async function performSend(
       error
     })
     if (isAgentSessionAttachmentExpiredError(error)) {
-      return agentSessionAttachmentExpiredRefusal()
+      return agentSessionAttachmentExpiredRefusal(error)
     }
     // Preserve typed refusals, corrupt-database errors and newer-version guards; never retry writes past them.
     if (
@@ -172,6 +179,6 @@ export type AgentSessionReplayContext = Pick<
 > & {
   journal: Pick<
     AgentSessionJournal,
-    'cursor' | 'submission' | 'submissions' | 'epoch' | 'threadGoal'
+    'cursor' | 'submission' | 'submissions' | 'epoch' | 'threadGoal' | 'inputOrder'
   > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
 }

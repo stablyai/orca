@@ -27,7 +27,7 @@ import {
   worktreeAddTimeoutMessage
 } from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
-import { assertNoPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { assertNoPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
 import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
 
 export type WorktreeAddBaseContext = Pick<AddWorktreeResult, 'localBaseRefUpdateSuggestion'> & {

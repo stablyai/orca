@@ -73,11 +73,35 @@ function texts(map: ReturnType<typeof notices>): Record<string, string> {
 }
 
 describe('the line under each of the chat own messages', () => {
-  it('says only that a message on its way is sending', () => {
-    expect(texts(notices({ pending: [pending('a', 'sending')] }))).toEqual({
-      [agentJournalSubmissionKey('a')]: SENDING
-    })
-    expect(texts(notices({ pending: [pending('c', 'recorded')] }))).toEqual({})
+  it('keeps sending through either reply/journal ordering until the host resolves it', () => {
+    const sending = { [agentJournalSubmissionKey('a')]: SENDING }
+    const echo = pending('a', 'sending')
+    const recordedEcho = pending('a', 'recorded')
+    const hostPending = row('a', 'pending')
+    for (const input of [
+      { pending: [echo] },
+      { pending: [recordedEcho] },
+      { pending: [recordedEcho], submissions: [hostPending] },
+      { pending: [echo], submissions: [hostPending] },
+      { submissions: [hostPending] }
+    ]) {
+      expect(texts(notices(input))).toEqual(sending)
+    }
+    for (const phase of ['sending', 'recorded'] as const) {
+      for (const state of ['accepted', 'unknown'] as const) {
+        expect(
+          texts(notices({ pending: [pending('a', phase)], submissions: [row('a', state)] }))
+        ).toEqual({})
+      }
+      expect(
+        texts(
+          notices({
+            pending: [pending('a', phase)],
+            submissions: [row('a', 'rejected', { reason: 'Not accepted' })]
+          })
+        )
+      ).toEqual({ [agentJournalSubmissionKey('a')]: 'Not accepted' })
+    }
   })
 
   it("says nothing on a message the host recorded but couldn't confirm, as the common pattern", () => {
@@ -170,7 +194,8 @@ describe('the line under each of the chat own messages', () => {
           })
         )
       ).toEqual({
-        [agentJournalSubmissionKey('first')]: 'Your message was not sent.'
+        [agentJournalSubmissionKey('first')]: 'Your message was not sent.',
+        [agentJournalSubmissionKey('later')]: SENDING
       })
       expect(texts(notices({ submissions: [recorded('first')] }))).toEqual({
         [agentJournalSubmissionKey('first')]: "Claude couldn't start. Start a new chat to continue."

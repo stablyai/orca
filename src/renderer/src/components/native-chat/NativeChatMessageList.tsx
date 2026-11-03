@@ -64,7 +64,7 @@ import type { NativeChatSettledTurns } from '../../../../shared/native-chat/tran
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
 import { transcriptTailRow } from './native-chat-transcript-tail-row'
-import { useNativeChatChildNavigation } from './native-chat-child-navigation'
+import { useNativeChatInlineSubagentChoices } from './native-chat-child-navigation'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 type NavigationRequest =
@@ -91,10 +91,12 @@ export function NativeChatMessageList({
   awaitingInput = null,
   turnActivity,
   stopping = false,
-  runtimeContext
+  runtimeContext,
+  structuredAttachments = false
 }: {
   ref?: Parameters<typeof useNativeChatMessageListHandle>[0]
   session: NativeChatLiveSession
+  structuredAttachments?: boolean
   journalItems?: readonly AgentJournalRenderItem[]
   /** With the items, what places each row in its turn (structured lane). */
   journalSubmissions?: readonly AgentJournalSubmission[]
@@ -157,20 +159,7 @@ export function NativeChatMessageList({
     subagentDisclosure,
     openSubagentSections
   } = useNativeChatSubagentSections(messages, subagentRows, subagentRoster)
-  const childNavigation = useNativeChatChildNavigation()
-  const inlineSubagentChoices = useMemo(
-    () =>
-      childNavigation
-        ? {
-            ...subagentChoices,
-            sections: new Map([
-              ...Array.from(subagentRows.keys(), (id) => [id, false] as const),
-              ...subagentChoices.sections
-            ])
-          }
-        : subagentChoices,
-    [childNavigation, subagentChoices, subagentRows]
-  )
+  const inlineSubagentChoices = useNativeChatInlineSubagentChoices(subagentChoices, subagentRows)
   // Folded subagent rows stay loaded, so a reopened reply keeps its reveal.
   const loadedMessageIds = useMemo(
     () => new Set([...messages.map(({ id }) => id), ...subagentSections.pathOf.keys()]),
@@ -346,6 +335,7 @@ export function NativeChatMessageList({
   const rowContext = useNativeChatTranscriptRowContext({
     agent: session.agent,
     hostWork,
+    structuredAttachments,
     expandSignal,
     revealedDiff,
     taskListPredecessors,

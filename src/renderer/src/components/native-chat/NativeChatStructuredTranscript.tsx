@@ -1,5 +1,8 @@
+import { NativeChatCrewFrame, NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
+import { NativeChatSessionChildren } from './NativeChatSessionChildren'
+import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
-import type { ComponentProps, Ref } from 'react'
+import type { ComponentProps, ReactNode, Ref } from 'react'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { NativeChatClaudeSignInContext } from './native-chat-claude-sign-in'
@@ -50,6 +53,7 @@ export function NativeChatStructuredTranscript({
         <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
           <NativeChatMessageList
             {...props}
+            structuredAttachments
             key={`${controller.epoch}:${controller.contextClear.clears}`}
             ref={messageListRef}
             journalItems={controller.journalItems}
@@ -67,5 +71,28 @@ export function NativeChatStructuredTranscript({
         </NativeChatClaudeSignInContext.Provider>
       </NativeChatUsageLimitActionsProvider>
     </NativeChatRewindContext.Provider>
+  )
+}
+
+export function NativeChatStructuredTranscriptFrame({
+  pane,
+  composerRef,
+  canMention,
+  isVisible,
+  children
+}: {
+  pane: Omit<NativeChatStructuredViewProps, 'mode'>
+  composerRef: ComponentProps<typeof NativeChatCrewPanel>['composerRef']
+  canMention: boolean
+  isVisible: boolean
+  children: ReactNode
+}): React.JSX.Element {
+  return (
+    <NativeChatCrewFrame
+      panel={<NativeChatCrewPanel {...pane} {...{ composerRef, canMention, isVisible }} />}
+    >
+      <NativeChatSessionChildren {...pane} isVisible={isVisible} />
+      {children}
+    </NativeChatCrewFrame>
   )
 }

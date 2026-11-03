@@ -5,32 +5,32 @@ import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktree'
 import {
   SshHostNotServedError,
   SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
 } from '../../../providers/ssh-host-not-served-error'
-import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-owner'
+import { resolveWorktreeRemovalMetadata } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import {
   authorizeUnregisteredWindowsRemoval,
   nativeWindowsMarkerMissing,
   usesNativeWindowsRemoval
 } from '../../../git/windows-worktree-removal'
-import { isPrunableGitFileWorktree } from '../../../worktree-prunable-git-file'
-import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
-import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
-import { removeStaleLocalWorktreeRegistration } from '../../../local-worktree-removal-recovery'
-import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
-import { getEffectiveHooks, runHook } from '../../../hooks'
+import { isPrunableGitFileWorktree } from '../../../workspaces/removal/worktree-prunable-git-file'
+import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
+import { assertNestedWorktreeRemovalApproval } from '../../../workspaces/removal/nested-worktree-removal-plan'
+import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
+import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
+import { getEffectiveHooks, runHook } from '../../../workspace-hooks/hooks'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
-import { gateWorktreeRemovalOnArchiveHook } from '../../../worktree-archive-hook-gate'
+import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import {
   cleanupUnusedWorktreePushTargetRemote,
   notifyWorktreesChanged
 } from '../../worktree-remote'
-import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { formatWorktreeRemovalError } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -41,7 +41,7 @@ import { removeFolderWorkspace } from './remove-folder-workspace'
 import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
 import { retryFailedLocalWorktreeRemoval } from './retry-failed-local-worktree-removal'
-import { retryFailedRemovalUnlessRegistered } from '../../../worktree-removal-leftover'
+import { retryFailedRemovalUnlessRegistered } from '../../../workspaces/removal/worktree-removal-leftover'
 
 export async function executeWorktreeRemoval(
   context: WorktreeIpcContext,

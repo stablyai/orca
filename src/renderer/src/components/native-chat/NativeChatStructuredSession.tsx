@@ -12,9 +12,11 @@ import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draf
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatEmptyPane } from './NativeChatEmptyPane'
 import { NativeChatLoadingCue } from './NativeChatLoadingCue'
-import { NativeChatStructuredTranscript } from './NativeChatStructuredTranscript'
+import {
+  NativeChatStructuredTranscript,
+  NativeChatStructuredTranscriptFrame
+} from './NativeChatStructuredTranscript'
 import { NativeChatChildTranscriptStack } from './NativeChatChildTranscript'
-import { NativeChatSessionChildren } from './NativeChatSessionChildren'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import {
   NativeChatChildNavigationContext,
@@ -30,7 +32,7 @@ import { useNativeChatRootInputRouting } from './use-native-chat-root-input-rout
 import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
-import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
@@ -67,9 +69,7 @@ import { useStructuredAgentSessionStartFailureFacts } from './use-structured-age
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
 import { isClaudeSignInFailureKind, useNativeChatClaudeSignIn } from './native-chat-claude-sign-in'
 
-type StructuredSessionProps = Omit<NativeChatStructuredViewProps, 'mode'>
-
-export function NativeChatStructuredSession(props: StructuredSessionProps): React.JSX.Element {
+export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
@@ -170,6 +170,7 @@ export function NativeChatStructuredSession(props: StructuredSessionProps): Reac
   const paneCommands = useStructuredNativeChatPaneCommands({
     pane: props,
     handOff,
+    sessionContext: controller,
     ownerWorktreeId,
     rootRef,
     composerRef: activeComposerRef,
@@ -186,6 +187,7 @@ export function NativeChatStructuredSession(props: StructuredSessionProps): Reac
   // An owned prompt keeps its card; otherwise a missing program leaves the composer disabled.
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
+  const canMention = composerShown && install.unavailableHint === undefined
   const rootInput = useNativeChatRootInputRouting({
     tabId: props.tabId,
     rootRef,
@@ -221,9 +223,6 @@ export function NativeChatStructuredSession(props: StructuredSessionProps): Reac
     transport
   })
 
-  // Said once: on the pane when the failure took it, else in the composer's notices.
-  const sessionError =
-    viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
   const availability = useNativeChatAvailabilityNotice({
     unavailable: controller.unavailable,
@@ -244,7 +243,8 @@ export function NativeChatStructuredSession(props: StructuredSessionProps): Reac
   const notices = structuredSessionNotices({
     launch: install.slot.kind === 'install' ? { ...launch, lifecycle: null } : launch,
     agentLabel,
-    sessionError,
+    // Said once: on the pane when the failure took it, else in the composer's notices.
+    sessionError: viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
     composerError: composerError ?? continuation.continueError,
     claudeSignIn,
     availability,
@@ -285,40 +285,42 @@ export function NativeChatStructuredSession(props: StructuredSessionProps): Reac
           inert={childNavigator.child !== null}
           className={childNavigator.child ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}
         >
-          <NativeChatSessionChildren
-            sessionId={props.sessionId}
-            target={props.target}
+          <NativeChatStructuredTranscriptFrame
+            pane={props}
+            composerRef={composerRef}
+            canMention={canMention && childNavigator.child === null}
             isVisible={props.isVisible && childNavigator.child === null}
-          />
-          <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
-            {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
-              historyPhase !== 'unread' && <NativeChatLoadingCue />
-            ) : viewState.kind === 'error' ? (
-              <NativeChatEmptyState
-                kind="error"
-                retrying={!readFailure?.final}
-                {...(readFailure?.named ? { headline: readFailure.text } : {})}
-              />
-            ) : viewState.kind === 'empty' ? (
-              <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
-            ) : (
-              <NativeChatStructuredTranscript
-                pane={props}
-                directory={fileLinkContext}
-                controller={controller}
-                continuation={continuation.view}
-                claudeSignIn={claudeSignIn}
-                messageListRef={submits.messageListRef}
-                session={session}
-                isVisible={props.isVisible && childNavigator.child === null}
-                awaitingInput={prompt === null ? null : 'shown'}
-                stopping={stopControls.stopping}
-                {...fileLinkProps}
-                runtimeContext={imageRuntimeContext}
-                deliveryNotices={deliveryNotices}
-              />
-            )}
-          </NativeChatContextClearFade>
+          >
+            <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
+              {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
+                historyPhase !== 'unread' && <NativeChatLoadingCue />
+              ) : viewState.kind === 'error' ? (
+                <NativeChatEmptyState
+                  kind="error"
+                  retrying={!readFailure?.final}
+                  {...(readFailure?.named ? { headline: readFailure.text } : {})}
+                />
+              ) : viewState.kind === 'empty' ? (
+                <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
+              ) : (
+                <NativeChatStructuredTranscript
+                  pane={props}
+                  directory={fileLinkContext}
+                  controller={controller}
+                  continuation={continuation.view}
+                  claudeSignIn={claudeSignIn}
+                  messageListRef={submits.messageListRef}
+                  session={session}
+                  isVisible={props.isVisible && childNavigator.child === null}
+                  awaitingInput={prompt === null ? null : 'shown'}
+                  stopping={stopControls.stopping}
+                  {...fileLinkProps}
+                  runtimeContext={imageRuntimeContext}
+                  deliveryNotices={deliveryNotices}
+                />
+              )}
+            </NativeChatContextClearFade>
+          </NativeChatStructuredTranscriptFrame>
           {readFailure?.final ? null : (
             <>
               {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
@@ -341,6 +343,7 @@ export function NativeChatStructuredSession(props: StructuredSessionProps): Reac
               {prompt ? null : (
                 <NativeChatStructuredComposerTabStrips
                   tabId={props.tabId}
+                  runtimeContext={imageRuntimeContext}
                   threadGoal={controller.threadGoal}
                   transport={transport}
                   isWorking={controller.isWorking}

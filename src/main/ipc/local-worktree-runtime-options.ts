@@ -3,7 +3,7 @@ import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import {
   getLocalProjectWorktreeGitOptions,
   type LocalProjectWorktreeGitOptions
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { Repo } from '../../shared/repo-types'
 

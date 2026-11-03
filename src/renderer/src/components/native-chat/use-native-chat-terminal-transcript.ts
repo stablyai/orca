@@ -13,7 +13,7 @@ import {
 } from './native-chat-command-marker'
 import type { NativeChatLiveSession } from './native-chat-live-session-contract'
 import { launchPromptAsMessage } from './native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat-pending-sends'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import { useNativeChatLaunchPromptDeliveryNotice } from './use-native-chat-launch-prompt-delivery-notice'
 import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'

@@ -17,6 +17,7 @@ import {
   routePageTextInsertion,
   type GuestCdpSender
 } from '../guest-direct-key-input'
+import { assertExpectedPageUrlForStep } from '../browser-expected-page-url'
 import { sendGuestCdpCommand } from '../guest-cdp-command'
 import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
 
@@ -92,6 +93,7 @@ export abstract class AgentBrowserBridgeKeyCommands extends AgentBrowserBridgeCa
           await flush()
           const route = await routePageTextInsertion(wc, { text: step }, send, guardFocus)
           try {
+            assertExpectedPageUrlForStep()
             await route.deliver({ text: step })
           } finally {
             route.release()

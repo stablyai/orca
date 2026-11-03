@@ -146,7 +146,7 @@ it.each([10, 100])(
         const picker = view.result.current.picker
         return (
           picker?.settable === true &&
-          picker.valueSource === 'reported' &&
+          picker.valueSource === 'applied' &&
           picker.description === 'Ask for approval' &&
           picker.kind.type === 'select' &&
           picker.kind.currentValue === 'ask' &&

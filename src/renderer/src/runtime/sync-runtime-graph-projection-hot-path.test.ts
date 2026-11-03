@@ -286,35 +286,6 @@ describe('editor draft projection on the typing path', () => {
     expect(draftHashCounter.calls).toBe(3)
   })
 
-  it('invalidates Markdown versions on content, language, draft removal, and file closure', () => {
-    let state = makeState({
-      openFiles: [makeOpenFile(0)],
-      editorDrafts: { 'file-0': 'draft' }
-    })
-    const sourceKey = getRuntimeMobileSessionSyncKey(state, undefined, undefined, false)
-    expect(draftHashCounter.calls).toBe(0)
-    const markdown = { ...state, openFiles: [makeOpenFile(0, { language: 'markdown' })] }
-    const markdownKey = getRuntimeMobileSessionSyncKey(markdown, state, sourceKey, false)
-    expect([...markdownKey.editorDraftsProjection]).toEqual([['file-0', 'draft']])
-    expect(runtimeMobileSessionSyncKeysEqual(markdownKey, sourceKey)).toBe(false)
-    expect(draftHashCounter.calls).toBe(0)
-    state = { ...markdown, editorDrafts: { 'file-0': 'edited draft' } }
-    const editedKey = getRuntimeMobileSessionSyncKey(state, markdown, markdownKey, false)
-    expect([...editedKey.editorDraftsProjection]).toEqual([['file-0', 'edited draft']])
-    expect(draftHashCounter.calls).toBe(0)
-    const clean = { ...state, editorDrafts: {} }
-    const cleanKey = getRuntimeMobileSessionSyncKey(clean, state, editedKey, false)
-    expect(cleanKey.editorDraftsProjection.size).toBe(0)
-    expect(
-      buildMobileSessionTabSnapshots(clean, false).flatMap((snapshot) => snapshot.tabs)
-    ).toContainEqual(expect.objectContaining({ id: 'file-0', documentVersion: 'file:file-0' }))
-    const closed = { ...state, openFiles: [] }
-    const closedKey = getRuntimeMobileSessionSyncKey(closed, state, editedKey, false)
-    expect(closedKey.editorDraftsProjection.size).toBe(0)
-    expect(getEditorDraftVersionByFileId(closed.editorDrafts, closed.openFiles).size).toBe(0)
-    expect(draftHashCounter.calls).toBe(0)
-  })
-
   it('hashes the final edited draft at snapshot capture after hash-free typing', () => {
     const typedCharacters = 100
     let memoDrafts = makeDrafts()

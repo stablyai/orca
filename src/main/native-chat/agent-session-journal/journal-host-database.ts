@@ -24,6 +24,8 @@ export class JournalHostDatabase {
   private stranded = false
   private readonly checkpoint: JournalCheckpointOwner | undefined
   private closing: Promise<void> | undefined
+  /** Identifies the open transaction; drafts staged in a rolled-back one must not be built on. */
+  transactionNumber = 0
 
   private constructor(
     opened: OpenJournalDatabase,
@@ -66,6 +68,7 @@ export class JournalHostDatabase {
     committed?: (result: T) => void
   ): T {
     const db = this.db
+    this.transactionNumber += 1
     if (!streamed) {
       const result = runJournalTransaction(db, run, () => {
         this.stranded = true

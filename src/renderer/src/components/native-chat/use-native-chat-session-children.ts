@@ -96,8 +96,13 @@ export function useNativeChatSessionChildren(args: {
     }
     const runner = createCoalescedPollRunner(refresh, { minIntervalMs: 250 })
     runner.run()
+    let statuses = useAppStore.getState().agentStatusByPaneKey
     let lifecycle = workerLifecycleKey(useAppStore.getState())
     const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.agentStatusByPaneKey === statuses) {
+        return
+      }
+      statuses = state.agentStatusByPaneKey
       const next = workerLifecycleKey(state)
       if (next === lifecycle) {
         return
