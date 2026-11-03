@@ -12,61 +12,105 @@ const pane = makePaneKey('permission', '11111111-1111-4111-8111-111111111111')
 const session = '11111111-1111-4111-8111-111111111111'
 const read = (path: string) => ({ tool_name: 'Read', tool_input: { file_path: path } })
 
+type Visits = { count: number }
+
 /** Test-side counter of every element production code reads from a Map by lookup or iteration. */
-function counted<K, V>(map: Map<K, V>, visits: { count: number }): Map<K, V> {
-  return new Proxy(map, {
-    get(target, property) {
-      const value: unknown = Reflect.get(target, property, target)
-      if (typeof value !== 'function') {
-        return value
-      }
-      if (property === 'get' || property === 'has') {
-        return (key: K) => {
-          visits.count++
-          return value.call(target, key)
-        }
-      }
-      if (
-        property === Symbol.iterator ||
-        ['entries', 'keys', 'values'].includes(String(property))
-      ) {
-        return function* () {
-          for (const item of value.call(target)) {
-            visits.count++
-            yield item
-          }
-        }
-      }
-      return value.bind(target)
+class CountedMap<K, V> extends Map<K, V> {
+  constructor(
+    entries: Map<K, V>,
+    private readonly visits: Visits
+  ) {
+    super(entries)
+  }
+
+  override get(key: K): V | undefined {
+    this.visits.count++
+    return super.get(key)
+  }
+
+  override has(key: K): boolean {
+    this.visits.count++
+    return super.has(key)
+  }
+
+  override *entries(): MapIterator<[K, V]> {
+    for (const item of super.entries()) {
+      this.visits.count++
+      yield item
     }
-  })
+  }
+
+  override *keys(): MapIterator<K> {
+    for (const item of super.keys()) {
+      this.visits.count++
+      yield item
+    }
+  }
+
+  override *values(): MapIterator<V> {
+    for (const item of super.values()) {
+      this.visits.count++
+      yield item
+    }
+  }
+
+  override [Symbol.iterator](): MapIterator<[K, V]> {
+    return this.entries()
+  }
 }
 
-/** Test-side counter of every row and field production reads from a roster; `restore` hands back the plain list. */
+/** Test-side counter of every field production reads from one roster row. */
+class CountedSubagent implements AgentSubagentSnapshot {
+  constructor(
+    private readonly row: AgentSubagentSnapshot,
+    private readonly visits: Visits
+  ) {}
+
+  private read<F extends keyof AgentSubagentSnapshot>(field: F): AgentSubagentSnapshot[F] {
+    this.visits.count++
+    return this.row[field]
+  }
+
+  get id() {
+    return this.read('id')
+  }
+  get state() {
+    return this.read('state')
+  }
+  get startedAt() {
+    return this.read('startedAt')
+  }
+  get agentType() {
+    return this.read('agentType')
+  }
+  get model() {
+    return this.read('model')
+  }
+  get description() {
+    return this.read('description')
+  }
+}
+
+/** Test-side counter of every row and field production reads from a roster. */
 function countedRoster(
   rows: AgentSubagentSnapshot[] | undefined,
-  visits: { count: number }
+  visits: Visits
 ): AgentSubagentSnapshot[] | undefined {
   if (!rows) {
     return rows
   }
-  const elements = rows.map(
-    (row) =>
-      new Proxy(row, {
-        get(target, property) {
-          visits.count++
-          return Reflect.get(target, property, target)
-        }
-      })
-  )
-  return new Proxy(elements, {
-    get(target, property) {
-      if (typeof property === 'string' && /^\d+$/.test(property)) {
+  const counted: AgentSubagentSnapshot[] = []
+  rows.forEach((row, index) => {
+    const element = new CountedSubagent(row, visits)
+    Object.defineProperty(counted, index, {
+      enumerable: true,
+      get: () => {
         visits.count++
+        return element
       }
-      return Reflect.get(target, property, target)
-    }
+    })
   })
+  return counted
 }
 
 describe('relay execution-host permission state', () => {
@@ -97,12 +141,15 @@ describe('relay execution-host permission state', () => {
         send('PreToolUse', { ...read(`/h${i}`), tool_use_id: `h${i}`, agent_id: `hook-agent-${i}` })
       }
       const visits = { count: 0 }
-      state.claudePermissionRequestByPaneKey = counted(
+      state.claudePermissionRequestByPaneKey = new CountedMap(
         state.claudePermissionRequestByPaneKey,
         visits
       )
-      state.claudeLeadStateByPaneKey = counted(state.claudeLeadStateByPaneKey, visits)
-      state.claudeSubagentRosterByPaneKey = counted(state.claudeSubagentRosterByPaneKey, visits)
+      state.claudeLeadStateByPaneKey = new CountedMap(state.claudeLeadStateByPaneKey, visits)
+      state.claudeSubagentRosterByPaneKey = new CountedMap(
+        state.claudeSubagentRosterByPaneKey,
+        visits
+      )
       send('PreToolUse', { ...read('/t'), tool_use_id: 'T' })
       send('PermissionRequest', read('/t'))
       const released = send('PostToolBatch', { tool_calls: [{ ...read('/t'), tool_use_id: 'T' }] })
@@ -120,8 +167,8 @@ describe('relay execution-host permission state', () => {
     const id = (i: number) => `c${String(i).padStart(4, '0')}`
     const measured = [50, 500].map((children) => {
       const state = createHookListenerState()
-      // Assigned only inside the closures below, so declared without control-flow narrowing.
-      let cached = null as ReturnType<typeof normalizeHookPayload>
+      // The relay's latest published row, held in an object since only the closures below assign it.
+      const published: { event: ReturnType<typeof normalizeHookPayload> } = { event: null }
       const normalize = (hook_event_name: string, fields: Record<string, unknown> = {}) =>
         normalizeHookPayload(
           state,
@@ -130,9 +177,14 @@ describe('relay execution-host permission state', () => {
           'production'
         )
       const decide = (event: NonNullable<ReturnType<typeof normalize>>) => {
-        const decision = decideRelayClaudePermission(state, cached ?? undefined, event, false)
+        const decision = decideRelayClaudePermission(
+          state,
+          published.event ?? undefined,
+          event,
+          false
+        )
         if (decision.kind === 'publish') {
-          cached = decision.event
+          published.event = decision.event
         }
         return decision
       }
@@ -156,7 +208,7 @@ describe('relay execution-host permission state', () => {
         event.payload.subagents = countedNext
         const decision = decide(event)
         // Restore plain rosters wherever the counted ones landed, before any assertion reads them.
-        for (const row of [held, request()!, event, cached!]) {
+        for (const row of [held, request()!, event, published.event!]) {
           if (row.payload.subagents === countedPrevious) {
             row.payload.subagents = previous
           } else if (row.payload.subagents === countedNext) {
@@ -198,7 +250,7 @@ describe('relay execution-host permission state', () => {
       }
       // Nothing retired stays behind the held request, its forwarded row or its replay.
       expect(request()?.payload.subagents ?? []).toHaveLength(0)
-      expect(cached?.payload.subagents ?? []).toHaveLength(0)
+      expect(published.event?.payload.subagents ?? []).toHaveLength(0)
       expect(relayClaudeReplayProjection(state, pane)?.row?.payload.subagents ?? []).toHaveLength(0)
       const retired = measure('SubagentStop', { agent_id: id(0) })
 

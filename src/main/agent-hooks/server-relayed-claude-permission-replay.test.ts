@@ -197,11 +197,18 @@ async function startPair(
 ) {
   const desktop = new AgentHookServer()
   running.push(desktop)
+  const forwarded: AgentHookRelayEnvelope[] = []
+  let relay: RelayAgentHookServer | undefined
   const pair = {
     desktop,
     connected: true,
-    forwarded: [] as AgentHookRelayEnvelope[],
-    relay: undefined as unknown as RelayAgentHookServer,
+    forwarded,
+    get relay(): RelayAgentHookServer {
+      if (!relay) {
+        throw new Error('the relay has not started')
+      }
+      return relay
+    },
     post: async (raw: Record<string, unknown>) => {
       const { port, token } = pair.relay.getCoordinates()
       const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
@@ -214,10 +221,10 @@ async function startPair(
     },
     /** A fresh relay process: no represented request while the CLI keeps running. */
     restart: async () => {
-      pair.relay?.stop()
+      relay?.stop()
       const endpointDir = mkdtempSync(join(tmpdir(), 'orca-relayed-permission-'))
       temporaryPaths.push(endpointDir)
-      pair.relay = new RelayAgentHookServer({
+      relay = new RelayAgentHookServer({
         endpointDir,
         token: 'relayed-permission-token',
         forward: (envelope) => {
@@ -228,8 +235,8 @@ async function startPair(
           }
         }
       })
-      running.push(pair.relay)
-      await pair.relay.start({ publishEndpoint: false })
+      running.push(relay)
+      await relay.start({ publishEndpoint: false })
     }
   }
   await pair.restart()
@@ -295,16 +302,7 @@ describe('a relayed request decided by its execution host', () => {
         tool_calls: [{ ...tool, tool_use_id: 'A', tool_response: 'denied' }]
       })
       expect(row(pair.desktop).state).toBe('waiting')
-      const state: unknown = Reflect.get(pair.desktop, 'state')
-      const rows =
-        typeof state === 'object' && state !== null
-          ? Reflect.get(state, 'lastStatusByPaneKey')
-          : undefined
-      const stored: unknown =
-        rows instanceof Map || (typeof rows === 'object' && rows !== null && 'get' in rows)
-          ? Reflect.apply(Reflect.get(rows, 'get'), rows, [PANE])
-          : undefined
-      expect(stored).toMatchObject(
+      expect(pair.desktop._getStateForTests().lastStatusByPaneKey.get(PANE)).toMatchObject(
         kind === 'question'
           ? { hookEventName: 'PermissionRequest', payload: { toolName: 'AskUserQuestion' } }
           : { hookEventName: 'Elicitation' }
@@ -483,14 +481,12 @@ async function startSinkPair() {
         }
       }
     },
-    drain: async () => {
+    drain: () => {
       blocked = false
       for (const listener of Array.from(drainListeners)) {
         drainListeners.delete(listener)
         listener()
       }
-      // One redelivery interval carries any snapshot still owed.
-      await new Promise((resolve) => setTimeout(resolve, 400))
     },
     deliver
   }
@@ -527,9 +523,15 @@ describe('current-state delivery through the relay’s real sink', () => {
     // Nothing got through while stalled.
     sink.deliver()
     expect(row(sink.current).state).toBe('waiting')
-    await sink.drain()
-    sink.deliver()
-    expect(row(sink.current).state).toBe('working')
+    sink.drain()
+    // A redelivery pass carries any snapshot still owed.
+    await vi.waitFor(
+      () => {
+        sink.deliver()
+        expect(row(sink.current).state).toBe('working')
+      },
+      { timeout: 2_000 }
+    )
     // The older desktop keeps its own hold, as on main: the batch improvement waits for its update.
     expect(row(sink.older).state).toBe('waiting')
   })
@@ -594,11 +596,16 @@ describe('current-state delivery through the relay’s real sink', () => {
     await sink.post({ ...root, hook_event_name: 'PermissionRequest', ...question })
     sink.deliver()
     expect(row(sink.older)).toMatchObject({ state: 'waiting', toolName: 'Read' })
-    await sink.drain()
-    sink.deliver()
-    for (const desktop of [sink.current, sink.older]) {
-      expect(row(desktop)).toMatchObject({ state: 'waiting', toolName: 'AskUserQuestion' })
-    }
+    sink.drain()
+    await vi.waitFor(
+      () => {
+        sink.deliver()
+        for (const desktop of [sink.current, sink.older]) {
+          expect(row(desktop)).toMatchObject({ state: 'waiting', toolName: 'AskUserQuestion' })
+        }
+      },
+      { timeout: 2_000 }
+    )
   })
 })
 
