@@ -145,6 +145,9 @@
       "speechModelHeading": "SPEECH MODEL",
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
+    },
+    "agents": {
+      "permissionOwnAll": "Agents' own settings"
     }
   },
   "common": {

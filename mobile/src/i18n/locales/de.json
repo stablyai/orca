@@ -2650,6 +2650,9 @@
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
+    },
+    "agents": {
+      "permissionOwnAll": "Eigene Einstellungen der Agenten"
     }
   },
   "sourceControl": {

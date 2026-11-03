@@ -39,7 +39,7 @@ function live(agent: string, current: AgentSessionOptionsResult['current'], auto
 }
 
 describe('the permission mode picker', () => {
-  it('shows the selected mode for the next turn, except for own, which follows the report', () => {
+  it('keeps the saved choice, including Own, independent of runtime reports', () => {
     const pr1 = live('codex', { permissionMode: 'ask' })
     expect(permission({ ...pr1, permissionOwnSupported: null })?.settable).toBe(false)
     expect(permission({ ...pr1, permissionOwnSupported: false })).toMatchObject({
@@ -50,9 +50,9 @@ describe('the permission mode picker', () => {
     for (const reportedPermissionMode of [undefined, null, 'full-access', 'read-only']) {
       const descriptor = permission({ ...capable, reportedPermissionMode })
       expect(descriptor).toMatchObject({
-        settable: typeof reportedPermissionMode === 'string',
+        settable: true,
         kind: {
-          currentValue: reportedPermissionMode ?? undefined,
+          currentValue: 'own',
           choices: expect.not.arrayContaining([expect.objectContaining({ value: 'own' })])
         }
       })
@@ -68,7 +68,21 @@ describe('the permission mode picker', () => {
     ).toMatchObject({ settable: true, kind: { currentValue: 'full-access' } })
   })
 
-  it('admits supported Own reset through the same descriptor/readiness predicate', () => {
+  it.each(['claude', 'codex', 'grok', 'opencode', 'opencode2', 'omp', 'antigravity'])(
+    'keeps a saved Ask choice editable for %s despite stale or missing reports',
+    (agent) => {
+      const state = live(agent, { permissionMode: 'ask' })
+      for (const reportedPermissionMode of [undefined, null, 'full-access', 'retired-mode']) {
+        expect(permission({ ...state, reportedPermissionMode })).toMatchObject({
+          settable: true,
+          valueSource: 'applied',
+          kind: { currentValue: 'ask' }
+        })
+      }
+    }
+  )
+
+  it('admits supported Own delegation through the same descriptor/readiness predicate', () => {
     const state = { ...live('codex', { permissionMode: 'ask' }), permissionOwnSupported: true }
     expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'own')).toBe(true)
     for (const permissionOwnSupported of [false, null]) {
