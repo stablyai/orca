@@ -59,8 +59,8 @@ describe('MobileHomeJumpBackIn', () => {
     await act(async () => {
       renderer = create(createElement(MobileHomeJumpBackIn, { rows, hosts, onOpen: () => {} }))
     })
-    return findAllByHostType(renderer!.root, 'Pressable').map(
-      (pressable) => pressable.props.accessibilityLabel as string
+    return findAllByHostType(renderer!.root, 'Pressable').map((pressable) =>
+      String(pressable.props.accessibilityLabel)
     )
   }
 
