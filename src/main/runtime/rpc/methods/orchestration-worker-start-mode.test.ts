@@ -4,9 +4,9 @@ import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-cha
 import { describe, expect, it } from 'vitest'
 import {
   decideWorkerStartMode,
-  downgradeWorkerStartModeForHost,
-  type WorkerStartModeReceipt
+  downgradeWorkerStartModeForHost
 } from './orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 
 const STRUCTURED_DEFAULT = {
   nativeChatProviders: EVERY_AGENT_CHAT

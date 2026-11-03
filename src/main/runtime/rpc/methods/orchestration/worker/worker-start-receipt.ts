@@ -9,7 +9,7 @@ import {
   type WorkerSetupReceipt
 } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
-import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 
 type WorkerStartFailureArgs = {

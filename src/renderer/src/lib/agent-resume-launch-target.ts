@@ -7,7 +7,7 @@ import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import type { AppState } from '@/store/types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export type AgentResumeLaunchTarget = {
   platform: NodeJS.Platform

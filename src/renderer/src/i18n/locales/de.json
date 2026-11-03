@@ -9228,7 +9228,7 @@
           "902f5dee1f": "Beim Auswählen kopieren",
           "9129b7e805": "Das Bewegen des Mauszeigers über einen Terminalbereich aktiviert diesen ohne Klick.",
           "8eefeaa3da": "Fokus folgt der Maus",
-          "96fe15def8": "Verhalten von Maus und Zwischenablage in Terminalbereichen.",
+          "96fe15def8": "Verhalten von Scrollen, Maus und Zwischenablage in Terminalbereichen.",
           "45721f3e67": "Terminalinteraktion",
           "9c0b1c1792": "Ein",
           "c1fc9e9444": "GPU-Beschleunigung",
@@ -20379,7 +20379,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Linken Rand beim Kopieren entfernen",
         "copyTrimsGutterDescription": "Den linken Rand vor der Agentenausgabe entfernen, damit kopierter Text nicht eingerückt ist. Entfernt wird nur die gemeinsame Einrückung aller ausgewählten Zeilen.",
-        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren."
+        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren.",
+        "scrollOnUserInput": "Bei Eingabe nach unten scrollen",
+        "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten."
       },
       "terminal": {
         "clipboard": {
@@ -20394,6 +20396,15 @@
             "whitespace": "Leerraum",
             "spaces": "Leerzeichen"
           }
+        },
+        "search": {
+          "typing": "tippen",
+          "input": "eingabe",
+          "jump": "springen",
+          "bottom": "unten",
+          "scrollback": "scrollback",
+          "snap": "einrasten",
+          "position": "position"
         }
       },
       "nativeChat": {

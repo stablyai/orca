@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import { getAgentResumeArgv } from '../../../shared/agent-resume-argv'
+import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import { isResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'

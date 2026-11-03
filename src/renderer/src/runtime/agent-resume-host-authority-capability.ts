@@ -1,5 +1,5 @@
 import type { ResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,

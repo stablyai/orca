@@ -11,7 +11,7 @@ import {
   sendMobileNativeChatMessageWithOutcome,
   typeMobileNativeChatCommandWithOutcome
 } from './mobile-native-chat-send'
-import { buildAgentTuiClearInputForText } from '../../../../src/shared/agent-tui-input-clear'
+import { buildAgentTuiClearInputForText } from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 
 afterEach(() => vi.useRealTimers())
 

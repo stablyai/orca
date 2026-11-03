@@ -1,6 +1,9 @@
 import { AGENT_HOOK_TARGETS, type AgentHookTarget } from './agent-hook-types'
-import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
+import {
+  getTuiAgentDetectCommands,
+  TUI_AGENT_CONFIG
+} from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 export type ManagedAgentHookTarget = {
   agent: AgentHookTarget

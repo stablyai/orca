@@ -1,4 +1,4 @@
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { labelFromModelId } from '../../model-id-label'
 import type {
   AgentSessionOptionCatalog,

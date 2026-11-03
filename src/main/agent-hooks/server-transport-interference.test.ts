@@ -4,7 +4,7 @@ import { IncomingMessage, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HookTransportInterferenceReport } from '../../shared/agent-hook-transport-interference'
 import { AgentHookServer } from './server'
-import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/opencode-startup-prompt'
+import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/agent-launch/startup/opencode-startup-prompt'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../shared/agent-hook-listener/listener-limits'
 
 async function postTruncatedHook(

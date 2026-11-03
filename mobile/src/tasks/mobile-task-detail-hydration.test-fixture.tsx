@@ -148,6 +148,7 @@ export async function mountDetail(
       detailRequestItem: selection.detailRequestItem,
       client,
       detailRefreshSeq,
+      detailRefreshRequested: { current: false },
       hydrateActionItem: selection.hydrateActionItem,
       setItems,
       setDetailPayload,

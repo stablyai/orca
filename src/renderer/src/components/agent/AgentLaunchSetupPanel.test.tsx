@@ -11,19 +11,19 @@ import { act } from 'react'
 import { fireEvent, getByRole, getByText, isInaccessible, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import * as shell from '../../../../shared/tui-agent-startup-shell'
+import * as shell from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   resolveAgentLaunchCommand,
   terminalSessionOptionInputs
-} from '../../../../shared/tui-agent-launch-command'
+} from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 
 import { fetchCodexModelCatalogListing } from '../../lib/codex-model-catalog-reader-test-fixture'
 import {
   agentPickerDraft,
-  agentPickerChoiceSeeds,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerChoiceSeeds } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
 
 it('shows visible no-match feedback for a nonempty model query', async () => {
   act(() =>

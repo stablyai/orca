@@ -1,8 +1,8 @@
 import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
-import { STRUCTURED_ACCOUNT_ENV_IGNORED_WARNING } from '../../shared/agent-launch-account-env'
+import type { AgentLaunchIntent } from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { STRUCTURED_ACCOUNT_ENV_IGNORED_WARNING } from '../../shared/agent-launch/startup/agent-launch-account-env'
 
 const ACCOUNT_ENV = { CLAUDE_CONFIG_DIR: '/home/u/.orca/claude/a', CODEX_HOME: '/home/u/.codex-b' }
 

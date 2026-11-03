@@ -1,4 +1,4 @@
-import { getMaxTerminalPasteBytesForIngestMs } from './agent-prompt-injection'
+import { getMaxTerminalPasteBytesForIngestMs } from './agent-launch/startup/agent-prompt-injection'
 import {
   AGENT_PROMPT_EFFECT_TIMEOUT_MS,
   ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS

@@ -4,7 +4,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { resolveOpenCodeDirectModelExecutable } from '../opencode/opencode-model-executable'
 import { probeOpenCodeLaunchCapabilities } from '../opencode/opencode-launch-capabilities'
 import { resolveLocalProjectRuntimeForRepo } from '../workspaces/execution-host/local-project-runtime-resolution'
-import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../shared/agent-launch-model-preferences'
+import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../shared/agent-launch/choices/agent-launch-model-preferences'
 
 vi.mock('../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: vi.fn()

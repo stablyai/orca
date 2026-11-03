@@ -2,7 +2,7 @@ import type { QuickCreationExecutionInput } from './composer-model'
 
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { useCallback } from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '@/store'
 import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-columns'

@@ -22,8 +22,8 @@ import {
   structuredSessionTabRetired,
   structuredWorkerAddressable
 } from './structured-worker-custody'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import {
   structuredWorkerIdentities,

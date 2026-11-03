@@ -1,11 +1,11 @@
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
-import { resolveAgentLaunchCommand } from '../../../../shared/tui-agent-launch-command'
-import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { resolveAgentLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   agentPickerLaunchInputs,
   type AgentPickerDraft,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export const entry: AgentPickerEntry = {
   agent: 'codex',

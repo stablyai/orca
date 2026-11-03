@@ -1,6 +1,6 @@
 import { extractLeadingEnvAssignments } from './command-environment'
 import { getCommandTokenPathBasename } from './command-token-scanner'
-import type { AgentStartupShell } from './tui-agent-startup-shell'
+import type { AgentStartupShell } from './agent-launch/startup/tui-agent-startup-shell'
 
 const RUN_VALUE_FLAGS = new Set([
   '--log-level',

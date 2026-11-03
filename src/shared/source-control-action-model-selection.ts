@@ -1,10 +1,10 @@
 import {
   normalizeAgentModelOptionChoices,
   type AgentDedicatedChoices
-} from './agent-launch-choices'
-import { agentPermissionChoices } from './tui-agent-permission-choice'
-import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
+} from './agent-launch/choices/agent-launch-choices'
+import { agentPermissionChoices } from './agent-launch/permissions/tui-agent-permission-choice'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type {
   ActionChoiceValue,
   ActionModelSelection,

@@ -1,11 +1,11 @@
 import { addWslEnvKeys } from '../../shared/wsl-env'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID, createHash } from 'node:crypto'
 import { agentHookServer } from '../agent-hooks/server'
 import {
   tokenizeStartupCommand,
   type AgentStartupShell
-} from '../../shared/tui-agent-startup-shell'
+} from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { isOpenCodeRunCommand } from '../../shared/opencode-headless-command'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
@@ -13,7 +13,7 @@ import {
   OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
   OPENCODE_STARTUP_PROMPT_BODY_ENV,
   OPENCODE_STARTUP_PROMPT_SHELL_ENV
-} from '../../shared/opencode-startup-prompt'
+} from '../../shared/agent-launch/startup/opencode-startup-prompt'
 
 const intentKeys = [
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,

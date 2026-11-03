@@ -3,7 +3,7 @@ import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
 import type {
   IPtyProvider,
@@ -20,12 +20,12 @@ import type { PtyBindingSourceExpectation } from '../../../persistence/loading-s
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding

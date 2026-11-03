@@ -9,10 +9,10 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { shouldShowSourceControlActionArguments } from './source-control-action-arguments-visibility'
 import { useState } from 'react'
 import * as sourceProjection from '../../../lib/source-control-agent-launch-picker'
-import * as choiceAnalysis from '../../../../../shared/agent-choice-args'
+import * as choiceAnalysis from '../../../../../shared/agent-launch/choices/agent-choice-args'
 import * as pickerCatalog from '../../../../../shared/agent-session/options/agent-session-option-catalog'
-import * as reconciliation from '../../../../../shared/agent-choice-reconciliation'
-import * as launchProfile from '../../../../../shared/agent-launch-profile'
+import * as reconciliation from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
+import * as launchProfile from '../../../../../shared/agent-launch/choices/agent-launch-profile'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
 import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control-action-selection'
 import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
@@ -20,7 +20,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { pickerLocaleFixture } from '../__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store/index'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AiActionId,
   SourceControlActionLaunchPreferences
@@ -370,8 +370,8 @@ it('labels an own raw Sonnet recipe from the same source as its setup chips', as
   const { projectSourceControlActionLaunch } =
     await import('../../../../../shared/source-control-action-launch-preferences')
   const { resolveAgentStartupPlanInputs } =
-    await import('../../../../../shared/agent-startup-plan-inputs')
-  const { buildAgentStartupPlan } = await import('../../../../../shared/tui-agent-startup')
+    await import('../../../../../shared/agent-launch/startup/agent-startup-plan-inputs')
+  const startupModule = await import('../../../../../shared/agent-launch/startup/tui-agent-startup')
   const settings = useAppStore.getState().settings
   if (!settings) {
     throw new Error('Missing configured settings')
@@ -380,7 +380,7 @@ it('labels an own raw Sonnet recipe from the same source as its setup chips', as
     basePrompt: 'Do the work',
     settings
   })
-  const startup = buildAgentStartupPlan({
+  const startup = startupModule.buildAgentStartupPlan({
     ...resolveAgentStartupPlanInputs({
       agent: 'claude',
       settings,
