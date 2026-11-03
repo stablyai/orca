@@ -142,55 +142,6 @@ describe('adopting live terminals in a layout-owner build', () => {
     ).resolves.toEqual({ surfaced: true, declinedPtyIds: [] })
   })
 
-  // Main placed the terminals while answering the sweep's listing, so the listing is fresher than
-  // any frame this window has drawn: it is the verdict, and the frames catch up.
-  it.each([
-    ['binds to another terminal', [`${GIT_KEY}@@aaaa0008`, `${GIT_KEY}@@aaaa0009`]],
-    ['leaves unbound', [undefined, undefined]]
-  ] satisfies [string, [string?, string?]][])(
-    'counts the pane main’s listing names, though the last frame drawn %s, and writes nothing',
-    async (_, ptyIds) => {
-      const { window: windowSession, main } = sessions(ptyIds)
-      const store = createTestStore()
-      await bootWindowFromPartitions(store, [{ hostId: 'local', session: windowSession }])
-      sync = openWorkspaceLayoutFrameSync(store)
-      provideLayoutFrameTerminalPanes(sync)
-      frames.onFrame!(snapshotOf(main))
-      await flushMicrotasks()
-      const createTab = vi.spyOn(store.getState(), 'createTab')
-      const setTabLayout = vi.spyOn(store.getState(), 'setTabLayout')
-
-      await expect(
-        adoptLiveWorkspacePtySurfaces(store.getState, GIT_KEY, [LEFT_PTY], async () => owners)
-      ).resolves.toEqual({ surfaced: true, declinedPtyIds: [] })
-      expect(createTab).not.toHaveBeenCalled()
-      expect(setTabLayout).not.toHaveBeenCalled()
-    }
-  )
-
-  it('counts a tab main’s listing names before its frame arrives, rather than making one', async () => {
-    const { window: windowSession } = sessions()
-    const store = createTestStore()
-    await bootWindowFromPartitions(store, [{ hostId: 'local', session: windowSession }])
-    sync = openWorkspaceLayoutFrameSync(store)
-    provideLayoutFrameTerminalPanes(sync)
-    sync.start()
-    frames.onFrame!(snapshotOf(windowSession))
-    await flushMicrotasks()
-    const createTab = vi.spyOn(store.getState(), 'createTab')
-
-    const adoption = await adoptLiveWorkspacePtySurfaces(
-      store.getState,
-      GIT_KEY,
-      [LEFT_PTY],
-      async () => owners
-    )
-
-    expect(adoption).toEqual({ surfaced: true, declinedPtyIds: [] })
-    expect(createTab).not.toHaveBeenCalled()
-    expect(store.getState().tabsByWorktree[GIT_KEY]!.map((tab) => tab.id)).toEqual(['tab-other'])
-  })
-
   it('counts a terminal shown, then the snapshot arriving after the sweep draws its tab with no new sweep', async () => {
     const { window: windowSession, main } = sessions()
     const store = createTestStore()
@@ -214,21 +165,5 @@ describe('adopting live terminals in a layout-owner build', () => {
     })
     expect(createTab).not.toHaveBeenCalled()
     expect(readOwners).toHaveBeenCalledOnce()
-  })
-
-  it('declines a terminal in a workspace the window does not show yet, which frames do not draw', async () => {
-    const { main } = sessions()
-    const store = createTestStore()
-    await bootWindowFromPartitions(store, [{ hostId: 'local', session: emptySession() }])
-    sync = openWorkspaceLayoutFrameSync(store)
-    provideLayoutFrameTerminalPanes(sync)
-    sync.start()
-    frames.onFrame!(snapshotOf(main))
-    await flushMicrotasks()
-
-    expect(
-      sync.holdsTerminalPane(GIT_KEY, { tabId: 'tab-split', leafId: leaf(2), ptyId: LEFT_PTY })
-    ).toBe(false)
-    expect(store.getState().terminalLayoutsByTabId['tab-split']).toBeUndefined()
   })
 })

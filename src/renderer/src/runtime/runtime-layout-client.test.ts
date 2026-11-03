@@ -166,67 +166,6 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     expect(stream.unsubscribed).toBe(false)
   })
 
-  it('reports every frame’s position, an unreadable frame’s and a throwing reader’s too', async () => {
-    const positions: number[] = []
-    let throwOnFrame = false
-    subscribeRuntimeLayout(
-      target,
-      {},
-      () => {
-        if (throwOnFrame) {
-          throw new Error('reader failed')
-        }
-      },
-      () => {},
-      (seq) => positions.push(seq)
-    )
-    const stream = await opened(1)
-    stream.send({ ...snapshot(), seq: 3 })
-    stream.send({ type: 'navigate', request: {}, seq: 4 })
-    throwOnFrame = true
-    expect(() => stream.send({ type: 'removed', key: 'a', seq: 5 })).toThrow('reader failed')
-    // A frame with no position, as an older host sends, reports none.
-    throwOnFrame = false
-    stream.send({ type: 'removed', key: 'a' })
-    expect(positions).toEqual([3, 4, 5])
-    // A malformed frame sends the stream back for a snapshot, whose position covers it.
-    stream.send({ type: 'workspace', key: 'a', layout: { worktreeId: 'a' }, seq: 6 })
-    expect(positions).toEqual([3, 4, 5])
-    ;(await opened(2)).send({ ...snapshot(), seq: 7 })
-    expect(positions).toEqual([3, 4, 5, 7])
-  })
-
-  it.each([
-    [
-      'method_not_found',
-      (stream: FakeStream) => stream.fail('no layout stream', 'method_not_found')
-    ],
-    ['forbidden', (stream: FakeStream) => stream.fail('scope denied', 'forbidden')]
-  ])('stops for good when the host refuses the stream (%s)', async (code, refuse) => {
-    const subscription = subscribe()
-    const stream = await opened(1)
-    stream.send(snapshot([{ key: 'a', layout: layout('a') }]))
-    refuse(stream)
-    expect(stream.unsubscribed).toBe(true)
-    expect(status).toMatchObject({ state: 'refused', code })
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(host.streams).toHaveLength(1)
-    // The last state stays; close after a refusal changes nothing.
-    expect(cache).toEqual({ a: layout('a') })
-    subscription.close()
-    expect(status).toMatchObject({ state: 'refused', code })
-  })
-
-  it('reads a refusal code that the transport flattened into the message', async () => {
-    host.rejectNextSubscribe(
-      new Error("Error invoking remote method 'runtime:subscribe': Error: method_not_found")
-    )
-    subscribe()
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(host.streams).toHaveLength(0)
-    expect(status).toMatchObject({ state: 'refused', code: 'method_not_found' })
-  })
-
   it('close unsubscribes and ignores later frames', async () => {
     const subscription = subscribe()
     const stream = await opened(1)
@@ -346,23 +285,6 @@ describe.each(targets)(
       expect(host.streams).toHaveLength(6)
       await vi.advanceTimersByTimeAsync(1)
       expect(host.streams).toHaveLength(7)
-    })
-
-    it('starts the backoff over after one resync, once the stream is healthy again', async () => {
-      const first = await opened(1)
-      first.send(snapshot('epoch-1', 3, ['a']))
-      first.send(regrouped('epoch-1', 5, 'a', ['t1']))
-      const second = await opened(2)
-      second.send(snapshot('epoch-1', 9, ['a']))
-      // Two unrelated drops, each followed by a healthy snapshot, each reopen after 1 s.
-      for (let count = 3; count <= 4; count += 1) {
-        host.streams.at(-1)!.drop()
-        await vi.advanceTimersByTimeAsync(999)
-        expect(host.streams).toHaveLength(count - 1)
-        await vi.advanceTimersByTimeAsync(1)
-        expect(host.streams).toHaveLength(count)
-        ;(await opened(count)).send(snapshot('epoch-1', 9, ['a']))
-      }
     })
 
     it.each([

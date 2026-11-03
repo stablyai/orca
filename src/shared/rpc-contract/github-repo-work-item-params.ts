@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RepoSelector } from './github-repo-target-params'
+import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 
 export const RepoSlug = RepoSelector.extend({ requireVerifiedSshProbe: z.boolean().optional() })
@@ -32,9 +32,9 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
 })
 
 export const WorkItemDetails = WorkItem.extend({
-  ownerRepo: z
-    .object({ owner: z.string().min(1), repo: z.string().min(1), host: OptionalString })
-    .optional()
+  ownerRepo: SlugRepo.optional(),
+  canonical: z.boolean().optional(),
+  expectedGhAccount: OptionalGhAccountExpectation
 })
 
 export const WorkItemsCount = RepoSelector.extend({

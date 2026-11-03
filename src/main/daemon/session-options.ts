@@ -2,6 +2,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
+import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
 
 export type SessionOptions = {
   sessionId: string
@@ -17,6 +18,8 @@ export type SessionOptions = {
   historySeedChunks?: readonly string[]
   scrollback?: number
   wslDistro?: string
+  /** Called once if the WSL bootstrap names its guest root shell in the launch output. */
+  onWslGuestRoot?: (root: WslGuestRoot) => void
   // Let the host reap exited sessions and their scrollback emulators.
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
