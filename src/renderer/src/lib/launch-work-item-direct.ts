@@ -33,6 +33,7 @@ import {
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/launch-work-item-direct-route-preparation'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { assignUnassignedGitHubIssueOnStart } from '@/lib/assign-unassigned-github-issue-on-start'
 
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
 export async function launchWorkItemDirect(
@@ -186,6 +187,13 @@ export async function launchWorkItemDirect(
     )
     const worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
+    // Why: assignment is best-effort and can wait on gh; do not delay reveal.
+    void assignUnassignedGitHubIssueOnStart({
+      enabled: store.settings?.assignUnassignedGitHubIssuesOnStart === true,
+      item: { ...item, type: itemType, number: itemNumber },
+      repoId,
+      sourceContext: args.sourceContext
+    }).catch(() => undefined)
 
     const launchPreparation = await prepareDirectWorkItemAgentLaunch({
       worktreeId,

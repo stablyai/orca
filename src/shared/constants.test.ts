@@ -8,4 +8,7 @@ describe('getDefaultSettings', () => {
       'C:\\Users\\alice\\orca\\workspaces'
     )
   })
+  it('does not assign unassigned GitHub issues on Start until the user opts in', () => {
+    expect(getDefaultSettings('/tmp').assignUnassignedGitHubIssuesOnStart).toBe(false)
+  })
 })
