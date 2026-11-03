@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getVisibleBrowserClientPagePartition } from '../browser-client-page-renderer-installation'
 import { webviewRegistry } from '../host-guest/webview-registry'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -30,7 +31,10 @@ export function ClearBrowsingDataForm({
     setBusy(true)
     setError(false)
     try {
-      const guestPartition = webviewRegistry.get(pageId)?.getAttribute('partition')
+      // Client-hosted guests live in the retained page registry, not webviewRegistry.
+      const guestPartition =
+        webviewRegistry.get(pageId)?.getAttribute('partition') ??
+        getVisibleBrowserClientPagePartition(pageId)
       if (!guestPartition) {
         throw new Error('Browser guest unavailable')
       }

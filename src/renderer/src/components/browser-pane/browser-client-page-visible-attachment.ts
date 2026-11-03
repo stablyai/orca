@@ -27,6 +27,30 @@ export function findBrowserClientRetainedPageForAttachment(
   return undefined
 }
 
+export function findBrowserClientVisiblePagePartition(
+  pages: Map<string, RetainedPage>,
+  browserPageId: string
+): string | null {
+  for (const page of pages.values()) {
+    if (
+      page.identity.browserPageId === browserPageId &&
+      page.status === 'attached' &&
+      page.visibleAttachment
+    ) {
+      return page.identity.partition
+    }
+  }
+  return null
+}
+
+export function disconnectBrowserClientRetainedPage(page: RetainedPage): void {
+  // Registry disposal or guest loss may precede pane detach; stop rect reads for the disconnected host now.
+  page.visibleAttachment?.stopTrackingViewport()
+  page.visibleAttachment = null
+  page.webview.remove()
+  page.host.remove()
+}
+
 export function attachBrowserClientRetainedPage(
   page: RetainedPage | undefined,
   pages: Map<string, RetainedPage>,

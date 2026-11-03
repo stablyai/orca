@@ -191,6 +191,21 @@ describe('browser client page retained registry', () => {
     expect(registry.getMemoryProfile().attachedPageCount).toBe(1)
   })
 
+  it('reports the partition only while the page guest is attached to a pane', async () => {
+    const { registry, webviews } = createRig()
+    const mounting = registry.mountPage(PAGE)
+    attach(webviews[0]!)
+    await mounting
+    expect(registry.getVisiblePagePartition(PAGE.browserPageId)).toBeNull()
+
+    const attachment = registry.attachPage(PAGE, document.createElement('div'))
+    expect(registry.getVisiblePagePartition(PAGE.browserPageId)).toBe(PAGE.partition)
+    expect(registry.getVisiblePagePartition('page-b')).toBeNull()
+
+    attachment.detach()
+    expect(registry.getVisiblePagePartition(PAGE.browserPageId)).toBeNull()
+  })
+
   it('keeps metadata revisions monotonic across visible detach and reattach', async () => {
     const { registry, webviews } = createRig()
     const mounting = registry.mountPage(PAGE)

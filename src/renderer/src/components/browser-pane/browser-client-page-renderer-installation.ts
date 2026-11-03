@@ -13,6 +13,7 @@ type RendererPageRegistry = {
     page: Pick<BrowserClientPageRendererRequest['page'], 'browserPageId' | 'pageHostGeneration'>,
     container: HTMLElement
   ): BrowserClientPageVisibleAttachment
+  getVisiblePagePartition?(browserPageId: string): string | null
   dispose(): void
   getMemoryProfile(): BrowserClientPageRendererMemoryProfile
   mountPage(page: BrowserClientPageRendererRequest['page']): Promise<{ webContentsId: number }>
@@ -30,6 +31,10 @@ export function attachBrowserClientPageToViewport(
   container: HTMLElement
 ): BrowserClientPageVisibleAttachment | null {
   return activeRendererPageRegistry?.attachPage?.(page, container) ?? null
+}
+
+export function getVisibleBrowserClientPagePartition(browserPageId: string): string | null {
+  return activeRendererPageRegistry?.getVisiblePagePartition?.(browserPageId) ?? null
 }
 
 type RendererRequestSubscriber = (

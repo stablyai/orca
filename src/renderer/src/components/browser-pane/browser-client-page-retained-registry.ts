@@ -15,8 +15,10 @@ import { rekeyBrowserClientRetainedPage } from './browser-client-page-retained-r
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 import {
   attachBrowserClientRetainedPage,
+  disconnectBrowserClientRetainedPage,
   enrolRetainedHostDragPassthrough,
   findBrowserClientRetainedPageForAttachment,
+  findBrowserClientVisiblePagePartition,
   type BrowserClientPageVisibleAttachment
 } from './browser-client-page-visible-attachment'
 import {
@@ -107,6 +109,10 @@ export class BrowserClientPageRetainedRegistry {
     return attachBrowserClientRetainedPage(page, this.pages, container)
   }
 
+  getVisiblePagePartition(browserPageId: string): string | null {
+    return findBrowserClientVisiblePagePartition(this.pages, browserPageId)
+  }
+
   retirePage(candidate: RendererPageIdentity): void {
     const parsed = BrowserClientPageRendererIdentity.safeParse(candidate)
     if (!parsed.success) {
@@ -122,7 +128,7 @@ export class BrowserClientPageRetainedRegistry {
     if (wasAttaching) {
       page.rejectMount(new Error('browser_client_page_renderer_page_retired'))
     }
-    this.disconnectPage(page)
+    disconnectBrowserClientRetainedPage(page)
     if (
       wasAttaching &&
       !page.attachmentObserved &&
@@ -250,7 +256,7 @@ export class BrowserClientPageRetainedRegistry {
     page.status = 'retiring'
     clearTimeout(page.attachTimer)
     page.rejectMount(new Error(errorCode))
-    this.disconnectPage(page)
+    disconnectBrowserClientRetainedPage(page)
     if (!page.attachmentObserved && !hasBrowserClientPageAttachedGuest(page.webview)) {
       this.releasePage(page)
     }
@@ -265,7 +271,7 @@ export class BrowserClientPageRetainedRegistry {
     }
     page.status = 'retiring'
     clearTimeout(page.attachTimer)
-    this.disconnectPage(page)
+    disconnectBrowserClientRetainedPage(page)
   }
 
   private handleDestroyed(page: RetainedPage): void {
@@ -309,13 +315,5 @@ export class BrowserClientPageRetainedRegistry {
     const root = createBrowserClientPageRetainedRoot(this.options.document)
     this.root = root
     return root
-  }
-
-  private disconnectPage(page: RetainedPage): void {
-    // Registry disposal or guest loss may precede pane detach; stop rect reads for the disconnected host now.
-    page.visibleAttachment?.stopTrackingViewport()
-    page.visibleAttachment = null
-    page.webview.remove()
-    page.host.remove()
   }
 }

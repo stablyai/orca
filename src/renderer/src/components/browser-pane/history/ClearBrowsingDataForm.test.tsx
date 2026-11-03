@@ -6,10 +6,15 @@ import { ClearBrowsingDataForm } from './ClearBrowsingDataForm'
 const registry = vi.hoisted(
   () => new Map<string, { getAttribute: (name: string) => string | null }>()
 )
+const clientPagePartition = vi.hoisted(() => vi.fn<(pageId: string) => string | null>())
 vi.mock('../host-guest/webview-registry', () => ({ webviewRegistry: registry }))
+vi.mock('../browser-client-page-renderer-installation', () => ({
+  getVisibleBrowserClientPagePartition: clientPagePartition
+}))
 afterEach(() => {
   cleanup()
   registry.clear()
+  clientPagePartition.mockReset()
 })
 function seedGuest() {
   registry.set('page', { getAttribute: () => 'persist:test' })
@@ -35,6 +40,27 @@ it('requires a choice and clears only selected categories before clearing scoped
     cache: false
   })
   expect(history).toHaveBeenCalledWith('persist:test')
+})
+it('clears a client-hosted page using the partition of its retained guest', async () => {
+  clientPagePartition.mockImplementation((pageId) =>
+    pageId === 'page' ? 'persist:client-hosted' : null
+  )
+  const clearBrowsingData = vi.fn().mockResolvedValue('persist:client-hosted')
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { browser: { clearBrowsingData } }
+  })
+  const close = vi.fn()
+  render(<ClearBrowsingDataForm pageId="page" onClearHistory={vi.fn()} onClose={close} />)
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Cookies and site data' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Clear data' }))
+  await waitFor(() => expect(close).toHaveBeenCalledOnce())
+  expect(clearBrowsingData).toHaveBeenCalledWith({
+    browserPageId: 'page',
+    partition: 'persist:client-hosted',
+    cookies: true,
+    cache: false
+  })
 })
 it('keeps the form open on failure and does not clear history', async () => {
   seedGuest()
