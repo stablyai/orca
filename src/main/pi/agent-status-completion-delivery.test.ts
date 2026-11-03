@@ -208,13 +208,27 @@ describe('Pi cancelled-turn completion', () => {
 
   // Why: without the verdict the host records a cancelled automation run as completed (STA-12638).
   it.each([
-    { stopReason: 'aborted', fields: { interrupted: true } },
-    { stopReason: 'stop', fields: { turn_completed_at: expect.any(Number) } }
-  ])('ends a $stopReason reply with $fields', async ({ stopReason, fields }) => {
+    { name: 'a cancelled reply', reply: { stopReason: 'aborted' }, fields: { interrupted: true } },
+    {
+      name: 'a reply cancelled mid-tool',
+      reply: { stopReason: 'error', errorMessage: 'The operation was aborted.' },
+      fields: { interrupted: true }
+    },
+    {
+      name: 'a failed reply',
+      reply: { stopReason: 'error', errorMessage: 'fetch failed' },
+      fields: {}
+    },
+    {
+      name: 'a finished reply',
+      reply: { stopReason: 'stop' },
+      fields: { turn_completed_at: expect.any(Number) }
+    }
+  ])('ends $name with its verdict', async ({ reply, fields }) => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
     await harness.callHook('agent_start')
     await harness.callHook('agent_end', {
-      messages: [{ role: 'user' }, { role: 'assistant', stopReason }]
+      messages: [{ role: 'user' }, { role: 'assistant', ...reply }]
     })
     await vi.advanceTimersByTimeAsync(0)
 
