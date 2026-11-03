@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/macos-updater-tests.yml'
-      - 'src/main/macos-update-running-instances*'
+      - 'src/main/updater/mac-install/macos-update-running-instances*'
       - 'src/main/updater*'
       - 'src/main/updater/**'
       - 'native/macos-shipit-scheduling/**'
