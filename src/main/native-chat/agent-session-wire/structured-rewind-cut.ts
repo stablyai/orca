@@ -13,6 +13,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
+import type { StructuredRewindForkTarget } from './structured-agent-session-adapter'
 
 export type StructuredRewindCut = {
   /** Excludes rows below the /clear floor. */
@@ -24,7 +25,7 @@ export type StructuredRewindCut = {
     }
   | {
       /** Fork-based providers cut at the removed prompt. */
-      beforeMessage: { sessionId: string; uuid: string }
+      beforeMessage: StructuredRewindForkTarget
     }
 )
 
@@ -38,24 +39,29 @@ export function structuredRewindCut(
     ? snapshot.items.filter((item) => item.sequence > floor.sequence)
     : snapshot.items
   const { providerKey, omitted, nativeIdentity } = savedRewindKeys(snapshot.submissions)
-  const selected = items.find((item) => item.itemId === target.itemId)
-  const key = selected ? nativeIdentity(selected.itemId) : null
+  // Messages before an earlier fork still cut at their original position.
+  const selected = items.findIndex((item) => item.itemId === target.itemId)
+  const key = selected === -1 ? null : nativeIdentity(target.itemId)
   if (key?.provider === 'claude' && target.provider === 'claude') {
-    // Messages before an earlier fork still cut at their original position.
-    const boundary = items.findIndex((item) => item.itemId === target.itemId)
-    const keptTurns = new Set(items.slice(0, boundary).flatMap((item) => scopedTurn(item) ?? []))
-    const keptRows = items.filter((item, index) => {
-      const turn = scopedTurn(item)
-      // Late rows follow their kept turn even if they arrived after the cut.
-      return (
-        !omitted.has(item.itemId) &&
-        (index < boundary || (turn !== undefined && keptTurns.has(turn)))
-      )
-    })
     return {
       beforeMessage: { sessionId: key.sessionId, uuid: key.uuid },
-      kept: keptRows.map((item) => keptRow(journal, item, providerKey))
+      kept: rowsBefore(items, selected, omitted).map((item) => keptRow(journal, item, providerKey))
     }
+  }
+  if (target.provider === 'pi' && selected !== -1) {
+    const prompts = items.slice(selected).flatMap((item) => {
+      const text = omitted.has(item.itemId) ? null : piPromptText(item, journal)
+      return text === null ? [] : [{ itemId: item.itemId, text }]
+    })
+    // Pi forks only at a prompt it received, never at a command or subagent row.
+    return prompts[0]?.itemId === target.itemId
+      ? {
+          beforeMessage: { sessionId: target.nativeId, prompts: prompts.map(({ text }) => text) },
+          kept: rowsBefore(items, selected, omitted).map((item) =>
+            keptRow(journal, item, providerKey)
+          )
+        }
+      : null
   }
   if (
     key?.provider !== 'codex' ||
@@ -99,6 +105,39 @@ export function isStructuredRewindTarget(journal: AgentSessionJournal, itemId: s
       (turnItemId) => readAgentJournalTurn(journal.itemBody(turnItemId) ?? undefined)?.userItemId
     )
   )
+}
+
+/** Rows before the cut, plus late rows of the turns it keeps. */
+function rowsBefore(
+  items: readonly AgentJournalRenderItem[],
+  boundary: number,
+  omitted: ReadonlySet<string>
+): AgentJournalRenderItem[] {
+  const keptTurns = new Set(items.slice(0, boundary).flatMap((item) => scopedTurn(item) ?? []))
+  return items.filter((item, index) => {
+    const turn = scopedTurn(item)
+    // Late rows follow their kept turn even if they arrived after the cut.
+    return (
+      !omitted.has(item.itemId) && (index < boundary || (turn !== undefined && keptTurns.has(turn)))
+    )
+  })
+}
+
+/** The prompt text Pi stored for a main-chat user message, joined as the prompt was sent. */
+function piPromptText(item: AgentJournalRenderItem, journal: AgentSessionJournal): string | null {
+  const body = journal.itemBody(item.itemId)
+  if (
+    body?.kind !== 'message' ||
+    body.role !== 'user' ||
+    body.command !== undefined ||
+    body.sentAs !== undefined ||
+    item.agentId !== undefined
+  ) {
+    return null
+  }
+  return body.blocks
+    .flatMap((block) => (block.type === 'text' && block.text.length > 0 ? [block.text] : []))
+    .join('\n')
 }
 
 function scopedTurn(item: AgentJournalRenderItem): string | undefined {

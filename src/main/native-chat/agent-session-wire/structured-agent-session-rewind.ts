@@ -41,11 +41,11 @@ export async function rewindStructuredAgentSession(
   } = context
   const fields = { itemId: params.itemId, expectedEpoch: params.expectedEpoch }
   const operation = { method: 'agentSession.rewind', fields }
-  // A fork can be saved without a running agent; other rewinds require the provider itself.
+  // A fork saves at rest unless its provider forks through the agent; other rewinds need the agent.
   const agent = store.getConversation(sessionId)?.provider
-  const rewindsByFork =
-    agent !== undefined &&
-    context.deps.agents.registration(agent)?.adapter.forkForRewind !== undefined
+  const provider =
+    agent === undefined ? undefined : context.deps.agents.registration(agent)?.adapter
+  const forksAtRest = provider?.forkForRewind !== undefined && !provider.forksThroughAgent
   const run = async (selection: ReadyOperationSelection) => {
     let completionReceipt: JournalOperationReceipt | undefined
     const result = await admitAndRunAgentSessionMutation<AgentSessionRewindResult>({
@@ -55,7 +55,7 @@ export async function rewindStructuredAgentSession(
       logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope: params.envelope,
-      prepareSession: rewindsByFork
+      prepareSession: forksAtRest
         ? sendPreparation(context, params.envelope, { refusesInRun: true }, selection)
         : openWithReadyStructuredAgentSessionChild(context, params.envelope, selection),
       journal: () => context.sessions.get(sessionId)?.journal,
@@ -65,7 +65,7 @@ export async function rewindStructuredAgentSession(
       now: context.now,
       plan: {
         ...operation,
-        ...(rewindsByFork ? { conversationWrite: true } : {}),
+        ...(forksAtRest ? { conversationWrite: true } : {}),
         recoverUnknownFromDurableState: true,
         settledOutcome: (rewind: AgentSessionRewindResult) => ({
           status: 'succeeded' as const,
@@ -122,6 +122,7 @@ export async function rewindStructuredAgentSession(
             'beforeMessage' in cut
               ? await ctx.adapter.forkForRewind?.({
                   record,
+                  fence: ctx.fence,
                   beforeMessage: cut.beforeMessage,
                   rewindOperationId: clientOperationId
                 })
@@ -145,7 +146,21 @@ export async function rewindStructuredAgentSession(
                 }
               : {})
           }
-          await persistRewindRecord(store, sessionId, ctx.fence, prepared)
+          try {
+            await persistRewindRecord(store, sessionId, ctx.fence, prepared)
+          } catch (error) {
+            // The chat stays on its source, so stop a child that may already sit on the unrecorded fork.
+            if (fork?.ok) {
+              await stopForFork(context, sessionId).catch((cause: unknown) =>
+                context.deps.logger.warn('agent was not stopped after an unrecorded rewind fork', {
+                  scope: 'rewind-fork',
+                  sessionId,
+                  error: cause
+                })
+              )
+            }
+            throw error
+          }
           ctx.publish()
           store.requireWritableRecord(sessionId)
           const provider =
@@ -222,7 +237,7 @@ export async function rewindStructuredAgentSession(
     operation,
     run,
     {
-      needsAgent: () => !rewindsByFork,
+      needsAgent: () => !forksAtRest,
       beforeAgent: () => rewindRefusalBehindClear(context.sessions.get(sessionId)?.journal, params)
     }
   )

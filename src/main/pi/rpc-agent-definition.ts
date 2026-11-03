@@ -5,7 +5,7 @@ export const PI_RPC_AGENT: DirectoryAccountAgentDefinition = {
   handleTransport: 'jsonl-rpc',
   accountHomeVariable: 'PI_CODING_AGENT_DIR',
   capabilities: {
-    rewind: false,
+    rewind: true,
     compact: true,
     compactInstructions: true,
     threadGoal: false,

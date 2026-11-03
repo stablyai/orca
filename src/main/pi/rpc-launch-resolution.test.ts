@@ -253,6 +253,38 @@ describe('Pi host launch resolution', () => {
     ).toMatchObject({ replaces: { reason: 'restore-failed', replacedAt: 200 } })
   })
 
+  it('resumes a saved rewind fork before the chat records it, even one Pi has not written yet', async () => {
+    const h = await setup()
+    const source = join(root, 'source.jsonl')
+    const fork = join(root, 'fork.jsonl')
+    await writeFile(source, `${JSON.stringify({ type: 'session', cwd: h.workspace })}\n`)
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
+      ...h.record,
+      providerHandleChain: [h.prior(source, 'adopted')],
+      rewind: {
+        operationId: 'rewind-1',
+        callerKey: 'client-1',
+        itemId: 'orca:prompt-2',
+        expectedEpoch: 'epoch-1',
+        phase: 'prepared',
+        providerFork: {
+          sessionId: fork,
+          sourceSessionId: source,
+          materialized: true,
+          replacesSessionId: source
+        }
+      }
+    })
+    const unwritten = await h.resolver(identity)
+    expect(unwritten.sessionFile).toBe(fork)
+    expect(unwritten.replacement).toBeUndefined()
+
+    await writeFile(fork, `${JSON.stringify({ type: 'session', cwd: h.workspace })}\n`)
+    const written = await h.resolver(identity)
+    expect(written.sessionFile).toBe(fork)
+    expect(piRpcProviderLink(written, fork, 2, 'next', 200).origin).toBe('resumed')
+  })
+
   it('refuses a different execution host and a foreign account home before resolving paths', async () => {
     const h = await setup()
     const record = h.store.getRecord(identity.sessionId)

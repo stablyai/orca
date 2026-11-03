@@ -127,3 +127,60 @@ it('rewinds only to a message that opened its turn, and still cuts at one alread
     structuredRewindCut(journal, { itemId: key('m3'), provider: 'claude', nativeId: 'claude-1' })
   ).toMatchObject({ beforeMessage: { uuid: 'm3' } })
 })
+
+it('names the prompts a Pi rewind removes, so Pi can check its branch ends with them', async () => {
+  const journal = await journals.open({
+    identity: { ...IDENTITY, agent: 'pi', providerHandle: null },
+    stateDirectory: root
+  })
+  const file = '/host/account/sessions/source.jsonl'
+  const orca = (clientMessageId: string) => ({ provider: 'orca' as const, clientMessageId })
+  const pi = (recordId: string) => ({
+    provider: 'legacy' as const,
+    agent: 'pi',
+    sessionId: file,
+    recordId
+  })
+  const prompt = (value: string): AgentJournalItemBody => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: value }]
+  })
+  const append = (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) =>
+    journal.appendItem(identity, body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+  await append(pi('entry-1'), prompt('from the terminal'))
+  await append(pi('entry-2'), text('terminal answer'))
+  await append(orca('second'), prompt('second'))
+  await append(pi('entry-4'), text('second answer'))
+  // Pi stores no prompt for a command, so the proof skips it.
+  await append(orca('compact'), {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: '/compact' }],
+    command: { name: 'compact' }
+  })
+  await append(orca('third'), {
+    kind: 'message',
+    role: 'user',
+    blocks: [
+      { type: 'text', text: 'third' },
+      { type: 'text', text: 'two lines' }
+    ]
+  })
+  const cutAt = (clientMessageId: string) =>
+    structuredRewindCut(journal, {
+      itemId: agentJournalItemKey(orca(clientMessageId)),
+      provider: 'pi',
+      nativeId: file
+    })
+
+  const cut = cutAt('second')
+  expect(cut).toMatchObject({
+    beforeMessage: { sessionId: file, prompts: ['second', 'third\ntwo lines'] }
+  })
+  expect(cut!.kept.map(({ body }) => body)).toEqual([
+    prompt('from the terminal'),
+    text('terminal answer')
+  ])
+  expect(cutAt('compact')).toBeNull()
+})

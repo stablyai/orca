@@ -101,6 +101,11 @@ export type AgentSessionCommandAdmission =
   | AgentSessionDispatchOutcome
   | { state: 'accepted'; providerIdentity: null }
 
+/** Where a fork rewind cuts. Pi keys live prompts by Orca's ID, so its cut lists the prompts it removes, from the target on. */
+export type StructuredRewindForkTarget =
+  | { sessionId: string; uuid: string }
+  | { sessionId: string; prompts: readonly string[] }
+
 /** Execution evidence only, never picker defaults; steers report their running turn’s choices. */
 export type AgentSessionRanOptionsEvidence = { ranOptions?: Readonly<Record<string, string>> }
 
@@ -236,11 +241,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Save the rewind fork before changing journal/record; refusals preserve the conversation, even at rest. */
   forkForRewind?(input: {
     record: AgentSessionRecord
-    beforeMessage: { sessionId: string; uuid: string }
+    fence: number
+    beforeMessage: StructuredRewindForkTarget
     rewindOperationId: string
   }): Promise<
     { ok: true; fork: AgentSessionRewindFork } | { ok: false; reason: AgentSessionRewindReason }
   >
+  /** Fork through the running agent: rewind starts it first and stops it once the fork is saved. */
+  readonly forksThroughAgent?: true
   /** Return provider compaction admission; translator ends the command turn unless child-exit recovery does first. */
   compact?(input: {
     sessionId: string

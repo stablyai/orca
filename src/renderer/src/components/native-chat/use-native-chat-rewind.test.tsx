@@ -6,6 +6,7 @@ const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
@@ -122,6 +123,37 @@ describe('structured chat rewind', () => {
     expect(confirm).not.toHaveBeenCalled()
     view.rerender({ ...props, contextFloor: { epoch: 'old', sequence: 11 } })
     expect([...(view.result.current.surface?.eligibleItemIds ?? [])]).toEqual(['later'])
+  })
+
+  it('offers sent prompts by their text only when the host cuts at the prompt (Pi)', () => {
+    const props = input()
+    // Accepted sends keep Orca's own key; only Claude/Codex keys carry a provider item id.
+    const sent = (clientMessageId: string) => ({
+      clientMessageId,
+      fence: 1,
+      payloadFingerprint: clientMessageId,
+      dispatchState: 'accepted' as const,
+      providerItemId: agentJournalSubmissionKey(clientMessageId),
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: 2
+    })
+    const state = {
+      ...props.state,
+      items: [
+        item(agentJournalSubmissionKey('one'), 10),
+        item('reply', 11, 'assistant'),
+        item(agentJournalSubmissionKey('two'), 12)
+      ],
+      submissions: [sent('one'), sent('two')]
+    }
+    const byId = render({ ...props, state })
+    expect([...(byId.result.current.surface?.eligibleItemIds ?? [])]).toEqual([])
+    const byPrompt = render({ ...props, state, support: { supported: true, cutsAtPrompt: true } })
+    expect([...(byPrompt.result.current.surface?.eligibleItemIds ?? [])]).toEqual([
+      agentJournalSubmissionKey('one'),
+      agentJournalSubmissionKey('two')
+    ])
   })
 
   it('awaits the suffix sequence in the same epoch before unblocking', async () => {

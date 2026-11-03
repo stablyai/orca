@@ -28,7 +28,11 @@ export const AGENT_SESSION_REWIND_REASONS = [
 ] as const
 export type AgentSessionRewindReason = (typeof AGENT_SESSION_REWIND_REASONS)[number]
 export type AgentSessionRewindSupport =
-  | { supported: true }
+  | {
+      supported: true
+      /** The host cuts at the prompt text the agent received, so sent rows need no provider item id. */
+      cutsAtPrompt?: true
+    }
   | { supported: false; reason: AgentSessionRewindReason }
 export type AgentSessionRewindParams = {
   envelope: AgentSessionMutationEnvelope
