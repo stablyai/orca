@@ -55,7 +55,6 @@ export function registerReposProjectHostCapabilityTests(): void {
   })
 
   describe('repo slice project-host setup runtime capability', () => {
-
     it('blocks runtime project setup when the server does not advertise support', async () => {
       const store = createTestStore()
 
@@ -111,11 +110,4 @@ export function registerReposProjectHostCapabilityTests(): void {
       expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     })
   })
-
-  // The catalog these tests read is the one the focused host would have shown.
-  function catalogOwner(store: {
-    getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
-  }): { runtimeEnvironmentId: string | null } {
-    return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
-  }
 }
