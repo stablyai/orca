@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
+import { useStatsReadsServer } from './server-usage-copy'
 import { getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
@@ -45,8 +46,7 @@ export function UsageOverviewPane(): React.JSX.Element {
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
   const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
-  // Why: on a server the logs being scanned are that server's, not this computer's.
-  const readsServer = useAppStore((state) => state.statsHost.kind !== 'local')
+  const readsServer = useStatsReadsServer()
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)

@@ -5338,6 +5338,9 @@
           "6adac63cfe": "turns"
         },
         "StatsPane": {
+          "serverUsageLogsDescription": "Reads {{provider}} usage logs on this server to show token, model, and session stats.",
+          "serverNoUsageForScope": "No {{provider}} usage found on this server yet for this scope.",
+          "serverAllUsageScope": "All {{provider}} usage on this server",
           "42d3e0bdf7": "Usage analytics provider: {{value0}}",
           "c79f073d4c": "Usage Analytics",
           "a58aba506f": "PRs created",

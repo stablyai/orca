@@ -6,6 +6,12 @@ import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { CodexUsageDetails } from './CodexUsageDetails'
 import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
+import {
+  serverNoUsageForScope,
+  serverScopeOptions,
+  serverUsageLogsDescription,
+  useStatsReadsServer
+} from './server-usage-copy'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { unpricedCostLabel } from './unpriced-cost-label'
@@ -42,6 +48,8 @@ const RANGE_LABELS: Record<CodexUsageRange, string> = {
 }
 
 export function CodexUsagePane(): React.JSX.Element {
+  const readsServer = useStatsReadsServer()
+  const scopeOptions = readsServer ? serverScopeOptions(SCOPE_OPTIONS, 'Codex') : SCOPE_OPTIONS
   const scanState = useAppStore((state) => state.codexUsageScanState)
   const summary = useAppStore((state) => state.codexUsageSummary)
   const daily = useAppStore((state) => state.codexUsageDaily)
@@ -77,10 +85,14 @@ export function CodexUsagePane(): React.JSX.Element {
       <UsageTrackingPaneShell
         enabled={false}
         title={title}
-        disabledDescription={translate(
-          'auto.components.stats.CodexUsagePane.13badcd8f2',
-          'Reads local Codex usage logs to show token, model, and session stats.'
-        )}
+        disabledDescription={
+          readsServer
+            ? serverUsageLogsDescription('Codex')
+            : translate(
+                'auto.components.stats.CodexUsagePane.13badcd8f2',
+                'Reads local Codex usage logs to show token, model, and session stats.'
+              )
+        }
         enableLabel={enableLabel}
         onEnabledChange={handleSetEnabled}
       />
@@ -137,7 +149,7 @@ export function CodexUsagePane(): React.JSX.Element {
           key="scope"
           label={translate('auto.components.stats.CodexUsagePane.6d68e8399a', 'Scope')}
           value={scope}
-          options={SCOPE_OPTIONS}
+          options={scopeOptions}
           onValueChange={(value) => void setCodexUsageScope(value)}
         />,
         <UsageFilterRadioGroup
@@ -150,13 +162,17 @@ export function CodexUsagePane(): React.JSX.Element {
       ]}
       selectionSummary={
         <>
-          {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
+          {scopeOptions.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
         </>
       }
-      emptyMessage={translate(
-        'auto.components.stats.CodexUsagePane.4c865393b4',
-        'No local Codex usage found yet for this scope.'
-      )}
+      emptyMessage={
+        readsServer
+          ? serverNoUsageForScope('Codex')
+          : translate(
+              'auto.components.stats.CodexUsagePane.4c865393b4',
+              'No local Codex usage found yet for this scope.'
+            )
+      }
       onEnabledChange={handleSetEnabled}
       onRefresh={() => void refreshCodexUsage()}
       headerAction={
