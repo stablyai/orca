@@ -8830,7 +8830,7 @@
           "902f5dee1f": "Copiar al seleccionar",
           "9129b7e805": "Al pasar el cursor sobre un panel de terminal, se activa sin necesidad de hacer clic.",
           "8eefeaa3da": "El foco sigue al ratón",
-          "96fe15def8": "Comportamiento del mouse y del portapapeles en los paneles de terminal.",
+          "96fe15def8": "Comportamiento del desplazamiento, el mouse y el portapapeles en los paneles de terminal.",
           "45721f3e67": "Interacción del terminal",
           "9c0b1c1792": "Activado",
           "c1fc9e9444": "Aceleración de GPU",
@@ -20228,7 +20228,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",
         "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",
-        "copyOnSelectDescription": "Copia automáticamente al portapapeles el texto que selecciones en un terminal o un chat."
+        "copyOnSelectDescription": "Copia automáticamente al portapapeles el texto que selecciones en un terminal o un chat.",
+        "scrollOnUserInput": "Desplazar al final al escribir",
+        "scrollOnUserInputDescription": "Escribir o pegar con el panel desplazado hacia arriba salta a la salida más reciente. Desactívalo para mantener tu posición."
       },
       "terminal": {
         "clipboard": {
@@ -20243,6 +20245,15 @@
             "highlight": "resaltar",
             "chat": "chat"
           }
+        },
+        "search": {
+          "typing": "escritura",
+          "input": "entrada",
+          "jump": "saltar",
+          "bottom": "final",
+          "scrollback": "historial",
+          "snap": "ajustar",
+          "position": "posición"
         }
       }
     },
