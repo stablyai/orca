@@ -193,7 +193,9 @@ describe('ACP session runtime', () => {
     const { runtime, agent } = fixture({}, { retryBusyPrompts })
     await runtime.start(startOptions)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    agent.on('session/prompt', (frame) => agent.send({ jsonrpc: '2.0', id: frame.id, error }))
+    agent.on('session/prompt', (frame) =>
+      agent.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: frame.id, error })}\n`)
+    )
     await expect(runtime.prompt([...textPrompt])).rejects.toMatchObject({ code })
     await vi.advanceTimersByTimeAsync(60_000)
     expect(agent.frames.filter((frame) => frame.method === 'session/prompt')).toHaveLength(1)
