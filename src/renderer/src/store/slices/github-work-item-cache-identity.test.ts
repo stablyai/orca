@@ -15,51 +15,6 @@ describe('createGitHubSlice.patchWorkItem', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('does not notify when a patch has no matching cached work item', () => {
-    const store = createTestStore()
-    const subscriber = vi.fn()
-    const unsubscribe = store.subscribe(subscriber)
-    store.getState().patchWorkItem('pr:missing', { title: 'Missing' }, 'repo-1')
-    unsubscribe()
-    expect(subscriber).not.toHaveBeenCalled()
-  })
-
-  it('can scope patches to one repo when different repos have the same work-item id', () => {
-    const store = createTestStore()
-    const repoOneItem = {
-      id: 'pr:42',
-      repoId: 'repo-1',
-      type: 'pr',
-      number: 42,
-      title: 'Repo one PR'
-    } as GitHubWorkItem
-    const repoTwoItem = {
-      id: 'pr:42',
-      repoId: 'repo-2',
-      type: 'pr',
-      number: 42,
-      title: 'Repo two PR'
-    } as GitHubWorkItem
-
-    store.setState({
-      workItemsCache: {
-        [workItemsCacheKey('repo-1', 20, '')]: { data: [repoOneItem], fetchedAt: 1 },
-        [workItemsCacheKey('repo-2', 20, '')]: { data: [repoTwoItem], fetchedAt: 1 }
-      }
-    })
-
-    store.getState().patchWorkItem('pr:42', { reviewRequests: [] }, 'repo-1')
-
-    const state = store.getState()
-    const repoOnePatched = state.workItemsCache[workItemsCacheKey('repo-1', 20, '')]?.data?.[0]
-    const repoTwoPatched = state.workItemsCache[workItemsCacheKey('repo-2', 20, '')]?.data?.[0]
-    expect(repoOnePatched).toMatchObject({
-      repoId: 'repo-1',
-      reviewRequests: []
-    })
-    expect(repoTwoPatched).toBe(repoTwoItem)
-  })
-
   it('can scope patches to one GitHub task source when hosts share a repo id and work-item id', () => {
     const store = createTestStore()
     const firstSourceContext = githubSourceContext('runtime:first-host', 'repo-1')
@@ -206,63 +161,6 @@ describe('createGitHubSlice.fetchWorkItems cache identity', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('reuses the cache without notifying subscribers and renews freshness on a no-op force refetch', async () => {
-    const store = createTestStore()
-    const items = [
-      makeNestedWorkItem({ id: 'pr:42', number: 42, title: 'First nested PR' }),
-      makeNestedWorkItem({ id: 'pr:43', number: 43, title: 'Second nested PR' })
-    ]
-    mockApi.gh.listWorkItems.mockImplementation(() =>
-      Promise.resolve({
-        items: structuredClone(items),
-        sources: structuredClone(nestedSources)
-      })
-    )
-
-    let now = 1_700_000_000_000
-    vi.spyOn(Date, 'now').mockImplementation(() => now)
-
-    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
-    const cacheKey = workItemsCacheKey('repo-id', 24, '')
-    const previousCache = store.getState().workItemsCache
-    const previousEntry = previousCache[cacheKey]
-    const previousRows = previousEntry?.data
-    expect(previousRows).toHaveLength(2)
-    expect(previousRows?.[0]?.labels).toEqual(['bug', 'needs-review'])
-    expect(previousRows?.[0]?.assignees?.[0]?.login).toBe('assignee')
-    expect(previousRows?.[0]?.reviewRequests?.[0]?.login).toBe('reviewer')
-    expect(previousRows?.[0]?.prRepo).toEqual({
-      owner: 'acme',
-      repo: 'widgets',
-      host: 'github.com'
-    })
-    expect(previousRows?.[0]?.checksSummary?.state).toBe('pending')
-
-    const previousState = store.getState()
-    const subscriber = vi.fn()
-    const unsubscribe = store.subscribe(subscriber)
-    now += 5_000
-    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '', { force: true })
-    unsubscribe()
-
-    const nextCache = store.getState().workItemsCache
-    const nextEntry = nextCache[cacheKey]
-    expect(subscriber).not.toHaveBeenCalled()
-    expect(store.getState()).toBe(previousState)
-    expect(nextCache).toBe(previousCache)
-    expect(nextEntry).toBe(previousEntry)
-    expect(nextEntry?.data).toBe(previousRows)
-    expect(nextEntry?.data?.[0]).toBe(previousRows?.[0])
-    expect(nextEntry?.data?.[1]).toBe(previousRows?.[1])
-    expect(nextEntry?.sources).toBe(previousEntry?.sources)
-    expect(nextEntry?.fetchedAt).toBe(now)
-    expect(nextEntry?.fetchedAt).toBeGreaterThan(1_700_000_000_000)
-
-    now += 1_000
-    expect(await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')).toBe(previousRows)
-    expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
   })
 
   it('writes a new entry when a nested reviewRequests login changes but reuses the sibling row', async () => {

@@ -1,3 +1,4 @@
+import type * as WorktreeListingModule from '../../../../../git/worktree-listing'
 import { describe, expect, it, vi } from 'vitest'
 
 const { ipcHandlers } = vi.hoisted(() => ({
@@ -5,6 +6,13 @@ const { ipcHandlers } = vi.hoisted(() => ({
 }))
 
 // Partially mock Electron: snapshot-pull is registered through ipcMain.handle, which is absent outside Electron.
+vi.mock('../../../../../git/worktree-listing', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listWorktreesStrict
+  }
+})
+
 vi.mock('electron', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ipcMain: {

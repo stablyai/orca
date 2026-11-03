@@ -38,6 +38,7 @@ import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native
 import { resolveNativeChatFileLink } from './native-chat-file-link'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import { observeTranscriptVisibility } from './NativeChatTranscriptChrome'
+import { useNativeChatMediaHref } from './use-native-chat-media-href'
 
 export const NativeChatMarkdownImageLinkContext = createContext<string | undefined>(undefined)
 const IMAGE_ACCESS = chatImageAccess()
@@ -104,20 +105,36 @@ function NativeChatMarkdownImagePreview({
         }
       : null
   const route = routeNativeChatHref(src)
-  const imageHref =
+  const originalImageHref =
     route.kind === 'file' ? createNativeChatFileHref(route.pathText, 'literal') : src
-  const target = resolveNativeChatFileLink(imageHref, fileLinkContext)
   const external = Boolean(src && /^(?:https?|data|blob):/i.test(src))
   const attachment = src ? jiraImageReference(src) !== null : false
   const visible = owner?.isVisible ?? true
   const leaseActive = visible && (near || open)
+  const media = useNativeChatMediaHref({
+    href: originalImageHref,
+    runtimeContext,
+    tabId: fileLinkContext?.sourceTabId,
+    sessionId: owner?.sessionId,
+    active: leaseActive,
+    retryKey
+  })
+  const imageHref = media.href
+  const imageRuntimeContext =
+    runtimeContext && media.expectedEnvironmentPairingRevision !== undefined
+      ? {
+          ...runtimeContext,
+          expectedEnvironmentPairingRevision: media.expectedEnvironmentPairingRevision
+        }
+      : runtimeContext
+  const target = resolveNativeChatFileLink(imageHref, fileLinkContext)
   const localSrc =
     !external && !attachment && target ? filesystemPathToFileUri(target.absolutePath) : undefined
   const loadedSrc = useLocalImageSrc(
     leaseActive ? localSrc : undefined,
     target?.absolutePath ?? '',
     runtimeContext?.connectionId,
-    runtimeContext,
+    imageRuntimeContext,
     IMAGE_ACCESS,
     retryKey
   )
@@ -125,7 +142,7 @@ function NativeChatMarkdownImagePreview({
     localSrc,
     target?.absolutePath ?? '',
     runtimeContext?.connectionId,
-    runtimeContext,
+    imageRuntimeContext,
     IMAGE_ACCESS
   )
   useEffect(() => {
@@ -218,7 +235,7 @@ function NativeChatMarkdownImagePreview({
       triggerStyle={displaySrc && displaySrc === loadedImageSrc ? undefined : footprint}
       onClick={(event) => {
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-          if (route.kind === 'file') {
+          if (route.kind === 'file' && imageHref) {
             onFileLinkClick?.(event, imageHref)
           } else {
             onLinkClick?.(event, src)

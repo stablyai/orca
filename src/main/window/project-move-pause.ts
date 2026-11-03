@@ -7,7 +7,7 @@ import {
   type ProjectMovePauseResponse
 } from '../../shared/project-move-pause'
 import type { WorkspaceSleepOutcome, WorkspaceSleepRequest } from '../../shared/workspace-sleep'
-import { addFanoutListener, addFanoutListeners } from '../event-listener-fanout'
+import { addFanoutListener, addFanoutListeners } from '../runtime/events/event-listener-fanout'
 
 type SleepRuntime = {
   sleepWorkspaces: (request: WorkspaceSleepRequest) => Promise<WorkspaceSleepOutcome[]>

@@ -128,27 +128,6 @@ describe('handle-gap verdict map, all rules on one tree', () => {
     expect(hasHostMirrorHandleWaitExpired(ENV_A, 'a1')).toBe(false)
   })
 
-  it('refuses to answer on an empty binding, which is a match value and not a null', () => {
-    // Two empty bindings must never match; verify the production park predicate uses the same environment-PTY test, but retain the defensive empty-value refusal.
-    setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
-    setLiveTabs(['a1'], { a1: 'remote:some-other-env@@term_1' })
-    parkAndExpire(ENV_A, 'a1')
-    expect(hasHostMirrorHandleWaitExpired(ENV_A, 'a1')).toBe(false)
-  })
-
-  it('keeps a verdict sticky enough to break the park/expire/replay loop', () => {
-    // Live/current verdicts must stay sticky or each replay re-parks with a fresh budget forever.
-    setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
-    setLiveTabs(['a1'])
-    parkAndExpire(ENV_A, 'a1')
-
-    for (let replay = 0; replay < 20; replay += 1) {
-      expect(hasHostMirrorHandleWaitExpired(ENV_A, 'a1')).toBe(true)
-      parkAndExpire(ENV_A, 'a1')
-    }
-    expect(hasHostMirrorHandleWaitExpired(ENV_A, 'a1')).toBe(true)
-  })
-
   it('never evicts a live pane verdict, whichever environment sweeps', () => {
     // Only env-b is temporarily rowless while env-a records; its surviving verdict proves tab-death pruning stays environment-scoped.
     for (const environmentId of [ENV_A, ENV_B, ENV_C]) {

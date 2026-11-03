@@ -2,7 +2,10 @@ import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../shared/browser-c
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
-import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
+import {
+  BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
+  BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY
+} from '../../shared/browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../shared/browser-client-file-channel-protocol'
 import type { BrowserClientHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
@@ -121,6 +124,7 @@ const browserClientHosts =
               'webview',
               BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
               BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
+              BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY,
               BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY
             ],
             handler,

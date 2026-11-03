@@ -14,7 +14,7 @@ import {
   commitServeSupervisorPark,
   parkServeSupervisorsForInstall,
   releaseServeSupervisorPark
-} from '../updater/serve-supervisor-install-park'
+} from '../updater/lifecycle/serve-supervisor-install-park'
 import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 
 const HELPER = 424242

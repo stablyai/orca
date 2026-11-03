@@ -7,7 +7,7 @@ import { startGitCommonPolling } from './worktree-git-common-polling'
 import type {
   WorktreeBasePollEvent,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 
 // Measure per-tick fanout with stat/readdir hooks; unchanged entries should need only one directory stat.
 type StatHook = { current: ((path: unknown) => Promise<void>) | null }

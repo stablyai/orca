@@ -1,11 +1,13 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktree-listing'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listWorktrees, listWorktreesStrict } from '../git/worktree'
-import { scheduleWorktreeBaseNotification } from '../ipc/worktree-base-directory-notifications'
-import { createWorktreeHeadIdentityRefreshState } from '../ipc/worktree-head-identity-refresh'
-import { EMPTY_HEAD_IDENTITY_SCOPE } from '../ipc/worktree-head-identity-scope'
+import { scheduleWorktreeBaseNotification } from '../ipc/worktrees/creation/worktree-base-directory-notifications'
+import { createWorktreeHeadIdentityRefreshState } from '../ipc/worktrees/creation/worktree-head-identity-refresh'
+import { EMPTY_HEAD_IDENTITY_SCOPE } from '../ipc/worktrees/creation/worktree-head-identity-scope'
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
@@ -19,6 +21,22 @@ import {
   type ResponseReader
 } from './paired-client-navigation-test-harness'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn(),

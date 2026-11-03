@@ -1,7 +1,11 @@
 import { existsSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
-import { LazyWorkerThreadHost, type WorkerThreadFactory } from '../lazy-worker-thread-host'
-import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
+import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
+import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
 import type {
   DetectionDirectoryRequest,
   DetectionDirectoryResponse

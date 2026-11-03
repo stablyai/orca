@@ -27,7 +27,7 @@ import {
   _getLocalWorktreeScanGenerationCacheSize,
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   _pendingWslStoppedWorktreeRescanCount,

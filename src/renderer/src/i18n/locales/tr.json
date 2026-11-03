@@ -2561,8 +2561,6 @@
         "25690a3855": "PR'dan çalışma alanı başlat",
         "a459866967": "PR'a bağlı çalışma alanını sürdür",
         "347034903a": "GitHub bağlantısını kopyala",
-        "5a01ca7253": "Görülme durumu GitHub ile eşitlenemedi.",
-        "996a1897d2": "Bu pull request için görülme durumu eşitlenemiyor.",
         "e0b15c793f": "GitHub bağlantısı kopyalanamadı",
         "992e799227": "GitHub bağlantısı kopyalandı",
         "61bfc81ada": "Bu pull request'e bağlı çalışma alanı açılamıyor.",
@@ -19110,6 +19108,7 @@
         "attachmentNotAFile": "Bu mesajdaki bir görsel dosya olmadığı için mesaj gönderilmedi.",
         "attachmentNoSource": "Bu mesajdaki bir görselin gönderilecek dosyası bulunmadığı için mesaj gönderilmedi.",
         "attachmentInvalid": "Bu mesajdaki bir ek ajana gönderilemiyor.",
+        "attachmentsExpired": "Süresi doldu: {{names}}.",
         "attachmentUnreadable": "Bu mesajdaki bir ek okunamadığı için mesaj gönderilmedi.",
         "emptyMessage": "Bu mesaj boş olduğu için gönderilmedi.",
         "commandUnavailable": "Bu komut {{agent}} sohbetlerinde kullanılamadığı için gönderilmedi.",
@@ -19199,6 +19198,7 @@
         "recordFailed": "Orca bunu sohbet geçmişine kaydedemedi.",
         "attachmentExpired": "Bu ekin süresi doldu.",
         "reattachFile": "Kaldırıp yeniden ekleyin.",
+        "reattachFiles": "Kaldırıp yeniden ekleyin.",
         "conversationCleared": "Bu konuşma temizlendi.",
         "openCurrentConversation": "Devam etmek için mevcut konuşmayı açın.",
         "clearUnfinished": "Son /clear işlemi tamamlanmadı.",
@@ -19594,7 +19594,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Sohbet arayüzünde devam etmek için bu sunucudaki Orca'yı güncelleyin.",
-        "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin."
+        "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin.",
+        "exitUnconfirmed": "{{agent}} bu sohbeti başka bir terminalde yürütüyor. Oradan çıkın veya o terminali kapatın, ardından yeniden deneyin."
       },
       "state": {
         "loading": {
@@ -22305,6 +22306,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: okunabilir yedek yok, bu yüzden boş başlayacak.",
+      "sectionKeptCurrent": "{{section}}: mevcut çalıştırmalarınız korunacak",
       "sectionRestored": "{{section}}: {{time}} kaydedilen yedekten geri yüklendi.",
       "projectsForgotten": "Orca projelerinizi ve çalışma alanı ayrıntılarını unutacak. Diskteki dosyalara dokunulmaz.",
       "newerProjectsRemoved": "Bu yedekten sonra eklenen projeler, çalışma alanı ayrıntılarıyla birlikte Orca'dan kaldırılacak. Diskteki dosyalara dokunulmaz.",
@@ -22347,7 +22349,7 @@
       "noneFound": "(bulunamadı)",
       "sqlitePath": "SQLite yolu: {{path}}",
       "sectionsDamaged": "Bu profilin kayıtlı durumunun bir bölümü hasarlı: {{sections}}. Diğer her şey sağlam.",
-      "repairCommand": "Orca'yı kapatın, ardından yalnızca hasarlı bölümleri yedeklerden değiştirip diğer her şeyi korumak için `{{command}}` komutunu çalıştırın. Orca hasarlı dosyanın bir kopyasını saklar.",
+      "repairCommand": "Orca’yı durdurun, ardından yalnızca hasarlı kısımları onarmak ve diğer her şeyi korumak için `{{command}}` komutunu çalıştırın. Orca hasarlı dosyanın bir kopyasını saklar.",
       "restoreWholeBackup": "Bunun yerine bir yedeği bütünüyle geri yüklemek için önce `{{exportsCommand}}`, ardından `{{rollbackCommand}}` komutunu çalıştırın.",
       "sqliteUnreadable": "SQLite durumu okunamadığı için etkin profil Orca'da güvenli bir şekilde açılamadı.",
       "legacyJsonPath": "Eski JSON yolu: {{path}}",

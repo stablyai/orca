@@ -2,9 +2,9 @@ import type { AgentProcessPresence } from '../../../shared/agent-process-presenc
 import {
   admitLegacyAgentStatus,
   clearPaneCacheState,
-  deleteLegacyAgentStatus,
-  paneHasStateClaims
+  deleteLegacyAgentStatus
 } from '../../../shared/agent-hook-listener/listener-state'
+import { paneHasStateClaims } from '../../../shared/agent-hook-listener/pane-state-claims'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status-types'
 import {

@@ -9,7 +9,7 @@ import {
   bulkUnstageFiles,
   stageWorktreeChanges
 } from '../../git/status'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalRepoForRegisteredWorktree

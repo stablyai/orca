@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { toHostFilesystemPath } from '../host-tree-removal'
+import { toHostFilesystemPath } from '../filesystem/host-tree-removal'
 import type * as FilePromises from 'node:fs/promises'
 
 const mocks = vi.hoisted(() => ({

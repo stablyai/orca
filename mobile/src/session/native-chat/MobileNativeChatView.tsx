@@ -191,7 +191,7 @@ export function MobileNativeChatView({
   skillDiscovery,
   onNeedSkills,
   sessionOptions,
-  structuredComposer = null,
+  structuredComposer: structured = null,
   ask,
   askKey,
   onDismissAsk,
@@ -393,7 +393,7 @@ export function MobileNativeChatView({
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer
           draftScopeKey={composerScopeKey}
-          structured={structuredActivityUi ? structuredComposer : null}
+          structured={structuredActivityUi && structured ? { ...structured, onOpenFile } : null}
           draftKey={draftKey}
           onChangeText={onComposerTextChange}
           onSend={handleSend}

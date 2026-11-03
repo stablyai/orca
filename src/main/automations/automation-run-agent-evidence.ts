@@ -3,9 +3,9 @@ import {
   isTurnDoneSince,
   judgeIdleAgentTurn,
   type AgentTurnStatusRow
-} from '../agent-turn-idle-verdict'
+} from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 
-export { AGENT_START_GRACE_MS } from '../agent-turn-idle-verdict'
+export { AGENT_START_GRACE_MS } from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 
 export type AutomationRunAgentEvidence = {
   getAgentStatusRowsForPane(paneKey: string): readonly AgentTurnStatusRow[]

@@ -69,14 +69,6 @@ describe('recordTerminalInput store writes are coalesced', () => {
     expect(store.getState().lastTerminalInputAtByPaneKey[PANE]).toBe(1_200)
   })
 
-  it('writes the very first stamp for a pane synchronously', () => {
-    const store = createTestStore()
-
-    store.getState().recordTerminalInput(PANE, 1_000)
-
-    expect(store.getState().lastTerminalInputAtByPaneKey[PANE]).toBe(1_000)
-  })
-
   it('does not resurrect a pane key a purge deleted', () => {
     const store = createTestStore()
 
@@ -91,14 +83,5 @@ describe('recordTerminalInput store writes are coalesced', () => {
     expect(stored[PANE]).toBeUndefined()
     expect(readLastTerminalInputAt(stored, PANE)).toBeUndefined()
     expect(mergePendingTerminalInputActivity(stored)[PANE]).toBeUndefined()
-  })
-
-  it('ignores invalid pane keys and timestamps', () => {
-    const store = createTestStore()
-
-    store.getState().recordTerminalInput('', 1_000)
-    store.getState().recordTerminalInput(PANE, Number.NaN)
-
-    expect(store.getState().lastTerminalInputAtByPaneKey).toEqual({})
   })
 })

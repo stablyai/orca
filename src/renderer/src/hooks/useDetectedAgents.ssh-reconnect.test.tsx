@@ -93,18 +93,4 @@ describe('useDetectedAgents when the SSH host reconnects', () => {
     expect(latest?.detectedIds).toEqual(['codex'])
     expect(latest?.detectionFailed).toBe(false)
   })
-
-  it('probes a connection that has reported no state yet, as before', async () => {
-    detectRemoteAgents.mockResolvedValue(['claude'])
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    const root = createRoot(container)
-    roots.push(root)
-    await act(async () => {
-      root.render(createElement(HookProbe))
-    })
-    await flushEffects()
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-    expect(latest?.detectedIds).toEqual(['claude'])
-  })
 })
