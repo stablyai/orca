@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { useState } from 'react'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
@@ -89,3 +89,32 @@ it.each([false, true])(
     expect(changed).toHaveBeenCalledExactlyOnceWith(false)
   }
 )
+
+it('only opens setup from the chevron segment, never from hovering the agent name or icon', async () => {
+  const { launched } = show()
+  const codex = screen.getByRole('menuitem', { name: /^Codex/ })
+  const claude = screen.getByRole('menuitem', { name: /^Claude/ })
+  vi.useFakeTimers()
+  try {
+    for (const target of [codex, screen.getByText('Codex'), codex.querySelector('svg')!]) {
+      fireEvent.pointerMove(target, { pointerType: 'mouse' })
+      await act(() => vi.advanceTimersByTimeAsync(200))
+      expect(screen.queryByRole('menu', { name: 'Configure Codex' })).toBeNull()
+      expect(document.activeElement).toBe(codex)
+    }
+
+    fireEvent.pointerOver(screen.getByRole('button', { name: 'Configure Codex' }), {
+      pointerType: 'mouse'
+    })
+    expect(screen.getByRole('menu', { name: 'Configure Codex' })).toBeTruthy()
+
+    fireEvent.pointerMove(screen.getByText('Claude'), { pointerType: 'mouse' })
+    await act(() => vi.advanceTimersByTimeAsync(200))
+    expect(document.activeElement).toBe(claude)
+    expect(screen.queryByRole('menu', { name: 'Configure Claude' })).toBeNull()
+    expect(screen.queryByRole('menu', { name: 'Configure Codex' })).toBeNull()
+    expect(launched).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})

@@ -37,8 +37,17 @@ export function AgentLaunchSetupSubmenu({
         variant="launch-row"
         disabled={disabled}
         onPointerMove={(event) => {
-          if (event.target instanceof Node && !event.currentTarget.contains(event.target)) {
+          const segment = event.currentTarget.querySelector('button')
+          if (!(event.target instanceof Node) || !segment?.contains(event.target)) {
             event.preventDefault()
+            if (
+              !disabled &&
+              event.pointerType === 'mouse' &&
+              event.target instanceof Node &&
+              event.currentTarget.contains(event.target)
+            ) {
+              event.currentTarget.focus({ preventScroll: true })
+            }
           }
         }}
       >
