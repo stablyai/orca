@@ -66,6 +66,18 @@ describe('splitGeneratedCommitMessage', () => {
     })
   })
 
+  it('keeps a subject longer than 72 characters intact', () => {
+    const subject =
+      'feat(find, contribute): offer type-specific add actions on empty local results (#62)'
+
+    expect(splitGeneratedCommitMessage(subject)).toEqual({
+      subject,
+      body: '',
+      message: subject
+    })
+    expect(splitGeneratedCommitMessage(`${subject}\n\n- Why`).message).toBe(`${subject}\n\n- Why`)
+  })
+
   it('extracts subject and body from newline-heavy output without line-array splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
     const body = '- Explain one generated change\n'.repeat(10_000).trimEnd()

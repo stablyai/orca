@@ -67,7 +67,7 @@ export function splitGeneratedCommitMessage(message: string): GeneratedCommitMes
   const normalized = cleanGeneratedCommitMessage(message)
   const firstNewline = normalized.indexOf('\n')
   const subjectLine = firstNewline === -1 ? normalized : normalized.slice(0, firstNewline)
-  const subject = subjectLine.trim().replace(/[.]+$/g, '').slice(0, 72).trimEnd()
+  const subject = subjectLine.trim().replace(/[.]+$/g, '').trimEnd()
   const body = firstNewline === -1 ? '' : normalized.slice(firstNewline + 1).trim()
   const safeSubject = subject.length > 0 ? subject : 'Update project files'
   return {
