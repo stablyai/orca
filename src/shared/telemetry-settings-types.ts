@@ -21,7 +21,7 @@ export type TelemetrySettings = {
   existedBeforeTelemetryRelease: boolean
   /** Frozen 50/50 assignment for fresh installs; absent for profiles predating the experiment. */
   onboardingLanguageCohort?: 'control' | 'treatment'
-  /** Frozen 70% control / 10% center / 10% corner / 10% live-switch assignment; existing assignments persist. */
+  /** Frozen 70% control / 30% corner-card assignment; legacy labels persist, with the delivered rollout version recorded on tip events. */
   chatUiLaunchTipCohort?: ChatUiLaunchTipCohort
   /** Treatment cards split equally by eligibility; frozen locally from settings, never usage history. */
   chatUiLaunchTipButtonEmphasis?: 'normal' | 'swapped'

@@ -25,6 +25,8 @@ export type OpenedMobileSessionTabActivationState = {
   sourceSessionTabId?: string | null
   activeSessionTabId?: string | null
   activeTabType: string | null
+  sourceNavigationGeneration?: number
+  activeNavigationGeneration?: number
 }
 
 export function findOpenedMobileSessionTab<T extends OpenedMobileSessionTabCandidate>(
@@ -108,5 +110,10 @@ export function shouldActivateOpenedMobileSessionTab(
       : state.activeTabType === 'terminal' &&
         state.sourceTerminalHandle !== null &&
         state.activeTerminalHandle === state.sourceTerminalHandle
-  return !state.activated && state.activationSeq === state.latestActivationSeq && sourceStillActive
+  return (
+    !state.activated &&
+    state.activationSeq === state.latestActivationSeq &&
+    state.sourceNavigationGeneration === state.activeNavigationGeneration &&
+    sourceStillActive
+  )
 }

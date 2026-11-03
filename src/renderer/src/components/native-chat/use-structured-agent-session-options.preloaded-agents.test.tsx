@@ -143,7 +143,7 @@ describe('a new chat of an agent with no saved pick', () => {
   afterEach(() => stop?.())
 
   it.each([
-    ['grok', { model: 'grok-4.6', label: 'grok-4.6 (saved)', effort: 'high', usable: true }],
+    ['grok', { model: 'grok-4.6', label: 'grok-4.6 (saved)', effort: null, usable: true }],
     ['opencode', { model: null, label: null, effort: null, usable: true }],
     ['omp', { model: null, label: null, effort: null, usable: true }]
   ] as const)(

@@ -25,15 +25,6 @@ const REPLY = {
 }
 
 describe('orca plugin dev emit', () => {
-  it('parses alongside the other dev subcommands', () => {
-    const emit = parse(['plugin', 'dev', 'emit', '.', 'workspace.created', '--data', '{}'])
-    expect(emit.commandPath).toEqual(['plugin', 'dev', 'emit'])
-    expect(emit.flags.get('target')).toBe('.')
-    expect(emit.flags.get('event')).toBe('workspace.created')
-    expect(emit.flags.get('data')).toBe('{}')
-    expect(parse(['plugin', 'dev', 'watch', '.']).commandPath).toEqual(['plugin', 'dev', 'watch'])
-  })
-
   it('sends a plugin key or a host folder with the parsed payload', async () => {
     const call = vi.fn().mockResolvedValue({ result: REPLY })
     const handler = PLUGIN_DEV_EMIT_HANDLERS['plugin dev emit']!

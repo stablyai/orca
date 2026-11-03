@@ -9,12 +9,15 @@ function ok(result: unknown): RpcResponse {
   return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-function createClient(responses: RpcResponse[]) {
+function createClient(responses: (RpcResponse | Error)[]) {
   return {
     sendRequest: vi.fn<SendRequest>(async (method) => {
       const response = responses.shift()
       if (!response) {
         throw new Error(`no scripted response for ${method}`)
+      }
+      if (response instanceof Error) {
+        throw response
       }
       return response
     })
@@ -599,50 +602,63 @@ describe('openMobileFileTap', () => {
     })
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(onOpenFailed).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports an unsupported file when files.open declines it', async () => {
-    const client = createClient([
-      ok({
-        worktree: 'wt-1',
-        relativePath: 'dist/app.zip',
-        absolutePath: '/repo/dist/app.zip',
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'local',
-          relativePath: 'dist/app.zip',
-          absolutePath: '/repo/dist/app.zip'
-        }
-      }),
-      ok({ worktree: 'wt-1', relativePath: 'dist/app.zip', kind: 'binary', opened: false })
-    ])
-    const onOpenFailed = vi.fn()
-    const scheduleDelayedAction = vi.fn()
-
-    openMobileFileTap({
-      client,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      candidates: [{ pathText: 'dist/app.zip', line: null, column: null }],
-      pushPreviewRoute: vi.fn(),
-      openBrowser: vi.fn(),
-      triggerOpenFeedback: vi.fn(),
-      fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
-      getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction,
-      onOpenFailed
+    expect(onOpenFailed).toHaveBeenCalledWith({
+      kind: 'failed',
+      pathText: 'src/index.ts',
+      message: 'nope'
     })
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(onOpenFailed).toHaveBeenCalledTimes(1)
-    expect(scheduleDelayedAction).not.toHaveBeenCalled()
   })
+
+  it.each(['declines', 'rejects'] as const)(
+    'reports the selected file when files.open %s',
+    async (outcome) => {
+      const client = createClient([
+        ok({ exists: false, isDirectory: false }),
+        ok({
+          worktree: 'wt-1',
+          relativePath: 'dist/app.zip',
+          absolutePath: '/repo/dist/app.zip',
+          exists: true,
+          isDirectory: false,
+          openTarget: {
+            kind: 'worktree-file',
+            provider: 'local',
+            relativePath: 'dist/app.zip',
+            absolutePath: '/repo/dist/app.zip'
+          }
+        }),
+        outcome === 'declines'
+          ? ok({ worktree: 'wt-1', relativePath: 'dist/app.zip', kind: 'binary', opened: false })
+          : new Error('Request timed out')
+      ])
+      const onOpenFailed = vi.fn()
+      const scheduleDelayedAction = vi.fn()
+
+      openMobileFileTap({
+        client,
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        candidates: [
+          { pathText: 'app.zip', line: null, column: null },
+          { pathText: 'dist/app.zip', line: null, column: null }
+        ],
+        pushPreviewRoute: vi.fn(),
+        openBrowser: vi.fn(),
+        triggerOpenFeedback: vi.fn(),
+        fetchSessionTabs: vi.fn(),
+        getSessionTabs: () => [],
+        getActiveSessionTabId: () => null,
+        getActivationState: activeTerminalState,
+        switchSessionTab: vi.fn(),
+        scheduleDelayedAction,
+        onOpenFailed
+      })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(onOpenFailed).toHaveBeenCalledWith({ kind: 'failed', pathText: 'dist/app.zip' })
+      expect(scheduleDelayedAction).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not report a stale failure after a newer tap supersedes it', async () => {
     const client = createClient([

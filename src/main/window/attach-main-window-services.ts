@@ -21,7 +21,10 @@ import type {
 import { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
 import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/browser-manager'
-import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
+import {
+  hasSystemMediaAccess,
+  requestSystemMediaAccess
+} from '../browser/site-settings/browser-media-access'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import type {
   PreQuitCleanupFailureMode,

@@ -70,7 +70,7 @@ const parent = `${head}~1`
 
 // Span file sizes to cover both fixed spawn and size-dependent read costs.
 const CANDIDATES = [
-  'src/main/git/status.ts',
+  'src/main/git/source-control/file-diff.ts',
   'src/shared/agent-hook-listener.ts',
   'src/renderer/src/components/task-page/TaskPage.tsx'
 ]

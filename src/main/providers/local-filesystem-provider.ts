@@ -6,8 +6,8 @@ import {
   readAuthorizedDocPreviewFileChunk
 } from '../../shared/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../filesystem/destination-serialized-local-rename'
-import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/access/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import {
   assertNotExists,
   rethrowWithUserMessage

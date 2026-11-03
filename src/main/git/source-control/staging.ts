@@ -14,7 +14,7 @@ import {
   type GitStageWorktreeScope,
   type GitStageWorktreeScopeReceipt
 } from '../../../shared/git-stage-worktree-scope'
-import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
+import { findExistingWorktreeSymlinkPaths } from '../worktrees/content-paths/worktree-symlink-detection'
 import { redoWriteForDriveCheckoutSuspects } from './drive-checkout-suspect-writes'
 import { runWithGitWorktreeOperationLock } from '../../../shared/git-worktree-operation-lock'
 

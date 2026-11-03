@@ -73,9 +73,9 @@ export function createAgentStatusRecoveryActions(
 
     clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
 
-    rememberSleepingAgentSession: (record) => {
+    rememberSleepingAgentSession: (record, replaces) => {
       set((s) =>
-        s.sleepingAgentSessionsByPaneKey[record.paneKey]
+        s.sleepingAgentSessionsByPaneKey[record.paneKey] !== replaces
           ? s
           : {
               sleepingAgentSessionsByPaneKey: {

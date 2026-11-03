@@ -459,7 +459,7 @@ describe('packaged runtime resources', () => {
           join(unpackedCliDir, 'index.js'),
           [
             'const args = process.argv.slice(2)',
-            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'orca-cli' }, { name: 'computer-use' }] }))",
+            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'orca-cli' }, { name: 'orca-computer-use' }] }))",
             "else if (args[1] === 'get') console.log(`---\\nname: ${args[2]}\\n---`)",
             'else console.log(JSON.stringify({ executed: false }))'
           ].join('\n'),

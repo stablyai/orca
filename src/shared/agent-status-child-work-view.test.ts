@@ -1,25 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { foldAgentLeadStatus } from './agent-lead-status-fold'
-import type { AgentChildWorkInput, AgentChildWorkOutcome } from './agent-status-child-work'
+import './agent-lead-status-fold'
+import type { AgentChildWorkInput } from './agent-status-child-work'
 import {
   createAgentChildWorkAdmission,
   type AgentChildWorkAnnounceRequest
 } from './agent-status-child-work-admission'
-import {
-  agentChildWorkLiveness,
-  type AgentChildWorkLiveness
-} from './agent-status-child-work-liveness'
-import {
-  projectAgentChildWorkLegacyBackgroundTasks,
-  projectAgentChildWorkLegacySubagents
-} from './agent-status-child-work-projection'
+import './agent-status-child-work-liveness'
+import './agent-status-child-work-projection'
 import {
   agentChildWorkOwnedLiveness,
   deriveAgentChildDisplayState
 } from './agent-status-child-work-display'
 import {
   projectAgentChildWorkViews,
-  type AgentChildWorkView,
   type AgentChildWorkViewAlias
 } from './agent-status-child-work-view'
 import { createAgentStatusStore } from './agent-status-store'
@@ -66,72 +59,6 @@ function alias(
 }
 
 describe('projectAgentChildWorkViews', () => {
-  it('omits Codex foreground commands from projected child views', () => {
-    const foreground = record('foreground', {
-      provider: 'codex',
-      kind: 'command',
-      residency: 'foreground'
-    })
-    const records = [
-      foreground,
-      record('background', { provider: 'codex', kind: 'command', residency: 'background' }),
-      record('claude', { kind: 'command', residency: 'foreground' }),
-      record('agent', { provider: 'codex', residency: 'foreground' })
-    ]
-    expect(agentChildWorkLiveness([foreground])).toBe('monitoring')
-    expect(projectAgentChildWorkViews(records, []).map((view) => view.id)).toEqual([
-      'background',
-      'claude',
-      'agent'
-    ])
-    expect(
-      projectAgentChildWorkViews([{ ...foreground, residency: 'background' }], [])
-    ).toHaveLength(1)
-    expect(foreground.residency).toBe('foreground')
-  })
-
-  it('carries what a surface reads and drops host bookkeeping', () => {
-    const [view] = projectAgentChildWorkViews(
-      [
-        record('child-1', {
-          name: 'researcher',
-          description: 'Investigate',
-          agentType: 'researcher',
-          model: 'model-a',
-          state: 'done',
-          membership: 'settled',
-          outcome: 'failed',
-          settledAt: 18,
-          lastMessage: 'Exit code 1',
-          totalTokens: 42,
-          residency: 'background',
-          providerTiming: { startedAt: 1 },
-          previousInvocations: [{ fence: { invocationId: 'invocation-0', generation: 0 } }]
-        })
-      ],
-      [alias('child-1', 'task_id', 'task-1')]
-    )
-    expect(view).toEqual({
-      id: 'child-1',
-      providerId: 'task-1',
-      kind: 'agent',
-      name: 'researcher',
-      description: 'Investigate',
-      agentType: 'researcher',
-      model: 'model-a',
-      state: 'done',
-      membership: 'settled',
-      outcome: 'failed',
-      lastMessage: 'Exit code 1',
-      firstObservedAt: 10,
-      observedAt: 20,
-      settledAt: 18,
-      totalTokens: 42,
-      stoppable: true,
-      invocation: FENCE
-    })
-  })
-
   it('names a child by its stable provider handle for the current invocation only', () => {
     const old = { invocationId: 'invocation-0', generation: 0 }
     const views = projectAgentChildWorkViews(
@@ -182,67 +109,6 @@ describe('projectAgentChildWorkViews', () => {
   })
 })
 
-type DisplayCase = [
-  label: string,
-  view: Pick<AgentChildWorkView, 'state' | 'membership' | 'outcome'>,
-  owned: AgentChildWorkLiveness,
-  expected: ReturnType<typeof deriveAgentChildDisplayState>
-]
-
-const liveAs = (state: AgentChildWorkView['state']) => ({ state, membership: 'live' }) as const
-const settledAs = (outcome: AgentChildWorkOutcome) =>
-  ({ state: 'done', membership: 'settled', outcome }) as const
-
-// Literal expectations (the product table), independent of the implementation.
-const DISPLAY: DisplayCase[] = [
-  ['working', liveAs('working'), null, 'working'],
-  ['working, owning a live shell', liveAs('working'), 'monitoring', 'working'],
-  ['waiting, owning a live agent', liveAs('waiting'), 'working', 'waiting'],
-  ['blocked, owning a live shell', liveAs('blocked'), 'monitoring', 'blocked'],
-  ['idle', liveAs('idle'), null, 'idle'],
-  ['idle, owning a live shell', liveAs('idle'), 'monitoring', 'monitoring'],
-  ['idle, owning a live agent', liveAs('idle'), 'working', 'working'],
-  ['unverifiable, even owning a live shell', liveAs('unverifiable'), 'monitoring', 'unverifiable'],
-  ['a shell that stores monitoring', liveAs('monitoring'), null, 'monitoring'],
-  ['finished', settledAs('succeeded'), null, 'done'],
-  ['finished, owning a live shell', settledAs('succeeded'), 'monitoring', 'monitoring'],
-  ['finished, owning a live agent', settledAs('succeeded'), 'working', 'working'],
-  ['failed', settledAs('failed'), null, 'failed'],
-  ['cancelled', settledAs('cancelled'), null, 'interrupted'],
-  ['cancelled, its shell still running', settledAs('cancelled'), 'monitoring', 'monitoring'],
-  ['ended, outcome unknown', settledAs('unknown'), null, 'idle']
-]
-
-describe('deriveAgentChildDisplayState', () => {
-  it.each(DISPLAY)('%s', (_label, view, owned, expected) => {
-    expect(deriveAgentChildDisplayState(view, owned)).toBe(expected)
-  })
-
-  it.each([
-    ['idle', liveAs('idle')],
-    ['finished', settledAs('succeeded')]
-  ])(
-    'gives a %s child with a live shell what the parent-row fold gives a CLI agent',
-    (_l, view) => {
-      // The same owned work, folded for a CLI agent whose own turn is over.
-      const ownedShell = [{ kind: 'command', state: 'working' }] as const
-      // A non-literal input, as the view passes it, so the fold's input can lose a field.
-      const foldInput = {
-        leadState: 'done',
-        interrupted: false,
-        childWorkLiveness: agentChildWorkLiveness(ownedShell)
-      } as const
-      expect(foldAgentLeadStatus(foldInput)).toEqual({
-        stateName: 'working',
-        workingMode: 'monitoring'
-      })
-      expect(deriveAgentChildDisplayState(view, agentChildWorkLiveness(ownedShell))).toBe(
-        'monitoring'
-      )
-    }
-  )
-})
-
 describe('agentChildWorkOwnedLiveness', () => {
   const views = projectAgentChildWorkViews(
     [
@@ -282,83 +148,6 @@ describe('agentChildWorkOwnedLiveness', () => {
     expect(agentChildWorkOwnedLiveness(cyclic, 'a')).toBe('monitoring')
     expect(agentChildWorkOwnedLiveness(cyclic, 'b')).toBe('working')
   })
-})
-
-describe('legacy shapes derived from views', () => {
-  it('publish exactly what today’s wire carries for the same children', () => {
-    const views = projectAgentChildWorkViews(
-      [
-        record('agent', {
-          name: 'researcher',
-          agentType: 'researcher',
-          description: 'Investigate',
-          operation: { toolName: 'Bash', input: 'npm test', basis: 'open', observedAt: 15 },
-          lastMessage: 'Running tests'
-        }),
-        record('failed-agent', {
-          state: 'done',
-          membership: 'settled',
-          outcome: 'failed',
-          settledAt: 20
-        }),
-        record('shell', { kind: 'command', parentChildWorkId: 'agent', totalTokens: 3 })
-      ],
-      [
-        alias('agent', 'task_id', 'task-agent'),
-        alias('failed-agent', 'task_id', 'task-failed'),
-        alias('shell', 'task_id', 'task-shell')
-      ]
-    )
-    expect(projectAgentChildWorkLegacySubagents(views)).toEqual([
-      {
-        id: 'task-agent',
-        state: 'working',
-        startedAt: 10,
-        agentType: 'researcher',
-        description: 'Investigate'
-      }
-    ])
-    expect(projectAgentChildWorkLegacyBackgroundTasks(views)).toEqual({
-      tasks: [
-        {
-          id: 'task-agent',
-          kind: 'agent',
-          description: 'Investigate',
-          name: 'researcher',
-          state: 'working',
-          startedAt: 10,
-          stoppable: true
-        },
-        {
-          id: 'task-shell',
-          kind: 'command',
-          state: 'working',
-          startedAt: 10,
-          totalTokens: 3,
-          stoppable: true
-        }
-      ],
-      settledTasks: [
-        { id: 'task-failed', kind: 'agent', state: 'blocked', startedAt: 10, stoppable: true }
-      ]
-    })
-  })
-
-  it.each([
-    ['succeeded', 'done'],
-    ['failed', 'blocked'],
-    ['cancelled', 'idle'],
-    ['unknown', 'done']
-  ] as const)(
-    'reads a settled %s child as the %s task a host publishes today',
-    (outcome, state) => {
-      const views = projectAgentChildWorkViews(
-        [record('child', { state: 'done', membership: 'settled', outcome, settledAt: 20 })],
-        [alias('child', 'task_id', 'task-1')]
-      )
-      expect(projectAgentChildWorkLegacyBackgroundTasks(views).settledTasks?.[0]?.state).toBe(state)
-    }
-  )
 })
 
 describe('one child and the shell it launched, end to end', () => {

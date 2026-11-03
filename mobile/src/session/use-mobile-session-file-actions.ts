@@ -30,7 +30,8 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     handleCreateBrowserRef,
     scheduleDelayedAction,
     nativeChatSendError,
-    fetchSessionTabs
+    fetchSessionTabs,
+    getSendCompletionGeneration
   } = scope
   const [pendingTerminalFileTap, setPendingTerminalFileTap] =
     useState<PendingTerminalFileTap | null>(null)
@@ -67,7 +68,8 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     scheduleDelayedAction,
     reportChatTapFailure: nativeChatSendError.show,
     confirmTerminalFileTapOpen,
-    onRevealFileLine: revealFileLine
+    onRevealFileLine: revealFileLine,
+    getSendCompletionGeneration
   })
 
   useProvideSessionScreenHandlers(hostId, worktreeId, {

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { githubTaskBinding } from '@/lib/github-task-observation'
+import { findRepoForGitHubOwner } from '../github/repository-routing'
 import { workItemsCacheKey } from '../github/cache-identity'
 import {
   createTestStore,
@@ -126,10 +128,19 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'old-runtime' }
     })
-    await expect(oldFetch).resolves.toEqual([{ ...oldRuntimeItem, repoId: 'caller-repo-id' }])
+    await expect(oldFetch).resolves.toBeUndefined()
     expect(
       store.getState().workItemsCache[
-        workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-new')
+        workItemsCacheKey(
+          'caller-repo-id',
+          24,
+          'is:open',
+          'runtime:env-new',
+          (() => {
+            const repo = findRepoForGitHubOwner(store.getState(), 'caller-repo-id', '/server/repo')
+            return repo && githubTaskBinding(repo)
+          })()
+        )
       ]?.data
     ).toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
   })

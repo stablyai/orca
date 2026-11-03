@@ -7,10 +7,13 @@ import {
   createBrowserClientPageRetainedRoot,
   createBrowserClientPageWebview,
   hasBrowserClientPageAttachedGuest,
-  hideRetainedHostWhileGuestIsBlank,
   readBrowserClientPageAttachedGuestId
 } from './browser-client-page-retained-elements'
 import { browserClientPageRetainedKey } from './browser-client-page-retained-key'
+import {
+  retainBrowserClientPagePaint,
+  createBrowserClientPageLoadCommitHandler
+} from './browser-client-page-paint-retention'
 import { rekeyBrowserClientRetainedPage } from './browser-client-page-retained-rekey'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 import {
@@ -151,7 +154,6 @@ export class BrowserClientPageRetainedRegistry {
       if (page.status === 'attaching') {
         page.rejectMount(new Error('browser_client_page_renderer_registry_disposed'))
       }
-      page.host.remove()
       this.releasePage(page)
     }
     this.root?.remove()
@@ -197,10 +199,11 @@ export class BrowserClientPageRetainedRegistry {
       onAttached,
       onReady,
       onDestroyed,
-      onRendererGone,
-      onLoadCommit: hideRetainedHostWhileGuestIsBlank(host)
+      onRendererGone
     })
+    page.onLoadCommit = createBrowserClientPageLoadCommitHandler(page)
     page.releaseDragPassthroughSurface = enrolRetainedHostDragPassthrough(page)
+    page.releasePaintRetention = retainBrowserClientPagePaint(page)
     webview.addEventListener('did-attach', onAttached)
     webview.addEventListener('dom-ready', onReady)
     webview.addEventListener('destroyed', onDestroyed)
@@ -284,6 +287,7 @@ export class BrowserClientPageRetainedRegistry {
     }
     clearTimeout(page.attachTimer)
     page.releaseDragPassthroughSurface()
+    page.releasePaintRetention()
     page.visibleAttachment?.stopTrackingViewport()
     page.webview.removeEventListener('did-attach', page.onAttached)
     page.webview.removeEventListener('dom-ready', page.onReady)
@@ -303,12 +307,8 @@ export class BrowserClientPageRetainedRegistry {
   }
 
   private ensureRoot(): HTMLDivElement {
-    if (this.root) {
-      return this.root
-    }
-    const root = createBrowserClientPageRetainedRoot(this.options.document)
-    this.root = root
-    return root
+    this.root ??= createBrowserClientPageRetainedRoot(this.options.document)
+    return this.root
   }
 
   private disconnectPage(page: RetainedPage): void {

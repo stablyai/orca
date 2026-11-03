@@ -109,12 +109,6 @@ export async function readStructuredAgentSessionOptionsAtRest(
         .catch(() => null)
     : catalog
   const listedModelIds = proof ? finishedListingIds(proof) : undefined
-  const defaultModels =
-    independentAgentModelCatalog(record.provider) && reader.readsWithoutModel
-      ? proof && proof.origin !== 'unknown'
-        ? proof.models
-        : []
-      : models
   const fastMode =
     saved.fastMode === undefined
       ? rules?.acceptsKey('fastMode')
@@ -126,13 +120,8 @@ export async function readStructuredAgentSessionOptionsAtRest(
   const model =
     saved.model ??
     (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id)
-  // The pick, else the model's default where a live child reports that, or where the chat's folder
-  // names that model as what it runs, as its first frame showed.
-  const effort =
-    saved.effort ??
-    (rules?.effortDefaultsToModel || (saved.model === undefined && folderDefault)
-      ? defaultModels.find((entry) => entry.id === model)?.defaultEffort
-      : undefined)
+  // Only saved effort is input; model recommendations remain catalog context.
+  const effort = saved.effort
   const defaulted = (['model', 'effort'] as const).filter(
     (key) => saved[key] === undefined && Boolean(key === 'model' ? model : effort)
   )

@@ -3960,7 +3960,7 @@
             "copyLinkFailed": "Bağlantı kopyalanamadı",
             "downloadOpenWithDefaultApp": "İndir ve varsayılan uygulamayla aç",
             "downloadOpenFailed": "'{{value0}}' indirilemedi.",
-            "openInThisGroup": "Bu grupta aç",
+            "openInNewTab": "Yeni sekmede aç",
             "openInThisGroupRefused": "{{value0}} bu grupta açılamadı"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -7665,7 +7665,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Computer Use'u Aç",
-          "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
+          "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Orca Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
           "333984cf90": "Mevcut bir tarayıcı oturumunu kullan"
         },
         "BrowserUseEnableSwitch": {
@@ -7785,7 +7785,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Ajanların yerel masaüstü uygulamalarını incelemesini ve çalıştırmasını sağlar.",
-          "93255aaf18": "Computer Use becerisi",
+          "93255aaf18": "Orca Computer Use becerisi",
           "45f8e22c2e": "Aç",
           "d95d1cfab8": "Yenile",
           "0c29da5805": "Hazır",
@@ -8670,8 +8670,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Komut şablonu",
-          "2b2f38652b": "Özel komut",
-          "0ffb081b3a": "Varsayılan ajanı kullan",
           "f4310cf63f": "Ajan",
           "1cd88d470a": "Özelleştir",
           "403876bb48": "Genel ayarı kullan",
@@ -9216,7 +9214,7 @@
           "902f5dee1f": "Seçince Kopyala",
           "9129b7e805": "Bir terminal bölmesinin üzerine gelmek, tıklamaya gerek kalmadan onu etkinleştirir.",
           "8eefeaa3da": "Odak Fareyi Takip Eder",
-          "96fe15def8": "Terminal bölmeleri için fare ve pano davranışı.",
+          "96fe15def8": "Terminal bölmeleri için kaydırma, fare ve pano davranışı.",
           "45721f3e67": "Terminal Etkileşimi",
           "9c0b1c1792": "Açık",
           "c1fc9e9444": "GPU Hızlandırma",
@@ -20000,7 +19998,8 @@
         "effortPickerFailed": "Çaba seçici açılamadı.",
         "modelApplyFailed": "{{value}} modeli uygulanamadı.",
         "effortApplyFailed": "Çaba düzeyi {{value}} olarak ayarlanamadı."
-      }
+      },
+      "settings": "Sohbet ayarları"
     },
     "tab": {
       "bar": {
@@ -20364,7 +20363,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Kopyalarken Kenar Boşluğunu Kırp",
         "copyTrimsGutterDescription": "Ajan çıktısının arkasına çizildiği sol kenar boşluğunu kaldırır, böylece kopyalanan metin girintili olmaz. Yalnızca seçilen tüm satırların paylaştığı girinti kaldırılır.",
-        "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın."
+        "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın.",
+        "scrollOnUserInput": "Girişte en alta kaydır",
+        "scrollOnUserInputDescription": "Yukarı kaydırılmışken yazmak veya yapıştırmak en son çıktıya götürür. Konumunuzu korumak için kapatın."
       },
       "terminal": {
         "clipboard": {
@@ -20379,6 +20380,15 @@
             "whitespace": "boşluk",
             "spaces": "boşluklar"
           }
+        },
+        "search": {
+          "typing": "yazma",
+          "input": "giriş",
+          "jump": "atla",
+          "bottom": "alt",
+          "scrollback": "kaydırma geçmişi",
+          "snap": "hizala",
+          "position": "konum"
         }
       },
       "nativeChat": {
@@ -23078,6 +23088,12 @@
     "terminalUnverifiable": "Orca, WSL dağıtımı {{distro}} öğesinin çalışıp çalışmadığını denetleyemediği için bu terminali başlatmadı. Dağıtımı başlatıp yeniden deneyin."
   },
   "agentPicker": {
+    "catalogUnsupported": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimlerinizi koruyabilir veya bağımsız değişkenleri kullanabilirsiniz.",
+    "catalogFailed": "{{agent}} modelleri yüklenemedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
+    "catalogSignIn": "Modelleri yüklemek için {{agent}} oturumu açın, ardından ajan seçiciyi yeniden açın.",
+    "catalogInstall": "Modelleri yüklemek için bu sunucuya {{agent}} yükleyin, ardından ajan seçiciyi yeniden açın.",
+    "catalogUnresolved": "{{agent}} modelleri yüklenmedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
+    "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
     "setByArguments": "Argümanlarınızla ayarlandı",
     "searchModels": "Modelleri ara",
     "noModels": "Aramanızla eşleşen model yok.",
@@ -23092,6 +23108,8 @@
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
     "launchTerminal": "Terminal başlat",
+    "use": "Kullan",
+    "select": "Aracı seç",
     "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
     "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
   }

@@ -4,7 +4,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
   launchSourceControlRecoveryAgentWithDefault,
   getDefaultSourceControlRecoveryLaunchCopy

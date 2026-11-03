@@ -1059,7 +1059,8 @@
     },
     "prSidebar": {
       "loading": "Loading pull request…",
-      "notPermitted": "Not permitted — your GitHub account is not connected."
+      "notPermitted": "Not permitted — your GitHub account is not connected.",
+      "retryLoading": "Retry loading pull request"
     },
     "richMarkdownEditor": {
       "linkUrl": "Link URL",
@@ -1342,7 +1343,7 @@
       "linkButton": "Link pull request"
     },
     "prViewPanel": {
-      "providerUnavailable": "Hosted review panel unavailable for this provider.",
+      "githubRemoteRequired": "This tab needs a GitHub remote to show pull request details. For other supported hosts, create a review from Changes and open it in your browser.",
       "branchUnavailable": "Current branch unavailable."
     },
     "prActionsSection": {
@@ -2302,7 +2303,8 @@
       "notesSent": "Notes sent"
     },
     "prActionsEngine": {
-      "mergeFailed": "Failed to merge pull request."
+      "mergeFailed": "Failed to merge pull request.",
+      "refreshFailed": "Failed to refresh pull request."
     },
     "prAiTriageLaunch": {
       "promptNotSent": "The agent started, but the prompt wasn't sent.",

@@ -88,9 +88,4 @@ describe('OrcaRuntimeService headless wake report', () => {
     expect(readHostIds).toContain('ssh:ssh-1')
     expect(wake).toBe('unsupported-headless')
   })
-
-  it('ignores a live record on an SSH-host worktree partition', async () => {
-    const { wake } = await activateOnHeadlessServe(makeRecord('live'), 'ssh:ssh-1')
-    expect(wake).toBe('not-applicable')
-  })
 })

@@ -1,7 +1,7 @@
 import type { BrowserScreencastResult } from '../../../shared/runtime-types'
 import { BrowserError } from '../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
-import { startBrowserScreencast } from '../../browser/browser-screencast-stream'
+import { startBrowserScreencast } from '../../browser/cdp/screencast/browser-screencast-stream'
 import { rendererPublicationThrottle } from '../../window/renderer-publication-throttle'
 import { mintBrowserScreencastSubscriptionId } from '../browser-screencast-subscription-id'
 import {
@@ -12,7 +12,7 @@ import {
   INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
   screencastSubscriberIsGhost
 } from '../browser-screencast-ghost-subscriber-eviction'
-import type { BrowserScreencastSession } from '../../browser/browser-screencast-stream-types'
+import type { BrowserScreencastSession } from '../../browser/cdp/screencast/browser-screencast-stream-types'
 import type { RpcBinarySender } from '../rpc/rpc-binary-sender'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'

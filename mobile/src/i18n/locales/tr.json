@@ -803,7 +803,8 @@
     },
     "prSidebar": {
       "loading": "Pull request yükleniyor…",
-      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil."
+      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil.",
+      "retryLoading": "Pull request'i yüklemeyi yeniden dene"
     },
     "protocolBlockScreen": {
       "backToHosts": "Sunucular bölümüne dön",
@@ -1643,7 +1644,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Geçerli branch kullanılamıyor.",
-      "providerUnavailable": "Bu sağlayıcı için barındırılan inceleme paneli kullanılamıyor."
+      "githubRemoteRequired": "Bu sekmede çekme isteği ayrıntılarını görmek için bir GitHub uzak deposu gerekir. Desteklenen diğer platformlarda Değişiklikler bölümünden bir inceleme oluşturup tarayıcınızda açın."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Kişiler yüklenemedi",

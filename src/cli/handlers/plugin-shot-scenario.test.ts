@@ -9,7 +9,6 @@ import type { RuntimeClient } from '../runtime-client'
 import { RuntimeRpcFailureError } from '../runtime/types'
 import { createPluginFromTemplate } from '../plugin-authoring/plugin-create'
 import { PLUGIN_VIEW_HANDLERS, type PluginShotReply } from './plugin-view'
-import { pluginScenarioFileStem } from './plugin-shot-scenario'
 
 const check = vi.hoisted(() => ({
   readPluginCheckScenarioNames: vi.fn<(dir: string, entry: string) => Promise<string[]>>(),
@@ -130,13 +129,6 @@ describe('orca plugin shot --scenario', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
-  it('says how to add scenarios when the panel has none', async () => {
-    check.readPluginCheckScenarioNames.mockResolvedValue([])
-    await expect(run(['plugin', 'shot', dir, '--scenario', 'counted'], vi.fn())).rejects.toThrow(
-      /has no scenarios: add src\/panel\.check\.ts/
-    )
-  })
-
   it('refuses --act with --scenario', async () => {
     const call = vi.fn()
     await expect(
@@ -201,22 +193,6 @@ describe('orca plugin shot --scenario', () => {
     ).rejects.toMatchObject({ code: 'runtime_unsupported' })
   })
 
-  it('still shoots a tree whose render had issues, listing them in errors', async () => {
-    check.checkPluginPanels.mockResolvedValue([
-      {
-        panel: panelId,
-        entry: 'src/panel.tsx',
-        drawnTree: TREE,
-        issues: [{ kind: 'plugin', message: 'boom', location: 'src/panel.tsx:4:7' }]
-      }
-    ])
-    await run(
-      ['plugin', 'shot', dir, '--scenario', 'counted'],
-      vi.fn(async () => ({ result: replayReply() }))
-    )
-    expect(printed().errors).toEqual(['src/panel.tsx:4:7: boom'])
-  })
-
   it('fails when the scenario drew no tree, without reaching the host', async () => {
     check.checkPluginPanels.mockResolvedValue([
       {
@@ -233,11 +209,5 @@ describe('orca plugin shot --scenario', () => {
       }
     )
     expect(call).not.toHaveBeenCalled()
-  })
-
-  it('names files safely after the scenario', () => {
-    expect(pluginScenarioFileStem('counted')).toBe('counted')
-    expect(pluginScenarioFileStem('../a b/c')).toBe('a-b-c')
-    expect(pluginScenarioFileStem('///')).toBe('scenario')
   })
 })

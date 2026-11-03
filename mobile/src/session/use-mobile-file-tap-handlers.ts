@@ -34,6 +34,7 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
     proceed: () => void
   ) => void
   onRevealFileLine?: (relativePath: string, line: number) => void
+  getSendCompletionGeneration: () => number
 }
 
 // Share stable dispatch-time handlers and activation sequence so newer terminal/chat file taps supersede in-flight opens.
@@ -51,6 +52,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getActiveSessionTabId,
     getActiveSessionTabType,
     getSessionTabs,
+    getSendCompletionGeneration,
     hostId,
     nativeChatSessionId,
     onRevealFileLine,
@@ -78,6 +80,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       getActiveSessionTabId,
       getActiveSessionTabType,
       getSessionTabs,
+      getSendCompletionGeneration,
       hostId,
       nativeChatSessionId,
       onRevealFileLine,
@@ -98,6 +101,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getActiveSessionTabId,
     getActiveSessionTabType,
     getSessionTabs,
+    getSendCompletionGeneration,
     hostId,
     nativeChatSessionId,
     onRevealFileLine,
@@ -123,6 +127,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         return
       }
       const activationSeq = ++activationSeqRef.current
+      const sourceNavigationGeneration = current.getSendCompletionGeneration()
       openMobileFileTap<T>({
         client: current.client,
         hostId: current.hostId,
@@ -141,6 +146,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
           activated,
           activationSeq,
           latestActivationSeq: activationSeqRef.current,
+          sourceNavigationGeneration,
+          activeNavigationGeneration: current.getSendCompletionGeneration(),
           sourceTerminalHandle: handle,
           activeTerminalHandle: current.activeHandleRef.current,
           activeTabType: current.getActiveSessionTabType()
@@ -148,7 +155,12 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         switchSessionTab: current.switchSessionTab,
         scheduleDelayedAction: current.scheduleDelayedAction,
         confirmResolvedOpen: current.confirmTerminalFileTapOpen,
-        onRevealFileLine: current.onRevealFileLine
+        onRevealFileLine: current.onRevealFileLine,
+        onOpenFailed: ({ kind, message, pathText }) => {
+          if (kind === 'failed') {
+            current.reportChatTapFailure(message?.trim() || `Couldn't open ${pathText}`)
+          }
+        }
       })
     },
     []
@@ -175,6 +187,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       return
     }
     const activationSeq = ++activationSeqRef.current
+    const sourceNavigationGeneration = current.getSendCompletionGeneration()
     openMobileNativeChatFileTap<T>({
       client: current.client,
       hostId: current.hostId,
@@ -195,6 +208,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         activated,
         activationSeq,
         latestActivationSeq: activationSeqRef.current,
+        sourceNavigationGeneration,
+        activeNavigationGeneration: current.getSendCompletionGeneration(),
         sourceTerminalHandle,
         activeTerminalHandle: current.activeHandleRef.current,
         sourceSessionTabId: nativeChatTabId,
@@ -204,7 +219,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       switchSessionTab: current.switchSessionTab,
       scheduleDelayedAction: current.scheduleDelayedAction,
       onRevealFileLine: current.onRevealFileLine,
-      onOpenFailed: () => current.reportChatTapFailure(`Couldn't open ${pathText}`)
+      onOpenFailed: ({ message }) =>
+        current.reportChatTapFailure(message?.trim() || `Couldn't open ${pathText}`)
     })
   }, [])
 

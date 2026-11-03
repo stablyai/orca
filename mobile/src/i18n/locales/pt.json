@@ -840,7 +840,8 @@
     },
     "prSidebar": {
       "loading": "Carregando pull request…",
-      "notPermitted": "Não permitido — sua conta do GitHub não está conectada."
+      "notPermitted": "Não permitido — sua conta do GitHub não está conectada.",
+      "retryLoading": "Tentar carregar o pull request novamente"
     },
     "protocolBlockScreen": {
       "backToHosts": "Voltar para hosts",
@@ -1692,7 +1693,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Branch atual indisponível.",
-      "providerUnavailable": "Painel de revisão hospedada indisponível para este provedor."
+      "githubRemoteRequired": "Esta aba precisa de um remoto do GitHub para mostrar os detalhes dos pull requests. Para outras plataformas compatíveis, crie uma revisão em Alterações e abra no navegador."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Falha ao carregar pessoas",

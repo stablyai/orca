@@ -3,7 +3,7 @@ import {
   cutClosingStructuredAgentSession,
   type StructuredAgentSessionConversationLifetimeHost
 } from './structured-agent-session-conversation-lifetime-host'
-import { retryableStructuredAgentSessionStart } from './structured-agent-session-start-retry'
+import type { AgentSessionStartFailure } from './structured-agent-session-start-failure'
 // Open conversations at rest; never start agents for reads. Acquire serialization once because the queue is nonreentrant.
 
 export type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-host-types'
@@ -37,10 +37,7 @@ import {
   type WorkspaceSleepCloseResult
 } from './structured-agent-session-workspace-sleep-stop'
 import type { StructuredAgentSessionExpiredStartup } from './structured-agent-session-startup-attempt'
-import {
-  providerStartupFailureFact,
-  structuredAgentSessionStartFailure
-} from './structured-agent-session-failure-text'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import {
   oldestQueuedSubmission,
   recordStructuredAgentSessionStartFailure
@@ -212,57 +209,58 @@ export function createStructuredAgentSessionConversationLifetime(
     expireStartup: ({ sessionId, child }: StructuredAgentSessionExpiredStartup): void =>
       stopStartingChild(sessionId, child),
     stopStartingChild,
+    /** The open's failed start: a direct attach records its row; a still-indexed child stops. A
+     *  replaced, stopped or closed child only retires its owner. */
     failStartingChild: (
       sessionId: string,
       failed: StructuredAgentSessionProviderChildIdentity,
-      error: unknown,
+      verdict: AgentSessionStartFailure,
       openMs: number
     ): Promise<void> =>
       serialize(sessionId, async () => {
         const session = sessions.get(sessionId)
         const child = session?.child
-        if (!session || !child || child.close || !sameProviderChild(child, failed)) {
+        const indexed = !!child && sameProviderChild(child, failed)
+        const ended = session?.lastEndedChild
+        const exited =
+          !child && !!ended && sameProviderChild(ended, failed) && ended.cause === 'exit'
+        if (!session || (indexed ? child?.close : !exited)) {
           return
         }
-        const failure = providerStartupFailureFact(error)
+        const failure = verdict.fact
         // Persisted facts cannot retain the original error; log it here.
         deps().logger.warn('a provider could not finish starting', {
           scope: 'provider-open-failed',
           sessionId,
           failure: failure.kind,
           ...failure.requestTimeout,
+          retry: verdict.retry,
           openMs,
-          error
+          error: verdict.cause
         })
-        const { runtimeState: runtime } = host.context()
-        const owned = runtime.startFlights.ownsChild(sessionId, child)
-        if (owned) {
-          const retry = retryableStructuredAgentSessionStart(error)
-          runtime.startupAttempts.childFailed(sessionId, child, failure, retry)
+        if (!host.context().runtimeState.startFlights.ownsChild(sessionId, failed)) {
+          const record = deps().store.getRecord(sessionId)
+          const wording = structuredAgentSessionFailureWordsContext(record)
+          // A start whose own exit settled first keeps that exit's wording; only a request
+          // deadline, the more specific explanation, outranks it. The verdict alone decides retry.
+          const cause = exited && !failure.requestTimeout ? { exit: ended?.failure } : { failure }
+          await recordStructuredAgentSessionStartFailure(
+            { journal: session.journal, fence: failed.fence },
+            {
+              startKey: failed.generation,
+              ...structuredAgentSessionStartFailure(cause, wording)
+            },
+            oldestQueuedSubmission(session)?.clientMessageId ?? null
+          ).catch((writeError: unknown) =>
+            deps().logger.warn('recording a failed provider open failed', {
+              scope: 'provider-open-failure',
+              sessionId,
+              error: writeError
+            })
+          )
         }
-        try {
-          if (!owned) {
-            const record = deps().store.getRecord(sessionId)
-            const wording = structuredAgentSessionFailureWordsContext(record)
-            await recordStructuredAgentSessionStartFailure(
-              { journal: session.journal, fence: child.fence },
-              {
-                startKey: child.generation,
-                ...structuredAgentSessionStartFailure({ failure }, wording)
-              },
-              oldestQueuedSubmission(session)?.clientMessageId ?? null
-            ).catch((writeError: unknown) =>
-              deps().logger.warn('recording a failed provider open failed', {
-                scope: 'provider-open-failure',
-                sessionId,
-                error: writeError
-              })
-            )
-          }
-          const reason = error instanceof Error ? error.message : String(error)
-          await stopAgent(sessionId, { cause: 'host-stop', reason, failure })
-        } finally {
-          runtime.startupAttempts.childEnded(sessionId, child)
+        if (indexed) {
+          await stopAgent(sessionId, { cause: 'host-stop', reason: verdict.message, failure })
         }
       }),
     dispose: (): void => {
