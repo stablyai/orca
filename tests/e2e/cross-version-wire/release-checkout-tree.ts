@@ -2,6 +2,8 @@ import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { parse } from 'yaml'
 import { createWorkspaceSourceResolver } from '../../../config/scripts/workspace-source-exports.mjs'
+import { LOCAL_RELEASE_GIT_ENV, prepareReleaseSnapshotSource } from './release-snapshot-source.ts'
+import { checkoutFetchTrace } from './release-checkout-diagnostic.ts'
 import {
   collectPackageImports,
   installMissingPackageStandIns,
@@ -168,14 +170,16 @@ async function runCheckoutProcess(
 ): Promise<string> {
   // Kept lazy so plain Node 24 contention children never load Vite's TS graph.
   const { runProcess } = await import('@orca/process-host')
+  const trace = program === 'git' ? await checkoutFetchTrace() : undefined
   const result = await runProcess({
     program,
     args,
     cwd: repoRoot,
+    env: { ...process.env, ...trace?.env, ...LOCAL_RELEASE_GIT_ENV },
     timeoutMs: Math.max(1, deadline - Date.now()),
     maxOutputBytes: CHECKOUT_MAX_OUTPUT_BYTES,
     terminationBarrier: true
-  })
+  }).finally(() => trace?.finish('', `consumer-${args[0]}`))
   if (result.code === 0 && !result.timedOut) {
     return result.stdout
   }
@@ -254,6 +258,7 @@ export async function extractReleaseCheckoutTree(
   sourceOnly = false
 ): Promise<PackageImports> {
   const archive = join(staging, '.release-checkout.tar')
+  await prepareReleaseSnapshotSource(repoRoot, commit)
   const deadline = Date.now() + CHECKOUT_PROCESS_TIMEOUT_MS
   const workspacePaths = await releaseWorkspaceArchivePaths(repoRoot, commit, deadline)
   const optionalPaths = await listReleasePaths(repoRoot, commit, OPTIONAL_ARCHIVE_PATHS, deadline)

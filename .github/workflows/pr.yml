@@ -205,6 +205,11 @@ jobs:
         run: node -p '"executable=" + process.execPath' >> "$GITHUB_OUTPUT"
 
       # Choose one root/mobile install: root-only store is 321MB/4.6s versus mixed 537MB/8.6s, saving unused mobile downloads on most PRs.
+      - name: Measure historical source checkout storage
+        run: |
+          git count-objects -v
+          df -k .
+
       - uses: ./.github/actions/install-node-dependencies
         if: needs.code_paths.outputs.mobile_dependencies != 'true'
         with:
@@ -989,8 +994,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Fetch historical blobs before timed per-pin archives, where lazy fetches exhausted the deadline.
+          # Requested historical snapshots acquire their blobs before timed extraction.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -1013,6 +1019,8 @@ jobs:
 
       # Run the entire directory; zero matches fail so new contracts cannot be omitted silently.
       - name: Old/new client and server compatibility journeys
+        env:
+          ORCA_RELEASE_CHECKOUT_DIAGNOSTIC: '1'
         run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
 
   managed_hook_node18:

@@ -12,6 +12,7 @@ import {
   type MaterializeReleaseCheckoutTestHooks
 } from './release-checkout-publication.ts'
 import { releaseModuleLocation } from './release-module-locations.ts'
+import { prepareReleaseSnapshotSource } from './release-snapshot-source.ts'
 export type {
   CheckoutLockOptions,
   CheckoutLifecycleContext,
@@ -102,6 +103,10 @@ function resolveCommit(ref: string): string {
         'The ref must exist locally; a shallow CI clone needs `fetch-depth: 0`.'
     )
   }
+}
+
+export async function prepareReleaseCheckoutSnapshot(ref: string): Promise<void> {
+  await prepareReleaseSnapshotSource(REPO_ROOT, resolveCommit(ref))
 }
 
 function checkoutModulePath(root: string, rootRelativePath: string): string {
