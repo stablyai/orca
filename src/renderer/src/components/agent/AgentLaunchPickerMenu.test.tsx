@@ -516,9 +516,7 @@ it('opens with ArrowRight and returns to the trigger with ArrowLeft', async () =
   act(() => getByRole(panel, 'button', { name: 'Toggle Arguments' }).focus())
   await user.keyboard('{ArrowLeft}')
   expect(document.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBeNull()
-  expect(document.activeElement).toBe(
-    getByRole(document.body, 'button', { name: 'Configure Codex' })
-  )
+  expect(document.activeElement).toBe(row)
   expect(launch).not.toHaveBeenCalled()
 })
 

@@ -28,9 +28,13 @@ export function AgentLaunchSetupSubmenu({
     content.current?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')?.focus({
       preventScroll: true
     })
-  const close = () => {
+  const close = (returnFocus: 'row' | 'segment') => {
     onOpenChange(false)
-    trigger.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    const target =
+      returnFocus === 'row'
+        ? trigger.current
+        : trigger.current?.querySelector<HTMLButtonElement>('button')
+    target?.focus()
   }
   return (
     <DropdownMenuSub open={open} onOpenChange={onOpenChange}>
@@ -77,7 +81,10 @@ export function AgentLaunchSetupSubmenu({
             }}
             onKeyDown={(event) => {
               event.stopPropagation()
-              if (['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+              if (event.key === 'ArrowRight') {
+                event.preventDefault()
+                event.currentTarget.click()
+              } else if (['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
                 event.preventDefault()
                 trigger.current?.focus()
                 if (event.key !== 'ArrowLeft') {
@@ -88,7 +95,7 @@ export function AgentLaunchSetupSubmenu({
               }
             }}
           >
-            <ChevronRight className="size-3.5 text-muted-foreground" />
+            <ChevronRight className="size-3.5 text-current" />
           </Button>
         )}
       </DropdownMenuSubTrigger>
@@ -122,23 +129,33 @@ export function AgentLaunchSetupSubmenu({
           }
         }}
         onKeyDownCapture={(event) => {
+          const target = event.target
+          const emptySearch =
+            target instanceof HTMLInputElement && target.matches('[cmdk-input]') && !target.value
+          const editing =
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement ||
+            (target instanceof HTMLElement && target.isContentEditable)
           if (
             event.key === 'ArrowLeft' &&
-            !(
-              event.target instanceof HTMLInputElement ||
-              event.target instanceof HTMLTextAreaElement ||
-              (event.target instanceof HTMLElement && event.target.isContentEditable)
-            )
+            !event.nativeEvent.isComposing &&
+            !event.altKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.shiftKey &&
+            target instanceof Element &&
+            target.closest('[role="menu"]') === event.currentTarget &&
+            (emptySearch || !editing)
           ) {
             event.preventDefault()
             event.stopPropagation()
-            close()
+            close('row')
           }
         }}
         onEscapeKeyDown={(event) => {
           event.preventDefault()
           if (!content.current?.querySelector('[contenteditable][aria-expanded="true"]')) {
-            close()
+            close('segment')
           }
         }}
       >

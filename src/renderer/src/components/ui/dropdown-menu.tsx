@@ -227,7 +227,7 @@ const dropdownMenuSubTriggerVariants = cva(
         default:
           'focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14 data-[state=open]:text-accent-foreground',
         'launch-row':
-          'group/launch-row gap-0 rounded-[7px] p-0 text-xs leading-5 font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
+          'gap-0 rounded-[7px] p-0 text-xs leading-5 font-medium hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus-within:bg-accent focus-within:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
       }
     },
     defaultVariants: { variant: 'default' }

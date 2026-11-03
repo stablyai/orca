@@ -18,9 +18,9 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',
         'menu-launch':
-          'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground hover:bg-accent hover:text-accent-foreground group-focus/launch-row:bg-accent group-focus/launch-row:text-accent-foreground',
+          'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment':
-          'rounded-l-none border-l border-border bg-muted/40 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground',
+          'rounded-l-none border-l border-border bg-muted/40 text-muted-foreground hover:bg-ai-action-accent/20 hover:text-ai-action-accent focus-visible:bg-ai-action-accent/20 focus-visible:text-ai-action-accent',
         'pane-title': 'pane-title-split-trigger',
         'pane-title-close': 'pane-title-close',
         // The worktree card's "rename failed" chip, for a failure the user can open.

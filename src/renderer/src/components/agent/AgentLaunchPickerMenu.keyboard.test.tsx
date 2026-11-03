@@ -77,6 +77,9 @@ it('moves one agent per Up/Down press, including after returning from its submen
   await waitFor(() =>
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Configure Codex' }))
   )
+  await user.keyboard('{ArrowRight}')
+  expect(document.activeElement).toBe(screen.getByPlaceholderText('Search Codex models…'))
+  await user.keyboard('{Escape}')
   await user.keyboard('{ArrowDown}')
   await waitFor(() => expect(document.activeElement).toBe(claude))
   expect(launched).not.toHaveBeenCalled()
@@ -99,6 +102,44 @@ it.each(['hover', 'click'] as const)(
     expect(launched).not.toHaveBeenCalled()
   }
 )
+
+it('returns from empty search with Left Arrow, then reopens and navigates the main menu', async () => {
+  const { launched, changed } = show()
+  const user = userEvent.setup()
+  const codex = screen.getByRole('menuitem', { name: /^Codex/ })
+  codex.focus()
+  await user.keyboard('{ArrowRight}')
+  expect(document.activeElement).toBe(screen.getByPlaceholderText('Search Codex models…'))
+  await user.keyboard('{ArrowLeft}')
+  expect(screen.queryByRole('menu', { name: 'Configure Codex' })).toBeNull()
+  expect(document.activeElement).toBe(codex)
+  expect(screen.getByRole('menu', { name: 'New tab' })).toBeTruthy()
+  await user.keyboard('{ArrowRight}')
+  expect(document.activeElement).toBe(screen.getByPlaceholderText('Search Codex models…'))
+  await user.keyboard('{ArrowLeft}{ArrowDown}')
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /^Claude/ }))
+  )
+  expect(changed).not.toHaveBeenCalled()
+  expect(launched).not.toHaveBeenCalled()
+})
+
+it('keeps Left Arrow editing a typed search and returns after the search is cleared', async () => {
+  show()
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Configure Codex' }))
+  const search = screen.getByPlaceholderText<HTMLInputElement>('Search Codex models…')
+  await user.keyboard('query{ArrowLeft}')
+  expect(search.selectionStart).toBe(4)
+  expect(document.activeElement).toBe(search)
+  expect(screen.getByRole('menu', { name: 'Configure Codex' })).toBeTruthy()
+  await user.clear(search)
+  fireEvent.keyDown(search, { key: 'ArrowLeft', isComposing: true })
+  expect(screen.getByRole('menu', { name: 'Configure Codex' })).toBeTruthy()
+  await user.keyboard('{ArrowLeft}')
+  expect(screen.queryByRole('menu', { name: 'Configure Codex' })).toBeNull()
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /^Codex/ }))
+})
 
 it.each([false, true])(
   'closes a controlled=%s menu once after default launch',
