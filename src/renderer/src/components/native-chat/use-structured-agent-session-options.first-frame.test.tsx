@@ -482,7 +482,7 @@ describe('a new chat picker’s first frame', () => {
     expect(next.frames[0]).toEqual({
       model: 'grok-build',
       label: 'Grok Build',
-      effort: 'high',
+      effort: null,
       usable: true
     })
     next.unmount()

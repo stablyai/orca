@@ -163,7 +163,7 @@ export async function readStructuredAgentSessionOptions(
         ? selected.current.serviceTier
         : (options.current.serviceTier ?? selected.current.serviceTier)
   }
-  // Defaults cover unsaved choices only; first send pins them.
+  // Only the unsaved model default is pinned on first send.
   const defaultedBy = (key: 'model' | 'effort') =>
     key === 'model' && !options.current.model
       ? displayDefault !== undefined || selected.current.defaulted?.includes(key) === true
@@ -173,7 +173,7 @@ export async function readStructuredAgentSessionOptions(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
   const pinsDefaults = neverSent && (agent !== 'codex' || !live || !!options.current.model)
-  const defaulted = pinsDefaults ? [] : defaultKeys
+  const defaulted = defaultKeys.filter((key) => key === 'effort' || !pinsDefaults)
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
   for (const key of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
     if (current[key] !== undefined && saved[key] !== undefined) {
@@ -181,7 +181,7 @@ export async function readStructuredAgentSessionOptions(
     }
   }
   for (const key of defaultKeys) {
-    if (pinsDefaults && current[key] !== undefined) {
+    if (key === 'model' && pinsDefaults && current[key] !== undefined) {
       acceptedInputSources[key] = 'policy'
     }
   }
