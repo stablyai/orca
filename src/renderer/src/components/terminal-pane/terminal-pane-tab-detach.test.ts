@@ -4,6 +4,7 @@ import {
   detachTerminalPaneToTab,
   resolveTerminalTabStripDropTarget
 } from './terminal-pane-tab-detach'
+import { holdTerminalMoveKeys, terminalLeafMoveKey } from './terminal-leaf-move-guard'
 import {
   createStore,
   EXISTING_TAB_1,
@@ -73,6 +74,35 @@ async function expectDeferredSplitDetachRejected(sourcePaneCwd: SourcePaneCwd): 
   expect(store.setActiveTab).not.toHaveBeenCalled()
   expect(store.setActiveTabType).not.toHaveBeenCalled()
 }
+
+describe('detachTerminalPaneToTab leaf guard', () => {
+  it('does nothing while another move holds the same leaf', async () => {
+    const release = holdTerminalMoveKeys([terminalLeafMoveKey(LEAF_2)])
+    const store = createStore()
+    const moveLeafToNewTab = vi.fn(() => Promise.resolve({ status: 'not_held' }))
+    vi.stubGlobal('window', { api: { pty: { moveLeafToNewTab } } })
+    try {
+      const result = await detachTerminalPaneToTab({
+        getStore: () => store,
+        manager: {
+          getPanes: () => [{ id: 1 }, { id: 2 }],
+          getLeafId: () => LEAF_2,
+          detachPaneForExternalMove: () => true
+        },
+        persistLayoutSnapshot: vi.fn(),
+        sourcePaneId: 2,
+        sourceTabId: SOURCE_TAB_ID,
+        targetGroupId: TARGET_GROUP_ID,
+        worktreeId: WORKTREE_ID
+      })
+
+      expect(result).toBeNull()
+      expect(moveLeafToNewTab).not.toHaveBeenCalled()
+    } finally {
+      release?.()
+    }
+  })
+})
 
 describe('resolveTerminalTabStripDropTarget', () => {
   afterEach(() => {

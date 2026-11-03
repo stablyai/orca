@@ -20,22 +20,34 @@ function getOverlayStyle(zone: TabDropZone): CSSProperties {
 export default function TabGroupDropOverlay({
   zone,
   showPaneColumnLabel = false,
-  fillContainer = false
+  fillContainer = false,
+  label,
+  disabled = false
 }: {
   zone: TabDropZone
   showPaneColumnLabel?: boolean
   /** When the parent already sizes the overlay to the target region. */
   fillContainer?: boolean
+  /** Replaces the new-column label, e.g. with a join label or the reason a drop is refused. */
+  label?: string
+  /** A target that would refuse the drop. */
+  disabled?: boolean
 }): React.JSX.Element {
+  const text =
+    label ??
+    (showPaneColumnLabel && zone !== 'center'
+      ? translate('auto.components.tab.group.TabGroupDropOverlay.newColumnLabel', 'New column')
+      : null)
   return (
     <div
       aria-hidden="true"
       className="tab-drop-overlay absolute"
+      data-disabled={disabled ? '' : undefined}
       style={fillContainer ? { inset: 0 } : getOverlayStyle(zone)}
     >
-      {showPaneColumnLabel && zone !== 'center' ? (
+      {text ? (
         <span className="tab-drop-overlay__label pointer-events-none absolute bottom-2 left-2 rounded-sm px-1.5 py-0.5 font-medium">
-          {translate('auto.components.tab.group.TabGroupDropOverlay.paneColumnLabel', 'New split')}
+          {text}
         </span>
       ) : null}
     </div>

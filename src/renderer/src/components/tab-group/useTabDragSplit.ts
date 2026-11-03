@@ -25,7 +25,9 @@ import {
 import { canDropTabIntoPaneBody, isTabDragData, type TabDragItemData } from './tab-drag-data'
 import { useTabDragGestureLifecycle } from './tab-drag-gesture-lifecycle'
 import { useTabDragHoverPreview, type HoveredTabDropTarget } from './tab-drag-hover-preview'
-import { commitTabDragDrop } from './tab-drag-drop-commit'
+import { commitTabDragDrop, type LeafJoinDeps } from './tab-drag-drop-commit'
+import { readMountedLeafRects, type TabDragLeafTarget } from './tab-drag-leaf-target'
+import { moveTerminalTabIntoPaneInApp } from '../terminal-pane/terminal-tab-into-pane-deps'
 
 export type { HoveredTabInsertion }
 export type { HoveredTabDropTarget }
@@ -82,6 +84,7 @@ export function useTabDragSplit({
   activeDrag: TabDragItemData | null
   collisionDetection: CollisionDetection
   hoveredDropTarget: HoveredTabDropTarget | null
+  hoveredLeafTarget: TabDragLeafTarget | null
   hoveredTabInsertion: HoveredTabInsertion | null
   isTabDragActiveRef: RefObject<boolean>
   onDragCancel: () => void
@@ -110,7 +113,9 @@ export function useTabDragSplit({
   const {
     clear: clearHoveredDropTarget,
     handleDragUpdate,
-    hoveredDropTarget
+    hoveredDropTarget,
+    hoveredLeafTarget,
+    shownLeafTargetRef
   } = useTabDragHoverPreview({
     worktreeId,
     preDragActivationSnapshotRef,
@@ -214,6 +219,15 @@ export function useTabDragSplit({
     // onDragMove already resolves split/insertion targets; avoid duplicate work in the same frame.
   }, [])
 
+  const leafJoin = useMemo<LeafJoinDeps>(
+    () => ({
+      moveTabIntoPane: moveTerminalTabIntoPaneInApp,
+      readLeafRects: readMountedLeafRects,
+      getShownLeafTarget: () => shownLeafTargetRef.current
+    }),
+    [shownLeafTargetRef]
+  )
+
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       if (!tabDragActiveRef.current) {
@@ -226,10 +240,11 @@ export function useTabDragSplit({
         dragGeometryRef,
         dropUnifiedTab,
         reorderUnifiedTabs,
-        finishDrag
+        finishDrag,
+        leafJoin
       })
     },
-    [dragGeometryRef, dropUnifiedTab, finishDrag, reorderUnifiedTabs, worktreeId]
+    [dragGeometryRef, dropUnifiedTab, finishDrag, leafJoin, reorderUnifiedTabs, worktreeId]
   )
 
   // Escape/aborted drags arrive here without onDragEnd; clear previews and restore the snapshot.
@@ -241,6 +256,7 @@ export function useTabDragSplit({
     activeDrag,
     collisionDetection,
     hoveredDropTarget,
+    hoveredLeafTarget,
     hoveredTabInsertion: tabInsertion.hoveredTabInsertion,
     isTabDragActiveRef: tabDragActiveRef,
     onDragCancel,

@@ -31,7 +31,7 @@ type LaunchedOrca = {
   page: Page
 }
 
-type RestartSession = {
+export type RestartSession = {
   userDataDir: string
   seedCodexResumeRollout: (sessionId: string, cwd: string) => string
   launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
