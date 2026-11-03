@@ -15,6 +15,7 @@ import { prepareCodexStructuredAccountHome } from './codex-structured-account-ho
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { structuredAgentSessionNeverSent } from '../native-chat/agent-session-wire/structured-agent-session-never-sent'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 const THREAD = '01a18767-8a57-7002-92e4-ead2476d8da6'
 const relativeRollout = join(
@@ -134,7 +135,7 @@ describe('native Codex account transitions', () => {
         await journal.appendItem(
           { provider: 'codex', threadId: THREAD, turnId: 'prior-turn', ordinal: 0 },
           { kind: 'turn', turnId: 'prior-turn', state: 'completed', outcome: 'success' },
-          { fence: 1 }
+          { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )
       }
       await journal.close()
