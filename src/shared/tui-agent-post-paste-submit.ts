@@ -3,6 +3,12 @@ import type { TuiAgent } from './tui-agent'
 
 export type AgentPostPasteSubmitInput = 'enter' | 'ctrl-enter'
 
+/** Settings group owned by this module; composed into GlobalSettings via GlobalSettingsBase. */
+export type AgentPostPasteSubmitGlobalSettings = {
+  /** Per-agent key Orca sends after paste-submit; missing values use Enter. */
+  agentPostPasteSubmitInputs?: Partial<Record<TuiAgent, AgentPostPasteSubmitInput>>
+}
+
 function isAgentPostPasteSubmitInput(value: unknown): value is AgentPostPasteSubmitInput {
   return value === 'enter' || value === 'ctrl-enter'
 }

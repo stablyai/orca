@@ -4,8 +4,12 @@ import { getAgentLabel } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentPostPasteSubmitInput } from '../../../../../../shared/tui-agent-post-paste-submit'
+<<<<<<< HEAD
 import { wholeAgentEnvironmentUpdates } from '../../../../../../shared/agent-launch/choices/agent-launch-permission-updates'
 import { useRef } from 'react'
+=======
+import { wholeAgentEnvironmentUpdates } from '../../../../../../shared/agent-launch-permission-updates'
+>>>>>>> c538dfe276 (fix(settings): wire post-paste submit control into regrouped agent catalog)
 import { useAppStore } from '@/store/index'
 import {
   agentLaunchSettingsMutationUpdates,
