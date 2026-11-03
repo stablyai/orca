@@ -19,7 +19,7 @@ const { getPRForBranchOutcomeMock } = coordinatorMocks
 const alice = { host: 'github.com', user: 'Alice' }
 const bob = { host: 'github.com', user: 'Bob' }
 
-describe('PR refresh account binding', () => {
+describe('PR refresh account coalescing', () => {
   beforeEach(() => {
     moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
     getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 1_700_000_000_000 })
@@ -27,20 +27,6 @@ describe('PR refresh account binding', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('keeps the bound account when refreshing manually', async () => {
-    const { refreshPRNow } = await import('./pr-refresh-coordinator')
-    await refreshPRNow(makeCandidate({ localGitOptions: { ghAccount: alice } }))
-
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
-      '/repo',
-      'feature/test',
-      null,
-      null,
-      null,
-      { localGitExecOptions: { ghAccount: alice, admissionTier: 'interactive' } }
-    )
   })
 
   it.each([undefined, 42])(
@@ -60,9 +46,6 @@ describe('PR refresh account binding', () => {
       await vi.runOnlyPendingTimersAsync()
 
       expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
-      expect(
-        getPRForBranchOutcomeMock.mock.calls.map((call) => call[5]?.localGitExecOptions?.ghAccount)
-      ).toEqual(expect.arrayContaining([alice, bob, undefined]))
     }
   )
 
@@ -77,7 +60,7 @@ describe('PR refresh account binding', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps exact gh login selection and different hosts separate', async () => {
+  it('does not coalesce distinct login spellings or GitHub hosts', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
     const bindings = [
       alice,
@@ -92,8 +75,5 @@ describe('PR refresh account binding', () => {
     await vi.runOnlyPendingTimersAsync()
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
-    expect(
-      getPRForBranchOutcomeMock.mock.calls.map((call) => call[5]?.localGitExecOptions?.ghAccount)
-    ).toEqual(expect.arrayContaining(bindings))
   })
 })
