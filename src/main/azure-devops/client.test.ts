@@ -237,7 +237,7 @@ describe('Azure DevOps client', () => {
           : Response.json(body, {
               headers: continuation ? { 'x-ms-continuationtoken': 'next' } : {}
             })
-      globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      globalThis.fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
         const path = new URL(String(input)).pathname
         requests.push(path)
         if (path.endsWith('/repositories/repo')) {
@@ -265,7 +265,7 @@ describe('Azure DevOps client', () => {
           )
         }
         throw new Error(`Unexpected request: ${path}`)
-      }) as never
+      })
 
       const pr = await getAzureDevOpsPullRequestForBranch('/repo', 'feature/azure')
       expect(pr?.status).toBe(commitFails ? 'neutral' : 'failure')
@@ -290,7 +290,7 @@ describe('Azure DevOps client', () => {
 
   it('keeps embedded statuses without a source SHA conservative', async () => {
     primeGitExecWithDefaultBranch()
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+    globalThis.fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
       const path = new URL(String(input)).pathname
       if (path.endsWith('/repositories/repo')) {
         return Response.json({ id: 'repo-guid' })
@@ -311,7 +311,7 @@ describe('Azure DevOps client', () => {
         return Response.json({ value: [] })
       }
       throw new Error(`Unexpected request: ${path}`)
-    }) as never
+    })
     const pr = await getAzureDevOpsPullRequestForBranch('/repo', 'feature/azure')
     expect(pr?.status).toBe('failure')
     expect(pr?.checksSummary).toBeUndefined()
