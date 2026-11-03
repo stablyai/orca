@@ -54,8 +54,17 @@ async function flush(): Promise<void> {
   })
 }
 
+function probeClient(): RpcClient {
+  // Connection for these tests is the connState prop. The client still has to accept the sidebar's subscription.
+  return {
+    sendRequest: vi.fn(),
+    getState: () => 'disconnected',
+    onStateChange: () => () => {}
+  } as unknown as RpcClient
+}
+
 describe('useMobilePrSidebarController repo probe', () => {
-  const client = { sendRequest: vi.fn() } as unknown as RpcClient
+  const client = probeClient()
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
@@ -185,7 +194,7 @@ describe('useMobilePrSidebarController repo probe', () => {
 })
 
 describe('useMobilePrSidebarController write reconciliation', () => {
-  const client = { sendRequest: vi.fn() } as unknown as RpcClient
+  const client = probeClient()
   const pr = (number: number, extra: Partial<PRInfo> = {}): PRInfo => ({
     number,
     title: 'Feat',
