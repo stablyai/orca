@@ -43,6 +43,28 @@ describe('buildNewWorkspaceShortcutModalData', () => {
     })
   })
 
+  it('carries the current worktree host into the shortcut composer', () => {
+    const openModal = vi.fn()
+    const initialWorkspaceTarget = { projectId: 'repo:twin', hostId: 'ssh:box' }
+    mocks.startCreateFromCurrentWorkspace.mockReturnValue({
+      kind: 'composer',
+      initialRepoId: 'twin',
+      initialWorkspaceTarget
+    })
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'terminal',
+      taskPageData: {},
+      openModal
+    })
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut',
+      initialRepoId: 'twin',
+      initialWorkspaceTarget
+    })
+  })
+
   it('keeps the task-page shortcut on the composer path', () => {
     const openModal = vi.fn()
     mocks.startCreateFromCurrentWorkspace.mockReturnValue({ kind: 'started' })

@@ -52,7 +52,12 @@ function NewWorkspaceButton({
   const handleCreateWorkspace = useCallback(() => {
     const create = startCreateFromCurrentWorkspace()
     if (create.kind === 'composer') {
-      openWorkspaceCreationComposerWithTourHandoff({ initialRepoId: create.initialRepoId })
+      openWorkspaceCreationComposerWithTourHandoff({
+        initialRepoId: create.initialRepoId,
+        ...(create.initialWorkspaceTarget
+          ? { initialWorkspaceTarget: create.initialWorkspaceTarget }
+          : {})
+      })
     } else if (create.kind === 'unavailable') {
       openWorkspaceCreationComposerWithTourHandoff()
     }

@@ -13,6 +13,7 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -24,7 +25,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getSuggestedCreatureName } from './worktree-name-suggestions'
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
-import { openHeaderCreateComposer } from './header-create-workspace-target'
+import {
+  getHeaderCreateWorkspaceTarget,
+  openHeaderCreateComposer
+} from './header-create-workspace-target'
 
 type FolderCreateSource = {
   folderPath?: string
@@ -34,7 +38,11 @@ type FolderCreateSource = {
 
 export type CurrentWorkspaceCreate =
   | { kind: 'started' }
-  | { kind: 'composer'; initialRepoId: string }
+  | {
+      kind: 'composer'
+      initialRepoId: string
+      initialWorkspaceTarget?: WorkspaceCreationTargetHint
+    }
   | { kind: 'unavailable' }
 
 function dismissCoveringModal(): void {
@@ -127,7 +135,8 @@ function repoForWorktree(
 ): Repo | undefined {
   const matches = repos.filter((repo) => repo.id === repoId)
   if (hostId) {
-    return matches.find((repo) => getRepoExecutionHostId(repo) === hostId) ?? matches[0]
+    // A missing host match must not become another host's checkout. The dialog hint is built from this repo.
+    return matches.find((repo) => getRepoExecutionHostId(repo) === hostId)
   }
   return matches.length === 1 ? matches[0] : undefined
 }
@@ -183,5 +192,9 @@ export function startCreateFromCurrentWorkspace(): CurrentWorkspaceCreate {
     startFolderRepoWorkspace(repo)
     return { kind: 'started' }
   }
-  return { kind: 'composer', initialRepoId: repo.id }
+  return {
+    kind: 'composer',
+    initialRepoId: repo.id,
+    ...getHeaderCreateWorkspaceTarget(repo, state.repos, state.projectHostSetups ?? [])
+  }
 }

@@ -281,6 +281,43 @@ describe('SidebarHeader', () => {
     })
   })
 
+  it('carries the SSH host when the current worktree shares its repo id with a local checkout', async () => {
+    mockState.activeWorkspaceKey = 'worktree:ssh-worktree'
+    mockState.activeWorktreeId = 'ssh-worktree'
+    mockState.activeWorkspaceExecutionHostId = 'ssh:box'
+    mockState.activeRepoId = 'twin'
+    mockState.repos = [
+      { id: 'twin', kind: 'git', path: '/src/twin' },
+      { id: 'twin', kind: 'git', path: '/home/alice/twin', connectionId: 'box' }
+    ]
+    mockState.worktreesByRepo = {
+      twin: [{ id: 'ssh-worktree', repoId: 'twin', path: '/home/alice/twin' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledWith({
+      initialRepoId: 'twin',
+      initialWorkspaceTarget: expect.objectContaining({ hostId: 'ssh:box' })
+    })
+  })
+
+  it('opens the dialog without a repo when the current host has no registration of that repo', async () => {
+    mockState.activeWorkspaceKey = 'worktree:ssh-worktree'
+    mockState.activeWorktreeId = 'ssh-worktree'
+    mockState.activeWorkspaceExecutionHostId = 'ssh:box'
+    mockState.repos = [{ id: 'twin', kind: 'git', path: '/src/twin' }]
+    mockState.worktreesByRepo = {
+      twin: [{ id: 'ssh-worktree', repoId: 'twin', path: '/home/alice/twin' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledWith()
+  })
+
   it('creates in the inferred SSH folder when the project group has no host pin', async () => {
     mockState.projectGroups = [makeProjectGroup()]
     mockState.folderWorkspaces = [makeFolderWorkspace()]

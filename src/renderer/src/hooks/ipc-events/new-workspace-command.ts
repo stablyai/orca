@@ -40,7 +40,13 @@ export function openNewWorkspaceFromShortcut(
       return
     }
     if (create.kind === 'composer') {
-      state.openModal('new-workspace-composer', { ...data, initialRepoId: create.initialRepoId })
+      state.openModal('new-workspace-composer', {
+        ...data,
+        initialRepoId: create.initialRepoId,
+        ...(create.initialWorkspaceTarget
+          ? { initialWorkspaceTarget: create.initialWorkspaceTarget }
+          : {})
+      })
       return
     }
   }
