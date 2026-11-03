@@ -1,0 +1,1 @@
+pmset: unable to read power settings

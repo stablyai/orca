@@ -67,6 +67,7 @@
     "../src/main/ipc/worktree-display-name.ts",
     "../src/main/ipc/worktree-linked-work-item-metadata.ts",
     "../src/main/ipc/worktree-metadata-merge.ts",
+    "../src/main/macos-sleep-disabled-setting.ts",
     "../src/main/wsl/discovery/wsl-availability.ts",
     "../src/main/wsl/filesystem/wsl-directory-probe-command.ts",
     "../src/main/wsl/discovery/wsl-distro-list-output.ts",

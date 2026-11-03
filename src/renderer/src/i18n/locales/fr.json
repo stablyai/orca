@@ -4647,7 +4647,15 @@
             "ariaLabel": "{{title}}, {{status}}",
             "onDescription": "Maintenir cet ordinateur éveillé en permanence",
             "autoDescription": "Rester éveillé pendant qu'un agent travaille",
-            "offDescription": "Autoriser le comportement de veille normal du système"
+            "offDescription": "Autoriser le comportement de veille normal du système",
+            "awakeLabel": "Sans veille",
+            "holdSystem": "Maintenu éveillé par un réglage système",
+            "holdLidClosed": "Ce Mac (où Orca s’exécute) reste éveillé avec le capot fermé.",
+            "orcaOwnStatus": "Maintien en éveil d’Orca : {{status}}.",
+            "holdUnchecked": "Impossible de vérifier le réglage de veille de ce Mac",
+            "holdSentenceJoin": "{{first}}. {{second}}",
+            "holdSentenceAppend": "{{first}} {{second}}",
+            "holdSentenceEnd": "{{sentence}}."
           },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "La connexion précédente a été fermée",
