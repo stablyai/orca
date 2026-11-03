@@ -1,6 +1,7 @@
 import { defineMethod } from '../core'
 import { isPwshAvailableAsync } from '../../../pty/shell-startup/pwsh'
-import { isWslAvailableAsync, listWslDistrosAsync } from '../../../wsl'
+import { isWslAvailableAsync } from '../../../wsl/discovery/wsl-availability'
+import { listWslDistrosAsync } from '../../../wsl/discovery/distro-catalog'
 import { isGitBashAvailable } from '../../../pty/shell-startup/git-bash'
 
 export const HOST_CAPABILITY_METHODS = [

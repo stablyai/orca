@@ -8102,6 +8102,9 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -10314,6 +10317,14 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
+            },
+            "orchestrationPanel": {
+              "title": "Orchestration panel",
+              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
+              "orchestration": "orchestration",
+              "agents": "agents",
+              "workers": "workers",
+              "manager": "manager"
             }
           }
         },

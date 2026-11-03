@@ -7,7 +7,7 @@ const { runProcessMock, blockedForExecMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
-vi.mock('../wsl/wsl-background-exec-gate', () => ({
+vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
   blockedWslDistroForExec: blockedForExecMock
 }))
 

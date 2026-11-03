@@ -6,7 +6,7 @@ import {
   type WslHostCapability,
   type WslHostStatus
 } from '../../shared/wsl-host-types'
-import { onWslHostsNewWorkChanged } from '../wsl/wsl-host-gate'
+import { onWslHostsNewWorkChanged } from '../wsl/host-lifecycle/wsl-host-gate'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {

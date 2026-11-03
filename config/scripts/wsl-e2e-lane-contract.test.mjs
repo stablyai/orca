@@ -9,8 +9,8 @@ describe('real WSL terminal lane', () => {
   it.each([
     'config/scripts/verify-wsl-e2e-participation.mjs',
     'config/scripts/verify-playwright-participation.mjs',
-    'src/main/wsl-availability.ts',
-    'src/main/wsl/wsl-runner.ts',
+    'src/main/wsl/discovery/wsl-availability.ts',
+    'src/main/wsl/execution/wsl-runner.ts',
     'src/main/pty/shell-startup/wsl-orca-env.ts',
     'src/shared/wsl-login-shell-command.ts',
     'src/shared/shell-argument-quoting.ts',

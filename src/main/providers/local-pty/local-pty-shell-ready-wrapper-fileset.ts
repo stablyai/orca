@@ -13,7 +13,7 @@ import {
   type ZshStartupHookSpec
 } from '../../pty/shell-startup/zsh-startup-wrapper-builder'
 import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
-import { SH_WSL_ENV_FILE } from '../../wsl-shell-cwd-report'
+import { SH_WSL_ENV_FILE } from '../../wsl/filesystem/wsl-shell-cwd-report'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 
 /** Paths in the generated tree, kept separate so existence checks do not rebuild wrapper bytes. */

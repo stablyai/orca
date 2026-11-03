@@ -1,5 +1,5 @@
 import type * as WslPathOwner from '../../../shared/wsl-paths'
-import type * as WslAvailabilityTypes from '../../wsl-availability'
+import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
 
@@ -41,7 +41,9 @@ const {
 
 vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
   ...(await importOriginal<typeof WslPathOwner>()),
-  toLinuxPath: toLinuxPathMock
+  toLinuxPath: toLinuxPathMock,
+  toWindowsWslPath: (path: string, distro: string) =>
+    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`
 }))
 
 vi.mock('fs', () => ({
@@ -100,24 +102,20 @@ vi.mock('../windows-pty-job-membership', () => ({
   isWindowsPtyJobReadable: () => true
 }))
 
-vi.mock('../../wsl', async () => ({
-  // The real parser, so both UNC spellings (\\wsl.localhost and \\wsl$) reach the launch plan.
+vi.mock('../../wsl/filesystem/unc-path-access', async () => ({
   parseWslPath: (await import('../../../shared/wsl-paths')).parseWslUncPath,
-  toLinuxPath: toLinuxPathMock,
-  toWindowsWslPath: (path: string, distro: string) =>
-    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
-  getDefaultWslDistro: () => 'Ubuntu',
-  isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
+vi.mock('../../wsl/discovery/distro-catalog', async () => ({
+  getDefaultWslDistro: () => 'Ubuntu'
+}))
 
-vi.mock('../../wsl-availability', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-availability', async (importOriginal) => ({
   ...(await importOriginal<typeof WslAvailabilityTypes>()),
   isWslAvailableAsync: () => isWslAvailableAsyncMock()
 }))
 
-vi.mock('../../wsl-background-distro-gate', () => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', () => ({
   readWslDistroRunningState: (...args: unknown[]) => readWslDistroRunningStateMock(...args)
 }))
 

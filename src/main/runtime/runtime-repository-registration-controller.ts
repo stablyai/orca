@@ -23,9 +23,9 @@ import {
   WslHostWindowsDriveRefusalError,
   type WslHostWindowsDriveRefusal
 } from '../../shared/wsl-host-windows-drive-refusal'
-import { describeWslUncAccessDenied } from '../wsl/wsl-unc-access-denied'
+import { describeWslUncAccessDenied } from '../wsl/filesystem/wsl-unc-access-denied'
 import { getResolvedFolderWorkspacePathStatus } from '../project-groups/folder-workspace-path-status'
-import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { repoCreateFailure, type RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 
 type RuntimeRepositoryRegistrationDependencies = {

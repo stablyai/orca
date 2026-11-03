@@ -24,7 +24,7 @@ import {
   wslHoldReadAnchor as wslHoldReadAnchorNow
 } from '../../daemon/daemon-wsl-passive-restore-hold'
 import { normalizeWindowsTerminalCwd } from '../../providers/windows-shell-args'
-import { wslUncDirectoryExistsAsync } from '../../wsl'
+import { wslUncDirectoryExistsAsync } from '../../wsl/filesystem/unc-path-access'
 import { getCodexSelectionTargetForPty } from './host-env/codex-home'
 import { probeLocalStartupCwdDirectory } from './host-env/startup-cwd-directory-exists'
 

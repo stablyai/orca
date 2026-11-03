@@ -28,7 +28,7 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommand: (command: string) => command
 }))
 
-vi.mock('../wsl/wsl-host-service-instance', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () => ({ recordForEnvironment: recordForEnvironmentMock })
 }))
 

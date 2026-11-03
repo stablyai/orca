@@ -5,7 +5,7 @@ import { readPtsName } from '../../pty/process-retirement/node-pty-pts-name'
 import { readPtyForegroundGroup } from '../../pty/process-retirement/pty-master-foreground-observation'
 import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posix-pty-foreground-group'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
-import { isWslAvailableAsync } from '../../wsl-availability'
+import { isWslAvailableAsync } from '../../wsl/discovery/wsl-availability'
 import { resolveGitBashPath } from '../../pty/shell-startup/git-bash'
 import { resolveProcessCwd } from '../process-cwd'
 import {

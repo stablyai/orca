@@ -8,7 +8,7 @@ import {
   resolveFishHistoryDir
 } from './fish-history-session'
 import { dropInheritedOrcaHistFile } from './worktree-history-file-path'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { toLinuxPath } from '../../../shared/wsl-paths'
 import { getHistoryRoot, getHistoryRootWsl } from './terminal-history-paths'
 import { hashWorktreeId } from './terminal-history-id'

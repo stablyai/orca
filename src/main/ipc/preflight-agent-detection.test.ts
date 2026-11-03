@@ -35,13 +35,13 @@ const {
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 // These cases cover a running distro; the E9 stopped-distro gate has its own suite.
-vi.mock('../wsl/wsl-background-exec-gate', () => ({
+vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
   assertWslDistroRunningForExec: async () => {},
   runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
 }))
 
 // WSL detection uses runWslProcess, so child_process mocks cannot observe it.
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('electron', () => ({
   ipcMain: {

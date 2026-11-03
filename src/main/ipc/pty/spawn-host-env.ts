@@ -18,8 +18,8 @@ import { stampWslOrchestrationCompatibilityHost } from '../../pty/shell-startup/
 import { getRuntimeSourceStamp } from '../../runtime/host-descriptor'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { buildPtyHostEnv } from './host-env/assembly'
-import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
-import { runAsWslLaunchUserAct } from '../../wsl/wsl-background-exec-gate'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { runAsWslLaunchUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
 import {
   codexHomePathsEqual,
   getCompatibleSelectedCodexHomePath,

@@ -1,6 +1,6 @@
 import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import { expandWindowsEnvironmentVariables } from '../../../shared/windows-environment-expansion'
 import { resolveSafePtyDefaultCwd } from '../pty-default-cwd'

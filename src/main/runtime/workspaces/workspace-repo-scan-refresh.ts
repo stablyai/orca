@@ -17,7 +17,7 @@ import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from '../repo-worktree-row-resolution'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
-import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 

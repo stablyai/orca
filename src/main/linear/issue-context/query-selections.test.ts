@@ -1,6 +1,6 @@
 import { buildSchema, graphql } from 'graphql'
 import { expect, it, vi } from 'vitest'
-import { CHILDREN_QUERY, ISSUE_QUERY, SEARCH_QUERY } from './raw'
+import { CHILDREN_QUERY, childrenPageSize, ISSUE_QUERY, SEARCH_QUERY } from './raw'
 
 const schema = buildSchema(`
   type Query { issue(id: String!): Issue, searchIssues(term: String!, first: Int): Issues }
@@ -70,8 +70,8 @@ it.each([
   },
   {
     name: 'children',
-    query: CHILDREN_QUERY,
-    variables: { id: issue.id },
+    query: CHILDREN_QUERY(1),
+    variables: { id: issue.id, first: childrenPageSize(1) },
     data: { issue: { children: { nodes: [agentProjection] } } }
   }
 ])(

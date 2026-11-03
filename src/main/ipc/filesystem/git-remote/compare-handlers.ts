@@ -11,7 +11,7 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
-import { assertWslUncPathRunning } from '../../../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerGitRemoteCompareHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
