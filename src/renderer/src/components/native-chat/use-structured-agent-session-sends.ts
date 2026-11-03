@@ -6,7 +6,7 @@ import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structur
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import { useCallback, useEffect, useEffectEvent, useSyncExternalStore } from 'react'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {

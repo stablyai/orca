@@ -3,62 +3,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  buildPluginGuestShellHtml,
-  buildPluginPanelShellHtml,
-  type PluginFrameSurface
-} from './plugin-panel-shell'
-
-/** The injected `window.orca` is the public frame API; the envelope under it stays internal. */
-
-type FrameOrca = {
-  api: { major: number; minor: number }
-  host: {
-    call: (method: string, params?: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>
-    has: (method: string) => boolean
-  }
-  on: (event: string, handler: (payload: unknown) => unknown) => { dispose: () => void }
-  locale: string
-  shell?: { openExternal: (url: string) => Promise<unknown> }
-  files?: {
-    saveAs: (options: {
-      suggestedName?: string
-      mimeType?: string
-      data: unknown
-    }) => Promise<unknown>
-  }
-  document?: {
-    get: () => Promise<unknown>
-    onDidChange: (handler: (document: unknown) => void) => { dispose: () => void }
-    applyEdit: (edit: unknown) => Promise<unknown>
-  }
-}
-
-const realParent = window.parent
-
-afterEach(() => {
-  Object.defineProperty(window, 'parent', { value: realParent, configurable: true })
-})
-
-function mountShell(surface: PluginFrameSurface = 'panel') {
-  const parent = { postMessage: vi.fn() }
-  Object.defineProperty(window, 'parent', { value: parent, configurable: true })
-  const script = buildPluginPanelShellHtml('<main></main>', surface).match(
-    /<script>\n([\s\S]*?)<\/script>/
-  )?.[1]
-  // Configurable only so happy-dom can tear down; the frame's copy stays locked.
-  window.eval(script!.replaceAll('configurable: false', 'configurable: true'))
-  const orca: FrameOrca = Object.getOwnPropertyDescriptor(window, 'orca')?.value
-  const fromHost = (data: unknown, source: unknown = parent) =>
-    window.dispatchEvent(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shim only compares source identity.
-      new MessageEvent('message', { data, source: source as Window })
-    )
-  const posted = () => parent.postMessage.mock.calls.map(([message]) => message)
-  return { orca, parent, fromHost, posted }
-}
-
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+import { buildPluginGuestShellHtml, type PluginFrameSurface } from './plugin-panel-shell'
+import { flush, mountShell, type FrameOrca } from './plugin-frame-shell-mount.test-fixture'
 
 describe('window.orca', () => {
   it('times out a call the host never answers, and bounds calls in flight', async () => {
@@ -90,12 +36,15 @@ describe('window.orca', () => {
     expect(Object.isFrozen(orca)).toBe(true)
     expect(Object.isFrozen(orca.host)).toBe(true)
     expect(posted()).toEqual([{ orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } }])
-    expect(orca.api).toEqual({ major: 1, minor: 0 })
+    expect(orca.api).toEqual({ major: 1, minor: 2 })
     expect(orca.shell).toBeUndefined()
     expect(orca.files).toBeUndefined()
     expect(orca.host.has('shell.openExternal')).toBe(false)
     expect(orca.host.has('workspace.readContext')).toBe(true)
     expect(orca.host.has('terminal.sendText')).toBe(false)
+    expect(orca.host.has('plugin.request')).toBe(true)
+    expect(Object.isFrozen(orca.plugin)).toBe(true)
+    expect(Object.isFrozen(orca.storage)).toBe(true)
     expect(orca.document).toBeUndefined()
   })
 

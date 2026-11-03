@@ -25,6 +25,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       // ACP has no stable rewind or goal methods.
       rewind: false,
       compact: spec.compaction === true,
+      compactInstructions: spec.compactionInstructions === true,
       threadGoal: false,
       contextUsage: true,
       // Narrowed by each agent's advertised startup capabilities.

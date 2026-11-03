@@ -29,7 +29,7 @@ export function renderAppearanceSettingsSection(context: SettingsRenderContext):
           terminalFontSuggestions={model.terminalFontSuggestions}
           onRequestFontSuggestions={interactions.requestFontSuggestions}
           systemPrefersDark={model.systemPrefersDark}
-          ghostty={model.ghostty}
+          terminalConfigImport={model.terminalConfigImport}
           warpThemes={model.warpThemes}
         />
       ) : null}

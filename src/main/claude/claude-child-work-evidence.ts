@@ -15,7 +15,7 @@ import {
   claudeToolUses,
   readClaudeMessageEnvelope,
   type ClaudeToolUse
-} from './claude-structured-item-translation'
+} from './structured/journal/claude-structured-item-translation'
 
 export type ClaudeTaskFacts = {
   toolName?: string

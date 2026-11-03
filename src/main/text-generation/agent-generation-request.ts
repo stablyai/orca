@@ -1,5 +1,5 @@
 import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
-import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
+import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
 import {
   cleanGeneratedCommitMessage,
   stripPrefilledReasoningPreamble,
@@ -63,15 +63,13 @@ export async function runGenerationRequest(input: {
           spawnAgent: input.spawnAgent,
           shouldExecute: input.shouldExecute
         })
-  let result = await runClaudeBackgroundAttempts({
+  let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,
-    run: (strictMcp): Promise<InternalTextGenerationResult> => {
-      if (strictMcp) {
+    run: (attempt): Promise<InternalTextGenerationResult> => {
+      if (attempt.strictMcp && !attempt.legacyToolPolicy) {
         return execute(plan)
       }
-      const retry = planCommitMessageGeneration(params, input.prompt, {
-        strictMcp
-      })
+      const retry = planCommitMessageGeneration(params, input.prompt, attempt)
       return retry.ok
         ? execute(retry.plan)
         : Promise.resolve({

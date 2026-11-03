@@ -5,7 +5,7 @@ import {
   type AgentSessionContextUsage,
   type AgentSessionContextWindow
 } from '../../shared/agent-session/agent-session-context-usage'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   claudeContextResetKind,
@@ -15,7 +15,7 @@ import {
   type ClaudeMainThreadModel
 } from './claude-context-usage'
 import type { ClaudeOpenTurn } from './claude-open-turn'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 import type { ClaudeTurnEnd } from './claude-turn-lifecycle-item'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import {

@@ -1,12 +1,12 @@
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from './app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexJournalItems } from './codex-structured-journal-items'

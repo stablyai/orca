@@ -14,7 +14,7 @@ import {
   fakeClaude,
   identityFor,
   tick
-} from './claude-structured-session-test-support'
+} from './structured/claude-structured-session-test-support'
 
 function turnSink() {
   const turns: AgentJournalTurnLifecycle[] = []

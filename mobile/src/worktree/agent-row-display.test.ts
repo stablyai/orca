@@ -123,6 +123,9 @@ describe('agentDisplayLabel', () => {
       'Working'
     )
     expect(
+      agentDisplayLabel(row({ state: 'working', prompt: '{ "tool": "x"', updatedAt: 0 }), 0)
+    ).toBe('Working')
+    expect(
       agentDisplayLabel(
         row({ state: 'working', workingMode: 'monitoring', prompt: '', updatedAt: 0 }),
         0

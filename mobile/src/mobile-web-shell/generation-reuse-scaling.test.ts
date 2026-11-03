@@ -4,8 +4,8 @@ import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/
 import {
   fetchMobileWebBundle,
   type MobileWebBundleFetchResult
-} from '../transport/mobile-web-bundle-fetch'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+} from '../transport/web-bundle/mobile-web-bundle-fetch'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'

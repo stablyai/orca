@@ -7,7 +7,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
-import { structuredAgentSessionHostRefusal } from '../../structured-agent-session-host-refusal'
+import { structuredAgentSessionHostRefusal } from '../../agent-session/structured-agent-session-host-refusal'
 import {
   createSupportFollowsHostSetting,
   clientReadsStructuredSessionAgent,

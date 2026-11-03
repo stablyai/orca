@@ -13,7 +13,7 @@ import {
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
 export { SESSION }
 export async function claudePipedFixture() {

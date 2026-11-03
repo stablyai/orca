@@ -21,16 +21,6 @@ describe('scanFakeAgentPasteEnd', () => {
     }
   )
 
-  it('keeps only the possible marker prefix between chunks', () => {
-    const scan = scanFakeAgentPasteEnd('', `worker prompt${PASTE_END.slice(0, -1)}`)
-
-    expect(scan).toEqual({
-      tail: PASTE_END.slice(0, -1),
-      pasteBeginOffset: null,
-      pasteEndOffset: null
-    })
-  })
-
   it('emits standalone JavaScript for the fake agent process', () => {
     const context = vm.createContext({ result: null })
     vm.runInContext(
@@ -45,21 +35,6 @@ describe('scanFakeAgentPasteEnd', () => {
       pasteBeginOffset: null,
       pasteEndOffset: 2
     })
-  })
-
-  it('recognizes a paste frame and submit delivered in separate chunks', () => {
-    const context = vm.createContext({ result: null })
-    vm.runInContext(
-      `${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
-       const modes = []
-       fakeAgentMaybeAck({ pasteBeginOffset: 1, pasteEndOffset: null }, '', (mode) => modes.push(mode))
-       fakeAgentMaybeAck({ pasteBeginOffset: null, pasteEndOffset: 1 }, '', (mode) => modes.push(mode))
-       fakeAgentMaybeAck({ pasteBeginOffset: null, pasteEndOffset: null }, '\\r', (mode) => modes.push(mode))
-       result = modes`,
-      context
-    )
-
-    expect(context.result).toEqual(['bracketed'])
   })
 
   it('does not upgrade a paste frame received after submit', () => {

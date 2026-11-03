@@ -14,14 +14,14 @@ import {
   ModelCatalogParams,
   OptionsParams
 } from './structured-agent-session-schemas'
-import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from '../../agent-session/records/agent-session-record-launch-directory'
 import {
   clientRequestsCommands,
   clientReadsOptionsWithoutModel
 } from './structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
-import { finishedListingIds } from '../../../../shared/agent-session/options/structured-agent-session-options'
+import { finishedListingIds } from '../../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({

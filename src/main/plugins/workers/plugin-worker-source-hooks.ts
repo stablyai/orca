@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { isPluginWorkerSourcePath } from '../../../shared/plugins/frames/plugin-frame-source-modules'
 import { pluginModuleCandidatePaths } from '../plugin-module-candidate-paths'
 import { transformPluginSource } from '../plugin-source-sucrase-transform'
+import { isOrcaSpecifier, pluginWorkerOrcaImportMessage } from './plugin-worker-orca-import'
 
 // Plain-Node entry code: runs in the plugin host process, so no Electron imports.
 
@@ -23,9 +24,6 @@ export type PluginWorkerSourceHooks = { resolve: ResolveHookSync; load: LoadHook
 
 const isRelativeSpecifier = (specifier: string): boolean =>
   specifier.startsWith('./') || specifier.startsWith('../')
-
-const isOrcaSpecifier = (specifier: string): boolean =>
-  specifier === 'orca' || specifier.startsWith('orca/')
 
 function errorCode(error: unknown): unknown {
   return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
@@ -67,10 +65,7 @@ export function createPluginWorkerSourceHooks(pluginRoot: string): PluginWorkerS
       return nextResolve(specifier, context)
     } catch (error) {
       if (isOrcaSpecifier(specifier)) {
-        throw new Error(
-          `cannot import "${specifier}" at run time: it only provides types. Write \`import type { OrcaWorkerApi } from 'orca/worker'\` and use the \`orca\` object passed to activate(orca).`,
-          { cause: error }
-        )
+        throw new Error(pluginWorkerOrcaImportMessage(specifier), { cause: error })
       }
       if (!isRelativeSpecifier(specifier) || !NOT_FOUND_CODES.has(errorCode(error))) {
         throw error

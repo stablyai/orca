@@ -5,7 +5,7 @@ import {
   providerTurnId,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { agentSessionLaunchFolderMissing } from '../runtime/agent-session-launch-directory'
+import { agentSessionLaunchFolderMissing } from '../runtime/agent-session/agent-session-launch-directory'
 import { tick } from './acp-scripted-agent.test-support'
 import {
   GROK,

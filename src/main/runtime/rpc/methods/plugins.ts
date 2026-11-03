@@ -55,7 +55,7 @@ export function setPluginServiceForRpc(
   pluginFrameDevToolsForRpc = writes?.openFrameDevTools ?? null
 }
 
-function requirePluginService(): PluginService {
+export function requirePluginService(): PluginService {
   if (!pluginServiceForRpc) {
     throw new Error('Plugin service is not available on this runtime')
   }

@@ -18,7 +18,7 @@ vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof DistroGateModule>()),
   readWslDistroRunningState: vi.fn(async () => mocks.state.distro)
 }))
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectGitExecOptions: () => ({}),
   getLocalProjectWorktreeGitOptions: () => ({})
 }))

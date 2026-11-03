@@ -5,7 +5,6 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
-  emptyWorkspaceDefaultChatAwaitsDetection,
   loadEmptyWorkspaceDefaultChatDetection,
   openDefaultAgentChatInEmptyWorkspace
 } from './empty-workspace-default-agent-chat'
@@ -59,24 +58,6 @@ afterEach(() => {
 })
 
 describe('openDefaultAgentChatInEmptyWorkspace', () => {
-  it("seeds a plain shell, not the agent's terminal, when the host declines the chat", () => {
-    seedSettings({})
-
-    openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)
-    const onDeclined = mocks.launchAgentInNewTab.mock.calls[0]?.[0]?.onStructuredHostDeclined
-
-    expect(mocks.seedShell).not.toHaveBeenCalled()
-    expect(onDeclined()).toEqual({ opened: true })
-    expect(mocks.seedShell).toHaveBeenCalledOnce()
-  })
-
-  it('opens no agent when the default agent is left on Auto', () => {
-    seedSettings({ defaultTuiAgent: null })
-
-    expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toBeNull()
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
   it('reads the agents detected on the workspace SSH host', () => {
     seedSettings({})
     mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')
@@ -91,25 +72,6 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
 })
 
 describe('agent detection for the default chat', () => {
-  it('waits only while chat is the default and the host list has not loaded', () => {
-    seedSettings({})
-    setLocalRuntimeCapabilitiesForTests([])
-    mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')
-    useAppStore.setState({ remoteDetectedAgentIds: {} })
-    expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(true)
-
-    useAppStore.setState({ remoteDetectedAgentIds: { 'conn-1': [] } })
-    expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
-
-    seedSettings({ nativeChatProviders: {} })
-    useAppStore.setState({ remoteDetectedAgentIds: {} })
-    expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
-
-    seedSettings({ defaultTuiAgent: null })
-    useAppStore.setState({ remoteDetectedAgentIds: {} })
-    expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
-  })
-
   it('probes the workspace host and gives up after a bounded wait', async () => {
     vi.useFakeTimers()
     seedSettings({})

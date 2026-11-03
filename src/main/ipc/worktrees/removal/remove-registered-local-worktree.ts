@@ -9,24 +9,24 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
-import type { LocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   listWorktreesStrict as listGitWorktreesStrict,
   removeWorktree
 } from '../../../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directories'
-import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
-import { recoverPartialLocalWorktreeRemoval } from '../../../local-worktree-removal-recovery'
+import { cleanupLocalOrphanedWorktreeDirectory } from '../../../workspaces/removal/local-orphaned-worktree-cleanup'
+import { recoverPartialLocalWorktreeRemoval } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
-import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
-import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
-import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
+import { assertNestedWorktreeRemovalApproval } from '../../../workspaces/removal/nested-worktree-removal-plan'
+import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../worktree-remote'
 import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
 } from '../../worktree-symlinks'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../registered-worktree-roots-scoped-invalidation'
+import { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
 import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
@@ -44,7 +44,7 @@ import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-bra
 import {
   removesInBackground,
   startBackgroundWorktreeRemoval
-} from '../../../worktree-background-removal'
+} from '../../../workspaces/removal/worktree-background-removal'
 
 export async function removeRegisteredLocalWorktree(
   context: WorktreeIpcContext,

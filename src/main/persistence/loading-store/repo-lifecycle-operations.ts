@@ -16,7 +16,7 @@ import { mergeProjectHostSetupCompatibilityState } from '../tracking-repos/proje
 import { RepoOrderPersistenceOperations } from '../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../tracking-repos/repo-worktree-pruning'
 import { collectDeregisteredRepoIds } from '../tracking-repos/deregistered-repo-residue'
-import { retireLocalWorktreeMetadataPruneStateForRepo } from '../../local-worktree-metadata-prune-gate'
+import { retireLocalWorktreeMetadataPruneStateForRepo } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { releaseWslStoppedWorktreeRescan } from '../../wsl-stopped-worktree-rescan-registry'
 import { hydrateRepo as hydrateRepoOperation } from '../tracking-repos/repo-hydration'
 import { RepoUpdatePersistenceOperations } from '../tracking-repos/repo-update-operations'
@@ -24,7 +24,7 @@ import { ProjectHostSetupPersistenceOperations } from '../tracking-repos/project
 import {
   bumpLocalWorktreeScanGeneration,
   retireLocalWorktreeScanGeneration
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'

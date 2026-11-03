@@ -3,7 +3,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** An absent structured host cannot issue a close; receipts must not claim closed_agent_terminal and falsely tell coordinators its tab is gone. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,7 +16,7 @@ import {
   structuredWorkerProcessIncarnation
 } from '../../structured-worker-identity'
 import { ORCHESTRATION_METHODS } from './orchestration'
-import { eraseRpcMethods } from '../core'
+import { isStreamingMethod, eraseRpcMethods } from '../core'
 
 const SESSION = 'session-stop-receipt'
 const HANDLE = 'structworker_22222222-2222-4222-a222-222222222222'
@@ -47,7 +47,7 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method.handler(method.params!.parse(params), { runtime })

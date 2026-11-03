@@ -1,5 +1,5 @@
 import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { ProviderTimelineJoin } from './provider-timeline-event'
 import { providerKey, type ProviderTimelineRows } from './provider-timeline-rows'

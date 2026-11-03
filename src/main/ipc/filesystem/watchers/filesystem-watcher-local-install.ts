@@ -20,9 +20,9 @@ import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 import type { WaitForLocalWatcherRetry } from './filesystem-watcher-local-capacity'
 import {
   noteWslDistroMayHaveStopped,
-  blockedWslDistroForPath
-} from '../../../wsl/wsl-unc-access-gate'
-import { deferUntilWslDistroRunning } from '../../../wsl-background-distro-gate'
+  deferUntilWslDistroRunning
+} from '../../../wsl-background-distro-gate'
+import { blockedWslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
 import {
   clearWslRootStatRetry,
   nextWslRootStatRetry

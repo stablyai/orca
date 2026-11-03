@@ -14,7 +14,7 @@ import type { AppMenuQuitHandlers } from '../menu/app-menu-quit-item'
 import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../updater'
+import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../updater/updater-service'
 import {
   createSystemTray,
   setMacMenuBarIconVisible,

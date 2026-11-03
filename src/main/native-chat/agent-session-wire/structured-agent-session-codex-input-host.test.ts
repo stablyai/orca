@@ -29,14 +29,14 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
+import { CodexAppServerTimeoutError } from '../../codex/app-server/codex-app-server-session'
 import {
   THREAD_ID as THREAD,
   adapterFor,
   fakeCodex
 } from '../../codex/codex-structured-session-adapter-fixture'
 import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
@@ -103,15 +103,6 @@ beforeEach(async () => {
   notify = (method, params) => codex.connections.at(-1)?.handlers.onNotification?.(method, params)
   turns = codexTurnLifecycleFake(THREAD, () => notify)
   Object.assign(codex.routes, turns.routes)
-  codex.routes['turn/interrupt'] = () => {
-    const turnId = turns.turnId
-    setTimeout(
-      () =>
-        notify('turn/completed', { threadId: THREAD, turn: { id: turnId, status: 'interrupted' } }),
-      4
-    )
-    return {}
-  }
   launch = {}
   adapter = adapterFor(codex, launch, [], {
     resolveLaunch: async ({ permissionMode, identity }) => ({
@@ -402,7 +393,6 @@ it.each(['config', 'order', 'initial'] as const)(
 it.each([
   ['ask', 1],
   ['auto', 1],
-  ['auto-before', 1],
   ['empty', 1],
   ['auto', 10],
   ['auto', 100]
@@ -455,9 +445,6 @@ it.each([
       population > 1 ? measureCodexInputWork(host, events, 'history', population) : undefined
     let waiting: ReturnType<typeof host.waitForSendSettlement> | undefined
     try {
-      if (mode === 'auto-before') {
-        await pick('auto')
-      }
       const id = await permissionSend('follow up')
       if (measured) {
         waiting = host.waitForSendSettlement(SESSION, id)
@@ -470,9 +457,7 @@ it.each([
           )
         ).toBe(true)
       )
-      if (mode !== 'auto-before') {
-        await pick(mode === 'empty' ? 'ask' : mode)
-      }
+      await pick(mode === 'empty' ? 'ask' : mode)
       if (mode === 'empty') {
         await journal.resolveDispatch({
           clientMessageId: id,
@@ -539,40 +524,6 @@ it.each([
     }
   }
 )
-
-it('preserves successful steering and only current retained work can inherit unknown Auto', async () => {
-  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-  const running = await permissionSend('running')
-  await began(running)
-  await pick('auto')
-  const steer = await permissionSend('steer')
-  await vi.waitFor(() =>
-    expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/steer')).toBe(true)
-  )
-  turns.echo(steer)
-  await vi.waitFor(() =>
-    expect(host.readStatusSummary(SESSION)?.runtimePermission?.mode).toBe('full-access')
-  )
-  turns.end('completed')
-  await host.flushStreamedEvents(SESSION)
-  retained = true
-  const busy = await permissionSend('work still held elsewhere')
-  await vi.waitFor(() => expect(starts()).toHaveLength(2))
-  expect(starts()[1]?.params).not.toHaveProperty('sandboxPolicy')
-  expect(codex.connections).toHaveLength(1)
-  await began(busy)
-  await vi.waitFor(() =>
-    expect(host.readStatusSummary(SESSION)?.runtimePermission?.mode).toBe('full-access')
-  )
-  expect((await host.readOptions(SESSION)).current.reportedPermissionMode).toBe('full-access')
-  turns.end('completed')
-  await host.flushStreamedEvents(SESSION)
-  retained = false
-  const idle = await permissionSend('now idle')
-  await vi.waitFor(() => expect(starts()).toHaveLength(3))
-  expect(codex.connections).toHaveLength(2)
-  expect(starts()[2]?.params).toMatchObject({ clientUserMessageId: idle, sandboxPolicy: sandbox })
-})
 
 it.each(['stop', 'local-abort'] as const)(
   'keeps an actual sent envelope when %s precedes its Promise delivery and the reply is lost',

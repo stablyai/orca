@@ -3,7 +3,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionLease } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PtyProcessInfo } from '../providers/pty-process-info'

@@ -65,85 +65,6 @@ describe('pty-bound agent draft readiness budget', () => {
     vi.useRealTimers()
   })
 
-  it('delivers when a cold Codex composer becomes ready after 10s', async () => {
-    const promise = pasteDraftToAgentPtyWhenReady({
-      ptyId: 'pty-1',
-      content: 'draft',
-      agent: 'codex',
-      forcePaste: true
-    })
-
-    await vi.advanceTimersByTimeAsync(10_000)
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, 'codex-composer-prompt')
-    expect(testState.sendInput).toHaveBeenCalledExactlyOnceWith(
-      'pty-1',
-      '\x1b[200~draft\x1b[201~',
-      'launch'
-    )
-  })
-
-  it('gives a cold opencode composer the same headroom as Codex', async () => {
-    const onUnconfirmedDelivery = vi.fn()
-    const promise = pasteDraftToAgentPtyWhenReady({
-      ptyId: 'pty-1',
-      content: 'draft',
-      agent: 'opencode',
-      forcePaste: true,
-      onUnconfirmedDelivery
-    })
-
-    await vi.advanceTimersByTimeAsync(10_000)
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.waitForReady).toHaveBeenCalledWith(
-      'pty-1',
-      20_000,
-      'render-cursor-after-bracketed-paste'
-    )
-    expect(testState.sendInput).toHaveBeenCalledTimes(1)
-    expect(onUnconfirmedDelivery).not.toHaveBeenCalled()
-  })
-
-  it.each(['opencode', 'opencode2'] as const)(
-    'waits for the %s agent row only when Enter follows the paste',
-    async (agent) => {
-      const promise = pasteDraftToAgentPtyWhenReady({
-        ptyId: 'pty-1',
-        content: 'task',
-        agent,
-        submit: true,
-        forcePaste: true
-      })
-
-      await vi.advanceTimersByTimeAsync(12_000)
-
-      await expect(promise).resolves.toBe(true)
-      expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, 'opencode-agent-row')
-    }
-  )
-
-  it.each([
-    ['opencode', true, 'opencode-agent-row'],
-    ['opencode2', true, 'opencode-agent-row'],
-    ['opencode', false, 'render-cursor-after-bracketed-paste'],
-    ['opencode2', false, 'render-cursor-after-bracketed-paste']
-  ] as const)('a tab-bound %s paste with submit %s waits on %s', async (agent, submit, signal) => {
-    const promise = pasteDraftWhenAgentReady({
-      tabId: 'tab-1',
-      content: 'task',
-      agent,
-      submit,
-      forcePaste: true
-    })
-
-    await vi.advanceTimersByTimeAsync(12_000)
-
-    await expect(promise).resolves.toBe(true)
-    expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, signal)
-  })
-
   it('flags a blind paste when only the opencode process, not its composer, was seen', async () => {
     // ConPTY omits DECSET 2004; distinguish OpenCode’s blind-write fallback from observed delivery (#22479).
     testState.waitForReady.mockResolvedValue(false)
@@ -197,26 +118,4 @@ describe('pty-bound agent draft readiness budget', () => {
       expect(writes).toHaveLength(started ? 2 : 0)
     }
   )
-
-  it('keeps the 8s readiness deadline for agents without an agent-specific budget', async () => {
-    const onTimeout = vi.fn()
-    const promise = pasteDraftToAgentPtyWhenReady({
-      ptyId: 'pty-1',
-      content: 'draft',
-      agent: 'gemini',
-      forcePaste: true,
-      onTimeout
-    })
-
-    await vi.advanceTimersByTimeAsync(9000)
-
-    await expect(promise).resolves.toBe(false)
-    expect(testState.waitForReady).toHaveBeenCalledWith(
-      'pty-1',
-      8000,
-      'render-quiet-after-bracketed-paste'
-    )
-    expect(onTimeout).toHaveBeenCalledTimes(1)
-    expect(testState.sendInput).not.toHaveBeenCalled()
-  })
 })

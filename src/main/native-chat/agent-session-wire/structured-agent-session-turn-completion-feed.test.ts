@@ -100,7 +100,8 @@ function harness(): {
   const feed = new StructuredAgentSessionTurnCompletionFeed({
     sessions,
     now: () => 1_700,
-    readStatusState: () => projectStructuredAgentSessionStatusState(items, submissions, fence)
+    readStatusState: () => projectStructuredAgentSessionStatusState(items, submissions, fence),
+    readChildWork: () => []
   })
   const events: AgentSessionTurnCompletionEvent[] = []
   return {

@@ -29,3 +29,11 @@ export function pluginDevChangeCount(root: string): number {
 export function pluginDevRevision(root: string): string {
   return `dev-${RUN_NONCE}-${revisions.get(resolve(root)) ?? 0}`
 }
+
+/** The `rev` of a plugin's frame guest URLs: an update or a dev edit (even asset-only) changes it. */
+export function pluginFrameContentRevision(plugin: {
+  contentHash?: string | null
+  rootDir: string
+}): string {
+  return plugin.contentHash ? plugin.contentHash.slice(0, 16) : pluginDevRevision(plugin.rootDir)
+}

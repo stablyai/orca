@@ -1,4 +1,4 @@
-import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 // Share one connection per test profile to match production host ownership.
 
 import { resolve } from 'node:path'

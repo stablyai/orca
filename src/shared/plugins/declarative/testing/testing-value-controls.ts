@@ -1,43 +1,82 @@
-import { PLUGIN_DECLARATIVE_EDIT_PROP } from '../plugin-declarative-message-names'
+import {
+  PLUGIN_DECLARATIVE_EDIT_PROP,
+  pluginDeclarativeValueControl
+} from '../plugin-declarative-message-names'
 import type { TestElement } from './testing-tree'
 
-type ControlState = { value: string | boolean; sent: number }
-export type ControlEdit = { value: string | boolean; id: number }
+/** What a value control holds: text, a flag, a number (Slider) or keys (Table selection). */
+export type ControlValue = string | boolean | number | readonly string[]
+type ControlState = { value: ControlValue; sent: number }
+export type ControlEdit = { value: ControlValue; id: number }
 
-const VALUE_PROP: Record<string, 'value' | 'checked'> = {
-  Input: 'value',
-  Select: 'value',
-  Switch: 'checked'
+const DEFAULT_PROP: Record<string, string> = {
+  value: 'defaultValue',
+  checked: 'defaultChecked',
+  open: 'defaultOpen',
+  selected: 'defaultSelected'
+}
+
+export function isControlValue(value: unknown): value is ControlValue {
+  return (
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    typeof value === 'number' ||
+    (Array.isArray(value) && value.every((entry) => typeof entry === 'string'))
+  )
+}
+
+function fallbackOf(element: TestElement): ControlValue {
+  switch (element.type) {
+    case 'Switch':
+    case 'Checkbox':
+    case 'Collapsible':
+      return false
+    case 'Slider':
+      return typeof element.props.min === 'number' ? element.props.min : 0
+    case 'Table':
+      return []
+    default:
+      return ''
+  }
 }
 
 /**
- * What Orca shows in each Input, Switch and Select, owned as Orca owns it: typing stays until the
- * panel renders a value having seen the edit (see the edit protocol in the components runtime).
+ * What Orca shows in each value control, owned as Orca owns it: an edit stays until the panel
+ * renders a value having seen it (see the edit protocol in the components runtime).
  */
 export function createValueControls() {
   let states = new Map<string, ControlState>()
+
+  function control(element: TestElement): { value: string; change: string } {
+    const found = pluginDeclarativeValueControl(element.type)
+    if (!found) {
+      throw new Error(`a ${element.type} has no value; expected a form control, Tabs or Table`)
+    }
+    return found
+  }
 
   function current(element: TestElement): ControlState {
     const known = states.get(element.path)
     if (known) {
       return known
     }
-    const prop = VALUE_PROP[element.type]
-    if (!prop) {
-      throw new Error(`a ${element.type} has no value; expected an Input, Switch or Select`)
-    }
+    const { value: prop } = control(element)
     const remote = element.props[prop]
-    const fallback = element.props[prop === 'checked' ? 'defaultChecked' : 'defaultValue']
-    const value = remote ?? fallback ?? (prop === 'checked' ? false : '')
-    const state = { value: typeof value === 'boolean' ? value : String(value), sent: 0 }
+    const seeded = element.props[DEFAULT_PROP[prop] ?? '']
+    const value = isControlValue(remote)
+      ? remote
+      : isControlValue(seeded)
+        ? seeded
+        : fallbackOf(element)
+    const state = { value, sent: 0 }
     states.set(element.path, state)
     return state
   }
 
-  function edit(element: TestElement, value: string | boolean): ControlEdit {
-    const prop = VALUE_PROP[element.type]
-    if (prop && element.props[prop] !== undefined && element.props.onChange === undefined) {
-      throw new Error(`the ${element.type} is read-only: it has a ${prop} and no onChange`)
+  function edit(element: TestElement, value: ControlValue): ControlEdit {
+    const { value: prop, change } = control(element)
+    if (element.props[prop] !== undefined && element.props[change] === undefined) {
+      throw new Error(`the ${element.type} is read-only: it has a ${prop} and no ${change}`)
     }
     const state = current(element)
     state.sent += 1
@@ -50,24 +89,25 @@ export function createValueControls() {
     observe(elements: readonly TestElement[]): void {
       const next = new Map<string, ControlState>()
       for (const element of elements) {
-        const prop = VALUE_PROP[element.type]
-        if (!prop) {
+        const found = pluginDeclarativeValueControl(element.type)
+        if (!found) {
           continue
         }
         const state = states.get(element.path) ?? current(element)
-        const remote = element.props[prop]
+        const remote = element.props[found.value]
         const acked = element.props[PLUGIN_DECLARATIVE_EDIT_PROP]
-        if (remote !== undefined && (typeof acked === 'number' ? acked : 0) >= state.sent) {
-          state.value = typeof remote === 'boolean' ? remote : String(remote)
+        if (isControlValue(remote) && (typeof acked === 'number' ? acked : 0) >= state.sent) {
+          state.value = remote
         }
         next.set(element.path, state)
       }
       states = next
     },
-    valueOf: (element: TestElement): string | boolean => current(element).value,
+    valueOf: (element: TestElement): ControlValue => current(element).value,
+    edit,
     typeInto(element: TestElement, text: string, replace: boolean): ControlEdit[] {
-      if (element.type !== 'Input') {
-        throw new Error(`type: a ${element.type} takes no text; expected an Input`)
+      if (element.type !== 'Input' && element.type !== 'Textarea') {
+        throw new Error(`type: a ${element.type} takes no text; expected an Input or Textarea`)
       }
       let value = replace ? '' : String(current(element).value)
       const edits: ControlEdit[] = []
@@ -81,27 +121,10 @@ export function createValueControls() {
       return edits
     },
     toggle(element: TestElement): ControlEdit {
-      if (element.type !== 'Switch') {
-        throw new Error(`toggle: expected a Switch, not a ${element.type}`)
+      if (!['Switch', 'Checkbox', 'Collapsible'].includes(element.type)) {
+        throw new Error(`toggle: expected a Switch, Checkbox or Collapsible, not a ${element.type}`)
       }
       return edit(element, !current(element).value)
-    },
-    select(element: TestElement, value: string): ControlEdit {
-      if (element.type !== 'Select') {
-        throw new Error(`select: expected a Select, not a ${element.type}`)
-      }
-      const options = Array.isArray(element.props.options) ? element.props.options : []
-      const option: unknown = options.find(
-        (entry: unknown) =>
-          typeof entry === 'object' && entry !== null && 'value' in entry && entry.value === value
-      )
-      if (
-        !option ||
-        (typeof option === 'object' && 'disabled' in option && option.disabled === true)
-      ) {
-        throw new Error(`select: the Select has no enabled option "${value}"`)
-      }
-      return edit(element, value)
     }
   }
 }

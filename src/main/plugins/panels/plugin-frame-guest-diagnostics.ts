@@ -1,8 +1,16 @@
 import type { WebContents } from 'electron'
 import {
   parsePluginFrameUrl,
+  PLUGIN_FRAME_RESERVED_SEGMENT,
   pluginFrameOrigin
 } from '../../../shared/plugins/frames/plugin-frame-guest'
+import {
+  createPluginFrameBlockedTally,
+  isPluginFrameCancelledRequestEcho,
+  pluginFrameCspBlock,
+  pluginFrameRequestBlock,
+  type PluginFrameBlockedTally
+} from './plugin-frame-blocked-requests'
 
 /**
  * Author diagnostics for plugin `<webview>` guests: console errors, warnings and uncaught
@@ -30,6 +38,8 @@ export const PLUGIN_FRAME_CONSOLE_WINDOW_MS = 10_000
 let logSink: PluginFrameLogSink | null = null
 const guestsByPlugin = new Map<string, Set<WebContents>>()
 const limiters = new Map<string, () => 'log' | 'notice' | 'drop'>()
+const blockedTallies = new Map<string, PluginFrameBlockedTally>()
+const pluginKeyByFrameKey = new Map<string, string>()
 
 export function setPluginFrameGuestLogSink(next: PluginFrameLogSink | null): void {
   logSink = next
@@ -67,6 +77,19 @@ export function pluginFrameSourceLocation(
   return lineNumber > 0 ? `${path}:${lineNumber}` : path
 }
 
+// After shortening, Orca's own guest files read `__orca/…`; authors only need their own frames.
+const ORCA_STACK_FRAME = new RegExp(`^\\s+at (?:.*\\()?${PLUGIN_FRAME_RESERVED_SEGMENT}/`)
+// `at Array.forEach (<anonymous>)`, `at new Promise (<anonymous>)`: engine frames with no source.
+const SOURCELESS_STACK_FRAME = /^\s+at (?:.*\((?:<anonymous>|native)\)|<anonymous>|native)\s*$/
+
+/** Drops stack lines inside Orca's guest runtime (`__orca/orca-runtime.mjs`) and the engine's. */
+export function withoutOrcaStackFrames(text: string): string {
+  return text
+    .split('\n')
+    .filter((line) => !ORCA_STACK_FRAME.test(line) && !SOURCELESS_STACK_FRAME.test(line))
+    .join('\n')
+}
+
 export function formatPluginFrameConsoleLine(
   details: PluginFrameConsoleDetails,
   frameKey: string
@@ -75,7 +98,7 @@ export function formatPluginFrameConsoleLine(
   if (!level) {
     return null
   }
-  let message = shortenPluginFrameUrls(details.message, frameKey)
+  let message = withoutOrcaStackFrames(shortenPluginFrameUrls(details.message, frameKey))
   if (message.length > MESSAGE_CHAR_LIMIT) {
     message = `${message.slice(0, MESSAGE_CHAR_LIMIT)}… (truncated)`
   }
@@ -112,6 +135,31 @@ function limiterFor(pluginKey: string): () => 'log' | 'notice' | 'drop' {
   return limiter
 }
 
+function blockedTallyFor(pluginKey: string): PluginFrameBlockedTally | null {
+  let tally = blockedTallies.get(pluginKey)
+  if (!tally) {
+    const log = logSink?.(pluginKey)
+    if (!log) {
+      return null
+    }
+    tally = createPluginFrameBlockedTally({ log: (line) => log('warn', line) })
+    blockedTallies.set(pluginKey, tally)
+  }
+  return tally
+}
+
+/** The guest session cancelled a request off the plugin's origin. */
+export function notePluginFrameBlockedRequest(
+  frameKey: string,
+  url: string,
+  resourceType: string
+): void {
+  const pluginKey = pluginKeyByFrameKey.get(frameKey)
+  if (pluginKey) {
+    blockedTallyFor(pluginKey)?.note(pluginFrameRequestBlock(url, resourceType))
+  }
+}
+
 /** `did-attach-webview`, after the guest policies: routes its console and tracks it for inspect. */
 export function installPluginFrameGuestDiagnostics(
   guest: WebContents,
@@ -124,11 +172,15 @@ export function installPluginFrameGuestDiagnostics(
     guestsByPlugin.set(pluginKey, guests)
   }
   guests.add(guest)
+  pluginKeyByFrameKey.set(frameKey, pluginKey)
   guest.once('destroyed', () => {
+    blockedTallies.get(pluginKey)?.flush()
     const live = guestsByPlugin.get(pluginKey)
     live?.delete(guest)
     if (live?.size === 0) {
       guestsByPlugin.delete(pluginKey)
+      blockedTallies.delete(pluginKey)
+      pluginKeyByFrameKey.delete(frameKey)
     }
   })
   const log = logSink?.(pluginKey)
@@ -137,6 +189,15 @@ export function installPluginFrameGuestDiagnostics(
   }
   // Uncaught exceptions and unhandled rejections arrive here too, as `Uncaught …` errors.
   guest.on('console-message', (details) => {
+    // Refusals are counted per origin, outside the line budget, so real errors still get logged.
+    const block = pluginFrameCspBlock(details.message)
+    if (block) {
+      blockedTallyFor(pluginKey)?.note(block)
+      return
+    }
+    if (isPluginFrameCancelledRequestEcho(details.message)) {
+      return
+    }
     const formatted = formatPluginFrameConsoleLine(details, frameKey)
     if (!formatted) {
       return
@@ -163,4 +224,9 @@ export function openPluginFrameGuestDevTools(pluginKey: string): number {
     }
   }
   return opened
+}
+
+/** The plugin's live guests, for `orca plugin shot` to wait on the one it captures. */
+export function livePluginFrameGuests(pluginKey: string): WebContents[] {
+  return [...(guestsByPlugin.get(pluginKey) ?? [])].filter((guest) => !guest.isDestroyed())
 }

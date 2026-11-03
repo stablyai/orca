@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../../../../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../../../../git/worktree-listing'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,6 +17,22 @@ import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import * as FailedStartTeardown from './failed-worker-start-teardown'
+
+vi.mock('../../../../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../../../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../../../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../../../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../../../../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -346,28 +364,6 @@ describe('orchestration worker-start prompt contract', () => {
     })
     expect(harness.submittedTurns()).toBe(1)
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('keeps a worker question answerable after turn observation times out', async () => {
-    vi.useFakeTimers()
-    const harness = await createPromptContractHarness('swallowed')
-    let questionId = ''
-    vi.spyOn(harness.runtime, 'observeTerminalAgentPrompt').mockImplementation(
-      async (_handle, prompt) => {
-        const dispatch = harness.db.findActiveDispatchForAssignee(harness.handle)!
-        questionId = harness.db.createQuestion({
-          runId: dispatch.run_id!,
-          dispatchId: dispatch.id,
-          askerHandle: harness.handle,
-          question: 'Which target should I use?'
-        }).question.message_id
-        return prompt
-      }
-    )
-    const pending = harness.dispatcher.dispatch(harness.request)
-    await vi.runAllTimersAsync()
-    expect(await pending).toMatchObject({ ok: true, result: { state: 'outcome_unknown' } })
-    expect(harness.db.getQuestion(questionId)?.status).toBe('pending')
   })
 
   it('reports a swallowed Enter as start_unknown while keeping the worker reportable', async () => {

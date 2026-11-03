@@ -216,6 +216,8 @@ export function paramsFor(method: string): unknown {
       return {}
     case 'agentSession.continueInterrupted':
       return { sessionId: SESSION, turnItemId: 'legacy:codex:s:turn-1' }
+    case 'agentSession.cancelUsageLimitContinue':
+      return { sessionId: SESSION, turnItemId: 'orca:limited-turn', resetsAt: NOW }
     default:
       return { sessionId: SESSION }
   }

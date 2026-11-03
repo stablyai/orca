@@ -9,7 +9,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-sessio
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRewindFork } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
-import { fakeClaude } from '../claude/claude-structured-session-test-support'
+import { fakeClaude } from '../claude/structured/claude-structured-session-test-support'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -20,8 +20,8 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { createClaudeStructuredLaunchResolver } from './structured-agent-launch-composition.test-support'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import {
