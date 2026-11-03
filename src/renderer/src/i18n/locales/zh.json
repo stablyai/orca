@@ -18962,7 +18962,7 @@
           "stoppedCount_other": "{{count}} 个已停止",
           "unverifiableCount_other": "{{count}} 个状态不可用"
         },
-        "tokens": "{{value0}} 代币",
+        "tokens": "{{value0}} token",
         "unnamed": "子智能体",
         "started_other": "已启动 {{count}} 个子智能体",
         "ran_other": "已运行 {{count}} 个子智能体"
