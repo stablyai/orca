@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { useEffect } from 'react'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
@@ -23,6 +24,9 @@ export function ChatAgentLaunchSettings({
 }): React.JSX.Element {
   useHostStructuredAgentsVersion()
   useChatProgramFacts(WORKSPACE)
+  useEffect(() => {
+    void useAppStore.getState().ensureNativeDetectedAgents()
+  }, [])
   const detected = useAppStore(readNativeDetectedAgents)
   const chatOnlyKey = useAppStore((state) => {
     const context = resolveChatProgramContext(state, WORKSPACE)
@@ -40,25 +44,27 @@ export function ChatAgentLaunchSettings({
     <section className="space-y-3">
       <SettingsSubsectionHeader title={entry.title} description={entry.description} />
       <Card>
-        <CardContent className="divide-y divide-border">
-          {getAgentCatalog().map((agent) => {
-            const opensAs = buildAgentOpensAs({
-              agent: agent.id,
-              cliDetected: detected === null ? null : detected.includes(agent.id),
-              chatProgramHere: chatOnly.has(agent.id),
-              settings,
-              updateSettings
-            })
-            return opensAs ? (
-              <div key={agent.id} className="flex items-center justify-between gap-4 py-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <AgentIcon agent={agent.id} size={16} />
-                  <span className="text-sm font-medium">{agent.label}</span>
+        <CardContent>
+          <div className="divide-y divide-border">
+            {getAgentCatalog().map((agent) => {
+              const opensAs = buildAgentOpensAs({
+                agent: agent.id,
+                cliDetected: detected === null ? null : detected.includes(agent.id),
+                chatProgramHere: chatOnly.has(agent.id),
+                settings,
+                updateSettings
+              })
+              return opensAs ? (
+                <div key={agent.id} className="flex items-center justify-between gap-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <AgentIcon agent={agent.id} size={16} />
+                    <span className="text-sm font-medium">{agent.label}</span>
+                  </div>
+                  <AgentOpensAsControl label={agent.label} opensAs={opensAs} />
                 </div>
-                <AgentOpensAsControl label={agent.label} opensAs={opensAs} />
-              </div>
-            ) : null
-          })}
+              ) : null
+            })}
+          </div>
         </CardContent>
       </Card>
     </section>

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { useRef, useState } from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { ChatSettingsSection } from './ChatSettingsSection'
@@ -15,8 +15,13 @@ import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import type { SettingsTerminalModel } from './use-settings-terminal-model'
+import { useAppStore } from '@/store'
 
 vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
+beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ ensureNativeDetectedAgents: vi.fn(async () => []) })
+})
 
 afterEach(() => {
   cleanup()

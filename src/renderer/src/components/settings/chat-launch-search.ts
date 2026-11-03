@@ -1,12 +1,17 @@
 import { translate } from '@/i18n/i18n'
 import type { SettingsSearchEntry } from './settings-search'
+import { translateSearchKeyword } from './settings-search-keywords'
 
 export function getChatLaunchEntriesByKey() {
   return {
     default: {
       targetSectionId: 'chat-launch-default',
       title: translate('settings.chat.launch.toggle', 'Use Chat UI by default'),
-      keywords: ['chat', 'CLI', 'terminal', 'default', 'on', 'off']
+      keywords: [
+        ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),
+        ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI'),
+        ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal')
+      ]
     },
     agents: {
       targetSectionId: 'chat-agent-launch',
@@ -15,7 +20,12 @@ export function getChatLaunchEntriesByKey() {
         'settings.chat.launch.agentsDescription',
         'Choose whether each agent opens in Chat UI or its CLI.'
       ),
-      keywords: ['chat', 'CLI', 'terminal', 'agent', 'provider', 'default']
+      keywords: [
+        ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),
+        ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI'),
+        ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
+        ...translateSearchKeyword('settings.chat.providers.searchAgents', 'agents')
+      ]
     }
   } satisfies Record<string, SettingsSearchEntry>
 }

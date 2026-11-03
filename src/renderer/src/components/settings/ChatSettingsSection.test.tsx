@@ -31,6 +31,7 @@ afterEach(async () => {
 })
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ ensureNativeDetectedAgents: vi.fn(async () => []) })
   setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
 })
 
@@ -71,6 +72,11 @@ function renderChat(
 }
 
 describe('Chat settings page', () => {
+  it('loads the native agent inventory when Chat settings is opened directly', () => {
+    renderChat()
+    expect(useAppStore.getState().ensureNativeDetectedAgents).toHaveBeenCalledOnce()
+  })
+
   it('saves a per-agent choice through the same settings map without changing the default', async () => {
     const { updateSettings } = renderChat(true, false, { agentDefaultSurface: 'terminal' })
     fireEvent.click(
@@ -128,6 +134,7 @@ describe('Chat settings page', () => {
     expect(container.querySelector('#chat-appearance')).toBeTruthy()
     expect(container.querySelector('#chat-text-size')).toBeTruthy()
     expect(container.querySelector('#chat-names')).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'デフォルトでチャット UI を使用' })).toBeTruthy()
   })
 
   it('shows shared launch choices above Appearance without changing existing settings', () => {
