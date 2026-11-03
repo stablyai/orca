@@ -79,6 +79,7 @@ export function NewWorkspaceComposerAgentSection({
           value={agentPickerDraft}
           cli={agentSurfaceRows?.selection.cli === true}
           setupDisabled={agentSetupDisabled}
+          onOpenAgentSettings={onOpenAgentSettings}
           onTriggerEnter={createDisabled ? undefined : onCreate}
           emptyLabel={translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}

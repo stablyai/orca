@@ -4,7 +4,8 @@ import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
 import { memo, useCallback, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store'
+import AgentSettingsDialog from './AgentSettingsDialog'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { AgentSettingsMenuItem } from './AgentSettingsMenuItem'
 import {
   DropdownMenu,
@@ -41,6 +42,7 @@ export const AgentLaunchPicker = memo(
     cli,
     children,
     onTriggerEnter,
+    onOpenAgentSettings,
     onPick
   }: {
     model: NewTabAgentMenuModel
@@ -56,6 +58,7 @@ export const AgentLaunchPicker = memo(
     cli?: boolean
     children?: ReactNode
     onTriggerEnter?: () => void
+    onOpenAgentSettings?: () => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -65,12 +68,15 @@ export const AgentLaunchPicker = memo(
   }) {
     useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
-    const openSettingsPage = useAppStore((state) => state.openSettingsPage)
-    const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+    const [settingsOpen, setSettingsOpen] = useState(false)
     const openAgentSettings = useCallback(() => {
-      openSettingsTarget({ pane: 'agents', repoId: null })
-      openSettingsPage()
-    }, [openSettingsPage, openSettingsTarget])
+      setOpen(false)
+      if (onOpenAgentSettings) {
+        onOpenAgentSettings()
+      } else {
+        setSettingsOpen(true)
+      }
+    }, [onOpenAgentSettings])
     const [open, setOpen] = useState(false)
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const entries = useAgentLaunchPickerInventory(
@@ -85,8 +91,10 @@ export const AgentLaunchPicker = memo(
       ? agentPickerPanelArguments(entry, draft ?? agentPickerDraft(entry)).choices
       : undefined
     const modelLabel =
-      (entry && entry.catalog.origin !== 'unknown'
-        ? entry.catalog.models.find((model) => model.id === choices?.model)?.label
+      (entry
+        ? getAgentSessionOptionLaunchCatalog(entry.agent)?.models.find(
+            (model) => model.id === choices?.model
+          )?.label
         : undefined) ?? choices?.model
     const summary = [modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
     const agentLabel = agent
@@ -122,10 +130,7 @@ export const AgentLaunchPicker = memo(
               <ChevronDown className="size-3.5 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width)"
-          >
+          <DropdownMenuContent align="start" className="min-w-64">
             {children}
             {model.state === 'settled' ? (
               <AgentLaunchPickerMenu
@@ -157,6 +162,9 @@ export const AgentLaunchPicker = memo(
             <AgentSettingsMenuItem onSelect={openAgentSettings} />
           </DropdownMenuContent>
         </DropdownMenu>
+        {settingsOpen && !onOpenAgentSettings ? (
+          <AgentSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        ) : null}
       </div>
     )
   },

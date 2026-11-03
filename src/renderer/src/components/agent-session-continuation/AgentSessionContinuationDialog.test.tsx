@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { mocks, request, detection } from './AgentSessionContinuationDialog.test-fixture'
-import { act, fireEvent, render, screen } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
@@ -617,4 +617,59 @@ it('keeps the no-agents explanation when the source agent only has a chat that c
   await act(async () => {})
   expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
   expect(screen.queryByText(/Only Agents sharing/)).toBeNull()
+})
+
+const settingsDialogOriginalApi = window.api
+afterEach(() =>
+  Object.defineProperty(window, 'api', { configurable: true, value: settingsDialogOriginalApi })
+)
+
+it('retains continuation context and accepted options through actual Agents settings', async () => {
+  useAppStore.setState(({ settings }) => ({
+    settings: { ...settings!, agentPermissionDefault: 'own' }
+  }))
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...window.api,
+      platform: {
+        get: () => ({
+          platform: 'darwin',
+          osRelease: '',
+          arch: 'arm64',
+          shell: '/bin/sh',
+          displayServer: null,
+          windowMaterial: 'off'
+        })
+      }
+    }
+  })
+  render(<AgentSessionContinuationDialog open request={request} onOpenChange={vi.fn()} />, {
+    wrapper: TooltipProvider
+  })
+  const picker = screen.getByRole('button', { name: 'Select agent' })
+  fireEvent.pointerDown(picker, { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Toggle Arguments' }))
+  const args = await screen.findByRole('textbox', { name: 'Arguments' })
+  await waitFor(() => expect(args).toHaveProperty('disabled', false))
+  fireEvent.change(args, { target: { value: '--search' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
+  fireEvent.pointerDown(picker, { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
+  const agents = await screen.findByRole('dialog', { name: 'Agents' })
+  expect(within(agents).getAllByRole('switch').length).toBeGreaterThan(0)
+  fireEvent.click(within(agents).getByRole('button', { name: 'Close' }))
+  expect(mocks.launch).not.toHaveBeenCalled()
+  expect(screen.getByText('/repo/.')).toBeTruthy()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      agent: 'codex',
+      initialCwd: '/repo/.',
+      groupId: 'group-1',
+      agentArgs: '--search',
+      launchChoice: expect.objectContaining({ route: 'terminal-tui', requestedSurface: 'terminal' })
+    })
+  )
 })

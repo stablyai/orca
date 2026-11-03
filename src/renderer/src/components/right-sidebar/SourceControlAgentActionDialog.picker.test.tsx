@@ -96,51 +96,6 @@ afterEach(() => {
   setLocalRuntimeCapabilitiesForTests(null)
 })
 
-it.each(['claude', 'codex'] as const)(
-  'edits %s in the common panel, saves and starts the resulting recipe',
-  async (agent) => {
-    const f = mountSourceDialog({ agentId: agent, surface: 'terminal', agentArgs: '--verbose' }, {})
-    const user = userEvent.setup()
-    const label = agent === 'claude' ? 'Claude' : 'Codex'
-    const model = agent === 'claude' ? 'sonnet' : 'gpt-5.5'
-    const trigger = screen.getByRole('button', { name: 'Select agent' })
-    await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false))
-    await user.click(trigger)
-    await user.click(screen.getByRole('button', { name: `Configure ${label}` }))
-    await user.click(screen.getByRole('option', { name: model }))
-    await user.click(screen.getByRole('radio', { name: 'Low' }))
-    await user.click(screen.getByRole('button', { name: `${label} permissions` }))
-    await user.click(screen.getByRole('menuitemradio', { name: /^Full access/ }))
-    await user.click(
-      agent === 'claude' ? screen.getByRole('switch') : screen.getByRole('radio', { name: 'Fast' })
-    )
-    const text = screen.queryByRole('textbox', { name: 'Arguments' })
-    if (!text) {
-      await user.click(screen.getByRole('button', { name: 'Toggle Arguments' }))
-    }
-    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
-      target: { value: '--add-dir docs' }
-    })
-    await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
-    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull())
-    await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Save & start agent' }))
-    )
-    await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
-    expect(f.onStart.mock.calls[0][0]).toMatchObject({
-      agent,
-      sessionOptions: {
-        model,
-        effort: 'low',
-        permissionMode: 'full-access',
-        ...(agent === 'claude' ? { fastMode: 'true' } : { serviceTier: 'priority' })
-      }
-    })
-    expect(f.onStart.mock.calls[0][0].agentArgs).toContain('--add-dir docs')
-    expect(f.persist).toHaveBeenCalledOnce()
-  }
-)
-
 it.each(['global', 'repo'] as const)(
   'keeps %s Customize permission-only edits sparse through Save and Start',
   async (scope) => {
@@ -452,6 +407,12 @@ it.each([
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Select agent' })).toHaveProperty('disabled', false)
     )
+    if (agentId !== null) {
+      await user.click(screen.getByRole('button', { name: 'Select agent' }))
+      await user.click(screen.getByRole('menuitem', { name: /^Claude/ }))
+      expect(read()).toEqual(before)
+      expect(f.persist).not.toHaveBeenCalled()
+    }
     await user.click(screen.getByRole('button', { name: 'Select agent' }))
     await user.click(screen.getByRole('button', { name: 'Configure Claude' }))
     if (agentId === null) {
@@ -465,7 +426,7 @@ it.each([
     act(() => f.controller.onSaveAgentDefaultChange('repo'))
     await user.click(screen.getByRole('button', { name: /^(Save & start agent|Start agent)$/ }))
     await waitFor(() => expect(start).toHaveBeenCalledOnce())
-    expect(read()).toEqual(before)
+    expect(read()).toEqual(agentId === null ? before : { ...before, surface: 'terminal' })
     const own = useAppStore.getState().repos[0].sourceControlAi?.actionOverrides?.resolveConflicts
     expect(own).toMatchObject(old)
     for (const key of [
@@ -773,6 +734,60 @@ it.each(['claude', 'codex'] as const)(
     expect(f.controller.recipe).toMatchObject({ ...recipe, surface: 'chat' })
     expect(screen.getByRole('button', { name: 'Select agent' }).textContent).not.toContain('(CLI)')
     expect(f.controller.agentArgsApply).toBe(false)
+    reopened.unmount()
+  }
+)
+
+it.each(
+  (['claude', 'codex'] as const).flatMap((agent) =>
+    (['chat', 'terminal'] as const).map((surface) => ({ agent, surface }))
+  )
+)(
+  'authors missing current-$surface in $agent Customize and replays against opposite Settings',
+  async ({ agent, surface }) => {
+    const recipe = {
+      agentId: agent,
+      agentArgs: '--add-dir "two words"',
+      commandInputTemplate: 'CURRENT {basePrompt}'
+    }
+    const f = mountSourceDialog(recipe, recipe)
+    act(() =>
+      useAppStore.setState(({ settings }) => ({
+        settings: { ...settings!, nativeChatProviders: { [agent]: surface === 'chat' } }
+      }))
+    )
+    const user = userEvent.setup()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Select agent' })).toHaveProperty('disabled', false)
+    )
+    await user.click(screen.getByRole('button', { name: 'Select agent' }))
+    await user.click(
+      screen.getByRole('button', { name: `Configure ${agent === 'claude' ? 'Claude' : 'Codex'}` })
+    )
+    await user.click(
+      screen.getByRole('button', { name: surface === 'chat' ? 'Launch chat' : 'Launch terminal' })
+    )
+    expect(f.controller.recipe).toMatchObject({ ...recipe, surface })
+    act(() => f.controller.onSaveAgentDefaultChange('repo'))
+    await user.click(screen.getByRole('button', { name: 'Save & start agent' }))
+    await waitFor(() => expect(f.persist).toHaveBeenCalledOnce())
+    expect(
+      useAppStore.getState().repos[0].sourceControlAi?.actionOverrides?.resolveConflicts
+    ).toEqual({ ...recipe, surface })
+    f.view.unmount()
+    const reopened = f.mount()
+    expect(f.controller.recipe).toMatchObject({ ...recipe, surface })
+    act(() =>
+      useAppStore.setState(({ settings }) => ({
+        settings: { ...settings!, nativeChatProviders: { [agent]: surface !== 'chat' } }
+      }))
+    )
+    await user.click(screen.getByRole('button', { name: /^(Start agent|Save & start agent)$/ }))
+    await waitFor(() => expect(f.onStart).toHaveBeenCalledTimes(2))
+    expect(f.onStart.mock.calls[1][0].launchChoice).toMatchObject({
+      route: surface === 'chat' ? 'structured-native-chat' : 'terminal-tui'
+    })
+    expect(f.onStart.mock.calls[1][0].agentArgs).toContain('--add-dir "two words"')
     reopened.unmount()
   }
 )

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type * as StructuredAgentClient from '@/runtime/structured-agent-session-client'
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -9,7 +9,7 @@ import { clearHostAgentMenuSettingsForTests } from '../settings/use-host-agent-l
 import { canonicalSourceControlActionSelection } from '../../../../shared/source-control-action-selection'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { useSavedSourceControlActionStart } from './use-saved-source-control-action-start'
-import { mountSourceDialog } from './source-control-action-dialog.test-fixture'
+import { mountSourceDialog, renderDialog } from './source-control-action-dialog.test-fixture'
 
 vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
   ...(await importOriginal<typeof StructuredAgentClient>()),
@@ -79,4 +79,17 @@ it('saved primary Chat skips Terminal-only validation under CLI settings and dis
   expect(fallback).not.toHaveBeenCalled()
   expect(f.persist).not.toHaveBeenCalled()
   primary.unmount()
+})
+
+it('preserves a stored equal surface on single-mode acceptance while keeping the live explicit operation', async () => {
+  const recipe = { agentId: 'codex' as const, surface: 'terminal' as const, agentArgs: '--search' }
+  const f = renderDialog(false, true, recipe)
+  await waitFor(() => expect(f.result.current.canStart).toBe(true))
+  act(() => f.result.current.onAgentPick('codex', 'terminal'))
+  expect(f.result.current.recipe).toMatchObject(recipe)
+  expect(f.result.current.surfaceRows.selection.choice).toMatchObject({
+    route: 'terminal-tui',
+    requestedSurface: 'terminal'
+  })
+  expect(f.result.current.agentArgsApply).toBe(true)
 })

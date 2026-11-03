@@ -51,7 +51,7 @@ type Launch = (
   row: NewTabAgentMenuRow,
   draft?: AgentPickerDraft,
   entry?: AgentPickerEntry,
-  /** Select mode: set only when a Chat or Terminal button changes the form's surface. */
+  /** Select mode: the surface explicitly accepted by a named launch action. */
   surface?: AgentPickerSurface
 ) => boolean | void | Promise<boolean>
 
@@ -334,9 +334,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         }
       }}
       onUse={(draft) => {
-        // Same surface as the form: accept the draft without a new route event.
-        const committed = (initial ?? selected ?? source)?.surface ?? entry.defaultSurface
-        const chosen = mode === 'select' && draft.surface !== committed ? draft.surface : undefined
+        const chosen = mode === 'select' ? draft.surface : undefined
         const result =
           chosen === undefined
             ? runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)

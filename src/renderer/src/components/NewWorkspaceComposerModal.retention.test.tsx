@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // Exercise production Modal/Card/Picker/inventory with synthetic composer targets.
 import React, { useRef, useState } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -103,7 +103,6 @@ vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => nul
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}
 }))
-vi.mock('@/components/agent/AgentSettingsDialog', () => ({ default: () => null }))
 vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({ AddRemoteHostDialog: () => null }))
 vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
   default: () => <input aria-label="workspace name" />
@@ -216,6 +215,7 @@ vi.mock('@/hooks/useComposerState', () => ({
   }
 }))
 const initialState = useAppStore.getState()
+const originalApi = window.api
 beforeEach(() => {
   evidence.trace = []
   evidence.phase = 'mount'
@@ -246,6 +246,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   useAppStore.setState(initialState, true)
+  Object.defineProperty(window, 'api', { configurable: true, value: originalApi })
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 const textarea = () =>
@@ -490,4 +492,69 @@ it('keeps accepted and newer pending ordinary intent across same-target agent sw
   }
   expect(evidence.submit).toHaveBeenCalledTimes(2)
   expect(evidence.submit.mock.calls[0]).toEqual(captured[0])
+})
+
+it('keeps accepted and pending workspace options through the shared gear/footer Agents dialog', async () => {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...window.api,
+      platform: {
+        get: () => ({
+          platform: 'darwin',
+          osRelease: '',
+          arch: 'arm64',
+          shell: '/bin/sh',
+          displayServer: null,
+          windowMaterial: 'off'
+        })
+      }
+    }
+  })
+  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
+  fireEvent.change(screen.getByRole('textbox', { name: 'workspace name' }), {
+    target: { value: 'retained-work' }
+  })
+  await open('Claude')
+  fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
+  fireEvent.change(textarea(), { target: { value: '--verbose' } })
+  await useDraft()
+  await open('Claude')
+  fireEvent.change(textarea(), { target: { value: '--debug' } })
+  await closeMenu()
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
+  const agents = await screen.findByRole('dialog', { name: 'Agents' })
+  expect(screen.getAllByRole('dialog', { name: 'Agents' })).toHaveLength(1)
+  expect(within(agents).getAllByRole('switch').length).toBeGreaterThan(0)
+  fireEvent.keyDown(within(agents).getByRole('button', { name: 'Close' }), {
+    key: 'Enter',
+    metaKey: true,
+    ctrlKey: true
+  })
+  expect(evidence.submit).not.toHaveBeenCalled()
+  fireEvent.click(within(agents).getByRole('button', { name: 'Close' }))
+  expect(screen.getByRole('textbox', { name: 'workspace name' })).toHaveProperty(
+    'value',
+    'retained-work'
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Open agent settings' }))
+  fireEvent.click(
+    within(await screen.findByRole('dialog', { name: 'Agents' })).getByRole('button', {
+      name: 'Close'
+    })
+  )
+  await open('Claude')
+  expect(textarea().value).toBe('--debug')
+  expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
+  await useDraft()
+  fireEvent.click(screen.getByRole('button', { name: 'Create worktree' }))
+  expect(evidence.submit).toHaveBeenCalledOnce()
+  expect(evidence.submit.mock.calls[0][0]).toBe('claude')
+  expect(evidence.submit.mock.calls[0][1]).toMatchObject({
+    launchInputs: { agentArgs: '--debug', sessionOptions: { effort: 'low' } }
+  })
 })
