@@ -17,7 +17,7 @@ test('temporary error recovery can be found and enabled in Chat settings', async
   const search = orcaPage.getByPlaceholder('Search settings')
   await expect(search).toBeVisible()
   await search.fill('capacity')
-  await orcaPage.getByRole('button', { name: 'Chat', exact: true }).click()
+  await orcaPage.getByRole('button', { name: 'Chat UI', exact: true }).click()
   const setting = orcaPage.locator('#chat-transient-error-recovery')
   const toggle = setting.getByRole('switch', {
     name: 'Toggle automatic continuation after temporary errors'
