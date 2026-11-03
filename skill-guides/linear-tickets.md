@@ -30,12 +30,12 @@ When you are about to plan one linked ticket, read its full context:
 ORCA linear issue --current --full --json
 ```
 
-For a queue or search, use `ORCA linear list` or `ORCA linear search`, then read each selected ticket with `ORCA linear issue <id> --json`:
+For a queue or search, use `ORCA linear list` or `ORCA linear search`, then read each selected ticket with `ORCA linear issue <identifier> --workspace <workspaceId> --json`, using that result's `identifier` and `workspace.id`:
 
 ```bash
 ORCA linear list --filter assigned --limit 10 --workspace all --json
 ORCA linear search "auth bug" --workspace all --limit 10 --json
-ORCA linear issue ENG-123 --json
+ORCA linear issue ENG-123 --workspace <workspaceId> --json
 ```
 
 A plain issue read leaves comments, children, attachments, relations, and activity off. Add `--comments` when the thread or a comment screenshot matters. Add `--children` when the ticket is a parent. Reserve `--full` for the one linked ticket you are about to plan, rather than every ticket in a queue.
