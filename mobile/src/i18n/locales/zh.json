@@ -1252,10 +1252,23 @@
     }
   },
   "home": {
+    "accountUsage": {
+      "heading": "账户使用情况",
+      "sessionWindow": "5小时",
+      "systemDefault": "系统默认",
+      "weeklyWindow": "7天"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",
       "updateAccessibilityLabel": "Orca {{version}} 已可用，点按更新"
+    },
+    "arrange": {
+      "done": "完成",
+      "hint": "拖动以移动。关闭某个板块即可隐藏。",
+      "reset": "重置",
+      "showSection": "显示{{section}}",
+      "title": "排列首页"
     },
     "emptyState": {
       "connectedDescription": "桌面将显示在这里。所有数据均采用端到端加密。",
@@ -1280,6 +1293,15 @@
       "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对。",
       "removeHostTitle": "移除主机",
       "tryAgain": "请重试。"
+    },
+    "stats": {
+      "agentTime": "智能体时间",
+      "agentsSpawned": "已启动智能体",
+      "days": "{{days}} 天",
+      "heading": "你的统计",
+      "hours": "{{hours}} 小时",
+      "minutes": "{{minutes}} 分钟",
+      "prsCreated": "已创建 PR"
     }
   },
   "hooks": {

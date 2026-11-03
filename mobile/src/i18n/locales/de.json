@@ -1256,10 +1256,23 @@
     }
   },
   "home": {
+    "accountUsage": {
+      "heading": "Kontonutzung",
+      "sessionWindow": "5 h",
+      "systemDefault": "Systemstandard",
+      "weeklyWindow": "7 Tage"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Update-Hinweis für Orca {{version}} ausblenden",
       "title": "Orca {{version}} ist verfügbar",
       "updateAccessibilityLabel": "Orca {{version}} ist verfügbar, zum Aktualisieren antippen"
+    },
+    "arrange": {
+      "done": "Fertig",
+      "hint": "Zum Verschieben ziehen. Schalte einen Bereich aus, um ihn auszublenden.",
+      "reset": "Zurücksetzen",
+      "showSection": "{{section}} anzeigen",
+      "title": "Home anordnen"
     },
     "emptyState": {
       "connectedDescription": "Der Desktop erscheint hier. Alles ist Ende-zu-Ende-verschlüsselt.",
@@ -1284,6 +1297,15 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "removeHostTitle": "Host entfernen",
       "tryAgain": "Bitte erneut versuchen."
+    },
+    "stats": {
+      "agentTime": "Agentenzeit",
+      "agentsSpawned": "Gestartete Agenten",
+      "days": "{{days}} T",
+      "heading": "Deine Statistiken",
+      "hours": "{{hours}} Std.",
+      "minutes": "{{minutes}} Min.",
+      "prsCreated": "Erstellte PRs"
     }
   },
   "hooks": {

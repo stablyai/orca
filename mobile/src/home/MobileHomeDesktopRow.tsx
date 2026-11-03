@@ -1,8 +1,8 @@
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight, Laptop, Monitor, Server, type LucideIcon } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { StatusDot, statusDotColor } from '../components/StatusDot'
+import { statusDotColor } from '../components/StatusDot'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import { verdictDisplayLabel } from '../transport/connection-health'
 import { mobileConnectionPathAccessibilityLabel } from '../transport/mobile-connection-path-label'
@@ -13,6 +13,12 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { homeListStyles as styles } from './home-list-styles'
+
+const MACHINE_GLYPHS: Record<'laptop' | 'desktop' | 'server', LucideIcon> = {
+  laptop: Laptop,
+  desktop: Monitor,
+  server: Server
+}
 
 const PROBLEM_VERDICTS: ReadonlySet<ConnectionVerdict['kind']> = new Set([
   'warning',
@@ -63,10 +69,9 @@ export function MobileHomeDesktopRow(props: {
     : credentialUnavailable
       ? { kind: 'warning', label: statusLabel }
       : props.verdict
+  const dotColor = statusDotColor(props.state, statusVerdict)
   // The words take the dot's severity, so an amber warning never reads red.
-  const statusColor = PROBLEM_VERDICTS.has(statusVerdict.kind)
-    ? statusDotColor(props.state, statusVerdict)
-    : colors.textSecondary
+  const statusColor = PROBLEM_VERDICTS.has(statusVerdict.kind) ? dotColor : colors.textMuted
   const worktreeSummary = worktreeSummaries(props.worktreeInfo, t)
   const display = useHostDisplay(props.host)
   const discoveryHint =
@@ -87,10 +92,11 @@ export function MobileHomeDesktopRow(props: {
   const details = [discoveryHint, credentialHint, verdictDetail].filter((line): line is string =>
     Boolean(line)
   )
-  const subtitle = connected && worktreeSummary.visual ? worktreeSummary.visual : statusLabel
+  const statusLine = connected && worktreeSummary.visual ? worktreeSummary.visual : statusLabel
+  const MachineGlyph = display.machineKind ? MACHINE_GLYPHS[display.machineKind] : Monitor
   const accessibilityLabel = [
     t('components.hostCard.openHost', 'Open {{title}}', { title: display.title }),
-    display.descriptorLine,
+    display.machineLine ?? display.descriptorLine,
     statusLabel,
     connected ? mobileConnectionPathAccessibilityLabel(props.path) : null,
     connected ? worktreeSummary.accessibility : null,
@@ -117,17 +123,21 @@ export function MobileHomeDesktopRow(props: {
       onLongPress={props.onLongPress}
       delayLongPress={400}
     >
-      <View style={styles.status}>
-        <View style={styles.statusDotBox}>
-          <StatusDot state={props.state} verdict={statusVerdict} />
-        </View>
+      <View style={styles.tile}>
+        <MachineGlyph size={20} strokeWidth={1.8} color={colors.textPrimary} />
+        <View style={[styles.tileDot, { backgroundColor: dotColor }]} />
       </View>
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>
           {display.title}
         </Text>
-        <Text style={[styles.subtitle, { color: statusColor }]} numberOfLines={connected ? 1 : 2}>
-          {subtitle}
+        {display.machineLine ? (
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {display.machineLine}
+          </Text>
+        ) : null}
+        <Text style={[styles.detail, { color: statusColor }]} numberOfLines={connected ? 1 : 2}>
+          {statusLine}
         </Text>
         {details.map((line) => (
           <Text key={line} style={styles.detail} numberOfLines={3}>

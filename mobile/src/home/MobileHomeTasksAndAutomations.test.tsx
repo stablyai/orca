@@ -1,8 +1,11 @@
-import { createElement } from 'react'
+import { createElement, Fragment } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostProfile } from '../transport/types'
-import { MobileHomeTasksAndAutomations } from './MobileHomeTasksAndAutomations'
+import {
+  MobileHomeAutomationsSection,
+  MobileHomeTasksSection
+} from './MobileHomeTasksAndAutomations'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -38,7 +41,22 @@ describe('Home Tasks and Automations sections', () => {
   function render(connectedHosts: HostProfile[]) {
     const callbacks = { onOpenTasks: vi.fn(), onOpenAutomations: vi.fn() }
     act(() => {
-      tree = create(createElement(MobileHomeTasksAndAutomations, { connectedHosts, ...callbacks }))
+      tree = create(
+        createElement(
+          Fragment,
+          null,
+          createElement(MobileHomeTasksSection, {
+            connectedHosts,
+            first: false,
+            onOpen: callbacks.onOpenTasks
+          }),
+          createElement(MobileHomeAutomationsSection, {
+            connectedHosts,
+            first: false,
+            onOpen: callbacks.onOpenAutomations
+          })
+        )
+      )
     })
     return callbacks
   }
@@ -59,10 +77,8 @@ describe('Home Tasks and Automations sections', () => {
       .find((node) => node.props.title === title)!
   }
 
-  it('opens the only connected host from the Automations row, placed right after Tasks', () => {
+  it('opens the only connected host from the Automations row', () => {
     const callbacks = render([host('desk')])
-    const rows = tree!.root.findAll((node) => String(node.type) === 'Pressable')
-    expect(rows.indexOf(row('Automations'))).toBe(rows.indexOf(row('Tasks')) + 1)
     expect(row('Automations').props.disabled).toBe(false)
     act(() => row('Automations').props.onPress())
     expect(callbacks.onOpenAutomations).toHaveBeenCalledExactlyOnceWith('desk')

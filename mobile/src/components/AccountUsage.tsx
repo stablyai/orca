@@ -24,6 +24,25 @@ export {
   hasRenderableUsage
 } from './account-usage-state'
 
+/** A meter's fill: the rounded, clamped percent and its consumption colour, shared by every usage meter. */
+export function usageBarFill(
+  usedPercent: number | null,
+  unavailable: boolean
+): { used: number | null; color: string } {
+  // Why: round then clamp so bar width, color, and label share one value (desktop parity).
+  const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
+  // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
+  const color =
+    unavailable || used == null
+      ? colors.textMuted
+      : used >= 80
+        ? colors.statusRed
+        : used >= 60
+          ? colors.statusAmber
+          : colors.statusGreen
+  return { used, color }
+}
+
 // Match desktop/harness consumption meters: fresh empty/green, depleted full/red.
 export function UsageBar({
   label,
@@ -39,17 +58,7 @@ export function UsageBar({
   resetText?: string | null
 }) {
   useMobileColorScheme()
-  // Why: round then clamp so bar width, color, and label share one value (desktop parity).
-  const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
-  // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
-  const barColor =
-    used == null
-      ? colors.textMuted
-      : used >= 80
-        ? colors.statusRed
-        : used >= 60
-          ? colors.statusAmber
-          : colors.statusGreen
+  const { used, color } = usageBarFill(usedPercent, unavailable)
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>
@@ -60,7 +69,7 @@ export function UsageBar({
               styles.usageFill,
               {
                 width: `${used ?? 0}%`,
-                backgroundColor: unavailable ? colors.textMuted : barColor
+                backgroundColor: color
               }
             ]}
           />

@@ -17,7 +17,12 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronRight: 'ChevronRight',
+  Laptop: 'Laptop',
+  Monitor: 'Monitor',
+  Server: 'Server'
+}))
 vi.mock('../components/StatusDot', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   StatusDot: 'StatusDot'

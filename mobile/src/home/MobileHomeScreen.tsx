@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react'
-import { Alert, View } from 'react-native'
+import { Fragment, useCallback, useState, type ReactElement } from 'react'
+import { Alert, ScrollView, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -12,7 +13,7 @@ import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
-import { colors } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -30,11 +31,19 @@ import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-l
 import type { HomeJumpBackInRow } from '../worktree/home-jump-back-in'
 import { isResumeTargetConfirmedMissing } from '../worktree/home-resume-card'
 import { MobileHomeAppUpdateCard } from './MobileHomeAppUpdateCard'
-import { MobileHomeTasksAndAutomations } from './MobileHomeTasksAndAutomations'
+import {
+  MobileHomeAutomationsSection,
+  MobileHomeTasksSection
+} from './MobileHomeTasksAndAutomations'
+import { MobileHomeAccountUsage } from './MobileHomeAccountUsage'
 import { MobileHomeBottomBar, MobileHomePairBar } from './MobileHomeBottomBar'
 import { MobileHomeEmptyState } from './MobileHomeEmptyState'
 import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeJumpBackIn } from './MobileHomeJumpBackIn'
+import { MobileHomeStats } from './MobileHomeStats'
+import type { HomeSectionId } from './home-layout'
+import { MobileHomeArrangeSheet } from './MobileHomeArrangeSheet'
+import { useHomeLayout } from './use-home-layout'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
@@ -49,11 +58,14 @@ export function MobileHomeScreen() {
   const openMobileTasks = useOpenMobileTasks()
   const openMobileAutomations = useOpenMobileAutomations()
   const openMobileSession = useOpenMobileSession()
+  const openMobileAccounts = useOpenMobileAccounts()
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
+  const { layout: homeLayout, saveLayout: saveHomeLayout } = useHomeLayout()
+  const [arranging, setArranging] = useState(false)
 
   const openWorktree = useCallback(
     (row: HomeJumpBackInRow) => {
@@ -118,13 +130,80 @@ export function MobileHomeScreen() {
   const actionTargetConnected =
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
+  const { stats } = data
+  // Null hides a section with nothing to show; `first` pulls the top one up under the bar.
+  const sections: Record<HomeSectionId, ((first: boolean) => ReactElement) | null> = {
+    jumpBackIn:
+      data.jumpBackInRows.length > 0
+        ? (first) => (
+            <MobileHomeJumpBackIn
+              rows={data.jumpBackInRows}
+              hosts={data.sortedHostCatalog}
+              first={first}
+              onOpen={openWorktree}
+            />
+          )
+        : null,
+    desktops: (first) => (
+      <MobileHomeHostList
+        autoConnectHostIds={data.autoConnectHostIds}
+        first={first}
+        hostAttempts={data.hostAttempts}
+        hostLastConnected={data.hostLastConnected}
+        hostConnections={data.hostConnections}
+        hosts={data.sortedHostCatalog}
+        hostStates={data.hostStates}
+        worktreeInfo={data.worktreeInfo}
+        onOpen={openHost}
+        onOpenActions={(host) => {
+          triggerMediumImpact()
+          openHostActions(host)
+        }}
+        onPairDesktop={pairDesktop}
+      />
+    ),
+    tasks: (first) => (
+      <MobileHomeTasksSection
+        connectedHosts={data.connectedHosts}
+        first={first}
+        onOpen={(hostId) => openMobileTasks(hostId)}
+      />
+    ),
+    automations: (first) => (
+      <MobileHomeAutomationsSection
+        connectedHosts={data.connectedHosts}
+        first={first}
+        onOpen={openMobileAutomations}
+      />
+    ),
+    stats: stats ? (first) => <MobileHomeStats stats={stats} first={first} /> : null,
+    accountUsage:
+      data.accountUsageRows.length > 0
+        ? (first) => (
+            <MobileHomeAccountUsage
+              rows={data.accountUsageRows}
+              nameDesktops={data.hostCatalog.length > 1}
+              first={first}
+              onOpen={openMobileAccounts}
+            />
+          )
+        : null
+  }
+  const visibleSections = (homeLayout?.order ?? []).flatMap((id) => {
+    const render = homeLayout?.hidden.includes(id) ? null : sections[id]
+    return render ? [{ id, render }] : []
+  })
+  const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <MobileHomeTopBar
         showBrand={!data.hostCatalogLoaded || data.hostCatalog.length > 0}
         onOpenSettings={() => data.router.push('/settings')}
+        onArrange={paired && homeLayout ? () => setArranging(true) : undefined}
+        arrangeOpen={arranging}
       />
-      {!data.hostCatalogLoaded ? (
+      {!data.hostCatalogLoaded || (paired && !homeLayout) ? (
         <View style={styles.fill} />
       ) : data.hostCatalog.length === 0 ? (
         <>
@@ -138,43 +217,17 @@ export function MobileHomeScreen() {
         </>
       ) : (
         <>
-          <MobileHomeHostList
-            autoConnectHostIds={data.autoConnectHostIds}
-            bottomInset={0}
-            contentMaxWidth={contentMaxWidth}
-            header={
-              data.jumpBackInRows.length > 0 ? (
-                <MobileHomeJumpBackIn
-                  rows={data.jumpBackInRows}
-                  hosts={data.sortedHostCatalog}
-                  onOpen={openWorktree}
-                />
-              ) : null
-            }
-            footer={
-              <>
-                <MobileHomeTasksAndAutomations
-                  connectedHosts={data.connectedHosts}
-                  onOpenTasks={(hostId) => openMobileTasks(hostId)}
-                  onOpenAutomations={openMobileAutomations}
-                />
-                <MobileHomeAppUpdateCard />
-              </>
-            }
-            hostAttempts={data.hostAttempts}
-            hostLastConnected={data.hostLastConnected}
-            hostConnections={data.hostConnections}
-            hosts={data.sortedHostCatalog}
-            hostStates={data.hostStates}
-            isWideLayout={isWideLayout}
-            worktreeInfo={data.worktreeInfo}
-            onOpen={openHost}
-            onOpenActions={(host) => {
-              triggerMediumImpact()
-              openHostActions(host)
-            }}
-            onPairDesktop={pairDesktop}
-          />
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
+            ]}
+          >
+            {visibleSections.map(({ id, render }, index) => (
+              <Fragment key={id}>{render(index === 0)}</Fragment>
+            ))}
+            <MobileHomeAppUpdateCard />
+          </ScrollView>
           <MobileHomeBottomBar
             bottomInset={insets.bottom}
             contentMaxWidth={contentMaxWidth}
@@ -187,6 +240,16 @@ export function MobileHomeScreen() {
           />
         </>
       )}
+      {homeLayout ? (
+        <MobileHomeArrangeSheet
+          visible={arranging}
+          layout={homeLayout}
+          onClose={(next) => {
+            saveHomeLayout(next)
+            setArranging(false)
+          }}
+        />
+      ) : null}
       <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.name}
@@ -241,5 +304,6 @@ export function MobileHomeScreen() {
 
 const styles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
-  fill: { flex: 1 }
+  fill: { flex: 1 },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl }
 }))

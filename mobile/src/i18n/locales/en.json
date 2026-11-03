@@ -194,6 +194,7 @@
       "loadFailed": "Failed to load host.",
       "saveFailed": "Failed to save host.",
       "title": "Edit host",
+      "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
       "help": "Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).",
@@ -551,6 +552,28 @@
     "sections": {
       "tasks": "Tasks",
       "tasksSubtitle": "Browse your issues and reviews"
+    },
+    "stats": {
+      "heading": "Your stats",
+      "agentsSpawned": "Agents spawned",
+      "agentTime": "Agent time",
+      "prsCreated": "PRs created",
+      "days": "{{days}}d",
+      "hours": "{{hours}}h",
+      "minutes": "{{minutes}}m"
+    },
+    "accountUsage": {
+      "heading": "Account usage",
+      "systemDefault": "System default",
+      "sessionWindow": "5h",
+      "weeklyWindow": "7d"
+    },
+    "arrange": {
+      "title": "Arrange Home",
+      "reset": "Reset",
+      "done": "Done",
+      "hint": "Drag to move. Turn a section off to hide it.",
+      "showSection": "Show {{section}}"
     }
   },
   "hooks": {
@@ -4435,6 +4458,7 @@
       "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Runs on the selected host. Keep that host available at the scheduled time.",
       "host": "Host",
       "pairedHost": "Paired host",
+      "chooseHost": "Automations on {{host}}, choose another host",
       "selectedServerUnavailable": "Selected server (unavailable)",
       "addANameInstructionsAndAnAgent": "Add a name, instructions and an agent.",
       "chooseAnExistingWorkspace": "Choose an existing workspace.",
