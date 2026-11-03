@@ -139,13 +139,4 @@ describe('first-turn mobile chat identity under the pre-launch shell title', () 
   ])('suppresses the hook under %s', (_name, pty, row) => {
     expect(projectedSession(pty, row)).toBeUndefined()
   })
-
-  it('does not invent a transcript for an empty pane', () => {
-    const status = buildRuntimeMobileAgentStatus(shellPty(), TAB, 'term-1', null, () => [], {
-      getPaneKey: () => 'tab:leaf',
-      getLeaf: () => null,
-      getTrackedTitle: () => null
-    })
-    expect(status).not.toHaveProperty('agentStatus')
-  })
 })

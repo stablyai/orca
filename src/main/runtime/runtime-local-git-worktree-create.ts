@@ -1,5 +1,5 @@
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'

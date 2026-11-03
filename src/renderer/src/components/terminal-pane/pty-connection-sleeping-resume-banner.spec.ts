@@ -181,7 +181,11 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        paneKey,
+        origin: 'quit',
+        restoreOnTabOpenOnly: true
+      })
     })
 
     it('says the fresh-spawn resume started fresh when main declined it', async () => {

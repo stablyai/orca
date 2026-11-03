@@ -1851,6 +1851,22 @@ describe('RelayAssignmentStore', () => {
       store.verifyCellAssignment({ ...identity, cellId: assignment.cellId, assignmentEpoch: 2 })
     ).resolves.toBe(false)
     await expect(
+      store.verifyCellAssignment({
+        ...identity,
+        userId: 'other',
+        cellId: assignment.cellId,
+        assignmentEpoch: 1
+      })
+    ).resolves.toBe(false)
+    await expect(
+      store.verifyCellAssignment({
+        ...identity,
+        relayHostId: 'host000000000002',
+        cellId: assignment.cellId,
+        assignmentEpoch: 1
+      })
+    ).resolves.toBe(false)
+    await expect(
       store.resolve({ userId: 'other', relayHostId: identity.relayHostId })
     ).resolves.toBeNull()
   })

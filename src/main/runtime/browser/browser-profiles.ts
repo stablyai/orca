@@ -17,7 +17,7 @@ import { browserSessionRegistry } from '../../browser/browser-session-registry'
 import { browserManager } from '../../browser/browser-manager'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
-import { waitForTabRegistration } from '../../ipc/browser-tab-registration-wait'
+import { waitForTabRegistration } from '../../ipc/browser/browser-tab-registration-wait'
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,

@@ -10,7 +10,7 @@ vi.mock('./parcel-watcher-process-supervisor', () => ({
     disposeAndWait = supervisorDispose
   }
 }))
-vi.mock('../../runtime-watcher-process-pool', () => ({
+vi.mock('./runtime-watcher-process-pool', () => ({
   RuntimeWatcherProcessPool: class {
     disposeAndWait = poolDispose
   }

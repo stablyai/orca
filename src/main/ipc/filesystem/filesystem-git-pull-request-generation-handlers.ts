@@ -20,7 +20,7 @@ import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-w
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { gitExecFileAsync } from '../../git/runner'
 import { withLinkedIssueDraftContext } from '../../../shared/source-control-ai-action-variables'
-import { resolveSourceControlAiLinkedIssueMeta } from '../source-control-ai-linked-issue'
+import { resolveSourceControlAiLinkedIssueMeta } from '../source-control/source-control-ai-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../../source-control/pull-request-template'
 import { loadPullRequestLinkedIssue } from '../../source-control/pull-request-linked-issue'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'

@@ -114,14 +114,14 @@ import {
 } from '../../../shared/setup-agent-sequencing'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { beginWatcherInstall } from '../../ipc/watcher-removal-gate'
-import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../ipc/watcher-removal-drain'
+import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'
+import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../workspaces/removal/watcher-removal-drain'
 import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
 } from '../terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
-import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
+import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 export const exportedAGENT_PROMPT_BRACKETED_PASTE_END = AGENT_PROMPT_BRACKETED_PASTE_END

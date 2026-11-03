@@ -87,7 +87,7 @@ describe('MobileNativeChatView: send and read failure banners', () => {
     expect(bannerText()).toBe('Permission reply failed')
   })
 
-  it('does not duplicate the route banner when the composer rejects', async () => {
+  it('retires the previous route banner when a new send starts', async () => {
     const onClearSendError = vi.fn()
     await render({
       onSend: vi.fn().mockResolvedValue(false),
@@ -97,18 +97,27 @@ describe('MobileNativeChatView: send and read failure banners', () => {
     })
     await pressSend()
 
-    expect(onClearSendError).not.toHaveBeenCalled()
+    expect(onClearSendError).toHaveBeenCalledOnce()
     expect(banners()).toHaveLength(1)
     expect(bannerText()).toBe('Stop failed')
   })
 
-  it('asks the route to clear its banner once a send is accepted', async () => {
+  it('retires the previous banner before sending and preserves the new delivery notice', async () => {
     const onClearSendError = vi.fn()
-    await render({ sendErrorMessage: 'Stop failed', onClearSendError })
+    await render({
+      sendErrorMessage: 'Stop failed',
+      onClearSendError,
+      onSend: async () => {
+        expect(onClearSendError).toHaveBeenCalledOnce()
+        await update({ sendErrorMessage: 'Delivery unconfirmed' })
+        return true
+      }
+    })
 
     await pressSend()
 
     expect(onClearSendError).toHaveBeenCalledOnce()
+    expect(bannerText()).toBe('Delivery unconfirmed')
   })
 })
 

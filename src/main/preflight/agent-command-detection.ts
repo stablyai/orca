@@ -5,7 +5,7 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
-import { findCommandsOnLocalPath } from '../ipc/command-path-resolver'
+import { findCommandsOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
 import { readGuestWindowsDriveMounts } from '../ipc/wsl-guest-windows-drive-path'
 

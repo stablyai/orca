@@ -49,7 +49,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: webContentsFromIdMock }
 }))
 
-vi.mock('../ipc/browser-tab-registration-wait', () => ({
+vi.mock('../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: waitForTabRegistrationMock,
   waitForWorktreeTabRegistration: waitForWorktreeTabRegistrationMock
 }))
