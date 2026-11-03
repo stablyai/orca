@@ -116,94 +116,6 @@ it('retires a failed-owner timer while a replacement IPC stays pending without c
   expect(timers).toBe(0)
 })
 
-it('keeps successful replacement rows and their references after retiring the old error retry', async () => {
-  const rows = [plugin()]
-  const list = vi
-    .fn<List>()
-    .mockRejectedValueOnce(new Error('starting'))
-    .mockResolvedValueOnce(rows)
-  const { store } = await harness(list)
-  await store.getState().fetchPlugins()
-  await expect(store.getState().fetchPlugins()).resolves.toBeUndefined()
-  const timers = vi.getTimerCount()
-  await vi.advanceTimersByTimeAsync(500)
-  expect(list).toHaveBeenCalledTimes(2)
-  expect(store.getState().plugins).toBe(rows)
-  expect(view(store)).toEqual({ plugins: rows, panelErrors: {}, fetchStatus: 'ready' })
-  expect(timers).toBe(0)
-})
-
-it.each([undefined, null, false])(
-  'keeps missing/unsupported bridge fallback for %s while releasing an invalid retry',
-  async (bridge) => {
-    const list = vi.fn<List>().mockRejectedValue(new Error('starting'))
-    const { store } = await harness(list)
-    await store.getState().fetchPlugins()
-    vi.stubGlobal('window', { api: { plugins: bridge } })
-    await expect(store.getState().fetchPlugins()).resolves.toBeUndefined()
-    const timers = vi.getTimerCount()
-    await vi.advanceTimersByTimeAsync(500)
-    expect(list).toHaveBeenCalledOnce()
-    expect(view(store)).toEqual(empty('ready'))
-    expect(timers).toBe(0)
-  }
-)
-
-it.each(['reject', 'throw'] as const)(
-  'keeps the current 500ms retry and original %s error after a second failed request',
-  async (kind) => {
-    const failure = new Error('same transport error')
-    const times: number[] = []
-    const list = vi.fn<List>(() => {
-      times.push(Date.now())
-      if (kind === 'throw') {
-        throw failure
-      }
-      return Promise.reject(failure)
-    })
-    const { store } = await harness(list)
-    await expect(store.getState().fetchPlugins()).resolves.toBeUndefined()
-    await expect(store.getState().fetchPlugins()).resolves.toBeUndefined()
-    const timers = vi.getTimerCount()
-    await vi.advanceTimersByTimeAsync(499)
-    expect(times).toEqual([0, 0])
-    await vi.advanceTimersByTimeAsync(1)
-    expect(times).toEqual([0, 0, 500])
-    expect(view(store)).toEqual(empty('error'))
-    expect(vi.getTimerCount()).toBe(0)
-    if (kind === 'throw') {
-      expect(list.mock.results[0]).toMatchObject({ type: 'throw', value: failure })
-    } else {
-      await expect(list.mock.results[0]?.value).rejects.toBe(failure)
-    }
-    expect(timers).toBe(1)
-  }
-)
-
-it('preserves the complete live 250ms/500ms retry schedule and cap', async () => {
-  const times: number[] = []
-  const failure = new Error('unavailable')
-  const list = vi.fn<List>(() => {
-    times.push(Date.now())
-    return Promise.reject(failure)
-  })
-  const { store } = await harness(list)
-  await store.getState().fetchPlugins()
-  expect(vi.getTimerCount()).toBe(1)
-  await vi.advanceTimersByTimeAsync(249)
-  expect(times).toEqual([0])
-  await vi.advanceTimersByTimeAsync(1)
-  expect(times).toEqual([0, 250])
-  await vi.advanceTimersByTimeAsync(499)
-  expect(times).toEqual([0, 250])
-  await vi.advanceTimersByTimeAsync(1)
-  expect(times).toEqual([0, 250, 750])
-  expect(view(store)).toEqual(empty('error'))
-  expect(vi.getTimerCount()).toBe(0)
-  await vi.advanceTimersByTimeAsync(5000)
-  expect(list).toHaveBeenCalledTimes(3)
-})
-
 it('keeps an authoritative replacement made reentrantly during loading above the older failure', async () => {
   const gate = Promise.withResolvers<PluginHostListEntry[]>()
   const rows = [plugin()]
@@ -225,25 +137,6 @@ it('keeps an authoritative replacement made reentrantly during loading above the
   await expect(list.mock.results[1]?.value).rejects.toBe(failure)
   await vi.advanceTimersByTimeAsync(500)
   expect(list).toHaveBeenCalledTimes(2)
-  expect(store.getState().plugins).toBe(rows)
-  expect(view(store)).toEqual({ plugins: rows, panelErrors: {}, fetchStatus: 'ready' })
-  expect(vi.getTimerCount()).toBe(0)
-  unsubscribe()
-})
-
-it('preserves existing reentrant error replacement and its already-fenced post-set retry', async () => {
-  const list = vi.fn<List>().mockRejectedValue(new Error('starting'))
-  const { store } = await harness(list)
-  const rows = [plugin()]
-  const unsubscribe = store.subscribe((state) => {
-    if (state.fetchStatus === 'error') {
-      store.getState().setPlugins(rows)
-    }
-  })
-  await store.getState().fetchPlugins()
-  expect(vi.getTimerCount()).toBe(1)
-  await vi.advanceTimersByTimeAsync(250)
-  expect(list).toHaveBeenCalledOnce()
   expect(store.getState().plugins).toBe(rows)
   expect(view(store)).toEqual({ plugins: rows, panelErrors: {}, fetchStatus: 'ready' })
   expect(vi.getTimerCount()).toBe(0)

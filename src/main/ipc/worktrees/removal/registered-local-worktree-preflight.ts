@@ -1,5 +1,5 @@
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import type { LocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   authorizeWindowsCheckout,
   usesNativeWindowsRemoval

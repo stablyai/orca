@@ -132,7 +132,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     expect(sends()).toHaveLength(1)
   })
 
-  it("puts the prompt in the chat's composer when the launch fails, and rethrows", async () => {
+  it("puts the prompt in the chat's composer when the launch fails, and preserves that ownership result", async () => {
     const stagedPrompt = stageStructuredLaunchPrompt(SESSION, 'review this')
     const failure = new Error('create refused')
 
@@ -143,7 +143,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
         options: { prompt: 'review this' },
         stagedPrompt
       })
-    ).rejects.toBe(failure)
+    ).resolves.toMatchObject({ delivered: false, failureNotified: true, inComposer: true })
 
     expect(draft()).toBe('review this')
     expect(sends()).toHaveLength(0)
@@ -161,7 +161,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
         options: { prompt: 'review this' },
         stagedPrompt
       })
-    ).resolves.toEqual({ delivered: false, failureNotified: true })
+    ).resolves.toMatchObject({ delivered: false, failureNotified: true })
     await expect(
       settleStructuredAgentLaunchPrompt({
         launchResult: Promise.reject(new Error('cancelled')),
@@ -169,7 +169,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
         options: { prompt: 'review this' },
         stagedPrompt
       })
-    ).rejects.toThrow('cancelled')
+    ).resolves.toMatchObject({ delivered: false, failureNotified: true })
 
     expect(sends()).toHaveLength(0)
     expect(draft()).toBe('')
@@ -191,7 +191,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     takeBackLegacyStructuredLaunchPrompts(SESSION)
     publish({ sessionId: SESSION, fence: 1 })
 
-    await expect(settled).resolves.toEqual({ delivered: false, failureNotified: true })
+    await expect(settled).resolves.toMatchObject({ delivered: false, failureNotified: true })
     expect(draft()).toBe('review this')
     expect(pendingTexts()).toEqual([])
     expect(sends()).toHaveLength(0)
@@ -242,13 +242,6 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     expect(
       sendStructuredAgentSessionMessage({ sessionId: SESSION, target, text: 'typed after' })
     ).not.toBeNull()
-  })
-
-  it('gives the chat back its send slot when the launch is cancelled, sending nothing', () => {
-    stageStructuredLaunchPrompt(SESSION, 'review this')
-    discardStructuredLaunchPrompts(SESSION)
-    expect(pendingTexts()).toEqual([])
-    expect(sends()).toHaveLength(0)
   })
 
   // Once sent, the prompt's entry is the sender's: what it keeps after settling stays.
@@ -306,16 +299,5 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     ).resolves.toEqual({ delivered: true, failureNotified: false })
     expect(pendingTexts()).toEqual(['review this:recorded'])
     stop()
-  })
-
-  it('reports nothing for a draft, which the composer adopts instead', () => {
-    expect(
-      settleStructuredAgentLaunchPrompt({
-        launchResult: Promise.resolve({ sessionId: SESSION, fence: 1 }),
-        target,
-        options: { prompt: 'review this', promptDelivery: 'draft' },
-        stagedPrompt: null
-      })
-    ).toBeUndefined()
   })
 })

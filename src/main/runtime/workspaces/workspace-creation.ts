@@ -10,25 +10,26 @@ import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from './startup/wo
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { notifyLineageRepos } from '../../worktree-lineage-change-notification'
-import { resolveWorktreeCreateRoute } from '../../worktree-create-execution-host-route'
+import { notifyLineageRepos } from '../../workspaces/catalog/worktree-lineage-change-notification'
+import { resolveWorktreeCreateRoute } from '../../workspaces/creation/worktree-create-execution-host-route'
 import { ExecutionHostNotDispatchableError } from '../../providers/execution-host-provider-dispatch'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { createRuntimeFolderWorktree } from '../runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from '../runtime-local-worktree-create'
-import type { PreparationRearmHolder } from '../../worktree-create-preparation'
+import type { PreparationRearmHolder } from '../../workspaces/creation/preparation/worktree-create-preparation'
 import { prepareRuntimeLocalWorktreeSetup } from '../runtime-local-worktree-setup'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/registered-worktree-roots-scoped-invalidation'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../runtime-local-worktree-terminal-startup'
-import { trackRuntimeWorkspaceCreate } from '../../workspace-create-telemetry'
+import { trackRuntimeWorkspaceCreate } from '../../workspaces/creation/workspace-create-telemetry'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../opencode/opencode-model-startup-plan'
-import type { RuntimeWorkspaceCreateEvents } from '../../workspace-create-telemetry'
-import { createdWorkspaceActivationCallbacks } from './workspace-create-activation'
+import type { RuntimeWorkspaceCreateEvents } from '../../workspaces/creation/workspace-create-telemetry'
+import { createdWorkspaceActivationCallbacks, wslUserAct } from './workspace-create-activation'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-startup'
 import type { WorkspaceCreationHandle } from './workspace-lifecycle-creations'
 import { workspaceLifecycleKey } from './workspace-lifecycle-commands'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { applyWorkspaceCreatePluginHook } from '../../plugins/hooks/workspace-create-plugin-hook'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   protected abstract resolveLineageForWorktreeCreate(
@@ -65,14 +66,15 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
+    const request = await applyWorkspaceCreatePluginHook(args, repo)
     // Listed from here: a create refused before its project resolved has nothing to show.
     const creation = this.workspaceLifecycle?.openCreate({
-      creationId: args.creationId,
+      creationId: request.creationId,
       repoId: repo.id,
       keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
     })
     try {
-      return await this.createInResolvedProject(args, repo, creation, rearm, events)
+      return await this.createInResolvedProject(request, repo, creation, rearm, events)
     } finally {
       creation?.close()
     }
@@ -309,9 +311,4 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         : {})
     }
   }
-}
-
-// A create someone asked for starts its terminals as theirs; an automation's stay background.
-function wslUserAct(args: RuntimeManagedWorktreeCreateArgs): { wslUserAct?: true } {
-  return args.wslUserAct ? { wslUserAct: true } : {}
 }

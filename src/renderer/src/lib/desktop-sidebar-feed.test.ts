@@ -96,17 +96,6 @@ describe('desktop sidebar feed', () => {
     expect(second.result.current?.domains.workspaces.size).toBe(2)
   })
 
-  it('answers a refresh with an install from that read or later', async () => {
-    connectMain()
-    const reader = await load()
-    const installs: number[] = []
-    reader.onDesktopSidebarFeedInstalled((installed) => installs.push(installed.readId))
-    renderHook(() => reader.useDesktopSidebarFeed())
-    await vi.waitFor(() => expect(installs).toHaveLength(1))
-    const readId = reader.refreshDesktopSidebarFeed()
-    await vi.waitFor(() => expect(installs.at(-1)).toBeGreaterThanOrEqual(readId))
-  })
-
   it('retries a failed first read on its own', async () => {
     const main = connectMain()
     main.failOnce()

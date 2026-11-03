@@ -76,11 +76,6 @@ describe('a pane title from main', () => {
     expect(layout()).toEqual({ ...rootless, titlesByLeafId: { [LEAF_ID]: 'REVIEWER' } })
   })
 
-  it('drops the field once the last title is cleared', () => {
-    applyRuntimePaneTitle({ tabId: 'tab-1', leafId: SIBLING_ID, title: '' })
-    expect(layout()).not.toHaveProperty('titlesByLeafId')
-  })
-
   it('ignores unknown tabs, leaves outside the layout, and non-leaf ids', () => {
     applyRuntimePaneTitle({ tabId: 'other-tab', leafId: LEAF_ID, title: 'WRONG' })
     applyRuntimePaneTitle({

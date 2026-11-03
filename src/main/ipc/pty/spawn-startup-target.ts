@@ -15,9 +15,9 @@ import { resolveWslSessionContext } from '../../daemon/wsl-session-context'
 import {
   resolvePlainTerminalWorkspace,
   resolvePlainTerminalProjectRuntime,
-  resolveLocalPtyOptions,
   type LaunchScopeRuntimeStore
-} from '../../local-project-runtime-resolution'
+} from '../../workspaces/execution-host/local-project-runtime-resolution'
+import { resolveLocalPtyOptions } from '../../workspaces/execution-host/local-project-runtime-pty-options'
 import type { PtySpawnOptions, PtySpawnResult } from '../../providers/pty-provider-contract'
 import {
   holdPassiveRestoreOfStoppedWslDistro,

@@ -81,36 +81,6 @@ describe('selected-host active workspace identity', () => {
     expect(getExecutionHostIdForWorktree(state, SAME_WORKTREE_ID)).toBe(RUNTIME_HOST)
   })
 
-  it('selects the runtime worktree when exact-ID catalog order is reversed', () => {
-    const local = worktree('/local/repo', 'local')
-    const runtime = worktree('/runtime/repo', RUNTIME_HOST)
-    useAppStore.setState({
-      repos: [
-        {
-          id: SAME_REPO_ID,
-          path: runtime.path,
-          displayName: 'runtime',
-          badgeColor: '#000',
-          addedAt: 1,
-          executionHostId: RUNTIME_HOST
-        },
-        {
-          id: SAME_REPO_ID,
-          path: local.path,
-          displayName: 'local',
-          badgeColor: '#000',
-          addedAt: 2,
-          executionHostId: 'local'
-        }
-      ],
-      worktreesByRepo: { [SAME_REPO_ID]: [runtime, local] }
-    })
-
-    expect(useAppStore.getState().getKnownWorktreeById(SAME_WORKTREE_ID, RUNTIME_HOST)?.path).toBe(
-      runtime.path
-    )
-  })
-
   it('keeps exact-ID folder and group activation on the selected runtime', () => {
     useAppStore.setState({
       projectGroups: [

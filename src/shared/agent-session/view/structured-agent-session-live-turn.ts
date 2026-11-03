@@ -7,7 +7,7 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
 } from '../journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../journal/agent-session-journal-turn-scope'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import type { AgentSessionLatestTurn, AgentSessionSubscribeEvent } from '../agent-session-wire'
 import { readAgentJournalTurn } from '../lifecycle/agent-session-turn-record'

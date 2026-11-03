@@ -1,5 +1,10 @@
+import { agentSessionAttachmentUploadIdOfPath } from '../../../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
+import type { NativeChatComposerDraftImage } from './native-chat-composer-draft-storage'
+import {
+  structuredAgentSessionDraftScopeKey,
+  unavailableNativeChatComposerDraftImage
+} from './native-chat-composer-draft-store'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
 
 export function structuredAgentSessionMessageText(body: AgentJournalMessageItem): string {
@@ -13,24 +18,25 @@ export function returnMessageToComposer(
   attachmentIdPrefix: string,
   blocks: AgentJournalMessageItem['blocks'],
   /** Each image's SSH connection, in block order. */
-  imageConnectionIds?: readonly (string | null)[]
+  imageConnectionIds?: readonly (string | null)[],
+  /** Uploads the host no longer stores: their chips come back asking to be attached again. */
+  expiredUploadIds?: ReadonlySet<string>
 ): boolean {
   let image = 0
   // Not the attachment hook's helper: its imports reach the store, whose teardown imports this.
-  const images = blocks.flatMap((block, index) => {
+  const images = blocks.flatMap((block, index): NativeChatComposerDraftImage[] => {
     if (block.type !== 'image-ref') {
       return []
     }
     const connectionId = imageConnectionIds?.[image++]
-    return block.path
-      ? [
-          {
-            id: `${attachmentIdPrefix}-${index}`,
-            path: block.path,
-            ...(connectionId ? { connectionId } : {})
-          }
-        ]
-      : []
+    if (!block.path) {
+      return []
+    }
+    const id = `${attachmentIdPrefix}-${index}`
+    const uploadId = agentSessionAttachmentUploadIdOfPath(block.path)
+    return uploadId && expiredUploadIds?.has(uploadId)
+      ? [unavailableNativeChatComposerDraftImage({ id, path: block.path })]
+      : [{ id, path: block.path, ...(connectionId ? { connectionId } : {}) }]
   })
   // Atomically append text/images; stable image ids make repeated hand-back idempotent despite later typing.
   return appendNativeChatDraftCache(
@@ -46,12 +52,14 @@ export function handBackStructuredAgentSessionMessage(
   sessionId: string,
   clientMessageId: string,
   body: AgentJournalMessageItem,
-  imageConnectionIds?: readonly (string | null)[]
+  imageConnectionIds?: readonly (string | null)[],
+  expiredUploadIds?: ReadonlySet<string>
 ): boolean {
   return returnMessageToComposer(
     structuredAgentSessionDraftScopeKey(sessionId),
     `returned-${clientMessageId}`,
     body.blocks,
-    imageConnectionIds
+    imageConnectionIds,
+    expiredUploadIds
   )
 }

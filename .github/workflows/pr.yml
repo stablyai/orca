@@ -727,7 +727,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_TRUST_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/agent-trust-presets.test.ts
+            src/main/agent-launch/trust/agent-trust-presets.test.ts
 
   xterm_patch_sync:
     name: xterm patch sync

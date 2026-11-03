@@ -7,8 +7,8 @@ import {
 } from '../../shared/agent-row-conversation-name'
 import type { AgentType } from '../../shared/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import { structuredAgentSessionIdFromTabId } from '../../shared/structured-agent-session-tab-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
+import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/view/structured-agent-session-tab-id'
+import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
 import {
   observeOrchestrationSender,
@@ -18,6 +18,7 @@ import {
   captureMirroredTabs,
   type MirroredTabs,
   type SenderHookRow,
+  type SenderNamingLayout,
   type SenderNamingSources,
   type TerminalSenderNaming
 } from './orchestration/orchestration-sender-name'
@@ -161,7 +162,17 @@ export class RuntimeOrchestrationSenderNames {
     const allStatuses = this.deps.getAgentStatusSnapshot?.()
     for (const row of allStatuses ?? []) {
       const rows = statuses.get(row.paneKey) ?? []
-      rows.push(structuredClone(row))
+      rows.push({
+        paneKey: row.paneKey,
+        worktreeId: row.worktreeId,
+        agentType: row.agentType,
+        providerSession: row.providerSession
+          ? { key: row.providerSession.key, id: row.providerSession.id }
+          : row.providerSession,
+        receivedAt: row.receivedAt,
+        connectionId: row.connectionId,
+        launchToken: row.launchToken
+      })
       statuses.set(row.paneKey, rows)
     }
     const terminals = new Map<string, TerminalSenderNaming | null>()
@@ -185,7 +196,8 @@ export class RuntimeOrchestrationSenderNames {
                 tabs.session,
                 tabs.terminalTab,
                 allStatuses ? (pane) => statuses.get(pane) ?? [] : this.statusRowsForPane,
-                readPane
+                readPane,
+                tabs.layout
               )
               terminals.set(handle, naming ? structuredClone(naming) : null)
             }
@@ -224,7 +236,8 @@ export class RuntimeOrchestrationSenderNames {
       tabId: string
     ) => (Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>) | undefined,
     readStatuses = this.statusRowsForPane,
-    readPane = this.deps.getTerminalPaneKey
+    readPane = this.deps.getTerminalPaneKey,
+    readLayout?: (worktreeId: string, tabId: string) => SenderNamingLayout | undefined
   ): TerminalSenderNaming | null {
     const record = this.deps.getHandleRecord(handle)
     if (!record) {
@@ -254,7 +267,8 @@ export class RuntimeOrchestrationSenderNames {
         record,
         paneKey,
         () => session,
-        () => tab
+        () => tab,
+        readLayout ? (tabId) => readLayout(record.worktreeId, tabId) : undefined
       ),
       agent: status?.agentType ?? pty?.launchAgent ?? pty?.foregroundAgent ?? null,
       providerSessionId: status?.providerSession?.id,
@@ -270,7 +284,8 @@ export class RuntimeOrchestrationSenderNames {
     readTab?: (
       worktreeId: string,
       tabId: string
-    ) => (Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>) | undefined
+    ) => (Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>) | undefined,
+    readLayout?: (tabId: string) => SenderNamingLayout | undefined
   ): Pick<TerminalSenderNaming, 'tab' | 'paneTitle'> {
     const session = sessionOf(record.worktreeId)
     const tab = readTab
@@ -282,14 +297,18 @@ export class RuntimeOrchestrationSenderNames {
     return {
       tab: tab ? { ...tab, title: tab.title ?? '', customTitle: tab.customTitle ?? null } : null,
       paneTitle:
-        trackedTitle ?? splitPaneTitle(session?.terminalLayoutsByTabId?.[record.tabId], paneKey)
+        trackedTitle ??
+        splitPaneTitle(
+          readLayout ? readLayout(record.tabId) : session?.terminalLayoutsByTabId?.[record.tabId],
+          paneKey
+        )
     }
   }
 }
 
 /** Split-tab titles name the focused pane; other split panes need user titles. Single-pane tabs use their own tab titles. */
 function splitPaneTitle(
-  layout: Pick<TerminalLayoutSnapshot, 'root' | 'titlesByLeafId'> | undefined,
+  layout: SenderNamingLayout | undefined,
   paneKey: string | null
 ): string | null | undefined {
   if (layout?.root?.type !== 'split') {

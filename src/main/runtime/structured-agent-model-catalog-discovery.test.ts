@@ -18,7 +18,7 @@ vi.mock('../provider-process/managed-provider-process', () => ({
     throw new Error('no spawn in this test')
   }
 }))
-vi.mock('../agent-cli-version-probe', async (importOriginal) => ({
+vi.mock('../agent-launch/preflight/agent-cli-version-probe', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   checkAgentCliVersion: async (input: { program: string }) => {
     spawned.commands.push(input.program)

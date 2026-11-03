@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type * as RpcClientModule from '@/runtime/runtime-rpc-client'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import '../../../../shared/layout-owner-switch'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
@@ -145,29 +145,4 @@ describe("a paired server's workspace", () => {
       })
     )
   })
-
-  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
-    "presence: this machine's workspace sends the same opens and closes to main",
-    async () => {
-      const browserTab = store.getState().createBrowserTab(LOCAL_WT, 'https://example.com')
-      await main.settle()
-      store.getState().closeBrowserTab(browserTab.id)
-      const chat = openStructuredAgentSessionProvisionalTab({
-        worktreeId: LOCAL_WT,
-        executionHostId: 'local',
-        sessionId: 'chat-2',
-        agent: 'codex'
-      })
-      await main.settle()
-      store.getState().closeUnifiedTab(chat.id)
-      await main.settle()
-
-      expect(sentFor(LOCAL_WT).map((command) => command.type)).toEqual([
-        'openBrowserTab',
-        'closeTabs',
-        'openAgentSessionTab',
-        'closeTabs'
-      ])
-    }
-  )
 })

@@ -1,9 +1,28 @@
 import type { JSONContent } from '@tiptap/react'
+import { agentReferenceToken } from '../../../../shared/orchestration-agent-reference'
 import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
 import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from './native-chat-pasted-text-reference'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
 export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
+
+export function promptLeafString(
+  type: string | undefined,
+  attrs: Readonly<Record<string, unknown>> | undefined,
+  text?: string | null
+): string {
+  if (type === 'nativeChatAgentReference') {
+    return agentReferenceToken({
+      label: String(attrs?.label),
+      address: String(attrs?.address),
+      hostKey: String(attrs?.hostKey)
+    })
+  }
+  if (type === IMAGE_REFERENCE_NODE) {
+    return imageReferenceToken(String(attrs?.attachmentId))
+  }
+  return type === 'hardBreak' ? '\n' : (text ?? String(attrs?.token ?? ''))
+}
 
 /** Text stays literal; only admitted pasted text references become file pills. */
 export function promptTextContent(text: string): JSONContent {
@@ -107,12 +126,7 @@ export function slicePromptDocument(document: JSONContent, from: number, to: num
     const start = offset
     const content: JSONContent[] = []
     for (const node of block.content ?? []) {
-      const value =
-        node.type === IMAGE_REFERENCE_NODE
-          ? imageReferenceToken(String(node.attrs?.attachmentId))
-          : node.type === 'hardBreak'
-            ? '\n'
-            : (node.text ?? String(node.attrs?.token ?? ''))
+      const value = promptLeafString(node.type, node.attrs, node.text)
       const end = offset + value.length
       if (end > from && offset < to) {
         content.push(

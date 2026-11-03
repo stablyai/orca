@@ -23,7 +23,7 @@ import { admissionTierForRefreshReason } from '../github/pr-refresh-candidate-po
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { hostedReviewForBranchReply } from '../../shared/hosted-review'
 import { readHostedReviewForBranch } from '../source-control/hosted-review'
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import {
   createHostedReview,

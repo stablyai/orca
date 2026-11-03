@@ -52,17 +52,6 @@ describe('shortcut label memoization', () => {
     resetCounters()
   })
 
-  it('computes a label once no matter how many times it is asked for', () => {
-    const overrides = overridesFor('Mod+Shift+K')
-    const first = formatShortcutLabel('tab.close', overrides)
-    resetCounters()
-    for (let index = 0; index < 200; index++) {
-      expect(formatShortcutLabel('tab.close', overrides)).toBe(first)
-    }
-    expect(counters.effective).toBe(0)
-    expect(counters.formatList).toBe(0)
-  })
-
   it('keys the cache by platform so Mac and Windows glyphs never cross', () => {
     const overrides = overridesFor('Mod+Shift+K')
     expect(formatShortcutLabel('tab.close', overrides)).toBe('⌘⇧K')

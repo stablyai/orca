@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktree-listing'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,21 +21,21 @@ import {
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
-  }
-})
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+  listWorktrees: (await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree'))
+    .listWorktrees
+}))
+
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeListingModule>()),
+  listWorktreesStrict: (await vi.importMock<typeof WorktreeListingModule>('../git/worktree'))
+    .listWorktreesStrict
+}))
+
+vi.mock('../git/worktree', async () =>
+  (await import('./runtime-rpc-worktree-store-fixtures')).createWorktreeListingMocks()
+)
 
 describe('OrcaRuntimeRpcServer', () => {
   it('classifies worker-start as a keepalive-backed long poll', () => {

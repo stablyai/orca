@@ -1,7 +1,7 @@
 import { basename, dirname, join } from 'node:path'
 import { existsSync, mkdirSync, renameSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
-import { removeHostTree } from './host-tree-removal'
+import { removeHostTree } from './filesystem/host-tree-removal'
 import { deleteFishHistoryFile, resolveFishHistoryDir } from './fish-history-session'
 import { readHistoryMeta } from './terminal-history'
 import {

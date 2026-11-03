@@ -10,7 +10,7 @@ import {
   type TelemetryClientTestState
 } from '../telemetry/client-test-harness'
 import { resetBurstCapsForSession } from '../telemetry/burst-cap'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
+import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 import { AgentTokenUsageReporter } from './agent-token-usage-reporter'
 
 const ID = '00000000-0000-4000-8000-000000000001'

@@ -6,19 +6,19 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { areRuntimePathsEqual } from '../../shared/worktree/ownership'
-import { collectLocalWorktreeBaseChanges } from './worktree-base-directory-change-collector'
-import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
+import { collectLocalWorktreeBaseChanges } from './worktrees/creation/worktree-base-directory-change-collector'
+import type { WorktreeBaseWatchTarget } from './worktrees/creation/worktree-base-directory-event-filter'
 import {
   startWorktreeBaseDirectoryPoller,
   type WorktreeBasePollEvent,
   type WorktreeBaseSubscription
-} from './worktree-base-directory-poller'
-import { cachedWorktreePathsForScope } from './worktree-head-identity-cached-paths'
+} from './worktrees/creation/worktree-base-directory-poller'
+import { cachedWorktreePathsForScope } from './worktrees/creation/worktree-head-identity-cached-paths'
 import {
   createWorktreeHeadIdentityCache,
   readGitCommonHeadIdentities,
   type WorktreeHeadIdentityCache
-} from './worktree-head-identity-reader'
+} from './worktrees/creation/worktree-head-identity-reader'
 
 const execFileAsync = promisify(execFile)
 const POLL_MS = 25
