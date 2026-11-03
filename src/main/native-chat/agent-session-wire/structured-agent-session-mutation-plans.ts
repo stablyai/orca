@@ -19,7 +19,10 @@ import type {
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
 } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session/agent-session-conversation-command'
+import {
+  agentSessionConversationCommandFields,
+  type AgentSessionConversationCommandResult
+} from '../../../shared/agent-session/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { StructuredAgentSessionBackgroundStopInput } from './structured-agent-session-background-stop'
 import {
@@ -209,6 +212,7 @@ export type ConversationCommandAcceptance =
 /** Accept compact as a submission, or as a queued card later converted to one. */
 export function conversationCommandPlan(params: {
   envelope: AgentSessionMutationEnvelope
+  instructions?: string
   delivery?: 'queue-if-active'
   priorRecord: () => AgentSessionConversationCommandResult | null
 }): MutationPlan<ConversationCommandAcceptance> {
@@ -218,10 +222,7 @@ export function conversationCommandPlan(params: {
     operationIdScope: 'global',
     conversationWrite: true,
     commandReceipt: submissionOrDraftReceipt(clientMessageId),
-    fields: {
-      command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
-      ...(params.delivery ? { delivery: params.delivery } : {})
-    },
+    fields: agentSessionConversationCommandFields(STRUCTURED_AGENT_SESSION_COMPACT_COMMAND, params),
     recoverUnknownFromDurableState: true,
     run: async (ctx) => {
       const sent = await performSend(ctx, {
@@ -229,7 +230,7 @@ export function conversationCommandPlan(params: {
         origin: 'client',
         source: USER_MESSAGE_SOURCE,
         payloadFingerprint: params.envelope.payloadFingerprint,
-        body: structuredAgentSessionCompactBody()
+        body: structuredAgentSessionCompactBody(params.instructions)
       })
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },

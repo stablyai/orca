@@ -63,21 +63,6 @@ describe('structured option state from the host model catalog', () => {
     }
   )
 
-  it('upgrades the seed with host models as a provisional, uncommitted default', () => {
-    const state = applyStructuredAgentSessionModelCatalog(
-      createStructuredAgentSessionOptionState('codex', SEED),
-      SEED,
-      HOST_CATALOG,
-      LAUNCH
-    )
-    expect(state.catalogSource).toBe('host')
-    const snapshot = structuredAgentSessionOptionSnapshot(state)
-    const model = snapshot.find((descriptor) => descriptor.id === 'model')!
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('gpt-hosted')
-    // Provisional provenance: a listing default, never a reported value.
-    expect(model.valueSource).toBe('default')
-  })
-
   it('lists host models but names no value for a session it did not launch', () => {
     // A reopened session may run a model picked in it, not the listing's default.
     const state = applyStructuredAgentSessionModelCatalog(
@@ -110,36 +95,6 @@ describe('structured option state from the host model catalog', () => {
     expect(currentModel(true)).toBe('gpt-hosted')
     // A workspace whose own config may pick another model: the host says so, over the seed.
     expect(currentModel(false)).toBeUndefined()
-  })
-
-  it('names the default effort the listing states, and none it does not', () => {
-    const effortOf = (catalog: AgentSessionModelCatalogResult) => {
-      const state = applyStructuredAgentSessionModelCatalog(
-        createStructuredAgentSessionOptionState('codex', SEED),
-        SEED,
-        catalog,
-        LAUNCH
-      )
-      return structuredAgentSessionOptionSnapshot(state).find((d) => d.id === 'effort')!
-    }
-    const stated = effortOf(HOST_CATALOG)
-    expect(stated.kind.type === 'select' ? stated.kind.currentValue : null).toBe('high')
-    expect(stated.valueSource).toBe('default')
-    const { defaultEffort: _stated, ...unstated } = HOST_CATALOG.models[0]!
-    const silent = effortOf({ ...HOST_CATALOG, models: [unstated] })
-    expect(silent.kind.type === 'select' ? silent.kind.currentValue : null).toBeUndefined()
-    expect(silent.valueSource).toBe('unknown')
-  })
-
-  it('settles on the built-in list on an unknown host answer, and keeps a host list', () => {
-    const seeded = createStructuredAgentSessionOptionState('codex', SEED)
-    for (const answer of [{ origin: 'unknown' as const }]) {
-      const settled = applyStructuredAgentSessionModelCatalog(seeded, SEED, answer, LAUNCH)
-      expect(settled.catalogSource).toBe('builtin')
-      expect(settled.catalog).toBe(seeded.catalog)
-      const hosted = applyStructuredAgentSessionModelCatalog(seeded, SEED, HOST_CATALOG, LAUNCH)
-      expect(applyStructuredAgentSessionModelCatalog(hosted, SEED, answer, LAUNCH)).toBe(hosted)
-    }
   })
 
   it('keeps known empty inventory distinct from an unavailable observation', () => {

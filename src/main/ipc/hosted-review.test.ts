@@ -30,7 +30,7 @@ const {
   readWslDistroRunningStateMock: vi.fn()
 }))
 
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))
@@ -59,18 +59,18 @@ vi.mock('../source-control/hosted-review', () => ({
   }))
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: resolveRegisteredWorktreePathMock
 }))
 
-vi.mock('../repo-worktrees', () => ({
+vi.mock('../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreeGraph: listRepoWorktreeGraphMock
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
 import { readHostedReviewForBranch } from '../source-control/hosted-review'
 import type { HostedReviewInfo } from '../../shared/hosted-review'
-import { WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
+import { WslDistroStoppedError } from '../wsl/filesystem/wsl-unc-access-gate'
 import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>

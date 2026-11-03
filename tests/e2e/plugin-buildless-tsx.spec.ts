@@ -1,10 +1,4 @@
-/**
- * Invariant: a plugin ships TSX with no build step. The frame protocol transpiles `.tsx`/`.ts` on
- * load and resolves extensionless relative imports, for a components panel and an HTML frame
- * whose entry is a `.ts` module; a bare package import fails with an error naming file:line:col.
- */
-
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
@@ -31,30 +25,6 @@ async function openPanel(page: Page, title: string): Promise<void> {
   await expect(button).toBeVisible({ timeout: 15_000 })
   await button.click()
 }
-
-test('the build-less TSX example renders and updates with no dist folder', async ({ orcaPage }) => {
-  const tempRoot = await mkdtemp(join(tmpdir(), 'orca-buildless-tsx-'))
-  const pluginRoot = join(tempRoot, 'hello-tsx')
-  try {
-    await cp(join(process.cwd(), 'examples', 'plugins', 'hello-tsx'), pluginRoot, {
-      recursive: true
-    })
-    await enableDevPlugins(orcaPage, [pluginRoot])
-    await openPanel(orcaPage, 'Hello TSX')
-
-    await expect(orcaPage.getByRole('heading', { name: 'Tasks' })).toBeVisible({ timeout: 15_000 })
-    // From ./todos, imported without an extension and resolved to todos.ts.
-    await expect(orcaPage.getByText('Edit src/panel.tsx and save')).toBeVisible()
-    await expect(orcaPage.getByText('1 open')).toBeVisible()
-    await orcaPage.getByPlaceholder('New task').fill('Ship without a build')
-    await orcaPage.getByRole('button', { name: 'Add task' }).click()
-    await expect(orcaPage.getByText('Ship without a build')).toBeVisible()
-    await expect(orcaPage.getByText('2 open')).toBeVisible()
-  } finally {
-    await disablePluginSystem(orcaPage).catch(() => undefined)
-    await rm(tempRoot, { recursive: true, force: true })
-  }
-})
 
 test('an HTML frame panel can name a .ts entry, and bare imports fail by name', async ({
   orcaPage

@@ -174,7 +174,7 @@ it('handles sibling-composer Escape at the actual native pane boundary and keeps
   expect(mocks.stop).not.toHaveBeenCalled()
 })
 
-it('ends only the native menu lifetime on hide, retaining disclosure and the subscribed Crew owner', async () => {
+it('ends the native menu lifetime and releases the hidden Crew owner on hide, restoring disclosure on reshow', async () => {
   const tasks = holdPhysicalCloseTasks()
   const user = userEvent.setup()
   const content = (isVisible: boolean) => (
@@ -205,12 +205,17 @@ it('ends only the native menu lifetime on hide, retaining disclosure and the sub
   expect(firstPopup.isConnected).toBe(false)
   expect(oldMore.isConnected).toBe(false)
   expect(tasks).toHaveLength(1)
-  expect(screen.getByRole('complementary', { name: 'Orchestration' })).toBe(panel)
-  expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+  expect(screen.queryByRole('complementary', { name: 'Orchestration' })).not.toBeInTheDocument()
   expect(crew.subscribe).toHaveBeenCalledOnce()
-  expect(crew.release).not.toHaveBeenCalled()
+  expect(crew.release).toHaveBeenCalledOnce()
 
   view.rerender(content(true))
+  expect(crew.subscribe).toHaveBeenCalledTimes(2)
+  expect(screen.getByRole('complementary', { name: 'Orchestration' })).not.toBe(panel)
+  const reshownDisclosure = screen.getByRole('button', {
+    name: "Show Worker's task and latest message"
+  })
+  expect(reshownDisclosure).toHaveAttribute('aria-expanded', 'true')
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   const more = screen.getByRole('button', { name: 'More for Worker' })
   expect(more).toHaveAttribute('aria-expanded', 'false')
@@ -231,11 +236,11 @@ it('ends only the native menu lifetime on hide, retaining disclosure and the sub
   act(tasks[1])
   expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true })
   expect(more).toHaveFocus()
-  expect(disclosure).toHaveAttribute('aria-expanded', 'true')
-  expect(crew.subscribe).toHaveBeenCalledOnce()
-  expect(crew.release).not.toHaveBeenCalled()
+  expect(reshownDisclosure).toHaveAttribute('aria-expanded', 'true')
+  expect(crew.subscribe).toHaveBeenCalledTimes(2)
+  expect(crew.release).toHaveBeenCalledOnce()
   expect(mocks.send).not.toHaveBeenCalled()
   expect(mocks.stop).not.toHaveBeenCalled()
   view.unmount()
-  expect(crew.release).toHaveBeenCalledOnce()
+  expect(crew.release).toHaveBeenCalledTimes(2)
 })

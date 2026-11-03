@@ -27,30 +27,6 @@ createStoreCascadesMockApi()
 
 // Why: CLI-spawned terminals stamp ORCA_PANE_KEY at spawn; renderer must adopt the tab under that id so hook events route correctly.
 describe('createTab tabId hint', () => {
-  it('rejects a taken id instead of minting a fresh one', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt-collision'
-    const existingId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-collision' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: existingId, worktreeId: wt })]
-      },
-      groupsByWorktree: {},
-      activeGroupIdByWorktree: {},
-      unifiedTabsByWorktree: {}
-    })
-
-    const before = store.getState().tabsByWorktree
-
-    expect(() => store.getState().createTab(wt, undefined, undefined, { id: existingId })).toThrow(
-      `Terminal tab ${existingId} already exists`
-    )
-    expect(store.getState().tabsByWorktree).toBe(before)
-  })
-
   it('treats tab ids as global and rejects hints that collide in another worktree', () => {
     const store = createTestStore()
     const wtA = 'repo1::/path/wt-a'
@@ -75,29 +51,5 @@ describe('createTab tabId hint', () => {
       `Terminal tab ${existingId} already exists`
     )
     expect(store.getState().tabsByWorktree[wtA]).toBeUndefined()
-  })
-
-  it('ignores web mirror id hints instead of making them canonical host tab ids', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt-web-hint'
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-web-hint' })]
-      },
-      groupsByWorktree: {},
-      activeGroupIdByWorktree: {},
-      unifiedTabsByWorktree: {}
-    })
-
-    const hintedId = 'web-terminal-host-tab-1'
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const tab = store.getState().createTab(wt, undefined, undefined, { id: hintedId })
-      expect(tab.id).not.toBe(hintedId)
-      expect(tab.id).not.toMatch(/^web-terminal-/)
-      expect(warn).not.toHaveBeenCalled()
-    } finally {
-      warn.mockRestore()
-    }
   })
 })

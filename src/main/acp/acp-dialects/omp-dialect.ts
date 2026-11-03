@@ -92,8 +92,8 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
-// OMP reports compaction failure and no-ops in a normally completed turn's reply.
-const COMPACTION_FAILED = /\bcompaction failed\b/i
+// OMP reports compaction failure, no-ops and refused arguments in a normally completed turn's reply.
+const COMPACTION_FAILED = /\bcompaction failed\b|\bdoes not take focus instructions\b/i
 const COMPACTION_NOOP = /\b(?:nothing to compact|already compacted)\b/i
 
 function compactionReply(text: string): AcpCompactionReply | undefined {

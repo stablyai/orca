@@ -1,3 +1,4 @@
+import { expiredAttachmentsSentence } from '../../../src/shared/agent-session/failures/agent-session-attachment-failure-words'
 import { agentSessionFailureSentence } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionWriteNoticePart,
@@ -95,6 +96,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('session.writeNotice.attachmentExpired', 'This attachment expired.'),
   reattachFile: () =>
     translate('session.writeNotice.reattachFile', 'Remove it and attach it again.'),
+  reattachFiles: () =>
+    translate('session.writeNotice.reattachFiles', 'Remove them and attach them again.'),
   conversationCleared: () =>
     translate('session.writeNotice.conversationCleared', 'This conversation has been cleared.'),
   openCurrentConversation: () =>
@@ -229,6 +232,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'session.writeNotice.recordUnreadable',
       "Orca couldn't read this chat's saved state."
     ),
+  mailOwnerUnconfirmed: () =>
+    translate(
+      'session.writeNotice.mailOwnerUnconfirmed',
+      "Orca couldn't confirm this message is still meant for this chat."
+    ),
   chatNotFound: () => translate('session.writeNotice.chatNotFound', "Orca can't find this chat."),
   startNewChat: () =>
     translate('session.writeNotice.startNewChat', 'Start a new chat to continue.'),
@@ -244,12 +252,14 @@ export function mobileAgentSessionWriteNoticeText(
         ? SENTENCES[part]()
         : 'text' in part
           ? part.text
-          : agentSessionFailureSentence(
-              part.failure,
-              part.surface,
-              part.context,
-              sayMobileAgentSessionFailure
-            )
+          : 'expiredAttachmentNames' in part
+            ? expiredAttachmentsSentence(part.expiredAttachmentNames, sayMobileAgentSessionFailure)
+            : agentSessionFailureSentence(
+                part.failure,
+                part.surface,
+                part.context,
+                sayMobileAgentSessionFailure
+              )
     )
     .join(' ')
 }

@@ -231,6 +231,13 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     return true
   }
 
+  /** A same-document or abandoned start stays recorded, so only a loading main frame counts. */
+  getInFlightNavigationUrl(guest: Electron.WebContents): string | null {
+    return guest.isLoadingMainFrame()
+      ? (this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? null)
+      : null
+  }
+
   // Resolve in-flight targets before getURL(), which still names the outgoing document.
   protected resolveTabNavigationUrl(guest: Electron.WebContents): string {
     return this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? guest.getURL()

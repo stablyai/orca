@@ -1,6 +1,6 @@
 import { existsSync, renameSync, rmSync } from 'node:fs'
 import { rename, rm, stat } from 'node:fs/promises'
-import { isPermissionError } from '../win32-utils'
+import { isPermissionError } from '../filesystem/permission-errors'
 
 /** Windows permits renaming a running executable aside so a new build can take its path. */
 export function getLockedExecutableAsidePath(targetPath: string): string {

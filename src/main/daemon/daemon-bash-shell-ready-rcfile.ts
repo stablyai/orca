@@ -1,15 +1,15 @@
-import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { getPosixOmpShellWrapper } from '../pty/shell-startup/omp-shell-wrapper'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-account-shell'
 import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
-import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
+import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../pty/shell-startup/bash-prompt-command-composition'
 import {
   BASH_FEATURE_CHANNEL_BLOCK,
   BASH_LOGIN_PROFILE_ZSH_HANDOFF_CLOSE_BLOCK,
   BASH_LOGIN_PROFILE_ZSH_HANDOFF_OPEN_BLOCK,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK
-} from '../shell-templates'
+} from '../pty/shell-startup/shell-templates'
 
 export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper

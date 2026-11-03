@@ -1,4 +1,5 @@
 import { drainAgentHookSpoolAsync, type SpoolRecord } from '../../../shared/agent-hook-spool'
+import { hookRootAnswerDeadline } from '../../../shared/hook-root-attempts'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 import { ClaudeAgentViewBridge } from '../../claude/agent-view/agent-view-bridge'
 
@@ -49,6 +50,8 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       // Drain before binding so replay cannot race live hooks.
       if (this.endpointDir) {
         const replayedPaneKeys = new Set<string>()
+        // Why: records replay in order, so a per-record allowance would add up across panes.
+        const answerBy = hookRootAnswerDeadline()
         await drainAgentHookSpoolAsync({
           endpointDir: this.endpointDir,
           getPersistedLaunchTokenHash: (paneKey) =>
@@ -57,7 +60,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
             if (this.token !== token || this.statusHookGeneration !== statusHookGeneration) {
               throw new Error('Status hook spool replay interrupted')
             }
-            await this.ingestSpoolRecord(record)
+            await this.ingestSpoolRecord(record, answerBy)
             replayedPaneKeys.add(this.resolvePaneKeyAlias(record.paneKey))
           }
         })

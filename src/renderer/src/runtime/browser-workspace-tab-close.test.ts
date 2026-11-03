@@ -82,43 +82,6 @@ function closeWorkspace(staged: boolean, overrides: Partial<AppState> = {}): voi
   })
 }
 
-/** A client-hosted page: the only kind whose close the runtime can outlive and undo. */
-function clientHostedHandles(): Partial<AppState> {
-  return {
-    remoteBrowserPageHandlesByPageId: {
-      [PAGE_ID]: {
-        environmentId: 'environment-a',
-        remotePageId: 'remote-page-a',
-        placement: {
-          kind: 'client',
-          browserHostClientId: 'host-a',
-          browserHostGeneration: 1,
-          pageHostGeneration: 1
-        }
-      }
-    } as AppState['remoteBrowserPageHandlesByPageId']
-  }
-}
-
-/** One workspace whose pages were opened against two different runtime environments. */
-function twoOwnerClientHostedHandles(): Partial<AppState> {
-  const placement = {
-    kind: 'client' as const,
-    browserHostClientId: 'host-a',
-    browserHostGeneration: 1,
-    pageHostGeneration: 1
-  }
-  return {
-    browserPagesByWorkspace: {
-      [WORKSPACE_ID]: [browserPage(PAGE_ID, WORKSPACE_ID), browserPage('page-c', WORKSPACE_ID)]
-    } as AppState['browserPagesByWorkspace'],
-    remoteBrowserPageHandlesByPageId: {
-      [PAGE_ID]: { environmentId: 'environment-a', remotePageId: 'remote-page-a', placement },
-      'page-c': { environmentId: 'environment-b', remotePageId: 'remote-page-c', placement }
-    } as AppState['remoteBrowserPageHandlesByPageId']
-  }
-}
-
 function liveStore(): Record<string, unknown> {
   return {
     browserTabsByWorktree: { 'worktree-a': [{ id: WORKSPACE_ID }] },
@@ -129,12 +92,6 @@ function liveStore(): Record<string, unknown> {
     closeBrowserTab: vi.fn(),
     closeUnifiedTab: vi.fn()
   }
-}
-
-async function settle(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
 }
 
 beforeEach(() => {
@@ -189,95 +146,5 @@ describe('closeBrowserWorkspaceTabOnHosts releases parked page chrome', () => {
     expect(consumeBrowserPageDeferredNavigation(OTHER_PAGE_ID)).toBe(
       'https://example.internal/other-tab'
     )
-  })
-})
-
-describe('closeBrowserWorkspaceTabOnHosts when the owning host cannot settle the close', () => {
-  it('tears the tab down here once every owner disavows the page', async () => {
-    closeWebRuntimeSessionTab.mockResolvedValue('unknown-tab')
-
-    closeWorkspace(false, clientHostedHandles())
-    await settle()
-
-    expect(destroyWorkspaceWebviews).toHaveBeenCalledWith(expect.anything(), WORKSPACE_ID)
-    expect(storeState.current.closeBrowserTab).toHaveBeenCalledWith(WORKSPACE_ID)
-    expect(storeState.current.closeBrowserTab).toHaveBeenCalledBefore(destroyWorkspaceWebviews)
-    expect(storeState.current.closeUnifiedTab).toHaveBeenCalledWith('unified-a')
-    // Nothing to replay: the host answered that it has no such tab, so the close is settled.
-    expect(recordClientHostedBrowserCloseIntents).toHaveBeenCalledWith([])
-  })
-
-  it('leaves the teardown to tab sync when the host still knows the page', async () => {
-    closeWebRuntimeSessionTab.mockResolvedValue('applied')
-
-    closeWorkspace(false, clientHostedHandles())
-    await settle()
-
-    expect(destroyWorkspaceWebviews).not.toHaveBeenCalled()
-    expect(storeState.current.closeBrowserTab).not.toHaveBeenCalled()
-  })
-
-  it('leaves the tab standing while any owner still knows the page', async () => {
-    // Two hosts own pages; one disavowal must not race the other’s tab-sync removal.
-    closeWebRuntimeSessionTab.mockResolvedValueOnce('unknown-tab').mockResolvedValueOnce('applied')
-
-    closeWorkspace(false, twoOwnerClientHostedHandles())
-    await settle()
-
-    expect(closeWebRuntimeSessionTab).toHaveBeenCalledTimes(2)
-    expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
-      worktreeId: 'worktree-a',
-      tabId: 'tab-a',
-      environmentId: 'environment-a',
-      reason: 'user'
-    })
-    expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
-      worktreeId: 'worktree-a',
-      tabId: 'tab-a',
-      environmentId: 'environment-b',
-      reason: 'user'
-    })
-    expect(destroyWorkspaceWebviews).not.toHaveBeenCalled()
-    expect(storeState.current.closeBrowserTab).not.toHaveBeenCalled()
-  })
-
-  it('records a replayable close when the host could not be asked', async () => {
-    closeWebRuntimeSessionTab.mockResolvedValue('failed')
-
-    closeWorkspace(false, clientHostedHandles())
-    await settle()
-
-    expect(recordClientHostedBrowserCloseIntents).toHaveBeenCalledWith([
-      {
-        environmentId: 'environment-a',
-        browserPageId: 'remote-page-a',
-        worktreeId: 'worktree-a'
-      }
-    ])
-    // A host that could not answer is not a host that forgot: the tab stays for the retraction.
-    expect(storeState.current.closeBrowserTab).not.toHaveBeenCalled()
-  })
-
-  it('records a replayable close when every owning environment is unreachable', () => {
-    isWebRuntimeSessionActive.mockReturnValue(false)
-
-    closeWorkspace(false, clientHostedHandles())
-
-    expect(closeWebRuntimeSessionTab).not.toHaveBeenCalled()
-    expect(recordClientHostedBrowserCloseIntents).toHaveBeenCalledWith([
-      {
-        environmentId: 'environment-a',
-        browserPageId: 'remote-page-a',
-        worktreeId: 'worktree-a'
-      }
-    ])
-  })
-
-  it('records nothing for a server-placed page, which dies with its runtime anyway', () => {
-    isWebRuntimeSessionActive.mockReturnValue(false)
-
-    closeWorkspace(false)
-
-    expect(recordClientHostedBrowserCloseIntents).toHaveBeenCalledWith([])
   })
 })

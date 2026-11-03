@@ -12,6 +12,7 @@ import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { i18n } from '@/i18n/i18n'
 import de from '../../i18n/locales/de.json'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
+import { focusMountedNativeChatEditor } from '../native-chat/native-chat-mounted-editor-view'
 import { changePrompt, promptEditor } from '../native-chat/native-chat-prompt-editor.test-support'
 import {
   clearNativeChatComposerDraftsForTests,
@@ -31,7 +32,9 @@ function prompt(): HTMLElement {
 }
 
 function launchButton(label: string): HTMLButtonElement {
-  return [...host.querySelectorAll('button')].find((button) => button.textContent === label)!
+  return [...host.querySelectorAll('button')].find(
+    (button) => button.getAttribute('aria-label') === label
+  )!
 }
 
 it('launches with the typed first prompt from Enter or either Launch button, and without one as before', async () => {
@@ -307,7 +310,10 @@ it.each(['claude', 'codex'] as const)(
     const configure = () =>
       document.querySelector<HTMLButtonElement>(`button[aria-label="Configure ${agent}"]`)!
     fireEvent.click(configure())
-    const panel = () => document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
+    const panel = () =>
+      document.querySelector<HTMLElement>(
+        '[data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"]'
+      )!
     fireEvent.click(panel().querySelector('[cmdk-item]')!)
     fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
     fireEvent.change(panel().querySelector('textarea')!, {
@@ -370,5 +376,56 @@ it.each(['claude', 'codex'] as const)(
     await waitFor(() =>
       expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(refreshed)).text).toBe('')
     )
+  }
+)
+
+it.each(['inline', 'menu'])(
+  'focuses the setup prompt imperatively with the model list open in %s configuration',
+  async (surface) => {
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          {surface === 'menu' ? (
+            <DropdownMenu defaultOpen modal={false}>
+              <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <AgentLaunchPickerMenu entries={[launchEntry]} runLaunch={() => false} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <AgentLaunchSetupPanel entry={launchEntry} onUse={onUse} />
+          )}
+        </TooltipProvider>
+      )
+    )
+    if (surface === 'menu') {
+      fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Claude' }))
+    }
+    const editor = document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
+    await waitFor(() => expect(promptEditor(editor)).toBeDefined())
+    const models = document.querySelector<HTMLInputElement>('input[aria-label="Search models"]')!
+    act(() => models.focus())
+    expect(document.activeElement).toBe(models)
+    expect(document.querySelector('[cmdk-list]')).not.toBeNull()
+    if (surface === 'menu') {
+      expect(document.querySelector('[role="menu"][data-state="open"]')).not.toBeNull()
+    }
+
+    act(() => focusMountedNativeChatEditor(promptEditor(editor)))
+    expect(document.activeElement).toBe(editor)
+
+    // A sibling popup still owns focus above the setup prompt.
+    const popup = document.createElement('div')
+    popup.setAttribute('role', 'dialog')
+    const input = document.createElement('input')
+    popup.append(input)
+    document.body.append(popup)
+    try {
+      input.focus()
+      act(() => focusMountedNativeChatEditor(promptEditor(editor)))
+      expect(document.activeElement).toBe(input)
+    } finally {
+      popup.remove()
+    }
   }
 )

@@ -4,6 +4,8 @@ import { z } from 'zod'
 export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.v1'
 /** Send cancel only when negotiated: older desktops drop the whole attachment on unknown event types. */
 export const DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY = 'browser.desktopBridge.cancel.v1'
+/** Older desktops re-parse params and would drop expectUrl, so commands carrying it need this. */
+export const DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY = 'browser.desktopBridge.expect-url.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
@@ -122,7 +124,8 @@ export type DesktopBrowserBridgeEvent = z.infer<typeof DesktopBrowserBridgeEvent
 
 const BridgeError = z.object({
   code: z.string().min(1).max(128),
-  message: z.string().max(4096)
+  message: z.string().max(4096),
+  data: z.unknown().optional()
 })
 
 export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [

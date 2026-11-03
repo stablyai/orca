@@ -73,8 +73,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('node:fs/promises', async (importOriginal) =>
@@ -131,7 +133,7 @@ vi.mock('../../../shared/openssh-default-shell', () => ({
   readOpenSshDefaultShell: vi.fn(() => '')
 }))
 // Fake-win32 runs have no wsl.exe: the distro runs, so main's background-start hold passes (E9).
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readWslDistroRunningState: vi.fn(async () => 'running')
 }))

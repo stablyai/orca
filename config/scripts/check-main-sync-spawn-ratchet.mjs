@@ -37,19 +37,30 @@ const GATED_FAMILIES = [
     advice: { gitExecFileSync: 'use gitExecFileAsync' }
   },
   {
-    modules: ['src/main/wsl'],
+    modules: ['src/main/wsl/discovery/distro-catalog'],
     advice: {
       getWslHome: 'use getWslHomeAsync',
-      listWslDistros: 'use listWslDistrosAsync',
+      listWslDistros: 'use listWslDistrosAsync'
+    }
+  },
+  {
+    modules: ['src/main/wsl/filesystem/unc-path-access'],
+    advice: {
       wslUncDirectoryExists: 'use wslUncDirectoryExistsAsync'
     }
   },
   {
-    modules: ['src/main/wsl-availability', 'src/main/wsl'],
+    modules: ['src/main/wsl/discovery/wsl-availability'],
     advice: { isWslAvailable: 'use isWslAvailableAsync' }
   },
-  { modules: ['src/main/pwsh'], advice: { isPwshAvailable: 'use isPwshAvailableAsync' } },
-  { modules: ['src/main/win32-utils'], advice: { grantDirAcl: 'use grantDirAclAsync' } }
+  {
+    modules: ['src/main/pty/shell-startup/pwsh'],
+    advice: { isPwshAvailable: 'use isPwshAvailableAsync' }
+  },
+  {
+    modules: ['src/main/windows/windows-directory-acl'],
+    advice: { grantDirAcl: 'use grantDirAclAsync' }
+  }
 ]
 const collector = createGatedCallCollector(GATED_FAMILIES, 'sync-spawn')
 const BASELINE_HEADER = [

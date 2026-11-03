@@ -17,8 +17,8 @@ const {
   makeFolderWorkspace,
   TEST_FOLDER_WORKSPACE_KEY
 } = await import('./orca-runtime-test-fixtures.spec')
-const { blockedWslDistroForPath } = await import('../wsl/wsl-unc-access-gate')
-const { isWslUserActFor } = await import('../wsl/wsl-user-act-scope')
+const { blockedWslDistroForPath } = await import('../wsl/filesystem/wsl-unc-access-gate')
+const { isWslUserActFor } = await import('../wsl/discovery/wsl-user-act-scope')
 
 const PARENT = '\\\\wsl.localhost\\Ubuntu\\home\\me'
 const FOLDER = `${PARENT}\\notes`

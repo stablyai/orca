@@ -9,7 +9,7 @@ import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import {
   makeTerminalScrollbackSnapshotRef,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   hasDuplicateOrcadMigrationScrollbackDescriptors,
   projectOrcadMigrationSessionScrollback

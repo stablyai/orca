@@ -19,6 +19,8 @@ import { recognizeAgentProcess } from '../../../../shared/agent-process-recognit
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
+import { cliChatResumeClosingPaneKeys } from './cli-chat-resume-close-terminal'
+import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
 import {
@@ -139,18 +141,29 @@ export async function admitCliChatResumeClose(
     )
     return null
   }
+  // The host's create refuses another terminal running the conversation; asked now, this terminal
+  // stays open. Its own panes are left out: the close stops them before create.
   const support = await waitForPromiseWithSignal(
-    admitStructuredLaunchOnHost(target, toRuntimeWorktreeSelector(source.workspaceId), agent),
+    admitStructuredLaunchOnHost(target, toRuntimeWorktreeSelector(source.workspaceId), agent, {
+      providerSessionId: source.providerSessionId,
+      closingPaneKeys: cliChatResumeClosingPaneKeys(state, source)
+    }),
     signal
   )
   if (!isCurrent()) {
+    return null
+  }
+  if (support.kind === 'refused') {
+    toast.error(cliConversationExitGuidance(source.agent))
     return null
   }
   if (support.kind === 'declined') {
     toast.error(structuredChatUnavailableText(support.reason))
     return null
   }
-  if (support.kind !== 'admitted') {
+  // Closing is irreversible: a host that could not say whether it checked the other writers has
+  // not admitted it.
+  if (support.kind !== 'admitted' || support.writers === 'unknown') {
     throw new Error('chat unavailable')
   }
   const permission = await readStructuredChatHostPermissionVerdict(target, agent)

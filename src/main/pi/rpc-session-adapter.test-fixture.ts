@@ -41,6 +41,7 @@ export class FakeConnection implements PiRpcConnection {
   closeResult: Awaited<ReturnType<PiRpcConnection['close']>> = { root: 'exited', tree: 'exited' }
   readonly sent: JsonlRpcRecord[] = []
   readonly requests: string[] = []
+  readonly compactParams: unknown[] = []
   private readonly exitListeners: (() => void)[] = []
   requestOverride?: (command: string) => Promise<unknown> | undefined
   abortRequest?: () => void
@@ -48,8 +49,11 @@ export class FakeConnection implements PiRpcConnection {
     readonly handlers: JsonlRpcAgentConnectionOptions,
     private readonly reported: { thinkingLevel?: string } = {}
   ) {}
-  async request(command: string): Promise<unknown> {
+  async request(command: string, params?: Record<string, unknown>): Promise<unknown> {
     this.requests.push(command)
+    if (command === 'compact') {
+      this.compactParams.push(params)
+    }
     const override = this.requestOverride?.(command)
     if (override) {
       return override

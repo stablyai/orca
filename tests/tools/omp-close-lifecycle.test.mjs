@@ -10,7 +10,7 @@ import { runProcess } from '@orca/process-host'
 import {
   captureDescendantSnapshot,
   readProcessTable
-} from '../../src/main/pty-descendant-termination.ts'
+} from '../../src/main/pty/process-retirement/pty-descendant-termination.ts'
 import {
   createPtyPhysicalExit,
   shutdownLocalPty,
