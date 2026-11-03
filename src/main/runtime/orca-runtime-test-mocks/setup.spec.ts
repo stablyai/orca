@@ -337,38 +337,43 @@ vi.mock('../../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 
-vi.mock('../../agent-trust-presets', () => ({
+vi.mock('../../agent-launch/trust/agent-trust-presets', () => ({
   markCodexProjectTrusted: markCodexProjectTrustedMock,
   markCopilotFolderTrusted: markCopilotFolderTrustedMock,
   markCursorWorkspaceTrusted: markCursorWorkspaceTrustedMock
 }))
 
-vi.mock('../../hooks', () => ({
+const parseOrcaYamlMock = vi.hoisted(() => vi.fn().mockReturnValue(null))
+vi.mock('../../../shared/orca-yaml', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  parseOrcaYaml: parseOrcaYamlMock
+}))
+
+vi.mock('../../workspace-hooks/hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   loadHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
-  hasHooksFile: vi.fn().mockReturnValue(false),
-  parseOrcaYaml: vi.fn().mockReturnValue(null)
+  hasHooksFile: vi.fn().mockReturnValue(false)
 }))
 
-vi.mock('../../setup-runner-script-text', () => ({
+vi.mock('../../workspace-hooks/setup-runner-script-text', () => ({
   buildPosixRunnerScript: (script: string) => `#!/usr/bin/env bash\nset -e\n${script}\n`,
   buildWindowsRunnerScript: (script: string) => `@echo off\r\n${script}\r\n`
 }))
 
-vi.mock('../../worktree-runner-script', () => ({
+vi.mock('../../workspace-hooks/worktree-runner-script', () => ({
   createSetupRunnerScript: vi.fn(),
   resolveSetupRunnerShell: vi.fn().mockReturnValue(undefined)
 }))
 
-vi.mock('../../setup-hook-env-vars', () => ({
+vi.mock('../../workspace-hooks/setup-hook-env-vars', () => ({
   getSetupRunnerEnvVars: (_repo: never, worktreePath: string) => ({
     ORCA_ROOT_PATH: '/remote/repo',
     ORCA_WORKTREE_PATH: worktreePath
   })
 }))
 
-vi.mock('../../effective-hook-config', () => ({
+vi.mock('../../workspace-hooks/effective-hook-config', () => ({
   getEffectiveHooksFromConfig: vi.fn().mockReturnValue(null),
   getDefaultTabsLaunch: vi.fn().mockReturnValue(undefined),
   shouldRunSetupForCreate: vi
@@ -426,6 +431,12 @@ vi.mock('../../source-control/hosted-review', () => ({
     review: await getHostedReviewForBranchMock(input),
     readOutcome: 'cached'
   }))
+}))
+
+vi.mock('../../github/client/fetch/repo-slug-upstream', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRepoSlug: getRepoSlugMock,
+  getRepoUpstream: getRepoUpstreamMock
 }))
 
 vi.mock('../../github/client', async (importOriginal) => {

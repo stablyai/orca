@@ -1063,6 +1063,25 @@
         "acrylic": "acrylic"
       },
       "windowsUnsupported": "Requires Windows 11 version 22H2 or later."
+    },
+    "updateDelay": {
+      "title": "Update Delay",
+      "description": "Wait this many days after a release is published before Orca offers it.",
+      "info": "About Update Delay",
+      "none": "None",
+      "availableSoon": "Available to you {{relative}}",
+      "availableOn": "Available to you {{date}} ({{relative}})",
+      "clearedTitle": "Orca {{version}} is ready",
+      "heldTitle": "Orca {{version}} is on hold",
+      "released": "Released {{released}}",
+      "progress": "Time until Orca {{version}} is available",
+      "skipDelayOnceHint": "Check for this release now. Your delay setting stays the same.",
+      "skipDelayOnce": "Skip Delay Once",
+      "upToDateWithHeld": "You’re up to date. A newer release is on hold until {{date}}.",
+      "heldReleaseReady": "A newer release is ready. Check for updates to get it.",
+      "keywordDelay": "delay",
+      "keywordCooldown": "cooldown",
+      "keywordSecurity": "security"
     }
   },
   "menu": {
@@ -2680,8 +2699,6 @@
         "25690a3855": "Start workspace from PR",
         "a459866967": "Resume workspace attached to PR",
         "347034903a": "Copy GitHub link",
-        "5a01ca7253": "Failed to sync viewed state with GitHub.",
-        "996a1897d2": "Unable to sync viewed state for this pull request.",
         "e0b15c793f": "Failed to copy GitHub link",
         "992e799227": "GitHub link copied",
         "61bfc81ada": "Unable to open the workspace attached to this pull request.",
@@ -8074,9 +8091,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -10289,14 +10303,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "orchestrationPanel": {
-              "title": "Orchestration panel",
-              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
-              "orchestration": "orchestration",
-              "agents": "agents",
-              "workers": "workers",
-              "manager": "manager"
             }
           }
         },
@@ -19536,6 +19542,7 @@
         "hostReconciling": "Orca is still checking on this chat after restarting.",
         "waitMoment": "Wait a moment.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
+        "mailOwnerUnconfirmed": "Orca couldn't confirm this message is still meant for this chat.",
         "chatNotFound": "Orca can't find this chat.",
         "startNewChat": "Start a new chat to continue.",
         "tryAgain": "Try again.",
@@ -20080,6 +20087,7 @@
         "estimated": "Estimated from the last response."
       },
       "contextMenu": {
+        "noSessionContext": "No chat context is available.",
         "copyOrcaSessionId": "Copy Orca Session ID",
         "orcaSessionIdCopied": "Orca session ID copied",
         "orcaSessionIdCopyFailed": "Unable to copy Orca session ID",
@@ -22884,6 +22892,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: no readable backup, so it will start empty.",
+      "sectionKeptCurrent": "{{section}}: your current runs will be kept",
       "sectionRestored": "{{section}}: restored from the backup saved {{time}}.",
       "projectsForgotten": "Orca will forget your projects and their workspace details. Files on disk are not touched.",
       "newerProjectsRemoved": "Projects added after that backup will be removed from Orca, along with their workspace details. Files on disk are not touched.",
@@ -22926,7 +22935,7 @@
       "noneFound": "(none found)",
       "sqlitePath": "SQLite path: {{path}}",
       "sectionsDamaged": "Part of this profile's saved state is damaged: {{sections}}. Everything else is intact.",
-      "repairCommand": "Stop Orca, then run `{{command}}` to replace only the damaged parts from backups and keep everything else. Orca keeps a copy of the damaged file.",
+      "repairCommand": "Stop Orca, then run `{{command}}` to repair only the damaged parts and keep everything else. Orca keeps a copy of the damaged file.",
       "restoreWholeBackup": "To restore a whole backup instead, run `{{exportsCommand}}`, then `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca cannot safely open the active profile because its SQLite state is unreadable.",
       "legacyJsonPath": "Legacy JSON path: {{path}}",

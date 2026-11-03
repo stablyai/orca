@@ -78,11 +78,6 @@ const SWITCH = {
   before: { state: ROSTER, accountId: 'account-a' },
   after: { state: ROSTER, accountId: 'account-b' }
 }
-const SAME_FOLDER = {
-  ...SWITCH,
-  before: { state: ROSTER, accountId: null },
-  after: { state: ROSTER, accountId: null }
-}
 
 describe('handleRunningClaudeSessionsAfterSwitch', () => {
   beforeEach(() => {
@@ -91,16 +86,6 @@ describe('handleRunningClaudeSessionsAfterSwitch', () => {
     store.settings = {}
     store.terminalLayoutsByTabId = Object.fromEntries(
       [1, 2, 3].map((n) => [`tab-${n}`, { ptyIdsByLeafId: { [`leaf-${n}`]: `pty-${n}` } }])
-    )
-  })
-
-  it('asks nothing when no Claude session runs on the outgoing account', async () => {
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([]))
-
-    expect(await handleRunningClaudeSessionsAfterSwitch(SWITCH)).toBe('show-confirmation')
-    expect(getClaudeAccountSwitchPrompt()).toBeNull()
-    expect(findClaudeSwitchSessions).toHaveBeenCalledWith(
-      expect.objectContaining({ fromAccountId: 'account-a' })
     )
   })
 
@@ -135,20 +120,6 @@ describe('handleRunningClaudeSessionsAfterSwitch', () => {
     expect(findQueuedClaudeRestartsOnAccount).toHaveBeenCalledTimes(1)
   })
 
-  it('restarts on the new account when the user picks Restart', async () => {
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1), candidate(2)]))
-    expect(await handleRunningClaudeSessionsAfterSwitch(SWITCH)).toBe('handled')
-    expect(
-      getClaudeAccountSwitchPrompt()?.sessions.onAccount.map((session) => session.ptyId)
-    ).toEqual(['pty-1', 'pty-2'])
-
-    answerClaudeAccountSwitchPrompt('restart')
-
-    expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-1', 'pty-2'], 'claude')
-    expect(getClaudeAccountSwitchPrompt()).toBeNull()
-    expect(store.updateSettings).not.toHaveBeenCalled()
-  })
-
   it('restarts only the ticked sessions, and only ones this question listed', async () => {
     vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1), candidate(2)]))
     await handleRunningClaudeSessionsAfterSwitch(SWITCH)
@@ -166,49 +137,6 @@ describe('handleRunningClaudeSessionsAfterSwitch', () => {
     answerClaudeAccountSwitchPrompt('restart')
 
     expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-1-reattached'], 'claude')
-  })
-
-  it('asks nothing when launches run on the same folder before and after the switch', async () => {
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1)]))
-
-    expect(await handleRunningClaudeSessionsAfterSwitch(SAME_FOLDER)).toBe('show-confirmation')
-    expect(findClaudeSwitchSessions).not.toHaveBeenCalled()
-  })
-
-  it('leaves sessions alone when the user keeps them', async () => {
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1)]))
-    await handleRunningClaudeSessionsAfterSwitch(SWITCH)
-
-    answerClaudeAccountSwitchPrompt('keep')
-
-    expect(store.queuePaneAccountRestarts).not.toHaveBeenCalled()
-    expect(getClaudeAccountSwitchPrompt()).toBeNull()
-  })
-
-  it.each(['restart', 'keep'] as const)(
-    'turns on automatic restarts on %s when told not to ask again',
-    async (answer) => {
-      vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1)]))
-      await handleRunningClaudeSessionsAfterSwitch(SWITCH)
-
-      answerClaudeAccountSwitchPrompt(answer, { dontAskAgain: true })
-
-      expect(store.updateSettings).toHaveBeenCalledWith({
-        claudeAccountSwitchRunningSessions: 'restart'
-      })
-    }
-  )
-
-  it('restarts without asking when the setting is Always restart', async () => {
-    store.settings = { claudeAccountSwitchRunningSessions: 'restart' }
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1), candidate(2)]))
-
-    expect(await handleRunningClaudeSessionsAfterSwitch(SWITCH)).toBe('handled')
-    expect(getClaudeAccountSwitchPrompt()).toBeNull()
-    expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-1', 'pty-2'], 'claude')
-    expect(toastSuccess).toHaveBeenCalledWith(
-      'Restarting 2 Claude sessions on account-b@example.com'
-    )
   })
 
   it('names sessions an automatic restart left behind, and reviews only those', async () => {

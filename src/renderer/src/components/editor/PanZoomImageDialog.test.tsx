@@ -3,6 +3,9 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { registerZoomIpcBridge } from '@/hooks/ipc-events/zoom-ipc-bridge'
+import { useAppStore } from '@/store'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
 
 const resizeObservers = new Set<() => void>()
@@ -126,6 +129,74 @@ describe('PanZoomImageDialog', () => {
 
     press([500, 300], [500, 300])
     expect(image.style.width).toBe('968px')
+  })
+
+  it('takes app zoom that would otherwise change UI Zoom while it is the front dialog', () => {
+    type Direction = 'in' | 'out' | 'reset'
+    let sendZoom: ((direction: Direction) => void) | undefined
+    const setZoomLevel = vi.fn()
+    const saveUI = vi.fn()
+    vi.stubGlobal('api', {
+      ui: {
+        onTerminalZoom: (listener: (direction: Direction) => void) => {
+          sendZoom = listener
+          return () => {}
+        },
+        getZoomLevel: () => 0,
+        setZoomLevel,
+        syncTrafficLights: () => {},
+        set: saveUI
+      }
+    })
+    const { activeView, activeTabType, editorFontZoomLevel } = useAppStore.getState()
+    try {
+      useAppStore.setState({ activeView: 'terminal', activeTabType: 'agent-session' })
+      registerZoomIpcBridge([])
+      const zoom = (direction: Direction): void => act(() => sendZoom?.(direction))
+      render(<PanZoomImageDialog open onOpenChange={() => {}} src="blob:shot" title="shot.png" />)
+      sizeCanvas()
+      const image = screen.getByRole('img', { name: 'shot.png' })
+      Object.defineProperty(image, 'naturalWidth', { value: 2000 })
+      Object.defineProperty(image, 'naturalHeight', { value: 1000 })
+      fireEvent.load(image)
+
+      zoom('in')
+      expect(image.style.width).toBe('1210px')
+      zoom('reset')
+      expect(image.style.width).toBe('968px')
+      // Stand-in for Fit to screen, which disables itself and drops focus to the body.
+      act(() => {
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur()
+        }
+      })
+      zoom('in')
+      expect(image.style.width).toBe('1210px')
+
+      useAppStore.setState({ activeTabType: 'editor', editorFontZoomLevel: 0 })
+      zoom('out')
+      expect(image.style.width).toBe('968px')
+      expect(useAppStore.getState().editorFontZoomLevel).toBe(0)
+      expect(setZoomLevel).not.toHaveBeenCalled()
+      expect(saveUI).not.toHaveBeenCalled()
+
+      // Stand-in for the workspace board: a non-modal sheet drawn over the viewer keeps today's UI Zoom.
+      useAppStore.setState({ activeTabType: 'agent-session' })
+      render(
+        <Dialog open modal={false}>
+          <DialogContent onOpenAutoFocus={(event) => event.preventDefault()}>
+            <DialogTitle>Board</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      )
+      zoom('in')
+      expect(image.style.width).toBe('968px')
+      expect(setZoomLevel).toHaveBeenCalledWith(0.5)
+      expect(saveUI).toHaveBeenCalledWith({ uiZoomLevel: 0.5 })
+    } finally {
+      useAppStore.setState({ activeView, activeTabType, editorFontZoomLevel })
+      document.documentElement.style.removeProperty('--ui-zoom-factor')
+    }
   })
 
   it('shows the fallback when the image fails to load', () => {

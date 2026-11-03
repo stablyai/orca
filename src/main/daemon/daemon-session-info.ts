@@ -1,5 +1,6 @@
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import type { SessionState, ShellReadyState } from './types'
+import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
 
 export type SessionInfo = {
   foregroundProcess?: string
@@ -12,6 +13,8 @@ export type SessionInfo = {
   /** ORCA_PANE_KEY the PTY was spawned with; absent from daemons that predate it. */
   paneKey?: string
   wslDistro?: string | null
+  /** Seen once in a WSL session's launch output; volatile metadata of this incarnation. */
+  wslGuestRoot?: WslGuestRoot
   pid: number | null
   cwd: string | null
   cols: number

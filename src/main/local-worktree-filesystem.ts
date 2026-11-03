@@ -3,13 +3,13 @@ import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../shared/wsl-login-shell-command'
 import { quotePosixShell } from '../shared/shell-argument-quoting'
-import { removeHostTree } from './host-tree-removal'
+import { removeHostTree } from './filesystem/host-tree-removal'
 import { toLinuxPath } from './wsl'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from './wsl/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
 
-export { toHostFilesystemPath, toHostRemovalPath } from './host-tree-removal'
+export { toHostFilesystemPath, toHostRemovalPath } from './filesystem/host-tree-removal'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string

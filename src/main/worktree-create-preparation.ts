@@ -40,7 +40,7 @@ import {
   recordPreparationConsume,
   resetPreparationConsumeHistoryForTests
 } from './worktree-create-preparation-burst'
-import { toHostFilesystemPath } from './host-tree-removal'
+import { toHostFilesystemPath } from './filesystem/host-tree-removal'
 import type { WorktreeCreateTimingRecorder } from './worktree-create-timing'
 
 export {

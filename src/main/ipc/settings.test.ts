@@ -63,7 +63,7 @@ vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: listProfilesMock }
 }))
 
-vi.mock('../app-icon', () => ({
+vi.mock('../window/desktop-integration/app-icon', () => ({
   applyAppIcon: applyAppIconMock
 }))
 

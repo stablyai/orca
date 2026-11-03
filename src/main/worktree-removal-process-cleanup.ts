@@ -1,10 +1,10 @@
 import type { ExecutionHostId } from '../shared/execution-host'
 import { advertisedUrlWatcher } from './ports/advertised-url-watcher'
-import { localhostWorktreeLabelProxy } from './localhost-worktree-label-proxy'
+import { localhostWorktreeLabelProxy } from './ports/workspace-labels/localhost-worktree-label-proxy'
 import { deleteWorktreeHistoryDir } from './terminal-history-deletion'
-import { recordWorkspaceCleanupRemovalSnapshotPrune } from './workspace-cleanup-removal-snapshot-prune'
-import { pruneWorkspaceCleanupScanSnapshot } from './workspace-cleanup-scan-snapshot'
-import { pruneWorkspaceSpaceAnalysisSnapshot } from './workspace-space-analysis-snapshot'
+import { recordWorkspaceCleanupRemovalSnapshotPrune } from './workspaces/cleanup/workspace-cleanup-removal-snapshot-prune'
+import { pruneWorkspaceCleanupScanSnapshot } from './workspaces/cleanup/workspace-cleanup-scan-snapshot'
+import { pruneWorkspaceSpaceAnalysisSnapshot } from './workspaces/space-analysis/workspace-space-analysis-snapshot'
 
 /** Drop host-blind process state only when no same-ID workspace survives on another host. */
 export function dropRemovedWorktreeProcessState(worktreeId: string): void {
