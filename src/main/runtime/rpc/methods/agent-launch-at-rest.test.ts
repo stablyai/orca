@@ -6,7 +6,13 @@ import {
   createRestTestRig,
   type RestTestRig
 } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { HOST_TEST_NOW } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import {
+  HOST_TEST_NOW,
+  hostTestMessage,
+  hostTestOperationId
+} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { LOCAL_CLI_RPC_CALLER } from '../rpc-caller-identity'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { RpcContext } from '../core'
 import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -34,8 +40,21 @@ const PHONE: Partial<RpcContext> = {
     AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
   ]
 }
-// The `orca` CLI carries no capability list.
-const CLI: Partial<RpcContext> = {}
+// The runtime socket stamps the local `orca` CLI's identity; its requests carry no capability list.
+const CLI: Partial<RpcContext> = { caller: LOCAL_CLI_RPC_CALLER }
+// A current paired `orca` CLI advertises the existing create-message capability.
+const PAIRED_CLI: Partial<RpcContext> = {
+  pairedDeviceId: 'device-cli',
+  clientCapabilities: [
+    AGENT_LAUNCH_RUNTIME_CAPABILITY,
+    AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+  ]
+}
+// An older paired client never learned to open a chat before its agent starts.
+const OLDER_PAIRED: Partial<RpcContext> = {
+  pairedDeviceId: 'device-old',
+  clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
+}
 const SESSION = 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
 
 let rig: RestTestRig
@@ -102,13 +121,30 @@ function launch(caller: Partial<RpcContext>, prompt?: string, delivery = 'submit
 it.each([
   { name: 'a bare launch from the phone waits', caller: PHONE, startsAtCreation: false },
   {
-    name: 'a draft launch keeps eager creation',
+    name: 'a draft launch from the phone waits, leaving the draft unsent',
     caller: PHONE,
     prompt: 'fix the build',
     delivery: 'draft',
-    startsAtCreation: true
+    startsAtCreation: false
   },
-  { name: 'a bare launch from the CLI starts', caller: CLI, startsAtCreation: true }
+  { name: 'a bare launch from the local CLI waits', caller: CLI, startsAtCreation: false },
+  {
+    name: 'a draft launch from the local CLI waits',
+    caller: CLI,
+    prompt: 'fix the build',
+    delivery: 'draft',
+    startsAtCreation: false
+  },
+  {
+    name: 'a bare launch from a current paired CLI waits',
+    caller: PAIRED_CLI,
+    startsAtCreation: false
+  },
+  {
+    name: 'a bare launch from an older paired client starts',
+    caller: OLDER_PAIRED,
+    startsAtCreation: true
+  }
 ])('$name', async ({ caller, prompt, delivery, startsAtCreation }) => {
   const result = await launch(caller, prompt, delivery)
 
@@ -151,13 +187,57 @@ function holdStarts() {
   rig.adapter.acquire.mockImplementation(rig.heldStart(acquire))
 }
 
-it('a whitespace-only submit creates an eager empty chat without sending a turn', async () => {
+it('a whitespace-only submit creates an empty chat that waits without sending a turn', async () => {
   const result = await launch(PHONE, ' \t\n ')
   expect(result.outcome).toMatchObject({ kind: 'structured', sessionId: SESSION })
   expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
-  expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+  expect(rig.adapter.acquire).not.toHaveBeenCalled()
   expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([])
   expect(rig.adapter.dispatch).not.toHaveBeenCalled()
+})
+
+it('starts a chat restarted before its first message on that message, under the same app ID', async () => {
+  const result = await launch(CLI, 'fix the build', 'draft')
+  expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
+  await rig.restart()
+  setStructuredAgentSessionHost(rig.host)
+  expect(rig.store.getRecord(SESSION)).toMatchObject({
+    sessionId: SESSION,
+    providerHandleChain: []
+  })
+  expect(rig.adapter.acquire).not.toHaveBeenCalled()
+  const submittedAtAcquire: string[][] = []
+  const acquire = rig.adapter.acquire.getMockImplementation()!
+  rig.adapter.acquire.mockImplementation(async (input) => {
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
+    submittedAtAcquire.push(
+      (journal?.snapshot().submissions ?? []).map((row) => row.clientMessageId)
+    )
+    return acquire(input)
+  })
+  const body = hostTestMessage('fix the build')
+  const sent = await rig.host.send(
+    { callerKey: 'first-send' },
+    {
+      body,
+      envelope: {
+        sessionId: SESSION,
+        clientOperationId: hostTestOperationId(),
+        expectedRuntimeFence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.send',
+          sessionId: SESSION,
+          fields: { body }
+        })
+      }
+    }
+  )
+  if (!sent.ok) {
+    throw new Error(`send refused: ${sent.refusal.code}`)
+  }
+  await rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+  expect(submittedAtAcquire).toEqual([[sent.value.clientMessageId]])
+  expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
 })
 
 it('the opening prompt owns retry with explicit model and permission for a legacy-capability CLI caller', async () => {
@@ -252,6 +332,25 @@ it.each(['spawn', 'open'] as const)(
     expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
   }
 )
+
+it('replays a recorded eager launch after its caller gains the capability, acquiring nothing more', async () => {
+  const runtime = launchRuntime()
+  const params = AGENT_LAUNCH_REPLAY.params.parse({
+    agent: 'codex',
+    target: { kind: 'existing', worktree: 'id:wt-7' },
+    sessionId: SESSION,
+    operationId: `${HOST_TEST_NOW}-000000000000000000000000000000ef`
+  })
+  const first = await AGENT_LAUNCH_REPLAY.handler(params, rpcContext(runtime, OLDER_PAIRED))
+  await vi.waitFor(() => expect(rig.store.getRecord(SESSION)?.providerHandleChain).toHaveLength(1))
+  const chain = structuredClone(rig.store.getRecord(SESSION)?.providerHandleChain)
+  expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+  const current = { ...OLDER_PAIRED, clientCapabilities: PAIRED_CLI.clientCapabilities }
+  const replay = await AGENT_LAUNCH_REPLAY.handler(params, rpcContext(runtime, current))
+  expect(replay).toEqual(first)
+  expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+  expect(rig.store.getRecord(SESSION)?.providerHandleChain).toEqual(chain)
+})
 
 it('replays a lost reply for a prompted folder launch without another message or child', async () => {
   const runtime = launchRuntime(true)

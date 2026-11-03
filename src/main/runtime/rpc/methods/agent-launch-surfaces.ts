@@ -21,6 +21,7 @@ import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { createStructuredAgentSessionId } from '../../../../shared/agent-session/structured-agent-session-create'
+import { isAgentRpcCaller } from '../rpc-caller-identity'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
 import {
@@ -55,7 +56,6 @@ export function agentLaunchSurfaceFactory(
       chatOptions,
       sessionId: requested,
       tabId,
-      withoutPrompt,
       firstMessage,
       signal
     }) => {
@@ -67,12 +67,12 @@ export function agentLaunchSurfaceFactory(
         )
       )
       const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
-      // A client that creates chats without starting them starts this one on its first message.
+      // A caller that can open a chat before its agent starts gets one that starts on its first Send.
       const atRest =
         firstMessage !== undefined ||
-        (withoutPrompt === true &&
-          context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
-            true)
+        context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
+          true ||
+        isAgentRpcCaller(context.caller)
       const created = await createStructuredAgentSessionForWorktree({
         runtime: context.runtime,
         ensureHost: async () => {
