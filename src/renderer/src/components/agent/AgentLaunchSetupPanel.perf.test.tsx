@@ -208,7 +208,9 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
           )
         }
         fireEvent.click(
-          [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+          [...host.querySelectorAll('button')].find(
+            (b) => b.getAttribute('aria-label') === 'Launch terminal'
+          )!
         )
         const launch = agentPickerLaunchInputs(onUse.mock.calls.at(-1)![0], own)
         expect(tokenizeStartupCommand(launch.agentArgs ?? '', 'posix')).toMatchObject({
@@ -316,7 +318,9 @@ it('bounds catalog projection independently of raw model operands and retains Co
         }
         previousAcceptance.set(models, acceptance)
         fireEvent.click(
-          [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+          [...host.querySelectorAll('button')].find(
+            (b) => b.getAttribute('aria-label') === 'Launch terminal'
+          )!
         )
         const launch = agentPickerLaunchInputs(onUse.mock.calls.at(-1)![0], own)
         const compiled = resolveAgentLaunchCommand({
@@ -363,7 +367,9 @@ it('bounds catalog projection independently of raw model operands and retains Co
       target: { value: '--model claude-opus-4-8 --verbose' }
     })
     fireEvent.click(
-      [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+      [...host.querySelectorAll('button')].find(
+        (b) => b.getAttribute('aria-label') === 'Launch terminal'
+      )!
     )
     const launch = agentPickerLaunchInputs(onUse.mock.calls.at(-1)![0], own)
     const compiled = resolveAgentLaunchCommand({

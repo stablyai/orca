@@ -276,23 +276,23 @@ async function useDraft(surface: 'chat' | 'terminal' = 'terminal') {
   await waitFor(() =>
     expect(
       document.querySelector(
-        '[data-slot="popover-content"][aria-label^="Configure "][data-state="open"]'
+        '[data-slot="dropdown-menu-sub-content"][aria-label^="Configure "][data-state="open"]'
       )
     ).toBeNull()
   )
 }
 async function closeMenu() {
   const panel = document.querySelector(
-    '[data-slot="popover-content"][aria-label^="Configure "][data-state="open"]'
+    '[data-slot="dropdown-menu-sub-content"][aria-label^="Configure "][data-state="open"]'
   )
   if (panel) {
-    fireEvent.click(
-      document.querySelector(`button[aria-label="${panel.getAttribute('aria-label')}"]`)!
-    )
+    const input = textarea()
+    act(() => input.focus())
+    fireEvent.keyDown(input, { key: 'Escape' })
     await waitFor(() =>
       expect(
         document.querySelector(
-          '[data-slot="popover-content"][aria-label^="Configure "][data-state="open"]'
+          '[data-slot="dropdown-menu-sub-content"][aria-label^="Configure "][data-state="open"]'
         )
       ).toBeNull()
     )

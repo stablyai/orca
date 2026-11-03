@@ -54,7 +54,9 @@ it.each([`--settings '{"fastMode":true}' --settings ./team.json`, `--settings '{
     for (const way of ['Launch chat', 'Launch terminal']) {
       onUse.mockClear()
       fireEvent.click(
-        [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
+        [...host.querySelectorAll('button')].find(
+          (button) => button.getAttribute('aria-label') === way
+        )!
       )
       const input = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
       expect(input.sessionOptions?.fastMode).toBeUndefined()
@@ -95,7 +97,7 @@ it.each(['direct Use', 'blur then Use'] as const)(
     }
     fireEvent.click(
       [...host.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Launch terminal'
+        (button) => button.getAttribute('aria-label') === 'Launch terminal'
       )!
     )
     expect(onUse).toHaveBeenCalledOnce()
@@ -147,7 +149,7 @@ it.each(['pending click', 'blur then click'] as const)(
       fireEvent.click(remove)
       fireEvent.click(
         [...host.querySelectorAll('button')].find(
-          (button) => button.textContent === 'Launch terminal'
+          (button) => button.getAttribute('aria-label') === 'Launch terminal'
         )!
       )
       expect(
@@ -221,7 +223,7 @@ it('explains no-flag choices from the recorded Pi catalog and keeps them usable 
     onUse.mockClear()
     fireEvent.click(
       [...host.querySelectorAll('button')].find(
-        (button) => button.textContent === `Launch ${surface}`
+        (button) => button.getAttribute('aria-label') === `Launch ${surface}`
       )!
     )
     expect(onUse).toHaveBeenCalledOnce()
@@ -318,7 +320,7 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
     clear()
     fireEvent.click(
       [...host.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Launch terminal'
+        (button) => button.getAttribute('aria-label') === 'Launch terminal'
       )!
     )
     const acceptance = counts()

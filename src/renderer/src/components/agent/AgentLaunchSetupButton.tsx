@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
@@ -59,6 +60,7 @@ export function AgentLaunchSetupButton({
   mode = 'launch',
   renderAnchor,
   disabled,
+  submenu = false,
   open: controlledOpen,
   replacedByAnotherSetup = false,
   onOpenChange,
@@ -74,6 +76,7 @@ export function AgentLaunchSetupButton({
   mode?: 'launch' | 'select'
   renderAnchor?: (trigger: ReactElement) => ReactElement
   disabled?: boolean
+  submenu?: boolean
   open?: boolean
   replacedByAnotherSetup?: boolean
   onOpenChange?: (open: boolean) => void
@@ -104,7 +107,7 @@ export function AgentLaunchSetupButton({
   const content = useRef<HTMLDivElement>(null)
   const anchor = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
-    if (!open) {
+    if (!open || submenu) {
       return
     }
     let frame = 0
@@ -137,7 +140,7 @@ export function AgentLaunchSetupButton({
       observer.disconnect()
       cancelAnimationFrame(frame)
     }
-  }, [open])
+  }, [open, submenu])
   const changeOpen = (next: boolean) => {
     if (next) {
       setup.activate()
@@ -148,6 +151,47 @@ export function AgentLaunchSetupButton({
     }
     onOpenChange?.(next)
   }
+  const panel = (
+    <div className="min-h-0 overflow-y-auto scrollbar-sleek">
+      {setup.ready ? (
+        <AgentLaunchSetupPanel
+          entry={entry}
+          mode={mode}
+          draft={setup.draft}
+          getDraft={setup.getDraft}
+          disabled={disabled}
+          onDraftChange={setup.change}
+          onUse={(draft) => {
+            const options = { ...draft, surface: setup.draft.surface }
+            delete options.prompt
+            if (!setup.accept(mode === 'select' ? draft : options)) {
+              return false
+            }
+            const accepted = onUse(draft)
+            if (accepted !== false) {
+              changeOpen(false)
+            }
+            return accepted
+          }}
+        />
+      ) : null}
+    </div>
+  )
+  const label = translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })
+  if (submenu && renderAnchor) {
+    return (
+      <AgentLaunchSetupSubmenu
+        open={open}
+        onOpenChange={changeOpen}
+        renderAnchor={renderAnchor}
+        disabled={disabled}
+        label={label}
+      >
+        {panel}
+      </AgentLaunchSetupSubmenu>
+    )
+  }
+
   const trigger = (
     <div className="flex shrink-0 items-center gap-1">
       <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
@@ -203,30 +247,7 @@ export function AgentLaunchSetupButton({
           }
         }}
       >
-        <div className="min-h-0 overflow-y-auto scrollbar-sleek">
-          {setup.ready ? (
-            <AgentLaunchSetupPanel
-              entry={entry}
-              mode={mode}
-              draft={setup.draft}
-              getDraft={setup.getDraft}
-              disabled={disabled}
-              onDraftChange={setup.change}
-              onUse={(draft) => {
-                const options = { ...draft, surface: setup.draft.surface }
-                delete options.prompt
-                if (!setup.accept(mode === 'select' ? draft : options)) {
-                  return false
-                }
-                const accepted = onUse(draft)
-                if (accepted !== false) {
-                  changeOpen(false)
-                }
-                return accepted
-              }}
-            />
-          ) : null}
-        </div>
+        {panel}
       </PopoverContent>
     </Popover>
   )
