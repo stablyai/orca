@@ -44,7 +44,7 @@ type QuickTaskRowProps = {
   repoName: string | null
   onOpen: () => void
   onCreateWorkspace: () => void
-  onOpenExternal: () => void
+  onOpenExternal: (event: React.MouseEvent) => void
 }
 
 export function QuickTaskRow({

@@ -10,6 +10,7 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { getJiraPresets } from '@/components/task-page/task-page-localized-options'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 import {
   openComposerForGitHubWorkItem,
   openComposerForGitLabWorkItem,
@@ -201,7 +202,7 @@ export default function QuickTasksPanel({
                 repoName={repoName(item.repoId)}
                 onOpen={() => openGitHubItem(item)}
                 onCreateWorkspace={() => openComposerForGitHubWorkItem(repos, openModal, item)}
-                onOpenExternal={() => void window.api.shell.openUrl(item.url)}
+                onOpenExternal={(event) => openAppHttpLink(item.url, { event })}
               />
             ))}
           </QuickTasksSection>
@@ -254,7 +255,7 @@ export default function QuickTasksPanel({
                 repoName={repoName(item.repoId)}
                 onOpen={() => openGitLabItem(item)}
                 onCreateWorkspace={() => openComposerForGitLabWorkItem(repos, openModal, item)}
-                onOpenExternal={() => void window.api.shell.openUrl(item.url)}
+                onOpenExternal={(event) => openAppHttpLink(item.url, { event })}
               />
             ))}
           </QuickTasksSection>
@@ -290,7 +291,7 @@ export default function QuickTasksPanel({
                 onCreateWorkspace={() =>
                   openComposerForJiraIssue(openModal, issue, taskRepos[0]?.id)
                 }
-                onOpenExternal={() => void window.api.shell.openUrl(issue.url)}
+                onOpenExternal={(event) => openAppHttpLink(issue.url, { event })}
               />
             ))}
           </QuickTasksSection>
