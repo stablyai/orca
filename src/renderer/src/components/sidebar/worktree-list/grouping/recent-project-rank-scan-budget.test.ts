@@ -100,7 +100,8 @@ describe('recent project rank scan budget', () => {
       ],
       folderWorkspaces: [],
       projectOrderBy: 'recent',
-      repoOrder: undefined
+      repoOrder: undefined,
+      sectionMemberRepoIds: new Map()
     })
     const expected = grouped.toSorted(
       (left, right) => ((Number(right[0]) * 73) % 128) - ((Number(left[0]) * 73) % 128)

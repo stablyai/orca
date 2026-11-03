@@ -31,16 +31,40 @@ export function getSidebarOrderedRepoHeaderIdsByBucket(
 ): Map<ProjectHeaderDragBucketKey, string[]> {
   const buckets = new Map<ProjectHeaderDragBucketKey, string[]>()
   for (const row of rows) {
-    const repo = row.type === 'header' ? getHeaderDragRepo(row) : undefined
+    if (row.type !== 'header') {
+      continue
+    }
+    const repo = getHeaderDragRepo(row)
     if (!repo) {
       continue
     }
-    const bucketKey = getProjectHeaderDragBucketKey(repo)
+    const bucketKey = getProjectHeaderDragBucketKey(row.projectGroupRepo ?? repo)
     const list = buckets.get(bucketKey) ?? []
     list.push(repo.id)
     buckets.set(bucketKey, list)
   }
   return buckets
+}
+
+// Why: a header drawn in a group through another host's row ranks among its siblings by that row.
+export function getProjectHeaderDragRepoById(
+  rows: readonly Row[],
+  repoById: ReadonlyMap<string, Repo>
+): ReadonlyMap<string, Repo> {
+  let byHeaderId: Map<string, Repo> | null = null
+  for (const row of rows) {
+    if (row.type !== 'header' || !row.projectGroupRepo) {
+      continue
+    }
+    // Key like the bucket lists: a host copy's id is its anchor's, not this host's registration.
+    const repo = getHeaderDragRepo(row)
+    if (!repo) {
+      continue
+    }
+    byHeaderId ??= new Map(repoById)
+    byHeaderId.set(repo.id, row.projectGroupRepo)
+  }
+  return byHeaderId ?? repoById
 }
 
 export function getProjectGroupOrderForSidebarDrop(args: {
