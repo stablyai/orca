@@ -92,6 +92,8 @@ export type TerminalWebViewProps = {
   terminalTheme?: MobileTerminalTheme
   // Persistent font-size preset; transient CSS pinch zoom is committed into it on release.
   textScale?: number
+  /** Desktop Settings twin for East Asian Ambiguous width (#9958); default narrow. */
+  eastAsianAmbiguousWidth?: 'narrow' | 'wide'
   // Only initially shown views build pre-ready engines, limiting WebGL context use.
   shownAtMount?: boolean
   interactionActive?: boolean
