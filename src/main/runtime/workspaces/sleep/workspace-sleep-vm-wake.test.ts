@@ -91,4 +91,34 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
 
     expect(resumeVm).toHaveBeenCalledTimes(1)
   })
+
+  it('wakes again for a click after a suspend started instead of joining the older wake', async () => {
+    const order: string[] = []
+    const firstResume = gate()
+    let resumes = 0
+    const workspaceSleep = coordinator({
+      suspendVm: async () => {
+        order.push('suspend')
+      },
+      resumeVm: async () => {
+        resumes += 1
+        const resume = `resume:${resumes}`
+        if (resumes === 1) {
+          await firstResume.opened
+        }
+        order.push(resume)
+        return null
+      }
+    })
+
+    const olderWake = workspaceSleep.wakeVm(WORKTREE_ID)
+    const slept = sleep(workspaceSleep)
+    // The sleep's mocks all resolve at once, so one macrotask lets it ask for the suspend.
+    await new Promise((resolve) => setImmediate(resolve))
+    const click = workspaceSleep.wakeVm(WORKTREE_ID)
+    firstResume.open()
+    await Promise.all([olderWake, slept, click])
+
+    expect(order).toEqual(['resume:1', 'suspend', 'resume:2'])
+  })
 })
