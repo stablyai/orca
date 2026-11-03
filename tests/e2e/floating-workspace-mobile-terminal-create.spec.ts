@@ -76,7 +76,7 @@ test('mobile terminal creation survives a remote floating host selection and a c
         await page.evaluate(() => window.dispatchEvent(new Event('orca-toggle-floating-terminal')))
         await expect(panel).toHaveAttribute('aria-hidden', 'true')
       } else if (selectedHost !== 'Local') {
-        await panel.getByRole('button', { name: /Host:|호스트:/ }).click()
+        await panel.getByRole('button', { name: /host:|호스트:/i }).click()
         await page.getByRole('menuitemradio', { name: selectedHost, exact: true }).click()
         await expect(panel).toHaveAttribute('data-floating-workspace-id', /runtime:/)
       }

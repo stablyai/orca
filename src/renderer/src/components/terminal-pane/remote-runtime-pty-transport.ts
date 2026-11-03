@@ -1152,7 +1152,7 @@ export function createRemoteRuntimePtyTransport(
     try {
       const resolved = await callRuntime<{ terminal: RuntimeTerminalResolvePane }>(
         'terminal.resolvePane',
-        { paneKey: `${hostTabId}:${leafId}`, worktreeId }
+        { paneKey: `${hostTabId}:${leafId}`, worktreeId: toRuntimeWorktreeId(worktreeId) }
       )
       // Why: wire data; an answer without a pane must read as unresolved, not throw past this catch.
       return resolved.terminal ?? null
@@ -1472,7 +1472,7 @@ export function createRemoteRuntimePtyTransport(
     try {
       const resolved = await callRuntime<{ terminal: RuntimeTerminalResolvePane }>(
         'terminal.resolvePane',
-        { paneKey, worktreeId }
+        { paneKey, worktreeId: toRuntimeWorktreeId(worktreeId) }
       )
       terminal = resolved.terminal
     } catch (error) {
@@ -1688,7 +1688,7 @@ export function createRemoteRuntimePtyTransport(
     const hostTabId = isWebTerminalSurfaceTabId(tabId) ? toHostSessionTabId(tabId) : tabId
     void callRuntime<{ terminal: RuntimeTerminalResolvePane }>('terminal.recoverPane', {
       paneKey: `${hostTabId}:${leafId}`,
-      worktreeId,
+      worktreeId: toRuntimeWorktreeId(worktreeId),
       expectedTerminal: expiredHandle
     })
       .then(async ({ terminal }) => {
@@ -2432,7 +2432,7 @@ export function createRemoteRuntimePtyTransport(
       }
       const resolved = await callRuntime<{ terminal?: RuntimeTerminalResolvePane }>(
         'terminal.resolvePane',
-        { paneKey: `${paneTabId}:${leafId}`, worktreeId }
+        { paneKey: `${paneTabId}:${leafId}`, worktreeId: toRuntimeWorktreeId(worktreeId) }
       )
       const pane = resolved.terminal
       return (
