@@ -62,7 +62,10 @@ it('propagates a temporary load envelope before takeover or a dead-child asserti
   await rig.adapter.closeAll()
 })
 
-it("keeps a load deadline's words when the agent exited while its output drained", async () => {
+it.each([
+  { agent: 'exited while its output drained', exits: true },
+  { agent: 'is still running', exits: false }
+])("keeps a load deadline's words when the agent $agent", async ({ exits }) => {
   vi.useFakeTimers()
   const spawned: ReturnType<typeof createFakePipedChild>[] = []
   const agents: AcpScriptedAgent[] = []
@@ -81,14 +84,21 @@ it("keeps a load deadline's words when the agent exited while its output drained
         agent.on('initialize', (frame) =>
           agent.reply(frame, { protocolVersion: 1, agentCapabilities: { loadSession: true } })
         )
-        // The agent never answers the load.
+        // The agent never answers the load, but would open a replacement session.
         agent.on('session/load', () => {})
+        agent.on('session/new', (frame) => agent.reply(frame, { sessionId: 'replacement-id' }))
         const child = Object.assign(createFakePipedChild(), {
           pid: 9_999_999,
           stdout: agent.stdout,
           stdin: agent.stdin,
           stderr: new PassThrough(),
           kill: () => true
+        })
+        // A live agent exits when Orca closes its input.
+        agent.stdin.once('finish', () => {
+          if (!exits) {
+            child.emit('exit', 0, null)
+          }
         })
         spawned.push(child)
         agents.push(agent)
@@ -99,10 +109,14 @@ it("keeps a load deadline's words when the agent exited while its output drained
   try {
     const acquired = rig.acquire()
     await vi.advanceTimersByTimeAsync(299_500)
-    // The agent exits unanswered at 299.5 s, holding stdout open; the load's own deadline fires at
-    // 300 s, inside the output drain that the exit started.
-    spawned[0].emit('exit', 1, null)
+    // An exiting agent leaves unanswered at 299.5 s, holding stdout open; the load's own deadline
+    // fires at 300 s, inside the output drain that the exit started.
+    if (exits) {
+      spawned[0].emit('exit', 1, null)
+    }
     await vi.advanceTimersByTimeAsync(500 + PROVIDER_EXIT_OUTPUT_DRAIN_MS)
+    // No replacement session is opened, even in a live agent that would answer one.
+    expect(agents[0].frames.map((frame) => frame.method)).not.toContain('session/new')
     await acquired
     const timedOut = agentSessionFailureFact('startFailed', {
       requestTimeout: { method: 'session/load', timeoutMs: 300_000 }
@@ -112,8 +126,6 @@ it("keeps a load deadline's words when the agent exited while its output drained
     expect(agentSessionFailureWords(rig.openVerdict()!.fact, { surface: 'rejection' })).toEqual(
       agentSessionFailureWords(timedOut, { surface: 'rejection' })
     )
-    // No replacement session is opened in an agent that already exited.
-    expect(agents[0].frames.map((frame) => frame.method)).not.toContain('session/new')
     expect(spawned).toHaveLength(1)
   } finally {
     await rig.adapter.closeAll()
