@@ -4,7 +4,6 @@ import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
-import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
@@ -24,23 +23,12 @@ import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreg
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
 import { initializePaneGeometry, readPaneSize } from './read-pane-size'
-import { createPaneForegroundReaderDeps } from './pane-foreground-reader-deps'
-import { createStaleMouseTrackingGuard } from './stale-mouse-tracking-guard'
-import { createPaneForegroundProcessReader } from '../pane-foreground-process-reader'
+import { createSessionStaleMouseTrackingGuard } from './session-stale-mouse-tracking-guard'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
-  const readForegroundProcess = createPaneForegroundProcessReader(
-    createPaneForegroundReaderDeps(session)
-  )
-  const staleMouseTrackingGuard = createStaleMouseTrackingGuard({
-    getPtyId: () => session.transport.getPtyId(),
-    isTrackablePtyId: (ptyId) => session.isForegroundTrackingAllowed(ptyId),
-    isMouseTrackingArmed: () => session.pane.terminal.modes.mouseTrackingMode !== 'none',
-    readConfirmedForeground: (ptyId) => readForegroundProcess(ptyId, true),
-    groundToShell: () => session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
-  })
+  const staleMouseTrackingGuard = createSessionStaleMouseTrackingGuard(session)
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
     // During replay, drop query replies and pointer-generated mouse/arrows but preserve typing; stale TUI modes could send reports or recall history in the fresh shell (replay-guard.ts).
     if (
@@ -51,8 +39,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     ) {
       return
     }
-    if (wasUserInput && isXtermMouseReport(data)) {
-      staleMouseTrackingGuard.observeMouseReport()
+    if (wasUserInput) {
+      staleMouseTrackingGuard.observeUserInput(isXtermMouseReport(data))
     }
     const currentPtyId = session.transport.getPtyId()
     // Protocol replies keep the TUI responsive while an account notice blocks typing.

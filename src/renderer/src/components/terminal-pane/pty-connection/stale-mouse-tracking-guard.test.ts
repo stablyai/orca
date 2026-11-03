@@ -7,13 +7,16 @@ type Foreground = Awaited<
 
 function setup(
   foreground: Foreground,
-  overrides: { armed?: () => boolean; ptyId?: () => string | null } = {}
+  overrides: {
+    armed?: () => boolean
+    binding?: () => { ptyId: string; incarnationId: string | null } | null
+  } = {}
 ) {
   let clock = 0
   const groundToShell = vi.fn()
   const readConfirmedForeground = vi.fn(async () => foreground)
   const guard = createStaleMouseTrackingGuard({
-    getPtyId: overrides.ptyId ?? (() => 'pty-1'),
+    getBinding: overrides.binding ?? (() => ({ ptyId: 'pty-1', incarnationId: null })),
     isTrackablePtyId: () => true,
     isMouseTrackingArmed: overrides.armed ?? (() => true),
     readConfirmedForeground,
@@ -35,14 +38,14 @@ const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve,
 describe('createStaleMouseTrackingGuard', () => {
   it('grounds the modes when a mouse report finds a shell in the foreground', async () => {
     const { guard, groundToShell } = setup({ processName: 'sh', remoteEvidenceVerdict: null })
-    guard.observeMouseReport()
+    guard.observeUserInput(true)
     await settle()
     expect(groundToShell).toHaveBeenCalledTimes(1)
   })
 
   it('leaves a live program that owns the mouse alone', async () => {
     const { guard, groundToShell } = setup({ processName: 'nvim', remoteEvidenceVerdict: null })
-    guard.observeMouseReport()
+    guard.observeUserInput(true)
     await settle()
     expect(groundToShell).not.toHaveBeenCalled()
   })
@@ -52,7 +55,7 @@ describe('createStaleMouseTrackingGuard', () => {
       processName: 'bash',
       remoteEvidenceVerdict: 'unverifiable'
     })
-    guard.observeMouseReport()
+    guard.observeUserInput(true)
     await settle()
     expect(groundToShell).not.toHaveBeenCalled()
   })
@@ -62,7 +65,7 @@ describe('createStaleMouseTrackingGuard', () => {
       { processName: 'sh', remoteEvidenceVerdict: null },
       { armed: () => false }
     )
-    guard.observeMouseReport()
+    guard.observeUserInput(true)
     await settle()
     expect(readConfirmedForeground).not.toHaveBeenCalled()
   })
@@ -72,13 +75,13 @@ describe('createStaleMouseTrackingGuard', () => {
       processName: 'nvim',
       remoteEvidenceVerdict: null
     })
-    guard.observeMouseReport()
-    guard.observeMouseReport()
+    guard.observeUserInput(true)
+    guard.observeUserInput(true)
     await settle()
-    guard.observeMouseReport()
+    guard.observeUserInput(true)
     expect(readConfirmedForeground).toHaveBeenCalledTimes(1)
     advance(2_000)
-    guard.observeMouseReport()
+    guard.observeUserInput(true)
     expect(readConfirmedForeground).toHaveBeenCalledTimes(2)
   })
 
@@ -86,10 +89,57 @@ describe('createStaleMouseTrackingGuard', () => {
     let ptyId = 'pty-1'
     const { guard, groundToShell } = setup(
       { processName: 'sh', remoteEvidenceVerdict: null },
-      { ptyId: () => ptyId }
+      { binding: () => ({ ptyId, incarnationId: null }) }
     )
-    guard.observeMouseReport()
+    guard.observeUserInput(true)
     ptyId = 'pty-2'
+    await settle()
+    expect(groundToShell).not.toHaveBeenCalled()
+  })
+
+  it('drops a verdict when the same PTY id comes back as a new incarnation', async () => {
+    let incarnationId = 'a'
+    const { guard, groundToShell } = setup(
+      { processName: 'sh', remoteEvidenceVerdict: null },
+      { binding: () => ({ ptyId: 'pty-1', incarnationId }) }
+    )
+    guard.observeUserInput(true)
+    incarnationId = 'b'
+    await settle()
+    expect(groundToShell).not.toHaveBeenCalled()
+  })
+
+  it('probes the new binding while a read for the old one is still pending', async () => {
+    let ptyId = 'pty-1'
+    const release: (() => void)[] = []
+    const groundToShell = vi.fn()
+    const readConfirmedForeground = vi.fn(
+      () =>
+        new Promise<Foreground>((resolve) => {
+          release.push(() => resolve({ processName: 'sh', remoteEvidenceVerdict: null }))
+        })
+    )
+    const guard = createStaleMouseTrackingGuard({
+      getBinding: () => ({ ptyId, incarnationId: null }),
+      isTrackablePtyId: () => true,
+      isMouseTrackingArmed: () => true,
+      readConfirmedForeground,
+      groundToShell,
+      now: () => 0
+    })
+    guard.observeUserInput(true)
+    ptyId = 'pty-2'
+    guard.observeUserInput(true)
+    expect(readConfirmedForeground).toHaveBeenCalledTimes(2)
+    release.forEach((fn) => fn())
+    await settle()
+    expect(groundToShell).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a verdict when typed input may have started a new program', async () => {
+    const { guard, groundToShell } = setup({ processName: 'sh', remoteEvidenceVerdict: null })
+    guard.observeUserInput(true)
+    guard.observeUserInput(false)
     await settle()
     expect(groundToShell).not.toHaveBeenCalled()
   })

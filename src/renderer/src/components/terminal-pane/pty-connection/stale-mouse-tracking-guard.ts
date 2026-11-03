@@ -14,34 +14,53 @@ type ForegroundRead = {
  * foreground and grounds the modes once it is a shell.
  */
 export function createStaleMouseTrackingGuard(deps: {
-  getPtyId: () => string | null
+  getBinding: () => { ptyId: string; incarnationId: string | null } | null
   isTrackablePtyId: (ptyId: string) => boolean
   isMouseTrackingArmed: () => boolean
   readConfirmedForeground: (ptyId: string) => Promise<ForegroundRead>
   groundToShell: () => void
   now?: () => number
-}): { observeMouseReport: () => void } {
+}): { observeUserInput: (isMouseReport: boolean) => void } {
   const now = deps.now ?? Date.now
-  let probing = false
-  let lastProbeAt = Number.NEGATIVE_INFINITY
+  const bindingKey = (): string | null => {
+    const binding = deps.getBinding()
+    return binding ? `${binding.ptyId}#${binding.incarnationId ?? ''}` : null
+  }
+  let probe: { key: string; inputGeneration: number } | null = null
+  let lastProbe = { key: '', at: Number.NEGATIVE_INFINITY }
+  // Typed input may launch a program, so a verdict read before it is stale.
+  let inputGeneration = 0
 
   return {
-    observeMouseReport() {
-      const ptyId = deps.getPtyId()
-      if (probing || !ptyId || !deps.isMouseTrackingArmed() || !deps.isTrackablePtyId(ptyId)) {
+    observeUserInput(isMouseReport) {
+      if (!isMouseReport) {
+        inputGeneration += 1
+        return
+      }
+      const binding = deps.getBinding()
+      const key = bindingKey()
+      if (!binding || key === null || !deps.isMouseTrackingArmed()) {
+        return
+      }
+      if (!deps.isTrackablePtyId(binding.ptyId) || probe?.key === key) {
         return
       }
       const startedAt = now()
-      if (startedAt - lastProbeAt < PROBE_COOLDOWN_MS) {
+      if (lastProbe.key === key && startedAt - lastProbe.at < PROBE_COOLDOWN_MS) {
         return
       }
-      lastProbeAt = startedAt
-      probing = true
+      lastProbe = { key, at: startedAt }
+      const thisProbe = { key, inputGeneration }
+      probe = thisProbe
       void deps
-        .readConfirmedForeground(ptyId)
+        .readConfirmedForeground(binding.ptyId)
         .then(({ processName, remoteEvidenceVerdict }) => {
-          // A rebound PTY or an already-reset terminal needs no ground.
-          if (deps.getPtyId() !== ptyId || !deps.isMouseTrackingArmed()) {
+          // A rebound PTY, newer input or an already-reset terminal needs no ground.
+          if (
+            bindingKey() !== key ||
+            inputGeneration !== thisProbe.inputGeneration ||
+            !deps.isMouseTrackingArmed()
+          ) {
             return
           }
           if (remoteEvidenceVerdict !== null && remoteEvidenceVerdict !== 'live') {
@@ -53,7 +72,9 @@ export function createStaleMouseTrackingGuard(deps: {
         })
         .catch(() => {})
         .finally(() => {
-          probing = false
+          if (probe === thisProbe) {
+            probe = null
+          }
         })
     }
   }
