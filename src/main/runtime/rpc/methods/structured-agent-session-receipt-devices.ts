@@ -1,3 +1,4 @@
+import { isNativeChatLocalResolver } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 import type {
   AgentJournalRenderItem,
   AgentJournalResolution
@@ -19,8 +20,8 @@ function resolverDevice(
   ctx: ReceiptReader
 ): AgentJournalResolution['resolvedByDevice'] {
   const caller = structuredCallerFor(ctx).callerKey
-  const local = resolvedBy.startsWith('trusted-local:')
-  if (resolvedBy === caller || (local && caller.startsWith('trusted-local:'))) {
+  const local = isNativeChatLocalResolver(resolvedBy)
+  if (resolvedBy === caller || (local && isNativeChatLocalResolver(caller))) {
     return { kind: 'current' }
   }
   const name = local ? ctx.runtime.readMachineName() : ctx.runtime.readPairedDeviceName(resolvedBy)

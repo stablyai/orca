@@ -22,8 +22,9 @@ it.each([
   }
 )
 
-it("does not display older hosts' local caller keys", () => {
-  expect(
-    nativeChatReceiptDevice({ ...resolution, resolvedBy: 'trusted-local:desktop' }, labels)
-  ).toBe('the computer')
-})
+it.each(['trusted-local:desktop', 'desktop-renderer'])(
+  "does not display older hosts' local caller key %s",
+  (resolvedBy) => {
+    expect(nativeChatReceiptDevice({ ...resolution, resolvedBy }, labels)).toBe('the computer')
+  }
+)

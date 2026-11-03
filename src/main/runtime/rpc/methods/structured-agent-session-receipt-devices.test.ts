@@ -117,3 +117,37 @@ it.each(['snapshot', 'batch', 'reset'] as const)(
     expect(receipt.body).not.toHaveProperty('resolution.resolvedByDevice')
   }
 )
+
+it.each(['desktop-renderer', 'trusted-local:runtime'])(
+  'names a historical local answer by %s for a paired reader',
+  async (resolvedBy) => {
+    if (receipt.body.kind !== 'question') {
+      throw new Error('expected question')
+    }
+    const item = {
+      ...receipt,
+      body: { ...receipt.body, resolution: { ...receipt.body.resolution, resolvedBy } }
+    }
+    hostCalls.history.mockReturnValue({ ok: true, page: { items: [item] } })
+    const response = await call(
+      'agentSession.history',
+      { sessionId: SESSION, direction: 'tail' },
+      { ...STRUCTURED_CLIENT, clientId: DEVICE_ID },
+      { readMachineName: () => 'Work Mac' }
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        page: {
+          items: [
+            {
+              body: {
+                resolution: { resolvedByDevice: { kind: 'named', name: 'Work Mac' } }
+              }
+            }
+          ]
+        }
+      }
+    })
+  }
+)

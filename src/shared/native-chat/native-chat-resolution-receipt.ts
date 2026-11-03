@@ -19,6 +19,10 @@ export const NATIVE_CHAT_RECEIPT_COPY = {
   cancelledBy: 'Cancelled on {{device}}'
 } as const
 
+export function isNativeChatLocalResolver(resolvedBy: string): boolean {
+  return resolvedBy === 'desktop-renderer' || resolvedBy.startsWith('trusted-local:')
+}
+
 export function nativeChatReceiptDevice(
   resolution: AgentJournalResolution,
   labels: { current: string; computer: string; unknown: string }
@@ -30,7 +34,9 @@ export function nativeChatReceiptDevice(
   if (device?.kind === 'named' && typeof device.name === 'string' && device.name.trim()) {
     return device.name
   }
-  return resolution.resolvedBy?.startsWith('trusted-local:') ? labels.computer : labels.unknown
+  return resolution.resolvedBy && isNativeChatLocalResolver(resolution.resolvedBy)
+    ? labels.computer
+    : labels.unknown
 }
 
 export type NativeChatResolvedPrompt = AgentJournalApprovalItem | AgentJournalQuestionItem
