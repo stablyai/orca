@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
-import { EMPTY_FORM, type EditingTarget } from '../settings/ssh-target-draft'
+import { EMPTY_FORM, type EditingTarget } from '../settings/ssh/targets/ssh-target-draft'
 import {
   addRuntimeSshTarget,
   listRuntimeEditableSshTargets

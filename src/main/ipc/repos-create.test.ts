@@ -1,3 +1,4 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../shared/constants'
@@ -34,6 +35,14 @@ const {
   prepareLocalWorktreeRootForRepoMock: vi.fn()
 }))
 
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
+  const facade = await vi.importMock<typeof GitExecFileModule>('../git/runner')
+  return {
+    ...(await importOriginal<typeof GitExecFileModule>()),
+    gitExecFileAsync: facade.gitExecFileAsync
+  }
+})
+
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   ipcMain: {
@@ -67,11 +76,11 @@ vi.mock('../git/repo', () => ({
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 

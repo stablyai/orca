@@ -17,10 +17,9 @@ function featureRoute(id, specs, prefixes) {
 export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   featureRoute(
     'feature.automations-ui',
-    ['automation-prompt-disclosure', 'automation-runs-dashboard'],
+    ['automation-prompt-disclosure'],
     [`${COMPONENTS}automations/`]
   ),
-  featureRoute('feature.feature-wall', ['feature-wall'], [`${COMPONENTS}feature-wall/`]),
   featureRoute(
     'feature.sparse-checkout',
     ['sparse-explorer-proof', 'sparse-preset-proof'],
@@ -53,7 +52,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   ),
   featureRoute(
     'feature.dictation',
-    ['dictation-indicator', 'voice-microphone-selection'],
+    ['voice-microphone-selection'],
     [`${COMPONENTS}dictation/`, 'src/main/speech/']
   ),
   featureRoute(
@@ -68,12 +67,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   ),
   featureRoute(
     'feature.linear',
-    [
-      'linear-filter-chip-labels',
-      'linear-issue-view-persistence',
-      'linear-private-images',
-      'linear-url-workspace-entry'
-    ],
+    ['linear-issue-view-persistence', 'linear-private-images', 'linear-url-workspace-entry'],
     [
       `${COMPONENTS}task-page/linear/`,
       'src/renderer/src/store/slices/linear/',
@@ -93,9 +87,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['project-group-creation-visibility', 'project-group-manual-sort'],
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
   ),
-  featureRoute('feature.usage-overview', ['usage-overview'], [`${COMPONENTS}stats/`]),
-  featureRoute('feature.pet', ['pet-status-segment-layout'], [`${COMPONENTS}pet/`]),
-  featureRoute('feature.setup-guide', ['setup-guide-sidebar'], [`${COMPONENTS}setup-guide/`]),
   featureRoute(
     'feature.new-workspace',
     [

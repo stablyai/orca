@@ -2,6 +2,7 @@ import { AgentSessionSelectionSchema } from '../agent-session/options/agent-sess
 import {
   SendBody,
   MAX_OPTION_LABEL,
+  CompactInstructions,
   AgentSessionOptions
 } from './structured-agent-session-message-params'
 import { TerminalClose } from './terminal-unary-params'
@@ -22,6 +23,7 @@ import {
 } from '../agent-session/agent-session-wire'
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
+import { ResumeSource, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 
 export {
   SendBlock,
@@ -37,6 +39,8 @@ export {
   MAX_ID_LENGTH,
   SessionId
 } from './structured-agent-session-identifiers'
+
+export { ResumeSource } from './structured-agent-session-resume-params'
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -97,24 +101,11 @@ export const AttachParams = z
   })
   .strict()
 
-/** Identity only: derive transcript/account paths host-side so clients cannot choose imported files or credential directories. */
-export const ResumeSource = z
-  .object({
-    providerSessionId: Identifier('Invalid provider session id'),
-    cliSource: z
-      .object({
-        workspaceId: Identifier('Invalid workspace id'),
-        paneKey: Identifier('Invalid pane key')
-      })
-      .strict()
-      .optional()
-  })
-  .strict()
-
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: StructuredAgent
+    agent: StructuredAgent,
+    resumeFrom: ResumeWriterAdmission.optional()
   })
   .strict()
 
@@ -287,11 +278,16 @@ export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
     command: z.enum(['clear', 'compact']),
+    /** Only where the session's options report compactInstructions: older strict hosts refuse it. */
+    instructions: CompactInstructions.optional(),
     /** Queue active /compact only with agent-session.queued-commands.v1; older strict hosts refuse it.
      * /clear never queues: delivery is outside its fingerprint, so including it conflicts. */
     delivery: z.literal('queue-if-active').optional()
   })
   .strict()
+  .refine((params) => params.instructions === undefined || params.command === 'compact', {
+    message: 'Only /compact takes instructions'
+  })
 
 export const ThreadGoalParams = z
   .object({

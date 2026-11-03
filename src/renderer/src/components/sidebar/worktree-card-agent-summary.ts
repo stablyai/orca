@@ -57,7 +57,7 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
 }
 
 // Per-state plural keys let locales inflect the status word for its count.
-function formatStateCount(state: AgentDotState, count: number): string {
+export function formatStateCount(state: AgentDotState, count: number): string {
   switch (state) {
     case 'waiting':
       return translate('sidebar.agentSummary.stateCount.waiting', '{{count}} waiting', {

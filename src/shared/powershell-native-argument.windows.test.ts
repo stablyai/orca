@@ -1,3 +1,10 @@
+import { parse as parseToml } from 'smol-toml'
+import { getDefaultSettings } from './constants'
+import { saveSourceControlActionRecipe } from './source-control-ai-recipe-save'
+import { resolveSourceControlActionRecipe } from './source-control-ai-operation-policy'
+import { projectSourceControlActionLaunch } from './source-control-action-launch-preferences'
+import { resolveAgentStartupPlanInputs } from './agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from './tui-agent-startup'
 import { spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -88,6 +95,11 @@ describe.each(POWERSHELLS)(
           'look in C:\\dir\\\n',
           'C:\\no-space\\',
           'C:\\no-space\\\n',
+          'model_reasoning_effort="high"',
+          'model="true"',
+          'model="42"',
+          'model="a\\"b"',
+          '{"fastMode":false,"theme":"light","env":{"KEEP":"yes"}}',
           'Fix " --dangerously-bypass-approvals-and-sandbox " thanks'
         ]) {
           // Why assign then splat: the agent wrappers hand their $args to the program this way.
@@ -108,49 +120,141 @@ describe.each(POWERSHELLS)(
   }
 )
 
-describe.each(POWERSHELLS.slice(0, 2))(
-  'agent wrappers under $name',
-  ({ powershell, available }) => {
-    it.skipIf(!available)(
-      'hand a quoted prompt to a .cmd shim intact, without cmd running any of it',
-      async () => {
-        const root = await mkdtemp(join(tmpdir(), 'orca-ps-agent-wrappers-'))
-        try {
-          await writeFile(
-            join(root, 'capture.js'),
-            'console.log(JSON.stringify([require("node:path").parse(process.argv[2]).name, ...process.argv.slice(3)]))'
-          )
-          for (const agent of ['codex', 'claude']) {
-            await writeFile(join(root, `${agent}.cmd`), `@node "%~dp0capture.js" "%~f0" %*\r\n`)
-          }
-          // Why this shape: escaping it as `\"` makes pwsh's .cmd quoting expose `&` to cmd.
-          const prompt = 'a"b & echo INJECTED'
-          const result = await runProcess({
-            program: powershell,
-            args: [
-              '-NoProfile',
-              '-NonInteractive',
-              '-Command',
-              `${getPowerShellAgentWrappers()}\ncodex ${quotePowerShellLiteral(prompt)}\nclaude ${quotePowerShellLiteral(prompt)}`
-            ],
-            cwd: root,
-            env: {
-              ...process.env,
-              PATH: `${root};${process.env.PATH ?? ''}`,
-              ORCA_CODEX_ISOLATE: '0',
-              ORCA_CLAUDE_PROFILE_POINTER: join(root, 'no-pointer')
+describe.each(POWERSHELLS)('agent wrappers under $name', ({ powershell, prelude, available }) => {
+  it.skipIf(!available)(
+    'hand a quoted prompt to a .cmd shim intact, without cmd running any of it',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ps-agent-wrappers-'))
+      try {
+        await writeFile(
+          join(root, 'capture.js'),
+          'console.log(JSON.stringify([require("node:path").parse(process.argv[2]).name, ...process.argv.slice(3)]))'
+        )
+        for (const agent of ['codex', 'claude']) {
+          await writeFile(join(root, `${agent}.cmd`), `@node "%~dp0capture.js" "%~f0" %*\r\n`)
+        }
+        // Why this shape: escaping it as `\"` makes pwsh's .cmd quoting expose `&` to cmd.
+        const prompt = 'a"b & echo INJECTED'
+        const settings = { ...getDefaultSettings(root), agentPermissionDefault: 'own' as const }
+        const compiled = (agent: 'codex' | 'claude', raw: string) => {
+          const saved = saveSourceControlActionRecipe({
+            settings,
+            actionId: 'fixChecks',
+            target: { type: 'global' },
+            recipe: {
+              agentId: agent,
+              agentArgs: raw,
+              launchPreferences: {
+                agentId: agent,
+                modelSelection: {
+                  base: 'default',
+                  options: { effort: { agentId: agent, value: 'high' } }
+                }
+              }
             }
           })
-
-          expect(result.code, JSON.stringify(result)).toBe(0)
-          expect(result.stdout.trim().split(/\r?\n/)).toEqual([
-            JSON.stringify(['codex', prompt]),
-            JSON.stringify(['claude', prompt])
-          ])
-        } finally {
-          await rm(root, { recursive: true, force: true })
+          if (!('sourceControlAi' in saved)) {
+            throw new Error('Expected global saved recipe')
+          }
+          const reopened = resolveSourceControlActionRecipe({
+            settings: { ...settings, sourceControlAi: saved.sourceControlAi },
+            actionId: 'fixChecks'
+          })
+          const inputs = projectSourceControlActionLaunch(reopened, agent, { basePrompt: '' })
+          const startup = buildAgentStartupPlan({
+            ...resolveAgentStartupPlanInputs({
+              agent,
+              settings,
+              ...inputs,
+              platform: 'win32',
+              shell: 'powershell',
+              isRemote: false
+            }),
+            prompt: '',
+            allowEmptyPromptLaunch: true
+          })
+          if (!startup) {
+            throw new Error('Expected real saved startup')
+          }
+          return startup.launchCommand
         }
+        const savedCommands = [
+          compiled('codex', `-c 'model="true"'`),
+          compiled('codex', `-c 'model="42"'`),
+          compiled('codex', `-c 'model="a\\"b"'`),
+          compiled('codex', '-m true'),
+          compiled('codex', '--model private/unlisted'),
+          compiled('claude', `--settings '{"fastMode":false,"theme":"light","env":{"KEEP":"yes"}}'`)
+        ]
+        const codexArgs = ['-c', 'model_reasoning_effort="high"', '-c', 'model="true"']
+        const claudeArgs = ['--settings', '{"fastMode":false,"theme":"light"}']
+        const result = await runProcess({
+          program: powershell,
+          args: [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `${prelude}\n${getPowerShellAgentWrappers()}\ncodex ${[prompt, ...codexArgs].map(quotePowerShellLiteral).join(' ')}\nclaude ${[prompt, ...claudeArgs].map(quotePowerShellLiteral).join(' ')}\n${savedCommands.join('\n')}`
+          ],
+          cwd: root,
+          env: {
+            ...process.env,
+            PATH: `${root};${process.env.PATH ?? ''}`,
+            ORCA_CODEX_ISOLATE: '0',
+            ORCA_CLAUDE_PROFILE_POINTER: join(root, 'no-pointer')
+          }
+        })
+
+        expect(result.code, JSON.stringify(result)).toBe(0)
+        const lines = result.stdout.trim().split(/\r?\n/)
+        expect(lines.slice(0, 2)).toEqual([
+          JSON.stringify(['codex', prompt, ...codexArgs]),
+          JSON.stringify(['claude', prompt, ...claudeArgs])
+        ])
+        const savedArgv: string[][] = lines.slice(2).map((line) => JSON.parse(line))
+        expect(savedArgv).toHaveLength(savedCommands.length)
+        const configs = savedArgv.slice(0, 3).map((argv) => {
+          const values: Record<string, unknown> = {}
+          for (let i = 1; i < argv.length; i++) {
+            if (argv[i] === '-c') {
+              const assignment = argv[++i]
+              const equals = assignment.indexOf('=')
+              const text = assignment.slice(equals + 1)
+              let value: unknown
+              try {
+                value = parseToml(`value=${text}`).value
+              } catch {
+                value = text
+              }
+              values[assignment.slice(0, equals)] = value
+            }
+          }
+          return values
+        })
+        expect(configs).toEqual([
+          { model: 'true', model_reasoning_effort: 'high' },
+          { model: '42', model_reasoning_effort: 'high' },
+          { model: 'a"b', model_reasoning_effort: 'high' }
+        ])
+        expect(savedArgv[3]).toEqual(['codex', '-m', 'true', '-c', 'model_reasoning_effort=high'])
+        expect(savedArgv[4]).toEqual([
+          'codex',
+          '--model',
+          'private/unlisted',
+          '-c',
+          'model_reasoning_effort=high'
+        ])
+        const claude = savedArgv[5]
+        expect(claude[0]).toBe('claude')
+        expect(JSON.parse(claude[claude.indexOf('--settings') + 1])).toEqual({
+          fastMode: false,
+          theme: 'light',
+          env: { KEEP: 'yes' }
+        })
+        expect(claude.slice(-2)).toEqual(['--effort', 'high'])
+      } finally {
+        await rm(root, { recursive: true, force: true })
       }
-    )
-  }
-)
+    }
+  )
+})

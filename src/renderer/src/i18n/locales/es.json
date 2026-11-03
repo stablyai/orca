@@ -171,7 +171,7 @@
         "inheritFont": "Misma fuente que el IDE",
         "fontPreviewLabel": "Vista previa de la fuente del chat",
         "fontPreview": "El veloz zorro marrón salta sobre el perro perezoso.",
-        "title": "Chat",
+        "title": "Interfaz de chat",
         "textSize": "Tamaño del texto",
         "textSizeDescription": "Mensajes, actividad de herramientas y cuadro de mensaje. {{increase}} / {{decrease}} en un chat también cambian este valor.",
         "codeTextSize": "Tamaño del texto del código",
@@ -2150,8 +2150,6 @@
         "25690a3855": "Iniciar espacio de trabajo desde PR",
         "a459866967": "Reanudar espacio de trabajo adjunto a PR",
         "347034903a": "Copiar enlace de GitHub",
-        "5a01ca7253": "No se pudo sincronizar el estado visto con GitHub.",
-        "996a1897d2": "No se puede sincronizar el estado visto de este pull request.",
         "e0b15c793f": "No se pudo copiar el enlace de GitHub",
         "992e799227": "Enlace de GitHub copiado",
         "61bfc81ada": "No se puede abrir el espacio de trabajo adjunto a este pull request.",
@@ -7729,7 +7727,6 @@
           "9d3e56ca36": "Aplicar cambios",
           "f96688b6bc": "Cancelar",
           "b7ddae600c": "Hecho",
-          "e4bda7ce6f": "No se encontró ninguna configuración de Ghostty en este sistema.",
           "b58d4c9051": "Claves no compatibles",
           "674b5ccd6b": "No hay nuevos ajustes que importar; tus ajustes actuales ya coinciden.",
           "a4c5dec640": "Ajustes por actualizar",
@@ -13689,6 +13686,7 @@
                 "failingChecks_one": "{{count}} comprobación fallida",
                 "failingChecks_other": "{{count}} comprobaciones fallidas",
                 "failingChecks_many": "{{count}} comprobaciones fallidas",
+                "pipelineFailed": "{{name}} falló",
                 "pendingChecks_one": "{{count}} comprobación pendiente",
                 "pendingChecks_other": "{{count}} comprobaciones pendientes",
                 "pendingChecks_many": "{{count}} comprobaciones pendientes",
@@ -18854,6 +18852,7 @@
       "failureWords": {
         "theAgent": "El agente",
         "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
+        "savedConversationMissing": "{{agent}} no pudo encontrar la conversación guardada de este chat.",
         "runCommandAgain": "Vuelva a ejecutar /{{command}}.",
         "sendToTryAgain": "Envíe su mensaje para volver a intentarlo.",
         "sendAgainToTryOnceMore": "Vuelva a enviar su mensaje para intentarlo de nuevo.",
@@ -18907,6 +18906,7 @@
         "attachmentNotAFile": "Una imagen de este mensaje no es un archivo, así que el mensaje no se envió.",
         "attachmentNoSource": "Una imagen de este mensaje no tiene ningún archivo que enviar, así que el mensaje no se envió.",
         "attachmentInvalid": "Un archivo adjunto de este mensaje no se puede enviar al agente.",
+        "attachmentsExpired": "Caducado: {{names}}.",
         "attachmentUnreadable": "No se pudo leer un archivo adjunto de este mensaje, así que el mensaje no se envió.",
         "emptyMessage": "Este mensaje está vacío, así que no se envió.",
         "commandUnavailable": "Este comando no está disponible en los chats de {{agent}}, así que no se envió.",
@@ -18994,6 +18994,7 @@
         "recordFailed": "Orca no pudo guardar esto en el historial del chat.",
         "attachmentExpired": "Este archivo adjunto caducó.",
         "reattachFile": "Quítelo y vuelva a adjuntarlo.",
+        "reattachFiles": "Quítelos y vuelva a adjuntarlos.",
         "conversationCleared": "Esta conversación se borró.",
         "openCurrentConversation": "Abra la conversación actual para continuar.",
         "clearUnfinished": "El último /clear no terminó.",
@@ -19301,7 +19302,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
-        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda."
+        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
+        "exitUnconfirmed": "{{agent}} está ejecutando esta conversación en otra terminal. Ciérralo allí o cierra esa terminal y vuelve a intentarlo."
       },
       "state": {
         "loading": {
@@ -19838,6 +19840,13 @@
         "switchAccount": "Cambiar de cuenta",
         "addAccount": "Añadir cuenta…",
         "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
+        "openSetting": "Continuar automáticamente cuando se restablezcan los límites",
+        "cancelled": "Orca no continuará este chat automáticamente.",
+        "scheduled": "Orca continuará este chat a las {{time}}.",
+        "cancel": "No continuar"
       }
     },
     "tab": {
@@ -20210,7 +20219,12 @@
         "queueSearchSteer": "dirigir",
         "shellEnvSearchVariables": "variables de entorno",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "usageLimitContinueTitle": "Continuar los chats automáticamente cuando se restablezca un límite de uso",
+        "usageLimitContinueCopy": "Orca envía \"Continue where you left off.\" cuando se restablece el límite. Se aplica a todos los chats con una hora de restablecimiento conocida.",
+        "usageLimitContinueSearchLimit": "límite de uso",
+        "usageLimitContinueSearchReset": "restablecer",
+        "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso"
       },
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",
@@ -20323,7 +20337,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Agente [Opcional]",
-      "createDescription": "Elige el proyecto y el nombre del espacio de trabajo. Selecciona un agente si quieres iniciar uno."
+      "createDescription": "Elige el proyecto y el nombre del espacio de trabajo. Selecciona un agente si quieres iniciar uno.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Elige si quieres ejecutar el setup antes de crear este espacio de trabajo.",
+        "cancel": "Cancelar",
+        "retry": "Reintentar",
+        "setupScript": "Script de configuración",
+        "defaultTabCommands": "Comandos de pestañas predeterminadas",
+        "setupAndDefaultTabs": "Configuración y comandos de pestañas predeterminadas",
+        "askRunSetup": "¿Ejecutar la configuración ahora?",
+        "askRunDefaultTabs": "¿Ejecutar ahora los comandos de pestañas predeterminadas?",
+        "askRunSetupAndDefaultTabs": "¿Ejecutar ahora la configuración y los comandos de pestañas predeterminadas?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "ajustes locales"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Ya hay otro cambio de incidencia en curso."
@@ -20411,6 +20441,9 @@
         "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
         "keepOpen": "Mantener abierto"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Se ejecuta en WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -21278,7 +21311,10 @@
       "title": "Ejecutar {{distro}} como host (recomendado)",
       "why": "Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
       "accept": "Ejecutar como host",
-      "projectNotFound": "No se encontró el proyecto añadido para moverlo. Usa «Mover al host {{distro}}…» en el proyecto de la barra lateral."
+      "projectNotFound": "No se encontró el proyecto añadido para moverlo. Usa «Mover al host {{distro}}…» en el proyecto de la barra lateral.",
+      "existingTitle": "Añadir en el host {{distro}} (recomendado)",
+      "existingWhy": "{{distro}} ya se ejecuta como host, así que Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
+      "existingAccept": "Añadir en el host"
     }
   },
   "rendererRecovery": {
@@ -22620,6 +22656,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: no hay ninguna copia de seguridad legible, así que empezará vacío.",
+      "sectionKeptCurrent": "{{section}}: se conservarán tus ejecuciones actuales",
       "sectionRestored": "{{section}}: se restaura desde la copia de seguridad guardada el {{time}}.",
       "projectsForgotten": "Orca olvidará tus proyectos y los detalles de sus espacios de trabajo. Los archivos en disco no se modifican.",
       "newerProjectsRemoved": "Los proyectos añadidos después de esa copia de seguridad se quitarán de Orca, junto con los detalles de sus espacios de trabajo. Los archivos en disco no se modifican.",
@@ -22662,7 +22699,7 @@
       "noneFound": "(no se encontró ninguna)",
       "sqlitePath": "Ruta de SQLite: {{path}}",
       "sectionsDamaged": "Parte del estado guardado de este perfil está dañada: {{sections}}. Todo lo demás está intacto.",
-      "repairCommand": "Cierra Orca y ejecuta `{{command}}` para reemplazar solo las partes dañadas desde copias de seguridad y conservar todo lo demás. Orca guarda una copia del archivo dañado.",
+      "repairCommand": "Detén Orca y ejecuta `{{command}}` para reparar solo las partes dañadas y conservar todo lo demás. Orca guarda una copia del archivo dañado.",
       "restoreWholeBackup": "Para restaurar una copia de seguridad completa en su lugar, ejecuta `{{exportsCommand}}` y luego `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca no puede abrir el perfil activo de forma segura porque su estado SQLite no se puede leer.",
       "legacyJsonPath": "Ruta del JSON heredado: {{path}}",
@@ -22959,6 +22996,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "Los modelos de {{agent}} no están disponibles en este equipo. Puedes conservar tus opciones o usar Argumentos.",
+    "catalogFailed": "No se pudieron cargar los modelos de {{agent}}. Cierra y vuelve a abrir el selector de agentes para intentarlo de nuevo.",
+    "catalogSignIn": "Inicia sesión en {{agent}} para cargar sus modelos y vuelve a abrir el selector de agentes.",
+    "catalogInstall": "Instala {{agent}} en este equipo para cargar sus modelos y vuelve a abrir el selector de agentes.",
+    "catalogUnresolved": "Los modelos de {{agent}} no se han cargado. Cierra y vuelve a abrir el selector de agentes para intentarlo de nuevo.",
+    "catalogEmpty": "{{agent}} no tiene modelos disponibles.",
     "search": "Buscar agentes y configuraciones…",
     "configure": "Configurar {{agent}}",
     "arguments": "Argumentos",
@@ -22972,7 +23015,10 @@
     "toggleArguments": "Mostrar u ocultar argumentos",
     "argumentsTerminalHint": "Solo se aplica a los lanzamientos en terminal (CLI)",
     "searchAgentModels": "Buscar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos"
+    "legacyModelCount": "{{total}} modelos",
+    "select": "Seleccionar agente",
+    "promptPlaceholder": "Agregar un prompt (opcional): / para skills, @ para archivos",
+    "promptPlaceholderFilesOnly": "Agregar un prompt (opcional): @ para archivos"
   },
   "wslMove": {
     "entry": {
@@ -23002,7 +23048,8 @@
       "changed": "Se movió antes y luego una versión anterior de Orca lo cambió aquí. No se vuelve a mover.",
       "chatsStay": "Los chats existentes se quedan en este equipo. Los chats nuevos de este proyecto se inician en el host WSL.",
       "browserLoginsConflict": "Las sesiones iniciadas en el navegador no se trasladarán, porque el perfil del navegador del host ya está en uso. Vuelve a iniciar sesión en las pestañas del navegador del host después del traslado.",
-      "browserLoginsNotCarried": "Las sesiones iniciadas en el navegador no se trasladarán a este host. Vuelve a iniciar sesión en sus pestañas del navegador después del traslado."
+      "browserLoginsNotCarried": "Las sesiones iniciadas en el navegador no se trasladarán a este host. Vuelve a iniciar sesión en sus pestañas del navegador después del traslado.",
+      "why": "El trabajo se ejecuta entonces dentro de Linux, junto a tus archivos, así que las terminales, Git y los cambios de archivos son más rápidos y fiables. Tus proyectos no cambian, y puedes devolver cualquier proyecto con «Usar de nuevo en este equipo»."
     },
     "cancel": "Cancelar",
     "progress": {

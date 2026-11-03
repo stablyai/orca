@@ -1,3 +1,4 @@
+import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
@@ -40,15 +41,16 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   agentSurfaceRows?: AgentComboboxSurfaceRows
+  agentPickerDraft?: AgentPickerDraft
+  agentSetupDisabled?: boolean
   onQuickAgentChange: (
     agent: TuiAgent | null,
-    surface?: AgentComboboxSurfaceRows['surface']
+    surface?: AgentComboboxSurfaceRows['surface'],
+    draft?: AgentPickerDraft,
+    entry?: AgentPickerEntry
   ) => void
   /** Where the quick agent would start; null keeps the picker's plain agent list. */
   agentRows?: ComposerAgentRows | null
-  /** Cleared picker: skip the agent and the extra shell when setup runs. */
-  quickSetupOnly?: boolean
-  onQuickSetupOnlySelect?: () => void
   eligibleRepos: readonly RepoOption[]
   selectedRepo?: RepoOption | null
   repoId: string
@@ -107,7 +109,7 @@ export type NewWorkspaceComposerCardProps = {
   smartNameJiraSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
-  onOpenAgentSettings: () => void
+  onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
   onToggleAdvanced: () => void
   createDisabled: boolean

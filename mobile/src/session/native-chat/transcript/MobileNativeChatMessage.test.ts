@@ -84,64 +84,77 @@ describe('MobileNativeChatMessage', () => {
   const words = (node: ReactTestInstance): string[] =>
     node.children.flatMap((child) => (typeof child === 'string' ? [child] : words(child)))
 
-  it('keeps answered receipts beside Started worker through the production structured hook', async () => {
-    const items = [
-      {
-        itemId: 'start',
-        revision: 1,
-        sequence: 42,
-        observedAt: 1,
-        body: {
-          kind: 'agent-start' as const,
-          dispatchId: 'dispatch',
-          task: 'Worker assignment',
-          worker: {
-            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
-            name: 'Worker'
+  it.each([
+    [undefined, 'the computer'],
+    [{ kind: 'current' }, 'this phone'],
+    [{ kind: 'named', name: 'Work Mac' }, 'Work Mac']
+  ] satisfies [NativeChatResolvedPrompt['resolution']['resolvedByDevice'], string][])(
+    'keeps answered receipts with device %j through the production structured hook',
+    async (resolvedByDevice, device) => {
+      const items = [
+        {
+          itemId: 'start',
+          revision: 1,
+          sequence: 42,
+          observedAt: 1,
+          body: {
+            kind: 'agent-start' as const,
+            dispatchId: 'dispatch',
+            task: 'Worker assignment',
+            worker: {
+              party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+              name: 'Worker'
+            }
           }
-        }
-      },
-      ...ANSWERED_PROMPT_ITEMS
-    ]
-    const client = stubRpcClient({
-      sendRequest: async () => ok({}),
-      subscribe: (method, _params, onData) => {
-        if (method === 'agentSession.subscribe') {
-          onData(snapshotEvent({ items }))
-        }
-        return () => {}
-      }
-    })
-    const onSendError = vi.fn()
-    function Transcript() {
-      const structured = useMobileStructuredAgentSession({
-        client,
-        sessionId: 'session-1',
-        agent: 'claude',
-        enabled: true,
-        connected: true,
-        hostSupport: null,
-        onSendError
-      })
-      return structured.session.messages.map((message) =>
-        createElement(MobileNativeChatMessage, {
-          key: message.id,
-          message,
-          receipt: structured.receipts.get(message.id)
+        },
+        ...ANSWERED_PROMPT_ITEMS.map((item) => {
+          const { body } = item
+          return body.kind === 'approval' || body.kind === 'question'
+            ? { ...item, body: { ...body, resolution: { ...body.resolution, resolvedByDevice } } }
+            : item
         })
+      ]
+      const client = stubRpcClient({
+        sendRequest: async () => ok({}),
+        subscribe: (method, _params, onData) => {
+          if (method === 'agentSession.subscribe') {
+            onData(snapshotEvent({ items }))
+          }
+          return () => {}
+        }
+      })
+      const onSendError = vi.fn()
+      function Transcript() {
+        const structured = useMobileStructuredAgentSession({
+          client,
+          pairedHostClient: client,
+          sessionId: 'session-1',
+          agent: 'claude',
+          enabled: true,
+          connected: true,
+          hostSupport: null,
+          onSendError
+        })
+        return structured.session.messages.map((message) =>
+          createElement(MobileNativeChatMessage, {
+            key: message.id,
+            message,
+            receipt: structured.receipts.get(message.id)
+          })
+        )
+      }
+      await act(async () => {
+        renderer = create(createElement(Transcript))
+      })
+      const drawn = words(renderer!.root).join('')
+      expect(drawn).toContain('Started worker')
+      expect(drawn).toContain(
+        `Asked: Do you prefer tea or coffee?CoffeeResolved · Answered on ${device}`
       )
+      expect(drawn).toContain(`AllowResolved · Answered on ${device}`)
+      expect(markdownIn(renderer!.root)[0]).toBe('Worker assignment')
     }
-    await act(async () => {
-      renderer = create(createElement(Transcript))
-    })
-    const drawn = words(renderer!.root).join('')
-    expect(drawn).toContain('Started worker')
-    expect(drawn).toContain(
-      'Asked: Do you prefer tea or coffee?CoffeeResolved · Answered on desktop-renderer'
-    )
-    expect(drawn).toContain('AllowResolved · Answered on desktop-renderer')
-    expect(markdownIn(renderer!.root)[0]).toBe('Worker assignment')
-  })
+  )
 
   it.each([
     ['en', 'agent-start', 'Worker assignment', 'Started worker'],

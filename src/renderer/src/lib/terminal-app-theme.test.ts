@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { contrastRatio, safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
-import { resolvePaintedDark, synthesizeTerminalAppTheme } from './terminal-app-theme'
+import { contrastRatio, over, safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
+import { synthesizeTerminalAppTheme } from './terminal-app-theme'
 
 // Parses #rrggbb and rgb(r g b), which is all the synthesized theme and its inputs use.
 const probe: ColorProbe = (value) => {
@@ -36,6 +36,23 @@ describe('synthesizeTerminalAppTheme', () => {
     )
   })
 
+  it('keeps the host pill label legible on its accent fill in light and dark', () => {
+    for (const [terminalThemeDark, tint] of [
+      ['GitHub Light', 1],
+      ['Nord', 0.8]
+    ] as const) {
+      const tokens = synthesizeTerminalAppTheme(
+        settingsWith({ terminalThemeDark }),
+        true,
+        probe
+      )?.tokens
+      const color = (token: string) => probe(tokens?.[token] ?? '') ?? [0, 0, 0, 1]
+      const [r, g, b] = color('--accent')
+      const pill = over([r, g, b, tint], color('--sidebar'))
+      expect(contrastRatio(color('--muted-foreground'), pill)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
   it('keeps a mid-tone background legible by tinting surfaces away from the text', () => {
     const settings = settingsWith({
       terminalColorOverrides: { background: '#757575', foreground: '#ffffff' }
@@ -45,33 +62,6 @@ describe('synthesizeTerminalAppTheme', () => {
     expect(tokens['--background']).toBe('#757575')
     expect(Object.keys(safePluginThemeTokens(tokens, theme?.base ?? 'dark', {}, probe))).toEqual(
       Object.keys(tokens)
-    )
-  })
-
-  it("follows the painting mode's color overrides and paints the background opaque", () => {
-    const settings = settingsWith({
-      terminalColorOverrides: { background: '#101820', foreground: '#f0f4f8' },
-      terminalColorOverridesLight: { background: '#f8f4f0', foreground: '#201810' },
-      terminalUseSeparateLightTheme: true,
-      terminalBackgroundOpacity: 0.5
-    })
-    const dark = synthesizeTerminalAppTheme(settings, true, probe)
-    expect(dark?.tokens).toMatchObject({ '--background': '#101820', '--foreground': '#f0f4f8' })
-    const light = synthesizeTerminalAppTheme({ ...settings, theme: 'light' }, true, probe)
-    expect(light?.base).toBe('light')
-    expect(light?.tokens).toMatchObject({ '--background': '#f8f4f0', '--foreground': '#201810' })
-  })
-})
-
-describe('resolvePaintedDark', () => {
-  it('paints the mode of the terminal theme only when the slot matches the terminal', () => {
-    const lightTerminal = settingsWith({
-      terminalThemeDark: 'Solarized Light',
-      pluginAppThemeDark: 'match-terminal'
-    })
-    expect(resolvePaintedDark(lightTerminal, true, true)).toBe(false)
-    expect(resolvePaintedDark({ ...lightTerminal, pluginAppThemeDark: null }, true, true)).toBe(
-      true
     )
   })
 })

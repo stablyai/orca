@@ -8,7 +8,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { snapshotLatestTurn } from './agent-session-history-latest-turn'
 import { isSubagentBlock } from '../../../shared/native-chat/native-chat-types'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
@@ -26,6 +26,7 @@ import { projectJournalBatch } from './agent-session-journal-batch'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import {
   boundHistoryItemsByBytes,
+  historyContentBytes,
   type HistoryReader,
   measureHistoryItem,
   newestWholeSequenceGroups,
@@ -214,19 +215,6 @@ function readForward(
     return historyReset(snapshot, since.reset, reader)
   }
   const submissionBytes = submissionBytesByItemId(snapshot.submissions)
-  // Count submissions and removal IDs too: legacy tombstones can outweigh all item content.
-  const pageContentBytes = (
-    items: readonly ReturnType<HistoryReader['form']>[],
-    removedItemIds: readonly string[]
-  ): number =>
-    items.reduce(
-      (total, { item, bytes }) => total + bytes + (submissionBytes.get(item.itemId) ?? 0),
-      0
-    ) +
-    removedItemIds.reduce(
-      (total, itemId) => total + Buffer.byteLength(JSON.stringify(itemId), 'utf8') + 1,
-      0
-    )
   // Shrink the row window; clipping items after advancing the cursor would permanently lose revisions.
   let rows = since.rows.slice(0, limit)
   const project = (window: typeof rows) => {
@@ -244,7 +232,11 @@ function readForward(
   if (!projected.ok) {
     return historyReset(snapshot, projected.reset, reader)
   }
-  let contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
+  let contentBytes = historyContentBytes(
+    projected.batch.items,
+    projected.batch.removedItemIds,
+    submissionBytes
+  )
   while (rows.length > 1 && contentBytes > reader.budgetBytes) {
     rows = rows.slice(0, Math.ceil(rows.length / 2))
     const shrunk = project(rows)
@@ -252,7 +244,11 @@ function readForward(
       return historyReset(snapshot, shrunk.reset, reader)
     }
     projected = shrunk
-    contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
+    contentBytes = historyContentBytes(
+      projected.batch.items,
+      projected.batch.removedItemIds,
+      submissionBytes
+    )
   }
   let items = projected.batch.items
   if (contentBytes > reader.budgetBytes) {
@@ -262,7 +258,7 @@ function readForward(
         ? measureHistoryItem(oversizedHistoryItem(formed.item))
         : formed
     })
-    contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
+    contentBytes = historyContentBytes(items, projected.batch.removedItemIds, submissionBytes)
   }
   if (contentBytes > reader.budgetBytes) {
     // Unsplittable removal IDs require whole-state reset; resume at the live cursor past the oversized row.

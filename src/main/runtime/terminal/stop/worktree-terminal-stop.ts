@@ -57,7 +57,9 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     return await this.runWorktreeTerminalMutation(worktree.id, async () => {
       // Clearing a rotated partition can reroute ownership; retain the session host that held tabs when close began.
       const sessionHostId = this.getWorkspaceSessionHostIdForWorktree(worktree.id)
-      const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`)
+      const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`, undefined, {
+        includeAgentSenders: false
+      })
       const targetPtyIds = collectWorktreePtyIds(
         // Switch point: main's bound terminals too, registered or not.
         ORCA_LAYOUT_OWNER_IS_MAIN

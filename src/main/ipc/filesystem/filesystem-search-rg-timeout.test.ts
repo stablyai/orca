@@ -1,3 +1,4 @@
+import type * as WslPaths from '../../../shared/wsl-paths'
 import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,14 +34,24 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../git/runner', () => ({
-  gitExecFileAsync: vi.fn(),
+vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn()
+}))
+
+vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   wslAwareSpawn: wslAwareSpawnMock
 }))
 
-vi.mock('../../wsl', () => ({
-  parseWslPath: parseWslPathMock,
-  toWindowsWslPath: toWindowsWslPathMock
+vi.mock('../../wsl/filesystem/unc-path-access', () => ({
+  parseWslPath: parseWslPathMock
+}))
+vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPaths>()),
+  ...(await (() => ({
+    toWindowsWslPath: toWindowsWslPathMock
+  }))())
 }))
 
 vi.mock('./filesystem-auth', () => ({
@@ -52,7 +63,7 @@ vi.mock('./filesystem-path-containment', () => ({
   validateGitRelativeFilePath: vi.fn((value: string) => value)
 }))
 
-vi.mock('../registered-worktree-roots-cache', () => ({
+vi.mock('../worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: vi.fn(async (value: string) => value)
 }))
 

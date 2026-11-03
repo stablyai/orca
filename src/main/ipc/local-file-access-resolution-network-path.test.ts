@@ -41,7 +41,9 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 vi.mock('electron', () => ({ app: { getPath: () => 'C:\\Users\\me\\AppData\\Roaming\\Orca' } }))
-vi.mock('../repo-worktrees', () => ({ listRepoWorktreeGraph: vi.fn(async () => []) }))
+vi.mock('../workspaces/catalog/repo-worktrees', () => ({
+  listRepoWorktreeGraph: vi.fn(async () => [])
+}))
 
 import {
   resolveLocalFileRequestPath,

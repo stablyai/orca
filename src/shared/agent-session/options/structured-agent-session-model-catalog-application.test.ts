@@ -7,7 +7,8 @@ import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
-  commitStructuredAgentSessionOption
+  commitStructuredAgentSessionOption,
+  settleStructuredAgentSessionBuiltinCatalog
 } from './structured-agent-session-options'
 import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
 
@@ -62,21 +63,6 @@ describe('structured option state from the host model catalog', () => {
     }
   )
 
-  it('upgrades the seed with host models as a provisional, uncommitted default', () => {
-    const state = applyStructuredAgentSessionModelCatalog(
-      createStructuredAgentSessionOptionState('codex', SEED),
-      SEED,
-      HOST_CATALOG,
-      LAUNCH
-    )
-    expect(state.catalogSource).toBe('host')
-    const snapshot = structuredAgentSessionOptionSnapshot(state)
-    const model = snapshot.find((descriptor) => descriptor.id === 'model')!
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('gpt-hosted')
-    // Provisional provenance: a listing default, never a reported value.
-    expect(model.valueSource).toBe('default')
-  })
-
   it('lists host models but names no value for a session it did not launch', () => {
     // A reopened session may run a model picked in it, not the listing's default.
     const state = applyStructuredAgentSessionModelCatalog(
@@ -111,36 +97,6 @@ describe('structured option state from the host model catalog', () => {
     expect(currentModel(false)).toBeUndefined()
   })
 
-  it('names the default effort the listing states, and none it does not', () => {
-    const effortOf = (catalog: AgentSessionModelCatalogResult) => {
-      const state = applyStructuredAgentSessionModelCatalog(
-        createStructuredAgentSessionOptionState('codex', SEED),
-        SEED,
-        catalog,
-        LAUNCH
-      )
-      return structuredAgentSessionOptionSnapshot(state).find((d) => d.id === 'effort')!
-    }
-    const stated = effortOf(HOST_CATALOG)
-    expect(stated.kind.type === 'select' ? stated.kind.currentValue : null).toBe('high')
-    expect(stated.valueSource).toBe('default')
-    const { defaultEffort: _stated, ...unstated } = HOST_CATALOG.models[0]!
-    const silent = effortOf({ ...HOST_CATALOG, models: [unstated] })
-    expect(silent.kind.type === 'select' ? silent.kind.currentValue : null).toBeUndefined()
-    expect(silent.valueSource).toBe('unknown')
-  })
-
-  it('settles on the built-in list on an unknown host answer, and keeps a host list', () => {
-    const seeded = createStructuredAgentSessionOptionState('codex', SEED)
-    for (const answer of [{ origin: 'unknown' as const }]) {
-      const settled = applyStructuredAgentSessionModelCatalog(seeded, SEED, answer, LAUNCH)
-      expect(settled.catalogSource).toBe('builtin')
-      expect(settled.catalog).toBe(seeded.catalog)
-      const hosted = applyStructuredAgentSessionModelCatalog(seeded, SEED, HOST_CATALOG, LAUNCH)
-      expect(applyStructuredAgentSessionModelCatalog(hosted, SEED, answer, LAUNCH)).toBe(hosted)
-    }
-  })
-
   it('keeps known empty inventory distinct from an unavailable observation', () => {
     const seeded = createStructuredAgentSessionOptionState('codex', SEED)
     const hosted = applyStructuredAgentSessionModelCatalog(seeded, SEED, HOST_CATALOG, LAUNCH)
@@ -155,6 +111,94 @@ describe('structured option state from the host model catalog', () => {
     expect(
       applyStructuredAgentSessionModelCatalog(hosted, SEED, { origin: 'unknown' }, LAUNCH)
     ).toBe(hosted)
+  })
+
+  it('records a running host listing without disabling controls drawn from data', () => {
+    const efforts = [
+      { value: 'low', label: 'Low' },
+      { value: 'high', label: 'High' }
+    ]
+    const codexRows = [
+      {
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        isDefault: true,
+        efforts,
+        serviceTiers: [{ value: 'priority', label: 'Fast' }]
+      },
+      {
+        id: 'gpt-5.5-mini',
+        label: 'GPT-5.5 Mini',
+        isDefault: false,
+        efforts,
+        supportsFastMode: true
+      }
+    ]
+    const grokRows = [
+      { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true, efforts },
+      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: false, efforts }
+    ]
+    const listing: AgentSessionModelCatalogResult = { origin: 'unknown', listingInProgress: true }
+    const launch = { newLaunch: true, coherentCatalog: true }
+    const capabilities = (state: ReturnType<typeof createStructuredAgentSessionOptionState>) =>
+      structuredAgentSessionOptionSnapshot(state).filter(({ id }) =>
+        ['effort', 'serviceTier', 'fastMode'].includes(id)
+      )
+    const answered = (
+      agent: 'codex' | 'grok',
+      hostList: AgentSessionModelCatalogResult,
+      models: typeof codexRows | typeof grokRows
+    ) => {
+      const seed = structuredAgentSessionSeedCatalog(agent)!
+      const start = createStructuredAgentSessionOptionState(agent, seed)
+      return applyStructuredAgentSessionOptions(
+        applyStructuredAgentSessionModelCatalog(start, seed, hostList, launch),
+        seed,
+        {
+          models,
+          listedModelIds: models.map(({ id }) => id),
+          fastModeSupport: { supported: true },
+          current: { model: models[0]!.id, effort: 'low', serviceTier: 'default', defaulted: [] }
+        },
+        launch
+      )
+    }
+    // Claude/Codex menus from a list the host is refreshing; Grok's from its own answer.
+    const refreshing = answered(
+      'codex',
+      {
+        origin: 'probe',
+        models: codexRows,
+        fetchedAt: 1,
+        fastModeSupport: { supported: true },
+        listingInProgress: true
+      },
+      codexRows
+    )
+    const own = answered('grok', listing, grokRows)
+    for (const state of [
+      refreshing,
+      own,
+      settleStructuredAgentSessionBuiltinCatalog(refreshing, true),
+      settleStructuredAgentSessionBuiltinCatalog(own, true)
+    ]) {
+      expect(state.listingInProgress).toBe(true)
+      expect(capabilities(state).map(({ id }) => id)).toContain('effort')
+      expect(capabilities(state).every(({ settable }) => settable)).toBe(true)
+    }
+    expect(capabilities(refreshing).map(({ id }) => id)).toEqual(['effort', 'serviceTier'])
+    const fast = commitStructuredAgentSessionOption(refreshing, 'model', 'gpt-5.5-mini')
+    expect(capabilities(fast).find(({ id }) => id === 'fastMode')).toMatchObject({ settable: true })
+    // An installed chat that answered before any list exists holds its effort, offering no choices.
+    const unknown = answered('codex', listing, codexRows)
+    expect(unknown.catalogSource).toBe('seed')
+    expect(capabilities(unknown)).toEqual([
+      expect.objectContaining({
+        id: 'effort',
+        settable: false,
+        kind: expect.objectContaining({ currentValue: 'low', choices: [expect.anything()] })
+      })
+    ])
   })
 })
 

@@ -28,6 +28,24 @@ const bridge = vi.hoisted(() => {
   return held
 })
 
+// The page's own router: an in-page hop puts the tapped pane in its URL, not in the shell route.
+const pageUrl = vi.hoisted(() => {
+  const url: {
+    params: { paneKey?: string }
+    setParams: (next: { paneKey?: string }) => void
+  } = {
+    params: {},
+    setParams: (next) => {
+      url.params = { ...url.params, ...next }
+    }
+  }
+  return url
+})
+vi.mock('expo-router', () => ({
+  useLocalSearchParams: () => pageUrl.params,
+  useRouter: () => pageUrl
+}))
+
 vi.mock('../transport/client-context.web', () => ({
   usePageBridgeClient: () => ({
     getShellSession: () => ({ route: bridge.route }),
@@ -118,6 +136,7 @@ beforeEach(() => {
   bridge.listeners = []
   bridge.cleared.length = 0
   switched.length = 0
+  pageUrl.params = {}
 })
 
 // Exercise the page hook: shell init carries pane requests because this document at / cannot edit the native route.
@@ -204,6 +223,27 @@ describe('the page pane hook', () => {
       tree.update(createElement(Probe, { terminalsLoaded: true, sessionTabs: TABS }))
     })
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
+  })
+
+  it('switches to the agent row tapped in the host list when the page opened the session itself', () => {
+    // #34235: the shell route stays the host list, so the tapped pane is only in the page URL.
+    bridge.route = { pathname: '/h/host-1' }
+    pageUrl.params = { paneKey: `tab-b:${LEAF}` }
+    const tree = render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+    act(() => {
+      tree.unmount()
+    })
+    render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+  })
+
+  it('follows a newer notification the shell holds over the pane the URL copied at bootstrap', () => {
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
+    pageUrl.params = { paneKey: `tab-a:${LEAF}` }
+    render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+    expect(pageUrl.params.paneKey).toBeUndefined()
   })
 
   it('does nothing at all when the page was opened on no pane', () => {

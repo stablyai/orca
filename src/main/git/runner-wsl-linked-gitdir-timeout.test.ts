@@ -27,7 +27,7 @@ afterEach(() => _resetGitAdmissionForTests())
 import {
   resetWslLinkedWorktreeGitRoutingForTests,
   WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS
-} from './wsl-linked-worktree-git-routing'
+} from './command-runner/wsl-linked-worktree-git-routing'
 
 function createMockChild(): EventEmitter & { pid: number; kill: ReturnType<typeof vi.fn> } {
   const child = new EventEmitter() as EventEmitter & {

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { spawnProcess } from '@orca/process-host'
 import { tearDownRuntime } from '../../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { journalDatabasePath } from './journal-host-database'

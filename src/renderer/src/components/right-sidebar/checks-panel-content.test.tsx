@@ -125,6 +125,7 @@ describe('MergeConflictNotice', () => {
     expect(markup).toContain('Resolve')
     expect(markup).toContain('lucide-sparkles')
     expect(markup).not.toContain('Resolve with AI')
+    expect((markup.match(/<button/g) ?? []).length).toBe(1)
   })
 
   it('renders a conflict resolve action for merge requests without PR data', () => {
@@ -139,6 +140,57 @@ describe('MergeConflictNotice', () => {
     expect(markup).toContain('Conflicts block this MR')
     expect(markup).toContain('Resolve')
     expect(markup).toContain('lucide-sparkles')
+  })
+
+  it.each(['PR', 'MR'] as const)(
+    'shows both Resolve and Fix for a conflicting %s with failed checks or pipeline',
+    (reviewKind) => {
+      const failedCheck: PRCheckDetail = {
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        url: null
+      }
+      const markup = renderToStaticMarkup(
+        React.createElement(PRTriageStrip, {
+          review: makePR(),
+          reviewKind,
+          checks: reviewKind === 'PR' ? [failedCheck] : [],
+          pipelineCheck: reviewKind === 'MR' ? failedCheck : null,
+          isResolvingConflictsWithAI: false,
+          onResolveConflictsWithAI: () => {},
+          isFixingChecksWithAI: false,
+          onFixChecksWithAI: () => {}
+        })
+      )
+
+      expect(markup).toContain(`Conflicts block this ${reviewKind}`)
+      expect(markup).toContain(reviewKind === 'PR' ? '1 failing check' : 'verify failed')
+      expect(markup).toMatch(/<button[^>]*>.*?Resolve<\/button>/)
+      expect(markup).toMatch(/<button[^>]*>.*?Fix<\/button>/)
+      expect((markup.match(/<button/g) ?? []).length).toBe(2)
+      expect(markup).not.toContain('No blocking PR action')
+    }
+  )
+
+  it('keeps conflicts actionable without offering a fix for checks requiring approval', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PRTriageStrip, {
+        review: makePR(),
+        checks: [
+          { name: 'approval', status: 'completed', conclusion: 'action_required', url: null }
+        ],
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {},
+        isFixingChecksWithAI: false,
+        onFixChecksWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('Conflicts block this PR')
+    expect(markup).toContain('Resolve')
+    expect(markup).not.toContain('failing check')
+    expect((markup.match(/<button/g) ?? []).length).toBe(1)
   })
 
   it('renders the CI fix action for failing non-conflict checks', () => {
@@ -248,6 +300,25 @@ describe('PRTriageStrip check counts', () => {
       })
     )
   }
+
+  it('counts failures requiring approval while offering Fix for a broken check', () => {
+    const checks: PRCheckDetail[] = [
+      { name: 'verify', status: 'completed', conclusion: 'failure', url: null },
+      { name: 'approval', status: 'completed', conclusion: 'action_required', url: null }
+    ]
+    const stripMarkup = renderStrip(checks)
+    const listMarkup = renderWithTooltips(
+      React.createElement(ChecksList, {
+        checks,
+        checksLoading: false,
+        checkDetailsContextKey: 'repo:42'
+      })
+    )
+
+    expect(stripMarkup).toContain('2 failing checks')
+    expect(listMarkup).toContain('2 failing')
+    expect(stripMarkup).toMatch(/<button[^>]*>.*?Fix<\/button>/)
+  })
 
   it('shows a completed check with no conclusion as unresolved instead of pending', () => {
     const markup = renderStrip([

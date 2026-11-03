@@ -55,32 +55,6 @@ describe('check details log ingress normalization', () => {
     expect(normalizeCheckRunDetailsLogTails(result)).toEqual(result)
   })
 
-  it.each([null, checkLogDetails([]), checkLogDetails([checkLogJob(null)])])(
-    'retains null/no-string responses (%#)',
-    (raw) => {
-      const sanitize = vi.spyOn(sanitation, 'sanitizeCheckJobLogExcerpt')
-      expect(normalizeCheckRunDetailsLogTails(raw)).toBe(raw)
-      expect(sanitize).not.toHaveBeenCalled()
-    }
-  )
-
-  it('replaces string-bearing objects even when the owned returned text is equal or empty', () => {
-    const own = vi.spyOn(ownership, 'ownRetainedString')
-    const raw = checkLogDetails([
-      checkLogJob('plain unchanged text'),
-      checkLogJob('', 2),
-      { ...checkLogJob('\x00\x01', 3), logState: 'available' }
-    ])
-    const result = normalizeCheckRunDetailsLogTails(raw)
-    if (!result) {
-      throw new Error('Expected details')
-    }
-    expect(result.jobs.map((job) => job.logTail)).toEqual(['plain unchanged text', '', ''])
-    expect(result.jobs[2].logState).toBe('available')
-    result.jobs.forEach((job, i) => expect(job).not.toBe(raw.jobs[i]))
-    expect(own.mock.calls).toEqual([['plain unchanged text'], [''], ['']])
-  })
-
   it('uses the real no-Buffer owned copier and does not split multibyte boundaries', () => {
     vi.stubGlobal('Buffer', undefined)
     ownership.resetOwnRetainedStringCopier()

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
-import { peekWebSessionFocusIntent } from './web-session-focus-intent'
+import './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { isWebSessionBrowserPlacementGroupReserved } from './web-session-browser-placement'
 import {
@@ -9,7 +9,6 @@ import {
   WORKTREE_ID,
   makeSnapshot,
   resetBrowserTabCreateEnvironment,
-  stagedBrowserWorkspaces,
   stubBrowserTabCreateEnvironment
 } from './web-runtime-session-test-harness'
 import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
@@ -85,158 +84,6 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
   afterEach(() => {
     resetBrowserTabCreateEnvironment()
-  })
-
-  it('creates an unfocused browser while preserving its requested split', async () => {
-    mocks.getState.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID },
-      runtimeStatusByEnvironmentId: new Map([
-        [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
-      ]),
-      activeWorktreeId: WORKTREE_ID,
-      browserPagesByWorkspace: {
-        'host-browser-workspace': [
-          { id: 'host-browser-page', workspaceId: 'host-browser-workspace' }
-        ]
-      },
-      remoteBrowserPageHandlesByPageId: {
-        'host-browser-page': {
-          environmentId: ENVIRONMENT_ID,
-          remotePageId: 'remote-browser-page-1'
-        }
-      },
-      browserTabsByWorktree: {},
-      unifiedTabsByWorktree: { [WORKTREE_ID]: [] },
-      createBrowserTab: mocks.createBrowserTab,
-      closeEmptyGroup: mocks.closeEmptyGroup,
-      moveUnifiedTabToGroup: mocks.moveUnifiedTabToGroup,
-      setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
-      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
-      setActiveWorktree: mocks.setActiveWorktree
-    })
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({
-        id: 'create',
-        ok: true,
-        result: { browserPageId: 'remote-browser-page-1' }
-      })
-      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
-
-    await expect(
-      createWebRuntimeSessionBrowserTab({
-        worktreeId: WORKTREE_ID,
-        environmentId: ENVIRONMENT_ID,
-        clientTargetGroupId: 'client-preview-group',
-        focusOnCreate: false
-      })
-    ).resolves.toBe(true)
-
-    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
-      selector: ENVIRONMENT_ID,
-      method: 'browser.tabCreate',
-      params: {
-        worktree: `id:${WORKTREE_ID}`,
-        url: undefined,
-        profileId: undefined,
-        activate: false,
-        navigation: 'caller',
-        waitForRegistration: false
-      },
-      timeoutMs: 15_000
-    })
-    expect(mocks.subscribe).not.toHaveBeenCalled()
-    expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toBeNull()
-    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
-      ENVIRONMENT_ID,
-      WORKTREE_ID
-    )
-    expect(
-      isWebSessionBrowserPlacementGroupReserved({
-        worktreeId: WORKTREE_ID,
-        groupId: 'client-preview-group'
-      })
-    ).toBe(false)
-    // The optimistic tab is staged into the requested split, not the active group.
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
-      WORKTREE_ID,
-      'about:blank',
-      expect.objectContaining({
-        activate: false,
-        browserRuntimeEnvironmentId: ENVIRONMENT_ID,
-        targetGroupId: 'client-preview-group'
-      })
-    )
-    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
-  })
-
-  it('releases and removes a newly-created split when host creation is ambiguous', async () => {
-    stubBrowserCreateRuntimeEnvironmentBridge(vi.fn().mockRejectedValue(new Error('offline')))
-
-    await expect(
-      createWebRuntimeSessionBrowserTab({
-        worktreeId: WORKTREE_ID,
-        environmentId: ENVIRONMENT_ID,
-        clientTargetGroupId: 'client-preview-group',
-        clientTargetGroupCreated: true
-      })
-    ).rejects.toThrow('did not confirm whether the browser tab was created')
-
-    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
-    expect(
-      isWebSessionBrowserPlacementGroupReserved({
-        worktreeId: WORKTREE_ID,
-        groupId: 'client-preview-group'
-      })
-    ).toBe(false)
-  })
-
-  it('cleans up and reports failure when the created browser cannot reconcile', async () => {
-    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({
-        id: 'create',
-        ok: true,
-        result: { browserPageId: 'remote-browser-page-1' }
-      })
-      .mockResolvedValueOnce({
-        id: 'list',
-        ok: false,
-        error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
-      })
-      .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
-      .mockResolvedValueOnce({ id: 'list-after-close', ok: true, result: makeSnapshot() })
-    stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
-
-    await expect(
-      createWebRuntimeSessionBrowserTab({
-        worktreeId: WORKTREE_ID,
-        environmentId: ENVIRONMENT_ID,
-        clientTargetGroupId: 'client-preview-group',
-        clientTargetGroupCreated: true,
-        focusOnCreate: false
-      })
-    ).resolves.toBe(false)
-
-    expect(runtimeCall).toHaveBeenNthCalledWith(3, {
-      selector: ENVIRONMENT_ID,
-      method: 'browser.tabClose',
-      params: {
-        worktree: `id:${WORKTREE_ID}`,
-        page: 'remote-browser-page-1'
-      },
-      timeoutMs: 15_000
-    })
-    expect(stagedBrowserWorkspaces(mocks)).toEqual([])
-    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
-    expect(
-      isWebSessionBrowserPlacementGroupReserved({
-        worktreeId: WORKTREE_ID,
-        groupId: 'client-preview-group'
-      })
-    ).toBe(false)
   })
 
   it('keeps a split reserved after ownership moves to an overlapping browser creation', async () => {

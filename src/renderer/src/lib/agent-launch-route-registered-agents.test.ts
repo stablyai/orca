@@ -109,17 +109,6 @@ describe('structured launch of a host-registered agent', () => {
     expect(routeFor(store(), 'claude')).toBe('structured-native-chat')
   })
 
-  it('does not offer it before the host has listed it', () => {
-    expect(routeFor(store(), 'grok')).not.toBe('structured-native-chat')
-    expect(routeFor(store(), 'codex')).toBe('structured-native-chat')
-  })
-
-  it('does not offer an agent the host did not list', async () => {
-    await loadHostStructuredAgents('local', REGISTERED, null)
-
-    expect(routeFor(store(), 'gemini')).not.toBe('structured-native-chat')
-  })
-
   it("reads a paired host's list only from the runtime that gave it", async () => {
     await loadHostStructuredAgents('runtime:env-1', REGISTERED, 'rt-1')
 

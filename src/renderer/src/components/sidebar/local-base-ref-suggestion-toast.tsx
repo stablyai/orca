@@ -6,7 +6,7 @@ import { Button } from '../ui/button'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
-} from '../settings/keep-local-main-up-to-date-setting'
+} from '../settings/source-control/keep-local-main-up-to-date-setting'
 import { i18n, translate } from '@/i18n/i18n'
 
 type SuggestionToastDeps = {

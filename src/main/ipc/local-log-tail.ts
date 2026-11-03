@@ -6,7 +6,7 @@ import type {
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
-import { readLocalLogTailRange } from '../ai-vault/local-log-tail-reader'
+import { readLocalLogTailRange } from '../ai-vault/transcripts/local-log-tail-reader'
 import type { Store } from '../persistence/loading-store/store'
 import { resolveUserNamedRegularFile } from './local-file-access-resolution'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'

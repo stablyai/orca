@@ -28,19 +28,21 @@ const {
   scanAiVaultSessionsInService: vi.fn()
 }))
 
-vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('./scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService
 }))
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getCachedWslDistros,
   hasCachedWslDistros
 }))
-vi.mock('../wsl/wsl-home-unless-stopped', () => ({
+vi.mock('../wsl/discovery/wsl-home-unless-stopped', () => ({
   readRunningWslHomeDirsUnlessStopped,
   listLastKnownRunningWslHomeDirs
 }))
-vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
+vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
+  filterPathsToRunningWslDistrosAsync
+}))
 
 import {
   getAiVaultWslHomeDirs,

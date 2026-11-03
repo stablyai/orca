@@ -28,6 +28,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
   const modalPaths = useAddRepoDialogModalPaths(Boolean(hosted))
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const addNonGitFolder = useAppStore((s) => s.addNonGitFolder)
   const openModal = useAppStore((s) => s.openModal)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
@@ -162,7 +163,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   })
 
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
-  const wslHostOffer = useAddRepoWslHostOffer(isOpen, hostSelection.selectedHostId)
+  const wslHostOffer = useAddRepoWslHostOffer(isOpen, hostSelection, modalPaths.droppedHostPath)
   const { handleBrowse, resetLocalFolderFlow, handleAddLocalPath } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath: modalPaths.droppedLocalPath,
@@ -188,6 +189,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
     handleAddServerPath
   } = useAddRepoServerPathFlow({
     addRepoPath,
+    addNonGitFolder,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
@@ -261,7 +263,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   // Apply dropped paths after host reset so the switch cannot erase them.
   const { browseWslHost, prefilledServerPath, clearPrefilledServerPath } = useAddRepoWslHostPaths({
     isOpen,
-    droppedHostPath: modalPaths.droppedHostPath,
+    droppedHostPath: wslHostOffer.hostPath,
     selectedHostId: hostSelection.selectedHostId,
     setServerPath,
     setStep,
