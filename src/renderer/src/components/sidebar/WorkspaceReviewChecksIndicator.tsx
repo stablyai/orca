@@ -23,7 +23,13 @@ export function workspaceReviewChecksLabel(summary: WorkspaceReviewChecksSummary
       status
     }
   )
-  return `${reviewStateLabel(summary.reviewState, 'PR')} · ${checks}`
+  const state =
+    summary.reviewState === 'draft'
+      ? translate('workspace.reviewStatus.draft', '{{review}}: Draft', {
+          review: translate('workspace.links.reviews', 'Reviews')
+        })
+      : reviewStateLabel(summary.reviewState, 'PR')
+  return `${state} · ${checks}`
 }
 
 export function WorkspaceReviewChecksIndicator({

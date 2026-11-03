@@ -172,6 +172,7 @@ describe('WorktreeCardStatusSlot', () => {
   it.each([
     {
       state: 'merged',
+      provider: 'github',
       status: 'success',
       icon: 'merge',
       tone: 'text-purple-600/70',
@@ -181,6 +182,7 @@ describe('WorktreeCardStatusSlot', () => {
     },
     {
       state: 'merged',
+      provider: 'github',
       status: 'failure',
       icon: 'merge',
       tone: 'text-purple-600/70',
@@ -190,15 +192,17 @@ describe('WorktreeCardStatusSlot', () => {
     },
     {
       state: 'draft',
+      provider: 'github',
       status: 'success',
       icon: 'pull-request-draft',
       tone: 'text-muted-foreground/50',
-      label: 'State: Draft PR',
+      label: 'Reviews: Draft',
       locale: 'en',
       stale: false
     },
     {
       state: 'closed',
+      provider: 'github',
       status: 'success',
       icon: 'pull-request-closed',
       tone: 'text-muted-foreground/60',
@@ -208,6 +212,7 @@ describe('WorktreeCardStatusSlot', () => {
     },
     {
       state: 'merged',
+      provider: 'github',
       status: undefined,
       icon: 'merge',
       tone: 'text-purple-600/70',
@@ -217,22 +222,45 @@ describe('WorktreeCardStatusSlot', () => {
     },
     {
       state: 'merged',
+      provider: 'github',
       status: 'success',
       icon: 'merge',
       tone: 'text-purple-600/70',
       label: ko.auto.components.sidebar.WorktreeCardMetadataStatusBadges.f394b3e86e,
       locale: 'ko',
       stale: false
+    },
+    {
+      state: 'draft',
+      provider: 'gitlab',
+      status: 'success',
+      icon: 'pull-request-draft',
+      tone: 'text-muted-foreground/50',
+      label: 'Reviews: Draft',
+      locale: 'en',
+      stale: false
     }
   ] as const)(
-    'preserves $state collection lifecycle with $status checks ($locale, stale=$stale)',
-    async ({ state, status, icon, tone, label, locale, stale }) => {
+    'preserves $provider $state collection lifecycle with $status checks ($locale, stale=$stale)',
+    async ({ state, provider, status, icon, tone, label, locale, stale }) => {
       await i18n.changeLanguage(locale)
-      const items = [referenceAttachment(1), referenceAttachment(2)]
+      const items = [referenceAttachment(1), referenceAttachment(2)].map((item) =>
+        provider === 'gitlab'
+          ? {
+              ...item,
+              provider,
+              type: 'mr' as const,
+              url: `https://gitlab.com/acme/orca/-/merge_requests/${item.number}`
+            }
+          : item
+      )
       const details = Object.fromEntries(
         items.map((item) => [
           getWorkspaceAttachmentKey(item),
-          { stale, review: { ...referenceReview(item.number, { state }), status } }
+          {
+            stale,
+            review: { ...referenceReview(item.number, { state }), provider, url: item.url, status }
+          }
         ])
       )
       const markup = renderToStaticMarkup(
@@ -253,6 +281,7 @@ describe('WorktreeCardStatusSlot', () => {
       expect(markup).toContain(tone)
       expect(markup).not.toContain('text-emerald-500')
       expect(markup).toContain(label)
+      expect(markup).not.toContain('Draft PR')
       if (stale) {
         expect(markup).toContain('Last known status')
         expect(markup).toContain('shimmer')
