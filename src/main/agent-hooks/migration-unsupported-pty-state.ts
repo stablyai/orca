@@ -27,8 +27,12 @@ export function setMigrationUnsupportedPtyPersistenceListener(
 
 export function setMigrationUnsupportedPty(entry: MigrationUnsupportedPtyEntry): void {
   entriesByPtyId.set(entry.ptyId, entry)
-  listener?.({ type: 'set', entry })
-  persistenceListener?.(getMigrationUnsupportedPtySnapshot())
+  try {
+    listener?.({ type: 'set', entry })
+  } finally {
+    // Save even when the renderer listener throws, so the saved entry never lags memory.
+    persistenceListener?.(getMigrationUnsupportedPtySnapshot())
+  }
 }
 
 export function clearMigrationUnsupportedPty(ptyId: string): void {

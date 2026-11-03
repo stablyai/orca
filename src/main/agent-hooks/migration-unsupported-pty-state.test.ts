@@ -105,6 +105,24 @@ describe('migration unsupported PTY state', () => {
     expect(getMigrationUnsupportedPtySnapshot()).toEqual([rekeyed])
   })
 
+  it('saves a re-keyed entry even when the renderer listener throws', () => {
+    const persist = vi.fn()
+    const moving = makeEntry('pty-1', `tab-source:${LEAF}`)
+    setMigrationUnsupportedPty(moving)
+    setMigrationUnsupportedPtyListener(() => {
+      throw new Error('renderer gone')
+    })
+    setMigrationUnsupportedPtyPersistenceListener(persist)
+
+    expect(() => rekeyMigrationUnsupportedPtyPaneKey('pty-1', `tab-target:${LEAF}`)).toThrow(
+      'renderer gone'
+    )
+
+    expect(persist).toHaveBeenCalledWith([
+      { ...moving, paneKey: `tab-target:${LEAF}`, tabId: 'tab-target', leafId: LEAF }
+    ])
+  })
+
   it('ignores a re-key for a PTY with no entry or an entry already at the pane', () => {
     const listener = vi.fn()
     const entry = makeEntry('pty-1', `tab-target:${LEAF}`)
