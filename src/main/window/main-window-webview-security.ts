@@ -7,11 +7,11 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
   enforceLocalSshWebRtcPolicyForGuest,
   isLocalSshBrowserPartition
-} from '../browser/local-ssh-browser-partitions'
+} from '../browser/routing/local-host-partitions/local-ssh-browser-partitions'
 import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
-} from '../browser/browser-route-session-runtime'
+} from '../browser/routing/sessions/browser-route-session-runtime'
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import { DOC_PREVIEW_PARTITION, parseDocPreviewUrl } from '../../shared/doc-preview-scheme'
 import { setDocPreviewFailureSink } from '../browser/doc-preview-failure-notice'
@@ -24,7 +24,7 @@ import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
 import { getBrowserExtensionSessionForProfile } from '../browser/extensions/browser-extension-session-loader'
-import { installBrowserJavaScriptDialogs } from '../browser/browser-javascript-dialogs'
+import { installBrowserJavaScriptDialogs } from '../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
   admitPluginFrameAttach,
   attachPluginFrameGuest,

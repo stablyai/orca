@@ -24,7 +24,7 @@ vi.mock('electron', () => ({
   screen: { getCursorScreenPoint: mocks.screenGetCursorScreenPointMock },
   webContents: { fromId: mocks.webContentsFromIdMock }
 }))
-vi.mock('./popup-origin-bar-window', () => ({
+vi.mock('./guest-lifecycle/popups/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: mocks.openPopupWithOriginBarMock
 }))
 

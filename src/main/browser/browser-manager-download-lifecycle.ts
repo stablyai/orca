@@ -1,4 +1,4 @@
-import { browserDownloadDestinationReservations } from './browser-download-destination'
+import { browserDownloadDestinationReservations } from './downloads/browser-download-destination'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,

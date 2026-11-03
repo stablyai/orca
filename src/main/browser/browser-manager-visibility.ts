@@ -1,15 +1,18 @@
 import { webContents } from 'electron'
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { BrowserManagerState } from './browser-manager-state'
-import { focusGuardUnavailableError, guardPaneFocusForAgentInput } from './agent-input-focus-guard'
+import {
+  focusGuardUnavailableError,
+  guardPaneFocusForAgentInput
+} from './cdp/input/agent-input-focus-guard'
 import {
   BrowserAgentActivity,
   type AgentCommandLease,
   type AgentPointerInput
-} from './browser-agent-activity'
-import { BrowserPageEvents, type BrowserPageEvent } from './browser-page-events'
-import { BrowserPageInputCredit } from './browser-page-input-credit'
-import { browserPopupPageId } from './browser-popup-page-id'
+} from './guest-lifecycle/browser-agent-activity'
+import { BrowserPageEvents, type BrowserPageEvent } from './guest-lifecycle/browser-page-events'
+import { BrowserPageInputCredit } from './routing/input-ownership/browser-page-input-credit'
+import { browserPopupPageId } from './guest-lifecycle/popups/browser-popup-page-id'
 import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {

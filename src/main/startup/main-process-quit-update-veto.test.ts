@@ -22,7 +22,7 @@ const dependencyExports: [string, string[]][] = [
   ['../runtime/files/watch/file-watcher-leases', ['awaitRuntimeFileWatcherUnsubscribes']],
   ['../runtime/runtime-metadata', ['clearRuntimeMetadataIfOwned']],
   [
-    '../browser/paired-runtime-browser-client-host-runtime',
+    '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime',
     ['shutdownPairedRuntimeBrowserClientHosts']
   ],
   ['../ipc/browser/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],

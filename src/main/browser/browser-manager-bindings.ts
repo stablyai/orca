@@ -1,9 +1,9 @@
-import { resolveRendererWebContents } from './browser-guest-renderer-target'
-import { setupGuestContextMenu } from './browser-guest-context-menu'
-import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
-import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
-import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
-import { setupGuestTargetUrlForwarding } from './browser-guest-target-url'
+import { resolveRendererWebContents } from './guest-lifecycle/browser-guest-renderer-target'
+import { setupGuestContextMenu } from './guest-lifecycle/input/browser-guest-context-menu'
+import { setupGrabShortcutForwarding } from './guest-lifecycle/input/browser-guest-grab-shortcuts'
+import { setupGuestMouseWheelZoomForwarding } from './guest-lifecycle/input/browser-guest-wheel-zoom'
+import { setupGuestShortcutForwarding } from './guest-lifecycle/input/browser-guest-shortcut-forwarding'
+import { setupGuestTargetUrlForwarding } from './guest-lifecycle/input/browser-guest-target-url'
 import { BrowserManagerGrab } from './browser-manager-grab'
 
 export abstract class BrowserManagerBindings extends BrowserManagerGrab {

@@ -1,21 +1,24 @@
 import { shell } from 'electron'
 import { normalizeExternalBrowserUrl, redactKagiSessionToken } from '../../shared/browser-url'
-import { trackBrowserGuestInputGesture } from './browser-guest-input-gesture'
+import { trackBrowserGuestInputGesture } from './guest-lifecycle/input/browser-guest-input-gesture'
 import {
   isNewBrowserTabPopupIntent,
   isBrowserTabPopupRequest,
   normalizeBrowserPopupUrl
-} from './browser-popup-new-tab-intent'
+} from './guest-lifecycle/popups/browser-popup-new-tab-intent'
 import { SAFE_POPUP_WINDOW_OPTIONS, safeOrigin } from './browser-manager-types'
-import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
+import {
+  openPopupWithOriginBar,
+  type PopupChildWindowOptions
+} from './guest-lifecycle/popups/popup-origin-bar-window'
 import { BrowserManagerNavigation } from './browser-manager-navigation'
 import {
   allowNativeBrowserPopup,
   discardBrowserPopupContents,
   isNativeBrowserPopupRequest
-} from './browser-popup-native-window'
-import { isBrowserRouteGuestPopup } from './browser-route-guest-popup-ownership'
-import { requestBrowserExternalAppLaunch } from './browser-external-app-launch'
+} from './guest-lifecycle/popups/browser-popup-native-window'
+import { isBrowserRouteGuestPopup } from './routing/guest-authority/browser-route-guest-popup-ownership'
+import { requestBrowserExternalAppLaunch } from './guest-lifecycle/prompts/browser-external-app-launch'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {

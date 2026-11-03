@@ -10,8 +10,11 @@ import { BrowserManagerRegistration } from './browser-manager-registration'
 import {
   isBrowserRouteGuestPopup,
   listBrowserRouteGuestPopups
-} from './browser-route-guest-popup-ownership'
-import { browserPopupPageId, browserPopupPageWebContentsId } from './browser-popup-page-id'
+} from './routing/guest-authority/browser-route-guest-popup-ownership'
+import {
+  browserPopupPageId,
+  browserPopupPageWebContentsId
+} from './guest-lifecycle/popups/browser-popup-page-id'
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   getGuestWebContentsId(browserTabId: string): number | null {

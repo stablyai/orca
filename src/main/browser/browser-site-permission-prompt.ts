@@ -7,7 +7,10 @@ import {
 } from '../../shared/browser-site-permission'
 import { isEligibleLocalCertificateHost } from '../../shared/browser-url'
 import { browserManager } from './browser-manager'
-import { browserPagePromptOrigin, openBrowserPagePrompt } from './browser-page-prompts'
+import {
+  browserPagePromptOrigin,
+  openBrowserPagePrompt
+} from './guest-lifecycle/prompts/browser-page-prompts'
 import {
   getBrowserSitePermissionDecision,
   setBrowserSitePermissionDecisions

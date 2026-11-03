@@ -38,7 +38,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./popup-origin-bar-window', () => ({
+vi.mock('./guest-lifecycle/popups/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 

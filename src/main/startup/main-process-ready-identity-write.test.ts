@@ -133,7 +133,9 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
     dataFile: join(mocks.profileDirectory, 'data.json')
   })
 }))
-vi.mock('../browser/browser-client-host-id', () => ({ initializeBrowserClientHostId: vi.fn() }))
+vi.mock('../browser/client-hosts/lifecycle/browser-client-host-id', () => ({
+  initializeBrowserClientHostId: vi.fn()
+}))
 vi.mock('../host/deferred-secret-protection-report', () => ({
   scheduleSecretProtectionGapReport: vi.fn()
 }))
@@ -175,13 +177,13 @@ vi.mock('../media/media-preview-protocol', () => ({ installMediaPreviewProtocolH
 vi.mock('../ipc/doc-preview-grant-ipc', () => ({ registerDocPreviewGrantHandlers: vi.fn() }))
 
 // Keep registry/startup real through meta load, retired-choice inspection and identity write; stub only surrounding route/policy/cookie machinery.
-vi.mock('../browser/browser-route-session-runtime', () => ({
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', () => ({
   configureRouteSessionsForOrcaProfile: vi.fn()
 }))
-vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
+vi.mock('../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
   configurePairedRuntimeBrowserClientHostsForOrcaProfile: vi.fn()
 }))
-vi.mock('../browser/browser-route-partition-storage-runtime', () => ({
+vi.mock('../browser/routing/partitions/browser-route-partition-storage-runtime', () => ({
   collectOrphanedBrowserRoutePartitionStorage: vi.fn(async () => {})
 }))
 vi.mock('../browser/browser-session-partition-policies', () => ({
@@ -194,7 +196,7 @@ vi.mock('../browser/browser-session-cookie-staging', () => ({
   clearPendingBrowserCookieImport: vi.fn(),
   setPendingBrowserCookieImport: vi.fn()
 }))
-vi.mock('../browser/browser-session-route-policies', () => ({
+vi.mock('../browser/routing/sessions/browser-session-route-policies', () => ({
   installBrowserRoutePartitionPolicies: vi.fn(),
   clearBrowserRoutePartitionPolicies: vi.fn()
 }))

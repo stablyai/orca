@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeSqlite from 'node:sqlite'
 import type * as ChromiumCookieSnapshotModule from '../chromium-cookie-snapshot'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'

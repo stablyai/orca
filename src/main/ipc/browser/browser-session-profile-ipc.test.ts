@@ -40,7 +40,7 @@ vi.mock('../../browser/browser-session-registry', () => ({
   }
 }))
 
-vi.mock('../../browser/paired-runtime-browser-client-host-runtime', () => ({
+vi.mock('../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: routeIdentityMock
 }))
 

@@ -37,7 +37,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./popup-origin-bar-window', () => ({
+vi.mock('./guest-lifecycle/popups/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
@@ -45,7 +45,7 @@ import { browserManager } from './browser-manager'
 import {
   MAX_PAGE_INITIATED_TABS_PER_WINDOW,
   PAGE_INITIATED_TAB_WINDOW_MS
-} from './browser-page-initiated-tab-budget'
+} from './guest-lifecycle/popups/browser-page-initiated-tab-budget'
 import {
   rendererWebContentsId,
   resetBrowserManagerMocks,

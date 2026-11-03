@@ -4,9 +4,9 @@ import {
   type PopupOwnerContext
 } from './browser-manager-types'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
-import { allowPageUnload } from './browser-guest-unload-policy'
+import { allowPageUnload } from './guest-lifecycle/browser-guest-unload-policy'
 import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
-import { installGuestDevToolsCloseShortcut } from './browser-guest-devtools-close-shortcut'
+import { installGuestDevToolsCloseShortcut } from './guest-lifecycle/browser-guest-devtools-close-shortcut'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(

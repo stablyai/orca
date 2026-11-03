@@ -1,4 +1,7 @@
-import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
+import {
+  openPopupWithOriginBar,
+  type PopupChildWindowOptions
+} from './guest-lifecycle/popups/popup-origin-bar-window'
 import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 import type { BrowserSessionRequestUserAgentResolver } from './browser-session-ua'
 import { isGoogleAuthUrl } from './browser-google-auth-ua'

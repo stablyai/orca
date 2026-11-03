@@ -63,7 +63,7 @@ vi.mock('../browser-cookie-clear-store', () => ({
 }))
 
 import { importCookiesFromBrowser } from '../browser-cookie-import'
-import type { DetectedBrowser } from './browser-cookie-detection-types'
+import type { DetectedBrowser } from './browser-cookie-source-profiles'
 import { createChromiumCookieTestDatabase } from '../browser-cookie-import-test-database'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'

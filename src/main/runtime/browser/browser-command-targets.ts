@@ -1,14 +1,14 @@
 import type { BrowserSnapshotOptions } from '../../../shared/rpc-contract/browser-observation-params'
 import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import { BrowserError } from '../../browser/browser-error'
-import { browserPopupPageWebContentsId } from '../../browser/browser-popup-page-id'
+import { browserPopupPageWebContentsId } from '../../browser/guest-lifecycle/popups/browser-popup-page-id'
 import { webContents } from 'electron'
 import {
   waitForTabFirstLoad,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from '../../ipc/browser/browser-tab-registration-wait'
-import { whenBrowserMainWindowReady } from '../../browser/browser-main-window-readiness'
+import { whenBrowserMainWindowReady } from '../../browser/guest-lifecycle/browser-main-window-readiness'
 import type { BrowserSnapshotResult } from '../../../shared/runtime-types'
 import type {
   BrowserCommandTargetParams,

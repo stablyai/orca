@@ -346,7 +346,8 @@ describe('partition permission policy', () => {
     const install = await loadInstaller()
     const store = await import('./browser-site-permission-store')
     store.configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
-    const { respondToBrowserPagePrompt } = await import('./browser-page-prompts')
+    const { respondToBrowserPagePrompt } =
+      await import('./guest-lifecycle/prompts/browser-page-prompts')
     const send = vi.fn()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: prompts only read id, isDestroyed, send and subscribe to the window's lifecycle events.
     const renderer = {
@@ -452,7 +453,7 @@ describe('partition permission policy', () => {
   it('gives browsing pages File System Access but keeps it from pages another machine can script', async () => {
     const install = await loadInstaller()
     const { installBrowserRoutePartitionPolicies } =
-      await import('./browser-session-route-policies')
+      await import('./routing/sessions/browser-session-route-policies')
     const routed = `persist:orca-browser-v1-${'a'.repeat(64)}`
     install(profileFor('persist:browsing-5'))
     void installBrowserRoutePartitionPolicies(profileFor('persist:browsing-5'), routed)

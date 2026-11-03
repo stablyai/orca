@@ -6,8 +6,8 @@ import {
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
-import { sendGuestCdpCommand } from './guest-cdp-command'
-import { touchEmulationParams } from './guest-touch-emulation'
+import { sendGuestCdpCommand } from './cdp/debugger/guest-cdp-command'
+import { touchEmulationParams } from './cdp/input/guest-touch-emulation'
 import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 
 export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifecycle {

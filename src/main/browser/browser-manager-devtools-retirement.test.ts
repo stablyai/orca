@@ -45,7 +45,9 @@ vi.mock('electron', () => {
     webContents: { fromId: (id: number) => native.byId.get(id) }
   }
 })
-vi.mock('./popup-origin-bar-window', () => ({ openPopupWithOriginBar: vi.fn() }))
+vi.mock('./guest-lifecycle/popups/popup-origin-bar-window', () => ({
+  openPopupWithOriginBar: vi.fn()
+}))
 
 import { BrowserManager } from './browser-manager'
 

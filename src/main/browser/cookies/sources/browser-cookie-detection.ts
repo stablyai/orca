@@ -9,7 +9,7 @@ import {
   firefoxProfilesRoot,
   isSafeBrowserProfileDirectory,
   type DetectedBrowser
-} from './browser-cookie-detection-types'
+} from './browser-cookie-source-profiles'
 
 export function detectSafari(): DetectedBrowser | null {
   if (process.platform !== 'darwin') {

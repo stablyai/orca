@@ -21,7 +21,7 @@ import {
   getBrowserExtensionSessionForProfile
 } from './browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
-import { whenBrowserMainWindowReady } from '../browser-main-window-readiness'
+import { whenBrowserMainWindowReady } from '../guest-lifecycle/browser-main-window-readiness'
 import { findDiscardedBrowserTabForPage } from './browser-extension-discarded-tabs'
 import {
   getBrowserExtensionMainWindow,

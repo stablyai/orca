@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { KEYBINDING_DEFINITIONS, keybindingMatchesAction } from '../../../../shared/keybindings'
-import { isAgentInjectingInput } from '../../agent-input-injection'
+import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
 import { browserManager } from '../../browser-manager'
 import {
   emitBrowserExtensionEvent,

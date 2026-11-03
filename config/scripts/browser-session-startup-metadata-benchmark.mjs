@@ -57,6 +57,14 @@ const stubs = new Map([
 const registryByVersion = {}
 try {
   for (const [version, source] of Object.entries(sources)) {
+    const versionStubs = new Map(
+      [...stubs].map(([specifier, body]) => [
+        version === 'after' && specifier === './browser-session-route-policies'
+          ? './routing/sessions/browser-session-route-policies'
+          : specifier,
+        body
+      ])
+    )
     const output = join(scratch, `${version}.cjs`)
     await build({
       stdin: { contents: source, sourcefile: target, resolveDir: dirname(target), loader: 'ts' },
@@ -69,7 +77,7 @@ try {
           name: 'isolate-startup-metadata',
           setup(builder) {
             builder.onResolve({ filter: /.*/ }, (args) => {
-              if (args.importer === target && stubs.has(args.path)) {
+              if (args.importer === target && versionStubs.has(args.path)) {
                 return { path: args.path, namespace: 'startup-stub' }
               }
               if (
@@ -83,7 +91,7 @@ try {
               contents:
                 args.path === 'fs-probe'
                   ? `import * as fs from 'node:fs'; export const {mkdirSync,renameSync,writeFileSync}=fs; export function readFileSync(...args){const result=fs.readFileSync(...args);globalThis.__metaBench.reads++;globalThis.__metaBench.bytes+=Buffer.byteLength(result);return result}`
-                  : stubs.get(args.path),
+                  : versionStubs.get(args.path),
               loader: 'js'
             }))
           }

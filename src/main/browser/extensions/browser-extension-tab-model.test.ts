@@ -47,7 +47,8 @@ vi.mock('./browser-extension-window-model', () => ({
 }))
 
 const { openBrowserExtensionTab } = await import('./browser-extension-tab-model')
-const { watchBrowserMainWindowReadiness } = await import('../browser-main-window-readiness')
+const { watchBrowserMainWindowReadiness } =
+  await import('../guest-lifecycle/browser-main-window-readiness')
 
 /** Orca's main window; its renderer reports readiness on the per-window IPC channel. */
 function mainWindow() {

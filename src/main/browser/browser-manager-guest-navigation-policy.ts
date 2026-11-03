@@ -8,8 +8,8 @@ import {
   BrowserManagerGuestPopupPolicy,
   isLocalFileLinkFromLocalPage
 } from './browser-manager-guest-popup-policy'
-import { allowPageUnload } from './browser-guest-unload-policy'
-import { initiatingFrameUrl } from './browser-external-app-launch'
+import { allowPageUnload } from './guest-lifecycle/browser-guest-unload-policy'
+import { initiatingFrameUrl } from './guest-lifecycle/prompts/browser-external-app-launch'
 import { isSameExtensionNavigation } from '../../shared/browser-extension-url'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
