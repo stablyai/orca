@@ -22,7 +22,13 @@ export type GuestShortcutForwardContext = {
   getKeybindings?: () => KeybindingOverrides | undefined
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
+  hasEditableFocus: () => Promise<boolean>
   forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => void
+}
+
+function toBrowserPageTabShortcut(input: GuestShortcutInput): BrowserPageTabShortcut {
+  const { key, code, alt, meta, control, shift, doubleTapModifier } = input
+  return { key, code, alt, meta, control, shift, doubleTapModifier }
 }
 
 export function forwardGuestShortcutInput(
@@ -39,6 +45,7 @@ export function forwardGuestShortcutInput(
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
+    hasEditableFocus,
     forwardBrowserPageZoom
   } = ctx
   const keybindings = getKeybindings?.()
@@ -53,7 +60,6 @@ export function forwardGuestShortcutInput(
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
       action?.type === 'deleteCurrentWorkspace' ||
-      sendNotesShortcut ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -169,7 +175,6 @@ export function forwardGuestShortcutInput(
     }
     renderer.send('ui:dictationKeyDown')
   } else if (
-    sendNotesShortcut ||
     matchesGuestTabShortcut(
       input,
       process.platform,
@@ -178,18 +183,18 @@ export function forwardGuestShortcutInput(
     )
   ) {
     // Why: replay into the renderer's own tab-shortcut handler so a page answers tab chords exactly as the rest of Orca does.
-    const { key, code, alt, meta, control, shift, doubleTapModifier } = input
-    const shortcut: BrowserPageTabShortcut = {
-      ...(sendNotesShortcut ? { browserPageId: browserTabId } : {}),
-      key,
-      code,
-      alt,
-      meta,
-      control,
-      shift,
-      doubleTapModifier
-    }
-    renderer.send('ui:browserPageTabShortcut', shortcut)
+    renderer.send('ui:browserPageTabShortcut', toBrowserPageTabShortcut(input))
+  } else if (sendNotesShortcut) {
+    // Why: before-input-event cannot wait for the page, so the key stays with the page and editable focus keeps it.
+    void hasEditableFocus().then((editable) => {
+      if (!editable) {
+        resolveRenderer(browserTabId)?.send('ui:browserPageTabShortcut', {
+          ...toBrowserPageTabShortcut(input),
+          browserPageId: browserTabId
+        })
+      }
+    })
+    return false
   } else {
     return false
   }

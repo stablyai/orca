@@ -11,6 +11,7 @@ import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
 } from '../../shared/modifier-double-tap-detector'
+import { guestHasEditableFocus } from './browser-guest-editable-focus'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 import { consumeRecentGuestWheelZoom } from './browser-guest-wheel-zoom'
 import {
@@ -63,6 +64,7 @@ export function setupGuestShortcutForwarding(args: {
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
+    hasEditableFocus: () => guestHasEditableFocus(guest),
     forwardBrowserPageZoom
   }
 

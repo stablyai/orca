@@ -134,8 +134,8 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     title: 'Send Review or Browser Notes to Agent',
     group: 'Global',
     scope: 'global',
-    // Global capture also fires in editors; include editor collisions such as Add Review Note in Settings warnings.
-    conflictGroup: 'editor',
+    // Global capture also fires in editors and browser guests; warn about Add Review Note and Reload collisions in Settings.
+    conflictGroups: ['global', 'editor', 'browser'],
     searchKeywords: [
       'shortcut',
       'source control',

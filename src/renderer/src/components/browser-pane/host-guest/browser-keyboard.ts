@@ -3,11 +3,31 @@ type EditableTargetLike = {
   closest?: (selector: string) => unknown
 }
 
+const EDITOR_SURFACE_SELECTOR = [
+  '.monaco-editor',
+  '.diff-editor',
+  '.rich-markdown-editor',
+  '.rich-markdown-editor-shell'
+].join(', ')
+
+function asEditableTarget(
+  target: EventTarget | EditableTargetLike | null
+): EditableTargetLike | null {
+  return target &&
+    typeof target === 'object' &&
+    ('closest' in target || 'isContentEditable' in target)
+    ? (target as EditableTargetLike)
+    : null
+}
+
+export function isEditorSurfaceKeyboardTarget(
+  target: EventTarget | EditableTargetLike | null
+): boolean {
+  return Boolean(asEditableTarget(target)?.closest?.(EDITOR_SURFACE_SELECTOR))
+}
+
 export function isEditableKeyboardTarget(target: EventTarget | EditableTargetLike | null): boolean {
-  const element =
-    target && typeof target === 'object' && ('closest' in target || 'isContentEditable' in target)
-      ? (target as EditableTargetLike)
-      : null
+  const element = asEditableTarget(target)
   if (!element) {
     return false
   }
@@ -20,10 +40,7 @@ export function isEditableKeyboardTarget(target: EventTarget | EditableTargetLik
       'select',
       '[contenteditable=""]',
       '[contenteditable="true"]',
-      '.monaco-editor',
-      '.diff-editor',
-      '.rich-markdown-editor',
-      '.rich-markdown-editor-shell'
+      EDITOR_SURFACE_SELECTOR
     ].join(', ')
   )
   if (editableHost) {
