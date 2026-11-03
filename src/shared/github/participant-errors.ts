@@ -16,6 +16,10 @@ const messages = new Map<string, string>([
     'The selected GitHub account is no longer assigned to this member. Ask the server owner to review the account assignment.'
   ],
   [
+    'github_participant_account_changed',
+    'The GitHub account for this operation changed. Retry the action with the current account.'
+  ],
+  [
     'github_participant_owner_required',
     'Only the server owner can manage members, device assignments, or account permissions. Run this action on the server.'
   ],

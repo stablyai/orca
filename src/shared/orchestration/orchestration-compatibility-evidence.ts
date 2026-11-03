@@ -1,4 +1,7 @@
-import { ORCA_SCRUB_SAFE_LAUNCH_ENV, ORCA_SCRUB_SAFE_PANE_ENV } from '../agent-hook-listener/transport/agent-hook-scrub-safe-env'
+import {
+  ORCA_SCRUB_SAFE_LAUNCH_ENV,
+  ORCA_SCRUB_SAFE_PANE_ENV
+} from '../agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { ORCA_AGENT_SESSION_PROOF_ENV } from '../agent-session/lifecycle/launch/agent-session-caller-env'
 
 const MAX_EVIDENCE_FIELD_LENGTH = 4_096

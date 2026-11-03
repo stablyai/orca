@@ -1,3 +1,4 @@
+import { runWithGitHubJobRequest } from './github-participant-execution'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -62,7 +63,9 @@ describe('accepted GitHub job launch binding', () => {
     ).toThrow('github_participant_owner_mismatch')
     expect(() =>
       runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
-        bindParticipantLaunch(store, { repo, id: 'workspace' }, 'pane-forged', 'forged')
+        runWithGitHubJobRequest(true, () =>
+          bindParticipantLaunch(store, { repo, id: 'workspace' }, 'pane-forged', 'forged')
+        )
       )
     ).toThrow('github_participant_identity_required')
   })

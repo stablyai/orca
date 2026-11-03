@@ -9,7 +9,8 @@ import {
   captureGitHubExecutionIdentity,
   createGitHubExecutionAccountResolver,
   resolveGitHubExecutionAccount,
-  runWithGitHubExecutionIdentity
+  runWithGitHubExecutionIdentity,
+  runWithGitHubJobRequest
 } from './github-participant-execution'
 
 const aliceAccount = { host: 'github.com', user: 'alice' }
@@ -54,10 +55,15 @@ describe('GitHub participant execution', () => {
     expect(sharedAccount.user).toBe('server-owner')
   })
 
-  it('preserves legacy bindings and lets the explicit desktop owner use the shared account', () => {
+  it('preserves legacy bindings and lets desktop and owner shell calls use the shared account', () => {
     const { registry } = fixture()
     expect(
       asDevice('unknown', () => resolveGitHubExecutionAccount(registry, 'legacy', sharedAccount))
+    ).toEqual(sharedAccount)
+    expect(
+      runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+        resolveGitHubExecutionAccount(registry, 'repo', sharedAccount)
+      )
     ).toEqual(sharedAccount)
     expect(
       runWithActiveRpcCaller({ kind: 'desktop' }, () =>
@@ -74,7 +80,9 @@ describe('GitHub participant execution', () => {
     ).toThrow('github_participant_missing')
     expect(() =>
       runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
-        resolveGitHubExecutionAccount(registry, 'repo', sharedAccount)
+        runWithGitHubJobRequest(true, () =>
+          resolveGitHubExecutionAccount(registry, 'repo', sharedAccount)
+        )
       )
     ).toThrow('github_participant_identity_required')
     expect(() => resolveGitHubExecutionAccount(registry, 'repo', sharedAccount)).toThrow(
@@ -114,9 +122,36 @@ describe('GitHub participant execution', () => {
     expect(resolve).toThrow('github_participant_account_not_allowed')
   })
 
+  it.each([sharedAccount, undefined])(
+    'rejects switching from a shared binding to a participant account mid-operation (%j)',
+    (binding) => {
+      const { registry } = fixture()
+      registry.setRepoEnabled('repo', false)
+      const resolve = asDevice('alice', () =>
+        createGitHubExecutionAccountResolver(registry, 'repo', binding)
+      )
+      expect(resolve()).toEqual(binding)
+      registry.setRepoEnabled('repo', true)
+      registry.selectAccount('repo', 'alice', aliceAccount)
+      expect(resolve).toThrow('github_participant_account_changed')
+    }
+  )
+
   it('defers missing identity errors until a generic hosted-review operation uses GitHub', () => {
     const { registry } = fixture()
     const resolve = createGitHubExecutionAccountResolver(registry, 'repo', sharedAccount)
+    expect(resolve).toThrow('github_participant_identity_required')
+  })
+
+  it('retains an unbound job context when a deferred resolver leaves the request', () => {
+    const { registry } = fixture()
+    registry.setRepoEnabled('repo', false)
+    const resolve = runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      runWithGitHubJobRequest(true, () =>
+        createGitHubExecutionAccountResolver(registry, 'repo', sharedAccount)
+      )
+    )
+    registry.setRepoEnabled('repo', true)
     expect(resolve).toThrow('github_participant_identity_required')
   })
 
@@ -129,6 +164,14 @@ describe('GitHub participant execution', () => {
     expect(() =>
       runWithActiveRpcCaller({ kind: 'desktop' }, () => assertUnscopedGitHubAccess(registry))
     ).not.toThrow()
+    expect(() =>
+      runWithActiveRpcCaller({ kind: 'local-cli' }, () => assertUnscopedGitHubAccess(registry))
+    ).not.toThrow()
+    expect(() =>
+      runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+        runWithGitHubJobRequest(true, () => assertUnscopedGitHubAccess(registry))
+      )
+    ).toThrow('github_participant_repo_required')
     registry.setRepoEnabled('repo', false)
     expect(() => asDevice('alice', () => assertUnscopedGitHubAccess(registry))).not.toThrow()
   })

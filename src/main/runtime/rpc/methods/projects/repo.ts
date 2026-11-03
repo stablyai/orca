@@ -1,4 +1,4 @@
-import { isGitHubParticipantOwner } from '../../../github-participant-settings'
+import { isGitHubParticipantOwner } from '../../../github-participant-execution'
 import { defineMethod } from '../../core'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
