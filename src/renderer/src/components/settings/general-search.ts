@@ -6,6 +6,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getUpdateDelayDescription, getUpdateDelayTitle } from './update-delay-copy'
+import { AUTO_HIDE_SINGLE_TAB_STRIP_SEARCH_ENTRY } from './general-tab-strip-search'
 
 export { getGeneralEditorSearchEntries } from './general-editor-search'
 export { getGeneralSupportSearchEntries } from './general-support-search'
@@ -200,7 +201,8 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.close', 'close'),
       ...translateSearchKeyword('auto.components.settings.general.search.omp', 'OMP')
     ]
-  }
+  },
+  AUTO_HIDE_SINGLE_TAB_STRIP_SEARCH_ENTRY()
 ])
 
 export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
