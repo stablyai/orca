@@ -64,6 +64,7 @@ const mocks = vi.hoisted(() => {
     activateAndRevealWorktree: vi.fn(),
     findGithubPrWorkspaceAttachment: vi.fn(),
     focusTerminalTabSurface: vi.fn(),
+    getConnectionId: vi.fn(),
     launchAgentInNewTab: vi.fn(),
     launchWorkItemDirect: vi.fn(),
     pickSourceControlLaunchAgent: vi.fn(),
@@ -90,6 +91,10 @@ vi.mock('sonner', () => ({
     error: mocks.toastError,
     message: mocks.toastMessage
   }
+}))
+
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionId: mocks.getConnectionId
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -165,6 +170,7 @@ describe('startFixChecksAgent', () => {
     mocks.store.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
     mocks.activateAndRevealWorktree.mockReturnValue(true)
     mocks.findGithubPrWorkspaceAttachment.mockReturnValue(null)
+    mocks.getConnectionId.mockReturnValue(null)
     mocks.launchAgentInNewTab.mockImplementation(
       (args: { beforeSurfaceOpen?: (surface: { kind: 'local-terminal' }) => boolean | void }) => {
         args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
@@ -235,8 +241,57 @@ describe('startFixChecksAgent', () => {
     expect(plans[0]?.launchCommand).not.toContain('high')
   })
 
-  // Why: a saved chat stays implicit so a host that stops running chats falls back to a terminal.
-  it('replays a saved terminal explicitly and leaves a saved chat to the settings route', async () => {
+  it('captures the canonical recipe before waiting and rederives the atomic tuple for either actual agent', async () => {
+    const recipe = {
+      agentArgs: `-c 'model="true"'`,
+      launchPreferences: {
+        agentId: 'codex' as const,
+        modelSelection: {
+          base: 'default' as const,
+          options: { effort: { agentId: 'codex' as const, value: 'high' } }
+        }
+      }
+    }
+    mocks.resolveSourceControlActionRecipe.mockReturnValue(recipe)
+    const pending = Promise.withResolvers<string[]>()
+    mocks.store.ensureDetectedAgents.mockReturnValueOnce(pending.promise)
+    mocks.readSourceControlLaunchRecipeAgentId.mockReturnValue('codex')
+    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+    const action = startFixChecksAgent({
+      repoId: 'repo-1',
+      basePrompt: 'Fix checks',
+      launchSource: 'task_page',
+      item: {
+        id: 'pr-7',
+        repoId: 'repo-1',
+        type: 'pr',
+        number: 7,
+        title: 'PR',
+        state: 'open',
+        url: 'https://example.test/pr/7',
+        labels: [],
+        updatedAt: '',
+        author: null
+      },
+      openModalFallback: () => {}
+    })
+    recipe.agentArgs = '--model later-form'
+    recipe.launchPreferences.modelSelection.options.effort.value = 'low'
+    pending.resolve(['codex'])
+    await expect(action).resolves.toBe(true)
+    const resolver = mocks.launchWorkItemDirect.mock.lastCall?.[0].resolveLaunchInputs
+    expect(resolver).toBeTypeOf('function')
+    expect(resolver('codex')).toMatchObject({
+      agentArgs: `-c 'model="true"'`,
+      sessionOptions: { effort: 'high' },
+      chatSessionOptions: { model: 'true', effort: 'high' }
+    })
+    expect(resolver('claude').agentArgs).toBe(`-c 'model="true"'`)
+    expect(resolver('claude').sessionOptions).toBeUndefined()
+    expect(JSON.stringify(resolver('codex'))).not.toContain('later-form')
+  })
+
+  it('replays a saved terminal explicitly and carries saved Chat as a supported preference', async () => {
     Object.assign(mocks.store.settings, { disabledTuiAgents: ['codex'] })
     Object.assign(mocks.store, {
       runtimeStatusByEnvironmentId: new Map(),
@@ -303,9 +358,26 @@ describe('startFixChecksAgent', () => {
       'terminal',
       undefined
     ])
+    expect(mocks.launchAgentInNewTab.mock.calls.map(([args]) => args.preferredSurface)).toEqual([
+      undefined,
+      'chat'
+    ])
     expect(
-      mocks.launchWorkItemDirect.mock.calls.map(([args]) => args.launchChoice?.requestedSurface)
-    ).toEqual(['terminal', undefined, undefined])
+      mocks.launchWorkItemDirect.mock.calls.map(([args]) => {
+        const inputs = args.resolveLaunchInputs('codex')
+        return {
+          requestedSurface: inputs.requestedSurface,
+          preferredSurface: inputs.preferredSurface
+        }
+      })
+    ).toEqual([
+      { requestedSurface: 'terminal', preferredSurface: undefined },
+      { requestedSurface: undefined, preferredSurface: 'chat' },
+      { requestedSurface: undefined, preferredSurface: undefined }
+    ])
+    expect(
+      mocks.launchWorkItemDirect.mock.calls[1][0].resolveLaunchInputs('claude').preferredSurface
+    ).toBeUndefined()
     clearHostAgentMenuSettingsForTests()
     replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
     const pending = Promise.withResolvers<{ settings: typeof preferences }>()
