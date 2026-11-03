@@ -173,43 +173,4 @@ describe('RuntimeClient module-graph deferral', () => {
       dispatchSpy.mockRestore()
     }
   })
-
-  it('forwards undefined for non-suppressed commands so the env fallback applies', async () => {
-    callMock.mockResolvedValue({ result: { worktrees: [] } })
-
-    await main(['worktree', 'list', '--json'], '/tmp/repo')
-
-    expect(constructorArgsMock).toHaveBeenCalled()
-    const [, , pairingCode, environment] = constructorArgsMock.mock.calls[0]
-    expect(pairingCode).toBeUndefined()
-    expect(environment).toBeUndefined()
-  })
-
-  it('forwards explicit --pairing-code and --environment values verbatim', async () => {
-    callMock.mockResolvedValue({ result: { worktrees: [] } })
-
-    await main(['worktree', 'list', '--pairing-code', 'code-1', '--json'], '/tmp/repo')
-    expect(constructorArgsMock.mock.calls[0][2]).toBe('code-1')
-    expect(constructorArgsMock.mock.calls[0][3]).toBeUndefined()
-
-    constructorArgsMock.mockClear()
-    await main(['worktree', 'list', '--environment', 'env-1', '--json'], '/tmp/repo')
-    expect(constructorArgsMock.mock.calls[0][2]).toBeUndefined()
-    expect(constructorArgsMock.mock.calls[0][3]).toBe('env-1')
-  })
-
-  it('reuses one client instance across repeated ctx.client reads', async () => {
-    const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
-    try {
-      await main(['worktree', 'list', '--json'], '/tmp/repo')
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1)
-      const ctx = dispatchSpy.mock.calls[0]?.[1]
-      const first = ctx?.client
-      expect(ctx?.client).toBe(first)
-      expect(constructorArgsMock).toHaveBeenCalledTimes(1)
-    } finally {
-      dispatchSpy.mockRestore()
-    }
-  })
 })

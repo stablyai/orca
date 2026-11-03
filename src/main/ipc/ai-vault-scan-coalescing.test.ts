@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: mocks.ipcHandle, on: vi.fn() },
   BrowserWindow: { getAllWindows: () => [] }
 }))
-vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService: mocks.scanAiVaultSessionsInService,
   resolveAiVaultSessionTitlesInService: mocks.resolveAiVaultSessionTitlesInService

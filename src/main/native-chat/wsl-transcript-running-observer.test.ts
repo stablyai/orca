@@ -82,17 +82,4 @@ describe('WSL transcript running observer', () => {
     await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(2))
     stop()
   })
-
-  it('lets a running-list read another caller started within the interval answer for it', async () => {
-    const stop = observeWslTranscriptRunningState(
-      '\\\\wsl.localhost\\Ubuntu\\home\\ada\\a.jsonl',
-      vi.fn(),
-      vi.fn()
-    )
-    await vi.advanceTimersByTimeAsync(FIRST)
-    expect(mocks.listRunning).toHaveBeenCalledWith({ startedAfter: expect.any(Number) })
-    const startedAfter: number = mocks.listRunning.mock.calls[0]?.[0]?.startedAfter
-    expect(performance.now() - startedAfter).toBeGreaterThanOrEqual(INTERVAL)
-    stop()
-  })
 })

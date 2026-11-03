@@ -31,7 +31,10 @@ function fixture(liveField: boolean) {
   const client = {}
   const sendLiveInputClick = vi.fn(async () => true)
   const sendLiveTerminalInput = vi.fn(async () => true)
+  const legacySend: typeof terminalInputSend.request = (rpc, params, options) =>
+    terminalInputSend.request(rpc, params, options)
   const scope = {
+    sendTerminalOrderedInput: legacySend,
     client,
     clientRef: ref<object | null>(client),
     connState: 'connected',

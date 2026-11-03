@@ -1,4 +1,4 @@
-import { hostSupportsLaunchChoices } from '@/components/settings/agent-launch-settings-transport'
+import { hostSupportsLaunchChoices } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'

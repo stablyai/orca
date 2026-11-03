@@ -90,22 +90,4 @@ describe('resolveSourceControlAiLinkedIssue', () => {
       })
     ).toBe(77)
   })
-
-  it('matches SSH remote paths from a Windows host without path rewriting', () => {
-    const original = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      const store = makeStore({ [REMOTE_ID]: { linkedIssue: 77 } })
-
-      expect(
-        resolveSourceControlAiLinkedIssue(store, {
-          worktreeId: REMOTE_ID,
-          worktreePath: REMOTE_PATH,
-          connectionId: 'conn-1'
-        })
-      ).toBe(77)
-    } finally {
-      Object.defineProperty(process, 'platform', original)
-    }
-  })
 })

@@ -1,6 +1,6 @@
 import { win32 } from 'node:path'
 import { GROK_CHAT_HISTORY_FILE } from '../../shared/grok-session-paths'
-import { isOmpConversationDirectory } from '../ai-vault/session-scanner-omp-subagent-transcripts'
+import { isOmpConversationDirectory } from '../ai-vault/scanners/omp/session-scanner-omp-subagent-transcripts'
 
 export type SessionIdLookupAgent = 'claude' | 'codex' | 'grok' | 'omp'
 

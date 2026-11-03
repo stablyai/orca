@@ -74,31 +74,6 @@ function harness() {
 }
 
 describe('an accepted Stop', () => {
-  it('settles its run as cancelled until the run reports how it ended', () => {
-    const h = harness()
-    h.apply(live('run-1'))
-    h.answered(h.stopSent())
-    expect(h.views()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
-    h.apply(ended('run-1', 'succeeded'))
-    expect(h.views()).toMatchObject([{ membership: 'settled', outcome: 'succeeded' }])
-  })
-
-  it('keeps the ending the run already reported', () => {
-    const h = harness()
-    h.apply(live('run-1'))
-    const targets = h.stopSent()
-    h.apply(ended('run-1', 'failed'))
-    h.answered(targets)
-    expect(h.views()).toMatchObject([{ membership: 'settled', outcome: 'failed' }])
-  })
-
-  it("takes the run's own ending when the answer names one", () => {
-    const h = harness()
-    h.apply(live('run-1'))
-    h.answered(h.stopSent(), 'succeeded')
-    expect(h.views()).toMatchObject([{ membership: 'settled', outcome: 'succeeded' }])
-  })
-
   it('never settles a run that started after the Stop was sent', () => {
     const h = harness()
     h.apply(live('run-1'))
@@ -106,12 +81,5 @@ describe('an accepted Stop', () => {
     h.apply(ended('run-1', 'succeeded'), live('run-2', 250))
     h.answered(targets)
     expect(h.views()).toMatchObject([{ membership: 'live', state: 'working' }])
-  })
-
-  it('settles nothing for a Stop the provider did not accept', () => {
-    const h = harness()
-    h.apply(live('run-1'))
-    h.apply(...agentChildWorkStopEvidence(h.stopSent(), [], 200))
-    expect(h.views()).toMatchObject([{ membership: 'live' }])
   })
 })

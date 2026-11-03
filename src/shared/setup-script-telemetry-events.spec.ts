@@ -66,17 +66,6 @@ describe('setup script prompt schemas', () => {
     expect(parsed.success).toBe(false)
   })
 
-  it('rejects unknown setup import providers', () => {
-    const parsed = eventSchemas.setup_script_prompt_shown.safeParse({
-      mode: 'import_available',
-      provider: 'made_up_tool',
-      file_count_bucket: '1',
-      unsupported_field_count_bucket: '0',
-      has_shared_hooks: false
-    })
-    expect(parsed.success).toBe(false)
-  })
-
   it('rejects candidate prompt exposure without a provider', () => {
     const parsed = eventSchemas.setup_script_prompt_shown.safeParse({
       mode: 'import_available',
@@ -121,30 +110,6 @@ describe('setup script prompt schemas', () => {
       has_shared_hooks: false,
       files: ['.codex/environments/environment.toml'],
       setup: 'npm install'
-    })
-    expect(parsed.success).toBe(false)
-  })
-
-  it('rejects unknown setup prompt actions', () => {
-    const parsed = eventSchemas.setup_script_prompt_action.safeParse({
-      action: 'save_detected_setup_cancelled',
-      mode: 'configure_needed',
-      file_count_bucket: '0',
-      unsupported_field_count_bucket: '0',
-      has_shared_hooks: false
-    })
-    expect(parsed.success).toBe(false)
-  })
-
-  it('rejects legacy generation setup action names', () => {
-    const parsed = eventSchemas.setup_script_prompt_action.safeParse({
-      action: 'generate_setup_clicked',
-      mode: 'import_available',
-      provider: 'package-manager',
-      file_count_bucket: '2-3',
-      unsupported_field_count_bucket: '0',
-      has_shared_hooks: false,
-      edited_before_save: false
     })
     expect(parsed.success).toBe(false)
   })

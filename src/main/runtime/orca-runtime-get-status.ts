@@ -175,6 +175,10 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
     return this.machineName.read()
   }
 
+  readPairedDeviceName(deviceId: string): string | null {
+    return this.getPairedDeviceNameFn(deviceId)
+  }
+
   /** Bound machine-name lookup; slow lookups temporarily publish hostname, then their result on the next read. */
   machineNameReady(): Promise<void> {
     return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)

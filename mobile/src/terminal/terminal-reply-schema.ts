@@ -11,6 +11,10 @@ export const terminalSendAcceptedSchema = z
   })
   .transform((reply) => reply.send?.accepted === true)
 
+export const terminalInputSessionSchema = z
+  .object({ inputSessionId: z.string().min(1).max(128).nullable() })
+  .transform((reply) => reply.inputSessionId)
+
 // Booleanize only exact true so malformed fields fall through to legacy resubscribe; unread seq stays unconstrained.
 export const terminalViewportUpdatedSchema = z
   .looseObject({

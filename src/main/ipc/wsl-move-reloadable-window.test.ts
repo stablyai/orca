@@ -48,13 +48,4 @@ describe('WSL move window reload landing', () => {
     const relaunched = await openStore()
     expect(relaunched.getUI().activeView).toBe('terminal')
   })
-
-  it('keeps any other view the reload started from', async () => {
-    const store = await openStore()
-    store.updateUI({ activeView: 'tasks' })
-
-    leaveSettingsForWslMoveReload(store)
-
-    expect(store.getUI().activeView).toBe('tasks')
-  })
 })

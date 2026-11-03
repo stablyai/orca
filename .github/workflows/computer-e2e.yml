@@ -109,7 +109,6 @@ jobs:
           src/shared/computer-use-key-spec.test.ts
           src/cli/format.test.ts
           src/cli/handlers/computer.test.ts
-          src/cli/handlers/computer-action-routing.test.ts
           src/cli/handlers/computer-action-validation.test.ts
           src/cli/handlers/computer-state-formatting.test.ts
           src/cli/index.test.ts

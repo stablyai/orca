@@ -11,16 +11,25 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const { git, glab, gh } = vi.hoisted(() => ({ git: vi.fn(), glab: vi.fn(), gh: vi.fn() }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: git,
-  glabExecFileAsync: glab,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: git
+}))
+
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: glab
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: gh
 }))
 
 import { listMergeRequests } from './merge-request-list'
 import { listIssues } from './issues'
 import { _resetProjectRefCache, _resetKnownHostsCache } from './gitlab-project-ref-resolution'
-import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
+import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
 import { resolveIssueSource } from './gitlab-issue-source-resolution'
 
 function serveRemotes(repos: Record<string, Record<string, string>>): void {

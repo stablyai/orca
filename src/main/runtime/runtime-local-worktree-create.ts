@@ -1,4 +1,4 @@
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
+import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'
 import { shouldRunSetupForCreate } from '../workspace-hooks/effective-hook-config'
 import { getEffectiveHooks } from '../workspace-hooks/hooks'
 import type { Repo } from '../../shared/repo-types'
@@ -17,7 +17,7 @@ import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-creat
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
-import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
+import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
 import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
 import {
   createRuntimeLocalGitWorktree,

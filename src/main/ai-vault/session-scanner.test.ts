@@ -5,36 +5,39 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
-import { KIRO_FIXTURE_SESSION_ID } from './session-scanner-kiro-fixtures'
+import { KIRO_FIXTURE_SESSION_ID } from './scanners/kiro/session-scanner-kiro-fixtures'
 import { writeEveryAgentVault } from './session-scanner-every-agent-fixture'
 
 // Use synchronous SQLite implementations because worker bundles are absent in the test runtime.
-vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
-  const v1List = await import('./session-scanner-opencode-sqlite-list')
-  const v1Parse = await import('./session-scanner-opencode-sqlite')
-  const v2List = await import('./session-scanner-opencode2-sqlite-list')
-  const v2Parse = await import('./session-scanner-opencode2-sqlite')
-  return {
-    listOpenCodeSqliteSessionsViaWorker: (
-      args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
-    ) => v1List.listOpenCodeSqliteSessions(args),
-    listZcodeSqliteSessionsViaWorker: (
-      args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
-    ) => v1List.listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
-    parseOpenCodeSqliteSessionViaWorker: (
-      args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
-    ) => v1Parse.parseOpenCodeSqliteSession(args),
-    parseZcodeSqliteSessionViaWorker: (
-      args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
-    ) => v1Parse.parseOpenCodeSqliteSession({ ...args, agent: 'zcode' }),
-    listOpenCode2SqliteSessionsViaWorker: (
-      args: Parameters<typeof v2List.listOpenCode2SqliteSessions>[0]
-    ) => v2List.listOpenCode2SqliteSessions(args),
-    parseOpenCode2SqliteSessionViaWorker: (
-      args: Parameters<typeof v2Parse.parseOpenCode2SqliteSession>[0]
-    ) => v2Parse.parseOpenCode2SqliteSession(args)
+vi.mock(
+  './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async () => {
+    const v1List = await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite-list')
+    const v1Parse = await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite')
+    const v2List = await import('./scanners/opencode2/session-scanner-opencode2-sqlite-list')
+    const v2Parse = await import('./scanners/opencode2/session-scanner-opencode2-sqlite')
+    return {
+      listOpenCodeSqliteSessionsViaWorker: (
+        args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
+      ) => v1List.listOpenCodeSqliteSessions(args),
+      listZcodeSqliteSessionsViaWorker: (
+        args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
+      ) => v1List.listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
+      parseOpenCodeSqliteSessionViaWorker: (
+        args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
+      ) => v1Parse.parseOpenCodeSqliteSession(args),
+      parseZcodeSqliteSessionViaWorker: (
+        args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
+      ) => v1Parse.parseOpenCodeSqliteSession({ ...args, agent: 'zcode' }),
+      listOpenCode2SqliteSessionsViaWorker: (
+        args: Parameters<typeof v2List.listOpenCode2SqliteSessions>[0]
+      ) => v2List.listOpenCode2SqliteSessions(args),
+      parseOpenCode2SqliteSessionViaWorker: (
+        args: Parameters<typeof v2Parse.parseOpenCode2SqliteSession>[0]
+      ) => v2Parse.parseOpenCode2SqliteSession(args)
+    }
   }
-})
+)
 
 let tempRoots: string[] = []
 
