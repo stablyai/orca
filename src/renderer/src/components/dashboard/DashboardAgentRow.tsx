@@ -85,6 +85,8 @@ type Props = {
   // Why: inline-card orchestration rows can fold their child agents.
   childAgentCount?: number
   childAgentsExpanded?: boolean
+  // Shown beside the collapsed count so hidden child work stays visible.
+  collapsedChildAgentsState?: AgentDotState
   onToggleChildAgents?: () => void
   // Why: chevron indentation replaces fixed-offset lineage connector art.
   hideLineageConnectors?: boolean
@@ -107,6 +109,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   isFocusedPane = false,
   childAgentCount,
   childAgentsExpanded = false,
+  collapsedChildAgentsState,
   onToggleChildAgents,
   hideLineageConnectors = false,
   sendTargetStatus,
@@ -343,11 +346,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )}
         {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
         {hasChildDisclosure && !childAgentsExpanded && (
-          <span
-            className="shrink-0 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums"
-            aria-hidden
-          >
-            +{childAgentCount}
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums">
+            {collapsedChildAgentsState && (
+              <AgentStateDot state={collapsedChildAgentsState} size="sm" tooltipSide="right" />
+            )}
+            <span aria-hidden>+{childAgentCount}</span>
           </span>
         )}
         <DashboardAgentRowTrailingControls

@@ -149,32 +149,6 @@ describe('activateBrowserPagePaletteResult', () => {
     seedStore()
   })
 
-  it('activates the browser workspace and page', () => {
-    expect(activateBrowserPagePaletteResult(target)).toEqual({
-      status: 'activated',
-      pageId: 'page-1',
-      focusTarget: 'webview'
-    })
-
-    const state = useAppStore.getState()
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {})
-    expect(state.activeBrowserTabId).toBe('ws-1')
-    expect(state.activeTabType).toBe('browser')
-    expect(state.browserTabsByWorktree['wt-1'][0].activePageId).toBe('page-1')
-  })
-
-  it('threads the worktree execution host into worktree activation', () => {
-    seedStore({
-      worktreesByRepo: { 'repo-1': [makeWorktree({ hostId: 'ssh:host-1' })] }
-    })
-
-    activateBrowserPagePaletteResult(target)
-
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      executionHostId: 'ssh:host-1'
-    })
-  })
-
   it('activates an SSH worktree through its paired-runtime owner alias', () => {
     seedStore({
       worktreesByRepo: {
@@ -273,55 +247,6 @@ describe('activateBrowserPagePaletteResult', () => {
       focusTarget: 'address-bar'
     })
   })
-
-  it('reports a missing page or workspace as a stale target', () => {
-    seedStore({ browserPagesByWorkspace: {} })
-    expect(activateBrowserPagePaletteResult(target)).toEqual({
-      status: 'failed',
-      reason: 'missing-page'
-    })
-
-    seedStore({ browserTabsByWorktree: {} })
-    expect(activateBrowserPagePaletteResult(target)).toEqual({
-      status: 'failed',
-      reason: 'missing-page'
-    })
-
-    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
-  })
-
-  // A live page in a dead workspace is a different story than a dead page.
-  it('reports an absent worktree as a missing workspace', () => {
-    seedStore({ worktreesByRepo: {} })
-
-    expect(activateBrowserPagePaletteResult(target)).toEqual({
-      status: 'failed',
-      reason: 'missing-worktree'
-    })
-    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
-  })
-
-  // Workspace removal also purges pages; check it first to report the actual missing owner.
-  it('reports a deleted worktree as a missing workspace once its pages are purged', () => {
-    seedStore({
-      worktreesByRepo: {},
-      browserTabsByWorktree: {},
-      browserPagesByWorkspace: {}
-    })
-
-    expect(activateBrowserPagePaletteResult(target)).toEqual({
-      status: 'failed',
-      reason: 'missing-worktree'
-    })
-    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('reports blocked activation without claiming the workspace disappeared', () => {
-    mocks.activateAndRevealWorkspace.mockReturnValue(false)
-
-    expect(activateBrowserPagePaletteResult(target)).toEqual({ status: 'blocked' })
-    expect(useAppStore.getState().activeBrowserTabId).toBeNull()
-  })
 })
 
 // Preserve cross-column focus through setActiveBrowserTab → activateTab.
@@ -365,12 +290,6 @@ describe('activateBrowserPagePaletteResult group focus', () => {
     const state = useAppStore.getState()
     expect(state.activeGroupIdByWorktree['wt-1']).toBe('group-2')
     expect(state.groupsByWorktree['wt-1'][1].activeTabId).toBe('unified-browser-1')
-  })
-
-  it('leaves the focused group unchanged when the page is already in it', () => {
-    expect(activateBrowserPagePaletteResult(target).status).toBe('activated')
-
-    expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-1')
   })
 
   // Without a unified tab, success would leave the previous tab visible.

@@ -3,7 +3,7 @@ import { createElement, useEffect } from 'react'
 import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import pageAsyncStorage, {
   publishPageStorage,
-  refreshPageTerminalShortcuts
+  refreshPageTerminalSettings
 } from '../mobile-web-shell/bridge/page-async-storage'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -447,7 +447,7 @@ it('finishes custom-key hydration when side-rail geometry arrives during the rea
   expect(scope.setVisibleBuiltInIds.mock.calls.at(-1)![0]).not.toContain('arrowUp')
 })
 
-it('refreshes a mounted terminal from native shortcut settings without router focus, remount or draft writes', async () => {
+it('refreshes mounted terminal settings without router focus, remount or draft writes', async () => {
   const layoutKey = 'orca:terminal-accessory-layout'
   const customKey = 'orca:custom-accessory-keys'
   const draftKey = 'orca:terminalDrafts:host-a:wt-1'
@@ -462,6 +462,9 @@ it('refreshes a mounted terminal from native shortcut settings without router fo
   const storage: Record<string, string> = {
     [layoutKey]: initial,
     [customKey]: '[]',
+    'orca:terminalTextScale': '1',
+    'orca:terminalAutocompleteEnabled': 'false',
+    'orca:terminalLinkOpenMode': 'orca-browser',
     [draftKey]: 'old draft'
   }
   const pair = createFakeBridgePortPair({ route: { pathname: '/h/host-a/session/wt-1' }, storage })
@@ -475,15 +478,17 @@ it('refreshes a mounted terminal from native shortcut settings without router fo
   )
   pair.client.onStorageUpdate(() => {
     const session = pair.client.getShellSession()!
-    refreshPageTerminalShortcuts(session.storage, session.storageOversize)
+    refreshPageTerminalSettings(session.storage, session.storageOversize)
   })
   vi.mocked(AsyncStorage.getItem).mockImplementation(pageAsyncStorage.getItem)
   const scope = sessionScope()
+  let ready = false
   let mounts = 0
   function Harness() {
     useEffect(() => {
       mounts += 1
     }, [])
+    ready = useMobileSessionPreferenceFocus(scope).terminalPreferencesReady
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lifecycle reads only the supplied session members.
     useMobileSessionLifecycle(scope as never)
     return null
@@ -495,12 +500,19 @@ it('refreshes a mounted terminal from native shortcut settings without router fo
   await pageAsyncStorage.setItem(draftKey, 'unsent page draft')
   await pair.flush()
   const writes = pair.storageWrites.length
+  storage['orca:terminalTextScale'] = '1.5'
+  storage['orca:terminalAutocompleteEnabled'] = 'true'
+  storage['orca:terminalLinkOpenMode'] = 'phone-browser'
   storage[layoutKey] = layout(['enter', 'arrowUp'], false)
   storage[customKey] = JSON.stringify([{ id: 'two', label: 'Two', bytes: '2', enter: false }])
   await act(async () => {
     pair.host.publishStorage()
     await pair.flush()
   })
+  expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1.5)
+  expect(scope.setAutocompleteEnabled).toHaveBeenLastCalledWith(true)
+  expect(scope.setTerminalLinkOpenMode).toHaveBeenLastCalledWith('phone-browser')
+  expect(ready).toBe(true)
   expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(false)
   expect(scope.setVisibleBuiltInIds).toHaveBeenLastCalledWith(['enter', 'arrowUp'])
   expect(scope.setCustomKeys).toHaveBeenLastCalledWith([
@@ -528,11 +540,17 @@ it('refreshes a mounted terminal from native shortcut settings without router fo
 
   delete storage[layoutKey]
   delete storage[customKey]
+  delete storage['orca:terminalTextScale']
+  delete storage['orca:terminalAutocompleteEnabled']
+  delete storage['orca:terminalLinkOpenMode']
   const afterLocalWrite = pair.storageWrites.length
   await act(async () => {
     pair.host.publishStorage()
     await pair.flush()
   })
+  expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1)
+  expect(scope.setAutocompleteEnabled).toHaveBeenLastCalledWith(false)
+  expect(scope.setTerminalLinkOpenMode).toHaveBeenLastCalledWith('orca-browser')
   expect(await pageAsyncStorage.getItem(layoutKey)).toBeNull()
   expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(true)
   expect(scope.setCustomKeys).toHaveBeenLastCalledWith([])

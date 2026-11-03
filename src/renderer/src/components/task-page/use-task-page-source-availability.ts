@@ -2,10 +2,8 @@ import type { TaskPageRuntimeHostsModel } from './use-task-page-runtime-hosts'
 import { useCallback, useMemo } from 'react'
 import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import type { Repo } from '../../../../shared/repo-types'
-import {
-  getTaskPageRepoSourceContext,
-  getTaskSourceHostAvailabilityForHost
-} from './task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskSourceHostAvailabilityForHost } from './task-page-source-context'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
@@ -23,7 +21,6 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     settings,
     preflightStatus,
     preflightStatusChecked,
-    linearListInvalidationToken,
     providerRuntimeContextKey,
     preflightStatusCurrent,
     preflightDescribesDesktop,
@@ -112,13 +109,6 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
       selectedLinearWorkspaceId
     ]
   )
-  // Why: only react to invalidation tokens for this TaskPage source scope.
-  const linearListInvalidationVersionForSource = useMemo(() => {
-    const scope = linearTaskSourceContext
-      ? getTaskSourceCacheScope(linearTaskSourceContext)
-      : 'local'
-    return linearListInvalidationToken.scope === scope ? linearListInvalidationToken.version : 0
-  }, [linearListInvalidationToken, linearTaskSourceContext])
   const jiraTaskSourceContext = useMemo(
     () =>
       normalizeTaskSourceContext({
@@ -156,7 +146,6 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     accountBackedTaskSourceHostId: typeof accountBackedTaskSourceHostId
     fallbackTaskSourceProjectId: typeof fallbackTaskSourceProjectId
     linearTaskSourceContext: typeof linearTaskSourceContext
-    linearListInvalidationVersionForSource: typeof linearListInvalidationVersionForSource
     jiraTaskSourceContext: typeof jiraTaskSourceContext
     jiraTaskSourceScopeKey: typeof jiraTaskSourceScopeKey
     accountBackedTaskSourceHostAvailability: typeof accountBackedTaskSourceHostAvailability
@@ -166,7 +155,6 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   nextModel.accountBackedTaskSourceHostId = accountBackedTaskSourceHostId
   nextModel.fallbackTaskSourceProjectId = fallbackTaskSourceProjectId
   nextModel.linearTaskSourceContext = linearTaskSourceContext
-  nextModel.linearListInvalidationVersionForSource = linearListInvalidationVersionForSource
   nextModel.jiraTaskSourceContext = jiraTaskSourceContext
   nextModel.jiraTaskSourceScopeKey = jiraTaskSourceScopeKey
   nextModel.accountBackedTaskSourceHostAvailability = accountBackedTaskSourceHostAvailability

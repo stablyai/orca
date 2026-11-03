@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { captureDescendantSnapshot } from '../pty-descendant-termination'
+import { captureDescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import { endpointIsProvenDead, probeSocketConnect } from './daemon-endpoint-probe'
 import { getPsProcessIdentityAsync } from './daemon-process-identity-query'
 import { hasErrorCode, inspectProcessLiveness } from './daemon-process-inspection'

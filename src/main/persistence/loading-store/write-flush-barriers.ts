@@ -1,6 +1,6 @@
 import { writeFileSync, renameSync, unlinkSync } from 'node:fs'
 import { rename, rm, writeFile } from 'node:fs/promises'
-import { durableWriteTempPath } from '../../durable-file-write'
+import { durableWriteTempPath } from '../../filesystem/durable-file-write'
 import { getGithubCacheFile } from './user-data-path'
 
 import type { StoreRuntimeState } from './store-runtime-state'

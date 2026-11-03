@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../shared/review-refresh-policy'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
-import type { ChecksDetailPollingPolicy } from './checks-detail-polling-policy'
+import type { ChecksDetailPollingPolicy } from '../../../../../shared/github/checks-detail-polling-policy'
 import type { ChecksPanelPollingInput, ChecksPanelPollingState } from './use-checks-panel-polling'
 
 export function useChecksDetailTimer({

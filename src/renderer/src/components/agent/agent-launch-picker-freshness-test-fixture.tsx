@@ -3,7 +3,10 @@ import { act, fireEvent, render } from '@testing-library/react'
 import { expect, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
-import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from './use-agent-launch-picker-inventory'
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
 import * as picker from '../../../../shared/agent-launch-picker'
@@ -48,7 +51,9 @@ export async function exerciseAgentPickerFreshness({
   const snapshots: picker.AgentPickerEntry[] = []
   const current: { entry?: picker.AgentPickerEntry } = {}
   function Setup({ value }: { value: typeof menu }) {
-    const [entry] = useAgentLaunchPickerInventory('wt', value, true)
+    const [entry] = useAgentPickerInventoryEntries(
+      useAgentLaunchPickerInventorySource('wt', value, true)
+    )
     current.entry = entry
     snapshots.push(entry)
     return createElement(
@@ -76,7 +81,9 @@ export async function exerciseAgentPickerFreshness({
     view.container.querySelector('[data-option-id="effort"] [data-state="on"]')?.textContent
   const launch = () => {
     fireEvent.click(
-      [...view.container.querySelectorAll('button')].find((b) => b.textContent === 'Launch chat')!
+      [...view.container.querySelectorAll('button')].find(
+        (b) => b.getAttribute('aria-label') === 'Launch chat'
+      )!
     )
     expect(launches.mock.lastCall).toEqual([{}])
   }

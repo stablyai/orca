@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import * as agentView from '../claude/agent-view-service'
+import * as agentView from '../claude/agent-view/agent-view-service'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty/pty-ipc-daemon-provider-fixtures'
@@ -24,8 +24,10 @@ vi.mock('../agent-hooks/server', () =>
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../pwsh', () => import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../wsl', async (importOriginal) =>
+vi.mock('../pty/shell-startup/pwsh', () =>
+  import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty/pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../telemetry/client', () =>

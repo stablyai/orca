@@ -22,7 +22,7 @@ const host = vi.hoisted(() => ({ listed: true, keptForPeers: false }))
 vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: () => (host.listed ? [{ id: 'wsl:Ubuntu' }] : [])
 }))
-vi.mock('../wsl/wsl-host-kept-for-peers', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-kept-for-peers', () => ({
   wasWslHostKeptForPeers: () => host.keptForPeers
 }))
 
@@ -252,6 +252,43 @@ describe('releasing moved projects here', () => {
       expect(journal.released).toEqual([])
       expect(window.reloads).toBe(0)
     }
+  })
+
+  // A bring-back reads the host first: a live terminal or a stopped distro refuses with nothing
+  // turned off, so the host's automations never blink and no terminal is slept.
+  it('refuses a bring-back on its preflight before touching automations or terminals', async () => {
+    for (const [preflight, reason] of [
+      ['still-running', 'host-still-running'],
+      ['unreachable', 'host-unreachable']
+    ] as const) {
+      journal.chain = [move('m1', 'r1'), move('m2', 'r2')]
+      journal.released = []
+      window.reloads = 0
+      const stopHostAutomations = vi.fn(async () => automationsOff())
+      const stopHostCopies = vi.fn(async () => 'stopped' as const)
+      const result = await releaseWslMoveChainHere('/user-data', 'Ubuntu', [], () => ({
+        preflightHostCopies: vi.fn(async () => preflight),
+        stopHostAutomations,
+        stopHostCopies
+      }))
+      expect(result).toEqual({ released: false, reason })
+      expect(result).not.toHaveProperty('hostTerminalsAsleep')
+      expect(stopHostAutomations).not.toHaveBeenCalled()
+      expect(stopHostCopies).not.toHaveBeenCalled()
+      expect(journal.released).toEqual([])
+      expect(window.reloads).toBe(0)
+    }
+  })
+
+  it('brings moves back as an undo would once the preflight finds the host idle', async () => {
+    const result = await releaseWslMoveChainHere('/user-data', 'Ubuntu', [], () => ({
+      preflightHostCopies: vi.fn(async () => 'stopped' as const),
+      stopHostAutomations: vi.fn(async () => automationsOff()),
+      stopHostCopies: vi.fn(async () => 'stopped' as const)
+    }))
+    expect(result).toMatchObject({ released: true, repoIds: ['r2', 'r1'] })
+    expect(journal.released).toEqual(['m2', 'm1'])
+    expect(window.reloads).toBe(1)
   })
 
   it('turns the automations back on when the terminals then fail to stop', async () => {

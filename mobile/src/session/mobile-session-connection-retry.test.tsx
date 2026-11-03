@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ForceReconnect } from '../transport/rpc-client-context-contract'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'web' } }))
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
 vi.mock('../layout/use-shell-side-rail', () => ({
   useShellSideRail: () => false,
   useDirectionPadAvailable: () => false

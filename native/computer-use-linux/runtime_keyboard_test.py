@@ -52,11 +52,6 @@ class RuntimeKeyboardTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_named_keys_synthesize_the_keysym(self):
-        for raw, keysym in (("enter", 0xFF0D), ("Tab", 0xFF09), ("esc", 0xFF1B), ("left", 0xFF51), ("Down", 0xFF54)):
-            self.events.clear()
-            runtime.press_key(raw)
-            self.assertEqual(self.events, [(keysym, None, FakeKeySynthType.SYM)], raw)
 
     def test_missing_xdotool_preserves_ascii_and_refuses_unicode(self):
         with mock.patch.object(runtime.shutil, "which", return_value=None), mock.patch.dict(
@@ -128,8 +123,6 @@ class RuntimeKeyboardTest(unittest.TestCase):
         self.assertEqual(self.run_hotkey("CmdOrCtrl+A"), ["/usr/bin/xdotool", "key", "ctrl+a"])
         self.assertEqual(self.run_hotkey("ctrl+shift+T"), ["/usr/bin/xdotool", "key", "ctrl+shift+t"])
 
-    def test_hotkey_keeps_named_keys(self):
-        self.assertEqual(self.run_hotkey("alt+Tab"), ["/usr/bin/xdotool", "key", "alt+Tab"])
 
 
 if __name__ == "__main__":

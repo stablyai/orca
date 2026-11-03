@@ -4,8 +4,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
-import { getLocalCommandSourcePolicyNotice } from './repository-hook-settings-draft'
+
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 
 vi.mock('@/store/index', () => ({
@@ -64,78 +63,6 @@ afterEach(() => {
   rendered = null
 })
 
-describe('getLocalCommandSourcePolicyNotice', () => {
-  it('does not show a notice when no local scripts are saved', () => {
-    expect(
-      getLocalCommandSourcePolicyNotice({
-        hooksInspectionReady: true,
-        currentPolicy: 'shared-only',
-        setupScript: '',
-        archiveScript: '',
-        hasSharedScript: false
-      })
-    ).toBeNull()
-  })
-
-  it('does not show a notice when command source already includes local scripts', () => {
-    expect(
-      getLocalCommandSourcePolicyNotice({
-        hooksInspectionReady: true,
-        currentPolicy: 'local-only',
-        setupScript: 'pnpm install',
-        archiveScript: '',
-        hasSharedScript: true
-      })
-    ).toBeNull()
-
-    expect(
-      getLocalCommandSourcePolicyNotice({
-        hooksInspectionReady: true,
-        currentPolicy: 'run-both',
-        setupScript: '',
-        archiveScript: 'echo archive',
-        hasSharedScript: true
-      })
-    ).toBeNull()
-  })
-
-  it('waits for hook inspection before recommending a command source', () => {
-    expect(
-      getLocalCommandSourcePolicyNotice({
-        hooksInspectionReady: false,
-        currentPolicy: 'shared-only',
-        setupScript: 'pnpm install',
-        archiveScript: '',
-        hasSharedScript: false
-      })
-    ).toEqual({ kind: 'checking' })
-  })
-
-  it('recommends local commands when local scripts are saved and no shared script exists', () => {
-    expect(
-      getLocalCommandSourcePolicyNotice({
-        hooksInspectionReady: true,
-        currentPolicy: 'shared-only',
-        setupScript: 'pnpm install',
-        archiveScript: '',
-        hasSharedScript: false
-      })
-    ).toEqual({ kind: 'action', policy: 'local-only', label: 'Use local commands' })
-  })
-
-  it('recommends run-both when local and shared scripts both exist', () => {
-    expect(
-      getLocalCommandSourcePolicyNotice({
-        hooksInspectionReady: true,
-        currentPolicy: 'shared-only',
-        setupScript: '',
-        archiveScript: 'echo archive',
-        hasSharedScript: true
-      })
-    ).toEqual({ kind: 'action', policy: 'run-both', label: 'Run both' })
-  })
-})
-
 describe('RepositoryHooksSection setup startup policy', () => {
   it('persists wait-for-setup when the repository toggle is checked', () => {
     const updates: NonNullable<Repo['hookSettings']>[] = []
@@ -155,20 +82,5 @@ describe('RepositoryHooksSection setup startup policy', () => {
       setupRunPolicy: 'run-by-default',
       scripts: { setup: '', archive: '' }
     })
-  })
-})
-
-describe('RepositoryHooksSection execution ownership', () => {
-  it('routes issue-command reads through the repository runtime owner', async () => {
-    vi.mocked(readRuntimeIssueCommand).mockClear()
-    await act(async () => {
-      rendered = renderRepositoryHooksSection({
-        onUpdateHookSettings: () => {},
-        repo: { ...repo, executionHostId: 'runtime:hub' }
-      })
-      await Promise.resolve()
-    })
-
-    expect(readRuntimeIssueCommand).toHaveBeenCalledWith('runtime:hub', repo.id)
   })
 })

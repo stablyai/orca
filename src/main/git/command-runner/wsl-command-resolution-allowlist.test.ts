@@ -10,7 +10,9 @@ vi.mock('node:child_process', async (original) => ({
   spawn: spawnMock,
   execFileSync: execFileSyncMock
 }))
-vi.mock('../../wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', () => ({
+  noteWslDistroLaunched: vi.fn()
+}))
 
 import { resolveCommand } from './wsl-command-resolution'
 import { gitExecFileSync } from './git-exec-file-sync'

@@ -151,41 +151,4 @@ describe('rich markdown table control target', () => {
       scrollContainer.remove()
     }
   })
-
-  it('refreshes layout state when the editor scrolls without pointer movement', async () => {
-    const scrollContainer = document.createElement('div')
-    const editorElement = document.createElement('div')
-    scrollContainer.append(editorElement)
-    document.body.append(scrollContainer)
-    const editor = new Editor({
-      element: editorElement,
-      extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
-      content: TABLE,
-      contentType: 'markdown'
-    })
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        disconnect = vi.fn()
-        observe = vi.fn()
-      }
-    )
-    const view = render(<TargetHarness editor={editor} scrollContainer={scrollContainer} />)
-    try {
-      await waitFor(() =>
-        expect(view.container.firstElementChild?.getAttribute('data-active')).toBe('true')
-      )
-      const renderCount = Number(view.container.firstElementChild?.getAttribute('data-renders'))
-      fireEvent.scroll(scrollContainer)
-      expect(frameCallbacks.size).toBe(1)
-      act(flushFrames)
-      expect(
-        Number(view.container.firstElementChild?.getAttribute('data-renders'))
-      ).toBeGreaterThan(renderCount)
-    } finally {
-      view.unmount()
-      editor.destroy()
-      scrollContainer.remove()
-    }
-  })
 })

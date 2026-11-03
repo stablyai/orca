@@ -1,7 +1,7 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createAgentModelCatalogSettingsExpiry } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -32,7 +32,7 @@ vi.mock('../startup/login-shell-environment', () => ({
     return { ...shell.current }
   }
 }))
-vi.mock('../pty/windows-environment-path', () => ({
+vi.mock('../pty/environment/windows-environment-path', () => ({
   cachedPersistedWindowsPathSegments: () => shell.saved,
   readPersistedWindowsPathSegmentsAsync: async () => (shell.saved = [...shell.nextSaved]),
   mergePersistedWindowsPathAsync: async () => {}

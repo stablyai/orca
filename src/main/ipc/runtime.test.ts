@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, onMock, removeAllListenersMock, removeHandlerMock, fromWebContentsMock } =
@@ -21,6 +22,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+import {
+  clearStructuredHostStub,
+  hostCalls,
+  installStructuredHostStub,
+  SESSION
+} from '../runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'
@@ -47,6 +54,60 @@ describe('registerRuntimeHandlers', () => {
     removeHandlerMock.mockReset()
     fromWebContentsMock.mockReset()
   })
+
+  it.each(['desktop-renderer', 'trusted-local:runtime'])(
+    'identifies an answer by %s as this computer through desktop IPC',
+    async (resolvedBy) => {
+      installStructuredHostStub()
+      try {
+        hostCalls.history.mockReturnValue({
+          ok: true,
+          page: {
+            submissions: [],
+            removedItemIds: [],
+            items: [
+              {
+                itemId: 'question-1',
+                sequence: 1,
+                revision: 2,
+                observedAt: 10,
+                body: {
+                  kind: 'question',
+                  question: 'Which color?',
+                  options: [],
+                  resolution: {
+                    state: 'resolved',
+                    selectedOptionId: null,
+                    resolvedBy,
+                    resolvedAt: 10
+                  }
+                }
+              }
+            ]
+          }
+        })
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this IPC read uses only identity/name methods; the installed host supplies journal reads.
+        registerRuntimeHandlers({
+          getRuntimeId: () => 'runtime-1',
+          readMachineName: () => 'Work Mac',
+          readPairedDeviceName: () => null
+        } as never)
+        const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')![1]
+        const response = await handler(runtimeCallEvent(), {
+          method: 'agentSession.history',
+          params: { sessionId: SESSION, direction: 'tail' }
+        })
+        expect(response).toMatchObject({
+          ok: true,
+          result: {
+            page: { items: [{ body: { resolution: { resolvedByDevice: { kind: 'current' } } } }] }
+          }
+        })
+      } finally {
+        clearStructuredHostStub()
+      }
+    }
+  )
 
   it('routes sync requests through the authoritative browser window id', () => {
     const runtime = {
@@ -214,7 +275,7 @@ describe('registerRuntimeHandlers', () => {
     }
     const runtime = {
       getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
-      getClientSettings: vi.fn(() => ({ experimentalNativeChat: true })),
+      getClientSettings: vi.fn(() => ({ nativeChatProviders: EVERY_AGENT_CHAT })),
       restoreStructuredAgentSessionTabs: vi.fn(async () => undefined),
       listMobileSessionTabs: vi.fn(async () => ({
         worktree: 'workspace-1',

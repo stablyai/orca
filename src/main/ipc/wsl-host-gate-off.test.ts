@@ -46,9 +46,11 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   runProcess: mocks.runProcess
 }))
 
-vi.mock('../wsl/wsl-host-connector', () => ({ createWslHostConnector: mocks.createConnector }))
+vi.mock('../wsl/host-lifecycle/wsl-host-connector', () => ({
+  createWslHostConnector: mocks.createConnector
+}))
 
-vi.mock('../wsl/wsl-host-e2e-fake-connector', async (importOriginal) => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-e2e-fake-connector', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createFakeWslHostConnector: mocks.createFakeConnector
 }))
@@ -81,7 +83,10 @@ import {
 } from './runtime-environments/runtime-environments-ipc-test-harness'
 import { registerWslHostHandlers, WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handlers'
 import { resolveManagedRuntimeEnvironment } from './runtime-environments/runtime-environment-managed-tunnel'
-import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
+import {
+  getWslHostService,
+  setWslHostService
+} from '../wsl/host-lifecycle/wsl-host-service-instance'
 import { getSavedRuntimeAiVaultHostInfos } from '../ai-vault/runtime-session-scanner'
 
 const handler = channelHandlerLookup(mocks.handle)
@@ -126,7 +131,8 @@ describe('WSL hosts with the internal gate closed', () => {
     getWorkspaceSessionHostIds: () => [],
     updateSettings: vi.fn(),
     removeWorkspaceSessionHost: vi.fn(),
-    setRemoteLayoutSnapshot: vi.fn()
+    setRemoteLayoutSnapshot: vi.fn(),
+    setHostRepoCatalogSnapshot: vi.fn()
   }
 
   beforeEach(() => {
@@ -202,6 +208,7 @@ describe('WSL hosts with the internal gate closed', () => {
   })
 
   it('creates the WSL host service only once the gate is open', () => {
+    vi.stubEnv('MODE', 'e2e')
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
     vi.stubEnv(
       'ORCA_E2E_FAKE_WSL_HOSTS',
@@ -225,8 +232,13 @@ describe('WSL hosts with the internal gate closed', () => {
     expect(registeredWslHostChannels().sort()).toEqual([...WSL_HOST_HANDLER_CHANNELS].sort())
   })
 
-  it('registers nothing with the gate open on a non-Windows host without the fake', () => {
+  it.each([
+    ['without the fake', ''],
+    ['with the fake outside an e2e build', JSON.stringify({ distros: [], pairingCode: 'x' })]
+  ])('registers nothing with the gate open on a non-Windows host %s', (_label, fake) => {
+    vi.stubEnv('MODE', 'production')
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+    vi.stubEnv('ORCA_E2E_FAKE_WSL_HOSTS', fake)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'linux' })
     try {
@@ -238,6 +250,7 @@ describe('WSL hosts with the internal gate closed', () => {
     }
 
     expect(getWslHostService()).toBeNull()
+    expect(mocks.createFakeConnector).not.toHaveBeenCalled()
     expect(registeredWslHostChannels()).toEqual([])
     expect(store.onSettingsChanged).not.toHaveBeenCalled()
   })

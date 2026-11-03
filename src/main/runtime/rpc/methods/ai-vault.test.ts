@@ -5,7 +5,7 @@ import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RuntimeAiVaultCommands } from '../../runtime-ai-vault-commands'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultServiceScanOptions } from '../../../ai-vault/session-scanner-service-protocol'
+import type { AiVaultServiceScanOptions } from '../../../ai-vault/scan-service/session-scanner-service-protocol'
 import {
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
@@ -19,7 +19,7 @@ const { scanAiVaultSessionsInService, resolveAiVaultSessionTitlesInService } = v
   resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
-vi.mock('../../../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../../../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService,
   resolveAiVaultSessionTitlesInService
@@ -30,8 +30,8 @@ import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams
 } from './ai-vault'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { recordStructuredAgentSessionHostInstallRefusal } from '../../structured-agent-session-host-refusal'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { recordStructuredAgentSessionHostInstallRefusal } from '../../agent-session/structured-agent-session-host-refusal'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { installCopyingChat } from '../../../ai-vault/structured-session-ownership.test-support'
 import {

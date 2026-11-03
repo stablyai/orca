@@ -1,8 +1,12 @@
+import { getAutomationSetupDefaultDecision } from '../../../../shared/automation-setup-decision'
+export { getAutomationSetupDefaultDecision } from '../../../../shared/automation-setup-decision'
 import type { AutomationWorkspaceMode } from '../../../../shared/automations-types'
 import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
+import { findAutomationRepo } from '../../../../shared/automation-repo-target'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 
 type AutomationSetupSource = {
@@ -16,10 +20,17 @@ function getAutomationSetupSource(
   projectHostSetups: readonly ProjectHostSetup[],
   yamlHooks: OrcaHooks | null | undefined
 ): AutomationSetupSource | null {
+  const repo = findAutomationRepo(repos, repoId)
+  if (!repo) {
+    return null
+  }
   const setup = projectHostSetups.find(
-    (candidate) => candidate.repoId === repoId && candidate.setupState === 'ready'
+    (candidate) =>
+      candidate.repoId === repoId &&
+      candidate.setupState === 'ready' &&
+      candidate.hostId === getRepoExecutionHostId(repo) &&
+      candidate.path === repo.path
   )
-  const repo = repos.find((candidate) => candidate.id === repoId)
   const hookSettings = setup?.hookSettings ?? repo?.hookSettings
   const setupConfig = getSetupConfig(
     hookSettings ? { hookSettings } : repo,
@@ -32,15 +43,6 @@ function getAutomationSetupSource(
     setupScript: setupConfig.command,
     setupRunPolicy: hookSettings?.setupRunPolicy ?? 'run-by-default'
   }
-}
-
-export function getAutomationSetupDefaultDecision(
-  source: Pick<AutomationSetupSource, 'setupRunPolicy'> | null
-): Extract<SetupDecision, 'run' | 'skip'> | undefined {
-  if (!source) {
-    return undefined
-  }
-  return source.setupRunPolicy === 'run-by-default' ? 'run' : 'skip'
 }
 
 export function getVisibleAutomationSetupDecision(args: {

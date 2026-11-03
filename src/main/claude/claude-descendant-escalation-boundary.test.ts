@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { terminateDescendantSnapshotWithVerdict } from '../pty-descendant-exit-verification'
+import { terminateDescendantSnapshotWithVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import {
   collectDescendantRows,
-  type DescendantSnapshot,
-  type ProcessTableRow
-} from '../pty-descendant-termination'
+  type DescendantSnapshot
+} from '../pty/process-retirement/pty-descendant-termination'
+import type { ProcessTableRow } from '../pty/process-retirement/pty-process-table-parser'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 
 const ROOT_PID = 500

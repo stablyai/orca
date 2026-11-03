@@ -2,7 +2,7 @@ import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import {
   admitAndRunAgentSessionMutation,

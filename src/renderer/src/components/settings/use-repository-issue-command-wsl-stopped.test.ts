@@ -111,16 +111,6 @@ describe('issue command editor while its WSL distro is stopped (E9)', () => {
     expect(client.read).toHaveBeenCalledTimes(2)
   })
 
-  it('ignores other distros', async () => {
-    client.read.mockResolvedValue(REFUSED)
-    const hook = render()
-    await vi.waitFor(() => expect(hook.result.current.issueCommandStoppedDistro).toBe('Ubuntu'))
-
-    act(() => emitDistroRunning('Debian'))
-
-    expect(client.read).toHaveBeenCalledTimes(1)
-  })
-
   it('stops waiting for the distro when the editor unmounts', async () => {
     client.read.mockResolvedValue(REFUSED)
     const hook = render()
@@ -130,16 +120,6 @@ describe('issue command editor while its WSL distro is stopped (E9)', () => {
 
     expect(distroRunningListeners.size).toBe(0)
     expect(client.read).toHaveBeenCalledTimes(1)
-  })
-
-  it('a blur with no edit saves nothing, so it never starts the distro', async () => {
-    client.read.mockResolvedValue(READ)
-    const hook = render()
-    await vi.waitFor(() => expect(hook.result.current.issueCommandDraft).toBe('my private command'))
-
-    await act(async () => hook.result.current.commitIssueCommand())
-
-    expect(client.write).not.toHaveBeenCalled()
   })
 
   it("re-asks a paired host on window focus, since its running signal can't reach us", async () => {

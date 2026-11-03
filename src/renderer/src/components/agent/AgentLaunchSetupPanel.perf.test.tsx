@@ -143,7 +143,7 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
           expect(measured.analyses).toBeGreaterThan(0)
           expect(measured.analyses).toBe(phase === 'render' ? 8 : value === 'empty' ? 18 : 19)
           expect(measured.compiler.inventories).toBe(
-            value === 'empty' ? 0 : phase === 'render' ? 2 : 6
+            value === 'empty' ? 0 : phase === 'render' ? 1 : 3
           )
           expect(measured.analyzer.inventories).toBeLessThanOrEqual(measured.analyses)
           const max = count + 1
@@ -169,7 +169,9 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
           )
         }
         fireEvent.click(
-          [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+          [...host.querySelectorAll('button')].find(
+            (b) => b.getAttribute('aria-label') === 'Launch terminal'
+          )!
         )
         const launch = agentPickerLaunchInputs(onUse.mock.calls.at(-1)![0], own)
         expect(tokenizeStartupCommand(launch.agentArgs ?? '', 'posix')).toMatchObject({
@@ -259,7 +261,9 @@ it('bounds catalog projection independently of raw model operands and retains Co
           host.querySelector(`button[aria-label="Remove -c service_tier=${tier}"]`)
         ).not.toBeNull()
         fireEvent.click(
-          [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+          [...host.querySelectorAll('button')].find(
+            (b) => b.getAttribute('aria-label') === 'Launch terminal'
+          )!
         )
         const launch = agentPickerLaunchInputs(onUse.mock.calls.at(-1)![0], own)
         expect(launch.agentArgs).toContain(`service_tier=${tier}`)
@@ -288,7 +292,9 @@ it('bounds catalog projection independently of raw model operands and retains Co
       target: { value: '--model claude-opus-4-8 --verbose' }
     })
     fireEvent.click(
-      [...host.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+      [...host.querySelectorAll('button')].find(
+        (b) => b.getAttribute('aria-label') === 'Launch terminal'
+      )!
     )
     const launch = agentPickerLaunchInputs(onUse.mock.calls.at(-1)![0], own)
     expect(launch.agentArgs).toContain('--model claude-opus-4-8')

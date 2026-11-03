@@ -8,8 +8,9 @@ import {
 import { ipcMain } from 'electron'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { recordRemoteLayoutFrame } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
+import { recordHostRepoCatalogAnswer } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   registerRuntimeEnvironmentConnectivityHandlers,
@@ -46,7 +47,7 @@ import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-enviro
 import { retireMobileDesktopRelayEnvironment } from './runtime-environment-mobile-relay-hosts'
 import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
-import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
+import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { resetDesktopBrowserBridgeEnvironment } from '../desktop-browser-bridge-reconcile'
 
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
@@ -153,7 +154,9 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
+  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath, (environment, method, response) =>
+    recordHostRepoCatalogAnswer(store, environment, method, response)
+  )
   setManagedOrcadPairingRepairedListener(invalidateRuntimeEnvironmentTransport)
   setRefusedPairingHandlers({
     recover: (environmentId) => recoverRefusedManagedPairing(getUserDataPath(), environmentId),

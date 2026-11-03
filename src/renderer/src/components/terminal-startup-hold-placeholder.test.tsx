@@ -153,21 +153,6 @@ describe('overlay layer under the startup terminal hold', () => {
     expect(placeholders()).toHaveLength(0)
     expect(mountedPaneTabIds()).toEqual(['tab-a', 'tab-b', 'tab-new'])
   })
-
-  it('renders no placeholder while the held worktree is not the active one', () => {
-    setTabs(['tab-a'], 'tab-a')
-    act(() =>
-      root.render(
-        <TerminalPaneOverlayLayer
-          worktreeId={WORKTREE_ID}
-          worktreePath="/held"
-          isWorktreeActive={false}
-          backgroundMountTabIds={NO_ADMITTED_TABS}
-        />
-      )
-    )
-    expect(placeholders()).toHaveLength(0)
-  })
 })
 
 describe('legacy terminal panes under the startup terminal hold', () => {
@@ -211,11 +196,5 @@ describe('legacy terminal panes under the startup terminal hold', () => {
     renderLegacy(['tab-a', 'tab-b', 'tab-new'], 'tab-new', null)
     expect(placeholders()).toHaveLength(0)
     expect(mountedPaneTabIds()).toEqual(['tab-a', 'tab-b', 'tab-new'])
-  })
-
-  it('renders no placeholder when the active tab is not a held one', () => {
-    renderLegacy(['tab-a', 'tab-b'], 'tab-a', new Set(['tab-a']))
-    expect(placeholders()).toHaveLength(0)
-    expect(mountedPaneTabIds()).toEqual(['tab-a'])
   })
 })

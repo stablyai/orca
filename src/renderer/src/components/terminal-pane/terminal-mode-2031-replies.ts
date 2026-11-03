@@ -1,8 +1,9 @@
 import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { PtyTransport } from './pty-transport-types'
+import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 
-type Mode2031ReplyTransport = Pick<PtyTransport, 'isConnected' | 'sendInputImmediate'>
+type Mode2031ReplyTransport = Pick<PtyTransport, 'isConnected' | 'sendInputImmediate' | 'getPtyId'>
 
 function sendMode2031Reply(
   transport: Mode2031ReplyTransport,
@@ -21,6 +22,11 @@ export function maybePushMode2031Flip(
   paneLastThemeMode: Map<number, TerminalColorSchemeMode>
 ): boolean {
   if (!transport.isConnected()) {
+    return false
+  }
+  // The phone or paired desktop holding this PTY's grid reports its own appearance; catch up on release.
+  const ptyId = transport.getPtyId()
+  if (ptyId && getFitOverrideForPty(ptyId)) {
     return false
   }
   if (!paneMode2031.get(paneId)) {

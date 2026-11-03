@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, type vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { _setShuttingDownForTests, track, trackAppOpenedOnce } from './client'
 import {
   BASE_COMMON,

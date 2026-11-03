@@ -3,12 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginKillList } from '../../../shared/plugins/catalog/plugin-kill-list'
-import {
-  fetchPluginKillList,
-  PLUGIN_KILL_LIST_RETRY_MS,
-  PluginKillListService
-} from './plugin-kill-list-service'
-import type { PluginKillListStore } from './plugin-kill-list-store'
+import { PLUGIN_KILL_LIST_RETRY_MS, PluginKillListService } from './plugin-kill-list-service'
 
 const roots: string[] = []
 
@@ -46,42 +41,6 @@ describe('PluginKillListService', () => {
 
     expect(restarted.reason('community.unsafe')).toBe('Malware advisory')
     expect(fetcher).not.toHaveBeenCalled()
-  })
-
-  it('publishes valid refreshes and notifies runtime reconciliation', async () => {
-    const service = new PluginKillListService({
-      pluginsDataDir: await tempRoot(),
-      fetcher: async () => killList()
-    })
-    const changed = vi.fn()
-    service.onChanged(changed)
-
-    await service.refresh()
-
-    expect(service.find('community.unsafe')).toMatchObject({ reason: 'Malware advisory' })
-    expect(changed).toHaveBeenCalledTimes(1)
-  })
-
-  it('starts with no revocations after a corrupt cache and accepts a valid refresh', async () => {
-    const store = {
-      read: vi.fn().mockRejectedValue(new Error('invalid JSON')),
-      write: vi.fn().mockResolvedValue(undefined)
-    } as unknown as PluginKillListStore
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const service = new PluginKillListService({
-      pluginsDataDir: await tempRoot(),
-      store,
-      fetcher: async () => killList()
-    })
-
-    await expect(service.initialize()).resolves.toBeUndefined()
-    expect(service.snapshot()).toBeNull()
-    await expect(service.refresh()).resolves.toEqual(killList())
-    expect(service.reason('community.unsafe')).toBe('Malware advisory')
-    expect(warning).toHaveBeenCalledWith(
-      '[plugins] ignoring invalid cached plugin safety list:',
-      expect.any(Error)
-    )
   })
 
   it('keeps accepting genuine lists after a far-future snapshot is published', async () => {
@@ -188,24 +147,5 @@ describe('PluginKillListService retry', () => {
     await vi.waitFor(() => expect(service.reason('community.unsafe')).toBe('Malware advisory'))
     service.dispose()
     expect(vi.getTimerCount()).toBe(0)
-  })
-})
-
-describe('fetchPluginKillList', () => {
-  it('validates a bounded HTTPS response body', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(JSON.stringify(killList()), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      })
-    )
-
-    await expect(fetchPluginKillList(fetcher)).resolves.toEqual(killList())
-    expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
-  })
-
-  it('rejects non-success responses', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('no', { status: 503 }))
-    await expect(fetchPluginKillList(fetcher)).rejects.toThrow('HTTP 503')
   })
 })

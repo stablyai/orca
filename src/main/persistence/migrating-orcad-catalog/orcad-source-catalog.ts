@@ -2,7 +2,7 @@ import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migrati
 import { withoutOrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../loading-store/store'
 import { orcadSourceFolderWorkspaceIds, repoBelongsToOrcadSource } from './orcad-source-ownership'
 
 type OrcadSourceCatalogStore = Pick<Store, 'getFolderWorkspaces' | 'getProjectGroups' | 'getRepos'>

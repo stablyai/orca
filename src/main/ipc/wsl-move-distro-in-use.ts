@@ -2,12 +2,12 @@
 import { readWslHostDeployments } from '../../shared/wsl-host-deployment-store'
 import { wslMoveJournalKey } from '../../shared/wsl-move/wsl-move-cutover'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   isLocalWslMoveRow,
   wslMoveHostDistro
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
+import { defaultWslOrcadEnvironmentId } from '../wsl/orcad/wsl-orcad-deploy'
 
 /**
  * A bridge project of the distro (local, on its UNC path, not moved) or its WSL host record. A

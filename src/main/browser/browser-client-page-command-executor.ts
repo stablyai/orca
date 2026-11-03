@@ -17,7 +17,7 @@ import { assertBrowserClientPageAdmission } from './browser-client-page-admissio
 import { createReservedBrowserClientPage } from './browser-client-page-creation'
 import { retireSupersededExecutionHostPages } from './browser-client-page-execution-host-supersession'
 import {
-  browserClientPageCommandFailureCode,
+  browserClientPageCommandFailure,
   BrowserClientPageCommandError,
   isBrowserClientPageCleanupFailure
 } from './browser-client-page-command-failure'
@@ -82,10 +82,7 @@ export class BrowserClientPageCommandExecutor {
       const value = await this.executeCommand(event, signal)
       return value === undefined ? { status: 'completed' } : { status: 'completed', value }
     } catch (error) {
-      return {
-        status: 'failed',
-        errorCode: browserClientPageCommandFailureCode(error, signal)
-      }
+      return browserClientPageCommandFailure(error, signal)
     }
   }
 
