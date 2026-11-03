@@ -5,7 +5,7 @@ import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktree'
 import {
   SshHostNotServedError,

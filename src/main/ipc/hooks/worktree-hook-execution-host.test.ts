@@ -29,7 +29,7 @@ vi.mock('../../workspace-hooks/issue-command-file', () => ({
   readIssueCommandUnlessWslStopped: mocks.localRead,
   writeIssueCommandUnlessWslStopped: mocks.localWrite
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('node:fs/promises', () => ({

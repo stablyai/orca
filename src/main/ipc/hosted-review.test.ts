@@ -63,7 +63,7 @@ vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: resolveRegisteredWorktreePathMock
 }))
 
-vi.mock('../repo-worktrees', () => ({
+vi.mock('../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreeGraph: listRepoWorktreeGraphMock
 }))
 

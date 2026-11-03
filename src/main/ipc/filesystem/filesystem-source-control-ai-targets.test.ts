@@ -4,8 +4,8 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({ graph: vi.fn(), gitOptions: vi.fn() }))
-vi.mock('../../repo-worktrees', () => ({ listRepoWorktreeGraph: mocks.graph }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/catalog/repo-worktrees', () => ({ listRepoWorktreeGraph: mocks.graph }))
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.gitOptions
 }))
 vi.mock('../worktrees/removal/registered-worktree-roots-cache', () => ({

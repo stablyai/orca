@@ -13,7 +13,7 @@ import {
   resolveFilesystemRouteForHost,
   resolveGitRouteForHost
 } from '../providers/execution-host-provider-dispatch'
-import { detectGitRemoteIdentity } from '../repo-git-remote-identity'
+import { detectGitRemoteIdentity } from '../workspaces/catalog/repo-git-remote-identity'
 import { detectRepoFileIcon } from './repo-icon-file-detection'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 

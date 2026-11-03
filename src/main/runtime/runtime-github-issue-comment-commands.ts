@@ -2,7 +2,7 @@ import type { GitHubCreateIssueFields, GitHubIssueUpdate } from '../../shared/is
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubPRReviewCommentInput } from '../../shared/github/comment-types'
 import type { Repo } from '../../shared/repo-types'
-import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
+import type { LocalProjectGhExecOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import {
   addIssueComment,
   addPRReviewComment,

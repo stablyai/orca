@@ -13,15 +13,17 @@ vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
   readWslDistroRunningState: async () => ((await mocks.running()) ? 'running' : 'stopped')
 }))
 
-vi.mock('../../../repo-worktrees', () => ({ listRepoWorktreesForDetectedScan: mocks.list }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
+  listRepoWorktreesForDetectedScan: mocks.list
+}))
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.gitOptions
 }))
 vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: mocks.registerRoots
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: vi.fn()
 }))
 

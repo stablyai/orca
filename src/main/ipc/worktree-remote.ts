@@ -3,7 +3,7 @@ import { canCheckoutExistingLocalBranch } from '../runtime/runtime-worktree-crea
 /* eslint-disable max-lines */
 
 import { worktreeCreateGit } from '../git/worktree-create-git-executor'
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -80,7 +80,7 @@ import {
 import { computeValidatedBranchName } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
-import { notifyLineageRepos } from '../worktree-lineage-change-notification'
+import { notifyLineageRepos } from '../workspaces/catalog/worktree-lineage-change-notification'
 import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   getConnectionExecutionHostId,
@@ -137,7 +137,7 @@ import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
