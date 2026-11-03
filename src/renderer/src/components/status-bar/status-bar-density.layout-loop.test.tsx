@@ -14,10 +14,10 @@ const TIGHTEST = STATUS_BAR_DENSITY_LEVELS.length - 1
 
 const layout = {
   barWidth: 0,
-  chipWidth: (compact: boolean) => (compact ? 40 : 70),
+  chipWidth: (compact: boolean): number => (compact ? 40 : 70),
   /** Extra width a collapsed (out-of-flow) chip measures compared with its in-row width. */
   collapsedChipDrift: (_collapsedCount: number) => 0,
-  segmentsWidth: (iconOnly: boolean) => (iconOnly ? 30 : 80),
+  segmentsWidth: (iconOnly: boolean): number => (iconOnly ? 30 : 80),
   urgent: new Set<string>()
 }
 let harnessRenders = 0
