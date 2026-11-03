@@ -104,4 +104,27 @@ describe('getLaunchConfigForEntry', () => {
     expect(getLaunchConfigForEntry(state, state.agentStatusByPaneKey[PANE_KEY]!)).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]?.launchConfig).toBeUndefined()
   })
+
+  it('preserves the launch recipe when a resumable agent transitions to done', () => {
+    const store = storeWithRegisteredRecipe('token-1')
+    reportHook(store, 'token-1')
+
+    // Transition to done with the same providerSession
+    store
+      .getState()
+      .setAgentStatus(
+        PANE_KEY,
+        { state: 'done', prompt: '', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession: { key: 'session_id', id: 'claude-session-1' } }
+      )
+
+    const state = store.getState()
+    expect(state.agentLaunchConfigByPaneKey[PANE_KEY]).toBeDefined()
+    expect(getLaunchConfigForEntry(state, state.agentStatusByPaneKey[PANE_KEY]!)).toEqual(
+      FULL_ACCESS
+    )
+  })
 })

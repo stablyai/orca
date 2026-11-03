@@ -41,4 +41,42 @@ describe('buildAgentResumeStartupPlan launch recipe', () => {
 
     expect(resume(flagless)?.launchConfig.unrecorded).toBeUndefined()
   })
+
+  it('keeps Full-access permissions for Antigravity across repeated restores', () => {
+    const resumeAgy = (launchConfig: SleepingAgentLaunchConfig | undefined) =>
+      buildAgentResumeStartupPlan({
+        agent: 'antigravity',
+        providerSession: { key: 'conversation_id', id: 'conv-1' },
+        cmdOverrides: {},
+        platform: 'linux',
+        ...resolveResumeLaunchRecipe(launchConfig)
+      })
+
+    const first = resumeAgy(FULL_ACCESS)
+    const second = resumeAgy(first?.launchConfig)
+    const third = resumeAgy(second?.launchConfig)
+
+    expect(first?.launchCommand).toContain('--dangerously-skip-permissions')
+    expect(second?.launchCommand).toContain('--dangerously-skip-permissions')
+    expect(third?.launchCommand).toContain('--dangerously-skip-permissions')
+    expect(third?.launchConfig).toMatchObject({ agentArgs: FULL_ACCESS.agentArgs })
+  })
+
+  it('re-attaches recorded agentArgs when agentCommand was recorded without them', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'antigravity',
+      providerSession: { key: 'conversation_id', id: 'conv-1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      agentCommand: 'agy',
+      agentArgs: '--dangerously-skip-permissions'
+    })
+
+    expect(plan?.launchCommand).toContain('--dangerously-skip-permissions')
+    expect(plan?.launchCommand).toContain('--conversation')
+    expect(plan?.launchConfig).toMatchObject({
+      agentCommand: "agy '--dangerously-skip-permissions'",
+      agentArgs: '--dangerously-skip-permissions'
+    })
+  })
 })

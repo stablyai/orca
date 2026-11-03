@@ -76,9 +76,13 @@ export function reduceAgentStatusLiveUpdate(
       }
     }
   }
-  // Launch tokens authorize only the session they started; a completed turn or changed provider id consumes them.
+  // Launch tokens authorize only the session they started; a completed turn or changed provider id consumes them,
+  // unless the agent retains its resumable session identity across idle/done turns.
   if (
-    (providerSessionChanged || (entry.state === 'done' && entry.sessionBoundary !== true)) &&
+    (providerSessionChanged ||
+      (entry.state === 'done' &&
+        entry.sessionBoundary !== true &&
+        !build.retainsResumableRecoveryIdentity)) &&
     paneKey in state.agentLaunchConfigByPaneKey
   ) {
     nextLaunchConfigs = { ...state.agentLaunchConfigByPaneKey }

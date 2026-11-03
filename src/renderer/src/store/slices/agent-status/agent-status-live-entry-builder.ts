@@ -182,7 +182,9 @@ export function buildAgentStatusLiveEntry(
     agentType: identity.agentType,
     tabId: statusTabId,
     terminalHandle: statusTerminalHandle,
-    launchToken: metadata?.launchToken,
+    launchToken:
+      metadata?.launchToken ??
+      (registryEntry?.launchTokenProven ? registryEntry.identity.launchToken : undefined),
     providerSession,
     existingProviderSession,
     providerSessionChanged

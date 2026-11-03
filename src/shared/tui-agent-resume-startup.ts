@@ -7,7 +7,12 @@ import type { SessionOptionValue } from './native-chat/input/native-chat-session
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand, withAgentTerminalInputArgs } from './tui-agent-launch-command'
 import type { AgentStartupPlan } from './tui-agent-startup'
-import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
+import {
+  quoteStartupArg,
+  resolveStartupShell,
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
@@ -15,6 +20,27 @@ import { buildAiVaultResumeShellCommand } from './ai-vault-resume-command'
 import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import { parseWslUncPath } from './wsl-paths'
 import { dropRecordedAgentPermissionArgs } from './tui-agent-permission-lift'
+
+function withMissingRecordedArgs(
+  command: string,
+  agentArgs: string | null | undefined,
+  shell: AgentStartupShell
+): string {
+  if (!agentArgs?.trim()) {
+    return command
+  }
+  const commandTokens = tokenizeStartupCommand(command, shell)
+  const argTokens = tokenizeStartupCommand(agentArgs.trim(), shell)
+  if (!commandTokens.ok || !argTokens.ok || argTokens.tokens.length === 0) {
+    return command
+  }
+  const missingTokens = argTokens.tokens.filter((token) => !commandTokens.tokens.includes(token))
+  if (missingTokens.length === 0) {
+    return command
+  }
+  const quotedMissing = missingTokens.map((t) => quoteStartupArg(t, shell)).join(' ')
+  return `${command} ${quotedMissing}`
+}
 
 export function buildAgentResumeStartupPlan(args: {
   agent: ResumableTuiAgent
@@ -59,16 +85,22 @@ export function buildAgentResumeStartupPlan(args: {
       ? dropRecordedAgentPermissionArgs(args.agent, args, shell)
       : args
   const resolvedAgentCommand = recorded.agentCommand?.trim()
-  const baseCommand = resolvedAgentCommand
+  const effectiveAgentCommand = resolvedAgentCommand
+    ? withMissingRecordedArgs(resolvedAgentCommand, recorded.agentArgs, shell)
+    : undefined
+  const baseCommand = effectiveAgentCommand
     ? ({
         ok: true,
         command: withAgentTerminalInputArgs(
-          resolvedAgentCommand,
+          effectiveAgentCommand,
           args.agent,
           args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
           shell
         ),
-        resumeLaunch: { agentCommand: resolvedAgentCommand },
+        resumeLaunch: {
+          agentCommand: effectiveAgentCommand,
+          ...(recorded.agentArgs?.trim() ? { agentArgs: recorded.agentArgs.trim() } : {})
+        },
         appliedSessionOptions: {}
       } as const)
     : resolveAgentLaunchCommand({
