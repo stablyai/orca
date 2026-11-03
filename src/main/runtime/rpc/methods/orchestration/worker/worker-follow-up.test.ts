@@ -1,10 +1,14 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+﻿import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
-import { getFollowUpDispatch } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
+import {
+  getFollowUpDispatch,
+  readWorkerResumeSession,
+  recordWorkerLaunchRecipe
+} from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import './worker-resume-session-capture'
 import {
   continueAllUnreadWorkerMail,
@@ -166,5 +170,36 @@ describe('a follow-up to a finished terminal worker', () => {
     await expect(
       h.call('orchestration.workerList', { run: h.activeRunId, terminalState: 'retained' })
     ).resolves.toMatchObject({ workers: [] })
+  })
+
+  it('a reopen reads the launch recipe recorded from what Orca itself launched (#37693)', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    // The conversation's pane kept no recipe of its own; only the start-time record survives.
+    h.db.db
+      .prepare('UPDATE worker_terminal_resources SET resume_session = ? WHERE owner_dispatch_id = ?')
+      .run(
+        JSON.stringify({ agent: 'claude', providerSession: { key: 'session_id', id: 's1' } }),
+        dispatchId
+      )
+
+    recordWorkerLaunchRecipe(h.db, dispatchId, {
+      agentArgs: '--dangerously-skip-permissions',
+      agentEnv: {}
+    })
+
+    expect(readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))).toMatchObject({
+      agent: 'claude',
+      launchConfig: { agentArgs: '--dangerously-skip-permissions' }
+    })
+
+    // A repeat of the same recipe writes nothing new.
+    recordWorkerLaunchRecipe(h.db, dispatchId, {
+      agentArgs: '--dangerously-skip-permissions',
+      agentEnv: {}
+    })
+    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.launch_recipe).toBe(
+      JSON.stringify({ agentArgs: '--dangerously-skip-permissions', agentEnv: {} })
+    )
   })
 })

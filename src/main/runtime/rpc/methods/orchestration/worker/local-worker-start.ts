@@ -16,6 +16,7 @@ import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '
 import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { recordWorkerLaunchRecipe } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
 import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'
@@ -201,6 +202,9 @@ export async function startLocalWorker(args: {
       effects
     }
     recordCreatedWorkerTerminalCustody(runtime, setupStage, created && !structuredSession)
+    // Record the launch recipe now that custody exists: a reopen replays this
+    // launch's flags instead of falling back to the agent's default (#37693).
+    recordWorkerLaunchRecipe(db, started.dispatch.id, placed.terminalCreation?.launchConfig)
     if (persistGatedSetupSpawnFailure(setupStage)) {
       failedStage = 'setup_start'
       throw new Error('Setup terminal failed to start before the gated agent launch.')

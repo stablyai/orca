@@ -1,6 +1,5 @@
 import { sleepingAgentLaunchConfigSchema } from '../../../../../shared/workspace-session/workspace-session-sleeping-agents'
 import { resolveWorkerLineageFacts, FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
-
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
@@ -73,7 +72,7 @@ export function resolveWorkerLineage(
 }
 
 export function readWorkerResumeSession(
-  resource: Pick<WorkerTerminalResourceRow, 'resume_session'> | undefined
+  resource: Pick<WorkerTerminalResourceRow, 'resume_session' | 'launch_recipe'> | undefined
 ): WorkerResumeSession | null {
   if (!resource?.resume_session) {
     return null
@@ -98,12 +97,59 @@ export function readWorkerResumeSession(
           agent,
           providerSession,
           captureHostId: getConnectionExecutionHostId(connectionId),
-          ...(launchConfig ? { launchConfig } : {})
+          // The conversation's own recorded recipe first; else the one Orca recorded at worker-start (#37693).
+          launchConfig: launchConfig ?? readWorkerLaunchRecipe(resource) ?? undefined
         }
       : null
   } catch {
     return null
   }
+}
+
+/** The launch recipe recorded from what Orca itself launched; null before v47 rows or absent records. */
+export function readWorkerLaunchRecipe(
+  resource: Pick<WorkerTerminalResourceRow, 'launch_recipe'> | undefined
+): SleepingAgentLaunchConfig | null {
+  if (!resource?.launch_recipe) {
+    return null
+  }
+  try {
+    const parsed: unknown = JSON.parse(resource.launch_recipe)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return null
+    }
+    const record = parsed as { agentArgs?: unknown; agentEnv?: unknown }
+    return {
+      // An explicit empty string is a recorded "no arguments", not an absent one.
+      agentArgs: typeof record.agentArgs === 'string' ? record.agentArgs : '',
+      agentEnv:
+        record.agentEnv && typeof record.agentEnv === 'object' && !Array.isArray(record.agentEnv)
+          ? (record.agentEnv as Record<string, string>)
+          : {}
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Record what Orca itself launched, so a reopen replays this launch's flags rather than guessing (#37693). */
+export function recordWorkerLaunchRecipe(
+  db: OrchestrationDb,
+  ownerDispatchId: string,
+  launchConfig: SleepingAgentLaunchConfig | null | undefined
+): void {
+  if (!launchConfig) {
+    return
+  }
+  const value = JSON.stringify({
+    agentArgs: launchConfig.agentArgs ?? '',
+    agentEnv: launchConfig.agentEnv ?? {}
+  })
+  db.db
+    .prepare(
+      'UPDATE worker_terminal_resources SET launch_recipe = ? WHERE owner_dispatch_id = ? AND launch_recipe IS NOT ?'
+    )
+    .run(value, ownerDispatchId, value)
 }
 
 /** Keep the agent's conversation on its worker's row while hook rows still name it; they vanish with the pane. */
