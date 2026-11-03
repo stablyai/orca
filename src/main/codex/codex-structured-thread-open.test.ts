@@ -233,6 +233,7 @@ describe('openCodexThread', () => {
     ['success', '', 3],
     ['second-archive', 'is archived', 3],
     ['retry-no-rollout', 'no rollout found', 3],
+    ['unsaved-retry-no-rollout', 'no rollout found', 3],
     ['retry-active-writer', 'already has an active writer', 3],
     ['unarchive-refusal', 'is archived', 2],
     ['cancel-before-unarchive', 'cancelled opening', 1],
@@ -251,6 +252,9 @@ describe('openCodexThread', () => {
         if (method === 'initialize') return send({ id, result: {} })
         if (!id) return
         mode ??= params.cwd
+        if (method === 'thread/start' && mode === 'unsaved-retry-no-rollout') {
+          return send({ id, result: { thread: { id: 'replacement-2' } } })
+        }
         if (method === 'thread/unarchive' && mode !== 'unarchive-refusal') {
           return send({ id, result: {} })
         }
@@ -258,7 +262,7 @@ describe('openCodexThread', () => {
           if (mode === 'retry-active-writer') {
             return send({ id, error: { code: -32600, message: 'thread thread-1 already has an active writer' } })
           }
-          if (mode === 'retry-no-rollout') {
+          if (mode === 'retry-no-rollout' || mode === 'unsaved-retry-no-rollout') {
             return send({ id, error: { code: -32600, message: 'no rollout found for thread id thread-1' } })
           }
           return send({ id, result: { thread: { id: 'thread-1' }, model: 'gpt-saved' } })
@@ -291,6 +295,7 @@ describe('openCodexThread', () => {
           {
             cwd: mode,
             resumeThreadId: mode === 'start' ? null : 'thread-1',
+            ...(mode === 'unsaved-retry-no-rollout' ? { supersedeIfUnsaved: true } : {}),
             model: 'gpt-selected',
             permissionPolicy: codexStructuredPermissionPolicy('ask'),
             threadConfig: { service_tier: 'priority' },
@@ -303,6 +308,9 @@ describe('openCodexThread', () => {
           await expect(opened).rejects.toThrow(error)
           if (mode === 'retry-active-writer') {
             await expect(opened).rejects.toMatchObject({ reason: 'conversationOpenElsewhere' })
+          }
+          if (mode === 'unsaved-retry-no-rollout') {
+            await expect(opened).rejects.toMatchObject({ reason: 'savedConversationMissing' })
           }
         } else {
           await expect(opened).resolves.toMatchObject({ threadId: 'thread-1', model: 'gpt-saved' })

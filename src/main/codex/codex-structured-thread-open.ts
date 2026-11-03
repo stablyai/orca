@@ -109,6 +109,7 @@ export async function openCodexThread(
         { timeoutMs }
       )
     }
+    let unarchived = false
     try {
       try {
         opened = await resume()
@@ -119,6 +120,7 @@ export async function openCodexThread(
         // An archived thread is still saved; restore it and resume the same ID once.
         throwIfSignalAborted(signal)
         await connection.request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
+        unarchived = true
         opened = await resume()
       }
     } catch (error) {
@@ -141,7 +143,8 @@ export async function openCodexThread(
       if (!isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }
-      if (!launch.supersedeIfUnsaved) {
+      // A thread that was archived was saved, so its retry never supersedes it.
+      if (!launch.supersedeIfUnsaved || unarchived) {
         throw withProviderDiagnostic(
           Object.assign(
             new AgentSessionAcquisitionRefusal(error.message, 'savedConversationMissing'),
