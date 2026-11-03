@@ -172,6 +172,64 @@ function scriptedOpenCode2(canDelete: boolean): {
 }
 
 describe('ACP model catalog probes', () => {
+  it('keeps a slow startup listing when effort discovery uses its full budget', async () => {
+    vi.useFakeTimers()
+    try {
+      const { agent, deps, closed } = scriptedOpenCode2(true)
+      agent.on('session/new', (frame) => {
+        setTimeout(
+          () => agent.reply(frame, { sessionId: 'probe-session', ...recordedEfforts.new }),
+          11_000
+        )
+      })
+      agent.on('session/set_config_option', () => {})
+      const listing = createAcpModelCatalogProbe(OPENCODE, deps)(
+        { kind: 'opencode', locator: { kind: 'unmanaged' } },
+        { workspacePath: '/work/project' }
+      )
+      await vi.waitFor(() =>
+        expect(agent.frames.map((frame) => frame.method)).toContain('session/new')
+      )
+      await vi.advanceTimersByTimeAsync(16_000)
+      expect((await listing).models).toHaveLength(3)
+      expect(agent.frames.at(-1)?.method).toBe('session/delete')
+      expect(closed()).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('deletes a session before closing when cancelled during effort discovery', async () => {
+    vi.useFakeTimers()
+    try {
+      const { agent, deps, closed } = scriptedOpenCode2(true)
+      agent.on('session/new', (frame) =>
+        agent.reply(frame, { sessionId: 'probe-session', ...recordedEfforts.new })
+      )
+      agent.on('session/set_config_option', () => {})
+      agent.on('session/delete', (frame) => {
+        expect(closed()).toBe(0)
+        agent.reply(frame, {})
+      })
+      const stop = new AbortController()
+      const listing = createAcpModelCatalogProbe(OPENCODE, deps)(
+        { kind: 'opencode', locator: { kind: 'unmanaged' } },
+        { workspacePath: '/work/project', signal: stop.signal }
+      )
+      const rejected = expect(listing).rejects.toThrow(/listing stopped/)
+      await vi.waitFor(() =>
+        expect(agent.frames.map((frame) => frame.method)).toContain('session/set_config_option')
+      )
+      stop.abort()
+      await rejected
+      expect(agent.frames.at(-1)?.method).toBe('session/delete')
+      expect(closed()).toBe(1)
+      await vi.runAllTimersAsync()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each([undefined, 'opencode/beam-free'])(
     'discovers actual model-owned menus before deleting its session (target %s)',
     async (selectedModel) => {

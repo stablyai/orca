@@ -138,14 +138,15 @@ export function createAcpModelCatalogProbe(
           folderArgs && folder ? [...launch.args, ...folderArgs(folder.path)] : launch.args
         models = await runAgentModelCatalogSession(
           () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
-          (connection) =>
+          (connection, ready) =>
             readSessionModels(
               spec,
               listing,
               connection,
               workspace,
               operation,
-              options?.selectedModel
+              options?.selectedModel,
+              spec.dialect.effortChangesModel ? ready : undefined
             ),
           run
         )
@@ -203,7 +204,8 @@ async function readSessionModels(
   connection: AcpModelCatalogSessionConnection,
   workspace: string,
   operation?: StructuredAgentResolutionOperation,
-  selectedModel?: string
+  selectedModel?: string,
+  ready?: (cleanup: () => Promise<unknown>) => void
 ): Promise<AgentSessionModelOption[]> {
   const initialized = await connection.initialize()
   assertStructuredAgentResolutionCurrent(operation)
@@ -212,10 +214,20 @@ async function readSessionModels(
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
   const started = await connection.start({ cwd: workspace, mcpServers: [] })
+  let stopped = false
+  const cleanup = async (): Promise<void> => {
+    stopped = true
+    if (deletes) {
+      await connection.deleteSession(started.sessionId).catch((error: unknown) => {
+        console.warn(`[acp-model-catalog] ${spec.agent} kept its listing session:`, error)
+      })
+    }
+  }
+  // Startup and menu discovery have separate budgets; cleanup also runs on cancellation.
+  ready?.(cleanup)
   const options = new AcpStructuredOptions(spec.dialect)
   options.adoptSession(started.response, 'new')
   let models = options.read().models
-  let stopped = false
   try {
     if (spec.dialect.effortChangesModel) {
       const targets = selectedModel ? models.filter((row) => row.id === selectedModel) : models
@@ -260,12 +272,8 @@ async function readSessionModels(
     assertStructuredAgentResolutionCurrent(operation)
     return models
   } finally {
-    stopped = true
-    // Delete after inspection; the runner bounds teardown even if the agent stops replying.
-    if (deletes) {
-      await connection.deleteSession(started.sessionId).catch((error: unknown) => {
-        console.warn(`[acp-model-catalog] ${spec.agent} kept its listing session:`, error)
-      })
+    if (!ready) {
+      await cleanup()
     }
   }
 }
