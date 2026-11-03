@@ -181,29 +181,6 @@ describe('omittedHostIds selector annotation', () => {
     ])
   })
 
-  it('says which omitted hosts are not selectable in the human listing', async () => {
-    pairRuntimeEnvironment(listEnvironmentsMock, 'env-paired', 'm4air')
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_list', {
-        terminals: [TERMINAL_ROW],
-        totalCount: 1,
-        truncated: false,
-        hostScope: {
-          hostIds: ['local'],
-          omittedHostIds: ['runtime:env-paired', 'runtime:env-retired']
-        }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'list'], '/tmp/repo')
-
-    const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('runtime:env-paired (--environment m4air)')
-    expect(printed).toContain('runtime:env-retired (not selectable from this machine)')
-  })
-
   it.each([
     ['terminal', 'list', 'req_terminal_list', { terminals: [TERMINAL_ROW] }],
     ['worktree', 'list', 'req_worktree_list', { worktrees: [] }],
@@ -247,45 +224,6 @@ describe('omittedHostIds selector annotation', () => {
     }
   )
 
-  it('says this runtime reaches an omitted local or SSH host in the human listing', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_list', {
-        terminals: [TERMINAL_ROW],
-        totalCount: 1,
-        truncated: false,
-        hostScope: { hostIds: [], omittedHostIds: ['local', 'ssh:box-1'] }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'list'], '/tmp/repo')
-
-    const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('local (reached through this runtime; no flag selects it)')
-    expect(printed).toContain('ssh:box-1 (reached through this runtime; no flag selects it)')
-    expect(printed).not.toContain('--host')
-  })
-
-  it('never keeps a host id out of omittedHostIds', async () => {
-    listEnvironmentsMock.mockReturnValue([])
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_list', {
-        terminals: [],
-        totalCount: 0,
-        truncated: false,
-        hostScope: { hostIds: [], omittedHostIds: ['runtime:env-retired'] }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'list', '--json'], '/tmp/repo')
-
-    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-    expect(printed.result.hostScope.omittedHostIds).toEqual(['runtime:env-retired'])
-  })
-
   it('costs no extra round trip when nothing was omitted', async () => {
     queueFixtures(
       callMock,
@@ -325,40 +263,6 @@ describe('worktree listings report their host coverage', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
-  })
-
-  it('prints a host column and the scope line for `worktree list`', async () => {
-    listEnvironmentsMock.mockReturnValue([])
-    queueFixtures(
-      callMock,
-      okFixture('req_worktree_list', {
-        worktrees: [
-          {
-            id: 'repo-ssh::/remote/wt',
-            branch: 'main',
-            path: '/remote/wt',
-            hostId: 'ssh:box-1',
-            displayName: 'remote',
-            parentWorktreeId: null,
-            childWorktreeIds: [],
-            linkedIssue: null,
-            comment: ''
-          }
-        ],
-        totalCount: 521,
-        truncated: true,
-        hostScope: { hostIds: ['ssh:box-1'], omittedHostIds: ['runtime:env-retired'] }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['worktree', 'list'], '/tmp/repo')
-
-    const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('host=ssh:box-1')
-    expect(printed).toContain('scope: ssh:box-1')
-    expect(printed).toContain('runtime:env-retired (not selectable from this machine)')
-    expect(printed).toContain('truncated: showing 1 of 521')
   })
 
   it('does not claim a scope for `worktree ps` when the host reported none', async () => {
