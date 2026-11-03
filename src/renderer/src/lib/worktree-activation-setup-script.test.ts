@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../shared/constants'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
   createMockStore,
@@ -11,9 +12,11 @@ registerWorktreeActivationReset()
 
 function setCloseSetupTabOnSuccess(closeSetupTabOnSuccess: boolean): void {
   useAppStore.setState((state) => ({
-    settings: state.settings
-      ? { ...state.settings, closeSetupTabOnSuccess, terminalWindowsShell: '' }
-      : state.settings
+    settings: {
+      ...(state.settings ?? getDefaultSettings('')),
+      closeSetupTabOnSuccess,
+      terminalWindowsShell: ''
+    }
   }))
 }
 
