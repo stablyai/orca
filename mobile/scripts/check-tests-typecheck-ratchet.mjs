@@ -40,6 +40,10 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/transport/web-bundle/mobile-web-bundle-host-slow-link.test.ts',
     'Node-side: imports the desktop bundle RPC handlers, checked against @types/node rather than RN libs'
+  ],
+  [
+    'src/worktree/workspace-row-desktop-contract.test.ts',
+    'Node-side: feeds rows from the desktop worktree.ps builder through the phone list, against Node rather than RN libs'
   ]
 ])
 
