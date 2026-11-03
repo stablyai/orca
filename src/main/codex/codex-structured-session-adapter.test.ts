@@ -231,7 +231,11 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         acquisitionGeneration: acquired.acquisitionGeneration ?? null,
         signal: new AbortController().signal
       })
-    ).rejects.toMatchObject({ reason: 'savedConversationMissing' })
+    ).rejects.toMatchObject({
+      retry: 'never',
+      fact: { kind: 'savedConversationMissing' },
+      cause: { reason: 'savedConversationMissing' }
+    })
     expect(codex.connections[0].calls.map((call) => call.method)).not.toContain('thread/start')
   })
 
