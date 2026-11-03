@@ -1,4 +1,3 @@
-import { structuredAgentSessionSettlementReading } from './structured-agent-session-send-settlement'
 import { StructuredAgentSessionJournalObservers } from './structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
@@ -20,7 +19,10 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
-import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
+import {
+  StructuredAgentSessionSendSettlement,
+  sendSettlementReading
+} from './structured-agent-session-send-settlement'
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type {
@@ -327,9 +329,7 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {
-    return structuredAgentSessionSettlementReading(journal, () =>
-      this.currentWork(sessionId, journal)
-    )
+    return sendSettlementReading(journal, () => this.currentWork(sessionId, journal))
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

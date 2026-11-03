@@ -149,7 +149,7 @@ describe('a conversation delivers what its journal commits', () => {
     expect(deliver).not.toHaveBeenCalled()
 
     await appendStatus(current, 'live')
-    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', current)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', current, true)
   })
 
   it('delivers nothing once the conversation is dropped', async () => {

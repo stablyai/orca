@@ -197,7 +197,7 @@ export class StructuredAgentSessionSendSettlement {
 }
 
 /** Released unanswered sends end acknowledgement waits as uncertain. */
-export function structuredAgentSessionSettlementReading(
+export function sendSettlementReading(
   journal: AgentSessionJournal,
   work: () => StructuredAgentSessionCurrentWork
 ): SendSettlementJournal {
