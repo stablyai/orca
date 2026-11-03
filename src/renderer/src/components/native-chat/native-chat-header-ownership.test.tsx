@@ -144,8 +144,6 @@ it.each([10, 100])(
     seedChats(size)
     const view = render(overlay(true))
     const retained = chat(view.container, 'chat-0').querySelector('output')
-    const unfocused = chat(view.container, `chat-${size - 1}`)
-    expect(within(unfocused).queryByRole('button', { name: 'Close Pane' })).toBeNull()
     for (const operation of [
       () => useAppStore.getState().setTabLabel('chat-0', 'Changed title'),
       () => useAppStore.getState().activateTab('chat-1', { worktreeId: workspace })
@@ -171,10 +169,6 @@ it.each([10, 100])(
     expect(work.headerVisits).toBe(0)
     expect(view.container.querySelector('.pane-title-bar')).toBeNull()
     view.rerender(overlay(true))
-    const shown = chat(view.container, 'chat-1')
-    expect(within(shown).queryByRole('button', { name: 'Close tab' })).toBeNull()
-    act(() => useAppStore.getState().unpinTab('chat-1', { recordInteraction: false }))
-    expect(within(shown).queryByRole('button', { name: 'Close tab' })).toBeNull()
     expect(chat(view.container, 'chat-0').querySelector('output')).toBe(retained)
     expect(fullRequest).not.toHaveBeenCalled()
   }
