@@ -4,7 +4,7 @@ import {
   setMigrationUnsupportedPtyPersistenceListener
 } from '../../agent-hooks/migration-unsupported-pty-state'
 import { agentHookServer } from '../../agent-hooks/server'
-import { ActiveViewPreference } from '../../active-view-preference'
+import { ActiveViewPreference } from '../preferences/active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { installLiveLeafOwnerResolver } from './live-leaf-owner-resolver'
 import { isTerminalOwnerPartition } from '../terminal-topology/terminal-topology-membership'

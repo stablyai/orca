@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MAX_FILE_RANGE_READ_BYTES } from '../file-range-read'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS,
   AGENT_SESSION_ATTACHMENT_MAX_BYTES
@@ -34,3 +35,12 @@ export const AttachmentUploadAppendParams = z
 export const AttachmentUploadIdParams = z.object({ uploadId: UploadId }).strict()
 
 export const AttachmentReadParams = z.object({ path: z.string().min(1).max(4096) }).strict()
+
+export const AttachmentTextReadParams = AttachmentReadParams.extend({
+  offset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  length: z.number().int().positive().max(MAX_FILE_RANGE_READ_BYTES),
+  expectedSnapshot: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional()
+}).strict()

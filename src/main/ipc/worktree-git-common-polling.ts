@@ -11,7 +11,7 @@ import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 import {
   gitCommonDirectorySignature,
   gitCommonFileSignature,

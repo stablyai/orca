@@ -14,7 +14,10 @@ const RAW_READ = /\b(?:repo|\w*Repo)(?:[A-Z]\w*)?!?\??\.connectionId\b(?!\s*=(?!
 /** Files that define what the two spellings mean, with the reason. Keep each reason true. */
 export const RESOLVER_FILES = new Map([
   ['src/shared/execution-host.ts', 'the canonical resolvers read both spellings by definition'],
-  ['src/main/repo-execution-host.ts', 'the main-process gates built on those resolvers'],
+  [
+    'src/main/workspaces/execution-host/repo-execution-host.ts',
+    'the main-process gates built on those resolvers'
+  ],
   [
     'src/main/ipc/worktrees/listing/worktree-host-ownership.ts',
     'ownership evidence must see a contradictory row as contradictory'
@@ -67,7 +70,7 @@ export function main(root = process.cwd(), arg = undefined) {
         "Resolve the row's host instead of reading `connectionId` (src/shared/execution-host.ts):",
         '  getRepoRoutingConnectionId(repo)  drop-in for `repo.connectionId` in a routing/SSH check',
         '  getRepoExecutionHostId(repo)      the host id, for comparisons and host-scoped lookups',
-        '  requireRepoLocalGitRoute(repo)    (src/main/repo-execution-host.ts) before local Git'
+        '  requireRepoLocalGitRoute(repo)    (src/main/workspaces/execution-host/repo-execution-host.ts) before local Git'
       ]
     },
     root,

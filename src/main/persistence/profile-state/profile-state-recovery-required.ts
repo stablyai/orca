@@ -52,7 +52,7 @@ export class ProfileStateRecoveryRequiredError extends Error {
   ) {
     super(
       repairableSections
-        ? `Damaged profile sections: ${profileStateSectionLabels(repairableSections.map(({ domain }) => domain)).join(', ')}; run \`orca profile state rollback --repair --profile-id ${options.profileId}\` to replace only those sections from backups`
+        ? `Damaged profile sections: ${profileStateSectionLabels(repairableSections.map(({ domain }) => domain)).join(', ')}; run \`orca profile state rollback --repair --profile-id ${options.profileId}\` to repair only those sections`
         : `SQLite profile state could not be read; choose a retained backup or JSON export to recover the profile`,
       { cause }
     )

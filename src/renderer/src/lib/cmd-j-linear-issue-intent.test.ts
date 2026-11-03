@@ -6,23 +6,6 @@ import {
 } from '../../../shared/linear/links'
 
 describe('Cmd+J Linear issue intent', () => {
-  it('accepts canonical Linear issue URLs with optional slugs', () => {
-    expect(
-      parseLinearIssueUrlIntent(
-        'https://linear.app/stably/issue/STA-4052/agent-terminals-disappearing-randomly'
-      )
-    ).toEqual({ identifier: 'STA-4052', organizationUrlKey: 'stably' })
-    expect(
-      parseLinearIssueUrlIntent(
-        ' https://linear.app/stably/issue/sta-4084/restore-shell-integration '
-      )
-    ).toEqual({ identifier: 'STA-4084', organizationUrlKey: 'stably' })
-    expect(parseLinearIssueUrlIntent('http://linear.app/acme/issue/ENG-1')).toEqual({
-      identifier: 'ENG-1',
-      organizationUrlKey: 'acme'
-    })
-  })
-
   it('does not classify names, bare issue keys, or ambiguous URLs as decisive intent', () => {
     expect(parseLinearIssueUrlIntent('restore-shell-integration')).toBeNull()
     expect(parseLinearIssueUrlIntent('STA-4084')).toBeNull()

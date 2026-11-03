@@ -8,7 +8,7 @@ import {
 } from './ssh-host-user-disconnect'
 import { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
-import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
+import { quitTeardownStartGate } from '../../startup/quit/quit-teardown-start-gate'
 import {
   getSshTargetRegistryStore,
   setSshConnectionManagerResolver,

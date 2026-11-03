@@ -16,14 +16,14 @@ vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
 }))
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.gitExec }))
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRegisteredPath
 }))
 vi.mock('./local-worktree-runtime-options', () => ({
   getLocalRepoForRegisteredWorktree: mocks.getLocalRepo,
   getLocalGitOptionsForRepo: mocks.getLocalOptions
 }))
-vi.mock('./worktree-base-directory-watcher', () => ({
+vi.mock('./worktrees/creation/worktree-base-directory-watcher', () => ({
   setWorktreeGitStatusRefWatch: mocks.setWatch
 }))
 

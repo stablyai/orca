@@ -3,7 +3,10 @@ import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { JsonTextStructureCapacityError } from '../../shared/json-text-structure-limit'
 import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 import { join } from 'node:path'
-import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
+import {
+  readAgentStateFileSync,
+  readAgentStateJsonFileSync
+} from './configuration/agent-state-file-reader'
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 

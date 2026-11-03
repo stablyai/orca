@@ -3,7 +3,7 @@ import { Worker } from 'node:worker_threads'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
-} from '../../worker-thread-entry-path'
+} from '../../worker-threads/worker-thread-entry-path'
 import type {
   PluginSourceTranspiled,
   PluginSourceTranspileRequest,

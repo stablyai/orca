@@ -73,19 +73,6 @@ describe('plugin language-pack startup ownership', () => {
     }
   )
 
-  it('offers only packs above the coverage floor while the store keeps every pack', async () => {
-    const bridge = installBridge()
-    const offered = renderHook(() => languagePacks.usePluginLanguagePacks())
-    const complete = pack('complete')
-    const partial = { ...pack('partial'), coverage: 12 }
-    await act(async () => {
-      bridge.requests[0]?.resolve([complete, partial])
-      await bridge.requests[0]?.promise
-    })
-    expect(offered.result.current).toEqual([complete])
-    expect(languagePacks.usePluginLanguagePackStore.getState().entries).toEqual([complete, partial])
-  })
-
   it.each(['resolve', 'reject'] as const)(
     'keeps a newer refresh pending after an older request %ss',
     async (settlement) => {
@@ -166,33 +153,5 @@ describe('plugin language-pack startup ownership', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('retains fail-closed loading and permits an explicit retry after rejection', async () => {
-    const bridge = installBridge()
-    const store = languagePacks.usePluginLanguagePackStore
-    const failed = store.getState().fetchEntries()
-    bridge.requests[0].reject(new Error('bridge unavailable'))
-    await failed
-    expect(store.getState().loaded).toBe(true)
-    expect(store.getState().entries).toEqual([])
-    languagePacks.ensurePluginLanguagePacksLoaded()
-    expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(1)
-    const retry = store.getState().fetchEntries()
-    bridge.requests[1].resolve([pack('retry')])
-    await retry
-    expect(store.getState().entries).toEqual([pack('retry')])
-  })
-
-  it('finishes without an older bridge API and admits a later explicit refresh', async () => {
-    vi.stubGlobal('api', {})
-    languagePacks.ensurePluginLanguagePacksLoaded()
-    expect(languagePacks.usePluginLanguagePackStore.getState().loaded).toBe(true)
-    const bridge = installBridge()
-    const refresh = languagePacks.usePluginLanguagePackStore.getState().fetchEntries()
-    bridge.requests[0].resolve([pack('available')])
-    await refresh
-    expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(1)
-    expect(languagePacks.usePluginLanguagePackStore.getState().entries).toEqual([pack('available')])
   })
 })

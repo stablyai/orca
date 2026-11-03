@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') } }))
-vi.mock('../agent-trust-presets', () => ({ markCodexProjectTrusted: vi.fn(async () => {}) }))
+vi.mock('../agent-launch/trust/agent-trust-presets', () => ({
+  markCodexProjectTrusted: vi.fn(async () => {})
+}))
 vi.mock('../codex/hook-service', () => ({
   codexHookService: {
     prepareRuntimeHomeForLaunch: mocks.prepareRuntimeHomeForLaunch,

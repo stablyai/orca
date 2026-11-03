@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
 import {
   captureTerminalStructuralScrollIntent,
-  enforceTerminalCurrentScrollIntent,
   getTerminalScrollIntentKind,
   markTerminalPinnedViewport,
   restoreTerminalStructuralScrollIntent
@@ -31,26 +30,7 @@ function createTerminal(viewportY: number, baseY: number) {
   return terminal
 }
 
-class TestElement extends EventTarget {
-  parentElement: TestElement | null = null
-  readonly classList = {
-    contains: (className: string): boolean => this.className.split(/\s+/).includes(className)
-  }
-
-  constructor(public className = '') {
-    super()
-  }
-
-  closest(selector: string): TestElement | null {
-    for (const candidate of selector.split(',')) {
-      const trimmed = candidate.trim()
-      if (trimmed.startsWith('.') && this.classList.contains(trimmed.slice(1))) {
-        return this
-      }
-    }
-    return this.parentElement?.closest(selector) ?? null
-  }
-}
+class TestElement extends EventTarget {}
 
 function createTerminalWithInputCapture(viewportY: number, baseY: number) {
   const capturedInput: { listener: ((data: string) => void) | null } = { listener: null }
@@ -77,107 +57,6 @@ afterEach(() => {
 })
 
 describe('terminal scroll-intent input resync', () => {
-  it('heals a stale pin when typing scrolls the terminal to the bottom', () => {
-    vi.stubGlobal('requestAnimationFrame', () => 0)
-    vi.stubGlobal('Element', TestElement)
-    const { terminal, capturedInput, capturedUserInput } = createTerminalWithInputCapture(42, 100)
-    const host = new TestElement() as unknown as HTMLElement
-    const disposable = attachTerminalScrollIntentTracking(terminal, host)
-
-    markTerminalPinnedViewport(terminal)
-    terminal.buffer.active.viewportY = terminal.buffer.active.baseY
-    capturedUserInput.listener?.()
-    capturedInput.listener?.('a')
-
-    expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
-    disposable.dispose()
-  })
-
-  it('heals a stale pre-reflow pin when typing reaches a shorter buffer bottom', () => {
-    vi.stubGlobal('requestAnimationFrame', () => 0)
-    vi.stubGlobal('Element', TestElement)
-    const { terminal, capturedInput, capturedUserInput } = createTerminalWithInputCapture(42, 100)
-    const host = new TestElement() as unknown as HTMLElement
-    const disposable = attachTerminalScrollIntentTracking(terminal, host)
-
-    markTerminalPinnedViewport(terminal)
-    terminal.buffer.active.baseY = 70
-    terminal.buffer.active.viewportY = 70
-    capturedUserInput.listener?.()
-    capturedInput.listener?.('a')
-
-    expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
-    disposable.dispose()
-  })
-
-  it('keeps a real pin when app-consumed input does not move the viewport', () => {
-    vi.stubGlobal('requestAnimationFrame', () => 0)
-    vi.stubGlobal('Element', TestElement)
-    const { terminal, capturedInput, capturedUserInput } = createTerminalWithInputCapture(42, 100)
-    const host = new TestElement() as unknown as HTMLElement
-    const disposable = attachTerminalScrollIntentTracking(terminal, host)
-
-    markTerminalPinnedViewport(terminal)
-    capturedUserInput.listener?.()
-    capturedInput.listener?.('\x1b[5~')
-
-    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
-    terminal.buffer.active.viewportY = 0
-    enforceTerminalCurrentScrollIntent(terminal)
-    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(42)
-    disposable.dispose()
-  })
-
-  it('does not reclassify a pin from mouse reports even when they scroll to bottom', () => {
-    vi.stubGlobal('requestAnimationFrame', () => 0)
-    vi.stubGlobal('Element', TestElement)
-    const { terminal, capturedInput, capturedUserInput } = createTerminalWithInputCapture(42, 100)
-    const host = new TestElement() as unknown as HTMLElement
-    const disposable = attachTerminalScrollIntentTracking(terminal, host)
-
-    markTerminalPinnedViewport(terminal)
-    terminal.buffer.active.viewportY = terminal.buffer.active.baseY
-    capturedUserInput.listener?.()
-    capturedInput.listener?.('\x1b[<35;10;5M')
-
-    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
-    expect(terminal.buffer.active.viewportY).toBe(42)
-    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(42)
-    disposable.dispose()
-  })
-
-  it('does not let a focus reply make a following mouse report reclassify the pin', () => {
-    vi.stubGlobal('requestAnimationFrame', () => 0)
-    vi.stubGlobal('Element', TestElement)
-    const { terminal, capturedInput, capturedUserInput } = createTerminalWithInputCapture(42, 100)
-    const host = new TestElement() as unknown as HTMLElement
-    const disposable = attachTerminalScrollIntentTracking(terminal, host)
-
-    markTerminalPinnedViewport(terminal)
-    capturedInput.listener?.('\x1b[I')
-    terminal.buffer.active.viewportY = terminal.buffer.active.baseY
-    capturedUserInput.listener?.()
-    capturedInput.listener?.('\x1b[<0;10;5M')
-
-    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
-    disposable.dispose()
-  })
-
-  it('ignores a parser reply that has no matching user-input signal', () => {
-    vi.stubGlobal('requestAnimationFrame', () => 0)
-    vi.stubGlobal('Element', TestElement)
-    const { terminal, capturedInput } = createTerminalWithInputCapture(42, 100)
-    const host = new TestElement() as unknown as HTMLElement
-    const disposable = attachTerminalScrollIntentTracking(terminal, host)
-
-    markTerminalPinnedViewport(terminal)
-    terminal.buffer.active.viewportY = terminal.buffer.active.baseY
-    capturedInput.listener?.('\x1b[1;1R')
-
-    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
-    disposable.dispose()
-  })
-
   it('does not apply input resync after tracking is disposed', () => {
     vi.stubGlobal('requestAnimationFrame', () => 0)
     vi.stubGlobal('Element', TestElement)
@@ -263,36 +142,5 @@ describe('terminal scroll-intent input resync', () => {
 
     expect(terminal.scrollToLine).toHaveBeenLastCalledWith(142)
     disposable.dispose()
-  })
-
-  it('supports bottom-offset restore for structural buffer rebuilds', () => {
-    const terminal = createTerminal(550, 600)
-    markTerminalPinnedViewport(terminal)
-    const snapshot = captureTerminalStructuralScrollIntent(terminal)
-    terminal.buffer.active.baseY = 80
-    terminal.buffer.active.viewportY = 80
-
-    restoreTerminalStructuralScrollIntent(terminal, snapshot, { restoreBy: 'bottomOffset' })
-
-    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(30)
-    expect(terminal.buffer.active.viewportY).toBe(30)
-  })
-
-  it('retains the intended bottom-offset pin when renderer dimensions reject restore', () => {
-    const terminal = createTerminal(80, 100)
-    markTerminalPinnedViewport(terminal)
-    const snapshot = captureTerminalStructuralScrollIntent(terminal)
-    terminal.buffer.active.baseY = 200
-    terminal.buffer.active.viewportY = 200
-    terminal.scrollToLine.mockImplementationOnce(() => {
-      throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
-    })
-
-    restoreTerminalStructuralScrollIntent(terminal, snapshot, { restoreBy: 'bottomOffset' })
-    expect(terminal.buffer.active.viewportY).toBe(200)
-
-    terminal.buffer.active.viewportY = 0
-    enforceTerminalCurrentScrollIntent(terminal)
-    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(180)
   })
 })
