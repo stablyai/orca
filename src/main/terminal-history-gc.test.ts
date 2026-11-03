@@ -17,7 +17,7 @@ const { removeHostTreeMock } = vi.hoisted(() => ({
 }))
 
 // The stub must delete tombstones: reporting success while leaving them on disk loops the drain.
-vi.mock('./host-tree-removal', () => ({
+vi.mock('./filesystem/host-tree-removal', () => ({
   removeHostTree: removeHostTreeMock
 }))
 

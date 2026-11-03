@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
 import { inspectPluginFolder, validatePluginTarget } from './plugin-folder-validation'
 import { PLUGIN_TEMPLATE_NAMES } from './plugin-template-names'
-import { PLUGIN_SOURCE_MODULES_SINCE } from '../../shared/plugins/manifest/plugin-schema-field-docs'
+import {
+  PLUGIN_EDITOR_FRAME_SINCE,
+  PLUGIN_HOOKS_SINCE,
+  PLUGIN_SOURCE_MODULES_SINCE
+} from '../../shared/plugins/manifest/plugin-schema-field-docs'
 
 const roots: string[] = []
 
@@ -43,7 +47,14 @@ describe('orca plugin create templates', () => {
       expect(created.pluginKey).toBe(`local.bare-${template}`)
       const manifest = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
       expect(manifest.publisher).toBeUndefined()
-      expect(manifest.engines.orca).toBe(`>=${PLUGIN_SOURCE_MODULES_SINCE}`)
+      // Hooks and isolated-only editors arrived later than build-less sources.
+      const floor =
+        template === 'hook'
+          ? PLUGIN_HOOKS_SINCE
+          : template === 'editor'
+            ? PLUGIN_EDITOR_FRAME_SINCE
+            : PLUGIN_SOURCE_MODULES_SINCE
+      expect(manifest.engines.orca).toBe(`>=${floor}`)
       const report = await validatePluginTarget(dir)
       expect(report.errors).toEqual([])
     }

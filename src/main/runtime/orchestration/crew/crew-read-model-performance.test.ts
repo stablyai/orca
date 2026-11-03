@@ -13,7 +13,7 @@ import { CrewChanges } from './crew-changes'
 import { subscribeCrew } from './crew-stream'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 import { fixture } from './crew-read-model.test-fixture'
 import { crewQueryPlans, meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
@@ -347,6 +347,11 @@ it('drives pending questions from metadata on real N/10N mailbox wakes', async (
         to: 'term_outbound',
         subject: 'Unrelated committed wake'
       })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(operations).toEqual({ executions: 0, rows: 0, bytes: 0 })
+      expect(plans).toHaveLength(0)
+      db.crewChanges.notify(new Set(['traffic']))
       await Promise.resolve()
       await Promise.resolve()
       expect(operations).toEqual({ executions: 1, rows: 0, bytes: 2 })

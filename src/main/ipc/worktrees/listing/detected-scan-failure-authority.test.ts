@@ -17,7 +17,7 @@ const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provid
 const { __resetDetectedWorktreeScanCacheForTests } = await import('./detected-worktree-scan-cache')
 const { _resetWorktreeScanCacheForTests } = await import('../../../git/worktree-scan-cache')
 const { isRegisteredWorktreePath, invalidateAuthorizedRootsCache } =
-  await import('../../registered-worktree-roots-cache')
+  await import('../removal/registered-worktree-roots-cache')
 
 const REPO_PATH = '/workspace/repo'
 const repo = {

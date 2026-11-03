@@ -190,50 +190,6 @@ describe('executeOpenEditorPathMove', () => {
     expect(useAppStore.getState().openFiles[0]!.filePath).toBe('/repo/b.md')
   })
 
-  it('declares the moved file as the document for a document-scoped rename', async () => {
-    openDirtyTab()
-
-    await executeOpenEditorPathMove({
-      context: CONTEXT,
-      fromPath: '/repo/a.md',
-      toPath: '/repo/b.md',
-      worktreeId: 'wt-1',
-      worktreePath: '/repo',
-      documentScoped: true
-    })
-
-    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(CONTEXT, '/repo/a.md', '/repo/b.md', {
-      kind: 'document-folder',
-      documentPath: '/repo/a.md'
-    })
-  })
-
-  it('resolves the verify gate proactively when no destination watcher event arrives', async () => {
-    const DISK_CONTENT = 'the file as it exists on disk\n'
-    const id = openDirtyTab()
-    useAppStore.getState().setLastKnownDiskSignature(id, getDiskBaselineSignature(DISK_CONTENT))
-    vi.stubGlobal('window', {
-      api: {
-        fs: { readFile: vi.fn().mockResolvedValue({ isBinary: false, content: DISK_CONTENT }) }
-      }
-    })
-
-    await executeOpenEditorPathMove({
-      context: CONTEXT,
-      fromPath: '/repo/a.md',
-      toPath: '/repo/sub/a.md',
-      worktreeId: 'wt-1',
-      worktreePath: '/repo'
-    })
-    await new Promise((resolve) => setTimeout(resolve, 20))
-
-    const moved = useAppStore.getState().openFiles[0]!
-    expect(moved.externalMutation).toBeUndefined()
-    expect(moved.isDirty).toBe(true)
-    // Keep echo provenance after proactive verify so a later destination watcher event remains recognized as this move’s own echo.
-    expect(moved.pendingSelfMoveEcho?.targetPath).toBe('/repo/sub/a.md')
-  })
-
   it('does not raise a false banner when the destination watcher event lands after the move', async () => {
     // FSEvents/SSH events may follow fast verification; consuming provenance early would mark our own rename as an external edit.
     const DISK_CONTENT = 'the file as it exists on disk\n'

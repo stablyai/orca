@@ -18,8 +18,8 @@ import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,
   resolveExternalEditorLaunchSpec
-} from '../external-editor-launch'
-import { resolveRemoteSshEditorLaunchSpec } from '../remote-ssh-editor-launch'
+} from '../external-editors/external-editor-launch'
+import { resolveRemoteSshEditorLaunchSpec } from '../external-editors/remote-ssh-editor-launch'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isEditorSshHostForOwner,

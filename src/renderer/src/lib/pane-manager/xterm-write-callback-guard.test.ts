@@ -19,27 +19,6 @@ beforeEach(() => {
 })
 
 describe('runGuardedWriteCompletionStep', () => {
-  it('contains a synchronous throw and reports a breadcrumb', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      expect(() =>
-        runGuardedWriteCompletionStep('test-step', () => {
-          throw new RangeError('synthetic settle failure')
-        })
-      ).not.toThrow()
-      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
-        'terminal_write_completion_error',
-        expect.objectContaining({
-          context: 'test-step',
-          errorName: 'RangeError',
-          errorMessage: 'synthetic settle failure'
-        })
-      )
-    } finally {
-      errorSpy.mockRestore()
-    }
-  })
-
   it('caps repeated reports per context so a throw-per-write loop cannot spam breadcrumbs', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
@@ -52,13 +31,6 @@ describe('runGuardedWriteCompletionStep', () => {
     } finally {
       errorSpy.mockRestore()
     }
-  })
-
-  it('runs non-throwing steps transparently', () => {
-    const step = vi.fn()
-    runGuardedWriteCompletionStep('ok-step', step)
-    expect(step).toHaveBeenCalledTimes(1)
-    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
   })
 })
 

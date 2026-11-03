@@ -40,7 +40,7 @@ import {
   normalizeSourceControlAiSettings,
   projectSourceControlAiToLegacyCommitMessageAi
 } from '../../../shared/source-control-ai'
-import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+import type { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
 import {

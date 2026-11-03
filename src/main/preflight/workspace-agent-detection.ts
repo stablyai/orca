@@ -20,7 +20,7 @@ import type { Repo } from '../../shared/repo-types'
 import {
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore
-} from '../local-project-runtime-resolution'
+} from '../workspaces/execution-host/local-project-runtime-resolution'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext

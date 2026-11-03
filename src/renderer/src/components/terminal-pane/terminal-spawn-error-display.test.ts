@@ -18,6 +18,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import {
+  failedSpawnShell,
   localizeTerminalSpawnHints,
   withoutTerminalSpawnIssueRequest
 } from './terminal-spawn-error-display'
@@ -46,5 +47,17 @@ describe('withoutTerminalSpawnIssueRequest', () => {
   it('keeps the same words when they are part of the diagnostic', () => {
     const error = `Command printed: If this persists, please file an issue.\nMore detail follows.`
     expect(withoutTerminalSpawnIssueRequest(error)).toBe(error)
+  })
+})
+
+describe('failedSpawnShell', () => {
+  it('reads the shell from daemon and local spawn failures', () => {
+    expect(
+      failedSpawnShell(
+        'Daemon failed to spawn shell "C:\\Windows\\System32\\wsl.exe" with cwd "C:\\"'
+      )
+    ).toBe('C:\\Windows\\System32\\wsl.exe')
+    expect(failedSpawnShell(RAW)).toBe('/bin/zsh')
+    expect(failedSpawnShell('Paste failed.')).toBeNull()
   })
 })

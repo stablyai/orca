@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseOwnerVerdict,
   agentSessionLeasePossiblyWriting

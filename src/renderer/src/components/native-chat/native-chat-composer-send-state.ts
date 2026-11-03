@@ -1,4 +1,4 @@
-import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
+import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'

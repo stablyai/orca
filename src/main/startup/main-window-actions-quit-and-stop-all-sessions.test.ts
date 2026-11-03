@@ -30,7 +30,10 @@ vi.mock('../daemon/daemon-provider-state', () => ({ getDaemonProvider: daemon.pr
 vi.mock('../ipc/pty/pty-management', () => ({
   confirmNoDaemonSessionsRemain: daemon.noSessionsRemain
 }))
-vi.mock('../updater', () => ({ checkForUpdatesFromMenu: vi.fn(), isQuittingForUpdate: vi.fn() }))
+vi.mock('../updater/updater-service', () => ({
+  checkForUpdatesFromMenu: vi.fn(),
+  isQuittingForUpdate: vi.fn()
+}))
 vi.mock('../tray/system-tray', () => ({
   createSystemTray: vi.fn(),
   setMacMenuBarIconVisible: vi.fn()

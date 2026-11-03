@@ -37,6 +37,10 @@ export { mocks }
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
 vi.mock('../orcad/orcad-data-root-locality', () => ({ orcadDataRootIsOnLocalDisk: () => true }))
 vi.mock('../git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreeGraph: mocks.listWorktreeGraph
+}))
 vi.mock('../git/worktree-create-preparation', () => ({
   prepareWorktreeCreateCheckout: mocks.prepareCheckout,
   finalizePreparedWorktree: mocks.finalize,
@@ -52,7 +56,7 @@ vi.mock('../git/worktree-base-ref-probe', () => ({
 vi.mock('../git/worktree-base-divergence', () => ({
   measureRetargetDivergence: mocks.measureDivergence
 }))
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
   getWorktreeMirrorDistro: () => undefined
 }))
@@ -66,7 +70,7 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => ({
   })
 }))
 
-import { _resetWorktreeCreatePreparationsForTests } from '../worktree-create-preparation'
+import { _resetWorktreeCreatePreparationsForTests } from '../workspaces/creation/preparation/worktree-create-preparation'
 
 // Evictions and retries are fire-and-forget, so let them settle before asserting.
 export function flushBackgroundWork(ms = 0): Promise<void> {

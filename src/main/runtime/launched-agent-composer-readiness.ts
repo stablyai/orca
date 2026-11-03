@@ -15,6 +15,7 @@ import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { draftPasteReadySignalHasMarker } from '../../shared/draft-paste-ready-scanner'
 import { nameOnlyIdleNeedsCorroboration } from './tui-idle-evidence'
 import type { OrcaRuntimeService } from './orca-runtime'
+import { failOnLaunchedAgentExit, type LaunchedAgentExitRuntime } from './launched-agent-exit-watch'
 import { showsHoldAnchor } from './agent-state-rules/agent-state-text-anchors'
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 
@@ -28,12 +29,26 @@ export type LaunchedAgentReadinessRuntime = Pick<
   OrcaRuntimeService,
   'waitForTerminal' | 'waitForFreshWorkerComposer'
 > &
-  Partial<Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'>>
+  Partial<Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'> & LaunchedAgentExitRuntime>
 
 export type TerminalReadinessCreation = Pick<
   RuntimeTerminalCreate,
   'handle' | 'ptyId' | 'incarnationId' | 'isReattach' | 'agentSessionDisposition'
 >
+
+/** The PTY this creation spawned for `handle`; a reattached or adopted pane launched nothing new. */
+function freshLaunchPtyId(
+  handle: string,
+  creation: TerminalReadinessCreation | undefined
+): string | null {
+  return creation &&
+    creation.handle === handle &&
+    !creation.isReattach &&
+    creation.agentSessionDisposition !== 'adopted' &&
+    creation.ptyId
+    ? creation.ptyId
+    : null
+}
 
 function readinessFailure(
   runtime: LaunchedAgentReadinessRuntime,
@@ -44,23 +59,44 @@ function readinessFailure(
   if (readTerminalStartFailure(error)) {
     return error
   }
-  const verdict = creation?.ptyId ? runtime.getPtyLivenessVerdict?.(creation.ptyId) : null
+  const ptyId = freshLaunchPtyId(handle, creation)
+  const verdict = ptyId ? runtime.getPtyLivenessVerdict?.(ptyId) : null
   if (
-    !creation ||
-    creation.handle !== handle ||
-    creation.isReattach ||
-    creation.agentSessionDisposition === 'adopted' ||
-    !creation.incarnationId ||
-    !creation.ptyId ||
+    !ptyId ||
+    !creation?.incarnationId ||
     verdict?.status !== 'exited' ||
     verdict.incarnationId !== creation.incarnationId
   ) {
     return error
   }
   return classifyTerminalCreationFailure(error, {
-    id: creation.ptyId,
+    id: ptyId,
     incarnationId: creation.incarnationId
   })
+}
+
+function observesLaunchedAgentExit(
+  runtime: LaunchedAgentReadinessRuntime
+): runtime is LaunchedAgentReadinessRuntime & LaunchedAgentExitRuntime {
+  return (
+    runtime.readLaunchedAgentForeground !== undefined &&
+    runtime.subscribeToTerminalData !== undefined &&
+    runtime.readRecentTerminalOutput !== undefined
+  )
+}
+
+function waitWatchingForAgentExit(
+  runtime: LaunchedAgentReadinessRuntime,
+  handle: string,
+  agent: TuiAgent,
+  creation: TerminalReadinessCreation | undefined,
+  signal: AbortSignal | undefined,
+  wait: (signal?: AbortSignal) => Promise<RuntimeTerminalWait>
+): Promise<RuntimeTerminalWait> {
+  const ptyId = freshLaunchPtyId(handle, creation)
+  return ptyId && observesLaunchedAgentExit(runtime)
+    ? failOnLaunchedAgentExit(runtime, ptyId, agent, signal, wait)
+    : wait(signal)
 }
 
 /** Startup dialogs and hold anchors veto signals; Codex's provisional loading header discards input. */
@@ -82,30 +118,36 @@ export async function waitForWorkerStartComposer(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
   agent: TuiAgent,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<RuntimeTerminalWait> {
+  const abort = signal ? { signal } : {}
   if (getLaunchedAgentReadinessLane(agent) === 'composer-marker') {
-    return runtime.waitForFreshWorkerComposer(handle, agent, timeoutMs)
+    return signal
+      ? runtime.waitForFreshWorkerComposer(handle, agent, timeoutMs, abort)
+      : runtime.waitForFreshWorkerComposer(handle, agent, timeoutMs)
   }
   if (!workerStartReadsComposerMarker(agent)) {
     return runtime.waitForTerminal(handle, {
       condition: 'tui-idle',
       timeoutMs,
-      launchReadiness: true
+      launchReadiness: true,
+      ...abort
     })
   }
   const stop = new AbortController()
+  const lanes = signal ? AbortSignal.any([signal, stop.signal]) : stop.signal
   try {
     return await firstAnswer(
       runtime.waitForTerminal(handle, {
         condition: 'tui-idle',
         timeoutMs,
         launchReadiness: true,
-        signal: stop.signal
+        signal: lanes
       }),
       runtime.waitForFreshWorkerComposer(handle, agent, timeoutMs, {
         requireComposerMarker: true,
-        signal: stop.signal
+        signal: lanes
       })
     )
   } finally {
@@ -160,9 +202,12 @@ export async function waitForWorkerAgentReady(
     creation?: TerminalReadinessCreation
   }
 ): Promise<RuntimeTerminalWait> {
+  const { agent } = args
   try {
-    const result = await (args.agent && !args.reusesTerminal
-      ? waitForWorkerStartComposer(runtime, handle, args.agent, args.timeoutMs)
+    const result = await (agent && !args.reusesTerminal
+      ? waitWatchingForAgentExit(runtime, handle, agent, args.creation, undefined, (signal) =>
+          waitForWorkerStartComposer(runtime, handle, agent, args.timeoutMs, signal)
+        )
       : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs }))
     return args.reusesTerminal
       ? result
@@ -233,13 +278,15 @@ async function waitForLaunchedAgentComposerImpl(
 export async function waitForLaunchedAgentComposer(
   ...args: Parameters<typeof waitForLaunchedAgentComposerImpl>
 ): Promise<RuntimeTerminalWait> {
-  const [runtime, handle, , , , creation] = args
+  const [runtime, handle, agent, timeoutMs, signal, creation] = args
   try {
     return requireFreshReadiness(
       runtime,
       handle,
       creation,
-      await waitForLaunchedAgentComposerImpl(...args)
+      await waitWatchingForAgentExit(runtime, handle, agent, creation, signal, (watchSignal) =>
+        waitForLaunchedAgentComposerImpl(runtime, handle, agent, timeoutMs, watchSignal, creation)
+      )
     )
   } catch (error) {
     throw readinessFailure(runtime, handle, creation, error)

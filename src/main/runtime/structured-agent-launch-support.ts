@@ -10,7 +10,7 @@ import {
   checkAgentCliVersion,
   launchableRelease,
   type AgentCliVersionCheck
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,

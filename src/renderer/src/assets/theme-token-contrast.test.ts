@@ -47,7 +47,9 @@ describe.each([':root', '.dark'] as const)('built-in %s token pairs', (selector)
     ['--muted-foreground', '--background'],
     ['--muted-foreground', '--muted'],
     ['--muted-foreground', '--accent'],
-    ['--muted-foreground', '--card']
+    ['--muted-foreground', '--card'],
+    // File Explorer paints ignored names on the right sidebar.
+    ['--git-decoration-ignored', '--sidebar']
   ])('%s on %s meets WCAG AA', (text, surface) => {
     expect(contrastRatio(token(text), token(surface))).toBeGreaterThanOrEqual(4.5)
   })
