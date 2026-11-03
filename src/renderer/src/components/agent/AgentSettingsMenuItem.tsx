@@ -8,7 +8,7 @@ export function AgentSettingsMenuItem({ onSelect }: { onSelect: () => void }): J
   return (
     <DropdownMenuItem
       onSelect={onSelect}
-      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium text-muted-foreground"
+      className="gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-4 font-medium text-muted-foreground"
     >
       <SettingsIcon className="size-4" />
       {translate('auto.components.tab.bar.QuickLaunchButton.348a04c1ad', 'Agent settings…')}

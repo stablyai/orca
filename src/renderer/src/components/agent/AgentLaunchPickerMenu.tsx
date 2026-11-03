@@ -161,7 +161,7 @@ export function AgentLaunchPickerMenu({
   return (
     <div ref={root} data-agent-launch-picker="true">
       {!hideSearch ? (
-        <div className="p-1">
+        <div className="px-1 py-0.5">
           <Input
             value={query}
             density="compact"
@@ -188,57 +188,59 @@ export function AgentLaunchPickerMenu({
           />
         </div>
       ) : null}
-      {setups.map((setup) => {
-        const source = draftForEntry?.(setup.entry)
-        return (
-          <AgentPickerMenuRow
-            key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-            draftScope={draftScope}
-            draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-            initialModel={setup.model.id}
-            initialEffort={setup.choices.options?.effort}
-            entry={setup.entry}
-            mode={mode}
-            setupDisabled={setupDisabled}
-            openSetup={openSetup}
-            onSetupOpenChange={setActiveSetup}
-            label={setup.label}
-            source={source}
-            selected={value?.agent === setup.entry.agent ? value : undefined}
-            onSelectAgent={onSelectAgent}
-            disabled={disabled}
-            runLaunch={runLaunch}
-          />
-        )
-      })}
-      {visible.map((entry) => {
-        const source = draftForEntry?.(entry)
-        return (
-          <AgentPickerMenuRow
-            key={entry.agent}
-            draftScope={draftScope}
-            entry={entry}
-            mode={mode}
-            source={source}
-            selected={value?.agent === entry.agent ? value : undefined}
-            setupDisabled={setupDisabled}
-            openSetup={openSetup}
-            onSetupOpenChange={setActiveSetup}
-            disabled={disabled}
-            runLaunch={runLaunch}
-            onSelectAgent={onSelectAgent}
-            shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
-          />
-        )
-      })}
-      {!visible.length && !setups.length ? (
-        <DropdownMenuItem disabled>
-          {translate(
-            'auto.components.agent.AgentCombobox.579c768bde',
-            'No agents match your search.'
-          )}
-        </DropdownMenuItem>
-      ) : null}
+      <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+        {setups.map((setup) => {
+          const source = draftForEntry?.(setup.entry)
+          return (
+            <AgentPickerMenuRow
+              key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+              draftScope={draftScope}
+              draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+              initialModel={setup.model.id}
+              initialEffort={setup.choices.options?.effort}
+              entry={setup.entry}
+              mode={mode}
+              setupDisabled={setupDisabled}
+              openSetup={openSetup}
+              onSetupOpenChange={setActiveSetup}
+              label={setup.label}
+              source={source}
+              selected={value?.agent === setup.entry.agent ? value : undefined}
+              onSelectAgent={onSelectAgent}
+              disabled={disabled}
+              runLaunch={runLaunch}
+            />
+          )
+        })}
+        {visible.map((entry) => {
+          const source = draftForEntry?.(entry)
+          return (
+            <AgentPickerMenuRow
+              key={entry.agent}
+              draftScope={draftScope}
+              entry={entry}
+              mode={mode}
+              source={source}
+              selected={value?.agent === entry.agent ? value : undefined}
+              setupDisabled={setupDisabled}
+              openSetup={openSetup}
+              onSetupOpenChange={setActiveSetup}
+              disabled={disabled}
+              runLaunch={runLaunch}
+              onSelectAgent={onSelectAgent}
+              shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+            />
+          )
+        })}
+        {!visible.length && !setups.length ? (
+          <DropdownMenuItem disabled>
+            {translate(
+              'auto.components.agent.AgentCombobox.579c768bde',
+              'No agents match your search.'
+            )}
+          </DropdownMenuItem>
+        ) : null}
+      </div>
     </div>
   )
 }
