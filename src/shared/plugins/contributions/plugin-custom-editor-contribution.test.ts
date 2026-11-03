@@ -1,3 +1,4 @@
+import { satisfiesOrcaEngineRange } from '../manifest/plugin-manifest-engine-range'
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 import {
@@ -75,7 +76,9 @@ describe('contributes.customEditors', () => {
         ?.frame
     ).toBe('isolated')
     expect(PLUGIN_EDITOR_FRAME_SINCE).toBe('1.4.248')
-    expect(PLUGIN_SCHEMA_NEWEST_SINCE).toBe(PLUGIN_EDITOR_FRAME_SINCE)
+    expect(
+      satisfiesOrcaEngineRange(PLUGIN_SCHEMA_NEWEST_SINCE, `>=${PLUGIN_EDITOR_FRAME_SINCE}`)
+    ).toBe(true)
     const tooOld = parsePluginManifest(manifest({ contributes: { customEditors: [isolated] } }))
     expect(tooOld).toMatchObject({ ok: false })
     expect(tooOld.ok ? '' : tooOld.error).toContain(PLUGIN_EDITOR_FRAME_SINCE)

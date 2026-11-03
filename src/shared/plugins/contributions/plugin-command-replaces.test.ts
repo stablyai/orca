@@ -1,3 +1,4 @@
+import { satisfiesOrcaEngineRange } from '../manifest/plugin-manifest-engine-range'
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { PLUGIN_SCHEMA_NEWEST_SINCE } from '../installation/plugin-host-version'
@@ -31,7 +32,8 @@ describe('commands[].replaces', () => {
     expect(
       issues(manifest([{ id: 'tasks', title: 'Tasks', replaces: 'view.tasks' }], '>=1.4.247'))
     ).toContain('1.4.248')
-    expect(PLUGIN_SCHEMA_NEWEST_SINCE).toBe('1.4.248')
+    // This build reads every field up to its newest since, so 1.4.248 plugins load here.
+    expect(satisfiesOrcaEngineRange(PLUGIN_SCHEMA_NEWEST_SINCE, '>=1.4.248')).toBe(true)
   })
 
   it('refuses unknown actions, aliases that replace, and two commands for one action', () => {
