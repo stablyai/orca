@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
+import { useStatsReadsServer } from './server-usage-copy'
 import { getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
@@ -45,6 +46,7 @@ export function UsageOverviewPane(): React.JSX.Element {
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
   const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
+  const readsServer = useStatsReadsServer()
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
@@ -166,10 +168,15 @@ export function UsageOverviewPane(): React.JSX.Element {
                   )}
                 </h4>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {translate(
-                    'auto.components.stats.UsageOverviewPane.6c00c46815',
-                    'Enable a provider to scan local agent logs and build the combined token ledger.'
-                  )}
+                  {readsServer
+                    ? translate(
+                        'auto.components.stats.UsageOverviewPane.enableProviderOnServer',
+                        "Enable a provider to scan this server's agent logs and build the combined token ledger."
+                      )
+                    : translate(
+                        'auto.components.stats.UsageOverviewPane.6c00c46815',
+                        'Enable a provider to scan local agent logs and build the combined token ledger.'
+                      )}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -254,10 +261,15 @@ export function UsageOverviewPane(): React.JSX.Element {
 
             {!overview.hasAnyData ? (
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.stats.UsageOverviewPane.noLocalUsageYet',
-                  'No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.'
-                )}
+                {readsServer
+                  ? translate(
+                      'auto.components.stats.UsageOverviewPane.noServerUsageYet',
+                      'No Claude, Codex, OpenCode, or Muse usage found on this server yet. The overview will populate after the next agent session writes token logs.'
+                    )
+                  : translate(
+                      'auto.components.stats.UsageOverviewPane.noLocalUsageYet',
+                      'No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.'
+                    )}
               </div>
             ) : (
               <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">

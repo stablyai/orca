@@ -5294,6 +5294,7 @@
           "a15206a63a": "Top model:",
           "040c044d39": "By model",
           "e5bb23d85e": "Cost comes from the local OpenCode database when the assistant message recorded one.",
+          "serverCostNote": "Cost comes from the OpenCode database on this server when the assistant message recorded one.",
           "15c34d4b08": "Recorded cost",
           "7e9433469a": "Sessions / Events",
           "5a65d68b77": "Reasoning output",
@@ -5338,6 +5339,10 @@
           "6adac63cfe": "turns"
         },
         "StatsPane": {
+          "serverUsageLogsDescription": "Reads {{provider}} usage logs on this server to show token, model, and session stats.",
+          "serverNoUsageForScope": "No {{provider}} usage found on this server yet for this scope.",
+          "serverAllUsageScope": "All {{provider}} usage on this server",
+          "serverRecentSessionsDescription": "Most recent {{provider}} sessions on this server in this scope.",
           "42d3e0bdf7": "Usage analytics provider: {{value0}}",
           "c79f073d4c": "Usage Analytics",
           "a58aba506f": "PRs created",
@@ -5349,7 +5354,9 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "hostUsageUpdateRequired": "This server runs an older Orca that cannot report token usage. Update Orca on the server to see its usage here.",
+          "hostUsageConnecting": "Connecting to this server. Its token usage appears once it answers."
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Providers",
@@ -5368,6 +5375,8 @@
           "55c910f4f1": "- some model prices are unavailable",
           "enableMuse": "Enable Muse",
           "noLocalUsageYet": "No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.",
+          "enableProviderOnServer": "Enable a provider to scan this server's agent logs and build the combined token ledger.",
+          "noServerUsageYet": "No Claude, Codex, OpenCode, or Muse usage found on this server yet. The overview will populate after the next agent session writes token logs.",
           "providersEnabledWithData": "{{enabled}} enabled - {{withData}} with data",
           "sessionCount_one": "{{formatted}} session",
           "sessionCount_other": "{{formatted}} sessions"
@@ -9040,6 +9049,7 @@
           "7686cb5c36": "Connect this browser to a saved Orca server.",
           "bd0181eeca": "Remote Orca Servers",
           "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.",
+          "statsServerDescription": "Orca stats plus Claude, Codex, OpenCode and Muse token analytics for this server.",
           "954a8f5aef": "Stats & Usage",
           "a737a4bb22": "Keyboard shortcuts for common actions.",
           "23bf7a1ad4": "Shortcuts",
@@ -12949,7 +12959,7 @@
         "SettingsHostScopePicker": {
           "label": "Host",
           "unavailable": "{{value0}} (unavailable)",
-          "description": "Accounts, detected agents and terminal options below are for this host.",
+          "description": "Accounts, detected agents, terminal options and Stats & Usage below are for this host.",
           "unavailableNotice": "This server is no longer saved, so nothing can be shown for it. Choose another host at the top of Settings."
         },
         "wslHostsExperimental": {

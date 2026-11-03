@@ -14,6 +14,12 @@ import { ClaudeUsageDetails } from './ClaudeUsageDetails'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
+import {
+  serverNoUsageForScope,
+  serverScopeOptions,
+  serverUsageLogsDescription,
+  useStatsReadsServer
+} from './server-usage-copy'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { unpricedCostLabel } from './unpriced-cost-label'
@@ -50,6 +56,8 @@ const RANGE_LABELS: Record<ClaudeUsageRange, string> = {
 }
 
 export function ClaudeUsagePane(): React.JSX.Element {
+  const readsServer = useStatsReadsServer()
+  const scopeOptions = readsServer ? serverScopeOptions(SCOPE_OPTIONS, 'Claude') : SCOPE_OPTIONS
   const scanState = useAppStore((state) => state.claudeUsageScanState)
   const summary = useAppStore((state) => state.claudeUsageSummary)
   const daily = useAppStore((state) => state.claudeUsageDaily)
@@ -88,10 +96,14 @@ export function ClaudeUsagePane(): React.JSX.Element {
       <UsageTrackingPaneShell
         enabled={false}
         title={title}
-        disabledDescription={translate(
-          'auto.components.stats.ClaudeUsagePane.0cb1a36d7d',
-          'Reads local Claude usage logs to show token, model, and session stats.'
-        )}
+        disabledDescription={
+          readsServer
+            ? serverUsageLogsDescription('Claude')
+            : translate(
+                'auto.components.stats.ClaudeUsagePane.0cb1a36d7d',
+                'Reads local Claude usage logs to show token, model, and session stats.'
+              )
+        }
         enableLabel={enableLabel}
         onEnabledChange={handleSetEnabled}
       />
@@ -138,7 +150,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
           key="scope"
           label={translate('auto.components.stats.ClaudeUsagePane.f61cffb9c8', 'Scope')}
           value={scope}
-          options={SCOPE_OPTIONS}
+          options={scopeOptions}
           onValueChange={(value) => void setClaudeUsageScope(value)}
         />,
         <UsageFilterRadioGroup
@@ -151,13 +163,17 @@ export function ClaudeUsagePane(): React.JSX.Element {
       ]}
       selectionSummary={
         <>
-          {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
+          {scopeOptions.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
         </>
       }
-      emptyMessage={translate(
-        'auto.components.stats.ClaudeUsagePane.7dde9331fd',
-        'No local Claude usage found yet for this scope.'
-      )}
+      emptyMessage={
+        readsServer
+          ? serverNoUsageForScope('Claude')
+          : translate(
+              'auto.components.stats.ClaudeUsagePane.7dde9331fd',
+              'No local Claude usage found yet for this scope.'
+            )
+      }
       onEnabledChange={handleSetEnabled}
       onRefresh={() => void refreshClaudeUsage()}
       headerAction={

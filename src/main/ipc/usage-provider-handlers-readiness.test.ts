@@ -111,10 +111,10 @@ beforeEach(() => {
   getPathMock.mockReturnValue(directory)
   vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
   vi.mocked(splitUsageCacheFileViaWorker).mockReset()
-  initClaudeUsagePath()
-  initCodexUsagePath()
-  initOpenCodeUsagePath()
-  initMuseUsagePath()
+  initClaudeUsagePath(directory)
+  initCodexUsagePath(directory)
+  initOpenCodeUsagePath(directory)
+  initMuseUsagePath(directory)
 })
 
 afterEach(async () => {
