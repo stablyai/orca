@@ -196,7 +196,9 @@ describe('useMobilePrSidebarController repo probe', () => {
           })
         )
       })
-      await act(async () => captured!.refetchPRSidebar({ includeDetails: false }))
+      await act(async () => {
+        await captured!.refetchPRSidebar({ includeDetails: false })
+      })
       expect(captured?.prSidebarState.kind).toBe('none')
       if (failure === 'refusal') {
         fetchGithubRepoSlugMock.mockResolvedValue({ ok: false, error: 'Timed out' })
