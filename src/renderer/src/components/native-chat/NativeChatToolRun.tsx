@@ -229,7 +229,11 @@ export function NativeChatToolRun({
             ) : null}
             {latestCallLabel ? (
               <span className="flex h-[1lh] min-w-0 items-center">
-                <span className="min-w-0 truncate font-sans text-xs text-chat-foreground-faint">
+                {/* Visible detail only. The run sentence is the button name, so this cannot match a section entry. */}
+                <span
+                  aria-hidden
+                  className="min-w-0 truncate font-sans text-xs text-chat-foreground-faint"
+                >
                   {latestCallLabel}
                 </span>
               </span>

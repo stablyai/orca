@@ -107,7 +107,8 @@ export function NativeChatSubagentEntries({
             </span>
           </>
         )
-        if (onOpenSubagent) {
+        // A section toggle stays the entry. Opening a child is the spawn card's control.
+        if (sectionOpen === undefined && onOpenSubagent) {
           return (
             <li key={agent.id}>
               <button
