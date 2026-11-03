@@ -17,6 +17,7 @@ import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-sou
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   WORK_ITEM_DETAILS_FRESH_MS,
+  markUserActionWorkItemDetailsRead,
   touchWorkItemDetailsCache,
   workItemDetailsCache,
   withWorkItemDetailsItem
@@ -138,6 +139,7 @@ export async function settleWorkItemDetailsFetch(
     details: result,
     pending: undefined,
     error: undefined,
+    rereadOwed: undefined,
     fetchedAt: Date.now()
   })
   args.onAccepted?.(result)
@@ -159,6 +161,7 @@ export function ensureWorkItemDetailsFetch(
     }
   } else if (
     cached?.details &&
+    !cached.rereadOwed &&
     (!options.target || matchesGitHubWorkItemTarget(cached.details.item, options.target)) &&
     Date.now() - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
   ) {
@@ -173,6 +176,9 @@ export function startWorkItemDetailsFetch(
   options: FetchAcceptance = {}
 ) {
   const inflight = Object.assign(Promise.resolve().then(load), { isCurrent: options.isCurrent })
+  if (options.userAction) {
+    markUserActionWorkItemDetailsRead(inflight)
+  }
   const previous = workItemDetailsCache.get(key)
   touchWorkItemDetailsCache(key, {
     details: previous?.details ?? null,

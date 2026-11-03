@@ -1,4 +1,5 @@
-import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
+import type { GitHubPRFileViewedState, PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
@@ -11,7 +12,13 @@ import {
   fetchPRForBranch,
   fetchWorkItemDetails
 } from './github-pr-rpc'
-import type { PrSidebarLoadDeps, PrSidebarState } from './mobile-pr-sidebar-state'
+import {
+  loadPrSidebarDetails,
+  prSidebarResourceKey,
+  resolvePrSidebarDetailsAfterPhase2,
+  type PrSidebarLoadDeps,
+  type PrSidebarState
+} from './mobile-pr-sidebar-state'
 
 export type PrSidebarControllerInput = {
   client: RpcClient | null
@@ -155,4 +162,37 @@ export function prSidebarWithFileViewed(
       }
     }
   }
+}
+
+// Claim the observation's details sequence, read, and return a placeholder-resolved body only while
+// this claim is still the current one for that same PR. A newer load or a departed observation gets null.
+export async function fetchCurrentPrSidebarDetails(args: {
+  owner: PrSidebarObservation
+  deps: PrSidebarLoadDeps
+  worktreeId: string
+  pr: PRInfo
+  refresh?: boolean
+}): Promise<GitHubWorkItemDetails | null> {
+  const { owner } = args
+  const detailsSeq = owner.detailsSeq + 1
+  owner.detailsSeq = detailsSeq
+  const resourceKey = prSidebarResourceKey(args.pr)
+  owner.detailsInFlight = { seq: detailsSeq, resourceKey }
+  const fetched = await loadPrSidebarDetails(args.deps, args.worktreeId, args.pr, args.refresh)
+  if (owner.detailsInFlight?.seq === detailsSeq) {
+    owner.detailsInFlight = null
+  }
+  if (
+    detailsSeq !== owner.detailsSeq ||
+    !owner.live ||
+    owner.latest.kind !== 'ready' ||
+    prSidebarResourceKey(owner.latest.data.pr) !== resourceKey
+  ) {
+    return null
+  }
+  return resolvePrSidebarDetailsAfterPhase2({
+    fetched,
+    prior: owner.latest.data.details,
+    pr: owner.latest.data.pr
+  })
 }

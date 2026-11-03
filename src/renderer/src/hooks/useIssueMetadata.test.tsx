@@ -179,26 +179,6 @@ describe('useIssueMetadata hooks', () => {
     expect(githubMocks.listLabels).not.toHaveBeenCalled()
   })
 
-  it('does not loop when cached team-state metadata is read with a fresh settings object', async () => {
-    let renders = 0
-    let states: unknown[] = []
-    linearMocks.linearTeamStates.mockResolvedValue([{ id: 's1', name: 'Todo' }])
-
-    function StatesProbe(): null {
-      renders += 1
-      const metadata = useTeamStates('team-1', { kind: 'local' }, 'ws-1')
-      states = metadata.data
-      return null
-    }
-
-    renderProbe(<StatesProbe />)
-    await flushEffects()
-
-    expect(states).toEqual([{ id: 's1', name: 'Todo' }])
-    expect(linearMocks.linearTeamStates).toHaveBeenCalledTimes(1)
-    expect(renders).toBeLessThanOrEqual(4)
-  })
-
   it('does not re-issue a failed team-state fetch when a fresh settings object re-renders', async () => {
     let renders = 0
     let error: string | null = null

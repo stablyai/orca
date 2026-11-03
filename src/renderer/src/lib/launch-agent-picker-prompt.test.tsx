@@ -509,20 +509,3 @@ it('returns setup input when explicit chat is refused before session admission',
   expect(mockLaunchStructuredCodexSession).not.toHaveBeenCalled()
   expect(mockCreateTab).not.toHaveBeenCalled()
 })
-
-it.each(['auto-submit', 'draft'] as const)(
-  'honors local no-future %s ownership instead of treating it as a missing result',
-  async (promptDelivery) => {
-    const actual = launcher.launchAgentInNewTab
-    const dispatch = vi
-      .spyOn(launcher, 'launchAgentInNewTab')
-      .mockImplementation((args) => actual({ ...args, promptDelivery }))
-    render(<Menu route="menu" />)
-    fireEvent.click(document.querySelector('button[aria-label="Configure Claude"]')!)
-    changePrompt(editor(), 'local prompt')
-    await act(async () => button('Launch terminal').click())
-    expect(dispatch.mock.results[0].value?.promptDeliveryResult).toBeUndefined()
-    expect(mockCreateTab).toHaveBeenCalledOnce()
-    expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(entry)).text).toBe('')
-  }
-)

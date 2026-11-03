@@ -4,6 +4,7 @@ import {
   buildMobilePrSidebarIdentity,
   createRepoProbe,
   createSidebarObservation,
+  fetchCurrentPrSidebarDetails,
   prSidebarLoadDeps,
   prSidebarWithFileViewed,
   subscribePrSidebarConnection,
@@ -15,9 +16,7 @@ import { fetchGithubRepoSlug } from './github-pr-rpc'
 import {
   prSidebarResourceKey,
   loadPrSidebarData,
-  loadPrSidebarDetails,
   prSidebarDetailsNeedFetch,
-  resolvePrSidebarDetailsAfterPhase2,
   shouldApplyResult,
   shouldSoftRefreshPrSidebarOnHeadChange,
   type PrSidebarState
@@ -123,12 +122,18 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   }, [probeReady, client, worktreeId, probeOwner])
 
   const loadOnce = useCallback(
-    async (options?: PrSidebarLoadOptions) => {
+    async (options?: PrSidebarLoadOptions, afterWrite = false) => {
       const includeDetails = options?.includeDetails ?? true
       const deps = buildDeps()
       const loadIdentity = identity
       if (!owner.live || !deps || !branch || !loadIdentity) {
         return 'stale'
+      }
+      // A details read started before the write would land pre-write content after this reread.
+      const retiredDetails = afterWrite && owner.detailsInFlight !== null
+      if (afterWrite) {
+        owner.detailsSeq += 1
+        owner.detailsInFlight = null
       }
       // A chip refresh never downgrades a full query this observation was already asked for.
       owner.demand = { includeDetails: includeDetails || owner.demand?.includeDetails === true }
@@ -156,11 +161,27 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         if (!accepted.refreshFailed) {
           publishState({ ...accepted, refreshFailed: true })
         }
+        // The shown PR stays, so replace the details read this reread retired rather than leave it spinning.
+        if (retiredDetails && accepted.kind === 'ready') {
+          const details = await fetchCurrentPrSidebarDetails({
+            owner,
+            deps,
+            worktreeId,
+            pr: accepted.data.pr
+          })
+          if (details && owner.latest.kind === 'ready') {
+            publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
+          }
+        }
         return 'failed'
       }
-      // A poll's checks-only failure for the same PR lands its discovery (clearing an older warning) with the prior
-      // checks, and reports 'failed' once for the backoff.
-      const { settled, result } = settleLoadedPr(accepted, next, options?.background === true)
+      // A poll or a write's reread keeps prior checks when that read failed for the same PR, and still lands
+      // the new review state. Equal numbers in another repository are another PR.
+      const { settled, result } = settleLoadedPr(
+        accepted,
+        next,
+        options?.background === true || afterWrite
+      )
 
       // Keep prior details across phase one so refresh cannot blank the comment tree.
       const priorDetails =
@@ -183,45 +204,23 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         }
       }
 
-      const detailsSeq = owner.detailsSeq + 1
-      owner.detailsSeq = detailsSeq
-      owner.detailsInFlight = {
-        seq: detailsSeq,
-        resourceKey: prSidebarResourceKey(settled.data.pr)
-      }
-      const fetchedDetails = await loadPrSidebarDetails(
+      const details = await fetchCurrentPrSidebarDetails({
+        owner,
         deps,
         worktreeId,
-        settled.data.pr,
-        options?.refresh
-      )
-      // Release only this details claim; a newer load may already own it.
-      if (owner.detailsInFlight?.seq === detailsSeq) {
-        owner.detailsInFlight = null
-      }
-      // Guard details by their own sequence; chip refresh advances loadSeq without replacing their owner.
-      if (
-        detailsSeq !== owner.detailsSeq ||
-        !owner.live ||
-        owner.latest.kind !== 'ready' ||
-        prSidebarResourceKey(owner.latest.data.pr) !== prSidebarResourceKey(settled.data.pr)
-      ) {
-        return result
-      }
-      // Replace nonfatal null with a placeholder so details cannot spin forever.
-      const details = resolvePrSidebarDetailsAfterPhase2({
-        fetched: fetchedDetails,
-        prior: owner.latest.data.details,
-        pr: owner.latest.data.pr
+        pr: settled.data.pr,
+        refresh: options?.refresh
       })
       // Details cannot certify the PR read, so a refresh failure stays marked.
-      publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
+      if (details && owner.latest.kind === 'ready') {
+        publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
+      }
       return result
     },
     [buildDeps, branch, headSha, identity, worktreeId, owner, publishState]
   )
 
-  const load = useForegroundFirstLoad(loadOnce)
+  const { load, rereadAfterWrite } = useForegroundFirstLoad(loadOnce)
 
   const ensurePrSidebarDetails = useCallback(async () => {
     const current = owner.latest
@@ -243,27 +242,15 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     if (inFlight && inFlight.resourceKey === resourceKey && inFlight.seq === owner.detailsSeq) {
       return
     }
-    const detailsSeq = owner.detailsSeq + 1
-    owner.detailsSeq = detailsSeq
-    owner.detailsInFlight = { seq: detailsSeq, resourceKey }
-    const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, current.data.pr)
-    if (owner.detailsInFlight?.seq === detailsSeq) {
-      owner.detailsInFlight = null
-    }
-    if (
-      detailsSeq !== owner.detailsSeq ||
-      !owner.live ||
-      owner.latest.kind !== 'ready' ||
-      prSidebarResourceKey(owner.latest.data.pr) !== resourceKey
-    ) {
-      return
-    }
-    const details = resolvePrSidebarDetailsAfterPhase2({
-      fetched: fetchedDetails,
-      prior: owner.latest.data.details,
-      pr: owner.latest.data.pr
+    const details = await fetchCurrentPrSidebarDetails({
+      owner,
+      deps,
+      worktreeId,
+      pr: current.data.pr
     })
-    publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
+    if (details && owner.latest.kind === 'ready') {
+      publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
+    }
   }, [buildDeps, identity, worktreeId, owner, publishState])
 
   // Restart same-branch reads on HEAD advance so their check lookup cannot keep a stale SHA.
@@ -327,6 +314,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     openPRSidebar,
     retryPRSidebar: retry,
     refetchPRSidebar: load,
+    // Every attempted PR write's follow-up read; its outcome stays the write's own feedback.
+    rereadPRSidebarAfterWrite: rereadAfterWrite,
     ensurePrSidebarDetails,
     patchPrFileViewed
   }

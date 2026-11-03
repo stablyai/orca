@@ -32,7 +32,6 @@
 - Use the [window](workspace-layout-oracle.spec.ts) and
   [headless](workspace-layout-oracle-headless.spec.ts) layout oracles for live/saved layout,
   DOM/client agreement, command effects, restarts, terminal output, and remount checks.
-  [Latency](workspace-layout-oracle-latency.spec.ts) measurements are informational.
 - New [known-on-main](workspace-layout-oracle-known-on-main.ts) entries must cite a reproducing
   run on `main` in the PR; rerun intermittent findings until reproduced. Use
   `ORCA_LAYOUT_ORACLE_REPEAT=<n>` for repeats and `ORCA_LAYOUT_ORACLE_REPORT_DIR` for JSON

@@ -1,5 +1,6 @@
 // Drafts owe no execution work; derive delivery gates under serialization before consuming one card per turn.
 
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -15,9 +16,16 @@ import {
   contextStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork
 } from './structured-agent-session-current-work'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
+import {
+  QueuedMessageNotConsumableError,
+  QueuedMessageNotOwedError
+} from '../agent-session-journal/queued-message-consume-error'
+import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
-import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionHostDeps,
+  StructuredAgentSessionHostSession
+} from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   type AgentSessionTurnContext,
@@ -63,20 +71,23 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 export function nextStructuredQueuedMessage(
   input: StructuredQueueGateInput & { journal: AgentSessionJournal }
 ): QueuedMessageRow | null {
-  if (structuredInputExecutionWorking(input.journal, input.work)) {
+  // Every gate before the queue is asked: choosing a card can read mail authority, and a session
+  // that is working, blocked or waiting on a prompt can send nothing anyway. An empty queue has
+  // nothing to choose, so it never reads the prompt either.
+  const state = input.journal.queuedMessages.inputState()
+  const cards = journalInputOrder(state).cards
+  cards.ensure(state)
+  if (
+    structuredInputExecutionWorking(input.journal, input.work) ||
+    !input.record ||
+    structuredAgentSessionSendBlock(input.record) ||
+    !cards.head() ||
+    input.work.hasActionablePrompt()
+  ) {
     return null
   }
   const selected = selectStructuredAgentSessionInput(input.journal)
-  const next = selected.kind === 'card' ? selected.card : null
-  // Check cheap working state before the prompt scan on every streamed frame.
-  if (next === null) {
-    return null
-  }
-  return !input.record ||
-    structuredAgentSessionSendBlock(input.record) ||
-    input.work.hasActionablePrompt()
-    ? null
-    : next
+  return selected.kind === 'card' ? selected.card : null
 }
 
 /** Queue behind work/actionable backlog; held or returned cards cannot trap a fresh send that lifts their pause. */
@@ -139,7 +150,7 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (queuedBefore) {
     return { ok: true, value: queuedBefore }
   }
-  if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
+  if (ctx.journal.submission(clientMessageId)) {
     return null
   }
   if (
@@ -198,6 +209,7 @@ export type QueuedMessageDrainDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   wakeDelivery: (sessionId: string) => void
   submissionReceipt?: (sessionId: string) => JournalOperationReceipt
+  owed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
   logger: StructuredAgentSessionLogger
 }
 
@@ -265,6 +277,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
     }
     // Fresh submission IDs link drafts through queuedMessageId, never equality.
     const submissionId = createStructuredAgentSessionOperationId(randomUUID)
+    const owed = queuedMessageOwed({ queuedAgentMessageOwed: this.deps.owed }, sessionId, next.body)
     try {
       await journal.appendSubmission(
         {
@@ -277,11 +290,30 @@ export class StructuredAgentSessionQueuedMessageDrain {
           fence,
           handoverRecorded: true
         },
-        { messageId: next.messageId, expect: 'waiting', yieldsToPause: true },
+        {
+          messageId: next.messageId,
+          expect: 'waiting',
+          yieldsToPause: true,
+          ...(owed && { owed })
+        },
         this.deps.submissionReceipt?.(sessionId)
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
+        if (next.messageId !== journal.queuedMessages.nextInputCard()?.messageId) {
+          // The queue's choice moved (older mail became decidable): choose again.
+          this.schedule(sessionId)
+        }
+        return
+      }
+      if (error instanceof QueuedMessageNotOwedError) {
+        // No longer owed here: drop it without a turn; its withdrawal commit wakes the next card.
+        // One that cannot be decided now keeps its place; the next wake passes over it.
+        if (error.owed === 'stale') {
+          await journal.queuedMessages.withdraw([next.messageId])
+        } else {
+          this.schedule(sessionId)
+        }
         return
       }
       // Persist failed conversion as a held waiting card; only explicit Send retries, avoiding loops.

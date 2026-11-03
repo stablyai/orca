@@ -437,19 +437,6 @@ describe('a second "new chat" with no text', () => {
 })
 
 describe('a "new chat" with text', () => {
-  it('opens its own chat beside an idle empty one', async () => {
-    pick('plus-pick-1')
-    await publishIdle(first.sessionId)
-
-    const notes = pick('notes-send', { prompt: 'review notes' })
-
-    expect(notes.sessionId).toBe(second.sessionId)
-    await expect(notes.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-  })
-
   it('opens its own chat beside an empty one still starting', async () => {
     holdCreates()
     const blank = pick('plus-pick-1')

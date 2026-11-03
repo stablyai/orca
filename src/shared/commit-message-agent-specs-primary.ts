@@ -1,4 +1,7 @@
-import { claudeBackgroundArgs } from './claude-background-run-isolation'
+import {
+  claudeBackgroundArgs,
+  claudeTextGenerationToolArgs
+} from './claude-background-run-isolation'
 import type { TuiAgent } from './tui-agent'
 import type {
   CommitMessageAgentSpec,
@@ -35,14 +38,13 @@ export function buildPrimaryCommitMessageAgentSpecs({
       binary: 'claude',
       // Claude -p accepts large prompts on stdin when no positional prompt is supplied.
       promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel, strictMcp, userArgs }) => [
+      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, userArgs }) => [
         '-p',
         '--output-format',
         'text',
         '--model',
         model,
-        '--permission-mode',
-        'plan',
+        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy }),
         ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
         ...claudeBackgroundArgs(strictMcp, userArgs)
       ],

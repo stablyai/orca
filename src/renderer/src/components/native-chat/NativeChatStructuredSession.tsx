@@ -26,7 +26,7 @@ import { useNativeChatRootInputRouting } from './use-native-chat-root-input-rout
 import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
-import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
@@ -51,7 +51,7 @@ import {
   cancelStructuredPrompt,
   nativeChatStructuredStopControls
 } from './native-chat-structured-stop-controls'
-import { chatApprovalFromJournal } from '../../../../shared/native-chat-interactive-prompt'
+import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { useAppStore } from '../../store'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from './use-native-chat-structured-composer-transport'
@@ -168,6 +168,7 @@ export function NativeChatStructuredSession(
   const paneCommands = useStructuredNativeChatPaneCommands({
     pane: props,
     handOff,
+    sessionContext: controller,
     ownerWorktreeId,
     rootRef,
     composerRef,

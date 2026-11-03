@@ -206,7 +206,10 @@ function PrEditTextSheet({
       <View style={sheetStyles.body}>
         <FieldTextInput
           value={draft}
-          onChangeText={setDraft}
+          onChangeText={(value) => {
+            textAction.touch()
+            setDraft(value)
+          }}
           editable={!textAction.saving}
           autoFocus
           multiline={field === 'body'}

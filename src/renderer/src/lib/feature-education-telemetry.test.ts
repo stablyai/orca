@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  persistEmittedSetupGuideStepId,
-  readEmittedSetupGuideStepIds,
-  trackTerminalPaneSplit
-} from './feature-education-telemetry'
+import { trackTerminalPaneSplit } from './feature-education-telemetry'
 
 const trackMock = vi.hoisted(() => vi.fn())
 
@@ -19,28 +15,6 @@ afterEach(() => {
 })
 
 describe('feature education telemetry helpers', () => {
-  it('persists emitted setup guide step ids locally without raw payload data', () => {
-    const storage = createMemoryStorage()
-    vi.stubGlobal('localStorage', storage)
-
-    persistEmittedSetupGuideStepId('two-worktrees')
-    persistEmittedSetupGuideStepId('two-worktrees')
-    persistEmittedSetupGuideStepId('setup-script')
-
-    expect([...readEmittedSetupGuideStepIds()].sort()).toEqual(['setup-script', 'two-worktrees'])
-  })
-
-  it('ignores inactive historical setup guide step ids from local storage', () => {
-    const storage = createMemoryStorage()
-    vi.stubGlobal('localStorage', storage)
-    storage.setItem(
-      'orca.setupGuideTelemetryCompletedSteps.v1',
-      JSON.stringify(['split-terminal', 'two-worktrees'])
-    )
-
-    expect([...readEmittedSetupGuideStepIds()]).toEqual(['two-worktrees'])
-  })
-
   it('caps terminal pane split telemetry by source and direction for each UTC day', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-02T12:00:00.000Z'))

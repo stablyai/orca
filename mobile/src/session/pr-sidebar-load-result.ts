@@ -30,23 +30,30 @@ export function settleLoadedPr(
   return { settled: { ...next, data: { ...next.data, checks, checksError } }, result: 'failed' }
 }
 
-// A poll never supersedes a read the user started; it skips and tries again later.
+// A poll never supersedes a read the user started or a write's reread; it skips and tries again later.
+// A write's reread is never skipped, and like a poll it keeps the shown PR when its read fails.
 export function useForegroundFirstLoad<Options extends { background?: boolean }>(
-  loadOnce: (options?: Options) => Promise<PrSidebarLoadResult>
-): (options?: Options) => Promise<PrSidebarLoadResult> {
+  loadOnce: (options?: Options, afterWrite?: boolean) => Promise<PrSidebarLoadResult>
+) {
   const foregroundLoadsRef = useRef(0)
-  return useCallback(
-    async (options?: Options) => {
+  const run = useCallback(
+    async (options: Options | undefined, afterWrite: boolean): Promise<PrSidebarLoadResult> => {
       if (options?.background) {
         return foregroundLoadsRef.current > 0 ? 'stale' : loadOnce(options)
       }
       foregroundLoadsRef.current += 1
       try {
-        return await loadOnce(options)
+        return await loadOnce(options, afterWrite)
       } finally {
         foregroundLoadsRef.current -= 1
       }
     },
     [loadOnce]
   )
+  return {
+    load: useCallback((options?: Options) => run(options, false), [run]),
+    rereadAfterWrite: useCallback(async (): Promise<void> => {
+      await run(undefined, true)
+    }, [run])
+  }
 }

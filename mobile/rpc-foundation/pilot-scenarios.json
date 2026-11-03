@@ -5780,6 +5780,10 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
+                "setup": {
+                  "contentHash": "hash-1",
+                  "approvedAt": 1767225600000
+                },
                 "all": {
                   "approvedAt": 1767225600000
                 }

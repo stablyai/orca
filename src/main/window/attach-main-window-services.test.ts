@@ -3,7 +3,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { cancelHistoryGc } from '../terminal-history-gc'
 import type { registerSshHandlers } from '../ipc/ssh/ssh'
 import type { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
-import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup/workspace-cleanup'
 import type { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import {
   createMainWindowServiceStub,
@@ -119,7 +119,7 @@ vi.mock('../ipc/ssh/ssh', () => ({ registerSshHandlers: registerSshHandlersMock 
 vi.mock('../ipc/pty/pty-management', () => ({
   registerDaemonManagementHandlers: registerDaemonManagementHandlersMock
 }))
-vi.mock('../ipc/workspace-cleanup', () => ({
+vi.mock('../ipc/workspace-cleanup/workspace-cleanup', () => ({
   registerWorkspaceCleanupHandlers: registerWorkspaceCleanupHandlersMock
 }))
 vi.mock('../ipc/folder-repo-git-upgrade', () => ({

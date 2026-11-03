@@ -106,6 +106,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         params.worktree,
         params.agent
       )
+      if (support.supported && params.resumeFrom) {
+        // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
+        await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+          params.agent,
+          params.resumeFrom.providerSessionId,
+          params.resumeFrom.closingPaneKeys
+        )
+      }
       // Optional: older clients ignore it, and a client seeds its picker with what create will use.
       const seedOptions = support.supported
         ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)

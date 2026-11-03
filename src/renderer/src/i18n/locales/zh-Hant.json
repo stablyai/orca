@@ -19312,7 +19312,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "請更新此主機上的 Orca，以便在聊天介面中繼續。",
-        "notSavedYet": "{{agent}} 尚未儲存此對話。請在它回覆後重試。"
+        "notSavedYet": "{{agent}} 尚未儲存此對話。請在它回覆後重試。",
+        "exitUnconfirmed": "{{agent}} 正在另一個終端機中執行此對話。請在該處結束它或關閉該終端機，然後重試。"
       },
       "state": {
         "loading": {
@@ -20232,6 +20233,9 @@
         "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
         "keepOpen": "保持開啟"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "在 WSL 上執行：{{distro}}（Linux）"
     }
   },
   "dashboardPopout": {
@@ -21988,6 +21992,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}：沒有可讀取的備份，因此將從空白狀態開始。",
+      "sectionKeptCurrent": "{{section}}：將保留目前的執行記錄",
       "sectionRestored": "{{section}}：已從 {{time}} 儲存的備份還原。",
       "projectsForgotten": "Orca 將清除專案及其工作區詳細資訊的紀錄。磁碟上的檔案不受影響。",
       "newerProjectsRemoved": "該備份之後新增的專案及其工作區詳細資訊，將從 Orca 中移除。磁碟上的檔案不受影響。",
@@ -22030,7 +22035,7 @@
       "noneFound": "（找不到）",
       "sqlitePath": "SQLite 路徑：{{path}}",
       "sectionsDamaged": "此設定檔儲存的部分狀態已損毀：{{sections}}。其餘內容皆完好無損。",
-      "repairCommand": "關閉 Orca，然後執行 `{{command}}`，僅從備份取代損毀的部分，並保留其餘所有內容。Orca 會保留損毀檔案的副本。",
+      "repairCommand": "停止 Orca，然後執行 `{{command}}`，僅修復損壞的部分並保留其他所有內容。Orca 會保留損壞檔案的副本。",
       "restoreWholeBackup": "若要改為還原整份備份，請先執行 `{{exportsCommand}}`，再執行 `{{rollbackCommand}}`。",
       "sqliteUnreadable": "Orca 無法安全地開啟目前使用的設定檔，因為其 SQLite 狀態無法讀取。",
       "legacyJsonPath": "舊版 JSON 路徑：{{path}}",

@@ -132,13 +132,13 @@ export function useGitHubWorkItemDetails({
         : null
   const detailsLoaded = Boolean(details)
 
-  // Invalidation can remove an open entry without changing fetch dependencies; a tick forces refetch.
+  // Invalidation keeps shown details without changing fetch dependencies; a tick starts the one owed read.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
     if (
       workItem &&
       detailsCacheKey &&
-      (!cachedEntry || (!cachedEntry.details && !cachedEntry.pending && !cachedEntry.error))
+      (!cachedEntry || (cachedEntry.rereadOwed && !cachedEntry.pending))
     ) {
       setRefetchTick((n) => n + 1)
     }

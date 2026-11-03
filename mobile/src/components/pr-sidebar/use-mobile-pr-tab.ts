@@ -40,6 +40,8 @@ export type { PrTabConfirm, PrTabSheet, PrTabSheetRequest } from './pr-tab-reque
 type Input = {
   state: PrSidebarState
   refetch: (options?: PrSidebarLoadOptions) => Promise<PrSidebarLoadResult> | void
+  /** A write's follow-up read: never skipped behind another read, and a failed one keeps the shown PR. */
+  rereadAfterWrite: () => Promise<void>
   /** What is on screen, so the PR keeps itself fresh only while someone is looking. */
   live?: PrTabLive
   client: RpcClient | null
@@ -77,7 +79,16 @@ export type MobilePrCreated = {
 
 // One owner for the PR tab's mutations, sheets and openers, so the hub bar and the tab body drive the same state.
 export function useMobilePrTab(input: Input) {
-  const { state, refetch, client, connState, worktreeId, gitBranch, onOpenScreen } = input
+  const {
+    state,
+    refetch,
+    rereadAfterWrite,
+    client,
+    connState,
+    worktreeId,
+    gitBranch,
+    onOpenScreen
+  } = input
   const launchWorkspaceLabel = input.workspaceLabel || gitBranch
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
   // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
@@ -92,10 +103,10 @@ export function useMobilePrTab(input: Input) {
   const branchScope = useSelectedScope({ client, worktreeId, branch: gitBranch, resource: null })
   const requests = usePrTabRequests(prScope, branchScope)
   const { setSheet } = requests
-  // Mutations refetch and wait; they do not care whether the read landed.
+  // Every attempted write rereads once; the write's own outcome stays the only feedback.
   const refetchAfterMutation = useCallback(async (): Promise<void> => {
-    await refetch()
-  }, [refetch])
+    await rereadAfterWrite()
+  }, [rereadAfterWrite])
   const ownActions = useMobilePrActions({
     client,
     connState,
