@@ -24,7 +24,7 @@ vi.mock('node:child_process', async (original) => {
   spawnMock.mockImplementation(actual.spawn)
   return { ...actual, spawn: spawnMock }
 })
-vi.mock('../wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))
 const nativeSpawn = (await vi.importActual<typeof ChildProcess>('node:child_process')).spawn
 afterEach(() => {
   spawnMock.mockReset().mockImplementation(nativeSpawn)

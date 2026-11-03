@@ -18,6 +18,7 @@ import {
   updateQueuedStructuredAgentMessage
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
+import { queuedMailUnavailable } from './structured-agent-session-queued-mail'
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
@@ -36,12 +37,38 @@ export function wireStructuredAgentSessionQueuedMessages(
       hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
+    owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })
+  /** Sessions with a republish waiting in their lane: more wakes before it runs add nothing. */
+  const republishing = new Set<string>()
+  /** Publish the queue again and look for work: what it can hand over may have changed with no write. */
+  const refresh = (sessionId: string) => {
+    if (sessions.get(sessionId)?.journal && !republishing.has(sessionId)) {
+      republishing.add(sessionId)
+      void context()
+        .serialize(sessionId, async () => {
+          // Off before publishing: a wake during it queues one more, so none is lost.
+          republishing.delete(sessionId)
+          const journal = sessions.get(sessionId)?.journal
+          if (journal) {
+            republish(context(), sessionId, journal)
+          }
+        })
+        .catch(() => republishing.delete(sessionId))
+    }
+    drain.schedule(sessionId)
+  }
   return {
     drain,
+    refresh,
     onOpened: (sessionId: string) => {
       const journal = sessions.get(sessionId)?.journal
+      if (journal) {
+        // Installed before anything reads the next card, so every reader applies the one mail rule.
+        journal.queuedMessages.mailUnavailable = (card) =>
+          queuedMailUnavailable(context().deps, sessionId)(card)
+      }
       journal?.queuedMessages.editLeases.onDeadline(() => {
         void context()
           .serialize(sessionId, async () => {

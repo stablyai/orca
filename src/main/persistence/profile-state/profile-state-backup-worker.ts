@@ -7,7 +7,7 @@ import { Worker } from 'node:worker_threads'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
-} from '../../worker-thread-entry-path'
+} from '../../worker-threads/worker-thread-entry-path'
 import { type ProfileStateBackupJob, writeProfileStateBackup } from './profile-state-backup-job'
 import { isRecord } from './profile-state-document-validation'
 

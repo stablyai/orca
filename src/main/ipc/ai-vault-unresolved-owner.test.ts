@@ -9,12 +9,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({ app: { on: vi.fn() }, ipcMain: { handle: vi.fn() } }))
 
-vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService: mocks.scanLocalSessions
 }))
 
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   listRunningWslDistrosAsync: vi.fn().mockResolvedValue([]),
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
   hasCachedWslDistros: vi.fn(() => false)

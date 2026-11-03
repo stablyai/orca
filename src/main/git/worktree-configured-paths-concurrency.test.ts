@@ -16,7 +16,7 @@ vi.mock('node:fs/promises', () => ({
   readFile: readFileMock
 }))
 
-vi.mock('../hooks', () => ({
+vi.mock('../workspace-hooks/hooks', () => ({
   loadHooks: loadHooksMock
 }))
 

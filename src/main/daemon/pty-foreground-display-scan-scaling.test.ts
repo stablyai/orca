@@ -53,7 +53,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
 
 import { createPtyForegroundProcessTracker } from './pty-subprocess/foreground-process-tracker'
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot-reader'
-import { getSnapshotRowsOnTty } from '../pty/terminal-process-rows'
+import { getSnapshotRowsOnTty } from '../pty/process-retirement/terminal-process-rows'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 
 const CODEX = 'node /usr/lib/node_modules/@openai/codex/bin/codex.js'

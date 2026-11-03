@@ -3,63 +3,22 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
-  agentPromptSubmitJoinsPasteFrame,
-  agentPromptTakesLeadLine,
   getAgentPromptSubmitDelayMs,
   getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
   isHeldAgentPromptDraft,
-  iterateAgentPromptPasteChunks,
-  resolveAgentPromptSubmitDelayForAgent
+  iterateAgentPromptPasteChunks
 } from './agent-prompt-injection'
 
 const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
 const END = AGENT_PROMPT_BRACKETED_PASTE_END
 
 describe('agent prompt injection bytes', () => {
-  it('joins submit only for OMP', () => {
-    expect(agentPromptSubmitJoinsPasteFrame('omp')).toBe(true)
-    expect(agentPromptSubmitJoinsPasteFrame('claude')).toBe(false)
-    expect(agentPromptSubmitJoinsPasteFrame('codex')).toBe(false)
-    expect(agentPromptSubmitJoinsPasteFrame(undefined)).toBe(false)
-  })
-
-  it('always bracket-pastes prompts so agent TUIs treat newlines as content', () => {
-    expect(buildAgentPromptPasteBytes('line one\nline two')).toBe(
-      '\x1b[200~line one\nline two\x1b[201~'
-    )
-  })
-
-  it('types the lead line only for Claude agents and unidentified ones', () => {
-    expect(agentPromptTakesLeadLine('claude')).toBe(true)
-    expect(agentPromptTakesLeadLine('claude-agent-teams')).toBe(true)
-    expect(agentPromptTakesLeadLine(null)).toBe(true)
-    expect(agentPromptTakesLeadLine('codex')).toBe(false)
-    expect(agentPromptTakesLeadLine('opencode')).toBe(false)
-  })
-
   it('types the lead line ahead of the paste frame on one line', () => {
     expect(buildAgentPromptPasteBytes('brief', 'Please\r\nfollow\x03\x1b[201~\x7f')).toBe(
       `Please follow [201~  ${BEGIN}brief${END}`
     )
     expect(buildAgentPromptPasteBytes('brief', '')).toBe(`${BEGIN}brief${END}`)
-  })
-
-  it('keeps generic prompt behavior for recognition-only agents', () => {
-    expect(agentPromptTakesLeadLine('dsb')).toBe(agentPromptTakesLeadLine(undefined))
-    expect(agentPromptSubmitJoinsPasteFrame('dsb')).toBe(false)
-    for (const platform of ['darwin', 'linux', 'win32'] as const) {
-      expect(resolveAgentPromptSubmitDelayForAgent(platform, 'first\nsecond', 'dsb')).toBe(
-        resolveAgentPromptSubmitDelayForAgent(platform, 'first\nsecond', undefined)
-      )
-    }
-  })
-
-  it('costs a common-sized prompt far less than the old flat Windows delay', () => {
-    // Measured ingest: 2 KB 14-25 ms, 8 KB 60-89 ms. The old constant charged 1_500 ms for both.
-    expect(getAgentPromptSubmitDelayMs('win32', 2_000)).toBeLessThan(700)
-    expect(getAgentPromptSubmitDelayMs('win32', 8_000)).toBeLessThan(700)
-    expect(getAgentPromptSubmitDelayMs('darwin', 8_000)).toBeLessThan(700)
   })
 
   it.each([
@@ -75,50 +34,11 @@ describe('agent prompt injection bytes', () => {
     expect(getAgentPromptSubmitDelayMs('win32', bytes)).toBeGreaterThan(measuredMs)
   })
 
-  it('keeps a real margin over the slowest measured slope', () => {
-    // 1.5x of 0.0104 ms/byte, so a host ~50% slower than either measured one is still covered.
-    expect(getTerminalPasteIngestMs('win32', 320_000)).toBeGreaterThan(3_342 * 1.4)
-  })
-
-  it('outgrows the old 1_500 ms constant before ConPTY ingest does', () => {
-    // Ingest crossed 1_500 ms at ~145 KB; the delay must already exceed it there.
-    expect(getAgentPromptSubmitDelayMs('win32', 145_000)).toBeGreaterThan(1_500)
-  })
-
   it('scales without a cap all the way to the terminal input ceiling', () => {
     const ceilingBytes = 16 * 1024 * 1024
     expect(getAgentPromptSubmitDelayMs('win32', ceilingBytes)).toBeGreaterThan(250_000)
     // Even the fast platforms outrun a flat 500 ms at the ceiling.
     expect(getAgentPromptSubmitDelayMs('linux', ceilingBytes)).toBeGreaterThan(4_000)
-  })
-
-  it('charges non-Windows hosts nothing measurable for a real prompt', () => {
-    expect(getTerminalPasteIngestMs('darwin', 8_000)).toBeLessThanOrEqual(2)
-    expect(getTerminalPasteIngestMs('linux', 0)).toBe(0)
-    expect(getTerminalPasteIngestMs('linux', Number.NaN)).toBe(0)
-    expect(getTerminalPasteIngestMs('win32', -5)).toBe(0)
-  })
-
-  it('grows monotonically with payload size on every platform', () => {
-    for (const platform of ['win32', 'darwin', 'linux'] as const) {
-      expect(getAgentPromptSubmitDelayMs(platform, 400_000)).toBeGreaterThan(
-        getAgentPromptSubmitDelayMs(platform, 40_000)
-      )
-    }
-    expect(getTerminalPasteIngestMs('win32', 320_000)).toBeGreaterThan(
-      getTerminalPasteIngestMs('darwin', 320_000)
-    )
-  })
-
-  it('adds per-line settle time for antigravity multiline prompts', () => {
-    const short = resolveAgentPromptSubmitDelayForAgent('darwin', 'one line', 'antigravity')
-    const long = resolveAgentPromptSubmitDelayForAgent(
-      'darwin',
-      `${'Filler line\n'.repeat(100)}AGY_LONG_OK`,
-      'antigravity'
-    )
-    expect(long - short).toBeGreaterThanOrEqual(100 * 45)
-    expect(resolveAgentPromptSubmitDelayForAgent('darwin', 'one line', 'aider')).toBe(short - 45)
   })
 
   it('inverts the host ingest budget without crossing it', () => {

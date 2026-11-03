@@ -46,7 +46,7 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
-vi.mock('../wsl-interop-spawn-directory', () => ({
+vi.mock('../wsl/execution/wsl-interop-spawn-directory', () => ({
   resolveWslInteropSpawnCwd: () => 'C:\\Windows'
 }))
 vi.mock('node-pty', () => ({

@@ -17,13 +17,16 @@ const conversion = vi.hoisted(() => ({
   previewWslDriveProjectWindowsGit: vi.fn(async () => ({ blockers: [] })),
   convertWslDriveProjectToWindowsGit: vi.fn(async () => ({ ok: false, blockers: [] }))
 }))
-vi.mock('../wsl/wsl-drive-project-windows-git', () => conversion)
+vi.mock('../wsl/filesystem/wsl-drive-project-windows-git', () => conversion)
 vi.mock('./wsl-drive-unc-conversion-handlers', () => ({
   registerWslDriveUncConversionHandlers: vi.fn()
 }))
 
 import { registerWslDriveProjectHandlers, readWorktreeLinks } from './wsl-drive-project-handlers'
-import { noteWslHostsLivePolicyBlock, resetWslHostsGateForTests } from '../wsl/wsl-host-gate'
+import {
+  noteWslHostsLivePolicyBlock,
+  resetWslHostsGateForTests
+} from '../wsl/host-lifecycle/wsl-host-gate'
 
 const invoke = (channel: string, request?: unknown) => handlers.get(channel)?.({}, request)
 const originalPlatform = process.platform

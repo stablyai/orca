@@ -77,7 +77,7 @@ vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => (
     return { ...environment, read: mocks.reads[id] }
   }
 }))
-vi.mock('../../wsl/wsl-host-service-instance', () => ({
+vi.mock('../../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () =>
     mocks.hasWslService ? { ensureForRuntimeCall: mocks.ensureForRuntimeCall } : null,
   getWslHostPhoneGate: () =>
@@ -121,7 +121,7 @@ import {
   requireWslHostWithoutStart,
   resolveManagedRuntimeEnvironment
 } from './runtime-environment-managed-tunnel'
-import { WSL_HOSTS_GATED_OFF_MESSAGE } from '../../wsl/wsl-host-gate'
+import { WSL_HOSTS_GATED_OFF_MESSAGE } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 
 describe('resolving a managed runtime for a call', () => {

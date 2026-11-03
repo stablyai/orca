@@ -1,4 +1,4 @@
-import { preserveFolderUpgradeWorktreePath } from '../folder-upgrade-worktree-path'
+import { preserveFolderUpgradeWorktreePath } from '../workspaces/catalog/folder-upgrade-worktree-path'
 import {
   composeWorktreeId,
   splitWorktreeId,
@@ -26,9 +26,9 @@ import type { RuntimeStore } from './runtime-store-contract'
 
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
-import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
-import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
-import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
+import { pruneLineageForMissingRepoWorktrees } from '../workspaces/catalog/worktree-lineage-pruning'
+import { getRepoOwnedWorktreeMeta } from '../workspaces/catalog/worktree-metadata-ownership'
+import { resolveLocalProjectRuntimesForRepos } from '../workspaces/execution-host/local-project-runtime-resolution'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 
 type RepoWorktreeRowStore = Pick<
@@ -65,6 +65,7 @@ export type RepoWorktreeRowDeps = {
     repo: Repo,
     projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ) => Promise<RuntimeWorktreeScanResult>
+  getCachedSuccessfulScan?: (repo: Repo) => RuntimeWorktreeScanResult | undefined
   /** Folder workspaces are stamped from runtime-owned identity helpers, so the caller supplies them. */
   listFolderWorkspaces: (repo: Repo, repoOwnerCount: number) => Worktree[]
 }
@@ -109,7 +110,7 @@ export type RepoWorktreeRowsScan = { ok: boolean; worktrees: GitWorktreeInfo[] }
 
 /** The scan half of `resolveRepoWorktreeRows`: slow, and the only part that awaits. */
 export async function scanRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo'>,
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo' | 'getCachedSuccessfulScan'>,
   repo: Repo,
   projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
@@ -122,7 +123,12 @@ export async function scanRepoWorktreeRows(
       .catch(() => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult),
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
-  )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
+  )) ?? {
+    ok: false,
+    worktrees:
+      deps.getCachedSuccessfulScan?.(repo)?.worktrees ??
+      listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount)
+  }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
   if (scan.ok) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)

@@ -1834,6 +1834,7 @@
       "attachmentAtMost": "{{agent}} 每条消息最多接受 {{limit}} 张图片，因此此消息未发送。",
       "attachmentEmpty": "此消息中的一张图片为空，因此消息未发送。",
       "attachmentInvalid": "此消息中的附件无法发送给智能体。",
+      "attachmentsExpired": "{{names}} 已过期。",
       "attachmentLargerThan": "此消息中的一张图片超过 {{size}} MB，因此消息未发送。",
       "attachmentNoSource": "此消息中的一张图片没有可发送的文件，因此消息未发送。",
       "attachmentNotAFile": "此消息中的一张图片不是文件，因此消息未发送。",
@@ -2037,8 +2038,7 @@
       "promptUnconfirmed": "智能体已启动，但无法确认提示词是否已发送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合并 PR 失败。",
-      "refreshFailed": "刷新 PR 失败。"
+      "mergeFailed": "合并 PR 失败。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "智能体已启动",
@@ -2419,6 +2419,7 @@
       "queueTooLarge": "队列中等待的文本过多。",
       "quitTerminalAgent": "请退出该智能体，以便在此处继续聊天。",
       "reattachFile": "请将其移除后重新附加。",
+      "reattachFiles": "请将它们移除后重新附加。",
       "recordFailed": "Orca 无法将此内容保存到聊天历史记录中。",
       "recordUnreadable": "Orca 无法读取此聊天的已保存状态。",
       "reopenChat": "请重新打开聊天以再次检查。",
@@ -2645,6 +2646,9 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各智能体自己的设置"
     }
   },
   "sourceControl": {

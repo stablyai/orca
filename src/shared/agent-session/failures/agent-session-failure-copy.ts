@@ -121,6 +121,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   attachmentNotAFile: "An image on this message isn't a file, so the message was not sent.",
   attachmentNoSource: 'An image on this message has no file to send, so the message was not sent.',
   attachmentInvalid: "An attachment on this message can't be sent to the agent.",
+  attachmentsExpired: '{{names}} expired.',
   attachmentUnreadable:
     "An attachment on this message couldn't be read, so the message was not sent.",
   emptyMessage: 'This message is empty, so it was not sent.',
@@ -200,6 +201,8 @@ export type AgentSessionFailureCopyValues = {
   /** A provider protocol method that got no answer, e.g. `thread/start`. */
   method?: string
   seconds?: string
+  /** Attachment file names, already listed for the sentence. */
+  names?: string
 }
 
 export type AgentSessionFailureSay = (

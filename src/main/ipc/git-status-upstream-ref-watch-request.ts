@@ -2,16 +2,16 @@ import type { Store } from '../persistence/loading-store/store'
 import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree
 } from './local-worktree-runtime-options'
-import { setWorktreeGitStatusRefWatch } from './worktree-base-directory-watcher'
+import { setWorktreeGitStatusRefWatch } from './worktrees/creation/worktree-base-directory-watcher'
 import type { GitStatusRefBindingRequest } from './worktree-git-status-ref-watch'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
-import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export type GitStatusUpstreamRefWatchRequest = GitStatusRefBindingRequest
 

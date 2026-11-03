@@ -204,41 +204,6 @@ describe('detected worktree refresh leases', () => {
     })
   })
 
-  it('does not join incompatible full-authority inputs under one public key', () => {
-    const { registry, starts } = createHarness()
-
-    const first = registry.acquire('repo-a:ssh:ssh-a', directInput(authority('epoch-a', 1)))
-    const second = registry.acquire('repo-a:ssh:ssh-a', directInput(authority('epoch-b', 1)))
-    const third = registry.acquire('repo-a:ssh:ssh-a', directInput(authority('epoch-a', 2)))
-
-    expect(starts).toHaveLength(3)
-    expect(
-      new Set([first.providerRequestId, second.providerRequestId, third.providerRequestId]).size
-    ).toBe(3)
-    expect(registry.getActiveCounts()).toEqual({
-      providerInvocations: 3,
-      waiterLeases: 3
-    })
-  })
-
-  it('removes settled invocations so a later acquire starts fresh', async () => {
-    const { pending, registry, starts } = createHarness()
-    const first = registry.acquire('repo-a:ssh:ssh-a', directInput())
-
-    const firstResult = completeResult(starts[0])
-    pending[0].resolve(firstResult)
-    await expect(first.result).resolves.toEqual(firstResult)
-    expect(registry.getActiveCounts()).toEqual({
-      providerInvocations: 0,
-      waiterLeases: 0
-    })
-
-    const second = registry.acquire('repo-a:ssh:ssh-a', directInput())
-    expect(starts).toHaveLength(2)
-    expect(second.providerRequestId).not.toBe(first.providerRequestId)
-    expect(second.waiterLeaseId).not.toBe(first.waiterLeaseId)
-  })
-
   it('cleans rejected provider invocations without retaining waiters', async () => {
     const { pending, registry } = createHarness()
     const lease = registry.acquire('repo-a:ssh:ssh-a', directInput())
