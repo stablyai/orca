@@ -11329,7 +11329,6 @@
       "src/renderer/src/store/slices/repos-host-identity-routing.test.ts": 1700,
       "src/renderer/src/store/slices/repos-nested-ssh-projection.test.ts": 1780,
       "src/renderer/src/store/slices/repos-onboarding-folder-startup.test.ts": 2167,
-      "src/renderer/src/store/slices/repos-paired-runtime-add.test.ts": 2036,
       "src/renderer/src/store/slices/repos-project-group-cross-host-move.test.ts": 1704,
       "src/renderer/src/store/slices/repos-project-groups.test.ts": 1898,
       "src/renderer/src/store/slices/repos-project-mutations.test.ts": 1995,
