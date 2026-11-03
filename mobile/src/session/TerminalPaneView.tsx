@@ -9,6 +9,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import { TerminalWebView } from '../terminal/TerminalWebView'
+import type { TuiWheelProfile } from '../terminal/document/tui-wheel-pacing'
 import type {
   MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
@@ -29,6 +30,7 @@ type TerminalPaneViewProps = {
   onFrame?: (handle: string, frame: TerminalFrame) => void
   keyboardLift: number
   terminalTheme?: MobileTerminalTheme
+  tuiWheelProfile?: TuiWheelProfile
   textScale: number
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void
@@ -61,6 +63,7 @@ export function TerminalPaneView({
   onFrame,
   keyboardLift,
   terminalTheme,
+  tuiWheelProfile,
   textScale,
   onRef,
   onWebReady,
@@ -177,6 +180,7 @@ export function TerminalPaneView({
               keyboardLift > 0 && { transform: [{ translateY: -keyboardLift }] }
             ]}
             terminalTheme={terminalTheme}
+            tuiWheelProfile={tuiWheelProfile}
             textScale={textScale}
             shownAtMount={visible}
             interactionActive={visible && appActive && routeFocused}

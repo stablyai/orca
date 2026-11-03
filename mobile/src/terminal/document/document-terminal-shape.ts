@@ -61,7 +61,10 @@ export type TerminalDocumentTerminalOptions = {
 export type TerminalDocumentTerminal = {
   readonly cols: number
   readonly rows: number
-  readonly buffer: { readonly active: TerminalDocumentBuffer }
+  readonly buffer: {
+    readonly active: TerminalDocumentBuffer
+    onBufferChange?: (listener: () => void) => TerminalDocumentDisposable
+  }
   options: TerminalDocumentTerminalOptions
   write: (data: string, callback?: () => void) => void
   open: (element: HTMLElement) => void
@@ -103,6 +106,12 @@ export type TerminalDocumentTerminal = {
   loadAddon: (addon: TerminalDocumentWebglAddon) => void
   scrollToBottom: () => void
   scrollLines: (amount: number) => void
+  /** Shifts the drawn rows by a sub-row offset in unscaled CSS px; false when no renderer can. */
+  setViewportPixelOffset?: (offset: number) => boolean
+  /** Shows the program's redraw for `lines` of wheel input sliding into place, where it can. */
+  beginRemoteScrollPresentation?: (lines: number) => void
+  /** Whether the touch that just landed only stopped such a slide. */
+  consumeRemoteScrollTouchCatch?: () => boolean
 }
 
 export type TerminalDocumentDisposable = { dispose?: () => void }
