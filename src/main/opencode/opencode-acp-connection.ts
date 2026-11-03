@@ -109,7 +109,8 @@ class OpenCodeAcpConnection extends AcpAgentConnection {
       } catch {
         // Native history is best effort; never hide the ACP failure when it cannot be read.
       }
-      if (!failure || this.closed || failure.inputId === this.lastRecoveredInput) {
+      // An exit while reading ends the connection even while its output still drains.
+      if (!failure || this.closed || this.exited || failure.inputId === this.lastRecoveredInput) {
         throw error
       }
       this.lastRecoveredInput = failure.inputId
