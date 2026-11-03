@@ -18,3 +18,4 @@ patchedDependencies:
   braces@3.0.3: patches/braces@3.0.3.patch
   react-native-webview@14.0.1: patches/react-native-webview@14.0.1.patch
   react-native@0.88.1: patches/react-native@0.88.1.patch
+  react-native-libsodium@1.7.0: patches/react-native-libsodium@1.7.0.patch
