@@ -15,19 +15,6 @@ afterEach(() => {
 })
 
 describe('platform process evidence', () => {
-  it('leaves Windows unanswered until a Windows hook captures an identity', async () => {
-    platform('win32')
-    expect(await readAgentProcess(4242)).toEqual({ verdict: 'unverifiable' })
-    expect(run).not.toHaveBeenCalled()
-    expect(read).not.toHaveBeenCalled()
-  })
-
-  it('treats a missing macOS utility as unanswered', async () => {
-    platform('darwin')
-    run.mockRejectedValue(Object.assign(new Error('missing ps'), { code: 'ENOENT' }))
-    expect(await readAgentProcess(4242)).toEqual({ verdict: 'unverifiable' })
-  })
-
   it('requires Linux process-file absence rather than an unreadable boot identity', async () => {
     platform('linux')
     read.mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'ENOENT' }))

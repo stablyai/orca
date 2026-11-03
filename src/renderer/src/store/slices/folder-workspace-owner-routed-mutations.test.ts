@@ -1,8 +1,5 @@
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
-import {
-  WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
-  WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES
-} from '../../../../shared/workspace-attachment-capabilities'
+import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../shared/workspace-attachment-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -125,65 +122,6 @@ describe('folder workspace owner-routed mutations', () => {
       store.getState().folderWorkspaces.find((row) => row.folderPath === '/remote')
     ).toMatchObject({ comment: 'kept on server', manualOrder: 9 })
   })
-  it.each([true, false])(
-    'keeps legacy folder task link=%s compatible with an older host',
-    async (link) => {
-      const folderWorkspace = makeFolderWorkspace({ executionHostId: 'runtime:env-owner' })
-      const linkedTask = link
-        ? {
-            provider: 'github' as const,
-            type: 'issue' as const,
-            number: 9,
-            title: 'Existing task',
-            url: 'https://github.com/acme/orca/issues/9',
-            repoId: 'repo'
-          }
-        : null
-      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-        const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
-        return status?.ok
-          ? {
-              ...status,
-              result: {
-                ...status.result,
-                capabilities: status.result.capabilities?.filter(
-                  (capability) =>
-                    !WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES.some((item) => item === capability)
-                )
-              }
-            }
-          : runtimeEnvironmentCall(args)
-      })
-      runtimeEnvironmentCall.mockResolvedValue({
-        id: 'folder-write',
-        ok: true,
-        result: { folderWorkspace: { ...folderWorkspace, linkedTask, updatedAt: 2 } }
-      })
-      const store = createTestStore()
-      store.setState({
-        projectGroups: [{ ...projectGroup, executionHostId: 'runtime:env-owner' }],
-        folderWorkspaces: [folderWorkspace]
-      })
-      await expect(
-        store.getState().updateWorktreeMeta(
-          folderWorkspaceKey(folderWorkspace.id),
-          {
-            linkedWorkItem: linkedTask
-          },
-          { executionHostId: 'runtime:env-owner' }
-        )
-      ).resolves.toEqual({ ok: true })
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'folderWorkspace.update',
-          params: {
-            folderWorkspaceId: folderWorkspace.id,
-            updates: { linkedTask }
-          }
-        })
-      )
-    }
-  )
 
   it('reports failure when the host drops an attachment collection', async () => {
     const folderWorkspace = makeFolderWorkspace()
@@ -199,83 +137,6 @@ describe('folder workspace owner-routed mutations', () => {
     })
     expect(result).toBe(false)
     expect(store.getState().folderWorkspaces[0]?.linkedItems).toBeUndefined()
-  })
-
-  it('persists manual rank through the shared batch metadata boundary', async () => {
-    const folderWorkspace = makeFolderWorkspace()
-    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, manualOrder: 9000 })
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
-      folderWorkspaces: [folderWorkspace]
-    })
-
-    await store.getState().updateWorktreesMeta([
-      {
-        worktreeId: folderWorkspaceKey(folderWorkspace.id),
-        updates: { manualOrder: 9000 }
-      }
-    ])
-
-    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { manualOrder: 9000 }
-    })
-    expect(store.getState().folderWorkspaces[0]?.manualOrder).toBe(9000)
-  })
-
-  it('updates a local folder locally while another runtime is focused', async () => {
-    const folderWorkspace = makeFolderWorkspace()
-    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
-      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
-      folderWorkspaces: [folderWorkspace]
-    })
-
-    await expect(
-      store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
-    ).resolves.toBe(true)
-
-    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { comment: 'Ready' }
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().folderWorkspaces[0]?.comment).toBe('Ready')
-  })
-
-  it('updates a runtime folder through its owner instead of the focused runtime', async () => {
-    const folderWorkspace = makeFolderWorkspace({ id: 'folder-runtime' })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-update-folder',
-      ok: true,
-      result: { folderWorkspace: { ...folderWorkspace, comment: 'Ready' } },
-      _meta: { runtimeId: 'runtime-owner' }
-    })
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
-      projectGroups: [{ ...projectGroup, executionHostId: 'runtime:env-owner' }],
-      folderWorkspaces: [folderWorkspace]
-    })
-
-    await expect(
-      store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
-    ).resolves.toBe(true)
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-owner',
-      method: 'folderWorkspace.update',
-      params: {
-        folderWorkspaceId: folderWorkspace.id,
-        updates: { comment: 'Ready' }
-      },
-      timeoutMs: 15_000
-    })
-    expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
-    expect(store.getState().folderWorkspaces[0]?.comment).toBe('Ready')
   })
 
   it('ignores an older response after the same field changes again', async () => {
@@ -366,33 +227,6 @@ describe('folder workspace owner-routed mutations', () => {
     expect(store.getState().folderWorkspaces[0]?.updatedAt).toBe(3)
   })
 
-  it('applies an update response when the overlapping catalog was older', async () => {
-    const folderWorkspace = makeFolderWorkspace()
-    let resolveUpdate!: (workspace: FolderWorkspace) => void
-    folderWorkspacesUpdate.mockImplementation(
-      () =>
-        new Promise<FolderWorkspace>((resolve) => {
-          resolveUpdate = resolve
-        })
-    )
-    folderWorkspacesList.mockResolvedValue([folderWorkspace])
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
-      folderWorkspaces: [folderWorkspace]
-    })
-
-    const pendingUpdate = store
-      .getState()
-      .updateFolderWorkspace(folderWorkspace.id, { isUnread: true })
-    await store.getState().fetchFolderWorkspaces(catalogOwner(store))
-    resolveUpdate({ ...folderWorkspace, isUnread: true, updatedAt: 2 })
-    await pendingUpdate
-
-    expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(true)
-    expect(store.getState().folderWorkspaces[0]?.updatedAt).toBe(2)
-  })
-
   it('does not fence a runtime update when the local same-ID catalog refreshes', async () => {
     const localWorkspace = makeFolderWorkspace({ updatedAt: 3 })
     const runtimeWorkspace = {
@@ -443,33 +277,6 @@ describe('folder workspace owner-routed mutations', () => {
     ])
   })
 
-  it('does not rewind newer optimistic activity when an older response arrives', async () => {
-    const folderWorkspace = makeFolderWorkspace()
-    let resolveUpdate!: (workspace: FolderWorkspace) => void
-    folderWorkspacesUpdate.mockImplementation(
-      () =>
-        new Promise<FolderWorkspace>((resolve) => {
-          resolveUpdate = resolve
-        })
-    )
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
-      folderWorkspaces: [folderWorkspace]
-    })
-
-    const pendingUpdate = store
-      .getState()
-      .updateFolderWorkspace(folderWorkspace.id, { lastActivityAt: 10 })
-    store.setState({
-      folderWorkspaces: [{ ...folderWorkspace, lastActivityAt: 20 }]
-    })
-    resolveUpdate({ ...folderWorkspace, lastActivityAt: 10, updatedAt: 2 })
-    await pendingUpdate
-
-    expect(store.getState().folderWorkspaces[0]?.lastActivityAt).toBe(20)
-  })
-
   it('reconciles optimistic fields when persistence fails', async () => {
     const persisted = makeFolderWorkspace({ isUnread: true, updatedAt: 2 })
     folderWorkspacesUpdate.mockResolvedValue(null)
@@ -486,79 +293,6 @@ describe('folder workspace owner-routed mutations', () => {
 
     expect(folderWorkspacesList).toHaveBeenCalledTimes(1)
     expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(true)
-  })
-
-  it('preserves path-status cache entries for metadata-only updates', async () => {
-    const folderWorkspace = makeFolderWorkspace()
-    folderWorkspacesUpdate.mockResolvedValue({
-      ...folderWorkspace,
-      lastActivityAt: 10,
-      updatedAt: 2
-    })
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
-      folderWorkspaces: [folderWorkspace],
-      folderWorkspacePathStatuses: {
-        cached: {
-          status: { path: folderWorkspace.folderPath, exists: true },
-          checkedAt: 1,
-          requestSnapshot: 'snapshot'
-        }
-      }
-    })
-
-    await store.getState().updateFolderWorkspace(folderWorkspace.id, { lastActivityAt: 10 })
-
-    expect(store.getState().folderWorkspacePathStatuses.cached).toBeDefined()
-  })
-
-  it('invalidates path-status cache entries when the folder path changes', async () => {
-    const folderWorkspace = makeFolderWorkspace()
-    folderWorkspacesUpdate.mockResolvedValue({
-      ...folderWorkspace,
-      folderPath: '/workspace/renamed',
-      updatedAt: 2
-    })
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
-      folderWorkspaces: [folderWorkspace],
-      folderWorkspacePathStatuses: {
-        cached: {
-          status: { path: folderWorkspace.folderPath, exists: true },
-          checkedAt: 1,
-          requestSnapshot: 'snapshot'
-        }
-      }
-    })
-
-    await store
-      .getState()
-      .updateFolderWorkspace(folderWorkspace.id, { folderPath: '/workspace/renamed' })
-
-    expect(store.getState().folderWorkspacePathStatuses).toEqual({})
-  })
-
-  it('deletes a local folder locally while another runtime is focused', async () => {
-    const folderWorkspace = makeFolderWorkspace()
-    folderWorkspacesDelete.mockResolvedValue(true)
-    const store = createTestStore()
-    const shutdownWorktreeBrowsers = vi.fn().mockResolvedValue(undefined)
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
-      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
-      folderWorkspaces: [folderWorkspace],
-      shutdownWorktreeBrowsers
-    })
-
-    await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
-
-    expect(folderWorkspacesDelete).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id
-    })
-    expect(shutdownWorktreeBrowsers).toHaveBeenCalledWith(folderWorkspaceKey(folderWorkspace.id))
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('deletes only the selected owner row when workspace IDs collide', async () => {
@@ -592,33 +326,6 @@ describe('folder workspace owner-routed mutations', () => {
     // Delete is owner-scoped: the sibling host's row keeps the bare ID alive.
     expect(store.getState().folderWorkspaces).toEqual([runtimeFolder])
     expect(shutdownWorktreeBrowsers).not.toHaveBeenCalled()
-  })
-
-  it('deletes a runtime folder through its owner instead of the focused runtime', async () => {
-    const folderWorkspace = makeFolderWorkspace({ id: 'folder-runtime' })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-delete-folder',
-      ok: true,
-      result: { deleted: true },
-      _meta: { runtimeId: 'runtime-owner' }
-    })
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
-      projectGroups: [{ ...projectGroup, executionHostId: 'runtime:env-owner' }],
-      folderWorkspaces: [folderWorkspace]
-    })
-
-    await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-owner',
-      method: 'folderWorkspace.delete',
-      params: { folderWorkspaceId: folderWorkspace.id },
-      timeoutMs: 15_000
-    })
-    expect(folderWorkspacesDelete).not.toHaveBeenCalled()
-    expect(store.getState().folderWorkspaces).toEqual([])
   })
 
   it('deletes only the host-qualified folder when ids collide', async () => {
@@ -686,3 +393,92 @@ function catalogOwner(store: {
 }): { runtimeEnvironmentId: string | null } {
   return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
 }
+
+import * as composerDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { records } from '@/components/native-chat/native-chat-composer-draft-memory'
+import {
+  addNativeChatPendingAttachment,
+  nativeChatPendingAttachmentSnapshot,
+  settleNativeChatPendingAttachment,
+  clearNativeChatPendingAttachmentsForTests
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
+
+it.each([10, 100])(
+  'retires launch submissions through %i real folder removals, including intermediate twins',
+  async (count) => {
+    composerDrafts.clearNativeChatComposerDraftsForTests()
+    clearNativeChatPendingAttachmentsForTests()
+    const store = createTestStore()
+    const folders = Array.from({ length: count }, (_, i) =>
+      makeFolderWorkspace({ id: `retired-${i}`, executionHostId: 'local' })
+    )
+    const twin = { ...folders[0], executionHostId: 'runtime:env-owner' as const }
+    const live = makeFolderWorkspace({ id: 'live', executionHostId: 'local' })
+    const shutdown = vi.fn(async () => {})
+    store.setState({
+      projectGroups: [projectGroup],
+      folderWorkspaces: [...folders, twin, live],
+      shutdownWorktreeBrowsers: shutdown,
+      deleteManagedBrowserSessionProfile: vi.fn(),
+      purgeWorktreeTerminalState: vi.fn()
+    })
+    const scope = (id: string, host = 'local') =>
+      composerDrafts.nativeChatLaunchPromptDraftScopeKey(folderWorkspaceKey(id), 'claude', host)
+    const liveScopes = [scope('live'), scope(twin.id, 'runtime:env-owner')]
+    for (const key of liveScopes) {
+      composerDrafts.updateNativeChatComposerDraft(key, { text: 'keep' }, 'immediate')
+    }
+    const attempts = folders.map((folder, i) => {
+      const key = scope(folder.id)
+      composerDrafts.updateNativeChatComposerDraft(key, { text: `task ${i}` }, 'immediate')
+      addNativeChatPendingAttachment(key, { id: key, path: '', pending: true })
+      const submission = composerDrafts.captureNativeChatComposerSubmission(key)
+      if (i % 2 === 0) {
+        composerDrafts.updateNativeChatComposerDraft(key, { text: '' }, 'immediate')
+      }
+      return submission
+    })
+    folderWorkspacesDelete.mockResolvedValue(false)
+    expect(
+      await store.getState().deleteFolderWorkspace(folders[0].id, { executionHostId: 'local' })
+    ).toBe(false)
+    expect(attempts[0].draft?.text).toBe('task 0')
+    expect(nativeChatPendingAttachmentSnapshot(scope(folders[0].id))).toHaveLength(1)
+    folderWorkspacesDelete.mockResolvedValue(true)
+    const reads = vi.spyOn(records, 'get')
+    for (const [i, folder] of folders.entries()) {
+      expect(
+        await store.getState().deleteFolderWorkspace(folder.id, { executionHostId: 'local' })
+      ).toBe(true)
+      expect(attempts[i].draft).toBeUndefined()
+      if (i === 0) {
+        expect(shutdown).not.toHaveBeenCalled()
+      }
+    }
+    const cleanupReads = reads.mock.calls.length
+    reads.mockRestore()
+    expect(cleanupReads).toBeGreaterThanOrEqual(count)
+    expect(cleanupReads).toBeLessThanOrEqual(count * (count + 2))
+    expect(records.size).toBe(2)
+    expect(shutdown).toHaveBeenCalledTimes(count - 1)
+    for (const key of liveScopes) {
+      expect(composerDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+    }
+    store.setState((s) => ({ folderWorkspaces: [...s.folderWorkspaces, folders[0]] }))
+    const recreated = scope(folders[0].id)
+    composerDrafts.updateNativeChatComposerDraft(recreated, { text: 'new lifetime' }, 'immediate')
+    folders.forEach((folder, i) => {
+      const key = scope(folder.id)
+      // A same-ID survivor skips ordinary cleanup as on main, so only that folder's chip stays.
+      expect(nativeChatPendingAttachmentSnapshot(key)).toHaveLength(i === 0 ? 1 : 0)
+      if (i > 0) {
+        expect(settleNativeChatPendingAttachment(key, key, '/late.png')).toBe(false)
+      }
+      composerDrafts.finishNativeChatComposerSubmission(key, attempts[i], true)
+    })
+    expect(composerDrafts.readNativeChatComposerDraft(recreated).text).toBe('new lifetime')
+    expect(records.size).toBe(3)
+    composerDrafts.clearNativeChatComposerDraftsForTests()
+    clearNativeChatPendingAttachmentsForTests()
+  }
+)

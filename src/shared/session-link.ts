@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isOrcaSessionId } from './orca-session-address'
+import { isOrcaSessionId, type OrcaSessionId } from './orca-session-address'
 
 export { SESSION_LINK_CAPABILITY } from './orchestration-runtime-capabilities'
 export const SESSION_LINK_TURN_LIMIT = 6
@@ -7,7 +7,9 @@ export const SESSION_LINK_MESSAGE_LIMIT = 12
 export const SESSION_LINK_MESSAGE_BYTES = 8 * 1024
 
 const identifier = z.string().min(1).max(128)
-const sessionId = identifier.refine(isOrcaSessionId)
+const sessionId = identifier.pipe(
+  z.custom<OrcaSessionId>((value) => typeof value === 'string' && isOrcaSessionId(value))
+)
 export const SessionLinkRole = z.enum(['reviewer', 'implementer'])
 export const SessionLinkParticipant = z.object({
   sessionId,

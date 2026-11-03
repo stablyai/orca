@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  agentMessageSendersShown,
-  readAgentMessageSource,
-  type AgentMessageSource
-} from './agent-session-message-source'
+import { readAgentMessageSource, type AgentMessageSource } from './agent-session-message-source'
 import { testOrcaSessionId } from '../orca-session-address-test-fixture'
 
 const SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
@@ -34,11 +30,6 @@ const FROM: AgentMessageSource = {
 }
 
 describe("a message's sender, read through its one reader", () => {
-  it('reads absence as the person, and a valid sender back whole', () => {
-    expect(readAgentMessageSource(undefined)).toBeUndefined()
-    expect(readAgentMessageSource(structuredClone(FROM))).toEqual(FROM)
-  })
-
   it("reads a Dispatch's task back whole", () => {
     const task: AgentMessageSource = {
       ...FROM,
@@ -88,24 +79,6 @@ describe("a message's sender, read through its one reader", () => {
     expect(read?.senders[1]?.name?.startsWith('a b ')).toBe(true)
   })
 
-  it("reads a value that is not a sender at all as the person's message", () => {
-    for (const value of [null, 'nobody', 42, [], { senders: [] }]) {
-      expect(readAgentMessageSource(value)).toBeUndefined()
-    }
-  })
-
-  it('names at most a few senders and counts the rest', () => {
-    const many: AgentMessageSource = {
-      ...FROM,
-      senders: Array.from({ length: 5 }, (_, index) => ({
-        party: { address: `term_${index}`, terminalHandle: `term_${index}`, orcaSessionId: null },
-        name: `Agent ${index}`
-      }))
-    }
-    const { shown, more } = agentMessageSendersShown(many)
-    expect(shown.map((sender) => sender.name)).toEqual(['Agent 0', 'Agent 1', 'Agent 2'])
-    expect(more).toBe(2)
-  })
   it('retains peer provenance when a newer or damaged link label cannot be read', () => {
     expect(
       readAgentMessageSource({

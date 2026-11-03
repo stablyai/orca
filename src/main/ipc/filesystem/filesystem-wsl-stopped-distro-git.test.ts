@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   handlers,
@@ -13,12 +15,29 @@ import {
 } from './filesystem-test-harness'
 
 const diskPreconditionMock = vi.hoisted(() => ({ writeLocalTextFileWithDiskPrecondition: vi.fn() }))
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktreeGraph: facade.listWorktreeGraph,
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
 vi.mock('./local-disk-write-precondition', () => diskPreconditionMock)
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 const isWslDistroRunningMock = vi.hoisted(() =>
   vi.fn(async (_distro: string, _options?: unknown) => false)
 )
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async (distro: string, options: unknown) =>
     (await isWslDistroRunningMock(distro, options)) ? 'running' : 'stopped'
@@ -26,7 +45,7 @@ vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock('node:fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock(
-  '../../wsl-unc-delete',
+  '../../wsl/filesystem/wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
@@ -63,7 +82,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { WslDistroStoppedError } from '../../wsl/wsl-unc-access-gate'
+import { WslDistroStoppedError } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 const UNC_ROOT = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')

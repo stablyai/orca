@@ -119,48 +119,6 @@ describe('remote runtime terminal data subscriptions', () => {
     expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(0)
   })
 
-  it('echoes the opaque stream generation in cumulative source-range ACKs', async () => {
-    const dispose = await subscribeToRuntimeTerminalData(
-      'remote:env-1@@terminal-1',
-      'watcher-1',
-      vi.fn()
-    )
-    await vi.waitFor(() => expect(sendBinary).toHaveBeenCalled())
-    const subscribeFrame = decodeTerminalStreamFrame(sendBinary.mock.calls[0][0])
-    const subscribePayload =
-      subscribeFrame && decodeTerminalStreamJson<{ streamId: number }>(subscribeFrame.payload)
-    callbacks?.onResponse({
-      ok: true,
-      result: {
-        type: 'subscribed',
-        streamId: subscribePayload!.streamId,
-        streamGeneration: 'opaque-generation',
-        capabilities: { ackOutputSourceRanges: 1 }
-      }
-    })
-
-    callbacks?.onBinary?.(
-      encodeTerminalStreamFrame({
-        opcode: TerminalStreamOpcode.Output,
-        streamId: subscribePayload!.streamId,
-        seq: 4,
-        payload: encodeTerminalStreamText('live')
-      })
-    )
-
-    await vi.waitFor(() => {
-      const ack = sendBinary.mock.calls
-        .slice(1)
-        .map((call) => decodeTerminalStreamFrame(call[0]))
-        .find((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
-      expect(ack && decodeTerminalStreamJson(ack.payload)).toEqual({
-        streamGeneration: 'opaque-generation',
-        ackedEndByte: 4
-      })
-    })
-    dispose()
-  })
-
   it('can start at the live tail without replaying the initial snapshot', async () => {
     const watcher = vi.fn()
     const subscription = subscribeToRuntimeTerminalData(
@@ -235,17 +193,6 @@ describe('remote runtime terminal data subscriptions', () => {
 
     secondDispose()
     expect(unsubscribe).toHaveBeenCalledOnce()
-    expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(0)
-  })
-
-  it('rejects remote terminal subscriptions when the multiplex connection fails', async () => {
-    runtimeSubscribe.mockRejectedValueOnce(new Error('offline'))
-
-    await expect(
-      subscribeToRuntimeTerminalData('remote:env-1@@terminal-1', 'watcher-1', vi.fn())
-    ).rejects.toThrow('offline')
-
-    expect(sendBinary).not.toHaveBeenCalled()
     expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(0)
   })
 

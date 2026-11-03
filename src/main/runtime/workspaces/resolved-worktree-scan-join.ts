@@ -11,7 +11,7 @@ import {
   type HostScopedWorktreeKey
 } from '../../../shared/worktree/host-qualified-identity'
 import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
-import { resolveLocalProjectRuntimesForRepos } from '../../project-runtime-git-options'
+import { resolveLocalProjectRuntimesForRepos } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { getAgentLaunchPlatformForRepo } from '../runtime-agent-launch-resolution'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import type { RuntimeStore } from '../runtime-store-contract'

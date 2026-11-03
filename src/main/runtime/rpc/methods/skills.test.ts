@@ -10,7 +10,7 @@ vi.mock('../../../skills/skill-discovery-target', () => ({
   discoverSkillsOnTarget: vi.fn(async () => ({ skills: [], sources: [], scannedAt: 1 }))
 }))
 // Off Windows the real gate never sees a distro; stand in for its UNC parse.
-vi.mock('../../../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   wslDistroForPath: (path: string) => /^\\\\wsl\.localhost\\([^\\]+)/.exec(path)?.[1] ?? null
 }))

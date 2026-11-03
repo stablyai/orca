@@ -3,7 +3,7 @@ import type { GitHubPRRefreshCandidate } from '../../shared/github/pull-request-
 import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence/loading-store/store'
 
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectGhExecOptions: () => ({})
 }))
 

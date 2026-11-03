@@ -19,8 +19,12 @@ vi.mock('./opencode-wsl-runtime-preparation', () => ({
   prepareOpenCodeWslReaders: vi.fn(async () => [])
 }))
 
-import { _resetWslCachesForTests, _setWslCachesForTests, listWslDistrosAsync } from '../wsl'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import {
+  _resetWslCachesForTests,
+  _setWslCachesForTests,
+  listWslDistrosAsync
+} from '../wsl/discovery/distro-catalog'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl/filesystem/wsl-running-path-filter'
 import {
   configureAiVaultSessionSources,
   getAiVaultWslHomeDirs,

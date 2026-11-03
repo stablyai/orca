@@ -16,7 +16,7 @@ import {
   type OrcadMigrationBlobDescriptor
 } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { rewriteOrcadMigrationWorktreeId } from '../../ssh/orcad-migration-path-rewrite'
-import { hashWorktreeId } from '../../terminal-history-id'
+import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 import { parseOrcadMigrationShellHistoryHeader } from '../migrating-orcad-catalog/orcad-migration-shell-history-format'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 import {

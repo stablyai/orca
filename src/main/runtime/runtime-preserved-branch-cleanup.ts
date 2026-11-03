@@ -13,11 +13,11 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { forceDeleteLocalBranch } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { resolveWorktreeRemovalRepoOwner } from '../worktree-removal-repo-owner'
+import { resolveWorktreeRemovalRepoOwner } from '../workspaces/removal/worktree-removal-repo-owner'
 import { parseExactWorktreeIdSelector } from './runtime-worktree-selection'
 
 type PreservedBranchCleanupTarget = {

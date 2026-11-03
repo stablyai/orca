@@ -155,6 +155,27 @@ describe('session link caller authority', () => {
     expect(store.events('link-1')[0].body).toContain('Tasks 1–5')
   })
 
+  it('resumes a manual pause without inventing an owner decision', async () => {
+    const context: RpcContext = { runtime, caller: { kind: 'desktop' } }
+    await call(
+      'orchestration.linkControl',
+      { id: 'link-1', operationId: 'pause', version: 1, action: 'pause' },
+      context
+    )
+    await call(
+      'orchestration.linkControl',
+      {
+        id: 'link-1',
+        operationId: 'resume',
+        version: store.get('link-1').version,
+        action: 'resume'
+      },
+      context
+    )
+    expect(store.get('link-1')).toMatchObject({ state: 'active', turns: 0, messages: 0 })
+    expect(store.events('link-1').some((event) => event.kind === 'owner-note')).toBe(false)
+  })
+
   it('requires an actual owner note before an owner-decision pause can resume', async () => {
     call(
       'orchestration.linkSend',

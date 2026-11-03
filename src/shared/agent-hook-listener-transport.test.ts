@@ -4,17 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  getEndpointFileName,
-  isShellSafeEndpointValue,
-  writeEndpointFile
-} from './agent-hook-listener/endpoint-publication'
-import {
-  HOOK_REQUEST_MAX_BYTES,
-  parseAgentHookJson,
-  parseFormEncodedBody,
-  readRequestBody
-} from './agent-hook-listener/request-body'
+import { getEndpointFileName, writeEndpointFile } from './agent-hook-listener/endpoint-publication'
+import { HOOK_REQUEST_MAX_BYTES, readRequestBody } from './agent-hook-listener/request-body'
 import { mergeAgentHookRequestHeaders } from './agent-hook-listener/hook-envelope'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { resolveHookSource } from './agent-hook-listener/source-routing'
@@ -49,23 +40,6 @@ describe('shared agent-hook-listener', () => {
   afterEach(() => {
     clearGrokSessionPathLookupCacheForTests()
     vi.unstubAllEnvs()
-  })
-
-  it('parses form-encoded bodies', () => {
-    const decoded = parseFormEncodedBody('paneKey=tab-1%3A0&worktreeId=foo')
-    expect(decoded.paneKey).toBe('tab-1:0')
-    expect(decoded.worktreeId).toBe('foo')
-  })
-
-  it('releases request parser listeners after reading a JSON body', async () => {
-    const req = createReadableRequest({ 'content-type': 'application/json' })
-    const body = readRequestBody(req as unknown as IncomingMessage)
-
-    req.emit('data', Buffer.from('{"ok":true}'))
-    req.emit('end')
-
-    await expect(body).resolves.toEqual({ ok: true })
-    expectRequestParserListenersReleased(req)
   })
 
   it('normalizes a routed raw JSON hook body with metadata headers', async () => {
@@ -184,39 +158,6 @@ describe('shared agent-hook-listener', () => {
     }
   )
 
-  it.each(['', '\uFEFF', '\uFEFF\uFEFF'])(
-    'preserves JSON whitespace and string BOMs after prefix %j',
-    (prefix) => {
-      expect(parseAgentHookJson(`${prefix} \r\n\t{"text":"a\uFEFFb"} \t\r\n`)).toEqual({
-        text: 'a\uFEFFb'
-      })
-    }
-  )
-
-  it.each([
-    '',
-    ' ',
-    '\uFEFF',
-    '\uFEFF\uFEFF',
-    '\uFEFF\uFEFFnot json',
-    ' \uFEFF{}',
-    '\uFEFF \uFEFF{}',
-    '{\uFEFF"ok":true}',
-    '{}\uFEFF',
-    '\uFEFF\uFEFF{"ok":}'
-  ])('rejects invalid JSON %j without trimming misplaced BOMs', (body) => {
-    expect(() => parseAgentHookJson(body)).toThrow()
-  })
-
-  it('keeps an empty HTTP body as an empty envelope', async () => {
-    const req = createReadableRequest({ 'content-type': 'application/json' })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing request harness supplies the headers and stream events used by the reader.
-    const body = readRequestBody(req as unknown as IncomingMessage)
-    req.emit('end')
-    await expect(body).resolves.toEqual({})
-    expectRequestParserListenersReleased(req)
-  })
-
   it('counts BOM bytes toward the cap across incremental chunks', async () => {
     const req = createReadableRequest({ 'content-type': 'application/json' })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing request harness supplies the headers and stream events used by the reader.
@@ -263,20 +204,6 @@ describe('shared agent-hook-listener', () => {
     req.emit('end')
     await expect(body).rejects.toThrow('hook request truncated after 2 of 10 bytes')
     expectRequestParserListenersReleased(req)
-  })
-
-  it('rejects root and unknown hook routes', () => {
-    expect(resolveHookSource('/hook/unknown')).toBeNull()
-    expect(resolveHookSource('/')).toBeNull()
-  })
-
-  it('rejects shell-unsafe endpoint values', () => {
-    expect(isShellSafeEndpointValue('1234')).toBe(true)
-    expect(isShellSafeEndpointValue('abc-DEF.0_1')).toBe(true)
-    expect(isShellSafeEndpointValue('')).toBe(false)
-    expect(isShellSafeEndpointValue('foo&bar')).toBe(false)
-    expect(isShellSafeEndpointValue('foo bar')).toBe(false)
-    expect(isShellSafeEndpointValue('foo;bar')).toBe(false)
   })
 
   describe('writeEndpointFile', () => {

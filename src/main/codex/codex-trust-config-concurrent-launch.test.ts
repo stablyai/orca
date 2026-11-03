@@ -35,7 +35,7 @@ const { CodexAppServerUnsupportedError } = await import('./app-server/codex-app-
 const { codexAppServerCapabilityCache } =
   await import('./app-server/codex-app-server-capability-cache')
 const { _internals, grantManagedCodexHookTrust } = await import('./codex-hook-trust-grant')
-const { markCodexProjectTrusted } = await import('../agent-trust-presets')
+const { markCodexProjectTrusted } = await import('../agent-launch/trust/agent-trust-presets')
 const { getLocalCodexTrustConfigFiles } = await import('./codex-home-paths')
 const { setCodexTrustGrantTelemetry } = await import('./codex-trust-grant-telemetry')
 const {

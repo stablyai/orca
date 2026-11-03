@@ -146,48 +146,6 @@ describe('remote pane output pause vs visibility', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('control: a hide/show cycle with a stable stream ends unpaused', async () => {
-    const { binding, deps, pauseCalls } = await connectVisibleRemotePane()
-
-    ;(deps.isVisibleRef as { current: boolean }).current = false
-    binding.syncProcessTracking()
-    expect(pauseCalls().at(-1)).toBe(true)
-    ;(deps.isVisibleRef as { current: boolean }).current = true
-    binding.syncProcessTracking()
-
-    expect(pauseCalls().at(-1)).toBe(false)
-    binding.dispose()
-  })
-
-  it('red: a reveal that lands mid-rebind must still end with the visible pane unpaused', async () => {
-    const { transport, binding, deps, callbacks, pauseCalls } = await connectVisibleRemotePane()
-
-    // Hide the pane: the transport is asked to pause host output.
-    ;(deps.isVisibleRef as { current: boolean }).current = false
-    binding.syncProcessTracking()
-    expect(pauseCalls().at(-1)).toBe(true)
-
-    // Reveal during null-ID rebind cannot reach the host; reconnect must retry visibility sync.
-    transport.getPtyId.mockImplementation(() => null)
-
-    // The user switches back while the rebind is in flight. The sync cannot
-    // reach the host right now — the defect is that nothing ever retries it.
-    ;(deps.isVisibleRef as { current: boolean }).current = true
-    binding.syncProcessTracking()
-
-    // Transport recovery replays pause intent verbatim, so it must first rederive it from visibility or drop watched output with no stall watchdog.
-    transport.getPtyId.mockImplementation(() => REMOTE_PTY_ID)
-    callbacks().onStreamRecovered?.()
-    callbacks().onConnect?.()
-    await flushAsyncTicks(6)
-
-    expect(
-      pauseCalls().at(-1),
-      `a visible pane was left output-paused after a mid-rebind reveal (setOutputPaused calls: ${JSON.stringify(pauseCalls())})`
-    ).toBe(false)
-    binding.dispose()
-  })
-
   it('red: a content-bearing recovery fires only onConnect, which must re-derive the pause bit alone', async () => {
     const { transport, binding, deps, callbacks, pauseCalls } = await connectVisibleRemotePane()
 

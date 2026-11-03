@@ -18,7 +18,7 @@ const { detectInstallDirs, guestMounts } = vi.hoisted(() => {
 vi.mock('../../shared/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: detectInstallDirs
 }))
-vi.mock('../pty/windows-environment-path', () => ({
+vi.mock('../pty/environment/windows-environment-path', () => ({
   mergePersistedWindowsPath: vi.fn()
 }))
 vi.mock('../ipc/command-path-resolver', async (importOriginal) => {

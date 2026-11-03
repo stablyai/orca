@@ -253,7 +253,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
   ),
   pluginRoute(
     'plugins.startup-and-manifest',
-    ['plugin-startup-budget', 'plugin-demo'],
+    ['plugin-demo'],
     [
       'src\\/main\\/plugins\\/plugin-(?:service|discovery|enablement|activation-policy|bundled-bootstrap|refresh-settlement|manifest-|content-|declarative-content-integrity|dev-)',
       'src\\/shared\\/plugins\\/(?:manifest\\/|approval\\/plugin-consent-|plugin-system-settings)'

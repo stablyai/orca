@@ -261,7 +261,7 @@ export const SESSION_LINK_METHODS = [
         const events = store.events(link.id)
         const requestIndex = events.findLastIndex((e) => e.kind === 'owner-request')
         if (
-          requestIndex === -1 ||
+          requestIndex !== -1 &&
           !events
             .slice(requestIndex + 1)
             .some((e) => e.actor === 'owner' && e.kind === 'owner-note')

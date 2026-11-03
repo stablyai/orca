@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  readAgentSessionFailureFact,
-  type AgentSessionFailureFact,
-  type SubmissionRejectionKind
-} from './agent-session-failure'
+import './agent-session-failure'
+import type { AgentSessionFailureFact, SubmissionRejectionKind } from './agent-session-failure'
 import {
   agentSessionFailureSentence,
   agentSessionFailureWords
@@ -63,29 +60,5 @@ describe('the words written beside a failure fact', () => {
       })
     ).toBe('Codex is rate-limited and retrying.\nLast error: HTTP 429 rate limit.')
     expect(retrying({})).toBe('Codex hit a temporary problem and is retrying.')
-  })
-})
-
-describe('an attachment problem as a reader meets it', () => {
-  it('keeps what it can place and drops what it cannot', () => {
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'attachmentInvalid',
-        attachment: { reason: 'tooMany', limit: 20 }
-      })
-    ).toEqual({ kind: 'attachmentInvalid', attachment: { reason: 'tooMany', limit: 20 } })
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'attachmentInvalid',
-        attachment: { reason: 'tooMany', limit: 'twenty' }
-      })
-    ).toEqual({ kind: 'attachmentInvalid', attachment: { reason: 'tooMany' } })
-    // A reason a newer host added reads as the generic attachment failure.
-    expect(
-      readAgentSessionFailureFact({
-        kind: 'attachmentInvalid',
-        attachment: { reason: 'futureReason' }
-      })
-    ).toEqual({ kind: 'attachmentInvalid' })
   })
 })

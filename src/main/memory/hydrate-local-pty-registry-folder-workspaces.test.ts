@@ -7,11 +7,11 @@ const getDaemonProviderMock = vi.fn()
 vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 const listLocalRepoWorktreesStrictMock = vi.fn()
-vi.mock('../repo-worktrees', () => ({
+vi.mock('../workspaces/catalog/repo-worktrees', () => ({
   listLocalRepoWorktreesStrict: (...args: unknown[]) => listLocalRepoWorktreesStrictMock(...args)
 }))
 

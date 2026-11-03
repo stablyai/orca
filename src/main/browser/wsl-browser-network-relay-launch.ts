@@ -2,7 +2,7 @@ import { spawnProcess } from '@orca/process-host'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
-import { withWslGuestLauncherRevision } from '../wsl/wsl-guest-launcher-revision'
+import { withWslGuestLauncherRevision } from '../wsl/execution/wsl-guest-launcher-revision'
 import { orcadPosixNodeRuntimeGlobs } from '../managed-server/install/orcad-node-runtime-globs'
 import {
   WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME,
