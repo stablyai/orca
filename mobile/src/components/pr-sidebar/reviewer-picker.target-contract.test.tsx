@@ -342,6 +342,7 @@ it('real tab/sheet sends a searched fork to the runtime provider with original w
         connState="connected"
         onRetry={() => {}}
         refetch={() => {}}
+        rereadAfterWrite={() => Promise.resolve()}
         worktreeId={worktreeId}
         gitBranch="feature"
         gitStatus={null}
