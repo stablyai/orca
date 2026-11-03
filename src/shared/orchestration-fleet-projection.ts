@@ -5,7 +5,10 @@ import {
   type OrchestrationFleetAttention,
   type OrchestrationFleetAttentionCategory
 } from './orchestration-fleet-attention'
-import { projectOrchestrationFleetWorker } from './orchestration-fleet-worker-projection'
+import {
+  projectOrchestrationFleetWorker,
+  SETTLED_WORKER_STATES
+} from './orchestration-fleet-worker-projection'
 
 export const ORCHESTRATION_FLEET_PAGE_MAX = 100
 
@@ -86,7 +89,7 @@ export type FleetResourceProjection =
 
 export type FleetNextAction = {
   /** `recover` = proven exit with no worker outcome; read the transcript, then stop or abandon. */
-  kind: 'inspect' | 'release' | 'recover' | 'none'
+  kind: 'inspect' | 'release' | 'recover' | 'read' | 'none'
   argv: string[]
 }
 
@@ -118,6 +121,7 @@ export type OrchestrationFleetWorker = {
   autoReleaseAt?: string
   nextAction: FleetNextAction
   attention: OrchestrationFleetAttention
+  lastAssistantMessage?: string | null
 }
 
 export type OrchestrationFleetPage = {
@@ -141,6 +145,17 @@ export function refreshOrchestrationFleetLivenessAttention(worker: Orchestration
     pendingGuidance: had('guidance'),
     pendingApproval: had('approval'),
     interrupted: had('interruption'),
+    stoppedWithoutWorkerDone:
+      worker.liveness.verdict === 'live' &&
+      worker.outcome === 'in_progress' &&
+      !SETTLED_WORKER_STATES.has(worker.stage.worker) &&
+      worker.stage.dispatch !== 'completed' &&
+      worker.stage.dispatch !== 'failed' &&
+      worker.stage.dispatch !== 'circuit_broken' &&
+      (worker.stage.activity === 'done' || worker.stage.activity === 'waiting') &&
+      !had('input') &&
+      !had('approval'),
+    lastAssistantMessage: worker.attention.lastAssistantMessage ?? worker.lastAssistantMessage,
     liveness: worker.liveness
   })
 }

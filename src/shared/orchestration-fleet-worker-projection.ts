@@ -39,7 +39,7 @@ export const DURABLE_EXIT_PROOF = {
 }
 
 /** Worker states that carry an outcome; anything else is still supposed to be running. */
-const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
+export const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
 
 /** Any certified termination reason proves exit independently of settlement state. */
 function hasCertifiedExit(worker: FleetLivenessSubject): boolean {
@@ -124,7 +124,8 @@ function projectResource(worker: FleetDurableWorker): FleetResourceProjection {
 /** Recompute after host verdicts; stale local inspect must not outrank recover for proven remote exit. */
 export function projectFleetNextAction(
   worker: FleetDurableWorker,
-  liveness: FleetLiveness
+  liveness: FleetLiveness,
+  options?: { stoppedWithoutWorkerDone?: boolean }
 ): FleetNextAction {
   if (worker.workerStage === 'released') {
     return { kind: 'none', argv: [] }
@@ -166,6 +167,13 @@ export function projectFleetNextAction(
   ) {
     return {
       kind: 'recover',
+      argv: ['orchestration', 'worker-read', '--dispatch', worker.dispatchId]
+    }
+  }
+  // Stopped without worker_done: worker is alive but finished its turn; direct to worker-read.
+  if (options?.stoppedWithoutWorkerDone) {
+    return {
+      kind: 'read',
       argv: ['orchestration', 'worker-read', '--dispatch', worker.dispatchId]
     }
   }
@@ -224,6 +232,19 @@ export function projectOrchestrationFleetWorker(
     workerState: worker.workerState,
     dispatchStatus: worker.dispatchStatus
   })
+  const unsettled =
+    outcome === 'in_progress' &&
+    !SETTLED_WORKER_STATES.has(worker.workerState) &&
+    worker.dispatchStatus !== 'completed' &&
+    worker.dispatchStatus !== 'failed' &&
+    worker.dispatchStatus !== 'circuit_broken'
+  const stoppedWithoutWorkerDone =
+    unsettled &&
+    fresh &&
+    (activity?.state === 'done' || activity?.state === 'waiting') &&
+    !worker.pendingInput &&
+    !worker.pendingApproval
+  const lastAssistantMessage = activity?.lastAssistantMessage ?? null
   return {
     id: worker.dispatchId,
     dispatchId: worker.dispatchId,
@@ -255,7 +276,7 @@ export function projectOrchestrationFleetWorker(
     },
     resource: projectResource(worker),
     ...(worker.resource?.autoReleaseAt ? { autoReleaseAt: worker.resource.autoReleaseAt } : {}),
-    nextAction: projectFleetNextAction(worker, liveness),
+    nextAction: projectFleetNextAction(worker, liveness, { stoppedWithoutWorkerDone }),
     attention: projectOrchestrationFleetAttention({
       isRoot: worker.parentTaskId === null,
       outcome,
@@ -265,7 +286,10 @@ export function projectOrchestrationFleetWorker(
         worker.workerState === 'abandoned' ||
         worker.terminationReason === 'operator_close' ||
         worker.terminationReason === 'signaled',
-      liveness
-    })
+      liveness,
+      stoppedWithoutWorkerDone,
+      lastAssistantMessage
+    }),
+    ...(lastAssistantMessage ? { lastAssistantMessage } : {})
   }
 }
