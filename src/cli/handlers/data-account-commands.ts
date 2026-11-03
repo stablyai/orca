@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { HandlerContext } from '../dispatch'
+import { getRepeatedStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
@@ -59,6 +60,7 @@ export async function addDataAccount(
       '--integration requires an OpenCode integration ID or name.'
     )
   }
+  const loginOptions = readOpenCodeLoginOptions(ctx, provider)
   const directory = mkdtempSync(join(tmpdir(), `orca-account-add-${provider}-`))
   const session: InteractiveLoginSession = {
     child: null,
@@ -79,6 +81,7 @@ export async function addDataAccount(
               'auth',
               'login',
               ...(typeof integration === 'string' ? [integration] : []),
+              ...loginOptions,
               '--standalone'
             ]
           : ['auth', 'login', '--force-manual-token-flow'],
@@ -107,6 +110,36 @@ export async function addDataAccount(
     }
   )
   printResult(result, ctx.json, (state) => formatDataAccounts(provider, state))
+}
+
+function readOpenCodeLoginOptions(
+  ctx: HandlerContext,
+  provider: ManagedDataAccountProvider
+): string[] {
+  const method = ctx.flags.get('method')
+  const answers = ctx.flags.has('answer') ? getRepeatedStringFlag(ctx.flags, 'answer') : []
+  if (provider !== 'opencode' && (method !== undefined || ctx.flags.has('answer'))) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--method and --answer are only supported with --agent opencode.'
+    )
+  }
+  if (method !== undefined && (typeof method !== 'string' || !method.trim())) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--method requires an OpenCode login method ID.'
+    )
+  }
+  if (
+    ctx.flags.has('answer') &&
+    (answers.length === 0 || answers.some((a) => !/^[^=\s]+=/.test(a)))
+  ) {
+    throw new RuntimeClientError('invalid_argument', '--answer must be written as key=value.')
+  }
+  return [
+    ...(typeof method === 'string' ? ['--method', method.trim()] : []),
+    ...answers.flatMap((answer) => ['--answer', answer])
+  ]
 }
 
 export async function listDataAccounts(ctx: HandlerContext, provider: unknown): Promise<void> {

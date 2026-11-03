@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { REPEATED_FLAG_SEPARATOR } from '../args'
 import { RuntimeClient } from '../runtime-client'
 import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import { addDataAccount, listDataAccounts } from './data-account-commands'
@@ -81,5 +82,56 @@ describe('managed data account enrollment', () => {
       label: 'opencode'
     })
     expect(existsSync(directory)).toBe(false)
+  })
+
+  it('passes OpenCode login method and answers before the standalone flag', async () => {
+    vi.spyOn(client, 'call')
+      .mockResolvedValueOnce({
+        id: 'test',
+        ok: true,
+        result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
+        _meta: { runtimeId: 'test' }
+      })
+      .mockRejectedValueOnce(new Error('capture failed'))
+    const login = vi.fn(async (_command: string, args: string[]) => {
+      expect(args).toEqual([
+        'auth',
+        'login',
+        'github-copilot',
+        '--method',
+        'device',
+        '--answer',
+        'deployment=github.com',
+        '--answer',
+        'note=a=b',
+        '--standalone'
+      ])
+    })
+    const flags = new Map<string, string | boolean>([
+      ['integration', 'github-copilot'],
+      ['method', 'device'],
+      ['answer', ['deployment=github.com', 'note=a=b'].join(REPEATED_FLAG_SEPARATOR)]
+    ])
+    await expect(addDataAccount({ ...context, flags }, 'opencode', login)).rejects.toThrow(
+      'capture failed'
+    )
+    expect(login).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['devin', new Map([['method', 'device']]), 'only supported with --agent opencode'],
+    ['opencode', new Map([['method', ' ']]), '--method requires'],
+    ['opencode', new Map([['answer', 'deployment']]), 'key=value'],
+    ['opencode', new Map([['answer', '=github.com']]), 'key=value']
+  ] as const)('refuses invalid %s login options before login', async (provider, flags, message) => {
+    vi.spyOn(client, 'call').mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
+      _meta: { runtimeId: 'test' }
+    })
+    const login = vi.fn()
+    await expect(addDataAccount({ ...context, flags }, provider, login)).rejects.toThrow(message)
+    expect(login).not.toHaveBeenCalled()
   })
 })
