@@ -13,7 +13,10 @@ import {
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
-import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
+import {
+  structuredAgentSessionHostKey,
+  useStructuredAgentSessionHostCapabilityState
+} from '@/runtime/structured-agent-session-host-capability'
 import type { StructuredAgentSessionOptionRecord } from '../../../../shared/agent-session/options/structured-agent-session-option-state'
 import {
   isHostModelListingWaitInFlight,
@@ -21,7 +24,6 @@ import {
 } from '../../../../shared/host-model-listing-waits'
 import { usesModelSpecificAcpEfforts } from '../../../../shared/agent-model-catalog-ownership'
 import { AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 
 /** Warm visible chats from the host catalog and share one listing wait per chat. Recheck held unavailability on agent changes, focus and turn edges. */
 export function useHostModelCatalogUpgrade(args: {
