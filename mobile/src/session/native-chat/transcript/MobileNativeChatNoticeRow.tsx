@@ -1,3 +1,7 @@
+import {
+  CLAUDE_MODEL_FALLBACK_COPY,
+  claudeModelFallbackLabels
+} from '../../../../../src/shared/native-chat/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, ChevronRight, Info } from 'lucide-react-native'
@@ -220,6 +224,16 @@ export function MobileNativeChatNoticeRow({
           style={[styles.faint, scaledType(TEXT_SIZE, fontScale)]}
         >
           {nativeChatHostStatusCopy(t)[look.presentation]}
+        </Text>
+      )
+    case 'model-fallback':
+      return (
+        <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
+          {t(
+            'chat.notice.modelFallback',
+            CLAUDE_MODEL_FALLBACK_COPY,
+            claudeModelFallbackLabels(look)
+          )}
         </Text>
       )
     case 'plan':
