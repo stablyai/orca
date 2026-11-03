@@ -4,6 +4,7 @@ import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { BrowserTabSplitDirection } from '../../../shared/browser-tab-split-direction'
 import type { BrowserTabCreateRequest } from '../../../shared/browser-tab-create-request'
 
+/** Request renderer creation, accepting only its matching reply and rejecting after a bounded wait. */
 export async function createBrowserTabInRenderer(
   host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
   url: string,

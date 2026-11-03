@@ -45,6 +45,7 @@ export const DEFAULT_BROWSER_PROFILE_ID = 'default'
 export const BROWSER_HOST_UNAVAILABLE_MESSAGE =
   "No paired Orca desktop is hosting browser pages for this server. On a desktop paired with it, open a browser tab in one of this server's workspaces, then retry. The desktop needs an Orca version that hosts this server's pages."
 
+/** Create a paired client's page with an initial toolbar hint; later toolbar choices belong to each view. */
 export async function createBrowserClientPage(
   host: BrowserClientPageOpeningHost,
   params: BrowserClientPageCreateParams,

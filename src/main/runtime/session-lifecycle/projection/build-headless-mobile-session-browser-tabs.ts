@@ -33,7 +33,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
   protected abstract getRendererOwnedBrowserPageIds(
     ...args: Parameters<BrowserOwnership['getRendererOwnedBrowserPageIds']>
   ): ReturnType<BrowserOwnership['getRendererOwnedBrowserPageIds']>
-  // Offscreen browser pages live outside renderer graphs; expose session rows or snapshots prune them and close fails with tab_not_found.
+  /** Publish pages outside renderer graphs with saved toolbar hints so snapshots retain their tabs. */
   protected buildHeadlessMobileSessionBrowserTabs(
     worktreeId: string
   ): RuntimeMobileSessionBrowserTab[] {

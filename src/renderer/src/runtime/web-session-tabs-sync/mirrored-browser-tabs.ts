@@ -112,6 +112,7 @@ export function resolveMirroredBrowserPageContent(
   }
 }
 
+/** Seed new mirrors from host hints while retaining existing local presentation choices, including false. */
 export function buildMirroredBrowserTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,

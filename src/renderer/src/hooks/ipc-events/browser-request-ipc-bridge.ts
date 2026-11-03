@@ -38,7 +38,7 @@ export function signalBrowserTabRequestsReadyAfterRestore(unsubs: (() => void)[]
   unsubs.push(unsubscribe)
 }
 
-// Route by proven workspace owner, not Active Server; this desktop’s runtime requests its own pages regardless of focus (#22275).
+/** Route requests by proven workspace owner, preserving creation hints without relying on Active Server. */
 export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onRequestRemoteCliBrowserScope((data) => {

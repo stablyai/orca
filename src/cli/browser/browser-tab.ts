@@ -64,6 +64,7 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, (v) => `Switched to tab ${v.switched} (${v.browserPageId})`)
   },
+  /** Forward explicit presentation and placement flags without overriding omitted runtime defaults. */
   'tab create': async ({ flags, client, cwd, json }) => {
     const url = getOptionalStringFlag(flags, 'url')
     const profileId = getOptionalStringFlag(flags, 'profile')

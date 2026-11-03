@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { findPage } from '@/store/slices/browser-page-records'
 import { translate } from '@/i18n/i18n'
 
+/** Toggle this view's toolbar from either menu; document previews and missing pages have no toggle. */
 export function BrowserToolbarVisibilityMenuItem({
   browserPageId,
   menuKind

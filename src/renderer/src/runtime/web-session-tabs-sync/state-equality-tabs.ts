@@ -44,6 +44,7 @@ export function sameTerminalTabs(
   return left.every((tab, index) => terminalTabEqual(tab, right[index]!))
 }
 
+/** Reuse a mirrored page only when its content and local presentation fields are unchanged. */
 export function browserPageEqual(a: BrowserPage, b: BrowserPage): boolean {
   return (
     a.id === b.id &&

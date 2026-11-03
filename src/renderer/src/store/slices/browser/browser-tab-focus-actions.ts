@@ -10,6 +10,7 @@ import { isLocalBrowserPageOwner } from './browser-host-state'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 
+/** Restore closed tabs with each page's saved presentation and coordinate browser-tab selection. */
 export function createBrowserTabFocusActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet

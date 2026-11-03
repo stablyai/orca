@@ -47,6 +47,7 @@ import { BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME } from './host-guest/browser-pag
 import { BrowserDevToolsDock } from './devtools-dock/BrowserDevToolsDock'
 import { useBrowserDevToolsDockPageFlex } from './devtools-dock/browser-devtools-docked-pages'
 
+/** Attach a server-owned guest while keeping failure and permission notices outside the hideable controls. */
 export function ClientHostedBrowserPagePane({
   browserTab,
   workspaceId,

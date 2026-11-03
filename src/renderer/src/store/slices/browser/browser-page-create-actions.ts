@@ -17,6 +17,7 @@ import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/brow
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { sendBrowserLayoutCommand } from './browser-layout-owner-commands'
 
+/** Coordinate page creation and closure; a blank chromeless page must not request address-bar focus. */
 export function createBrowserPageCreateActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet

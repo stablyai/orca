@@ -15,6 +15,7 @@ import { isLocalBrowserPageOwner } from './browser-host-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { sendBrowserLayoutCommand } from './browser-layout-owner-commands'
 
+/** Coordinate page conversion and reopening, restoring saved presentation when recreating a closed page. */
 export function createBrowserPageConversionActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet

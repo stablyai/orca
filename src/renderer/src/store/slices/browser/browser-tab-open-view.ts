@@ -7,8 +7,7 @@ import {
 import type { AppState } from '../../types'
 import { ownsGlobalSelection } from '../../global-selection-owner'
 
-// The window's own view of a browser tab it opens: its tab-bar order entry, browser selection and
-// the address-bar focus a blank New Tab asks for; a layout-owner build writes it once drawn.
+/** Build local tab order and selection, requesting blank-page address focus only when its toolbar is shown. */
 export function browserTabOpenView(
   s: AppState,
   worktreeId: string,

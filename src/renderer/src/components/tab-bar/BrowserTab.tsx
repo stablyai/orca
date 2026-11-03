@@ -66,6 +66,7 @@ function isBlankBrowserTab(tab: BrowserTabState): boolean {
   return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
 }
 
+/** Keep workspace tab actions, including toolbar recovery, available independently of the page's chrome. */
 export default function BrowserTab({
   tab,
   isActive,

@@ -70,6 +70,7 @@ type BrowserToolbarMenuDropdownProps = {
   overflow: BrowserChromeOverflowMenuProps
 }
 
+/** Expose page presentation and session tools while deferring folded actions until the menu closes. */
 export function BrowserToolbarMenuDropdown({
   browserPageId,
   menuOpen,

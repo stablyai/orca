@@ -78,6 +78,7 @@ export function withOpenedServeBrowserTab(
   })
 }
 
+/** Seed a saved server page with its presentation hint; absent hints keep the normal toolbar default. */
 function servePageRecord(page: ServeBrowserPageState, createdAt: number): BrowserPage {
   return {
     ...BLANK_BROWSER_TAB_STATE,

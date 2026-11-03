@@ -35,6 +35,7 @@ export class RuntimeBrowserTabCreation {
     >
   ) {}
 
+  /** Route creation to the page's host, carrying presentation hints without changing execution or focus policy. */
   async browserTabCreate(
     params: {
       url?: string

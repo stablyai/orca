@@ -85,6 +85,7 @@ export function persistClientHostedBrowserPages(
   return true
 }
 
+/** Save paired page metadata and its initial toolbar hint without retaining live placement authority. */
 export function buildPersistedClientHostedBrowserPages(
   pages: readonly RuntimeBrowserClientPage[],
   savedAt: number
@@ -173,6 +174,7 @@ function needsAgeRefresh(
   return (existing ?? []).some((row) => now - row.savedAt > CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS)
 }
 
+/** Compare restorable metadata, including explicit toolbar hints; timestamps are refreshed separately. */
 function samePersistedClientHostedBrowserPages(
   left: readonly PersistedClientHostedBrowserPage[] | undefined,
   right: readonly PersistedClientHostedBrowserPage[]

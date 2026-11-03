@@ -90,6 +90,7 @@ export function BrowserChromeToolbar(
   return chromeless ? null : <BrowserChromeToolbarContent {...props} />
 }
 
+/** Own toolbar measurements and folded tools for one visible mount, resetting them after restoration. */
 function BrowserChromeToolbarContent({
   browserPageId,
   controls,

@@ -25,6 +25,7 @@ import { openBrowserTabThroughLayoutOwner } from './browser-tab-open-through-lay
 import { browserTabOpenView } from './browser-tab-open-view'
 import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
 
+/** Create workspace browser tabs with initial page presentation before applying layout and focus. */
 export function createBrowserTabActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet

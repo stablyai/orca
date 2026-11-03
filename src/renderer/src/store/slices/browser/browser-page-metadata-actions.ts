@@ -12,6 +12,7 @@ import {
 } from './browser-page-annotation'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 
+/** Update page-local metadata without publishing presentation overrides back to a remote host. */
 export function createBrowserPageMetadataActions(
   set: BrowserSliceSet,
   _get: BrowserSliceGet

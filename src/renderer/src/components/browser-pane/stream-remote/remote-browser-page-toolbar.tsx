@@ -10,6 +10,7 @@ import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/browser-egress-
 import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 
+/** Apply local toolbar visibility to remote controls while leaving navigation execution on the host. */
 export function RemoteBrowserPageToolbar({
   runtimeEnvironmentId,
   addressBarValue,
