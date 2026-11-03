@@ -54,13 +54,18 @@ export type FileLinkTarget = {
 
 export type FileLinkPathExistence = ReturnType<typeof createTerminalPathExistenceBatch>
 
-/** Without the pane's own HOME, a paired server's home beats a guess from the cwd, which can name another user's file. WSL homes stay client-expanded. */
-function hostExpandsTilde(pathText: string, host: FileLinkHost): boolean {
+/** Without the pane's own HOME, a paired server's home beats a guess from the cwd, which can name another user's file. WSL and SSH homes stay client-expanded: the server knows neither. */
+function hostExpandsTilde(
+  pathText: string,
+  host: FileLinkHost,
+  connectionId: string | null | undefined
+): boolean {
   return (
     /^~[\\/]/.test(pathText) &&
     host.homeOnHost === true &&
     !host.homePath &&
     Boolean(host.runtimeEnvironmentId) &&
+    !connectionId &&
     !parseWslUncPath(host.worktreePath)
   )
 }
@@ -68,9 +73,14 @@ function hostExpandsTilde(pathText: string, host: FileLinkHost): boolean {
 /** Detected path text to the path to check; a paired terminal's `~` stays for its host to expand. */
 export function resolveFileLinkPath(
   parsed: ParsedTerminalFileLink,
-  host: FileLinkHost
+  host: FileLinkHost,
+  connectionId = getTerminalFileContext(
+    host.worktreeId,
+    host.worktreePath,
+    host.runtimeEnvironmentId
+  ).connectionId
 ): ResolvedTerminalFileLink | null {
-  if (hostExpandsTilde(parsed.pathText, host)) {
+  if (hostExpandsTilde(parsed.pathText, host, connectionId)) {
     return { absolutePath: parsed.pathText, line: parsed.line, column: parsed.column }
   }
   return host.cwd ? resolveTerminalFileLink(parsed, host.cwd, host.homePath) : null
@@ -81,8 +91,13 @@ export function resolveFileLinkTarget(
   parsed: ParsedTerminalFileLink,
   host: FileLinkHost
 ): FileLinkTarget | null {
-  const expandsOnHost = hostExpandsTilde(parsed.pathText, host)
-  const resolved = resolveFileLinkPath(parsed, host)
+  const fileContext = getTerminalFileContext(
+    host.worktreeId,
+    host.worktreePath,
+    host.runtimeEnvironmentId
+  )
+  const expandsOnHost = hostExpandsTilde(parsed.pathText, host, fileContext.connectionId)
+  const resolved = resolveFileLinkPath(parsed, host, fileContext.connectionId)
   if (!resolved) {
     return null
   }
@@ -90,11 +105,6 @@ export function resolveFileLinkTarget(
     resolved.absolutePath,
     host.worktreePath,
     terminalLinkWslDistro(host.wslDistro, host.runtimeEnvironmentId)
-  )
-  const fileContext = getTerminalFileContext(
-    host.worktreeId,
-    host.worktreePath,
-    host.runtimeEnvironmentId
   )
   const isKnownWorktreeRoot = Boolean(
     resolveKnownWorktreeRootPathLink(absolutePath, useAppStore.getState(), fileContext)

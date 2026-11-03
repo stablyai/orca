@@ -1,6 +1,7 @@
 import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { getConnectionId } from '@/lib/connection-context'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import { createProviderSetup, makeBufferLine } from './terminal-link-provider-buffer-fixtures'
 import {
@@ -137,7 +138,7 @@ describe('a home-relative path printed in a paired-server terminal', () => {
 
       await click(links[0]!)
 
-      expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-b', {
+      expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-b', {
         executionHostId: 'runtime:env-1'
       })
       expect(openFileMock).not.toHaveBeenCalled()
@@ -175,6 +176,19 @@ describe('a home-relative path printed in a paired-server terminal', () => {
     hostHoldsVideoInSibling()
 
     await provideLinks('\\\\wsl.localhost\\Ubuntu\\home\\me\\project')
+
+    expect(hostWasAskedFor()).not.toContain(VIDEO)
+  })
+
+  // Why: a server proxying an SSH workspace refuses `~`; only the client can still guess it.
+  it('keeps expanding home on this client for an SSH workspace its host proxies', async () => {
+    hostHoldsVideoInSibling()
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    try {
+      await provideLinks('/home/me/project')
+    } finally {
+      vi.mocked(getConnectionId).mockReturnValue(null)
+    }
 
     expect(hostWasAskedFor()).not.toContain(VIDEO)
   })

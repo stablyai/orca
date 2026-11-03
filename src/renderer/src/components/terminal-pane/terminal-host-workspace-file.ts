@@ -1,5 +1,5 @@
 import { callHostRoute } from '@/runtime/host-route-call'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { hostRouteForAuthority, runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
@@ -144,7 +144,7 @@ async function opensInPlace(environmentId: string): Promise<boolean> {
 /** A host-resolved workspace root, such as `~/proj` from a paired pane, switches to it like an absolute root link. */
 export function revealHostWorkspaceRoot(file: HostWorkspaceFile): void {
   if (file.isDirectory && file.absolutePath === file.worktreePath) {
-    activateAndRevealWorktree(file.worktreeId, { executionHostId: file.executionHostId })
+    activateAndRevealWorkspace(file.worktreeId, { executionHostId: file.executionHostId })
   }
 }
 
