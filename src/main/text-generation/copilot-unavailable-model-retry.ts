@@ -1,7 +1,8 @@
 import { findOptionOccurrence } from '../../shared/command-option-occurrence'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import { escapeRegex } from '../../shared/string-utils'
+import type { AgentGenerationFailureOutput } from './agent-failure-output'
 
-const UNAVAILABLE_MODEL_STDERR = /Model "[^"]*" from --model flag is not available/
 const PROMPT_VALUE_OPTIONS = ['--prompt', '-p']
 
 function withoutOption(args: string[], aliases: readonly string[]): string[] {
@@ -21,16 +22,32 @@ function withoutOption(args: string[], aliases: readonly string[]): string[] {
 /** Copilot rejects models the account's plan or org policy hides; rerun once on Copilot's own default model. */
 export function copilotUnavailableModelRetryPlan(
   plan: CommitMessagePlan,
-  stderr: string
+  failure: AgentGenerationFailureOutput | undefined
 ): CommitMessagePlan | null {
-  // The rejection happens before a model turn starts, so the retry cannot repeat work.
-  if (!UNAVAILABLE_MODEL_STDERR.test(stderr)) {
+  // The rejection exits nonzero before a model turn starts, so the retry cannot repeat work.
+  if (
+    !failure ||
+    failure.exitCode === 0 ||
+    failure.exitCode === null ||
+    /\S/.test(failure.stdout)
+  ) {
     return null
   }
-  const withoutModel = withoutOption(plan.args, ['--model'])
-  if (withoutModel.length === plan.args.length) {
+  const model = findOptionOccurrence(plan.args, ['--model'], true, PROMPT_VALUE_OPTIONS)?.value
+  if (!model) {
+    return null
+  }
+  // Match Copilot's own error line for the model we passed, not the text quoted elsewhere.
+  const rejection = new RegExp(
+    `^Error: Model "${escapeRegex(model)}" from --model flag is not available\\.?\\r?$`,
+    'm'
+  )
+  if (!rejection.test(failure.stderr)) {
     return null
   }
   // The effort level belonged to the rejected model.
-  return { ...plan, args: withoutOption(withoutModel, ['--effort', '--reasoning-effort']) }
+  return {
+    ...plan,
+    args: withoutOption(withoutOption(plan.args, ['--model']), ['--effort', '--reasoning-effort'])
+  }
 }

@@ -92,7 +92,7 @@ export async function runGenerationRequest(input: {
     }
   }
   if (!result.success && input.params.agentId === 'copilot') {
-    const retry = copilotUnavailableModelRetryPlan(plan, result.failureOutput?.stderr ?? '')
+    const retry = copilotUnavailableModelRetryPlan(plan, result.failureOutput)
     if (retry) {
       result = await execute(retry)
     }
