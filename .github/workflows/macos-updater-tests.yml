@@ -51,10 +51,10 @@ jobs:
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/macos-shipit-scheduling.test.mjs
-          src/main/macos-update-running-instances.integration.test.ts
-          src/main/updater.mac-install.test.ts
-          src/main/updater.headless-serve-install.test.ts
-          src/main/updater-mac-quit-guard.test.ts
+          src/main/updater/mac-install/macos-update-running-instances.integration.test.ts
+          src/main/updater/mac-install/updater.mac-install.test.ts
+          src/main/updater/updater.headless-serve-install.test.ts
+          src/main/updater/mac-install/updater-mac-quit-guard.test.ts
           src/main/startup/main-process-quit-update-veto.test.ts
           src/main/window/main-window-state-lifecycle.test.ts
           src/main/window/dashboard-popout-window.test.ts
