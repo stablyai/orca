@@ -259,6 +259,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
+      // Keep the failed dispatch durable: callers retry with the same mutation
+      // receipt, while the DB retains the failed attempt and its audit trail.
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
         launch: requestedLaunch

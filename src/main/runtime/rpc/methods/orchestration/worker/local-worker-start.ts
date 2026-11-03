@@ -1,5 +1,6 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
+import { validateWorkerAgent } from './worker-agent-validation'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -56,7 +57,7 @@ export async function startLocalWorker(args: {
   helperCreator?: DispatchContextRow
   followUp?: WorkerFollowUp
 }): Promise<unknown> {
-  const { runtime, db, coordinator, callerSession, orchestrationMutation } = args
+  const { runtime, db, coordinator, callerSession } = args
   const recordStart = prepareWorkerStartCard(runtime, callerSession)
   // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
@@ -119,12 +120,11 @@ export async function startLocalWorker(args: {
       existingPlacement: 'current or an exact existing folder workspace'
     })
   }
-  let resolvedWorktree: Awaited<ReturnType<typeof placeWorkerAgent>>['worktree'] | undefined =
-    creationTarget
-      ? undefined
-      : requestedWorktree === 'current'
-        ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
-        : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+  let resolvedWorktree: { id: string; repoId: string } | undefined = creationTarget
+    ? undefined
+    : requestedWorktree === 'current'
+      ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
+      : await runtime.showManagedTerminalWorkspace(requestedWorktree)
   if (terminal) {
     await assertExplicitWorkerUsable({
       runtime,
@@ -137,6 +137,7 @@ export async function startLocalWorker(args: {
   }
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
+  await validateWorkerAgent(runtime, agent, creationTarget, resolvedWorktree, mode.mode)
 
   const run = args.bindRun()
   const started = createLocalWorkerStartDispatch(args, {
@@ -264,7 +265,7 @@ export async function startLocalWorker(args: {
       terminalHandle,
       coordinatorHandle: params.from,
       devMode: params.devMode,
-      requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
+      requestId: args.orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,
       launchedAgent: external || workerChat ? null : (agent ?? null),
       setupReceipt,

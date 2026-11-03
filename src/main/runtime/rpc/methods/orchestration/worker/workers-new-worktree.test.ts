@@ -41,6 +41,7 @@ describe('orchestration new-worktree workers', () => {
       handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
     )
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: 'term_coord',
       worktreeId: 'repo::parent',

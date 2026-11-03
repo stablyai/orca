@@ -11,7 +11,11 @@ import { readGuestWindowsDriveMounts } from '../ipc/wsl-guest-windows-drive-path
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
-  options: { connectionId?: string | null; context?: PreflightRuntimeContext } = {}
+  options: {
+    connectionId?: string | null
+    context?: PreflightRuntimeContext
+    failOnProbeError?: boolean
+  } = {}
 ): Promise<Set<string>> {
   if (options.connectionId) {
     throw new SshHostNotServedError(options.connectionId)
@@ -19,7 +23,7 @@ export async function detectAgentCommandsOnHost(
   const context = options.context
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    return detectWslCommandsOnPath(wslTarget, commands)
+    return detectWslCommandsOnPath(wslTarget, commands, options)
   }
   // Bounded directory scans avoid repeated probes for missing commands (#34636).
   const onPathCommands = await findCommandsOnLocalPath(commands, {

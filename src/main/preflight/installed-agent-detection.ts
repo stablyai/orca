@@ -17,6 +17,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */
   disabledTuiAgents?: readonly TuiAgent[]
+  failOnProbeError?: boolean
 }
 
 function activeDetectionCommands(
@@ -39,7 +40,10 @@ export async function detectInstalledAgents(
   const probeCommands = getTuiAgentDetectionProbeCommands(commands, runtime)
   return resolveDetectedTuiAgentIds(
     commands,
-    await detectAgentCommandsOnHost(probeCommands, { context }),
+    await detectAgentCommandsOnHost(probeCommands, {
+      context,
+      ...(options?.failOnProbeError ? { failOnProbeError: true } : {})
+    }),
     runtime
   )
 }

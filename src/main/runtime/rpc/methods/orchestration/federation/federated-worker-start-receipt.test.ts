@@ -7,6 +7,7 @@ import {
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { startFederatedWorker } from './federated-worker-start'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
 describe('federated worker start receipt validation', () => {
   const databases: OrchestrationDb[] = []
@@ -162,5 +163,71 @@ describe('federated worker start receipt validation', () => {
         ? "Orca wakes you when workers report; end your turn when you're done."
         : `Orca wakes you when workers report; end your turn when you're done. remote cannot report a worker that stops without worker_done, so if no report arrives, run \`orca orchestration worker-show --dispatch ${result.dispatchId}\`.`
     )
+  })
+
+  it('keeps an unavailable-agent dispatch durable for a retry', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    databases.push(db)
+    const run = db.createRun({
+      objective: 'federated worker',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_remote',
+      name: 'remote',
+      peerFingerprint: 'remote_peer',
+      pairingRevision: 1
+    })
+    vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
+      async (_environmentId, method) => {
+        if (method === 'status.get') {
+          return {
+            capabilities: [
+              ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+              ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+            ]
+          }
+        }
+        throw new OrchestrationError(
+          'agent_not_available',
+          'Agent launcher codex is not installed on the execution host.'
+        )
+      }
+    )
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The receipt is checked against its persisted dispatch below.
+    const result = (await startFederatedWorker({
+      params: {
+        task: task.id,
+        from: 'term_coord',
+        on: 'remote',
+        worktree: 'id:worktree_remote',
+        agent: 'codex'
+      },
+      runtime,
+      db,
+      bindRunId: () => run.id,
+      taskDeps: undefined,
+      task,
+      orchestrationMutation: {
+        callerFingerprint: 'caller',
+        requestId: 'remote_start',
+        method: 'orchestration.workerStart',
+        payloadHash: 'payload'
+      }
+    })) as { dispatchId: string; state: string }
+
+    expect(result.state).toBe('failed')
+    expect(db.getWorkerDispatch(result.dispatchId)).toMatchObject({
+      state: 'failed',
+      stage: 'remote_attach',
+      last_error: expect.stringContaining('not installed')
+    })
+    expect(db.getTask(task.id)?.status).toBe('failed')
   })
 })

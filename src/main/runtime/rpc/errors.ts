@@ -48,12 +48,7 @@ import {
 } from '../../../shared/host-spawn-admission'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
-  return {
-    id,
-    ok: true,
-    result,
-    _meta: meta
-  }
+  return { id, ok: true, result, _meta: meta }
 }
 
 export function errorResponse(
@@ -148,6 +143,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'dispatch_capability_invalid',
   'agent_unconfigured',
   'worker_prompt_too_large',
+  'agent_not_available',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
   // The user chose Keep open; only they can undo it, so a coordinator must not retry blindly.

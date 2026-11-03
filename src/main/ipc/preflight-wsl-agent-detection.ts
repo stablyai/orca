@@ -13,7 +13,8 @@ export type WslPreflightTarget = {
 
 export async function detectWslCommandsOnPath(
   wslTarget: WslPreflightTarget,
-  commands: readonly string[]
+  commands: readonly string[],
+  options: { failOnProbeError?: boolean } = {}
 ): Promise<Set<string>> {
   const uniqueCommands = [...new Set(commands.filter(Boolean))]
   if (uniqueCommands.length === 0) {
@@ -30,10 +31,12 @@ export async function detectWslCommandsOnPath(
   const script = [
     // Reuse the common version-manager fallback and executable lookup, including directory rejection.
     buildPosixFallbackPathPrelude(),
-    `for cmd in ${commandList}; do`,
+    `for raw_cmd in ${commandList}; do`,
+    'cmd="$raw_cmd"',
+    'case "$cmd" in "~/"*) cmd="$HOME/${cmd#~/}" ;; esac',
     lookupScript,
     'if [ -n "$resolved" ]; then',
-    `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
+    `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$raw_cmd" "$resolved";`,
     'fi',
     'done'
   ].join('\n')
@@ -48,12 +51,23 @@ export async function detectWslCommandsOnPath(
       shell: 'sh',
       timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
     })
-    // Timeout/nonzero results may contain partial stdout, not a complete inventory.
-    if (result.timedOut || result.code !== 0) {
+    // Failed environment/command probes cannot establish a complete launcher inventory.
+    if (result.environmentResolved === false || result.timedOut || result.code !== 0) {
+      if (options.failOnProbeError) {
+        throw Object.assign(new Error('The WSL execution host is unavailable.'), {
+          code: 'remote_runtime_unavailable'
+        })
+      }
       return new Set()
     }
     return parseWslDetectedCommands(result.stdout)
-  } catch {
+  } catch (error) {
+    if (options.failOnProbeError) {
+      throw Object.assign(new Error('The WSL execution host is unavailable.'), {
+        code: 'remote_runtime_unavailable',
+        cause: error
+      })
+    }
     return new Set()
   }
 }

@@ -99,7 +99,10 @@ vi.mock('../gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
-import { detectInstalledAgents } from '../preflight/agent-detection'
+import {
+  detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration
+} from '../preflight/agent-detection'
 import { registerPreflightHandlers } from './preflight'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
@@ -135,6 +138,34 @@ describe('preflight', () => {
       configurable: true,
       value: originalPlatform
     })
+  })
+
+  it('forwards strict WSL probe failures through the extracted installed-agent detector', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: false,
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
+    const context = {
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo-1',
+          distro: 'Ubuntu',
+          reason: 'project-override',
+          cacheKey: 'repo-1'
+        }
+      }
+    } as const
+
+    await expect(
+      detectInstalledAgentsWithShellPathHydration(context, { failOnProbeError: true })
+    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
   })
 
   it.each(['win32', 'darwin', 'linux'])(
