@@ -1,10 +1,10 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
-import { memo, useCallback, useState, type ReactNode } from 'react'
+import { memo, useCallback, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import AgentSettingsDialog from './AgentSettingsDialog'
+import AgentSettingsDialog, { restoreAgentSettingsInvoker } from './AgentSettingsDialog'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { AgentSettingsMenuItem } from './AgentSettingsMenuItem'
 import {
@@ -60,7 +60,7 @@ export const AgentLaunchPicker = memo(
     cli?: boolean
     children?: ReactNode
     onTriggerEnter?: () => void
-    onOpenAgentSettings?: () => void
+    onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -71,10 +71,11 @@ export const AgentLaunchPicker = memo(
     useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
     const [settingsOpen, setSettingsOpen] = useState(false)
+    const trigger = useRef<HTMLButtonElement>(null)
     const openAgentSettings = useCallback(() => {
       setOpen(false)
       if (onOpenAgentSettings) {
-        onOpenAgentSettings()
+        onOpenAgentSettings(trigger.current!)
       } else {
         setSettingsOpen(true)
       }
@@ -109,6 +110,7 @@ export const AgentLaunchPicker = memo(
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>
             <Button
+              ref={trigger}
               type="button"
               aria-label={translate('agentPicker.select', 'Select agent')}
               variant="outline"
@@ -172,7 +174,11 @@ export const AgentLaunchPicker = memo(
           </DropdownMenuContent>
         </DropdownMenu>
         {settingsOpen && !onOpenAgentSettings ? (
-          <AgentSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+          <AgentSettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            onCloseAutoFocus={(event) => restoreAgentSettingsInvoker(event, trigger.current)}
+          />
         ) : null}
       </div>
     )

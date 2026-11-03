@@ -115,6 +115,9 @@ it.each(['claude', 'codex'] as const)(
     })
     await user.click(screen.getByRole('button', { name: `Configure ${label}` }))
     await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu', { name: `Configure ${label}` })).toBeNull()
+    await user.keyboard('{Escape}')
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
     fireEvent.change(screen.getByRole('textbox', { name: 'Prompt template' }), {
       target: { value: 'RETAIN {basePrompt}' }
     })
@@ -122,7 +125,10 @@ it.each(['claude', 'codex'] as const)(
     await user.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
     const agents = await screen.findByRole('dialog', { name: 'Agents' })
     expect(within(agents).getAllByRole('switch').length).toBeGreaterThan(0)
-    await user.click(within(agents).getByRole('button', { name: 'Close' }))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+    await user.tab()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Reset' }))
     expect(f.controller.recipe).toEqual({
       ...accepted,
       commandInputTemplate: 'RETAIN {basePrompt}'
@@ -159,5 +165,20 @@ it.each(['claude', 'codex'] as const)(
     })
     expect(f.onStart.mock.calls[0][0].agentArgs).toContain('--add-dir docs')
     expect(f.persist).toHaveBeenCalledOnce()
+    if (agent === 'codex') {
+      await user.click(trigger)
+      await user.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
+      expect(await screen.findByRole('dialog', { name: 'Agents' })).toBeTruthy()
+      f.view.unmount()
+      const replacement = document.createElement('button')
+      document.body.append(replacement)
+      replacement.focus()
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Agents' })).toBeNull())
+      // Drain the real deferred Radix close callback before checking ownership.
+      await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
+      expect(trigger.isConnected).toBe(false)
+      expect(document.activeElement).toBe(replacement)
+      replacement.remove()
+    }
   }
 )

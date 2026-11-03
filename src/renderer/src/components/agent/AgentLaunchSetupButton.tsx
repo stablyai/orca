@@ -124,7 +124,7 @@ export function AgentLaunchSetupButton({
           const available = Number.parseFloat(
             style.getPropertyValue('--radix-popover-content-available-width')
           )
-          if (available < Number.parseFloat(style.minWidth)) {
+          if (available < 416) {
             setPlacement('bottom')
           }
         })

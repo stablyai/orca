@@ -63,7 +63,7 @@ export function NewWorkspaceComposerAgentSection({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                onClick={onOpenAgentSettings}
+                onClick={(event) => onOpenAgentSettings(event.currentTarget)}
                 tabIndex={-1}
                 className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
                 aria-label={translate(

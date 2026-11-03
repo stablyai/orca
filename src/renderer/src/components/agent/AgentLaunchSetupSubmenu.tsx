@@ -1,5 +1,6 @@
-import { useRef, type ReactElement, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
+import { autoUpdate } from '@floating-ui/dom'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenuSub,
@@ -24,6 +25,28 @@ export function AgentLaunchSetupSubmenu({
 }) {
   const trigger = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
+  const [sideOffset, setSideOffset] = useState(4)
+  useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+    const anchor = trigger.current
+    if (!anchor) {
+      return
+    }
+    const measure = () => {
+      const rect = anchor.getBoundingClientRect()
+      const space = Math.max(rect.left - 8, document.documentElement.clientWidth - rect.right - 8)
+      setSideOffset(Math.min(4, space - 416))
+    }
+    const stop = autoUpdate(anchor, null, measure, { animationFrame: false })
+    const observer = new ResizeObserver(measure)
+    observer.observe(document.documentElement)
+    return () => {
+      stop()
+      observer.disconnect()
+    }
+  }, [open])
   const segmentRelease = useRef(false)
   const focusSearch = () =>
     content.current?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')?.focus({
@@ -130,10 +153,10 @@ export function AgentLaunchSetupSubmenu({
         ref={content}
         aria-label={label}
         aria-labelledby={undefined}
-        sideOffset={4}
+        sideOffset={sideOffset}
         collisionPadding={8}
         variant="picker"
-        className="flex w-104 min-w-64 max-w-(--radix-dropdown-menu-content-available-width) max-h-(--radix-dropdown-menu-content-available-height) flex-col"
+        className="flex w-104 min-w-0 max-w-[calc(100vw-1rem)] max-h-(--radix-dropdown-menu-content-available-height) flex-col"
         onFocusCapture={(event) => {
           if (event.target === event.currentTarget) {
             focusSearch()

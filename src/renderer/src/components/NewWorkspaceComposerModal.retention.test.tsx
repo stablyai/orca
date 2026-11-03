@@ -3,6 +3,7 @@
 import React, { useRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../shared/constants'
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
@@ -495,6 +496,7 @@ it('keeps accepted and newer pending ordinary intent across same-target agent sw
 })
 
 it('keeps accepted and pending workspace options through the shared gear/footer Agents dialog', async () => {
+  const user = userEvent.setup()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -522,11 +524,8 @@ it('keeps accepted and pending workspace options through the shared gear/footer 
   await open('Claude')
   fireEvent.change(textarea(), { target: { value: '--debug' } })
   await closeMenu()
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
-    button: 0,
-    ctrlKey: false
-  })
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
+  await user.click(screen.getByRole('button', { name: 'Select agent' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
   const agents = await screen.findByRole('dialog', { name: 'Agents' })
   expect(screen.getAllByRole('dialog', { name: 'Agents' })).toHaveLength(1)
   expect(within(agents).getAllByRole('switch').length).toBeGreaterThan(0)
@@ -536,17 +535,26 @@ it('keeps accepted and pending workspace options through the shared gear/footer 
     ctrlKey: true
   })
   expect(evidence.submit).not.toHaveBeenCalled()
-  fireEvent.click(within(agents).getByRole('button', { name: 'Close' }))
+  within(agents).getByRole('button', { name: 'Close' }).focus()
+  await user.keyboard('{Escape}')
+  const picker = await screen.findByRole('button', { name: 'Select agent' })
+  await waitFor(() => expect(document.activeElement).toBe(picker))
+  await user.tab()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Advanced' }))
   expect(screen.getByRole('textbox', { name: 'workspace name' })).toHaveProperty(
     'value',
     'retained-work'
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Open agent settings' }))
+  const gear = screen.getByRole('button', { name: 'Open agent settings' })
+  fireEvent.click(gear)
   fireEvent.click(
     within(await screen.findByRole('dialog', { name: 'Agents' })).getByRole('button', {
       name: 'Close'
     })
   )
+  await waitFor(() => expect(document.activeElement).toBe(gear))
+  await user.tab()
+  expect(document.activeElement).toBe(picker)
   await open('Claude')
   expect(textarea().value).toBe('--debug')
   expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')

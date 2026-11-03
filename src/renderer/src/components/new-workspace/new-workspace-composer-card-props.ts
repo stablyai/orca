@@ -109,7 +109,7 @@ export type NewWorkspaceComposerCardProps = {
   smartNameJiraSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
-  onOpenAgentSettings: () => void
+  onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
   onToggleAdvanced: () => void
   createDisabled: boolean
