@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/agent-launch-settings'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
 import * as permissionControls from './AgentPermissionChoiceControls'
-import { SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsSegmentedControl } from './form-controls/SettingsFormControls'
 import type { AgentPermissionChoice } from '../../../../shared/tui-agent-permission-choice'
 import { TooltipProvider } from '../ui/tooltip'
 import type { AgentPermissionsRenderer } from './AgentLaunchSettingsCatalog'

@@ -2,9 +2,9 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { EphemeralVmsPane } from './EphemeralVmsPane'
-import { getExperimentalSearchEntry } from './experimental-search'
-import { SearchableSetting } from './SearchableSetting'
-import { SettingsSwitch } from './SettingsFormControls'
+import { getExperimentalSearchEntry } from './advanced/experimental-search'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { SettingsSwitch } from './form-controls/SettingsFormControls'
 
 type EphemeralVmsExperimentalSettingProps = {
   settings: GlobalSettings

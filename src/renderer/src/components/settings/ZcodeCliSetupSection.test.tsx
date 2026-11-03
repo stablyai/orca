@@ -24,7 +24,7 @@ vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
     </div>
   )
 }))
-vi.mock('./SearchableSetting', () => ({
+vi.mock('./section-layout/SearchableSetting', () => ({
   SearchableSetting: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
 

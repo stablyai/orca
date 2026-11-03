@@ -10,7 +10,7 @@ import {
   type SettingsPersistenceModel
 } from './__fixtures__/settings-persistence-test-fixture'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
-import { useSettingsInteractionController } from './use-settings-interaction-controller'
+import { useSettingsInteractionController } from './page/use-settings-interaction-controller'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'

@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 
 type CredentialStatus = boolean | 'loading' | 'unavailable'
 

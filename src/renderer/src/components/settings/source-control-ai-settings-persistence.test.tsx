@@ -3,9 +3,9 @@ import type { ComponentProps } from 'react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
-import { ChatNamingSetting } from './ChatNamingSetting'
+import { ChatNamingSetting } from './chat/ChatNamingSetting'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
-import { useSettingsInteractionController } from './use-settings-interaction-controller'
+import { useSettingsInteractionController } from './page/use-settings-interaction-controller'
 import {
   persist,
   pickerLocaleFixture,

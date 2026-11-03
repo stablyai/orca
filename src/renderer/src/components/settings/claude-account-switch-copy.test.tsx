@@ -13,7 +13,7 @@ import ko from '@/i18n/locales/ko.json'
 import zh from '@/i18n/locales/zh.json'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch } from './search/settings-search'
 import { createClaudeAccountActionRunner } from './accounts-pane-account-actions'
 import {
   getClaudeAccountSwitchPrompt,

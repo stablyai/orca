@@ -1,5 +1,5 @@
-import { SearchableSetting } from './SearchableSetting'
-import { SettingsSwitchRow } from './SettingsFormControls'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { SettingsSwitchRow } from './form-controls/SettingsFormControls'
 import { MobilePane } from './MobilePane'
 import {
   getMobileOverviewSearchEntry,

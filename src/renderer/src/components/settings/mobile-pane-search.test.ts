@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { getMobilePaneSearchEntries, shouldOpenMobilePairingAddress } from './mobile-pane-search'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch } from './search/settings-search'
 
 describe('getMobilePaneSearchEntries', () => {
   it('keeps the shared machine-name entry searchable from the Mobile pane', () => {
