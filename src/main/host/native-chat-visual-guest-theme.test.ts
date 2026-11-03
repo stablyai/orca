@@ -132,6 +132,8 @@ describe('visual guest theme handoff', () => {
       for (const guest of guests) {
         read(event(guest))
         read(event(guest))
+        expect(guest.listenerCount('did-navigate')).toBe(1)
+        expect(guest.listenerCount('destroyed')).toBe(1)
       }
       publish(event(host), { ...dark, colorScheme: 'light' })
       expect(guests.reduce((sum, guest) => sum + guest.send.mock.calls.length, 0)).toBe(population)
