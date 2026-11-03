@@ -11,11 +11,21 @@ import {
   type GitHubApiRepository
 } from '../../github-api-repository'
 import { hostedReviewLocalGitOptionArgs, sameOwnerRepo } from './../github-exec-scope'
+/** Resolve origin and upstream without replacing an unverifiable SSH probe with a local repository guess. */
 export async function getRepoSlug(
   repoPath: string,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions & { requireVerifiedSshProbe?: boolean } = {}
 ): Promise<GitHubApiRepository | null> {
+  if (options.requireVerifiedSshProbe) {
+    return getGitHubApiRepositoryForRemote(
+      repoPath,
+      'origin',
+      connectionId,
+      getHostedReviewLocalGitOptions(options),
+      { requireVerifiedSshProbe: true }
+    )
+  }
   return getOriginGitHubApiRepository(
     repoPath,
     connectionId,

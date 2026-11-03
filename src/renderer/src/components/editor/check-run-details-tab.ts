@@ -5,7 +5,14 @@ import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-re
 
 export type CheckRunDetailsTabPatch = Pick<
   OpenCheckRunDetailsState,
-  'requestId' | 'details' | 'loading' | 'error' | 'githubRepository' | 'gitlabProjectRef'
+  | 'requestId'
+  | 'details'
+  | 'loading'
+  | 'error'
+  | 'githubRepository'
+  | 'gitlabProjectRef'
+  | 'actionsContext'
+  | 'actionsAttempt'
 >
 
 let nextCheckRunDetailsRequestId = 0
@@ -29,7 +36,11 @@ export function isSameGitHubRepository(
   return a === b || (a?.owner === b?.owner && a?.repo === b?.repo && a?.host === b?.host)
 }
 
+/** Keep Actions run tabs distinct by account/host context before falling back to existing check identities. */
 export function getCheckRunTabIdentity(check: PRCheckDetail): string {
+  if (check.actionsIdentity && check.workflowRunId) {
+    return `actions:${check.actionsIdentity}:${check.workflowRunId}`
+  }
   if (check.checkRunId) {
     return `check-run:${check.checkRunId}`
   }

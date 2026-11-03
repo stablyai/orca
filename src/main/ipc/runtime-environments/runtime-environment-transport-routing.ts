@@ -26,6 +26,7 @@ import {
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import { ACTIONS_ARTIFACT_TRANSFER_METHODS } from '../../../shared/github/actions-artifact-types'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
   sendRemoteRuntimeRequestAbortable
@@ -300,5 +301,10 @@ function markEnvironmentUsedFromResponse(
 }
 
 function shouldUseCachedRequestConnection(method: string): boolean {
-  return method === 'terminal.send' || method === 'terminal.updateViewport'
+  return (
+    method === 'terminal.send' ||
+    method === 'terminal.updateViewport' ||
+    // Artifact sessions retain disconnect cleanup, so every chunk must share the start socket.
+    ACTIONS_ARTIFACT_TRANSFER_METHODS.has(method)
+  )
 }

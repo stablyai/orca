@@ -101,6 +101,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
   }
 
   // Why: WebSocket dispatch is streaming (multiple responses) and auths via per-device tokens, not the shared token.
+  /** Authenticate and admit a socket request, preserving disconnect cancellation across dispatched handlers. */
   protected async handleWebSocketMessage(
     rawMessage: string,
     reply: (response: string) => void,
@@ -277,6 +278,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
             ? { sync: (phones) => this.syncDelegatedMobileDevices(device.deviceId, phones) }
             : undefined,
         signal: abortRegistration?.signal,
+        retainConnectionLifetime: ws ? () => this.registerWebSocketDispatchAbort(ws) : undefined,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler),

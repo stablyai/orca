@@ -135,6 +135,8 @@
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-ai-action-accent: var(--ai-action-accent);
+  --color-status-info: var(--status-info);
+  --color-status-warning-foreground: var(--status-warning-foreground);
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
@@ -433,6 +435,8 @@
 .native-chat-appearance[data-native-chat-scheme='light'] {
   /* Native scrollbars and form controls follow the scheme instead of Chromium's light default. */
   color-scheme: light;
+  --status-info: var(--color-blue-600);
+  --status-warning-foreground: var(--color-yellow-700);
   --destructive: #e40014;
   --destructive-foreground: #fff;
   --status-success: #147638;
@@ -470,6 +474,8 @@
 .dark,
 .native-chat-appearance[data-native-chat-scheme='dark'] {
   color-scheme: dark;
+  --status-info: var(--color-blue-400);
+  --status-warning-foreground: var(--status-warning);
   --destructive: #ff6568;
   /* Dark --destructive is a light red, so its label needs dark ink to clear AA. */
   --destructive-foreground: #450a0a;

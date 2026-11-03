@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 
+export const RepoSlug = RepoSelector.extend({ requireVerifiedSshProbe: z.boolean().optional() })
+
 export const WorkItemsList = RepoSelector.extend({
   limit: OptionalFiniteNumber,
   query: OptionalString,

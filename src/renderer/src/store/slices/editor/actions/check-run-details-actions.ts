@@ -1,3 +1,4 @@
+import { loadActionsDetailTab } from '@/store/github/actions-detail-tabs'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { translate } from '@/i18n/i18n'
@@ -5,8 +6,6 @@ import {
   buildCheckRunDetailsTabId,
   createCheckRunDetailsRequestId,
   getCheckRunDetailsTabLabel,
-  isSameGitHubRepository,
-  isSameGitLabProjectRef,
   type CheckRunDetailsTabPatch
 } from '@/components/editor/check-run-details-tab'
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
@@ -22,7 +21,9 @@ import {
   isSameCheckRunDetailsOwner,
   resolveCheckRunDetailsOwnership
 } from './check-run-details-owner'
+import { createCheckRunDetailsTabPatcher } from './check-run-details-patch'
 
+/** Keep Actions detail tabs on their owner-bound loader while retaining existing GitHub and GitLab check paths. */
 export function createCheckRunDetailsActions(
   set: EditorSet,
   get: EditorGet
@@ -32,73 +33,10 @@ export function createCheckRunDetailsActions(
 > {
   // Restored numeric request IDs belong to a previous renderer lifetime.
   const requests = new WeakSet<OpenCheckRunDetailsState>()
-  const patchCheckRunDetailsTab = (
-    id: string,
-    contextKey: string,
-    check: OpenCheckRunDetailsState['check'],
-    state: CheckRunDetailsTabPatch
-  ): void => {
-    let accepted: { previous: OpenCheckRunDetailsState; next: OpenCheckRunDetailsState } | undefined
-    set((s) => {
-      const existing = s.openFiles.find((f) => f.id === id)
-      if (existing?.mode !== 'check-details' || !existing.checkRunDetails) {
-        return s
-      }
-      const current = existing.checkRunDetails
-      if (current.contextKey !== contextKey) {
-        return s
-      }
-      if (
-        state.requestId !== undefined &&
-        current.requestId !== undefined &&
-        state.requestId < current.requestId
-      ) {
-        return s
-      }
-      // Async sidebar project lookup must not clear a previously known MR ref.
-      const githubRepository = state.githubRepository ?? current.githubRepository ?? null
-      const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
-      const nextCheckRunDetails: OpenCheckRunDetailsState = {
-        contextKey,
-        check,
-        requestId: state.requestId ?? current.requestId,
-        details: state.details,
-        loading: state.loading,
-        error: state.error,
-        githubRepository,
-        gitlabProjectRef
-      }
-      if (
-        current.contextKey === nextCheckRunDetails.contextKey &&
-        current.requestId === nextCheckRunDetails.requestId &&
-        current.check.status === nextCheckRunDetails.check.status &&
-        current.check.conclusion === nextCheckRunDetails.check.conclusion &&
-        current.loading === nextCheckRunDetails.loading &&
-        current.error === nextCheckRunDetails.error &&
-        current.details === nextCheckRunDetails.details &&
-        isSameGitHubRepository(current.githubRepository ?? null, githubRepository) &&
-        isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
-      ) {
-        return s
-      }
-      accepted = { previous: current, next: nextCheckRunDetails }
-      return {
-        openFiles: s.openFiles.map((f) =>
-          f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
-        )
-      }
-    })
-    if (accepted) {
-      const { previous, next } = accepted
-      requests.add(next)
-      reconcileCheckDetailsReadingCache(id, previous, next, () => {
-        const live = get().openFiles.find((file) => file.id === id)
-        return live?.mode === 'check-details' && live.checkRunDetails === next
-      })
-    }
-  }
+  const patchCheckRunDetailsTab = createCheckRunDetailsTabPatcher(set, get, requests)
 
   return {
+    /** Open or focus the stable detail tab while retaining its Actions owner context and current snapshot. */
     openCheckRunDetails: (worktreeId, contextKey, check, state) => {
       const resolvedOwnership = resolveCheckRunDetailsOwnership(get(), worktreeId)
       const id = buildCheckRunDetailsTabId(
@@ -108,6 +46,8 @@ export function createCheckRunDetailsActions(
       )
       const label = getCheckRunDetailsTabLabel(check)
       const checkRunDetails: OpenCheckRunDetailsState = {
+        actionsAttempt: state.actionsAttempt,
+        actionsContext: state.actionsContext,
         contextKey,
         check,
         requestId: state.requestId,
@@ -211,6 +151,7 @@ export function createCheckRunDetailsActions(
     },
 
     // Why: sidebar detail fetches can finish after the full-details tab is open; update the snapshot without stealing focus.
+    /** Update an existing matching tab without stealing focus or overwriting a newer request generation. */
     patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
       const live = get()
       // Why: a request's completion belongs to the tab it started on, even after the user selects a twin host.
@@ -224,6 +165,7 @@ export function createCheckRunDetailsActions(
       patchCheckRunDetailsTab(id, contextKey, check, state)
     },
 
+    /** Use the owner-bound Actions loader when present; otherwise retain the provider-specific check reload path. */
     reloadOpenCheckRunDetailsTab: async (fileId) => {
       const state = get()
       const file = state.openFiles.find((candidate) => candidate.id === fileId)
@@ -231,8 +173,13 @@ export function createCheckRunDetailsActions(
       if (!file || file.mode !== 'check-details' || !checkRunDetails) {
         return
       }
+      if (checkRunDetails.actionsContext) {
+        await loadActionsDetailTab(get, fileId)
+        return
+      }
       const { contextKey, check } = checkRunDetails
       const requestId = createCheckRunDetailsRequestId()
+      /** Apply detail results with this request ID so a slower generation cannot overwrite a newer tab state. */
       const patch = (next: CheckRunDetailsTabPatch): void => {
         const current = get().openFiles.find(
           (candidate) => candidate.id === fileId

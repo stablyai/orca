@@ -39,6 +39,20 @@ export function mapWorkflowJobs(raw: unknown, checkName?: string): PRCheckRunDet
       completedAt: nullableString(job.completed_at),
       url: nullableString(job.html_url),
       logTail: null,
+      ...(typeof job.runner_name === 'string'
+        ? { runnerName: nullableString(job.runner_name) }
+        : {}),
+      ...(Array.isArray(job.labels)
+        ? {
+            runnerLabels: [
+              ...new Set(
+                job.labels.filter(
+                  (label): label is string => typeof label === 'string' && label.length > 0
+                )
+              )
+            ]
+          }
+        : {}),
       steps: Array.isArray(job.steps)
         ? job.steps
             .filter((step): step is Record<string, unknown> => Boolean(step))
