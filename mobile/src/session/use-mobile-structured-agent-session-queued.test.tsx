@@ -216,9 +216,11 @@ describe('mobile structured queued messages', () => {
       hook!.session.messages.find((row) => row.id === agentJournalSubmissionKey(id))
     ).toMatchObject({ deliveryState: 'pending' })
     act(() => listener?.(batchEvent()))
-    expect(
-      hook!.session.messages.find((row) => row.id === agentJournalSubmissionKey(id))
-    ).toBeUndefined()
+    await vi.waitFor(() =>
+      expect(
+        hook!.session.messages.find((row) => row.id === agentJournalSubmissionKey(id))
+      ).toBeUndefined()
+    )
   })
 
   it('reverts an optimistic relative move when the host reports a changed queue', async () => {

@@ -143,6 +143,7 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       const message: NativeChatMessage = {
         id: 'ask',
         role: 'assistant',
+        journalPosition: { sequence: 1, index: 0 },
         blocks: [
           { type: 'text', text: 'Which color?\n- Red\n- Blue' },
           { type: 'tool-call', name: 'request_user_input_async', input: { questions } }
@@ -153,6 +154,7 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       const notice: NativeChatMessage = {
         id: 'mail',
         role: 'user',
+        journalPosition: { sequence: 2, index: 0 },
         blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
         timestamp: 2,
         source: 'transcript',
@@ -223,9 +225,10 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
             {
               id: 'sending-answer',
               role: 'user',
+              journalPosition: { sequence: 3, index: 0 },
               source: 'transcript',
               timestamp: 3,
-              blocks: [{ type: 'text', text: 'Blue' }],
+              blocks: [{ type: 'text', text: '> Which color?\n\nBlue' }],
               deliveryState
             }
           ]
@@ -239,6 +242,7 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
         {
           id: 'human-answer',
           role: 'user',
+          journalPosition: { sequence: 4, index: 0 },
           blocks: [{ type: 'text', text: 'Blue' }],
           timestamp: 3,
           source: 'transcript'
