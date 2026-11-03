@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { createServer, type Server } from 'node:http'
+import { createHash } from 'node:crypto'
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
@@ -502,27 +503,80 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
 
       for (const runner of provider.runners ?? [CMD_PLAIN, GIT_BASH]) {
         const before = listener.posts.length
-        const result = await run(runner, env)
-        expect(result.timedOut, `${runner.name} timed out`).toBe(false)
-        expect(result.code, `${runner.name} exit code; stderr: ${result.stderr}`).toBe(0)
+        let phase = 'inside Orca'
+        let observedResult: Awaited<ReturnType<typeof runProcess>> | undefined
+        try {
+          const result = await run(runner, env)
+          observedResult = result
+          expect(result.timedOut, `${runner.name} timed out`).toBe(false)
+          expect(result.code, `${runner.name} exit code; stderr: ${result.stderr}`).toBe(0)
 
-        // Compare exact bytes to catch both discarded stdin and code-page corruption.
-        expect(listener.posts.slice(before), `${runner.name} posts`).toEqual([
-          {
-            payload: PAYLOAD,
-            paneKey: PANE_KEY,
-            token: HOOK_TOKEN,
-            hookEventName: provider.hookEventName ?? null
+          // Compare exact bytes to catch both discarded stdin and code-page corruption.
+          expect(listener.posts.slice(before), `${runner.name} posts`).toEqual([
+            {
+              payload: PAYLOAD,
+              paneKey: PANE_KEY,
+              token: HOOK_TOKEN,
+              hookEventName: provider.hookEventName ?? null
+            }
+          ])
+          expect(result.stderr, `${runner.name} stderr`).toBe('')
+          // Gate consumers require parseable stdout.
+          expect(result.stdout.trim(), `${runner.name} stdout`).toBe(provider.stdout)
+
+          phase = 'outside Orca'
+          observedResult = undefined
+          const outsideOrca = await run(runner, hookEnvironment({ USERPROFILE: home, HOME: home }))
+          observedResult = outsideOrca
+          expect(outsideOrca.timedOut, `${runner.name} outside Orca timed out`).toBe(false)
+          expect(outsideOrca.code, `${runner.name} outside Orca exit code`).toBe(0)
+          expect(listener.posts).toHaveLength(before + 1)
+        } catch (error) {
+          if (
+            provider.homeName === 'user name' &&
+            (provider.name === 'Claude' || provider.name === 'Claude (orca-agent-hook.exe)')
+          ) {
+            // Diagnostics must not replace the original assertion or process failure.
+            try {
+              const summarize = (value: string | null, expected?: string | null) => ({
+                bytes: value === null ? null : Buffer.byteLength(value),
+                sha256: value === null ? null : createHash('sha256').update(value).digest('hex'),
+                ...(expected === undefined ? {} : { matchesFixture: value === expected })
+              })
+              const posts = listener.posts.slice(before, before + 4)
+              console.error(
+                'Windows hook delivery failure',
+                JSON.stringify({
+                  provider: provider.name,
+                  homeName: provider.homeName,
+                  runner: runner.name,
+                  phase,
+                  process: observedResult
+                    ? {
+                        code: observedResult.code,
+                        signal: observedResult.signal,
+                        timedOut: observedResult.timedOut,
+                        outputTruncated: observedResult.outputTruncated ?? false,
+                        // Hashes describe retained text; truncated streams have unknown full contents.
+                        retainedStdout: summarize(observedResult.stdout),
+                        retainedStderr: summarize(observedResult.stderr)
+                      }
+                    : { resultUnavailable: true },
+                  postsSinceRunnerStart: listener.posts.length - before,
+                  postsOmitted: Math.max(0, listener.posts.length - before - posts.length),
+                  posts: posts.map((post) => ({
+                    payload: summarize(post.payload, PAYLOAD),
+                    paneKey: summarize(post.paneKey, PANE_KEY),
+                    hookEventName: summarize(post.hookEventName, provider.hookEventName ?? null)
+                  }))
+                })
+              )
+            } catch {
+              // Best effort only; the original failure remains authoritative.
+            }
           }
-        ])
-        expect(result.stderr, `${runner.name} stderr`).toBe('')
-        // Gate consumers require parseable stdout.
-        expect(result.stdout.trim(), `${runner.name} stdout`).toBe(provider.stdout)
-
-        const outsideOrca = await run(runner, hookEnvironment({ USERPROFILE: home, HOME: home }))
-        expect(outsideOrca.timedOut, `${runner.name} outside Orca timed out`).toBe(false)
-        expect(outsideOrca.code, `${runner.name} outside Orca exit code`).toBe(0)
-        expect(listener.posts).toHaveLength(before + 1)
+          throw error
+        }
       }
       // Allow several shell launches, installation, and a cold executable build.
     },
