@@ -92,8 +92,10 @@ describe('launchAgentInNewTab', () => {
   it.each(['local', 'ssh', 'capable-web', 'older-web'] as const)(
     'keeps the whole saved-source terminal DTO/config identical to its base-only caller on %s',
     async (host) => {
-      const transport = await import('../components/settings/agent-launch-settings-transport')
-      const preferences = await import('../components/settings/use-host-agent-launch-preferences')
+      const transport =
+        await import('../runtime/agent-launch-settings/agent-launch-settings-transport')
+      const preferences =
+        await import('../runtime/agent-launch-settings/use-host-agent-launch-preferences')
       vi.spyOn(transport, 'hostSupportsLaunchChoices').mockResolvedValue(host === 'capable-web')
       vi.spyOn(preferences, 'ensureAgentLaunchPreferences').mockResolvedValue({
         defaultTuiAgent: 'codex',

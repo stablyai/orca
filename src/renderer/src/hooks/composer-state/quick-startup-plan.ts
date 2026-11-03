@@ -1,14 +1,18 @@
 import { useAppStore } from '@/store'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import type { ComposerModel } from './composer-model'
-import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import {
+  type AgentStartupPlan,
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan
+} from '@/lib/tui-agent-startup'
+
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { getAgentLabel } from '@/lib/agent-catalog'

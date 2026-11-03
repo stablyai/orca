@@ -20,12 +20,12 @@ import {
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
-import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
+import { mutateHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree,
   readAgentLaunchPreferencesForWorkspace
-} from '../settings/use-host-agent-launch-preferences'
+} from '../../runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   useAgentLaunchPickerInventory,
   useAgentLaunchPickerInventorySource,

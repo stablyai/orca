@@ -5,7 +5,7 @@ import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commi
 import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspaces/floating-workspace-search'
 import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
 import { getGitPaneSearchEntries } from '@/components/settings/git-search'
-import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
+import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile/emulator/mobile-emulator-search'
 import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands/quick-commands-search'
 import { getShareSkillsSettingsSearchEntries } from '@/components/settings/share-skills-settings-search'
 import { getTasksPaneSearchEntries } from '@/components/settings/tasks-search'

@@ -5,7 +5,7 @@ import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-
 import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
-import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
+import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'

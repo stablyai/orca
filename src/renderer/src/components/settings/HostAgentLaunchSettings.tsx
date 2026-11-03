@@ -3,11 +3,12 @@ import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
 } from '../../../../shared/agent-launch-settings'
-import type { AgentPermissionsRenderer } from './AgentLaunchSettingsCatalog'
 import {
+  type AgentPermissionsRenderer,
   AgentLaunchSettingsCatalog,
   AgentLaunchSettingsLoading
 } from './AgentLaunchSettingsCatalog'
+
 import {
   mutateHostAgentLaunchSettings,
   readHostAgentLaunchSettings,
@@ -16,7 +17,7 @@ import {
   hostSupportsNativeChatPermissions,
   hostSupportsOwnChatPermissions,
   type AgentLaunchSettingsOwner
-} from './agent-launch-settings-transport'
+} from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import { Button } from '../ui/button'
 import {
   useAgentPermissionOverrideNotice,

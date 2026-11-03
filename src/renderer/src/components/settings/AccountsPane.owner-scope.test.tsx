@@ -17,13 +17,12 @@ import type {
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { AccountsPane } from './AccountsPane'
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import { useSettingsHostNavigation } from './use-settings-host-navigation'
-import { resolveSettingsHostScope } from './settings-host-scope'
+import { useSettingsHostNavigation } from './host-scope/use-settings-host-navigation'
+import { resolveSettingsHostScope, type SettingsHostScope } from './host-scope/settings-host-scope'
 import type { SettingsNavigationTarget } from '@/lib/settings-navigation-types'
 import { ProviderAccountChatButton } from '../status-bar/ProviderAccountChatButton'
 import { ClaudeSwitcherMenu } from '../status-bar/ClaudeSwitcherMenu'
 import { TooltipProvider } from '../ui/tooltip'
-import type { SettingsHostScope } from './settings-host-scope'
 
 // Why: focus deliberately points at another server; the pane must follow hostScope only.
 const focusedElsewhere = {

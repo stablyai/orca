@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { AgentLaunchSettingsSection } from './AgentLaunchSettingsSection'
-import type { SettingsHostScope } from './settings-host-scope'
+import type { SettingsHostScope } from './host-scope/settings-host-scope'
 
 const state = vi.hoisted(() => ({
   runtimeEnvironments: [{ id: 'ssh-host', name: 'SSH host', createdAt: 1, pairingRevision: 17 }],

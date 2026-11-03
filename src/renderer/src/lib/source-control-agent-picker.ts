@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
 import { readAgentLaunchChoice } from '@/lib/host-chat-program'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'

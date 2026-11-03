@@ -81,7 +81,7 @@
 1 src/renderer/src/components/settings/linear-agent-skill-install-cta.tsx
 3 src/renderer/src/components/settings/LinearAgentSkillPane.tsx
 1 src/renderer/src/components/settings/provider-account-scope.ts
-4 src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx
+4 src/renderer/src/components/settings/runtime-environments/catalog/RuntimeEnvironmentsPane.tsx
 2 src/renderer/src/components/settings/setup-guide/settings-setup-guide-progress.ts
 2 src/renderer/src/components/settings/Settings.tsx
 1 src/renderer/src/components/settings/setup-guide/SettingsSetupGuidePane.tsx
@@ -92,7 +92,7 @@
 2 src/renderer/src/components/settings/TasksPane.tsx
 2 src/renderer/src/components/settings/token-source-control-integration-cards.tsx
 2 src/renderer/src/components/settings/use-integration-provider-status-refresh.ts
-1 src/renderer/src/components/settings/use-runtime-environment-mutation-actions.ts
+1 src/renderer/src/components/settings/runtime-environments/catalog/use-runtime-environment-mutation-actions.ts
 2 src/renderer/src/components/settings/navigation/use-settings-navigation-model.ts
 3 src/renderer/src/components/settings/page/use-settings-store-model.ts
 2 src/renderer/src/components/settings/page/use-settings-terminal-model.ts
