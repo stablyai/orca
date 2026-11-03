@@ -17,13 +17,17 @@ const layout = {
   chipWidth: (compact: boolean) => (compact ? 40 : 70),
   /** Extra width a collapsed (out-of-flow) chip measures compared with its in-row width. */
   collapsedChipDrift: (_collapsedCount: number) => 0,
-  segmentsWidth: (iconOnly: boolean) => (iconOnly ? 30 : 80)
+  segmentsWidth: (iconOnly: boolean) => (iconOnly ? 30 : 80),
+  urgent: new Set<string>()
 }
+let harnessRenders = 0
 
 function resetLayout(): void {
   layout.chipWidth = (compact) => (compact ? 40 : 70)
   layout.collapsedChipDrift = () => 0
   layout.segmentsWidth = (iconOnly) => (iconOnly ? 30 : 80)
+  layout.urgent = new Set()
+  harnessRenders = 0
 }
 
 function chipWidth(element: HTMLElement): number {
@@ -57,6 +61,7 @@ function measure(element: HTMLElement): number {
 
 function Harness(): React.JSX.Element {
   const { density, collapsedUsageProviders, barRef, usageRef, segmentsRef } = useStatusBarDensity()
+  harnessRenders += 1
   return (
     <div
       ref={barRef}
@@ -70,7 +75,7 @@ function Harness(): React.JSX.Element {
             <span
               key={provider}
               data-usage-chip={provider}
-              data-usage-urgent="false"
+              data-usage-urgent={layout.urgent.has(provider)}
               data-usage-percentage="false"
               data-usage-collapsed={collapsedUsageProviders.includes(provider)}
             />
@@ -155,6 +160,17 @@ describe('useStatusBarDensity layout settling', () => {
     })
   })
 
+  it('re-picks the collapsed chips when a collapsed chip turns urgent at the same width', () => {
+    renderAt(220)
+    expect(collapsed()).toEqual(['gemini', 'grok', 'kimi'])
+    // Usage polling marks kimi urgent; no width moves, but an urgent chip must not stay folded into "+N".
+    layout.urgent = new Set(['kimi'])
+    renderAt(220)
+    expect(settledLevel()).toBe(3)
+    expect(collapsed()).toEqual(['codex', 'gemini', 'grok'])
+    expect(renderedWidth()).toBeLessThanOrEqual(220)
+  })
+
   it('settles on the drift-free result when collapsed chips measure a few pixels off', () => {
     // An out-of-flow chip measuring 2px off its in-row width used to restart probing from level 0 forever.
     layout.collapsedChipDrift = () => 2
@@ -198,5 +214,37 @@ describe('useStatusBarDensity layout settling', () => {
     layout.collapsedChipDrift = (collapsedCount) => (collapsedCount >= 3 ? -60 : 0)
     expect(() => renderAt(220)).not.toThrow()
     expect(renderedWidth()).toBeLessThanOrEqual(220)
+  })
+
+  it('stays in the fallback across outside re-renders until the room or the content changes', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let flip = false
+    layout.segmentsWidth = (iconOnly) => {
+      flip = !flip
+      return iconOnly ? 30 : flip ? 80 : 90
+    }
+    renderAt(220)
+    expect(settledLevel()).toBe(TIGHTEST)
+
+    // Usage polling and agent status re-render the bar; each must cost one commit, not a fresh probe.
+    for (let i = 0; i < 5; i++) {
+      harnessRenders = 0
+      renderAt(220)
+      expect(harnessRenders).toBe(1)
+      expect(settledLevel()).toBe(TIGHTEST)
+    }
+    expect(warn).toHaveBeenCalledTimes(1)
+
+    // A chip turning urgent is a content change: the fallback re-runs and keeps the urgent chip visible.
+    layout.urgent = new Set(['kimi'])
+    renderAt(220)
+    expect(collapsed()).toEqual(['claude', 'codex', 'gemini', 'grok'])
+    expect(renderedWidth()).toBeLessThanOrEqual(220)
+    expect(warn).toHaveBeenCalledTimes(1)
+
+    // More room ends the fallback.
+    renderAt(1000)
+    expect(settledLevel()).toBe(0)
+    expect(collapsed()).toEqual([])
   })
 })

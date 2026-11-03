@@ -43,7 +43,21 @@ const TIGHTEST_LEVEL = STATUS_BAR_DENSITY_LEVELS.length - 1
 const MAX_SETTLE_UPDATES = STATUS_BAR_DENSITY_LEVELS.length * 3
 
 /** Room and row content a collapsed set was chosen for; it is kept until either changes. */
-type CollapseBasis = { level: number; collapsed: string; available: number; natural: number }
+type CollapseBasis = {
+  level: number
+  collapsed: string
+  available: number
+  natural: number
+  chips: string
+}
+
+/** Row content the budget fallback holds for; null until the fallback layout has been measured. */
+type SettleFallback = { content: { natural: number; chips: string } | null }
+
+// Why: urgency decides which chips may collapse, and it can flip without moving any width.
+function usageChipsKey(chips: readonly UsageChipMeasure[]): string {
+  return chips.map((chip) => `${chip.provider}${chip.urgent ? '!' : ''}`).join()
+}
 
 /** Roomiest level known to fit; an unmeasured level is returned so it gets probed. */
 export function pickStatusBarDensityLevel(
@@ -111,13 +125,15 @@ export function useStatusBarDensity(): {
   const chipWidthsRef = useRef({ key: '', widths: new Map<string, UsageChipWidthMemo>() })
   const collapseBasisRef = useRef<CollapseBasis | null>(null)
   const settleUpdatesRef = useRef(0)
-  const settleExhaustedRef = useRef(false)
+  /** Set while the bar sits in the budget fallback. */
+  const settleFallbackRef = useRef<SettleFallback | null>(null)
+  const settleWarnedRef = useRef(false)
   const settlingRef = useRef(false)
   const settleAvailableRef = useRef(Number.NaN)
 
   const resetSettlePass = useCallback((): void => {
     settleUpdatesRef.current = 0
-    settleExhaustedRef.current = false
+    settleFallbackRef.current = null
   }, [])
 
   const applyCollapsed = useCallback((next: readonly string[]): void => {
@@ -132,21 +148,35 @@ export function useStatusBarDensity(): {
 
   /**
    * Last resort when measurements keep drifting: stop on the tightest level with every calm chip
-   * collapsed. The bar stays there until the next resize or a render this hook did not cause.
+   * collapsed. The bar stays there until the available width, the row's natural width or a chip's
+   * urgency changes, so outside re-renders (usage polling, agent status) cannot re-run the probe.
    */
   const settleOnTightestState = useCallback(
-    (chips: readonly UsageChipMeasure[], nextOverflowing: boolean): void => {
-      if (!settleExhaustedRef.current) {
-        settleExhaustedRef.current = true
-        console.warn(
-          `[status-bar] density did not settle within ${MAX_SETTLE_UPDATES} updates; using the tightest layout`
-        )
+    (
+      chips: readonly UsageChipMeasure[],
+      nextOverflowing: boolean,
+      content: { natural: number; chips: string }
+    ): void => {
+      if (settleFallbackRef.current === null) {
+        // Why: one report per bar is enough to diagnose the drift; persistent drift must not spam the log.
+        if (!settleWarnedRef.current) {
+          settleWarnedRef.current = true
+          console.warn(
+            `[status-bar] density did not settle within ${MAX_SETTLE_UPDATES} updates; using the tightest layout`
+          )
+        }
         const calm = chips.filter((chip) => !chip.urgent).map((chip) => chip.provider)
-        if (committedLevelRef.current !== TIGHTEST_LEVEL) {
+        const levelChanges = committedLevelRef.current !== TIGHTEST_LEVEL
+        const collapsedChanges = calm.join() !== collapsedUsageRef.current.join()
+        // Why: the content is recorded from the fallback layout itself, so drift between layouts cannot end the fallback.
+        settleFallbackRef.current = {
+          content: levelChanges || collapsedChanges ? null : content
+        }
+        if (levelChanges) {
           settlingRef.current = true
           setLevel(TIGHTEST_LEVEL)
         }
-        if (calm.join() !== collapsedUsageRef.current.join()) {
+        if (collapsedChanges) {
           settlingRef.current = true
           applyCollapsed(calm)
         }
@@ -193,6 +223,7 @@ export function useStatusBarDensity(): {
     const nextLevel = pickStatusBarDensityLevel(levelWidthsRef.current, available)
     const nextOverflowing = usage.renderedWidth + fixedWidth > available + WIDTH_TOLERANCE_PX
     const currentCollapsed = collapsedUsageRef.current
+    const chipsKey = usageChipsKey(usage.chips)
     const basis = collapseBasisRef.current
     // Why: a collapsed set that fits is kept until the room or the row's content changes, so it cannot flip-flop at a fixed level.
     const keepCollapsed =
@@ -202,6 +233,7 @@ export function useStatusBarDensity(): {
       basis.level === level &&
       basis.collapsed === currentCollapsed.join() &&
       basis.available === available &&
+      basis.chips === chipsKey &&
       Math.abs(basis.natural - required) <= WIDTH_TOLERANCE_PX
     const collapsible = nextLevel === level && STATUS_BAR_DENSITY_LEVELS[nextLevel].collapseUsage
     const nextCollapsed = !collapsible
@@ -217,12 +249,28 @@ export function useStatusBarDensity(): {
           )
     collapseBasisRef.current =
       nextCollapsed.length > 0
-        ? { level, collapsed: nextCollapsed.join(), available, natural: required }
+        ? { level, collapsed: nextCollapsed.join(), available, natural: required, chips: chipsKey }
         : null
 
     if (available !== settleAvailableRef.current) {
       settleAvailableRef.current = available
       resetSettlePass()
+    }
+    const content = { natural: required, chips: chipsKey }
+    const fallback = settleFallbackRef.current
+    if (fallback !== null) {
+      if (fallback.content === null) {
+        fallback.content = content
+      } else if (
+        fallback.content.chips !== chipsKey ||
+        Math.abs(fallback.content.natural - required) > WIDTH_TOLERANCE_PX
+      ) {
+        resetSettlePass()
+      }
+    }
+    if (settleFallbackRef.current !== null) {
+      settleOnTightestState(usage.chips, nextOverflowing, content)
+      return
     }
     const levelChanged = nextLevel !== level
     const collapsedChanged = nextCollapsed.join() !== currentCollapsed.join()
@@ -232,7 +280,7 @@ export function useStatusBarDensity(): {
       return
     }
     if (settleUpdatesRef.current >= MAX_SETTLE_UPDATES) {
-      settleOnTightestState(usage.chips, nextOverflowing)
+      settleOnTightestState(usage.chips, nextOverflowing, content)
       return
     }
     settleUpdatesRef.current += 1
@@ -251,8 +299,9 @@ export function useStatusBarDensity(): {
   // Why: runs before paint, so probing a roomier level that turns out not to fit never flashes.
   useLayoutEffect(() => {
     committedLevelRef.current = level
-    // Only renders this hook caused continue a settle pass; any other render starts a fresh one.
-    if (!settlingRef.current) {
+    // Only renders this hook caused continue a settle pass; any other render starts a fresh one,
+    // except while in the fallback, which only a width or content change ends (checked in evaluate).
+    if (!settlingRef.current && settleFallbackRef.current === null) {
       resetSettlePass()
     }
     settlingRef.current = false
