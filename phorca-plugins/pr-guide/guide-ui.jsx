@@ -43,6 +43,7 @@ export function Guide({ url, headSha, sourceFingerprint, guide, files, root }) {
   const repo = `${parts[1]}/${parts[2]}`
   const number = parts[4]
   const current = guide.sections[chapter]
+  const selectedFile = current.diffs[openFile]
   const patchFiles = new Map(files.map((file) => [file.path, file]))
   const showChapter = (index) => { setChapter(index); setOpenFile(0); setOtherFiles(false) }
   const completed = reviewed.filter(Boolean).length
@@ -69,7 +70,7 @@ export function Guide({ url, headSha, sourceFingerprint, guide, files, root }) {
       <header className="guide-header">
         <div className="eyebrow">{repo} <span>·</span> PR #{number} <span>·</span> {headSha.slice(0, 8)}</div>
         <h1>{guide.title}</h1>
-        <p>{guide.intent}</p>
+        <details className="guide-context"><summary>About this PR</summary><p>{guide.intent}</p></details>
       </header>
 
       {otherFiles ? <section className="chapter-card">
@@ -80,15 +81,14 @@ export function Guide({ url, headSha, sourceFingerprint, guide, files, root }) {
       </section> : <section className="chapter-card" aria-labelledby="chapter-title">
         <div className="chapter-top"><span className="eyebrow">Chapter {chapter + 1} of {guide.sections.length}</span><label className="review-toggle"><input type="checkbox" checked={reviewed[chapter]} onChange={(event) => setReviewed(reviewed.map((value, index) => index === chapter ? event.target.checked : value))} /> Reviewed</label></div>
         <h2 id="chapter-title">{current.title}</h2>
-        <p className="chapter-overview">{current.overview}</p>
-        <div className="file-list">
-          {current.diffs.map((reference, index) => <article className="file-card" key={reference.file} data-guide-file-shell={reference.file}>
-            <button type="button" className="file-heading" aria-expanded={openFile === index} onClick={() => setOpenFile(openFile === index ? -1 : index)}>
-              <span><code>{reference.file}</code><small>{reference.summary}</small></span><span aria-hidden="true">{openFile === index ? '−' : '+'}</span>
-            </button>
-            {openFile === index && <Diff file={patchFiles.get(reference.file)} />}
-          </article>)}
-        </div>
+        <details className="chapter-context"><summary>Chapter overview</summary><p>{current.overview}</p></details>
+        {current.diffs.length > 1 && <nav className="file-tabs" aria-label="Files in this chapter">
+          {current.diffs.map((reference, index) => <button type="button" key={reference.file} aria-current={openFile === index ? 'true' : undefined} title={`${reference.file} — ${reference.summary}`} onClick={() => setOpenFile(index)}>{reference.file}</button>)}
+        </nav>}
+        <article className="file-card" data-guide-file-shell={selectedFile.file}>
+          <div className="file-heading"><span><code>{selectedFile.file}</code><small>{selectedFile.summary}</small></span><span className="file-count">File {openFile + 1} of {current.diffs.length}</span></div>
+          <Diff file={patchFiles.get(selectedFile.file)} />
+        </article>
         <div className="chapter-actions"><button type="button" disabled={chapter === 0} onClick={() => showChapter(chapter - 1)}>← Previous</button><button type="button" disabled={chapter === guide.sections.length - 1} onClick={() => showChapter(chapter + 1)}>Next chapter →</button></div>
       </section>}
     </main>

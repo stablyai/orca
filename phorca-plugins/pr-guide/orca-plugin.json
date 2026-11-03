@@ -3,7 +3,7 @@
   "id": "pr-guide",
   "publisher": "phocassoftware",
   "name": "PR Guide",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Review GitHub PRs with chaptered guides, real diffs, and inline comments sent to GitHub or a local agent session.",
   "engines": { "orca": ">=1.4.224" },
   "pluginApi": 1,

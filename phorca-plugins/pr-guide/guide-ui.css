@@ -68,13 +68,13 @@ code {
 .guide-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-columns: 216px minmax(0, 1fr);
 }
 .guide-sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 24px 16px;
+  padding: 18px 12px;
   background: var(--card);
   border-right: 1px solid var(--border);
   display: flex;
@@ -85,7 +85,7 @@ code {
   font-size: 18px;
   font-weight: 750;
   letter-spacing: -0.04em;
-  margin: 0 10px 34px;
+  margin: 0 10px 20px;
 }
 .brand span {
   font-weight: 450;
@@ -163,37 +163,30 @@ code {
 }
 .guide-main {
   min-width: 0;
-  max-width: 1200px;
   width: 100%;
-  padding: 42px clamp(20px, 5vw, 72px) 120px;
-  margin: 0 auto;
+  padding: 18px 20px 100px;
 }
 .guide-header {
-  padding-bottom: 32px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 30px;
+  margin-bottom: 14px;
 }
 .guide-header h1 {
-  font-size: clamp(26px, 3vw, 38px);
+  font-size: clamp(20px, 2vw, 26px);
   letter-spacing: -0.04em;
   line-height: 1.15;
-  margin: 12px 0;
+  margin: 5px 0 7px;
 }
-.guide-header p {
-  font-size: 15px;
+.guide-context p {
+  font-size: 14px;
   max-width: 70ch;
   color: var(--muted);
-  margin: 0;
+  margin: 7px 0 0;
 }
 .eyebrow span {
   margin: 0 8px;
 }
 .chapter-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
-  padding: clamp(20px, 3vw, 38px);
   min-width: 0;
 }
 .chapter-top {
@@ -203,16 +196,25 @@ code {
   align-items: center;
 }
 .chapter-card h2 {
-  font-size: clamp(23px, 2.5vw, 32px);
+  font-size: clamp(19px, 2vw, 24px);
   letter-spacing: -0.035em;
   line-height: 1.2;
-  margin: 12px 0;
+  margin: 4px 0 8px;
 }
-.chapter-overview {
-  font-size: 15px;
+.guide-context summary,
+.chapter-context summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+.chapter-context p {
+  font-size: 14px;
   white-space: pre-wrap;
   max-width: 75ch;
-  margin: 0 0 28px;
+  margin: 7px 0 0;
+}
+.chapter-context {
+  margin-bottom: 12px;
 }
 .review-toggle {
   display: flex;
@@ -225,29 +227,45 @@ code {
 .review-toggle input {
   accent-color: var(--primary);
 }
-.file-list {
-  display: grid;
-  gap: 14px;
+.file-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin: 0 0 8px;
+  padding-bottom: 3px;
+}
+.file-tabs button {
+  flex: 0 0 auto;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--foreground);
+  padding: 6px 10px;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.file-tabs button:hover,
+.file-tabs button[aria-current="true"] {
+  background: var(--accent);
+}
+.file-tabs button[aria-current="true"] {
+  border-color: var(--primary);
 }
 .file-card {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
+  background: var(--card);
 }
 .file-heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 20px;
-  width: 100%;
-  text-align: left;
-  background: var(--card);
-  border: 0;
-  padding: 14px 17px;
-  color: var(--foreground);
-}
-.file-heading:hover {
-  background: var(--accent);
+  padding: 10px 12px;
 }
 .file-heading span:first-child {
   min-width: 0;
@@ -265,8 +283,9 @@ code {
   font-weight: 400;
   margin-top: 3px;
 }
-.file-heading > span:last-child {
-  font-size: 20px;
+.file-count {
+  white-space: nowrap;
+  font-size: 12px;
   color: var(--muted);
 }
 .empty-diff {
@@ -275,9 +294,8 @@ code {
   border-top: 1px solid var(--border);
 }
 .diff {
-  overflow: auto;
+  overflow-x: auto;
   border-top: 1px solid var(--border);
-  max-height: 65vh;
 }
 .diff-row {
   display: grid;
@@ -389,8 +407,10 @@ code {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  width: min(360px, calc(100vw - 40px));
   z-index: 20;
+}
+.comment-dock details[open] {
+  width: min(360px, calc(100vw - 40px));
 }
 .comment-dock details {
   background: var(--card);
@@ -471,14 +491,13 @@ code {
     display: none;
   }
   .guide-main {
-    padding: 24px 16px 110px;
-  }
-  .chapter-card {
-    padding: 20px;
+    padding: 16px 12px 90px;
   }
   .comment-dock {
     right: 12px;
     bottom: 12px;
+  }
+  .comment-dock details[open] {
     width: min(340px, calc(100vw - 24px));
   }
 }

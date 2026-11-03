@@ -2,7 +2,7 @@
 
 Create a chaptered local guide with the PR's real code diff using your existing `gh` and Claude Code sign-ins. The plugin works across repositories on Phorca for Windows and macOS. It does not create, prune, or remove worktrees or change Phorca source. It posts to GitHub only when you send a comment with **GitHub PR** selected.
 
-PR Guide owns the chaptering prompt, guide validation, React viewer, diff display, and comment controls. The viewer has thematic chapters, reviewed checkboxes, file navigation, and lightweight code highlighting. PR fetching, refresh, and GitHub comment posting also live in this standalone plugin.
+PR Guide owns the chaptering prompt, guide validation, React viewer, diff display, and comment controls. The viewer has thematic chapters, reviewed checkboxes, one file at a time with compact file navigation, and lightweight code highlighting. Expand **About this PR** or **Chapter overview** when you need that context. PR fetching, refresh, and GitHub comment posting also live in this standalone plugin.
 
 The viewer is bundled with the plugin. It has no Plannotator package, asset service, or cache dependency. Installing and running the plugin needs no npm, Bun, or build step on Windows or macOS.
 
