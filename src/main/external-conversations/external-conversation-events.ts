@@ -8,7 +8,7 @@ import type {
   ConnectorAgent,
   ExternalConversationLink
 } from '../../shared/external-conversation-link'
-import { judgeIdleAgentTurn } from '../agent-turn-idle-verdict'
+import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem

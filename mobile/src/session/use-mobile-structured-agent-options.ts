@@ -117,16 +117,20 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
       }),
     [controller, projectRuntimeReports, hostSupport?.permissionOwn]
   )
-  const shown = lockSnapshot(
-    mobileStructuredModelDefaultSnapshot(
-      structuredAgentSessionShownSnapshot(readOptionState()),
-      readOptionState(),
+  const acceptsPicks = !!client && !!sessionId && enabled && fence !== null
+  const readOptionSnapshot = useCallback(() => {
+    const state = readOptionState()
+    const shown = mobileStructuredModelDefaultSnapshot(
+      structuredAgentSessionShownSnapshot(state),
+      state,
       hostSupport?.defaultModel === true
     )
-  )
-  const optionSnapshot = legacyHostPermissions
-    ? [...shown, legacyHostPermissionDescriptor()]
-    : shown
+    const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
+    return acceptsPicks && writes.current.count === 0
+      ? snapshot
+      : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+  }, [acceptsPicks, legacyHostPermissions, readOptionState, hostSupport?.defaultModel, writes])
+  const optionSnapshot = readOptionSnapshot()
 
   const readWriteContext = () => {
     const currentState = projectRuntimeReports({
@@ -138,8 +142,8 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
       controller,
       record: optionStateRef.current.record,
       view,
-      snapshot: lockSnapshotRef.current(structuredAgentSessionShownSnapshot(view)),
-      ready: writes.current.count === 0 && !!client && !!sessionId && interactionReadyRef.current,
+      snapshot: readOptionSnapshot(),
+      ready: acceptsPicks && writes.current.count === 0 && interactionReadyRef.current,
       providerStarting,
       isCurrentContext,
       flush: (isCurrent: () => boolean) => {
@@ -209,7 +213,7 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
       optionSnapshot,
       demandModelCatalog,
       setStructuredOption,
-      readOptionState,
+      readOptionSnapshot,
       resetOption: hostSupport?.defaultModel === true ? resetOption : undefined
     })
 
@@ -217,6 +221,8 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
     optionPickerRequest,
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : NO_COMMANDS,
+    compactInstructions:
+      conversationSupport?.sessionId === sessionId && conversationSupport.compactInstructions,
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??
       (agent !== null && isAgentSessionHandleProvider(agent)),

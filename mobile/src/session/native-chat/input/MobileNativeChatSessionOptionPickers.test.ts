@@ -606,47 +606,52 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     ['codex', 'full-access', 'Full access'],
     ['claude', 'plan', 'Plan mode'],
     ['codex', 'read-only', 'Read only']
-  ])('uses the nullable %s/%s report without an Own row', async (agent, mode, label) => {
-    const state = createStructuredAgentSessionOptionState(agent, null)
-    const snapshot = (reportedPermissionMode?: string | null) => {
-      const row = structuredAgentSessionPermissionDescriptor({
-        ...state,
-        permissionMode: 'own',
-        permissionOwnSupported: true,
-        reportedPermissionMode
-      })
-      return row ? [row] : []
-    }
-    const update = mount(snapshot())
-    expect(pill('Permissions').props).toMatchObject({
-      disabled: true,
-      accessibilityLabel: 'Permissions, Permissions'
-    })
-    for (const report of [mode, null, mode, undefined]) {
-      update(false, snapshot(report))
+  ])(
+    'keeps Own selected despite the nullable %s/%s report without adding an Own row',
+    async (agent, mode) => {
+      const state = createStructuredAgentSessionOptionState(agent, null)
+      const snapshot = (reportedPermissionMode?: string | null) => {
+        const row = structuredAgentSessionPermissionDescriptor({
+          ...state,
+          permissionMode: 'own',
+          permissionOwnSupported: true,
+          reportedPermissionMode
+        })
+        return row ? [row] : []
+      }
+      const update = mount(snapshot())
       expect(pill('Permissions').props).toMatchObject({
-        disabled: !report,
-        accessibilityLabel: `Permissions, ${report ? label : 'Permissions'}`
+        disabled: false,
+        accessibilityLabel: "Permissions, Agents' own settings"
       })
-    }
-    update(false, snapshot(mode))
-    await act(async () => pill('Permissions').props.onPress())
-    const rows = findByHostType(renderer!.root, 'BottomDrawer').findAll(
-      (node) => node.props.accessibilityRole === 'radio'
-    )
-    expect(
-      rows
-        .filter((row) => row.props.accessibilityState.checked)
-        .map((row) => findAllByHostType(row, 'Text')[0]?.props.children)
-    ).toEqual(['accept-edits', 'full-access'].includes(mode) ? [label] : [])
-    expect(
-      findAllByHostType(renderer!.root, 'Text').some((node) =>
-        String(node.props.children).includes('own settings')
+      for (const report of [mode, null, mode, undefined]) {
+        update(false, snapshot(report))
+        expect(pill('Permissions').props).toMatchObject({
+          disabled: false,
+          accessibilityLabel: "Permissions, Agents' own settings"
+        })
+      }
+      update(false, snapshot(mode))
+      await act(async () => pill('Permissions').props.onPress())
+      const rows = findByHostType(renderer!.root, 'BottomDrawer').findAll(
+        (node) => node.props.accessibilityRole === 'radio'
       )
-    ).toBe(false)
-    await act(async () => rowByText('Full access').props.onPress())
-    expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
-  })
+      expect(
+        rows
+          .filter((row) => row.props.accessibilityState.checked)
+          .map((row) => findAllByHostType(row, 'Text')[0]?.props.children)
+      ).toEqual([])
+      expect(
+        rows.some((row) =>
+          findAllByHostType(row, 'Text').some((node) =>
+            String(node.props.children).includes('own settings')
+          )
+        )
+      ).toBe(false)
+      await act(async () => rowByText('Full access').props.onPress())
+      expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
+    }
+  )
 
   it.each([
     ['ask', 'Ask for approval', 'Hand', 'full-access', 'Full access'],

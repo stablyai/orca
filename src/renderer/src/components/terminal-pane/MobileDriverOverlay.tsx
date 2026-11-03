@@ -215,6 +215,7 @@ function LoudOverlay({
     <div
       ref={setRootRef}
       role="dialog"
+      data-overlay-focus-scope="parent"
       aria-live="assertive"
       aria-labelledby={titleId}
       aria-describedby={bodyId}

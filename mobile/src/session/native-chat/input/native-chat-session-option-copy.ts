@@ -1,4 +1,4 @@
-import type { NativeChatSessionOptionSay } from '../../../../../src/shared/native-chat-session-option-labels'
+import type { NativeChatSessionOptionSay } from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { translate } from '../../../i18n/mobile-i18n'
 
 export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id, values) => {

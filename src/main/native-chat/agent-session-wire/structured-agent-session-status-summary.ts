@@ -27,6 +27,7 @@ export function structuredAgentSessionStatusSummary({
   state,
   stopping,
   starting,
+  usageLimitContinue,
   childWork,
   namingFailure,
   now
@@ -44,6 +45,7 @@ export function structuredAgentSessionStatusSummary({
   record: AgentSessionConversationView | null
   state: StructuredAgentSessionStatusState
   starting?: boolean
+  usageLimitContinue?: AgentSessionStatusSummary['usageLimitContinue']
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
@@ -64,6 +66,7 @@ export function structuredAgentSessionStatusSummary({
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
+    ...(usageLimitContinue ? { usageLimitContinue } : {}),
     workspaceId: session.params.location.workspaceId,
     agent: session.params.provider,
     ...(session.child || starting

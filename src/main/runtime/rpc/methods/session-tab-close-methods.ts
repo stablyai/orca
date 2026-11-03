@@ -18,7 +18,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
       if (context.clientKind) {
         const raw = await context.runtime.listMobileSessionTabs(
           params.worktree,
-          context.pairedDeviceId
+          context.pairedDeviceId,
+          { includeAgentSenders: false }
         )
         const visible = projectSessionTabsForClient(
           raw,
@@ -97,7 +98,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
       if (context.clientKind) {
         const raw = await context.runtime.listMobileSessionTabs(
           params.worktree,
-          context.pairedDeviceId
+          context.pairedDeviceId,
+          { includeAgentSenders: false }
         )
         const visible = projectSessionTabsForClient(
           raw,

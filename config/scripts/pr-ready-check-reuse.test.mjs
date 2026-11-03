@@ -126,9 +126,8 @@ describe('ready-for-review required check reuse', () => {
   })
 
   it('keeps required skips conditional on proof and leaves advisory routing eligible', () => {
-    // Main pushes title their runs 'main', which never matches a PR identity.
     expect(workflow['run-name']).toBe(
-      "${{ github.event_name == 'push' && 'main' || format('PR {0}', github.event.pull_request.number) }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
+      "PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
     )
     expect(workflow.on.pull_request.types).toContain('ready_for_review')
     const detector = workflow.jobs.code_paths
@@ -150,7 +149,7 @@ describe('ready-for-review required check reuse', () => {
       expect(detector.outputs[name]).toBe(`\${{ steps.e2e_filter.outputs.${name} }}`)
     }
     expect(detector.steps.find((step) => step.id === 'e2e_filter').if).toBe(
-      "github.event_name == 'pull_request' && github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
+      "github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
     )
     expect(workflow.jobs.verify.needs).toEqual([
       'code_paths',

@@ -137,6 +137,7 @@ function acceptStructuredConversationCommand(
 ): Promise<AgentSessionMutationResult<ConversationCommandAcceptance>> {
   const plan = conversationCommandPlan({
     envelope: params.envelope,
+    ...(params.instructions ? { instructions: params.instructions } : {}),
     ...(params.delivery ? { delivery: params.delivery } : {}),
     priorRecord
   })
@@ -163,7 +164,7 @@ function acceptUnderSerialize(
         // Queue first so commands obey the same holds as sends before active-work admission.
         const queued = await maybeQueueStructuredAgentSessionSend(context, ctx, {
           envelope: params.envelope,
-          body: structuredAgentSessionCompactBody(),
+          body: structuredAgentSessionCompactBody(params.instructions),
           ...(params.userSend ? { userSend: params.userSend } : {}),
           ...(params.delivery ? { delivery: params.delivery } : {})
         })

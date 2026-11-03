@@ -262,6 +262,9 @@ export async function readStructuredAgentSessionOptions(
             reason: 'unsupported'
           }),
     conversationCommands: capabilities?.compact ? ['clear', 'compact'] : ['clear'],
+    ...(capabilities?.compact && capabilities.compactInstructions
+      ? { compactInstructions: true }
+      : {}),
     // Live children may narrow declared capabilities, never expand them.
     acceptsImages: capabilities?.imagePrompts === true && options.acceptsImages !== false,
     ...structuredAgentSessionThreadGoalReport(

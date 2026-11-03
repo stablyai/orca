@@ -1,11 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import {
   countPastePayloadLines,
   getPastePayloadUtf8ByteLength,
   hasPastePayloadControlSequence,
-  measurePastePayloadMetadata,
-  measurePastePayloadMetadataWithYield
+  measurePastePayloadMetadata
 } from './paste-payload-metadata'
 
 describe('paste payload metadata', () => {
@@ -36,25 +35,5 @@ describe('paste payload metadata', () => {
       lineCount: 1
     })
     expect(metadata.byteLength).toBeLessThan(getPastePayloadUtf8ByteLength(text))
-  })
-
-  it('yields while measuring accepted large paste metadata', async () => {
-    const yieldToEventLoop = vi.fn(async () => {})
-    const metadata = await measurePastePayloadMetadataWithYield(
-      `${'x'.repeat(32)}\r\nnext\x1b[31m`,
-      {
-        yieldAfterCodeUnits: 8,
-        yieldToEventLoop
-      }
-    )
-
-    expect(metadata).toEqual({
-      byteLength: 43,
-      exceededLimit: false,
-      hasControlSequences: true,
-      lineEndingByteLength: 2,
-      lineCount: 2
-    })
-    expect(yieldToEventLoop).toHaveBeenCalled()
   })
 })

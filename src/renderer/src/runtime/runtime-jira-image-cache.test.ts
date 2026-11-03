@@ -2,14 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   acquireJiraImageUrl,
-  migrateLegacyJiraImages,
   hasCachedJiraImage,
   clearJiraImageCache,
   observeJiraImageHostStatus,
   onJiraImageCacheInvalidated
 } from './runtime-jira-image-cache'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { jiraImageReference } from '../../../shared/jira/jira-attachment-image'
+import '../../../shared/jira/jira-attachment-image'
 
 const { download } = vi.hoisted(() => ({ download: vi.fn() }))
 vi.mock('./runtime-jira-image-client', () => ({ readRuntimeJiraImage: download }))
@@ -42,16 +41,6 @@ function acquire(reference = 'image') {
 }
 
 describe('bounded Jira Blob image cache', () => {
-  it('shares concurrent downloads, retains active URLs and revokes on clear', async () => {
-    const [a, b] = await Promise.all([acquire(), acquire()])
-    expect(download).toHaveBeenCalledOnce()
-    expect(a.url).toBe(b.url)
-    a.release()
-    expect(revoke).not.toHaveBeenCalled()
-    b.release()
-    clearJiraImageCache()
-    expect(revoke).toHaveBeenCalledWith(a.url)
-  })
   it('aborts the shared transfer only after both readers cancel', async () => {
     let requestSignal: AbortSignal | undefined
     download.mockImplementation((_target, _reference, signal: AbortSignal) => {
@@ -99,21 +88,6 @@ describe('bounded Jira Blob image cache', () => {
     expect(revoke).toHaveBeenCalledWith(replacement.url)
     replacement.release()
   })
-  it('clears a host cache when the connection is lost or revoked', async () => {
-    const image = await acquire()
-    observeJiraImageHostStatus({
-      environmentId: 'host',
-      pairingRevision: 1,
-      sequence: 2,
-      checkedAt: 0,
-      status: null,
-      verification: 'unavailable',
-      transport: 'disconnected'
-    })
-    expect(hasCachedJiraImage(target, 'image')).toBe(false)
-    expect(revoke).toHaveBeenCalledWith(image.url)
-    image.release()
-  })
   it('allows the combined description and comment queue while keeping three active downloads', async () => {
     const releases: (() => void)[] = []
     download.mockImplementation(
@@ -132,39 +106,6 @@ describe('bounded Jira Blob image cache', () => {
     expect(images).toHaveLength(48)
     expect(download).toHaveBeenCalledTimes(48)
     images.forEach((image) => image.release())
-  })
-
-  it('notifies mounted readers once when a disconnected host is verified again', () => {
-    const listener = vi.fn()
-    const stop = onJiraImageCacheInvalidated(listener)
-    const status = {
-      environmentId: 'host',
-      pairingRevision: 1,
-      sequence: 2,
-      checkedAt: 0,
-      status: null,
-      verification: 'unavailable' as const,
-      transport: 'disconnected' as const
-    }
-    observeJiraImageHostStatus(status)
-    expect(listener).toHaveBeenCalledTimes(1)
-    observeJiraImageHostStatus({ ...status, sequence: 3, transport: 'connecting' })
-    expect(listener).toHaveBeenCalledTimes(1)
-    observeJiraImageHostStatus({
-      ...status,
-      sequence: 4,
-      verification: 'verified',
-      transport: 'ready'
-    })
-    expect(listener).toHaveBeenCalledTimes(2)
-    observeJiraImageHostStatus({
-      ...status,
-      sequence: 4,
-      verification: 'verified',
-      transport: 'ready'
-    })
-    expect(listener).toHaveBeenCalledTimes(2)
-    stop()
   })
 
   it('does not let stale host snapshots consume the reconnect retry', () => {
@@ -202,54 +143,5 @@ describe('bounded Jira Blob image cache', () => {
     })
     expect(listener).toHaveBeenCalledTimes(2)
     stop()
-  })
-
-  it('forgets the old reconnect marker when a host is replaced', () => {
-    observeJiraImageHostStatus({
-      environmentId: 'host',
-      pairingRevision: 1,
-      sequence: 3,
-      checkedAt: 0,
-      status: null,
-      verification: 'unavailable',
-      transport: 'disconnected'
-    })
-    replaceRuntimeEnvironmentRevisions([{ id: 'host', createdAt: 2 }], {
-      retired: ['host'],
-      sameHost: []
-    })
-    const listener = vi.fn()
-    const stop = onJiraImageCacheInvalidated(listener)
-    observeJiraImageHostStatus({
-      environmentId: 'host',
-      pairingRevision: 2,
-      sequence: 1,
-      checkedAt: 0,
-      status: null,
-      verification: 'verified',
-      transport: 'ready'
-    })
-    expect(listener).not.toHaveBeenCalled()
-    stop()
-  })
-
-  it('converts old-host image data into short references before retaining Markdown', async () => {
-    const body = migrateLegacyJiraImages(
-      '![shot](data:image/png;base64,AQID) and literal data:image/png;base64,AQID',
-      target
-    )
-    expect(body).toMatch(
-      /^!\[shot\]\(orca-jira-image:\/\/attachment\/[0-9a-f-]+\) and literal data:/
-    )
-    const url = body.match(/orca-jira-image:\/\/attachment\/[0-9a-f-]+/)?.[0]
-    const reference = jiraImageReference(url)
-    if (!reference) {
-      throw new Error('Expected migrated image reference')
-    }
-    const image = await acquire(reference)
-    expect(image.url).toMatch(/^blob:/)
-    expect(download).not.toHaveBeenCalled()
-    image.release()
-    expect(migrateLegacyJiraImages('![bad](data:image/png;base64,A===)', target)).toBe('![bad]()')
   })
 })

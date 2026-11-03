@@ -1,7 +1,10 @@
 import { expect, it, vi } from 'vitest'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { createStructuredAgentSessionOptionState } from './structured-agent-session-options'
+import {
+  commitStructuredAgentSessionOption,
+  createStructuredAgentSessionOptionState
+} from './structured-agent-session-options'
 import { createStructuredSessionSelectionController } from './structured-agent-session-selection-operations'
 import { createStructuredAgentSessionOptionsReadOwner } from './structured-agent-session-options-read-owner'
 
@@ -179,6 +182,59 @@ it('retains same-owner answers and permissions while resetting reports, and seed
   await tick()
   expect(reader.getSnapshot().support).toBe(accepted.support)
   close()
+})
+
+it('keeps its snapshot on an identical answer but still applies one that undoes a local pick', async () => {
+  const { reader, context, reads } = fixture()
+  const close = reader.attach(context)
+  await tick()
+  reads[0].resolve(answer)
+  await tick()
+  const accepted = reader.getSnapshot()
+  const changed = vi.fn()
+  reader.subscribe(changed)
+  reader.invalidate()
+  await tick()
+  reads[1].resolve(structuredClone(answer))
+  await tick()
+  expect(reader.getSnapshot()).toBe(accepted)
+  expect(changed).not.toHaveBeenCalled()
+  expect(context.accepted).toHaveBeenCalledTimes(2)
+
+  // The record fills in place, so an unchanged answer over a pick must still count as a change.
+  reader.updateOptionState((state) => commitStructuredAgentSessionOption(state, 'model', 'picked'))
+  changed.mockClear()
+  reader.invalidate()
+  await tick()
+  reads[2].resolve(structuredClone(answer))
+  await tick()
+  expect(reader.getSnapshot().support).toBe(accepted.support)
+  expect(reader.getSnapshot().optionState.record.values.model?.value).toBe('live')
+  expect(changed).toHaveBeenCalledTimes(1)
+  close()
+})
+
+it('keeps a chat answered while away but holds back its reports and accepted inputs', async () => {
+  const { reader, context, reads } = fixture()
+  const close = reader.attach(context)
+  await tick()
+  reads[0].resolve({
+    ...answer,
+    current: { ...answer.current, acceptedInputSources: { model: 'saved' } }
+  })
+  await tick()
+  close()
+  const left = reader.getSnapshot()
+  reader.markAway()
+  const away = reader.getSnapshot()
+  expect(away.support).toBe(left.support)
+  expect(away.optionState.optionsAnswerPresent).toBe(true)
+  expect(away.optionState.record.values.model?.value).toBe('live')
+  expect(away.optionState.permissionMode).toBe('ask')
+  expect(away.optionState.reportedPermissionMode).toBeUndefined()
+  expect(away.optionState.acceptedInputSources).toEqual({})
+  // A late write through the left chat's record stays out of the one shown on return.
+  expect(away.optionState.record).not.toBe(left.optionState.record)
 })
 
 it('releases failed or closed reads and starts a fresh lease at once while the old reply stays inert', async () => {

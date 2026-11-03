@@ -391,7 +391,7 @@
         "inheritFont": "Même police que l’IDE",
         "fontPreviewLabel": "Aperçu de la police du chat",
         "fontPreview": "Le vif renard brun saute par-dessus le chien paresseux.",
-        "title": "Chat",
+        "title": "Interface de chat",
         "textSize": "Taille du texte",
         "textSizeDescription": "Messages, activité des outils et zone de message. {{increase}} / {{decrease}} dans un chat modifient aussi ce réglage.",
         "codeTextSize": "Taille du texte du code",
@@ -2378,8 +2378,6 @@
         "25690a3855": "Démarrer un espace de travail à partir de la PR",
         "a459866967": "Reprendre l'espace de travail attaché à la PR",
         "347034903a": "Copier le lien GitHub",
-        "5a01ca7253": "Échec de la synchronisation de l'état consulté avec GitHub.",
-        "996a1897d2": "Impossible de synchroniser l'état consulté de cette pull request.",
         "e0b15c793f": "Échec de la copie du lien GitHub",
         "992e799227": "Lien GitHub copié",
         "61bfc81ada": "Impossible d'ouvrir l'espace de travail attaché à cette pull request.",
@@ -7953,7 +7951,6 @@
           "9d3e56ca36": "Appliquer les modifications",
           "f96688b6bc": "Annuler",
           "b7ddae600c": "Terminé",
-          "e4bda7ce6f": "Aucune configuration Ghostty trouvée sur ce système.",
           "b58d4c9051": "Clés non prises en charge",
           "674b5ccd6b": "Aucun nouveau réglage à importer — vos réglages actuels correspondent déjà.",
           "a4c5dec640": "Réglages à mettre à jour",
@@ -19075,6 +19072,7 @@
       "failureWords": {
         "theAgent": "L'agent",
         "providerStartFailed": "{{agent}} s'est arrêté avant d'avoir fini de démarrer.",
+        "savedConversationMissing": "{{agent}} n’a pas trouvé la conversation enregistrée de ce chat.",
         "runCommandAgain": "Relancez /{{command}}.",
         "sendToTryAgain": "Envoyez votre message pour réessayer.",
         "sendAgainToTryOnceMore": "Renvoyez votre message pour réessayer.",
@@ -19128,6 +19126,7 @@
         "attachmentNotAFile": "Une image de ce message n'est pas un fichier, le message n'a donc pas été envoyé.",
         "attachmentNoSource": "Une image de ce message n'a aucun fichier à envoyer, le message n'a donc pas été envoyé.",
         "attachmentInvalid": "Une pièce jointe de ce message ne peut pas être envoyée à l'agent.",
+        "attachmentsExpired": "Expiré : {{names}}.",
         "attachmentUnreadable": "Une pièce jointe de ce message n'a pas pu être lue, le message n'a donc pas été envoyé.",
         "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
         "commandUnavailable": "Cette commande n'est pas disponible dans les chats {{agent}}, elle n'a donc pas été envoyée.",
@@ -19215,6 +19214,7 @@
         "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
         "attachmentExpired": "Cette pièce jointe a expiré.",
         "reattachFile": "Retirez-la et joignez-la à nouveau.",
+        "reattachFiles": "Retirez-les et joignez-les à nouveau.",
         "conversationCleared": "Cette conversation a été effacée.",
         "openCurrentConversation": "Ouvrez la conversation actuelle pour continuer.",
         "clearUnfinished": "Le dernier /clear ne s'est pas terminé.",
@@ -19522,7 +19522,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour continuer dans l'interface de chat.",
-        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse."
+        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
+        "exitUnconfirmed": "{{agent}} exécute cette conversation dans un autre terminal. Quittez-le là-bas ou fermez ce terminal, puis réessayez."
       },
       "state": {
         "loading": {
@@ -20059,6 +20060,13 @@
         "switchAccount": "Changer de compte",
         "addAccount": "Ajouter un compte…",
         "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",
+        "openSetting": "Reprendre automatiquement à la réinitialisation des limites",
+        "cancelled": "Orca ne reprendra pas ce chat automatiquement.",
+        "scheduled": "Orca reprendra ce chat à {{time}}.",
+        "cancel": "Ne pas reprendre"
       }
     },
     "tab": {
@@ -20504,7 +20512,12 @@
         "queueSearchSteer": "orienter",
         "shellEnvSearchVariables": "variables d'environnement",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "usageLimitContinueTitle": "Reprendre automatiquement les chats quand une limite d’utilisation est réinitialisée",
+        "usageLimitContinueCopy": "Orca envoie « Continue where you left off. » quand la limite est réinitialisée. S’applique à tous les chats dont l’heure de réinitialisation est connue.",
+        "usageLimitContinueSearchLimit": "limite d’utilisation",
+        "usageLimitContinueSearchReset": "réinitialisation",
+        "usageLimitContinueToggleLabel": "Activer ou désactiver la reprise des chats à la réinitialisation d’une limite"
       }
     },
     "agentChildRow": {
@@ -20648,6 +20661,9 @@
         "finished": "Worker temporaire d’orchestration terminé · Fermeture dans {{countdown}}",
         "keepOpen": "Garder ouvert"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "S’exécute dans WSL : {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -21053,7 +21069,10 @@
       "title": "Exécuter {{distro}} comme hôte (recommandé)",
       "why": "Git, les fichiers et les terminaux s’exécutent alors nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
       "accept": "Exécuter comme hôte",
-      "projectNotFound": "Impossible de trouver le projet ajouté à déplacer. Utilisez « Déplacer vers l'hôte {{distro}}… » sur le projet dans la barre latérale."
+      "projectNotFound": "Impossible de trouver le projet ajouté à déplacer. Utilisez « Déplacer vers l'hôte {{distro}}… » sur le projet dans la barre latérale.",
+      "existingTitle": "Ajouter sur l’hôte {{distro}} (recommandé)",
+      "existingWhy": "{{distro}} s’exécute déjà comme hôte : Git, les fichiers et les terminaux s’exécutent donc nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
+      "existingAccept": "Ajouter sur l’hôte"
     }
   },
   "editor": {
@@ -22637,6 +22656,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}} : aucune sauvegarde lisible, la section repartira donc de zéro.",
+      "sectionKeptCurrent": "{{section}} : vos exécutions actuelles seront conservées",
       "sectionRestored": "{{section}} : restauré à partir de la sauvegarde du {{time}}.",
       "projectsForgotten": "Orca oubliera vos projets et les détails de leurs espaces de travail. Les fichiers sur le disque ne sont pas modifiés.",
       "newerProjectsRemoved": "Les projets ajoutés après cette sauvegarde seront retirés d'Orca, avec les détails de leurs espaces de travail. Les fichiers sur le disque ne sont pas modifiés.",
@@ -22679,7 +22699,7 @@
       "noneFound": "(aucun élément trouvé)",
       "sqlitePath": "Chemin SQLite : {{path}}",
       "sectionsDamaged": "Une partie de l'état enregistré de ce profil est endommagée : {{sections}}. Tout le reste est intact.",
-      "repairCommand": "Quittez Orca, puis exécutez `{{command}}` pour remplacer uniquement les parties endommagées à partir des sauvegardes et conserver tout le reste. Orca conserve une copie du fichier endommagé.",
+      "repairCommand": "Arrêtez Orca, puis exécutez `{{command}}` pour réparer uniquement les parties endommagées et conserver le reste. Orca garde une copie du fichier endommagé.",
       "restoreWholeBackup": "Pour restaurer plutôt une sauvegarde complète, exécutez `{{exportsCommand}}`, puis `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca ne peut pas ouvrir le profil actif en toute sécurité, car son état SQLite est illisible.",
       "legacyJsonPath": "Chemin de l'ancien fichier JSON : {{path}}",
@@ -22989,7 +23009,9 @@
     "toggleArguments": "Afficher ou masquer les arguments",
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
-    "legacyModelCount": "{{total}} modèles"
+    "legacyModelCount": "{{total}} modèles",
+    "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
+    "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers"
   },
   "wslMove": {
     "entry": {
@@ -23019,7 +23041,8 @@
       "changed": "Déplacé auparavant, puis modifié ici par une version plus ancienne d'Orca. Il n'est pas déplacé à nouveau.",
       "chatsStay": "Les chats existants restent sur cet ordinateur. Les nouveaux chats de ce projet démarrent sur l'hôte WSL.",
       "browserLoginsConflict": "Les connexions du navigateur ne seront pas transférées, car le profil de navigateur de l'hôte est déjà utilisé. Reconnectez-vous dans les onglets de navigateur de l'hôte après le déplacement.",
-      "browserLoginsNotCarried": "Les connexions du navigateur ne seront pas transférées vers cet hôte. Reconnectez-vous dans ses onglets de navigateur après le déplacement."
+      "browserLoginsNotCarried": "Les connexions du navigateur ne seront pas transférées vers cet hôte. Reconnectez-vous dans ses onglets de navigateur après le déplacement.",
+      "why": "Le travail s’exécute alors dans Linux, à côté de vos fichiers : les terminaux, Git et les modifications de fichiers sont plus rapides et plus fiables. Vos projets ne changent pas, et vous pouvez ramener n’importe quel projet avec « Utiliser à nouveau sur cet ordinateur »."
     },
     "cancel": "Annuler",
     "progress": {

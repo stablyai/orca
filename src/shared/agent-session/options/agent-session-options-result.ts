@@ -22,6 +22,8 @@ export type AgentSessionOptionsResult = {
   transcriptPath?: string
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  /** `/compact` takes instructions here; an older host omits this and refuses the field. */
+  compactInstructions?: boolean
   /** Offer goal controls only with threadGoal support; current spans the whole journal, including unloaded pages. */
   threadGoal?: { current: AgentJournalThreadGoal | null; contextFloor?: AgentJournalCursor }
   /** Journal goal changed only by the agent's /goal; separate from threadGoal so older clients never offer host controls. */

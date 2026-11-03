@@ -1,7 +1,7 @@
-import type { AgentSessionOptionResult } from '../../../shared/agent-session/options/agent-session-options-result'
+export { setOptionPlan } from './structured-agent-session-option-mutation-plan'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
-import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -18,7 +18,10 @@ import type {
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
 } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session/agent-session-conversation-command'
+import {
+  agentSessionConversationCommandFields,
+  type AgentSessionConversationCommandResult
+} from '../../../shared/agent-session/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { StructuredAgentSessionBackgroundStopInput } from './structured-agent-session-background-stop'
 import {
@@ -55,6 +58,7 @@ export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
   operationIdScope?: 'global'
+  acceptanceRecord?: (record: AgentSessionRecord) => AgentSessionRecord
   /** Needs no writer lease. */
   conversationWrite?: true
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
@@ -207,6 +211,7 @@ export type ConversationCommandAcceptance =
 /** Accept compact as a submission, or as a queued card later converted to one. */
 export function conversationCommandPlan(params: {
   envelope: AgentSessionMutationEnvelope
+  instructions?: string
   delivery?: 'queue-if-active'
   priorRecord: () => AgentSessionConversationCommandResult | null
 }): MutationPlan<ConversationCommandAcceptance> {
@@ -216,10 +221,7 @@ export function conversationCommandPlan(params: {
     operationIdScope: 'global',
     conversationWrite: true,
     commandReceipt: submissionOrDraftReceipt(clientMessageId),
-    fields: {
-      command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
-      ...(params.delivery ? { delivery: params.delivery } : {})
-    },
+    fields: agentSessionConversationCommandFields(STRUCTURED_AGENT_SESSION_COMPACT_COMMAND, params),
     recoverUnknownFromDurableState: true,
     run: async (ctx) => {
       const sent = await performSend(ctx, {
@@ -227,7 +229,7 @@ export function conversationCommandPlan(params: {
         origin: 'client',
         source: USER_MESSAGE_SOURCE,
         payloadFingerprint: params.envelope.payloadFingerprint,
-        body: structuredAgentSessionCompactBody()
+        body: structuredAgentSessionCompactBody(params.instructions)
       })
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },
@@ -302,35 +304,4 @@ export function promptPlan(
     run: (ctx) => refusingNewerOrcaJournal(performPrompt(ctx, params)),
     replay: (_ctx, _outcome, receipt) => acceptedPromptAnswer(receipt)
   }
-}
-
-export function setOptionPlan(params: { key: string; value: string | null }) {
-  return {
-    method: 'agentSession.setOption',
-    fields: { key: params.key, value: params.value },
-    run: async (ctx): Promise<TurnOutcome<AgentSessionOptionResult>> => {
-      const options =
-        params.value === null ? {} : { ...ctx.persistedOptions, [params.key]: params.value }
-      await ctx.persistOptions(options)
-      ctx.publish()
-      return { ok: true, value: { ...params, options } }
-    },
-    // Reapply unsettled picks; only a settled success can be replayed directly.
-    replay: (ctx, outcome) => {
-      if (outcome.status !== 'succeeded') {
-        return null
-      }
-      if (params.value !== null && Object.hasOwn(outcome, 'optionResult')) {
-        return readNoChoiceOptionResult(outcome.optionResult, {
-          key: params.key,
-          value: params.value
-        })
-      }
-      return {
-        ...params,
-        ...(params.value === null ? { modelDefault: ctx.defaultModelSelected === true } : {}),
-        ...(ctx.persistedOptions ? { options: { ...ctx.persistedOptions } } : {})
-      }
-    }
-  } satisfies MutationPlan<AgentSessionOptionResult>
 }

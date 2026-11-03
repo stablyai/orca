@@ -2,6 +2,7 @@ import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-t
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import { createCoalescingKeyedRunner } from '../../coalescing-keyed-runner'
+import { structuralValuesEqualIgnoringUndefined } from '../../structural-value-equality'
 import { cloneStructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
@@ -43,6 +44,15 @@ type ReadSnapshot = {
 }
 const same = (left: readonly unknown[], right: readonly unknown[]) =>
   left.length === right.length && left.every((value, index) => Object.is(value, right[index]))
+// Answers fill the record in place, so comparing starts before applying; JSON skips the catalog's fresh closures.
+const applyKeepingIdentity = (
+  current: StructuredAgentSessionOptionState,
+  apply: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
+) => {
+  const before = JSON.stringify(current)
+  const next = apply(current)
+  return JSON.stringify(next) === before ? current : next
+}
 
 /** One live scope owns capture, accepted publication and causal retirement on either surface. */
 export function createStructuredAgentSessionOptionsReadOwner(
@@ -134,26 +144,29 @@ export function createStructuredAgentSessionOptionsReadOwner(
       }
       retries = 0
       cancelRetry()
-      snapshot = {
-        optionState: attached.optionCatalog
-          ? applyStructuredAgentSessionOptions(
-              snapshot.optionState,
-              attached.optionCatalog,
-              result,
-              attached
-            )
-          : snapshot.optionState,
-        support: {
-          result,
-          owner: attached.owner,
-          sessionId: attached.sessionId,
-          fence: attached.fence
-        }
+      const before = snapshot
+      const { optionCatalog } = attached
+      const optionState = optionCatalog
+        ? applyKeepingIdentity(before.optionState, (current) =>
+            applyStructuredAgentSessionOptions(current, optionCatalog, result, attached)
+          )
+        : before.optionState
+      const support =
+        before.support &&
+        same(before.support.owner, attached.owner) &&
+        before.support.fence === attached.fence &&
+        structuralValuesEqualIgnoringUndefined(before.support.result, result)
+          ? before.support
+          : { result, owner: attached.owner, sessionId: attached.sessionId, fence: attached.fence }
+      if (optionState !== before.optionState || support !== before.support) {
+        snapshot = { optionState, support }
       }
       attached.accepted?.()
       attached.controller.setModelDefault(result.current.modelDefault === true)
       attached.controller.retire(completed)
-      notify()
+      if (snapshot !== before) {
+        notify()
+      }
     }).catch(() => undefined)
   }
   const invalidate = () => {
@@ -205,6 +218,21 @@ export function createStructuredAgentSessionOptionsReadOwner(
       }
     },
     invalidate,
+    /** Its view moved to another chat: the answer stays to show on return, but the process may restart
+     * and the options move meanwhile, so its reports and accepted inputs wait for the next answer. */
+    markAway() {
+      const current = snapshot.optionState
+      snapshot = {
+        ...snapshot,
+        optionState: {
+          ...current,
+          record: cloneStructuredAgentSessionOptionRecord(current.record),
+          reportedPermissionMode: undefined,
+          reportedEffort: undefined,
+          ...(current.acceptedInputSources ? { acceptedInputSources: {} } : {})
+        }
+      }
+    },
     attach(context: ReadContext) {
       const sameOwner = !previous || same(previous.owner, context.owner)
       if (!previous || !sameOwner || !same(previous.reset, context.reset)) {
@@ -250,15 +278,17 @@ export function createStructuredAgentSessionOptionsReadOwner(
       if (!context) {
         return
       }
-      updateOptionState((current) =>
-        catalog && context.optionCatalog
-          ? applyStructuredAgentSessionModelCatalog(
-              current,
-              context.optionCatalog,
-              catalog,
-              context
-            )
-          : settleStructuredAgentSessionBuiltinCatalog(current, false)
+      updateOptionState((state) =>
+        applyKeepingIdentity(state, (current) =>
+          catalog && context.optionCatalog
+            ? applyStructuredAgentSessionModelCatalog(
+                current,
+                context.optionCatalog,
+                catalog,
+                context
+              )
+            : settleStructuredAgentSessionBuiltinCatalog(current, false)
+        )
       )
       if (
         !context.coherentCatalog &&

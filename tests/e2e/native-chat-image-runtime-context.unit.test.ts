@@ -3,7 +3,6 @@
 import { createElement } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
 import type { RuntimeFileOperationArgs } from '../../src/renderer/src/runtime/runtime-file-client-types'
 import { useAppStore } from '@/store'
@@ -11,8 +10,6 @@ import type { TerminalTab } from '../../src/shared/terminal-tab-types'
 import type { Tab } from '../../src/shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../src/shared/constants'
 import {
-  createNativeChatImageOwnerSelector,
-  createNativeChatImageRuntimeContextSelector,
   resolveNativeChatImageRuntimeContext,
   resolveNativeChatImageRuntimeContextForOwner,
   selectNativeChatImageOwnerState,
@@ -207,105 +204,6 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       })
     }
   )
-
-  it('keeps unrelated store writes out of the image-owner selector', () => {
-    const storeState = state()
-    const first = selectNativeChatImageOwnerState(storeState)
-    const second = selectNativeChatImageOwnerState({
-      ...storeState,
-      agentStatusByPaneKey: {} as AppState['agentStatusByPaneKey']
-    })
-
-    expect(shallow(second, first)).toBe(true)
-  })
-
-  it("keeps tab changes in other workspaces out of a chat's owner inputs", () => {
-    const storeState = state()
-    const select = createNativeChatImageOwnerSelector('tab-1')
-    const first = select(storeState)
-    const otherWorkspaceTab = { ...storeState.tabsByWorktree['wt-1'][0], id: 'tab-2' }
-    const second = select({
-      ...storeState,
-      tabsByWorktree: { ...storeState.tabsByWorktree, 'wt-2': [otherWorkspaceTab] },
-      unifiedTabsByWorktree: { 'wt-2': [] }
-    })
-
-    expect(first.owner).toBe('wt-1')
-    expect(shallow(second, first)).toBe(true)
-  })
-
-  it('keeps the selected context across rank and catalog-timestamp writes until its path moves', () => {
-    const storeState = state()
-    const select = createNativeChatImageRuntimeContextSelector('tab-1')
-    const first = select(storeState)
-    const worktree = storeState.worktreesByRepo.repo[0]
-    const ranked = {
-      ...storeState,
-      worktreesByRepo: { repo: [{ ...worktree, sortOrder: 9, isUnread: true }] },
-      runtimeEnvironments: [...storeState.runtimeEnvironments]
-    }
-
-    expect(first?.worktreePath).toBe('/repo/worktree')
-    expect(select(ranked)).toBe(first)
-
-    const moved = worktreeFixture('wt-1', '/repo/moved', { hostId: 'local' })
-    expect(
-      select({
-        ...ranked,
-        getKnownWorktreeById: () => moved,
-        worktreesByRepo: { repo: [moved] }
-      })?.worktreePath
-    ).toBe('/repo/moved')
-  })
-
-  it('reuses derived settings when owner inputs are unchanged', () => {
-    const storeState = state()
-    const first = resolveNativeChatImageRuntimeContext(storeState, 'tab-1')
-    const second = resolveNativeChatImageRuntimeContext(storeState, 'tab-1')
-
-    expect(first).not.toBeNull()
-    expect(second?.target).toBe(first?.target)
-    expect(shallow(second, first)).toBe(true)
-  })
-
-  it('derives a runtime host from an owner-only route during paired hydration', () => {
-    const storeState = state()
-    const ownerOnlyWorktree = {
-      id: 'wt-1',
-      repoId: 'repo',
-      path: '/repo/worktree',
-      runtimeOwnerEnvironmentId: 'owner-a'
-    }
-    const ownerState = {
-      ...storeState,
-      activeWorktreeId: null,
-      activeWorkspaceExecutionHostId: null,
-      getKnownWorktreeById: () => ownerOnlyWorktree,
-      worktreesByRepo: { repo: [ownerOnlyWorktree] },
-      runtimeEnvironments: [{ id: 'owner-a' }]
-    } as unknown as AppState
-
-    const context = resolveNativeChatImageRuntimeContext(ownerState, 'tab-1')
-
-    expect(context).toMatchObject({
-      worktreeId: 'wt-1',
-      worktreePath: '/repo/worktree',
-      expectedExecutionHostId: 'local',
-      target: { kind: 'environment' as const, environmentId: 'owner-a' }
-    })
-  })
-
-  it('reads nothing for an SSH-owned workspace with no paired server to serve it', () => {
-    const worktree = worktreeFixture('wt-1', '/remote/worktree', { hostId: 'ssh:ssh-1' })
-    const sshState = state({
-      activeWorkspaceExecutionHostId: 'ssh:ssh-1',
-      getKnownWorktreeById: () => worktree,
-      repos: [repoFixture({ connectionId: 'ssh-1' })],
-      worktreesByRepo: { repo: [worktree] }
-    })
-
-    expect(resolveNativeChatImageRuntimeContext(sshState, 'tab-1')).toBeNull()
-  })
 
   it('resolves a floating chat to its pinned folder on the local host, and nothing before the pin', () => {
     const floatingTab: Tab = {

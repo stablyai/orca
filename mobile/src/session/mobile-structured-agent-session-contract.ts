@@ -1,5 +1,5 @@
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
-import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type {

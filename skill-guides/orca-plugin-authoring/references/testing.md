@@ -28,7 +28,7 @@
 - `find(query: TestQuery)`: The innermost match, or null.
 - `findAll(query: TestQuery)`
 - `tree()`: The drawn tree as plain data, for snapshots; handlers show as `[handler]`.
-- `summary()`: One line per thing a person notices first: headings, callouts, empty states, table and tree sizes, the selected tab, loading placeholders, danger or warning text.
+- `summary()`: One line per thing a person notices first: headings, callouts, empty states, table and tree sizes, the selected tab, loading placeholders, danger or warning text and boxes.
 - `press(target: Target)`: Each act grants one gesture (a press) and resolves once the panel has settled.
 - `type(target: Target, text: string, options?: { replace?: boolean; submit?: boolean })`: Types after what the field holds (`replace` clears it first); `submit` presses Enter.
 - `submit(target: Target)`

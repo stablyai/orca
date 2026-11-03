@@ -14,7 +14,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { nativeChatSessionChoiceLabel } from '../../../../shared/native-chat-session-option-labels'
+import { nativeChatSessionChoiceLabel } from '../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
