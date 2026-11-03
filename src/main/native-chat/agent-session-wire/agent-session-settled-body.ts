@@ -42,8 +42,9 @@ export function settledBodyPresentation(
       resolution: {
         state: body.resolution.state,
         selectedOptionId: null,
-        resolvedBy: null,
-        resolvedAt: null
+        // Readers project the device from the resolver, so the outcome row stays on the head.
+        resolvedBy: body.resolution.resolvedBy,
+        resolvedAt: body.resolution.resolvedAt
       }
     },
     ...(supported

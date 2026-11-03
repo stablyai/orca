@@ -44,6 +44,20 @@ export function nativeChatReceiptDevice(
 export type NativeChatResolvedPrompt = (AgentJournalApprovalItem | AgentJournalQuestionItem) & {
   deferredBody?: { itemId: string; revision: number; descriptor: AgentSessionSettledBodyDescriptor }
 }
+/** A loaded settled body carries the answers; its head carries the per-reader outcome row. */
+export function nativeChatReceiptBody(
+  presentation: NativeChatResolvedPrompt,
+  loaded: NativeChatResolvedPrompt | null
+): NativeChatResolvedPrompt {
+  if (!presentation.deferredBody || !loaded) {
+    return presentation
+  }
+  const { resolvedBy, resolvedByDevice, resolvedAt } = presentation.resolution
+  return {
+    ...loaded,
+    resolution: { ...loaded.resolution, resolvedBy, resolvedByDevice, resolvedAt }
+  }
+}
 /** `answer` is '' for an explicitly empty text answer and null when the answer cannot be read. */
 export type NativeChatReceiptAnswer = { question: string | null; answer: string | null }
 

@@ -10,6 +10,7 @@ import {
   STRUCTURED_CLIENT
 } from './structured-agent-session-rpc.test-fixture'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { AGENT_SESSION_SETTLED_BODY_CAPABILITY } from '../../../../shared/agent-session-settled-body'
 
 const DEVICE_ID = '5d857d9e-ec3f-4762-b7f4-69691f580707'
 const receipt: AgentJournalRenderItem = {
@@ -157,3 +158,59 @@ it.each(['desktop-renderer', 'trusted-local:runtime'])(
     })
   }
 )
+
+it.each([
+  [DEVICE_ID, { kind: 'current' }],
+  ['another-reader', { kind: 'named', name: "Kelvin's iPhone" }]
+] as const)('keeps a settled form head projectable for reader %s', async (clientId, device) => {
+  const form: AgentJournalRenderItem = {
+    itemId: 'form-1',
+    sequence: 2,
+    revision: 3,
+    observedAt: 11,
+    body: {
+      kind: 'approval',
+      title: 'Configure report',
+      detail: null,
+      options: [],
+      form: { fields: [{ name: 'name', required: true, schema: { type: 'string' } }] },
+      resolution: {
+        state: 'resolved',
+        selectedOptionId: null,
+        formContent: { name: 'x' },
+        resolvedBy: DEVICE_ID,
+        resolvedAt: 11
+      }
+    }
+  }
+  hostCalls.journalSnapshot.mockReturnValue({
+    sessionId: SESSION,
+    cursor: { epoch: 'epoch-a', sequence: 2 },
+    items: [form],
+    submissions: []
+  })
+  const response = await call(
+    'agentSession.item',
+    { sessionId: SESSION, itemId: 'form-1' },
+    {
+      ...STRUCTURED_CLIENT,
+      clientId,
+      clientCapabilities: [
+        ...STRUCTURED_CLIENT.clientCapabilities,
+        AGENT_SESSION_SETTLED_BODY_CAPABILITY
+      ]
+    },
+    { readPairedDeviceName: (id: string) => (id === DEVICE_ID ? "Kelvin's iPhone" : null) }
+  )
+  expect(response).toMatchObject({
+    ok: true,
+    result: {
+      item: {
+        settledBody: { state: 'resolved' },
+        body: { resolution: { resolvedBy: DEVICE_ID, resolvedAt: 11, resolvedByDevice: device } }
+      }
+    }
+  })
+  expect(response).not.toHaveProperty('result.item.body.form')
+  expect(response).not.toHaveProperty('result.item.body.resolution.formContent')
+})

@@ -143,6 +143,77 @@ it('automatically hydrates a projected saved phone receipt and displays exact se
   }
 })
 
+it.each([
+  [{ kind: 'current' }, 'this phone'],
+  [{ kind: 'named', name: 'Work Mac' }, 'Work Mac'],
+  [undefined, 'another device']
+] satisfies [NativeChatResolvedPrompt['resolution']['resolvedByDevice'], string][])(
+  'keeps the head outcome %j once a settled phone form body loads',
+  async (resolvedByDevice, device) => {
+    const resolution = {
+      state: 'resolved' as const,
+      selectedOptionId: null,
+      resolvedBy: 'paired-reader',
+      resolvedAt: 1000
+    }
+    const loaded: NativeChatResolvedPrompt = {
+      kind: 'approval',
+      title: 'Saved form',
+      detail: null,
+      options: [],
+      form: { fields: [{ name: 'answer', required: true, schema: { type: 'string' } }] },
+      resolution: { ...resolution, formContent: { answer: 'blue' } }
+    }
+    const descriptor = {
+      contract: AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+      version: 'approval-json.v1' as const,
+      state: 'resolved' as const
+    }
+    const source = {
+      ...descriptor,
+      sessionId: 'host',
+      epoch: 'epoch',
+      itemId: 'item-1',
+      revision: 2
+    }
+    const reader = createAgentSessionSettledBodyReader(async (request) => ({
+      source,
+      ...agentSessionJsonPiece(JSON.stringify(loaded), request.cursor)
+    }))
+    let mounted!: ReactTestRenderer
+    try {
+      await act(async () => {
+        mounted = create(
+          createElement(
+            MobileNativeChatSettledBodyContext.Provider,
+            { value: { reader, sessionId: 'host', epoch: 'epoch' } },
+            createElement(MobileNativeChatResolutionReceipt, {
+              fontScale: 1,
+              body: {
+                kind: 'approval',
+                title: 'Saved form',
+                detail: null,
+                options: [],
+                resolution: { ...resolution, resolvedByDevice },
+                deferredBody: { itemId: 'item-1', revision: 2, descriptor }
+              }
+            })
+          )
+        )
+      })
+      await act(async () => {
+        await vi.waitFor(() => expect(reader.getSnapshot(source).status).toBe('ready'))
+      })
+      const text = mounted.root.findAllByType(Text).map((node) => node.children.join(''))
+      expect(text).toContain('blue')
+      expect(text).toContain(`Resolved · Answered on ${device}`)
+    } finally {
+      await act(async () => mounted?.unmount())
+      reader.dispose()
+    }
+  }
+)
+
 it('renders saved whole-form receipt values on phone through the existing receipt component', async () => {
   let mounted!: ReactTestRenderer
   await act(async () => {

@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import {
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswerEntries,
+  nativeChatReceiptBody,
   nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
@@ -29,8 +30,10 @@ export function MobileNativeChatResolutionReceipt({
   fontScale: number
 }): React.JSX.Element | null {
   const hydrated = useMobileNativeChatSettledBody(presentation)
-  const body: NativeChatResolvedPrompt =
-    presentation.deferredBody && hydrated.status === 'ready' ? hydrated.body : presentation
+  const body = nativeChatReceiptBody(
+    presentation,
+    hydrated.status === 'ready' ? hydrated.body : null
+  )
   const incomplete = !!body.deferredBody
   useMobileColorScheme()
   const t = useMobileTranslation()

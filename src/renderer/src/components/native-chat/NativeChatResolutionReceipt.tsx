@@ -9,6 +9,7 @@ import {
   NATIVE_CHAT_RECEIPT_COPY,
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswerEntries,
+  nativeChatReceiptBody,
   nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
@@ -27,8 +28,10 @@ export function NativeChatResolutionReceipt({
 }): React.JSX.Element | null {
   useUiLanguageRevision()
   const hydrated = useNativeChatSettledBody(presentation)
-  const body: NativeChatResolvedPrompt =
-    presentation.deferredBody && hydrated.status === 'ready' ? hydrated.body : presentation
+  const body = nativeChatReceiptBody(
+    presentation,
+    hydrated.status === 'ready' ? hydrated.body : null
+  )
   const incomplete = !!body.deferredBody
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
   const subject = nativeChatReceiptSubject(body)

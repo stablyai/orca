@@ -299,6 +299,68 @@ describe('resolution receipts', () => {
     }
   )
 
+  it.each([
+    [{ kind: 'current' }, 'this computer'],
+    [{ kind: 'named', name: 'My iPhone' }, 'My iPhone'],
+    [undefined, 'another device']
+  ] satisfies [NativeChatResolvedPrompt['resolution']['resolvedByDevice'], string][])(
+    'keeps the head outcome %j once a settled form body loads',
+    async (resolvedByDevice, device) => {
+      const loaded: NativeChatResolvedPrompt = {
+        ...approval,
+        title: 'Saved form',
+        detail: null,
+        options: [],
+        form: { fields: [{ name: 'answer', required: true, schema: { type: 'string' } }] },
+        resolution: {
+          ...approval.resolution,
+          selectedOptionId: null,
+          formContent: { answer: 'blue' }
+        }
+      }
+      const descriptor = {
+        contract: AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+        version: 'approval-json.v1' as const,
+        state: 'resolved' as const
+      }
+      const source = {
+        ...descriptor,
+        sessionId: 'host',
+        epoch: 'epoch',
+        itemId: 'item-1',
+        revision: 2
+      }
+      const reader = createAgentSessionSettledBodyReader(async (request) => ({
+        source,
+        ...agentSessionJsonPiece(JSON.stringify(loaded), request.cursor)
+      }))
+      const owner = Object.freeze({ reader, sessionId: 'host', epoch: 'epoch' })
+      const view = render(
+        <NativeChatSettledBodyContext.Provider value={owner}>
+          <NativeChatResolutionReceipt
+            body={{
+              ...approval,
+              title: 'Saved form',
+              options: [],
+              resolution: { ...approval.resolution, selectedOptionId: null, resolvedByDevice },
+              deferredBody: { itemId: 'item-1', revision: 2, descriptor }
+            }}
+          />
+        </NativeChatSettledBodyContext.Provider>
+      )
+      try {
+        await act(async () => {
+          await vi.waitFor(() => expect(reader.getSnapshot(source).status).toBe('ready'))
+        })
+        expect(screen.getByText('blue')).toBeInTheDocument()
+        expect(screen.getByText(`Answered on ${device}`)).toBeInTheDocument()
+      } finally {
+        view.unmount()
+        reader.dispose()
+      }
+    }
+  )
+
   it('uses the SDK display name in the compact resolved receipt', () => {
     render(
       <NativeChatResolutionReceipt
