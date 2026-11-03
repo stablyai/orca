@@ -10,7 +10,7 @@ import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { withBoundedCacheEntry } from './cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'
-import { inflightCommentsRequests } from './request-coordination'
+import { inflightCommentsRequests, trackGitHubMutationCacheWrite } from './request-coordination'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
@@ -41,71 +41,78 @@ export const createCommentMutationActions = (
         options?.sourceContext,
         repo !== undefined
       )
-      const requestContext = getGitHubWorkItemRequestContext(
-        get(),
-        getGitHubSourceTarget(get(), repo, options?.sourceContext),
-        repoId ?? repoPath,
-        repoPath,
-        options?.sourceContext
-      )
-      const result: GitHubCommentResult =
-        requestContext.target.kind === 'environment'
-          ? await callRuntimeRpc<GitHubCommentResult>(
-              { kind: 'environment', environmentId: requestContext.target.environmentId },
-              'github.addPRReviewCommentReply',
-              {
-                repo: requestContext.target.runtimeRepoId,
+      const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
+      try {
+        const requestContext = getGitHubWorkItemRequestContext(
+          get(),
+          getGitHubSourceTarget(get(), repo, options?.sourceContext),
+          repoId ?? repoPath,
+          repoPath,
+          options?.sourceContext
+        )
+        const result: GitHubCommentResult =
+          requestContext.target.kind === 'environment'
+            ? await callRuntimeRpc<GitHubCommentResult>(
+                { kind: 'environment', environmentId: requestContext.target.environmentId },
+                'github.addPRReviewCommentReply',
+                {
+                  repo: requestContext.target.runtimeRepoId,
+                  prNumber,
+                  commentId,
+                  body,
+                  threadId: options?.threadId,
+                  path: options?.path,
+                  line: options?.line,
+                  prRepo: options?.prRepo ?? null
+                },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.addPRReviewCommentReply({
+                repoPath,
+                repoId,
                 prNumber,
                 commentId,
                 body,
                 threadId: options?.threadId,
                 path: options?.path,
                 line: options?.line,
-                prRepo: options?.prRepo ?? null
-              },
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.addPRReviewCommentReply({
-              repoPath,
-              repoId,
-              prNumber,
-              commentId,
-              body,
-              threadId: options?.threadId,
-              path: options?.path,
-              line: options?.line,
-              prRepo: options?.prRepo ?? null,
-              ...hostedReviewOwnerIpcArgs(options),
-              sourceContext: options?.sourceContext
-            })
-      if (!hasUsableCommentPayload(result)) {
-        return result.ok
-          ? {
-              ok: false,
-              error: translate(
-                'auto.store.slices.github.f129c42773',
-                'GitHub did not return the new comment.'
-              )
-            }
-          : result
-      }
-      const comment: PRComment = {
-        ...result.comment,
-        threadId: result.comment.threadId ?? options?.threadId,
-        path: result.comment.path ?? options?.path,
-        line: result.comment.line ?? options?.line
-      }
-      set((s) => {
-        const entry = s.commentsCache[cacheKey]
-        return {
-          commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
-            data: mergePRCommentIntoList(entry?.data, comment),
-            fetchedAt: Date.now()
-          })
+                prRepo: options?.prRepo ?? null,
+                ...hostedReviewOwnerIpcArgs(options),
+                sourceContext: options?.sourceContext
+              })
+        if (!hasUsableCommentPayload(result)) {
+          return result.ok
+            ? {
+                ok: false,
+                error: translate(
+                  'auto.store.slices.github.f129c42773',
+                  'GitHub did not return the new comment.'
+                )
+              }
+            : result
         }
-      })
-      inflightCommentsRequests.get(cacheKey)?.postedComments.push(comment)
-      return { ok: true, comment }
+        const comment: PRComment = {
+          ...result.comment,
+          threadId: result.comment.threadId ?? options?.threadId,
+          path: result.comment.path ?? options?.path,
+          line: result.comment.line ?? options?.line
+        }
+        if (cacheWrite.isCurrent()) {
+          set((s) => {
+            const entry = s.commentsCache[cacheKey]
+            return {
+              commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+                data: mergePRCommentIntoList(entry?.data, comment),
+                fetchedAt: Date.now()
+              })
+            }
+          })
+          inflightCommentsRequests.get(cacheKey)?.postedComments.push(comment)
+        }
+        return { ok: true, comment }
+      } finally {
+        cacheWrite.dispose()
+      }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -138,65 +145,14 @@ export const createCommentMutationActions = (
         options?.sourceContext,
         repo !== undefined
       )
-      const previousComment = get().commentsCache[cacheKey]?.data?.find(
-        (comment) => comment.reactionSubjectId === reactionSubjectId
-      )
-      const previousReaction = previousComment?.reactions?.find(
-        (reaction) => reaction.content === content
-      )
-      set((state) => {
-        const entry = state.commentsCache[cacheKey]
-        if (!entry?.data) {
-          return state
-        }
-        return {
-          commentsCache: {
-            ...state.commentsCache,
-            [cacheKey]: {
-              ...entry,
-              data: setReactionOnSubject(entry.data, reactionSubjectId, content, reacted)
-            }
-          }
-        }
-      })
-
-      let ok = false
+      const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
       try {
-        const requestContext = getGitHubWorkItemRequestContext(
-          get(),
-          getGitHubSourceTarget(get(), repo, options?.sourceContext),
-          repoId ?? repoPath,
-          repoPath,
-          options?.sourceContext
+        const previousComment = get().commentsCache[cacheKey]?.data?.find(
+          (comment) => comment.reactionSubjectId === reactionSubjectId
         )
-        ok =
-          requestContext.target.kind === 'environment'
-            ? await callRuntimeRpc<boolean>(
-                { kind: 'environment', environmentId: requestContext.target.environmentId },
-                'github.setPRCommentReaction',
-                {
-                  repo: requestContext.target.runtimeRepoId,
-                  reactionSubjectId,
-                  content,
-                  reacted,
-                  prRepo: options?.prRepo ?? null
-                },
-                { timeoutMs: 30_000 }
-              )
-            : await window.api.gh.setPRCommentReaction({
-                repoPath,
-                repoId,
-                reactionSubjectId,
-                content,
-                reacted,
-                prRepo: options?.prRepo ?? null,
-                ...hostedReviewOwnerIpcArgs(options),
-                sourceContext: options?.sourceContext
-              })
-      } catch (err) {
-        console.error('Failed to update PR comment reaction:', err)
-      }
-      if (!ok && previousComment) {
+        const previousReaction = previousComment?.reactions?.find(
+          (reaction) => reaction.content === content
+        )
         set((state) => {
           const entry = state.commentsCache[cacheKey]
           if (!entry?.data) {
@@ -207,18 +163,74 @@ export const createCommentMutationActions = (
               ...state.commentsCache,
               [cacheKey]: {
                 ...entry,
-                data: restoreReactionOnSubject(
-                  entry.data,
-                  reactionSubjectId,
-                  content,
-                  previousReaction
-                )
+                data: setReactionOnSubject(entry.data, reactionSubjectId, content, reacted)
               }
             }
           }
         })
+
+        let ok = false
+        try {
+          const requestContext = getGitHubWorkItemRequestContext(
+            get(),
+            getGitHubSourceTarget(get(), repo, options?.sourceContext),
+            repoId ?? repoPath,
+            repoPath,
+            options?.sourceContext
+          )
+          ok =
+            requestContext.target.kind === 'environment'
+              ? await callRuntimeRpc<boolean>(
+                  { kind: 'environment', environmentId: requestContext.target.environmentId },
+                  'github.setPRCommentReaction',
+                  {
+                    repo: requestContext.target.runtimeRepoId,
+                    reactionSubjectId,
+                    content,
+                    reacted,
+                    prRepo: options?.prRepo ?? null
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.gh.setPRCommentReaction({
+                  repoPath,
+                  repoId,
+                  reactionSubjectId,
+                  content,
+                  reacted,
+                  prRepo: options?.prRepo ?? null,
+                  ...hostedReviewOwnerIpcArgs(options),
+                  sourceContext: options?.sourceContext
+                })
+        } catch (err) {
+          console.error('Failed to update PR comment reaction:', err)
+        }
+        if (!ok && previousComment && cacheWrite.isCurrent()) {
+          set((state) => {
+            const entry = state.commentsCache[cacheKey]
+            if (!entry?.data) {
+              return state
+            }
+            return {
+              commentsCache: {
+                ...state.commentsCache,
+                [cacheKey]: {
+                  ...entry,
+                  data: restoreReactionOnSubject(
+                    entry.data,
+                    reactionSubjectId,
+                    content,
+                    previousReaction
+                  )
+                }
+              }
+            }
+          })
+        }
+        return ok
+      } finally {
+        cacheWrite.dispose()
       }
-      return ok
     } catch {
       return false
     }

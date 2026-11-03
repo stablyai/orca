@@ -1,6 +1,7 @@
 import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch-surface'
+import { gitHubParticipantFailure } from '../../../shared/github/participant-errors'
 import {
   agentSessionRefusalReference,
   isAgentSessionRefusalError,
@@ -189,6 +190,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+  const participantFailure = gitHubParticipantFailure(message)
+  if (participantFailure) {
+    return errorResponse(id, meta, participantFailure.code, participantFailure.message)
+  }
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
   }

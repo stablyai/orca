@@ -1,5 +1,6 @@
 import { withGitHubRepoExecution } from './github-repository-identity'
 import type { GitHubApiRepository } from './github-api-repository'
+import { resolveHostedReviewGitHubOptions } from '../source-control/hosted-review-git-options'
 import {
   getOwnerRepoForRemote,
   type GitHubRemoteIdentityProbeOptions,
@@ -62,6 +63,7 @@ export async function getGitHubApiRepositoryForRemote(
     if (ownerRepo) {
       return { ...ownerRepo, host: 'github.com' }
     }
+    localGitOptions = resolveHostedReviewGitHubOptions({ localGitExecOptions: localGitOptions })
     const cacheKey = githubApiRepositoryProbeCacheKey(
       repoPath,
       remoteName,

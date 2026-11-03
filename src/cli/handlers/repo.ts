@@ -1,3 +1,4 @@
+import { REPO_GITHUB_MEMBER_HANDLERS } from './repo-github-members'
 import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
@@ -11,6 +12,7 @@ import { RuntimeClientError } from '../runtime/types'
 import { attachCliErrorData } from './worktree-setup-decision-recovery'
 
 export const REPO_HANDLERS: Record<string, CommandHandler> = {
+  ...REPO_GITHUB_MEMBER_HANDLERS,
   'repo list': async ({ client, json }) => {
     const result = await client.call<RuntimeRepoList>('repo.list')
     printResult(result, json, formatRepoList)

@@ -10,12 +10,13 @@ import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-p
 // The probe is a POSIX shell command.
 const enabled = process.env.ORCA_REAL_CODEX_CLI_TEST === '1' && process.platform !== 'win32'
 const SESSION_ID = 'codex_real_command_env'
-const PROBE = 'printf "probe[%s]" "$ORCA_AGENT_SESSION_ID"'
+const PROBE =
+  'printf "probe[%s]proof[%s]" "$ORCA_AGENT_SESSION_ID" "${ORCA_AGENT_SESSION_PROOF:+yes}"'
 
 async function probeIdentity(
   base: string,
   thread: { resumeThreadId: string | null; commandEnv?: Record<string, string> }
-): Promise<{ threadId: string; seen: string }> {
+): Promise<{ threadId: string; seen: string; proofSeen: boolean }> {
   let output = ''
   let turnCompleted = false
   const cwd = join(base, 'workspace')
@@ -50,7 +51,11 @@ async function probeIdentity(
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
     const seen = output.match(/probe\[([^\]%]*)\]/)
-    return { threadId: opened.threadId, seen: seen?.[1] ?? '<no output>' }
+    return {
+      threadId: opened.threadId,
+      seen: seen?.[1] ?? '<no output>',
+      proofSeen: output.match(/proof\[([^\]%]*)\]/)?.[1] === 'yes'
+    }
   } finally {
     await connection.close()
   }
@@ -66,12 +71,16 @@ describe.skipIf(!enabled)('Codex real app-server command env', () => {
         join(base, 'codex-home', 'config.toml'),
         '[shell_environment_policy]\ninherit = "core"\n'
       )
-      const commandEnv = { ORCA_AGENT_SESSION_ID: SESSION_ID }
+      const commandEnv = {
+        ORCA_AGENT_SESSION_ID: SESSION_ID,
+        ORCA_AGENT_SESSION_PROOF: 'fixture-proof'
+      }
       expect((await probeIdentity(base, { resumeThreadId: null })).seen).toBe('')
       const started = await probeIdentity(base, { resumeThreadId: null, commandEnv })
       expect(started.seen).toBe(SESSION_ID)
+      expect(started.proofSeen).toBe(true)
       const resumed = await probeIdentity(base, { resumeThreadId: started.threadId, commandEnv })
-      expect(resumed).toEqual({ threadId: started.threadId, seen: SESSION_ID })
+      expect(resumed).toEqual({ threadId: started.threadId, seen: SESSION_ID, proofSeen: true })
     } finally {
       rmSync(base, { recursive: true, force: true })
     }

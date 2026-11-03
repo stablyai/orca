@@ -1,4 +1,5 @@
 import type {
+  GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
@@ -14,11 +15,19 @@ export type PRRefreshOutcomeObserver = (
 ) => void
 
 const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
+type UnsequencedEvent<Event = GitHubPRRefreshEvent> = Event extends GitHubPRRefreshEvent
+  ? Omit<Event, 'sequence'>
+  : never
 
 export class PRRefreshEventPublisher {
+  private aliasFilter: ((alias: GitHubPRRefreshAlias) => boolean) | null = null
   private sequence = 0
   private observer: PRRefreshOutcomeObserver | null = null
   private readonly counters = { enqueued: 0, coalesced: 0, skipped: 0, backgroundPauses: 0 }
+
+  setAliasFilter(filter: ((alias: GitHubPRRefreshAlias) => boolean) | null): void {
+    this.aliasFilter = filter
+  }
 
   setOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
     this.observer = observer
@@ -33,11 +42,16 @@ export class PRRefreshEventPublisher {
     return this.sequence
   }
 
-  broadcast(event: Omit<GitHubPRRefreshEvent, 'sequence'>, sequenceOverride?: number): void {
-    const payload = {
+  broadcast(event: UnsequencedEvent, sequenceOverride?: number): void {
+    const aliases = this.aliasFilter ? event.aliases.filter(this.aliasFilter) : event.aliases
+    if (aliases.length === 0) {
+      return
+    }
+    const payload: GitHubPRRefreshEvent = {
       ...event,
+      aliases,
       sequence: sequenceOverride ?? this.nextSequence()
-    } as GitHubPRRefreshEvent
+    }
     sendToTrustedUIRenderer('gh:prRefreshEvent', payload)
   }
 

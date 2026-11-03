@@ -8,7 +8,8 @@ import { isFresh, withBoundedCacheEntry } from './cache-policy'
 import {
   inflightCommentsRequests,
   nextProviderRequestId,
-  ownsInflightRequest
+  ownsInflightRequest,
+  trackGitHubMutationCacheWrite
 } from './request-coordination'
 import { mergePRCommentIntoList } from './pr-comment-cache'
 import { findRepoForGitHubOwner } from './repository-routing'
@@ -55,6 +56,7 @@ export const createCommentFetchActions = (
     }
 
     const requestId = nextProviderRequestId()
+    const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
     const requestStartedAt = Date.now()
     // Carry the replaced read's local posts: its reply will no longer publish them.
     const postedComments: PRComment[] = [...(inflightRequest?.postedComments ?? [])]
@@ -99,9 +101,15 @@ export const createCommentFetchActions = (
             throw err
           })
         })
+        if (!cacheWrite.isCurrent()) {
+          return []
+        }
         if (!ownsInflightRequest(inflightCommentsRequests, cacheKey, requestId)) {
           // Its callers show the owner's answer, so a late superseded reply cannot repaint older comments.
           await inflightCommentsRequests.get(cacheKey)?.promise
+          if (!cacheWrite.isCurrent()) {
+            return []
+          }
           const latest = get().commentsCache[cacheKey]
           return latest?.data && latest.fetchedAt >= requestStartedAt ? latest.data : comments
         }
@@ -122,8 +130,9 @@ export const createCommentFetchActions = (
         return comments
       } catch (err) {
         console.error('Failed to fetch PR comments:', err)
-        return get().commentsCache[cacheKey]?.data ?? []
+        return cacheWrite.isCurrent() ? (get().commentsCache[cacheKey]?.data ?? []) : []
       } finally {
+        cacheWrite.dispose()
         if (ownsInflightRequest(inflightCommentsRequests, cacheKey, requestId)) {
           inflightCommentsRequests.delete(cacheKey)
         }

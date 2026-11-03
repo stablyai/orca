@@ -122,6 +122,16 @@ export class RuntimeRpcState {
     methods
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
+    runtime.configureGitHubParticipantDevices?.(
+      (id) => this.deviceRegistry?.getDevice(id) ?? null,
+      () =>
+        (this.deviceRegistry?.listDevices() ?? [])
+          .filter(
+            (device) =>
+              !device.parentDeviceId && (device.scope === 'runtime' || device.lastSeenAt > 0)
+          )
+          .map(({ deviceId, name }) => ({ deviceId, name }))
+    )
     this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? ALL_RPC_METHODS })
     this.userDataPath = userDataPath
     this.pid = pid

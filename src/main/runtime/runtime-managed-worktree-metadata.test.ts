@@ -8,7 +8,7 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeStore } from './runtime-store-contract'
 
 describe('updateRuntimeManagedWorktreeMetadata', () => {
-  it('writes metadata through the resolved worktree execution host', async () => {
+  it('writes metadata through the resolved host without accepting forged GitHub ownership', async () => {
     const worktree = {
       id: 'repo-1::/workspace/app',
       repoId: 'repo-1',
@@ -33,7 +33,14 @@ describe('updateRuntimeManagedWorktreeMetadata', () => {
 
     await updateRuntimeManagedWorktreeMetadata({
       selector: `id:${worktree.id}`,
-      updates: { comment: 'remote row only' },
+      updates: {
+        comment: 'remote row only',
+        githubExecutionIdentity: {
+          repoId: 'repo-1',
+          participantId: 'forged',
+          account: { host: 'github.com', user: 'owner' }
+        }
+      },
       store,
       ports
     })

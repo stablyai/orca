@@ -2,6 +2,8 @@ import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-sco
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import { getActiveRpcCaller } from '../../rpc/rpc-active-caller'
+import { rpcCallerOperationKey } from '../../rpc/rpc-caller-identity'
 import { OrcaRuntimeWithCreateAgentSession } from '../../orca-runtime-create-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
@@ -253,7 +255,9 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         : target.repoHostId
           ? `${target.repoHostId}\0${target.repo}`
           : target.repo
-    const key = `${repoKey}\0${clientMutationId}`
+    const caller = getActiveRpcCaller()
+    const callerKey = caller ? rpcCallerOperationKey(caller) : 'trusted-local:runtime'
+    const key = `${callerKey}\0${repoKey}\0${clientMutationId}`
     const inflight = this.worktreeCreateByMutationId.get(key)
     if (inflight) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Callers must use one operation/result type per repo and mutation key.

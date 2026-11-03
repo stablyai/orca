@@ -9,6 +9,7 @@ import {
 import { HOST_TEST_NOW } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { RpcContext } from '../core'
+import type { OrchestrationCompatibilityHostStamp } from '../../../../shared/orchestration-compatibility-evidence'
 import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../rpc-caller-identity'
 import {
   methodNamed,
@@ -206,6 +207,37 @@ it.each([
   expect(append).not.toHaveBeenCalled()
   expect(await cards()).toEqual([])
 })
+
+it.each([
+  { kind: 'wsl', hostId: 'wsl-host', distro: 'Ubuntu' },
+  {
+    kind: 'ssh',
+    targetId: 'ssh-host',
+    connectionIncarnation: 'ssh-incarnation',
+    attachmentId: 'ssh-attachment'
+  }
+] satisfies OrchestrationCompatibilityHostStamp[])(
+  'keeps a $kind session with the same id from recording a handoff in a local chat',
+  async (host) => {
+    const append = vi.spyOn(rig.host, 'appendAgentStart')
+
+    const launched = await launch(
+      { prompt: { text: TASK, delivery: 'submit' } },
+      {
+        ...AGENT_CLI,
+        orchestrationCompatibilityEvidence: {
+          agentSessionId: CALLER,
+          agentSessionSpawnToken: 'foreign-session-proof',
+          host
+        }
+      }
+    )
+
+    expect(launched.outcome.kind).toBe('structured')
+    expect(append).not.toHaveBeenCalled()
+    expect(await cards()).toEqual([])
+  }
+)
 
 it('records nothing when the launch fails, and the failure is the launch’s own', async () => {
   const append = vi.spyOn(rig.host, 'appendAgentStart')

@@ -7,7 +7,7 @@ import type { LegacyWorkerRecoveryCandidate } from '../runtime-legacy-worker-ter
 
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
 
-import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
+import { OrcaRuntimeWithGitHubParticipants } from './runtime-github-participant-services'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
@@ -43,7 +43,7 @@ import { countRepoTerminalsNotKnownExited } from '../project-removal-impact'
 
 type SessionCreateOperation = TerminalContracts.AgentSessionCreateOperation
 
-export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
+export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithGitHubParticipants {
   declare addRepo: RuntimeRepositoryCommandSurface['addRepo']
   declare cloneRepo: RuntimeRepositoryCommandSurface['cloneRepo']
   declare acquireFileWatcherRemoval: ConstructorParameters<

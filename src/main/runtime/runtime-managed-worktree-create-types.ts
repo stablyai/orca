@@ -1,3 +1,4 @@
+import type { GitHubExecutionIdentity } from '../../shared/github/execution-identity'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
@@ -20,6 +21,8 @@ import type { RuntimeRepoSelector } from './runtime-repo-selector'
 export type RuntimeManagedWorktreeCreateArgs = {
   /** A create someone asked for (UI, CLI, agent or paired client): its terminals may start a stopped WSL distro. */
   wslUserAct?: true
+  /** Host-assigned execution owner; excluded from client mutation schemas. */
+  githubExecutionIdentity?: GitHubExecutionIdentity
   repoSelector: RuntimeRepoSelector
   name: string
   nameWasGenerated?: boolean
