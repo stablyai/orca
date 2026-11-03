@@ -1,4 +1,5 @@
 export { serializeJournalRow, journalRowByteLength } from './journal-row-encoding'
+import type { JournalCancellationTarget } from './journal-cancellation-targets'
 import type { JournalInputContext, JournalInputLineage } from './journal-input-lineage'
 import type { JournalItemEcho } from './journal-item-echo'
 // Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
@@ -98,6 +99,8 @@ export type JournalStopEvent = {
   turnId?: string
   at: number
   caller?: string
+  /** Captured before provider shutdown; omitted from the retained queue boundary. */
+  targets?: JournalCancellationTarget[]
 }
 
 export type JournalStopOrResumeRow = JournalTombstoneRow &

@@ -20,32 +20,38 @@ export function structuredAgentSessionStopping(
   /** A Stop bound to an ended generation’s turn is over. */
   scope?: StructuredAgentSessionWorkScope
 ): boolean {
-  const stop = journal.stopMarks.latest()
-  if (stop === null || !stopIsAPersons(stop.event.reason)) {
-    return false
-  }
-  if (stop.settle?.settling === true) {
-    return true
-  }
-  const failed = stop.settle?.failedOn
-  const bound =
-    stop.event.turnId ??
-    stop.settle?.turnId ??
-    (failed && 'turnId' in failed ? failed.turnId : undefined)
+  const latest = journal.stopMarks.latest()
+  const stops = [
+    ...journal.stopMarks.cancellations().map((stop) => ({ ...stop, bound: stop.target?.turnId })),
+    ...(latest?.settle ? [{ ...latest, bound: latest.event.turnId }] : [])
+  ]
   const live = activeStructuredAgentSessionTurnId(
     items,
     scope && ((item) => scope.isCurrentItem(item.itemId))
   )
-  if (bound !== undefined) {
-    return bound === live
-  }
-  if (failed && 'openedAfter' in failed) {
-    // Later handed-over sends open independent turns and cannot inherit this failed Stop.
-    const sentSince = firstSendHandedOverAfter(submissions, failed.openedAfter)
-    const first = firstTurnOpenedAfter(items, failed.openedAfter, sentSince)
-    return first === null ? sentSince === Infinity : first === live
-  }
-  return false
+  return stops.some((stop) => {
+    if (!stopIsAPersons(stop.event.reason)) {
+      return false
+    }
+    if (stop.settle?.settling) {
+      return true
+    }
+    const failed = stop.settle?.failedOn
+    const bound =
+      stop.bound ??
+      stop.event.turnId ??
+      stop.settle?.turnId ??
+      (failed && 'turnId' in failed ? failed.turnId : undefined)
+    if (bound !== undefined) {
+      return bound === live
+    }
+    if (failed && 'openedAfter' in failed) {
+      const sentSince = firstSendHandedOverAfter(submissions, failed.openedAfter)
+      const first = firstTurnOpenedAfter(items, failed.openedAfter, sentSince)
+      return first === null ? sentSince === Infinity : first === live
+    }
+    return false
+  })
 }
 
 function firstSendHandedOverAfter(

@@ -74,8 +74,17 @@ export function journalStopEventRowBuilder(
   event: Omit<JournalStopEvent, 'at'>,
   fence: number
 ): (seq: number, ts: number) => JournalTombstoneRow {
+  const targets = state()
+    .derivedTurnScope.cancellations.capture(fence, event.turnId)
+    .map((target) => ({ ...target }))
   return (seq, ts) =>
-    buildJournalStopEventRow({ state: state(), seq, fence, ts, event: { ...event, at: ts } })
+    buildJournalStopEventRow({
+      state: state(),
+      seq,
+      fence,
+      ts,
+      event: { ...event, ...(targets.length ? { targets } : {}), at: ts }
+    })
 }
 
 export function journalQueueResumeRowBuilder(

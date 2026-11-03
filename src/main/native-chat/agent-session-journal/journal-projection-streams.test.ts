@@ -217,7 +217,7 @@ it.each(['claude', 'codex'] as const)(
         }
       ]
     })
-    expect(journal.stopMarks.latest()?.settle).toBe(settle)
+    expect(journal.stopMarks.cancellations()).toHaveLength(0)
     journal.stopMarks.settled(settle)
     expect(
       restoreJournal(database.db, sessionId)?.state.appliedSettlementIds.has('stop-settlement')

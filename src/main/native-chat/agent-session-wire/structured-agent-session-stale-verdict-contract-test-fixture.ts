@@ -96,7 +96,7 @@ export function journalWith(items: AgentJournalRenderItem[]) {
     snapshot: () => ({ items }),
     itemFence: () => 1,
     lastProviderActivityAt: () => undefined,
-    stopMarks: { latest: () => null },
+    stopMarks: { latest: () => null, observedLiveAt: () => undefined },
     cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
     submissions: () => [],
     appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)

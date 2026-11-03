@@ -4,7 +4,7 @@
 
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { noteHeldStop, type PendingCancellation } from './journal-stop-cancellation'
+import type { PendingCancellation } from './journal-stop-cancellation'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
 export type QueuePauseReason = 'stopped' | 'failed' | 'cleared' | 'restarted'
@@ -66,7 +66,10 @@ export function foldJournalQueuePauseMark(
   if (isReadableStopEvent(row.stopEvent)) {
     // A close or host Stop during an agent's turn must not end what the person stopped.
     const replacesPause = row.stopEvent.reason === 'user-stop' || !journalQueueStopHolds(marks)
-    noteHeldStop(marks, { seq: row.seq, stopEvent: row.stopEvent }, replacesPause)
+    if (replacesPause) {
+      const { targets: _targets, ...event } = row.stopEvent
+      marks.latestStop = { sequence: row.seq, event }
+    }
   } else if (row.queueResume === true) {
     marks.resumedSequence = row.seq
   } else if (row.queueReopen === true) {

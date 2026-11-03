@@ -145,7 +145,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     // Repeated same-cause closes include newer queued work and rebind what shutdown cuts.
     child.close.requestedAt = session.journal.cursor()
     child.close.recorded = child.close.recorded.then((settle) =>
-      settle ? session.journal.stopMarks.beginSettle() : null
+      settle ? Object.assign(settle, { settling: true }) : null
     )
   }
   const { close } = child

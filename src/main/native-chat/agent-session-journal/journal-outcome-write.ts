@@ -1,5 +1,6 @@
 import { journalInputAcceptance } from './journal-input-provenance'
 import { copyJournalNativeState } from './journal-input-conversion'
+import { carryStopCancellations } from './journal-stop-cancellation'
 import { journalInputOrder } from './journal-input-order'
 import type Database from '../../sqlite/sync-database'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
@@ -65,6 +66,9 @@ export function publishJournalOutcomeEpoch(
     undefined,
     true,
     (state) => {
+      if (previous) {
+        carryStopCancellations(previous, state, state.items.values())
+      }
       journalInputOrder(state).restore(state)
       journalInputOrder(state).finishReconstruction(state)
     }

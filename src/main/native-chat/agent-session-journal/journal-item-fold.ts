@@ -10,7 +10,9 @@ import {
   namesAgentJournalProducer
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { retirePendingCancellation } from './journal-stop-cancellation'
+import { foldCancellationTurn, retireCancellation } from './journal-stop-cancellation'
+import { turnOpeningClientId } from './journal-cancellation-targets'
+import { journalItemExecutionFence } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
 
 export function statedOrDerivedTurnScope(
@@ -44,7 +46,7 @@ export function upsertJournalItem(
     state.items.set(itemId, next)
     state.itemFences.set(itemId, fences.ownerFence ?? fences.fence)
     state.tombstones.delete(itemId)
-    retireResolvedTurn(state, next.body)
+    observeExecution(state, next)
     return
   }
   // Pin creation position/time so provider echoes cannot move submitted bubbles below later messages.
@@ -65,14 +67,12 @@ export function upsertJournalItem(
     turnScope: existing.turnScope ?? next.turnScope
   })
   state.tombstones.delete(itemId)
-  retireResolvedTurn(state, submitted ? existing.body : next.body)
+  observeExecution(state, state.items.get(itemId)!)
 }
 
-function retireResolvedTurn(state: JournalReducerState, body: AgentJournalItemBody): void {
-  const turn = readAgentJournalTurn(body)
-  if (turn !== null && turn.state !== 'running' && turn.state !== 'unverifiable') {
-    retirePendingCancellation(state.queuePauseMarks, turn.turnId)
-  }
+function observeExecution(state: JournalReducerState, item: AgentJournalRenderItem): void {
+  state.derivedTurnScope.cancellations.observeTurn(state, item)
+  foldCancellationTurn(state, item.body, journalItemExecutionFence(state, item.itemId) ?? 0)
 }
 
 export function removeJournalItem(
@@ -95,7 +95,11 @@ export function removeJournalItem(
       existing.body,
       undefined
     )
-    const turnId = readAgentJournalTurn(existing.body)?.turnId
+    const turn = readAgentJournalTurn(existing.body)
+    const clientMessageId = turnOpeningClientId(state, turn?.userItemId ?? itemId)
+    const turnId = turn?.turnId
+    retireCancellation(state, turnId, clientMessageId)
+    state.derivedTurnScope.cancellations.remove(turnId, clientMessageId)
     if (turnId !== undefined) {
       state.removedTurnIds.add(turnId)
     }

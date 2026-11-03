@@ -57,6 +57,14 @@ const pauseMarks = z.object({
     .array(
       z.object({
         sequence: number,
+        target: z
+          .object({
+            ownerFence: number,
+            turnId: z.string().optional(),
+            clientMessageId: z.string().optional()
+          })
+          .optional(),
+        observedAt: number.optional(),
         event: z.object({
           reason: z.string(),
           at: number,
@@ -268,8 +276,12 @@ type StoredIn<F> = F extends 'items'
       : never
 type Marks = State['queuePauseMarks']
 // Live Stop settlement is never stored (durableQueuePauseMarks).
-type StoredMarks = Omit<Marks, 'latestStop'> & {
-  latestStop: { sequence: number; event: JournalStopEvent } | null
+type StoredMarks = Omit<Marks, 'latestStop' | 'pendingCancellations'> & {
+  pendingCancellations?: (Omit<
+    NonNullable<Marks['pendingCancellations']>[number],
+    'settle' | 'event'
+  > & { event: Omit<JournalStopEvent, 'targets'> })[]
+  latestStop: { sequence: number; event: Omit<JournalStopEvent, 'targets'> } | null
 }
 type Scalars = z.output<typeof outcomeFormat1StoredScalars>
 export type OutcomeFormat1DeclaresEveryKey = [

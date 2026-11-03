@@ -89,6 +89,12 @@ function isBoundedComponentRepresentation(value: string): boolean {
   return BOUNDED_COMPONENT_PATTERN.test(value)
 }
 
+export const AGENT_JOURNAL_STOP_NOTE_PREFIX = 'stop:'
+
+export function agentJournalStopNoteIdentity(stopKey: string): AgentJournalItemIdentity {
+  return { provider: 'orca', clientMessageId: `${AGENT_JOURNAL_STOP_NOTE_PREFIX}${stopKey}` }
+}
+
 /** Codex resume renumbers item IDs: key by thread, turn and within-turn ordinal. Forks retain turn IDs, so keep thread identity; Claude forks copy UUIDs, so include session identity. Never key by text. */
 export function agentJournalItemKey(identity: AgentJournalItemIdentity): string {
   // Parsed pre-tag digest keys must keep addressing their persisted revision chain.

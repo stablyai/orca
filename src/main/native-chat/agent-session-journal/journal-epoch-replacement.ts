@@ -1,3 +1,4 @@
+import { carryStopCancellations } from './journal-stop-cancellation'
 import { journalInputOrder } from './journal-input-order'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
@@ -217,7 +218,7 @@ export function replaceJournalEpoch(input: {
     resume()
   }
   if (liveStop) {
-    const row = buildJournalStopEventRow({ ...place(), event: liveStop })
+    const row = buildJournalStopEventRow({ ...place(), event: { ...liveStop, targets: [] } })
     applyJournalRow(state, row)
     rows.push(row)
   }
@@ -232,6 +233,9 @@ export function replaceJournalEpoch(input: {
     rows.push(row)
   }
 
+  if (input.previous) {
+    carryStopCancellations(input.previous, state, state.items.values())
+  }
   journalInputOrder(state).restore(state)
   journalInputOrder(state).finishReconstruction(state)
   const { sessionId } = input.identity

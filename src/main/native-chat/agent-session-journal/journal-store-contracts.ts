@@ -33,6 +33,7 @@ export type AgentSessionJournalOptions = {
   now?: () => number
   mintEpoch?: () => string
   /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
+  stoppedCut?: () => UsageLimitContinueIdentity | undefined
   withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
 }
 

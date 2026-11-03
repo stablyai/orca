@@ -279,16 +279,25 @@ export function registerQueuedMessageStopPauseTests(
 
     it("closing a later report does not lift a person's Stop, and that close still cancels its turn", async () => {
       const journal = await fixture.open()
-      await journal.appendStopEvent({ reason: 'user-stop', turnId: 'A' }, 0)
-      await journal.appendStopEvent({ reason: 'user-close', turnId: 'B' }, 0)
+      for (const turnId of ['A', 'B']) {
+        await journal.appendItem(
+          { provider: 'claude', sessionId: 'native-1', uuid: turnId },
+          { kind: 'turn', turnId, state: 'running' },
+          { fence: 0, turnScope: { kind: 'thread' } }
+        )
+        await journal.appendStopEvent(
+          { reason: turnId === 'A' ? 'user-stop' : 'user-close', turnId },
+          0
+        )
+      }
       expect(fixture.reason(journal)).toBe('stopped')
       expect(journal.stopMarks.personStopDecides('B')).toBe(true)
       expect(journal.stopMarks.personStopDecides('A')).toBe(true)
       const db = new Database(journalDatabasePath(fixture.root))
       try {
         const loaded = restoreJournal(db, fixture.IDENTITY.sessionId)
-        expect(loaded !== undefined && personStopDecidesTurn(loaded.state, 'B')).toBe(true)
-        expect(loaded !== undefined && personStopDecidesTurn(loaded.state, 'A')).toBe(true)
+        expect(loaded != null && personStopDecidesTurn(loaded.state, 'B')).toBe(true)
+        expect(loaded != null && personStopDecidesTurn(loaded.state, 'A')).toBe(true)
       } finally {
         db.close()
       }

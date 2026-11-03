@@ -224,6 +224,7 @@ export function mutateWithChatStop<TValue>(
       turnId: noteTurnId,
       turnScope: target.turnScope,
       previouslyStopped,
+      stopSequence: accepted.value.stopSequence,
       ...((target.reach === 'interrupt' && (target.marks || target.turnId !== null)) ||
       accepted.value.settled
         ? {

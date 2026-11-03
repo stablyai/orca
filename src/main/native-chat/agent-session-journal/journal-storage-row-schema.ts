@@ -87,7 +87,9 @@ const storedRow = z.discriminatedUnion('kind', [
     kind: z.literal('tombstone'),
     itemId: value,
     revision: value,
-    stopEvent: z.object({ reason: value, turnId: value, at: value, caller: value }).optional(),
+    stopEvent: z
+      .object({ reason: value, turnId: value, at: value, caller: value, targets: value })
+      .optional(),
     queueResume: value,
     queueReopen: value,
     queueReopenSince: value,

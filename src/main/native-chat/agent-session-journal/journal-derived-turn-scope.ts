@@ -7,9 +7,11 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { JournalCancellationTargets } from './journal-cancellation-targets'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 
 export class JournalDerivedTurnScope {
+  cancellations = new JournalCancellationTargets()
   private openTurnItemId: string | null = null
 
   snapshot(): string | null {

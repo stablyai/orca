@@ -75,9 +75,8 @@ export function lastProvenTurnLiveAt(
   journal: Pick<AgentSessionJournal, 'stopMarks' | 'itemFence' | 'lastProviderActivityAt'>,
   item: AgentJournalRenderItem
 ): number | undefined {
-  const stop = journal.stopMarks.latest()
   const turnId = readAgentJournalTurn(item.body)?.turnId
-  const stoppedAt = stop && turnId !== undefined && stop.event.turnId === turnId ? stop.event.at : 0
+  const stoppedAt = turnId === undefined ? 0 : (journal.stopMarks.observedLiveAt(turnId) ?? 0)
   const fence = journal.itemFence(item.itemId)
   const providerAt = fence === undefined ? 0 : (journal.lastProviderActivityAt(fence) ?? 0)
   return Math.max(stoppedAt, providerAt) || undefined

@@ -309,11 +309,11 @@ function countCommitWork() {
   const counts = { hooks: 0, scans: 0, renders: 0, cutReads: 0, indexes: 0 }
   let inside: 'hook' | 'cut' | null = null
   const hook = stoppedCut.journalStoppedUsageLimitCut
-  vi.spyOn(stoppedCut, 'journalStoppedUsageLimitCut').mockImplementation((state, rows) => {
+  vi.spyOn(stoppedCut, 'journalStoppedUsageLimitCut').mockImplementation((...args) => {
     counts.hooks++
     inside = 'hook'
     try {
-      return hook(state, rows)
+      return hook(...args)
     } finally {
       inside = null
     }

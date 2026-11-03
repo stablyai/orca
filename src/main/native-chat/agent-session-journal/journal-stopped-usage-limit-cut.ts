@@ -1,6 +1,10 @@
 // A person's accepted Stop withdraws its work's automatic continuation whichever commits first:
 // its acceptance, or the limited end. Settlement binds turns that had no ID when Stop was accepted.
 
+import {
+  agentJournalItemKey,
+  agentJournalStopNoteIdentity
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
@@ -38,18 +42,36 @@ function mayRevealCut(row: JournalRow): boolean {
 /** The known-reset cut this commit leaves for work the latest personal Stop withdrew. */
 export function journalStoppedUsageLimitCut(
   state: JournalReducerState,
-  rows: readonly JournalRow[]
+  rows: readonly JournalRow[],
+  previous: JournalReducerState = state,
+  withdrawn?: UsageLimitContinueIdentity
 ): UsageLimitContinueIdentity | undefined {
-  const stop = state.queuePauseMarks.latestStop
-  if (stop?.event.reason !== 'user-stop') {
+  const accepting = rows.some(
+    (row) => row.kind === 'tombstone' && row.stopEvent?.reason === 'user-stop'
+  )
+  if (!accepting && !rows.some(mayRevealCut)) {
     return undefined
   }
-  // Acceptance withdraws the latest cut, including one its own withdrawals reveal.
-  const accepting = rows.some((row) => row.seq === stop.sequence)
+  const stops = [
+    ...(state.queuePauseMarks.pendingCancellations ?? []),
+    ...(previous.queuePauseMarks.pendingCancellations ?? [])
+  ].filter((stop) => stop.event.reason === 'user-stop')
+  const withdrawnTurn = withdrawn
+    ? readAgentJournalTurn(state.items.get(withdrawn.turnItemId)?.body)?.turnId
+    : undefined
+  const requested = (turnId: string): boolean => {
+    const note = state.items.get(agentJournalItemKey(agentJournalStopNoteIdentity(turnId)))
+    return (
+      note?.turnScope?.kind === 'turn' &&
+      readAgentJournalTurn(state.items.get(note.turnScope.turnItemId)?.body)?.turnId === turnId
+    )
+  }
   const owns = (turnId: string | undefined): boolean =>
     accepting ||
-    stop.settle?.settling === true ||
-    (turnId !== undefined && (turnId === stop.settle?.turnId || turnId === stop.event.turnId))
+    (turnId !== undefined &&
+      (requested(turnId) ||
+        withdrawnTurn === turnId ||
+        stops.some((stop) => stop.target?.turnId === turnId)))
   if (!accepting) {
     const newest = rows.some(mayRevealCut)
       ? newestStructuredAgentSessionTurnBySequence(state.items.values())

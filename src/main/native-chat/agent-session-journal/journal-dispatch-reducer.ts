@@ -6,6 +6,8 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import type { AgentJournalAnsweredTurn } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
+import { agentJournalSubmissionProvenUnwritten } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { retireCancellation } from './journal-stop-cancellation'
 import type { JournalReducerState } from './journal-reducer'
 import {
   noteTurnAccepted,
@@ -49,6 +51,7 @@ export function applyJournalDispatchRow(
   }
   submission.resolvedAt = row.state === 'pending' ? null : row.ts
   if (row.state === 'pending') {
+    state.itemExecutionOwners.set(agentJournalSubmissionKey(submission.clientMessageId), row.fence)
     submission.handedOverAt = row.ts
     placeHandedOverMessage(state, submission, row)
     foldStoppedHistoryCarried(state, row)
@@ -62,6 +65,16 @@ export function applyJournalDispatchRow(
   }
   if (row.state === 'accepted') {
     noteTurnAccepted(state, submission)
+  }
+  if (row.state !== 'accepted') {
+    state.derivedTurnScope.cancellations.observeSubmission(
+      state,
+      submission,
+      state.items.get(agentJournalSubmissionKey(submission.clientMessageId))
+    )
+  }
+  if (row.state === 'rejected' && agentJournalSubmissionProvenUnwritten(submission)) {
+    retireCancellation(state, undefined, submission.clientMessageId)
   }
   if (row.state !== 'accepted' || !row.providerItemId) {
     return

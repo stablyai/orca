@@ -17,13 +17,12 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { journalItemOwnerFence } from './journal-item-provenance'
+import { journalItemExecutionFence, journalItemOwnerFence } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
 import {
   type JournalDispatchRow,
   type JournalItemRow,
   type JournalLifecycleBatchRow,
-  type JournalLifecycleMutation,
   type JournalSubmissionRow,
   type JournalTombstoneRow,
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
@@ -40,7 +39,7 @@ import { nextJournalItemRevision } from './journal-item-revision'
 import type { ResolveDispatchInput, JournalSubmissionInput } from './journal-store-contracts'
 import {
   journalLifecycleMutationItemId,
-  journalLifecycleMutationRow,
+  journalLifecycleMutationForState,
   type JournalItemAddress,
   type JournalLifecycleMutationInput
 } from './journal-lifecycle-mutation'
@@ -183,22 +182,9 @@ export function journalLifecycleBatchRowBuilder(
     }
     const current = state()
     const runningRevisions = revisions ?? new Map<string, number>()
-    const built: JournalLifecycleMutation[] = mutations.map((mutation) => {
-      const itemId = journalLifecycleMutationItemId(mutation)
-      const resolved = current.aliases.get(itemId) ?? itemId
-      const revision = nextJournalItemRevision(current, itemId, runningRevisions)
-      return journalLifecycleMutationRow(
-        mutation.kind === 'item'
-          ? { ...mutation, body: turnEndAfterStop(current, resolved, mutation.body) }
-          : mutation,
-        itemId,
-        revision,
-        journalItemOwnerFence(current, resolved, {
-          fence: options.fence,
-          ownerFence: mutation.kind === 'item' ? mutation.ownerFence : undefined
-        })
-      )
-    })
+    const built = mutations.map((mutation) =>
+      journalLifecycleMutationForState(current, mutation, options.fence, runningRevisions)
+    )
     const row: JournalLifecycleBatchRow = {
       kind: 'lifecycle-batch',
       settlementId,
@@ -249,7 +235,17 @@ export function buildJournalItemRow(
   const resolved = input.state.aliases.get(itemId) ?? itemId
   // Recreated items must outrank tombstones or the reducer will discard them.
   const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
-  const body = boundRunningToolOutput(turnEndAfterStop(input.state, resolved, input.body))
+  const body = boundRunningToolOutput(
+    turnEndAfterStop(
+      input.state,
+      resolved,
+      input.body,
+      input.executionOwner ??
+        journalItemExecutionFence(input.state, resolved) ??
+        input.ownerFence ??
+        input.fence
+    )
+  )
   return {
     kind: 'item',
     ...journalItemEchoFields(input),

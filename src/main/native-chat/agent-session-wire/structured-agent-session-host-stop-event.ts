@@ -99,7 +99,10 @@ export function recordStopEvent(
   return session.journal
     .appendStopEvent({ reason: ending.cause, ...(turnId !== null ? { turnId } : {}) }, fence)
     .then(
-      () => (ending.cause === 'user-close' ? session.journal.stopMarks.beginSettle() : null),
+      (mark) =>
+        ending.cause === 'user-close'
+          ? session.journal.stopMarks.beginSettle(false, mark.sequence)
+          : null,
       (error: unknown) => {
         context.deps.logger.warn("a host stop's Stop event row skipped", {
           scope: 'stop-event',

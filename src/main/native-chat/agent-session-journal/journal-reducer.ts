@@ -1,3 +1,4 @@
+import { recordStopCancellations } from './journal-stop-cancellation'
 import { journalItemDeclaresEcho } from './journal-item-echo'
 import {
   journalInputOrder,
@@ -174,6 +175,7 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
     return
   }
   if (isJournalStopOrResumeRow(row)) {
+    recordStopCancellations(state, row)
     foldJournalQueuePauseMark(state.queuePauseMarks, row)
     return
   }
@@ -220,6 +222,10 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
   }
   if (row.kind === 'submission') {
     applyJournalSubmission(state, row)
+    const submission = state.submissions.get(row.clientMessageId)
+    if (submission) {
+      state.derivedTurnScope.cancellations.observeSubmission(state, submission)
+    }
     return
   }
   applyJournalDispatchRow(state, row)

@@ -1,3 +1,7 @@
+import { journalItemExecutionFence, journalItemOwnerFence } from './journal-item-provenance'
+import { nextJournalItemRevision } from './journal-item-revision'
+import { turnEndAfterStop } from './journal-stop-turn-end'
+import type { JournalReducerState } from './journal-reducer'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
   AgentJournalItemBody,
@@ -84,4 +88,35 @@ export function journalLifecycleMutationRow(
         ...agentJournalLinkageFields(mutation.linkage)
       }
     : { kind: 'tombstone', itemId, revision }
+}
+
+export function journalLifecycleMutationForState(
+  state: JournalReducerState,
+  mutation: JournalLifecycleMutationInput,
+  fence: number,
+  revisions: Map<string, number>
+): JournalLifecycleMutation {
+  const itemId = journalLifecycleMutationItemId(mutation)
+  const resolved = state.aliases.get(itemId) ?? itemId
+  const revision = nextJournalItemRevision(state, itemId, revisions)
+  const ownerFence = journalItemOwnerFence(state, resolved, {
+    fence,
+    ownerFence: mutation.kind === 'item' ? mutation.ownerFence : undefined
+  })
+  return journalLifecycleMutationRow(
+    mutation.kind === 'item'
+      ? {
+          ...mutation,
+          body: turnEndAfterStop(
+            state,
+            resolved,
+            mutation.body,
+            journalItemExecutionFence(state, resolved) ?? ownerFence
+          )
+        }
+      : mutation,
+    itemId,
+    revision,
+    ownerFence
+  )
 }

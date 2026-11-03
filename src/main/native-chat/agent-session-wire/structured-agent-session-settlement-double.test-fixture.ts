@@ -44,7 +44,11 @@ export function exitJournalDouble(fields: {
     itemFence: fields.itemFence ?? (() => undefined),
     snapshot: () => ({ items: fields.items() }),
     submissions: fields.submissions ?? (() => []),
-    stopMarks: { latest: () => null, personStopDecides: () => false },
+    stopMarks: {
+      latest: () => null,
+      observedLiveAt: () => undefined,
+      personStopDecides: () => false
+    },
     appendPlannedLifecycleBatch: plannedBatchThrough(fields.appendLifecycleBatch)
   } as unknown as StructuredAgentSessionChildExitSession['journal']
 }
