@@ -50,6 +50,7 @@ export function createBrowserNetworkTunnelClientStream(
     remoteClosed: false,
     readableEnded: false,
     sendCredit: 0,
+    flushingWrites: false,
     receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     pendingToSocket: [],
     pendingToSocketBytes: 0,
