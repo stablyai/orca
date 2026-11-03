@@ -420,6 +420,12 @@ describe('useMobilePrSidebarController write reconciliation', () => {
   })
 
   it('does not carry details to the same PR number in another repo', async () => {
+    // Details count only when they name this repository, so the later switch can prove they were not reused.
+    const loaded = details('Old')
+    rpc.fetchWorkItemDetails.mockResolvedValue({
+      ok: true,
+      result: { ...loaded, item: { ...loaded.item, url: 'https://github.com/acme/a/pull/7' } }
+    })
     rpc.fetchPRForBranch.mockResolvedValue({
       ok: true,
       result: pr(7, { prRepo: { owner: 'acme', repo: 'a' } })
