@@ -4,15 +4,15 @@ import {
   openNewWorkspaceFromShortcut
 } from './ipc-events/new-workspace-command'
 
-const mocks = vi.hoisted(() => ({ createFolderWorkspaceFromCurrent: vi.fn() }))
+const mocks = vi.hoisted(() => ({ startCreateFromCurrentWorkspace: vi.fn() }))
 vi.mock('@/components/sidebar/folder-workspace-create', () => mocks)
 
-beforeEach(() => mocks.createFolderWorkspaceFromCurrent.mockReset())
+beforeEach(() => mocks.startCreateFromCurrentWorkspace.mockReset())
 
 describe('buildNewWorkspaceShortcutModalData', () => {
   it('uses the current folder for an ordinary global create shortcut', () => {
     const openModal = vi.fn()
-    mocks.createFolderWorkspaceFromCurrent.mockReturnValue(true)
+    mocks.startCreateFromCurrentWorkspace.mockReturnValue({ kind: 'started' })
     openNewWorkspaceFromShortcut({
       activeModal: 'none',
       activeView: 'terminal',
@@ -20,13 +20,32 @@ describe('buildNewWorkspaceShortcutModalData', () => {
       openModal
     })
 
-    expect(mocks.createFolderWorkspaceFromCurrent).toHaveBeenCalledTimes(1)
+    expect(mocks.startCreateFromCurrentWorkspace).toHaveBeenCalledTimes(1)
     expect(openModal).not.toHaveBeenCalled()
+  })
+
+  it('seeds the composer with the current git worktree repo', () => {
+    const openModal = vi.fn()
+    mocks.startCreateFromCurrentWorkspace.mockReturnValue({
+      kind: 'composer',
+      initialRepoId: 'last-opened-repo'
+    })
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'terminal',
+      taskPageData: {},
+      openModal
+    })
+
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut',
+      initialRepoId: 'last-opened-repo'
+    })
   })
 
   it('keeps the task-page shortcut on the composer path', () => {
     const openModal = vi.fn()
-    mocks.createFolderWorkspaceFromCurrent.mockReturnValue(true)
+    mocks.startCreateFromCurrentWorkspace.mockReturnValue({ kind: 'started' })
     openNewWorkspaceFromShortcut({
       activeModal: 'none',
       activeView: 'tasks',
@@ -34,7 +53,7 @@ describe('buildNewWorkspaceShortcutModalData', () => {
       openModal
     })
 
-    expect(mocks.createFolderWorkspaceFromCurrent).not.toHaveBeenCalled()
+    expect(mocks.startCreateFromCurrentWorkspace).not.toHaveBeenCalled()
     expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
       telemetrySource: 'shortcut'
     })

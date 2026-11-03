@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     activateAndRevealFolderWorkspace: vi.fn(),
     createFolderWorkspace: vi.fn(),
     toastError: vi.fn(),
+    runBackgroundWorktreeCreation: vi.fn(),
     popoverContentProps,
     shortcutLabel,
     toast: vi.fn()
@@ -27,7 +28,13 @@ const mocks = vi.hoisted(() => {
 })
 
 type MockState = {
-  repos: { id: string }[]
+  repos: {
+    id: string
+    kind?: string
+    projectGroupId?: string
+    path?: string
+    connectionId?: string
+  }[]
   activeWorktreeId: string | null
   activeWorkspaceKey: string | null
   activeWorkspaceExecutionHostId: string | null
@@ -41,6 +48,9 @@ type MockState = {
   sidebarWidth: number
   setSidebarBody: (body: 'workspaces' | 'agents') => void
   openModal: (modal: string, data?: unknown) => void
+  closeModal: () => void
+  activeModal: 'none' | 'add-repo'
+  worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
   updateSettings: (patch: Record<string, unknown>) => void
   activeContextualTourId: string | null
   settings?: {
@@ -95,6 +105,10 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
 }))
 
+vi.mock('@/lib/worktree-creation-flow', () => ({
+  runBackgroundWorktreeCreation: mocks.runBackgroundWorktreeCreation
+}))
+
 // Expose open state directly to isolate this header test from Radix portals.
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
@@ -130,6 +144,7 @@ beforeEach(() => {
   mocks.toastError.mockReset()
   mocks.createFolderWorkspace.mockReset().mockResolvedValue(makeFolderWorkspace())
   mocks.activateAndRevealFolderWorkspace.mockReset()
+  mocks.runBackgroundWorktreeCreation.mockReset()
   mocks.shortcutLabel.current = '⌘N'
   mockState = {
     repos: [],
@@ -146,6 +161,9 @@ beforeEach(() => {
     sidebarWidth: 280,
     setSidebarBody: vi.fn(),
     openModal: vi.fn(),
+    closeModal: vi.fn(),
+    activeModal: 'none',
+    worktreesByRepo: {},
     updateSettings: vi.fn(),
     activeContextualTourId: null,
     settings: {}
@@ -243,6 +261,93 @@ describe('SidebarHeader', () => {
     expect(mocks.createFolderWorkspace).not.toHaveBeenCalled()
   })
 
+  it('seeds the composer from the current git worktree when another repo is selected', async () => {
+    mockState.activeWorkspaceKey = 'worktree:current-worktree'
+    mockState.activeWorktreeId = 'current-worktree'
+    mockState.activeRepoId = 'other-repo'
+    mockState.repos = [
+      { id: 'other-repo', kind: 'git' },
+      { id: 'current-repo', kind: 'git' }
+    ]
+    mockState.worktreesByRepo = {
+      'current-repo': [{ id: 'current-worktree', repoId: 'current-repo', path: '/tmp/current' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledWith({
+      initialRepoId: 'current-repo'
+    })
+  })
+
+  it('creates in the inferred SSH folder when the project group has no host pin', async () => {
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.repos = [
+      {
+        id: 'repo-1',
+        projectGroupId: 'group-1',
+        path: '/repo/platform/app',
+        connectionId: 'box'
+      }
+    ]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mockState.activeWorkspaceExecutionHostId = 'ssh:box'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.createFolderWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectGroupId: 'group-1',
+        folderPath: '/repo/platform/hi',
+        connectionId: 'box'
+      }),
+      { runtimeEnvironmentId: null }
+    )
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('closes an open Add project dialog before creating the current folder', async () => {
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mockState.activeModal = 'add-repo'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mockState.closeModal).toHaveBeenCalledTimes(1)
+    expect(mocks.createFolderWorkspace).toHaveBeenCalled()
+  })
+
+  it('creates an Open as Folder workspace without the composer', async () => {
+    mockState.activeWorkspaceKey = 'worktree:notes::/tmp/notes'
+    mockState.activeWorktreeId = 'notes::/tmp/notes'
+    mockState.activeRepoId = 'other-repo'
+    mockState.repos = [
+      { id: 'other-repo', kind: 'git' },
+      { id: 'notes', kind: 'folder', path: '/tmp/notes' }
+    ]
+    mockState.worktreesByRepo = {
+      notes: [{ id: 'notes::/tmp/notes', repoId: 'notes', path: '/tmp/notes' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'notes',
+        setupDecision: 'skip',
+        agent: null,
+        telemetrySource: 'sidebar'
+      })
+    )
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
   it('creates and reveals a default folder workspace in the current folder project', async () => {
     mockState.projectGroups = [{ ...makeProjectGroup(), executionHostId: 'runtime:folder-host' }]
     mockState.folderWorkspaces = [makeFolderWorkspace({ executionHostId: 'runtime:folder-host' })]
@@ -257,6 +362,7 @@ describe('SidebarHeader', () => {
       {
         projectGroupId: 'group-1',
         name: 'Platform workspace',
+        folderPath: '/repo/platform/hi',
         connectionId: null,
         linkedTask: null
       },

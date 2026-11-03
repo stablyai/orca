@@ -8,9 +8,11 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { createFolderWorkspaceFromSidebar } from './folder-workspace-create'
+import {
+  createFolderWorkspaceFromSidebar,
+  createWorkspaceForRepoHeader
+} from './folder-workspace-create'
 import type { Repo } from '../../../../shared/repo-types'
-import { openHeaderCreateComposer } from './header-create-workspace-target'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
@@ -256,7 +258,7 @@ const WorktreeList = React.memo(function WorktreeList({
         projectOrderBy={projectOrderBy}
         toggleGroup={toggleGroup}
         collapsedGroups={effectiveCollapsedGroups}
-        handleCreateForRepo={openHeaderCreateComposer}
+        handleCreateForRepo={createWorkspaceForRepoHeader}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}

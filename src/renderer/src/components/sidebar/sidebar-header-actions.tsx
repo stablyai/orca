@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
-import { createFolderWorkspaceFromCurrent } from './folder-workspace-create'
+import { startCreateFromCurrentWorkspace } from './folder-workspace-create'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 
 function AddProjectButton({
@@ -50,7 +50,10 @@ function NewWorkspaceButton({
   const label = translate('auto.components.sidebar.SidebarHeader.92154beb7e', 'New workspace')
 
   const handleCreateWorkspace = useCallback(() => {
-    if (!createFolderWorkspaceFromCurrent()) {
+    const create = startCreateFromCurrentWorkspace()
+    if (create.kind === 'composer') {
+      openWorkspaceCreationComposerWithTourHandoff({ initialRepoId: create.initialRepoId })
+    } else if (create.kind === 'unavailable') {
       openWorkspaceCreationComposerWithTourHandoff()
     }
   }, [])
