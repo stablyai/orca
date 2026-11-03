@@ -20,6 +20,8 @@ export type ChatApproval = {
   subject?: AgentJournalApprovalSubject
   detail?: string
   options: { label: string; send: string }[]
+  /** Can't collapse: a freed composer's Return would answer the agent's startup dialog. */
+  holdsComposer?: true
 }
 
 /** A journal approval prompt as its card reads it; each option sends its id. */
@@ -82,6 +84,7 @@ export function parseApprovalFromStatus(
   const folderTrust = parseNativeChatFolderTrustEnvelope(interactivePrompt)
   if (folderTrust) {
     return {
+      holdsComposer: true,
       title: say('folderTrustTitle'),
       description: say('folderTrustHint'),
       options: [
