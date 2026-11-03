@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
+export const terminalComposerDraftSchema = z.looseObject({
+  terminal: salvagedOptional(
+    'terminal',
+    z.looseObject({ draft: salvagedOptional('draft', z.string()) })
+  )
+})
+
 // Only send.accepted === true proves delivery; malformed/missing envelopes must retain the writers’ not-delivered verdict.
 export const terminalSendAcceptedSchema = z
   .looseObject({

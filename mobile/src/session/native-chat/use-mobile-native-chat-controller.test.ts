@@ -1,3 +1,4 @@
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../src/shared/agent-tui-input-clear'
 import { mobileNativeChatDraftDestination } from './composer/mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -266,10 +267,15 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       accepted = await controller!.handleNativeChatSend('answer')
     })
     expect(accepted).toBe(true)
-    expect(clientStub.sendRequest).toHaveBeenCalledTimes(2)
-    for (const call of clientStub.sendRequest.mock.calls) {
-      expect(call[1]).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
-    }
+    const writes = clientStub.sendRequest.mock.calls.filter((call) => call[0] === 'terminal.send')
+    expect(writes.map((call) => call[1])).toEqual([
+      expect.objectContaining({
+        terminal: 'term-1',
+        text: AGENT_TUI_CLEAR_INPUT_MAX,
+        enter: false
+      }),
+      expect.objectContaining({ terminal: 'term-1', text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false })
+    ])
     expect(isMobileNativeChatInputStale('term-1')).toBe(false)
   })
 
@@ -335,7 +341,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     expect(clientStub.sendRequest).toHaveBeenCalledWith(
       'terminal.send',
-      expect.objectContaining({ text: '\x15', enter: false }),
+      expect.objectContaining({ text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false }),
       expect.any(Object)
     )
     expect(sendWithOutcome).toHaveBeenLastCalledWith(

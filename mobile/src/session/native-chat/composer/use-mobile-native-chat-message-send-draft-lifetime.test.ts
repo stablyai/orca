@@ -1,3 +1,4 @@
+import type * as MobileNativeChatSendModule from '../mobile-native-chat-send'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,7 +7,7 @@ import type { RpcClient } from '../../../transport/rpc-client'
 const transport = vi.hoisted(() => ({
   heal: vi.fn<() => Promise<boolean>>(),
   clearInput: vi.fn<() => Promise<boolean>>(),
-  send: vi.fn<() => Promise<'accepted' | 'rejected'>>(),
+  send: vi.fn<() => Promise<'accepted' | 'rejected' | 'unknown'>>(),
   command: vi.fn(),
   error: vi.fn()
 }))
@@ -14,7 +15,8 @@ const transport = vi.hoisted(() => ({
 vi.mock('../mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: transport.heal
 }))
-vi.mock('../mobile-native-chat-send', () => ({
+vi.mock('../mobile-native-chat-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof MobileNativeChatSendModule>()),
   healMobileNativeChatStaleInput: transport.heal,
   clearMobileNativeChatInput: transport.clearInput,
   sendMobileNativeChatMessageWithOutcome: transport.send,
@@ -250,5 +252,35 @@ describe('mobile native-chat send across screen lifetimes', () => {
     })
     expect(current().drafts.composerText).toBe('new draft\n\nping')
     expect(transport.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps an unknown command at its original destination beside later edits without replay', async () => {
+    const delivery = deferred<'unknown'>()
+    transport.heal.mockResolvedValue(true)
+    transport.clearInput.mockResolvedValue(true)
+    transport.send.mockImplementation(() => delivery.promise)
+    await mount('unknown-command')
+    const command = '/clear  \n'
+    await edit(command)
+    let sending: Promise<unknown> | undefined
+    await act(async () => {
+      sending = current().sender.sendWithOutcome(command)
+    })
+    expect(current().drafts.composerText).toBe('')
+    await edit('/compact')
+    await remount('different-tab')
+    await edit('other tab draft')
+    await act(async () => {
+      delivery.resolve('unknown')
+      expect(await sending).toBe('unknown')
+    })
+    expect(current().drafts.composerText).toBe('other tab draft')
+    await remount('unknown-command')
+    expect(current().drafts.composerText).toBe(`/compact\n\n${command}`)
+    expect(current().drafts.pending).toEqual([])
+    expect(transport.send).toHaveBeenCalledTimes(1)
+    expect(transport.error).toHaveBeenCalledWith(
+      'Delivery unconfirmed — check chat before retrying'
+    )
   })
 })
