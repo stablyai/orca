@@ -64,7 +64,7 @@ const NON_UNIT_TEST_RUNNERS = [
       "'src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'"
     ]
   },
-  ...['connector', 'push', 'relay'].map((app) => ({
+  ...['push', 'relay'].map((app) => ({
     name: `cloud ${app}`,
     include: [`cloud/apps/${app}/src/**/*.test.ts`],
     sources: [`cloud/apps/${app}/vitest.config.ts`],
