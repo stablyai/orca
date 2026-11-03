@@ -1,4 +1,8 @@
-import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
+import {
+  getAgentSlashCommands,
+  getNativeChatAgentProfile,
+  getTextDrivenNativeChatCommands
+} from '../../native-chat/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
@@ -133,8 +137,30 @@ export function structuredSessionSlashCommands(
   const offered = new Set(hostOwned.map(({ name }) => name))
   return [
     ...hostOwned,
-    ...sessionSlashCommandSuggestions(agent, reported).filter(({ name }) => !offered.has(name))
+    ...sessionSlashCommandSuggestions(agent, reported)
+      .filter(({ name }) => !offered.has(name))
+      // A runtime without its own slash parser receives a chat-sent command as
+      // prose, and a curated row whose reply is absent shows its output only in
+      // a terminal the chat surface does not have (#37594). Offer such rows only
+      // when this agent's chat text still drives them.
+      .filter(({ name }) => structuredChatDrivesCommand(agent, name))
   ]
+}
+
+/** Whether this agent acts on `name` when the chat sends it as message text. */
+function structuredChatDrivesCommand(agent: AgentType, name: string): boolean {
+  const profile = getNativeChatAgentProfile(agent)
+  // Only runtimes documented as lacking their own slash parser — their profile
+  // declares which commands chat text drives — can strand a curated
+  // terminal/effect-only row as prose. Other surfaces keep today's behavior.
+  if (profile?.expandsSlashCommandsFromText || profile?.textDrivenCommands === undefined) {
+    return true
+  }
+  if (profile.textDrivenCommands.includes(name)) {
+    return true
+  }
+  const curated = getAgentSlashCommands(agent).find((command) => command.name === name)
+  return curated === undefined || curated.reply !== undefined
 }
 
 function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
