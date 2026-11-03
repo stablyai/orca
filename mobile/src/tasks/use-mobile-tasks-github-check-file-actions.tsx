@@ -216,7 +216,7 @@ export function useMobileTasksGithubCheckFileActions<
         finish()
       }
     },
-    [claimPublication, client, tryBeginMutation]
+    [claimPublication, client, detailPayload, tryBeginMutation]
   )
 
   const loadGitHubFileContents = useCallback(

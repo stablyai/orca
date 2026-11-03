@@ -56,6 +56,31 @@ async function record(scenario: RecordingScenario) {
   )
 }
 
+async function disposeTaskOwnerRecording(
+  mounted: { dispose: () => void },
+  clock: ReturnType<typeof vitestRecordingScheduler>,
+  transports: ScriptedRpcTransport[]
+) {
+  const errors: unknown[] = []
+  for (const cleanup of [
+    () => mounted.dispose(),
+    ...transports.map((transport) => () => transport.dispose()),
+    () => clock.flush(),
+    ...transports.map((transport) => () => transport.causality.assertTransparentCalls()),
+    ...transports.map((transport) => () => transport.causality.close()),
+    () => clock.stop()
+  ]) {
+    try {
+      await cleanup()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (errors.length) {
+    throw new AggregateError(errors, 'Task owner recording cleanup failed')
+  }
+}
+
 describe('committed production task owners in recording adapters', () => {
   it.each(['tk-item-detail-gitlab', 'tk-project-row-detail'])(
     '%s uses an actual replacement client and suppresses the old client read',
@@ -112,11 +137,7 @@ describe('committed production task owners in recording adapters', () => {
         await clock.flush()
         expect(effects).toEqual(terminal)
       } finally {
-        mounted.dispose()
-        original.dispose()
-        replacement.dispose()
-        await clock.flush()
-        clock.stop()
+        await disposeTaskOwnerRecording(mounted, clock, [original, replacement])
       }
     }
   )
@@ -146,10 +167,7 @@ describe('committed production task owners in recording adapters', () => {
       expect(transport.requests).toEqual([])
       expect(transport.payloads).toEqual([])
     } finally {
-      mounted.dispose()
-      transport.dispose()
-      await clock.flush()
-      clock.stop()
+      await disposeTaskOwnerRecording(mounted, clock, [transport])
     }
   })
 
