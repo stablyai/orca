@@ -33,8 +33,10 @@ A plugin adds highlighting for a language through `contributes.syntaxes` in `orc
   Orca maps but has no grammar for.
 - The exception is a file Orca opens as TypeScript, JavaScript, JSON, CSS, SCSS, Less, HTML or
   Markdown: those keep Orca's language, because it also drives completions, diagnostics, or
-  Markdown features that a plugin grammar would turn off. JSP (`.jsp`, `.jspf`) is not covered by
-  this exception; Orca shows it as HTML only until a real grammar is available.
+  Markdown features that a plugin grammar would turn off. JSP (`.jsp`, `.jspf`) and MDX (`.mdx`)
+  are not covered by this exception, because Orca only approximates them with HTML and Markdown.
+  A plugin that claims `.mdx` colors the source view; `.mdx` files still open in the rich Markdown
+  editor, but the source view loses `[[` document completion and Markdown comments.
 - When several enabled syntaxes claim a file, an exact file name wins over an extension, a longer
   extension wins over a shorter one, and an exact tie goes to the lower syntax id
   (`plugin:...`), so the winner does not depend on load order. There is no per-file language

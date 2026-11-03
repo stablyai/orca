@@ -54,8 +54,10 @@ const PLUGIN_PROTECTED_CORE_LANGUAGES = new Set([
   'html',
   'markdown'
 ])
-// Orca maps these to a protected language only as a stopgap (JSP shown as HTML).
-const PLUGIN_OVERRIDABLE_STOPGAP_EXTENSIONS = ['.jsp', '.jspf']
+// Orca maps these to a protected language only as an approximation: JSP is shown as HTML, and MDX
+// as Markdown, which cannot color its JSX or ESM. Only the source view's Monaco language changes;
+// the file still opens in the rich Markdown editor because that is chosen from the core language.
+const PLUGIN_OVERRIDABLE_EXTENSIONS = ['.jsp', '.jspf', '.mdx']
 
 /** Whether a plugin syntax that claims this file may replace Orca's own language for it. */
 export function canPluginSyntaxReplaceCoreLanguage(
@@ -66,7 +68,7 @@ export function canPluginSyntaxReplaceCoreLanguage(
     return true
   }
   const lowerPath = filePath.toLowerCase()
-  return PLUGIN_OVERRIDABLE_STOPGAP_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))
+  return PLUGIN_OVERRIDABLE_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))
 }
 
 /** The plugin syntax that should color a file, or null to keep Orca's language. */
