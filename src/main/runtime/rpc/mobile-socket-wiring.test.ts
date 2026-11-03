@@ -54,6 +54,7 @@ function registryFor(
   token: string,
   scope: 'mobile' | 'runtime' = 'mobile'
 ): DeviceRegistry {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transport tests use only credential lookups and last-seen writes.
   return {
     validateToken: (candidate: string) =>
       candidate === token
@@ -65,6 +66,10 @@ function registryFor(
             pairedAt: 1,
             lastSeenAt: 0
           }
+        : null,
+    resolveAuthenticatedPrincipal: (principal: { deviceId: string; deviceToken?: string }) =>
+      principal.deviceId === deviceId && principal.deviceToken === token
+        ? { deviceId, token, name: 'Phone', scope, pairedAt: 1, lastSeenAt: 0 }
         : null,
     updateLastSeen: vi.fn(),
     updateLastSeenDeferred: vi.fn()

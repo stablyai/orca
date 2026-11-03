@@ -40,8 +40,10 @@ vi.mock('./runtime-environment-request-connections', () => ({
 vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.call
 }))
-vi.mock('../../wsl/wsl-host-gate', () => ({ wslHostsGateOpen: () => mocks.wslGateOpen }))
-vi.mock('../../wsl/wsl-host-service-instance', () => ({
+vi.mock('../../wsl/host-lifecycle/wsl-host-gate', () => ({
+  wslHostsGateOpen: () => mocks.wslGateOpen
+}))
+vi.mock('../../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostPhoneGate: () => ({
     // Every recorded host, as the gate lists them; one not set is unavailable.
     reachAll: () => new Map([['wsl:ubuntu', mocks.wslReach.get('wsl:ubuntu') ?? 'unavailable']])
@@ -227,6 +229,7 @@ describe('runtime environment mobile relay hosts', () => {
     await expect(hosts.resolve('env-1')).resolves.toEqual({
       environmentId: 'env-1',
       fence: '7\0runtime-a',
+      pairingRevision: 7,
       pairing: { endpoint: 'ws://vm:6768' }
     })
     expect(mocks.resolveManaged).toHaveBeenCalledWith('/user-data', 'env-1', NO_WSL_START)

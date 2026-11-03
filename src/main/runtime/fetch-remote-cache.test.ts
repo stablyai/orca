@@ -1,10 +1,18 @@
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'
 import { resolveGitAdmissionTier } from '../git/command-runner/git-operation-executor'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Isolate fetch mocks from orca-runtime.test.ts; pin §3.3 eviction, freshness and concurrent-call sharing.
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof GitExecFileModule>()),
+    gitExecFileAsync: gitExecFileAsyncMock
+  }
+})
 
 vi.mock('../git/runner', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>

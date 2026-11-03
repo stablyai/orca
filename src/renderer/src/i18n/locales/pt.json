@@ -4814,7 +4814,7 @@
           "902f5dee1f": "Copiar ao Selecionar",
           "9129b7e805": "Passar o mouse sobre um painel de terminal o ativa sem precisar clicar.",
           "8eefeaa3da": "Foco Segue o Mouse",
-          "96fe15def8": "Comportamento do mouse e da área de transferência para painéis de terminal.",
+          "96fe15def8": "Comportamento de rolagem, mouse e área de transferência para painéis de terminal.",
           "45721f3e67": "Interação do Terminal",
           "9c0b1c1792": "Ativado",
           "c1fc9e9444": "Aceleração por GPU",
@@ -6820,7 +6820,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Permite que agentes inspecionem e operem apps de desktop locais.",
-          "93255aaf18": "Skill de Uso do Computador",
+          "93255aaf18": "Skill Orca Computer Use",
           "45f8e22c2e": "Abrir",
           "d95d1cfab8": "Atualizar",
           "0c29da5805": "Pronto",
@@ -8235,8 +8235,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Modelo de comando",
-          "2b2f38652b": "Comando personalizado",
-          "0ffb081b3a": "Usar agente padrão",
           "f4310cf63f": "Agente",
           "1cd88d470a": "Personalizar",
           "403876bb48": "Usar global",
@@ -8532,7 +8530,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Abrir Uso do Computador",
-          "79209b37b9": "Se a importação de cookies não for a opção ideal, o Uso do Computador pode controlar apps locais e usar sessões de navegador já conectadas quando aplicável. Instale a skill de Uso do Computador; o macOS também exige permissões de privacidade.",
+          "79209b37b9": "Se a importação de cookies não for a opção ideal, o Uso do Computador pode controlar apps locais e usar sessões de navegador já conectadas quando aplicável. Instale a skill Orca Computer Use; o macOS também exige permissões de privacidade.",
           "333984cf90": "Usar uma sessão de navegador existente"
         },
         "BranchPrefixFeedback": {
@@ -16315,7 +16313,7 @@
             "copyLinkFailed": "Falha ao copiar o link",
             "downloadOpenWithDefaultApp": "Baixar e abrir com o aplicativo padrão",
             "downloadOpenFailed": "Falha ao baixar '{{value0}}'.",
-            "openInThisGroup": "Abrir neste grupo",
+            "openInNewTab": "Abrir em nova aba",
             "openInThisGroupRefused": "Não foi possível abrir {{value0}} neste grupo"
           },
           "MobileDriverOverlay": {
@@ -16810,8 +16808,6 @@
         "25690a3855": "Iniciar espaço de trabalho a partir do PR",
         "a459866967": "Retomar espaço de trabalho anexado ao PR",
         "347034903a": "Copiar link do GitHub",
-        "5a01ca7253": "Falha ao sincronizar o estado visualizado com o GitHub.",
-        "996a1897d2": "Não foi possível sincronizar o estado visualizado para este pull request.",
         "e0b15c793f": "Falha ao copiar o link do GitHub",
         "992e799227": "Link do GitHub copiado",
         "61bfc81ada": "Não foi possível abrir o espaço de trabalho anexado a este pull request.",
@@ -20516,6 +20512,7 @@
         "attachmentNotAFile": "Uma imagem nesta mensagem não é um arquivo, por isso a mensagem não foi enviada.",
         "attachmentNoSource": "Uma imagem nesta mensagem não tem um arquivo para enviar, por isso a mensagem não foi enviada.",
         "attachmentInvalid": "Um anexo nesta mensagem não pode ser enviado ao agente.",
+        "attachmentsExpired": "Expirado: {{names}}.",
         "attachmentUnreadable": "Não foi possível ler um anexo nesta mensagem, por isso a mensagem não foi enviada.",
         "emptyMessage": "Esta mensagem está vazia, por isso não foi enviada.",
         "commandUnavailable": "Este comando não está disponível em chats de {{agent}}, por isso não foi enviado.",
@@ -20607,6 +20604,7 @@
         "recordFailed": "O Orca não conseguiu salvar isto no histórico do chat.",
         "attachmentExpired": "Este anexo expirou.",
         "reattachFile": "Remova-o e anexe-o novamente.",
+        "reattachFiles": "Remova-os e anexe-os novamente.",
         "conversationCleared": "Esta conversa foi limpa.",
         "openCurrentConversation": "Abra a conversa atual para continuar.",
         "clearUnfinished": "O último /clear não terminou.",
@@ -20663,7 +20661,8 @@
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
-        "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder."
+        "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder.",
+        "exitUnconfirmed": "O {{agent}} está executando esta conversa em outro terminal. Saia dele lá ou feche esse terminal e tente novamente."
       },
       "loadingEarlierMessages": "Carregando mensagens anteriores…",
       "prompt": {
@@ -20970,7 +20969,8 @@
         "effortPickerFailed": "Não foi possível abrir o seletor de esforço.",
         "modelApplyFailed": "Não foi possível aplicar o modelo {{value}}.",
         "effortApplyFailed": "Não foi possível aplicar o esforço {{value}}."
-      }
+      },
+      "settings": "Configurações do chat"
     },
     "tab": {
       "bar": {
@@ -21344,7 +21344,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Remover Margem ao Copiar",
         "copyTrimsGutterDescription": "Remove a margem esquerda onde a saída do agente é desenhada por trás, para que o texto copiado não fique indentado. Apenas a indentação compartilhada por todas as linhas selecionadas é removida.",
-        "copyOnSelectDescription": "Copiar automaticamente o texto selecionado em um terminal ou chat para a área de transferência."
+        "copyOnSelectDescription": "Copiar automaticamente o texto selecionado em um terminal ou chat para a área de transferência.",
+        "scrollOnUserInput": "Rolar para o final ao digitar",
+        "scrollOnUserInputDescription": "Digitar ou colar com o painel rolado para cima leva à saída mais recente. Desative para manter sua posição."
       },
       "terminal": {
         "clipboard": {
@@ -21359,6 +21361,15 @@
             "highlight": "destaque",
             "chat": "chat"
           }
+        },
+        "search": {
+          "typing": "digitação",
+          "input": "entrada",
+          "jump": "pular",
+          "bottom": "final",
+          "scrollback": "histórico",
+          "snap": "encaixar",
+          "position": "posição"
         }
       },
       "nativeChat": {
@@ -22643,6 +22654,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: não há backup legível, então começará vazio.",
+      "sectionKeptCurrent": "{{section}}: suas execuções atuais serão mantidas",
       "sectionRestored": "{{section}}: restaurado a partir do backup salvo em {{time}}.",
       "projectsForgotten": "O Orca vai esquecer seus projetos e os detalhes dos espaços de trabalho deles. Os arquivos no disco não são alterados.",
       "newerProjectsRemoved": "Os projetos adicionados depois desse backup serão removidos do Orca, junto com os detalhes dos espaços de trabalho deles. Os arquivos no disco não são alterados.",
@@ -22685,7 +22697,7 @@
       "noneFound": "(nada encontrado)",
       "sqlitePath": "Caminho do SQLite: {{path}}",
       "sectionsDamaged": "Parte do estado salvo deste perfil está danificada: {{sections}}. Todo o restante está intacto.",
-      "repairCommand": "Feche o Orca e execute `{{command}}` para substituir apenas as partes danificadas a partir dos backups e manter todo o restante. O Orca guarda uma cópia do arquivo danificado.",
+      "repairCommand": "Pare o Orca e execute `{{command}}` para reparar apenas as partes danificadas e manter todo o resto. O Orca guarda uma cópia do arquivo danificado.",
       "restoreWholeBackup": "Para restaurar um backup completo em vez disso, execute `{{exportsCommand}}` e depois `{{rollbackCommand}}`.",
       "sqliteUnreadable": "O Orca não consegue abrir o perfil ativo com segurança porque seu estado SQLite está ilegível.",
       "legacyJsonPath": "Caminho do JSON legado: {{path}}",
@@ -22967,6 +22979,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "Os modelos de {{agent}} não estão disponíveis neste host. Você pode manter suas escolhas ou usar argumentos.",
+    "catalogFailed": "Não foi possível carregar os modelos de {{agent}}. Feche e reabra o seletor de agentes para tentar novamente.",
+    "catalogSignIn": "Entre em {{agent}} para carregar seus modelos e reabra o seletor de agentes.",
+    "catalogInstall": "Instale {{agent}} neste host para carregar seus modelos e reabra o seletor de agentes.",
+    "catalogUnresolved": "Os modelos de {{agent}} não foram carregados. Feche e reabra o seletor de agentes para tentar novamente.",
+    "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
     "search": "Buscar agentes e configurações…",
     "configure": "Configurar {{agent}}",
     "arguments": "Argumentos",
@@ -22981,6 +22999,8 @@
     "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
     "searchAgentModels": "Pesquisar modelos de {{agent}}…",
     "legacyModelCount": "{{total}} modelos",
+    "use": "Usar",
+    "select": "Selecionar agente",
     "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
     "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos"
   },

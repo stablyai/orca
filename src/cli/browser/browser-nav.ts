@@ -19,7 +19,7 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime/types'
-import { getBrowserCommandTarget } from '../selectors'
+import { getBrowserCommandTarget } from './browser-command-target'
 import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 
 export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {

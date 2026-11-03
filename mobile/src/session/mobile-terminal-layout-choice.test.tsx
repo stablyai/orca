@@ -64,6 +64,8 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { TerminalPaneView } from './TerminalPaneView'
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { resolveTerminalPaneHandles } from './mobile-terminal-pane-layout'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 

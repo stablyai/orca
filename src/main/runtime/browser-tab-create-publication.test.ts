@@ -27,16 +27,16 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-vi.mock('../ipc/browser-tab-registration-wait', () => ({
+vi.mock('../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: waitForTabRegistrationMock,
   waitForWorktreeTabRegistration: vi.fn()
 }))
 
-vi.mock('../browser/browser-main-window-readiness', () => ({
+vi.mock('../browser/guest-lifecycle/browser-main-window-readiness', () => ({
   whenBrowserMainWindowReady: async () => null
 }))
 
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     getDefaultProfile: () => ({ id: 'default', partition: 'persist:orca-browser' }),
     getProfile: () => null,

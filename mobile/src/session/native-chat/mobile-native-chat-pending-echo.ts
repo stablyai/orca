@@ -27,6 +27,7 @@ export type MobileNativeChatSendOrigin = {
     'afterMessageId' | 'afterMessageTimestamp' | 'afterEmptyTranscriptSessionId'
   >
   sentAt: number
+  queuedDuringWorkingEpoch?: number | null
 }
 
 type PendingByKey = Record<string, MobileNativeChatPendingMessage[]>
@@ -55,6 +56,7 @@ export function appendMobileNativeChatPending(
     id,
     text,
     sentAt: origin.sentAt,
+    queuedDuringWorkingEpoch: origin.queuedDuringWorkingEpoch,
     ...origin.boundary,
     ...(images?.length ? { images } : {})
   })

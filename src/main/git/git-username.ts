@@ -1,5 +1,5 @@
 import { extractExecError, ghExecFileAsync, gitExecFileAsync } from './runner'
-import { parseHostedRemote } from './hosted-remote-url'
+import { parseHostedRemote } from './remotes/hosted-remote-url'
 import { resolveDefaultBaseRefViaExec } from './repo'
 import { createGitConfigSnapshotRunner } from '../../shared/git-config-snapshot-runner'
 

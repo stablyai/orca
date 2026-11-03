@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
@@ -14,7 +15,7 @@ import type * as RouteInput from '@/lib/agent-launch-route-input'
 import type * as ChatProgram from '@/lib/host-chat-program'
 import type * as MenuRows from '@/lib/new-tab-agent-menu-rows'
 import type * as ZustandShallow from 'zustand/react/shallow'
-import type * as HostAgentSettingsTransport from '@/components/settings/agent-launch-settings-transport'
+import type * as HostAgentSettingsTransport from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import {
@@ -89,10 +90,13 @@ vi.mock('@/lib/new-tab-agent-menu-rows', async (importOriginal) => {
     }
   }
 })
-vi.mock('@/components/settings/agent-launch-settings-transport', async (importOriginal) => {
-  const actual = await importOriginal<typeof HostAgentSettingsTransport>()
-  return { ...actual, readHostAgentLaunchSettings: vi.fn().mockResolvedValue(null) }
-})
+vi.mock(
+  '@/runtime/agent-launch-settings/agent-launch-settings-transport',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof HostAgentSettingsTransport>()
+    return { ...actual, readHostAgentLaunchSettings: vi.fn().mockResolvedValue(null) }
+  }
+)
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: mocks.subscribe }))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.support
@@ -365,11 +369,7 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
             expect(measured.routes).toBeLessThanOrEqual(
               measured.selectors + 1 + Number(Boolean(launchCwd))
             )
-            if (launchCwd) {
-              expect(measured.records).toBeGreaterThanOrEqual(count)
-            } else {
-              expect(measured.records).toBe(0)
-            }
+            expect(measured.records).toBe(0)
             expect(measured.records).toBeLessThanOrEqual(count * (measured.routes + 8))
             expect(measured.answers).toBe(
               4 +
@@ -683,4 +683,49 @@ it('preserves per-agent published answers and direct route inputs across context
       }
     }
   }
+})
+
+it('keeps explicit Chat separate from provider defaults and pending/CLI support', () => {
+  const input = {
+    agent: 'codex' as const,
+    inventoryReady: true,
+    answer: 'yes' as const,
+    chatPending: false,
+    plain: false
+  }
+  const settings = { agentDefaultSurface: 'chat' as const, nativeChatProviders: { codex: false } }
+  expect(resolveAgentMenuSelection({ ...input, settings, surface: 'chat' }).choice?.route).toBe(
+    'structured-native-chat'
+  )
+  expect(resolveAgentMenuSelection({ ...input, settings, surface: 'terminal' }).choice?.route).toBe(
+    'terminal-tui'
+  )
+  const off = resolveAgentMenuSelection({
+    ...input,
+    settings: { agentDefaultSurface: 'terminal' }
+  })
+  expect(off).toMatchObject({
+    ready: true,
+    choice: { route: 'terminal-tui' }
+  })
+  expect(resolveAgentMenuSelection({ ...input, settings: null, surface: 'chat' }).ready).toBe(false)
+  expect(resolveAgentMenuSelection({ ...input, settings: null, surface: 'terminal' }).ready).toBe(
+    true
+  )
+  expect(
+    resolveAgentMenuSelection({
+      ...input,
+      settings: { agentDefaultSurface: 'terminal' },
+      cliMissing: true
+    }).ready
+  ).toBe(false)
+  expect(
+    resolveAgentMenuSelection({
+      ...input,
+      settings,
+      surface: 'chat',
+      answer: 'not-on-host',
+      cliMissing: true
+    }).ready
+  ).toBe(false)
 })

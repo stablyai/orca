@@ -9,7 +9,7 @@ import {
   extractSessionOwnersForTransfer,
   hasTransferredSessionState
 } from '../../orca-profiles/profile-session-owner-transfer'
-import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
+import type { TerminalScrollbackSnapshotStorage } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   createOrcadMigrationExportScope,
   orcadMigrationOwnerMatchesScope,

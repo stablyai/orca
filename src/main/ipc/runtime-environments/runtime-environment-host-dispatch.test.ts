@@ -46,27 +46,30 @@ vi.mock('./runtime-environment-status-probe', () => ({
 vi.mock('../../ssh/ssh-credential-decline', () => ({
   clearSshCredentialDeclinedForEnvironment: mocks.clearDecline
 }))
-vi.mock('../../wsl/wsl-host-service-instance', () => ({
+vi.mock('../../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () => mocks.wsl.service
 }))
-vi.mock('../../wsl/wsl-host-connector', () => ({ createWslHostConnector: vi.fn() }))
-vi.mock('../../wsl/wsl-host-e2e-fake-connector', () => ({
+vi.mock('../../wsl/host-lifecycle/wsl-host-connector', () => ({ createWslHostConnector: vi.fn() }))
+vi.mock('../../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
   createFakeWslHostConnector: vi.fn(),
   readFakeWslHostsConfig: () => null
 }))
 vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
 vi.mock('../../ssh/orcad-terminal-census-client', () => ({ requestOrcadTerminalCensus: vi.fn() }))
 
-import { registerWslHostHandlers } from '../wsl-host-handlers'
+import { registerWslHostHandlers } from '../wsl/wsl-host-handlers'
 import { registerRuntimeEnvironmentConnectivityHandlers } from './runtime-environment-connectivity-handlers'
 import {
   findWslHostDeployment,
   setWslHostPendingStop
 } from '../../../shared/runtime-environment-wsl-host-store'
-import { WslHostService } from '../../wsl/wsl-host-service'
-import { UBUNTU, makeConnector } from '../../wsl/wsl-host-service-test-connector'
-import { wslHostRemovalPendingMessage } from '../../wsl/wsl-host-add-admission'
-import { WSL_HOSTS_GATED_OFF_MESSAGE } from '../../wsl/wsl-host-gate'
+import { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
+import {
+  UBUNTU,
+  makeConnector
+} from '../../wsl/host-lifecycle/__tests__/wsl-host-service-test-connector'
+import { wslHostRemovalPendingMessage } from '../../wsl/host-lifecycle/wsl-host-add-admission'
+import { WSL_HOSTS_GATED_OFF_MESSAGE } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 
 const { resolveEnvironment: resolveActualEnvironment } = await vi.importActual<

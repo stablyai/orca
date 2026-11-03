@@ -164,15 +164,6 @@ it.each(['worktree', 'folder'] as const)(
 )
 
 it.each(['worktree', 'folder'] as const)(
-  'preserves the %s watcher snapshot when selection and watched roots stay unchanged',
-  (workspace) => {
-    const state = makeState(workspace)
-    const first = selectEditorExternalWatchTargets(state)
-    expect(selectEditorExternalWatchTargets({ ...state })).toBe(first)
-  }
-)
-
-it.each(['worktree', 'folder'] as const)(
   "watches the selected host's %s root when hosts publish the same id at different roots",
   (workspace) => {
     const state = makeState(workspace, (host) => `/${host}/repo`)

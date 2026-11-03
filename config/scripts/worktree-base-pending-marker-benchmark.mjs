@@ -49,7 +49,7 @@ let timeout
 try {
   const jiti = createJiti(import.meta.url)
   const { startWorktreeBaseDirectoryPoller } = await jiti.import(
-    '../../src/main/ipc/worktree-base-directory-poller.ts'
+    '../../src/main/ipc/worktrees/creation/worktree-base-directory-poller.ts'
   )
   const repo = { repoId: 'repo-1', repoName: 'repo', nestWorkspaces: false }
   const target = {

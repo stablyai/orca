@@ -840,7 +840,8 @@
     },
     "prSidebar": {
       "loading": "Chargement de la pull request…",
-      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté."
+      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté.",
+      "retryLoading": "Réessayer de charger la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Retour aux hôtes",
@@ -1692,7 +1693,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Branche actuelle indisponible.",
-      "providerUnavailable": "Panneau de revue hébergée indisponible pour ce fournisseur."
+      "githubRemoteRequired": "Cet onglet nécessite un dépôt distant GitHub pour afficher les détails des pull requests. Pour les autres plateformes prises en charge, créez une revue depuis Modifications et ouvrez-la dans votre navigateur."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Échec du chargement des personnes",
@@ -1903,6 +1904,7 @@
       "attachmentAtMost": "{{agent}} accepte au maximum {{limit}} images par message, ce message n'a donc pas été envoyé.",
       "attachmentEmpty": "Une image de ce message est vide, le message n'a donc pas été envoyé.",
       "attachmentInvalid": "Une pièce jointe de ce message ne peut pas être envoyée à l'agent.",
+      "attachmentsExpired": "Expiré : {{names}}.",
       "attachmentLargerThan": "Une image de ce message dépasse {{size}} Mo, le message n'a donc pas été envoyé.",
       "attachmentNoSource": "Une image de ce message n'a aucun fichier à envoyer, le message n'a donc pas été envoyé.",
       "attachmentNotAFile": "Une image de ce message n'est pas un fichier, le message n'a donc pas été envoyé.",
@@ -2107,8 +2109,7 @@
       "promptUnconfirmed": "L'agent a démarré, mais l'envoi du prompt n'a pas pu être confirmé."
     },
     "prActionsEngine": {
-      "mergeFailed": "Impossible de merger la pull request.",
-      "refreshFailed": "Impossible d'actualiser la pull request."
+      "mergeFailed": "Impossible de merger la pull request."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent démarré",
@@ -2490,6 +2491,7 @@
       "queueTooLarge": "Trop de texte est en attente dans la file.",
       "quitTerminalAgent": "Quittez cet agent pour continuer le chat ici.",
       "reattachFile": "Retirez-la et joignez-la à nouveau.",
+      "reattachFiles": "Retirez-les et joignez-les à nouveau.",
       "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
       "recordUnreadable": "Orca n'a pas pu lire l'état enregistré de ce chat.",
       "reopenChat": "Rouvrez le chat pour vérifier à nouveau.",
@@ -2720,6 +2722,9 @@
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
+    },
+    "agents": {
+      "permissionOwnAll": "Paramètres propres aux agents"
     }
   },
   "sourceControl": {

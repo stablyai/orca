@@ -55,6 +55,8 @@ export function buildDefaultSettings(args: {
     appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: args.appFontFamily,
     editorAutoSave: false,
+    editorFormatOnSave: false,
+    editorInsertFinalNewline: false,
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
@@ -111,6 +113,8 @@ export function buildDefaultSettings(args: {
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
+    // Why: xterm's default; turning it off keeps a scrolled-up reading position while typing.
+    terminalScrollOnUserInput: true,
     windowBackgroundBlur: false,
     reduceVisualEffects: false,
     minimizeToTrayOnClose: false,

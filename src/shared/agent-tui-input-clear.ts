@@ -31,6 +31,9 @@ export function countAgentTuiInputLines(text: string): number {
 }
 
 /** Clear bytes for a buffer believed to hold `text`, with slack for TUI-side edits. */
-export function buildAgentTuiClearInputForText(text: string): string {
+export function buildAgentTuiClearInputForText(text: string | null | undefined): string {
+  if (text == null) {
+    return AGENT_TUI_CLEAR_INPUT_MAX
+  }
   return buildAgentTuiClearInput(countAgentTuiInputLines(text) + AGENT_TUI_CLEAR_LINE_SLACK)
 }

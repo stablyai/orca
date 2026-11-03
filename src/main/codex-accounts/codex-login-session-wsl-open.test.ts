@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../wsl/wsl-runner', () => ({
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: vi.fn(async () => ({
     environmentResolved: true,
     code: 0,

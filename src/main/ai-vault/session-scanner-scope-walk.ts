@@ -11,12 +11,12 @@ import {
   resolveSessionScopeCwd,
   storeSessionScopeCwd,
   type SessionScopeCwdStamp
-} from './session-parse-cache-store'
-import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+} from './parse-cache/session-parse-cache-store'
+import type { AntigravityWorkspaceResolver } from './scanners/antigravity/session-scanner-antigravity-history'
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import { sessionSortTime } from './session-scanner-accumulator'
 import { discoveryFileCandidates, dropCodexHardlinkAliases } from './session-scanner-candidates'
-import type { SessionParseStats } from './session-scanner-parse-cache'
+import type { SessionParseStats } from './parse-cache/session-scanner-parse-cache'
 import {
   inventoryCwdBucketFiles,
   selectCwdBucketFiles,
@@ -31,8 +31,8 @@ import type {
   SessionFileDiscovery
 } from './session-scanner-types'
 import { AI_VAULT_SCOPE_CWD_SOURCES, scopeWalksAgentFiles } from './session-scope-cwd'
-import { sidecarUnchanged } from './session-sidecar-stat'
-import { prioritizeAntigravityTranscriptCandidates } from './antigravity-transcript-candidates'
+import { sidecarUnchanged } from './parse-cache/session-sidecar-stat'
+import { prioritizeAntigravityTranscriptCandidates } from './scanners/antigravity/antigravity-transcript-candidates'
 
 type ScopeScanArgs = {
   inventory: CwdBucketInventory[]

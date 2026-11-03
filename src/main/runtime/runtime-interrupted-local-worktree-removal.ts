@@ -4,34 +4,37 @@ import type { RuntimeStore } from './runtime-store-contract'
 import {
   releaseStartupRemovalFence,
   type BackgroundWorktreeRemovalJob
-} from '../worktree-background-removal'
-import { resolveWorktreeRemovalMetadata } from '../worktree-removal-repo-owner'
+} from '../workspaces/removal/worktree-background-removal'
+import { resolveWorktreeRemovalMetadata } from '../workspaces/removal/worktree-removal-repo-owner'
 import type { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
-import { listWorktreesStrict } from '../git/worktree'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
-import { authorizeWindowsCheckout, usesNativeWindowsRemoval } from '../git/windows-worktree-removal'
+import {
+  authorizeWindowsCheckout,
+  usesNativeWindowsRemoval
+} from '../git/worktrees/removal/windows-worktree-removal'
 import {
   deleteBranchOfUnregisteredWorktree,
   finishUnregisteredWorktreeRemoval,
   removeWorktree
-} from '../git/worktree-removal'
-import { getErrorCode } from '../git/worktree-operation-options'
-import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
+} from '../git/worktrees/removal/worktree-removal'
+import { getErrorCode } from '../git/worktrees/worktree-operation-options'
+import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
+import { findRegisteredDeletableWorktree } from '../workspaces/removal/worktree-removal-safety'
 import {
   assertUnregisteredCheckoutGone,
   isRecordedCheckout,
   differentCheckoutAtPathError
-} from '../worktree-removal-leftover'
-import { CLIENT_REMOVAL_HOME, getPathOps } from '../worktree-removal-home-guard'
-import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-recovery'
+} from '../workspaces/removal/worktree-removal-leftover'
+import { CLIENT_REMOVAL_HOME, getPathOps } from '../workspaces/removal/worktree-removal-home-guard'
+import { removeStaleLocalWorktreeRegistration } from '../workspaces/removal/local-worktree-removal-recovery'
 import {
   getLocalWorktreePathAccess,
   toLocalWorktreeRuntimePath,
   type LocalWorktreeFilesystemOptions
-} from '../local-worktree-filesystem'
-import type { WorktreeRemovalRecord } from '../worktree-removal-records'
+} from '../workspaces/removal/local-worktree-filesystem'
+import type { WorktreeRemovalRecord } from '../workspaces/removal/worktree-removal-records'
 import {
   cleanupRemovedWorktreePushTarget,
   finishRuntimeLocalWorktreeRemoval,

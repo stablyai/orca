@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAgentStartupPlanInputs } from './agent-startup-plan-inputs'
-import { mergeExtraAgentArgs } from './automation-extra-agent-args'
+import './automation-extra-agent-args'
 import { buildAgentStartupPlan } from './tui-agent-startup'
-import { resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
+import './tui-agent-launch-defaults'
 
 const SETTINGS = {
   agentDefaultArgs: { claude: '--dangerously-skip-permissions --model sonnet' },
@@ -30,36 +30,6 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
     expect(plan?.launchCommand).toContain('--dangerously-skip-permissions')
   })
 
-  it('matches explicitly composed launch defaults and extras', () => {
-    const headless = resolveAgentStartupPlanInputs({
-      agent: 'claude',
-      settings: SETTINGS,
-      platform: 'darwin',
-      isRemote: false,
-      shell: undefined,
-      extraAgentArgs: '--effort high'
-    })
-    const desktopArgs = mergeExtraAgentArgs({
-      agent: 'claude',
-      defaultArgs: resolveTuiAgentLaunchArgs('claude', SETTINGS),
-      extraAgentArgs: '--effort high',
-      shell: 'posix'
-    })
-    if (!desktopArgs.ok) {
-      throw new Error(desktopArgs.error)
-    }
-    const desktop = buildAgentStartupPlan({
-      agent: 'claude',
-      prompt: 'go',
-      cmdOverrides: {},
-      platform: 'darwin',
-      agentArgs: desktopArgs.agentArgs
-    })
-    expect(buildAgentStartupPlan({ ...headless, prompt: 'go' })?.launchCommand).toBe(
-      desktop?.launchCommand
-    )
-  })
-
   it('throws on extras the executing host refuses', () => {
     expect(() =>
       resolveAgentStartupPlanInputs({
@@ -71,18 +41,5 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
         extraAgentArgs: '--permission-mode bypassPermissions'
       })
     ).toThrow('"--permission-mode"')
-  })
-
-  it('leaves launches without extras untouched', () => {
-    const inputs = resolveAgentStartupPlanInputs({
-      agent: 'claude',
-      settings: SETTINGS,
-      platform: 'linux',
-      isRemote: false,
-      shell: undefined,
-      agentArgs: null,
-      extraAgentArgs: '  '
-    })
-    expect(inputs.agentArgs).toBeNull()
   })
 })

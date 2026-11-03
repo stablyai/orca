@@ -1,9 +1,12 @@
 import {
   readPtyForegroundGroup,
   resolvePtyForegroundMembers
-} from '../../pty/pty-master-foreground-observation'
-import { readPtsName } from '../../pty/node-pty-pts-name'
-import { getSnapshotRowsOnTty, normalizePtyTty } from '../../pty/terminal-process-rows'
+} from '../../pty/process-retirement/pty-master-foreground-observation'
+import { readPtsName } from '../../pty/process-retirement/node-pty-pts-name'
+import {
+  getSnapshotRowsOnTty,
+  normalizePtyTty
+} from '../../pty/process-retirement/terminal-process-rows'
 import type { IPty } from 'node-pty'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import {

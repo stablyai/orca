@@ -2116,8 +2116,6 @@
         "25690a3855": "从 PR 启动工作区",
         "a459866967": "恢复关联 PR 的工作区",
         "347034903a": "复制 GitHub 链接",
-        "5a01ca7253": "无法将查看的状态与 GitHub 同步。",
-        "996a1897d2": "无法同步此PR的查看状态。",
         "e0b15c793f": "复制 GitHub 链接失败",
         "992e799227": "GitHub 链接已复制",
         "61bfc81ada": "无法打开附加到此PR的工作区。",
@@ -3610,7 +3608,7 @@
             "copyLinkFailed": "复制链接失败",
             "downloadOpenWithDefaultApp": "下载并使用默认应用程序打开",
             "downloadOpenFailed": "无法下载“{{value0}}”。",
-            "openInThisGroup": "在此分组中打开",
+            "openInNewTab": "在新标签页中打开",
             "openInThisGroupRefused": "无法在此分组中打开 {{value0}}"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -7035,7 +7033,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "开放计算机使用",
-          "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装计算机使用技能； macOS 还需要隐私权限。",
+          "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
           "333984cf90": "使用现有的浏览器会话"
         },
         "BrowserUseEnableSwitch": {
@@ -7155,7 +7153,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "使智能体能够检查和操作本地桌面应用程序。",
-          "93255aaf18": "计算机控制技能",
+          "93255aaf18": "Orca Computer Use 技能",
           "45f8e22c2e": "打开",
           "d95d1cfab8": "刷新",
           "0c29da5805": "就绪",
@@ -7997,8 +7995,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",
-          "2b2f38652b": "自定义命令",
-          "0ffb081b3a": "使用默认智能体",
           "f4310cf63f": "智能体",
           "1cd88d470a": "定制",
           "403876bb48": "使用全局",
@@ -8539,7 +8535,7 @@
           "902f5dee1f": "选择时复制",
           "9129b7e805": "将鼠标悬停在终端窗格上即可将其激活，无需单击。",
           "8eefeaa3da": "焦点跟随鼠标",
-          "96fe15def8": "终端窗格的鼠标和剪贴板行为。",
+          "96fe15def8": "终端窗格的滚动、鼠标和剪贴板行为。",
           "45721f3e67": "终端交互",
           "9c0b1c1792": "开",
           "c1fc9e9444": "GPU加速",
@@ -18431,6 +18427,7 @@
         "attachmentNotAFile": "此消息中的一张图片不是文件，因此消息未发送。",
         "attachmentNoSource": "此消息中的一张图片没有可发送的文件，因此消息未发送。",
         "attachmentInvalid": "此消息中的附件无法发送给智能体。",
+        "attachmentsExpired": "{{names}} 已过期。",
         "attachmentUnreadable": "无法读取此消息中的附件，因此消息未发送。",
         "emptyMessage": "此消息为空，因此未发送。",
         "commandUnavailable": "此命令在 {{agent}} 聊天中不可用，因此未发送。",
@@ -18519,6 +18516,7 @@
         "recordFailed": "Orca 无法将此内容保存到聊天历史记录中。",
         "attachmentExpired": "此附件已过期。",
         "reattachFile": "请将其移除后重新附加。",
+        "reattachFiles": "请将它们移除后重新附加。",
         "conversationCleared": "此对话已被清除。",
         "openCurrentConversation": "请打开当前对话以继续。",
         "clearUnfinished": "上一次 /clear 未完成。",
@@ -18779,7 +18777,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续。",
-        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。"
+        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
+        "exitUnconfirmed": "{{agent}} 正在另一个终端中运行此对话。请在那里退出它或关闭该终端，然后重试。"
       },
       "state": {
         "loading": {
@@ -18963,7 +18962,7 @@
           "stoppedCount_other": "{{count}} 个已停止",
           "unverifiableCount_other": "{{count}} 个状态不可用"
         },
-        "tokens": "{{value0}} 代币",
+        "tokens": "{{value0}} token",
         "unnamed": "子智能体",
         "started_other": "已启动 {{count}} 个子智能体",
         "ran_other": "已运行 {{count}} 个子智能体"
@@ -19278,7 +19277,8 @@
         "cancelled": "Orca 不会自动继续此聊天。",
         "scheduled": "Orca 将在 {{time}} 继续此聊天。",
         "cancel": "不要继续"
-      }
+      },
+      "settings": "聊天设置"
     },
     "tab": {
       "bar": {
@@ -19676,7 +19676,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "修剪副本上的装订线",
         "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。",
-        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。"
+        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。",
+        "scrollOnUserInput": "输入时滚动到底部",
+        "scrollOnUserInputDescription": "向上滚动时键入或粘贴会跳至最新输出。关闭此项可保持当前位置。"
       },
       "terminal": {
         "clipboard": {
@@ -19691,6 +19693,15 @@
             "highlight": "高亮",
             "chat": "聊天"
           }
+        },
+        "search": {
+          "typing": "键入",
+          "input": "输入",
+          "jump": "跳转",
+          "bottom": "底部",
+          "scrollback": "回滚",
+          "snap": "吸附",
+          "position": "位置"
         }
       },
       "nativeChat": {
@@ -22030,6 +22041,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}：没有可读取的备份，因此将从空白开始。",
+      "sectionKeptCurrent": "{{section}}：将保留当前运行记录",
       "sectionRestored": "{{section}}：将从 {{time}} 保存的备份中恢复。",
       "projectsForgotten": "Orca 将忘记你的项目及其工作区详情。磁盘上的文件不受影响。",
       "newerProjectsRemoved": "该备份之后添加的项目将连同其工作区详情一起从 Orca 中移除。磁盘上的文件不受影响。",
@@ -22072,7 +22084,7 @@
       "noneFound": "（未找到）",
       "sqlitePath": "SQLite 路径：{{path}}",
       "sectionsDamaged": "此配置文件已保存状态的一部分已损坏：{{sections}}。其余内容均完好无损。",
-      "repairCommand": "关闭 Orca，然后运行 `{{command}}`，仅从备份中替换损坏的部分，并保留其余所有内容。Orca 会保留损坏文件的副本。",
+      "repairCommand": "停止 Orca，然后运行 `{{command}}` 以仅修复损坏的部分并保留其他所有内容。Orca 会保留损坏文件的副本。",
       "restoreWholeBackup": "如需改为恢复整份备份，请先运行 `{{exportsCommand}}`，再运行 `{{rollbackCommand}}`。",
       "sqliteUnreadable": "Orca 无法安全地打开当前配置文件，因为其 SQLite 状态无法读取。",
       "legacyJsonPath": "旧版 JSON 路径：{{path}}",
@@ -22305,6 +22317,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "此主机上无法使用 {{agent}} 模型。你可以保留当前选择或使用参数。",
+    "catalogFailed": "无法加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
+    "catalogSignIn": "请登录 {{agent}} 以加载模型，然后重新打开智能体选择器。",
+    "catalogInstall": "请在此主机上安装 {{agent}} 以加载模型，然后重新打开智能体选择器。",
+    "catalogUnresolved": "尚未加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
+    "catalogEmpty": "{{agent}} 没有可用模型。",
     "search": "搜索智能体和配置…",
     "configure": "配置 {{agent}}",
     "arguments": "参数",
@@ -22319,6 +22337,8 @@
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
     "legacyModelCount": "{{total}} 个模型",
+    "use": "使用",
+    "select": "选择智能体",
     "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
     "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
   },

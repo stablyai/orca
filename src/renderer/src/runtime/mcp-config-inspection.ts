@@ -1,0 +1,113 @@
+import { translate } from '@/i18n/i18n'
+import {
+  getMcpConfigCandidateParentDir,
+  getMcpConfigParentDirs,
+  inspectMcpConfigContent,
+  MCP_CONFIG_CANDIDATES,
+  selectExistingMcpConfigCandidates,
+  type McpConfigDirectoryEntry,
+  type McpConfigInspection
+} from '../../../shared/mcp-config'
+import { joinPath } from '../lib/path'
+import { extractIpcErrorMessage } from '../lib/ipc-error'
+
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+
+function isMissingFileError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /ENOENT|no such file|not found/i.test(message)
+}
+
+export async function loadMcpConfigInspections(
+  targetRootPath: string,
+  context: RuntimeFileOperationArgs
+): Promise<LoadedMcpConfigInspection[]> {
+  const entriesByRelativeDir = new Map<string, readonly McpConfigDirectoryEntry[]>()
+  const rootEntries = await readRuntimeDirectory(context, targetRootPath)
+  entriesByRelativeDir.set('', rootEntries)
+
+  const rootDirectoryNames = new Set(
+    rootEntries.filter((entry) => entry.isDirectory).map((entry) => entry.name)
+  )
+  const unreadableParentDirMessages = new Map<string, string>()
+  await Promise.all(
+    getMcpConfigParentDirs().map(async (relativeDir) => {
+      if (!rootDirectoryNames.has(relativeDir)) {
+        return
+      }
+      try {
+        const entries = await readRuntimeDirectory(context, joinPath(targetRootPath, relativeDir))
+        entriesByRelativeDir.set(relativeDir, entries)
+      } catch (error) {
+        unreadableParentDirMessages.set(
+          relativeDir,
+          extractIpcErrorMessage(
+            error,
+            translate('settings.mcp.inspectFailed', 'Unable to inspect {{directory}}.', {
+              directory: relativeDir
+            })
+          )
+        )
+      }
+    })
+  )
+
+  const existingRelativePaths = new Set(
+    selectExistingMcpConfigCandidates(entriesByRelativeDir).map(
+      (candidate) => candidate.relativePath
+    )
+  )
+
+  return Promise.all(
+    MCP_CONFIG_CANDIDATES.map(async (candidate): Promise<LoadedMcpConfigInspection> => {
+      const absolutePath = joinPath(targetRootPath, candidate.relativePath)
+      const parentDirReadError = unreadableParentDirMessages.get(
+        getMcpConfigCandidateParentDir(candidate)
+      )
+      if (parentDirReadError) {
+        return {
+          ...inspectMcpConfigContent(candidate, null),
+          exists: false,
+          status: 'invalid',
+          absolutePath,
+          readError: parentDirReadError
+        }
+      }
+
+      if (!existingRelativePaths.has(candidate.relativePath)) {
+        return { ...inspectMcpConfigContent(candidate, null), absolutePath }
+      }
+
+      try {
+        const result = await readRuntimeFileContent({
+          target: context.target,
+          worktreeId: context.worktreeId ?? undefined,
+          filePath: absolutePath,
+          relativePath: candidate.relativePath,
+          connectionId: context.connectionId
+        })
+        const inspection = inspectMcpConfigContent(candidate, result.isBinary ? '' : result.content)
+        return { ...inspection, absolutePath }
+      } catch (error) {
+        if (isMissingFileError(error)) {
+          return { ...inspectMcpConfigContent(candidate, null), absolutePath }
+        }
+        // Known existing but unreadable configs must never permit starter overwrite.
+        return {
+          ...inspectMcpConfigContent(candidate, null),
+          exists: true,
+          status: 'invalid',
+          absolutePath,
+          readError: extractIpcErrorMessage(error, 'Unable to read config file.')
+        }
+      }
+    })
+  )
+}
+
+export type LoadedMcpConfigInspection = McpConfigInspection & {
+  absolutePath: string
+  readError?: string
+}

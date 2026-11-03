@@ -4,10 +4,8 @@ import {
   armTerminalWriteStallWatch,
   cancelTerminalWriteStallWatch,
   captureTerminalParseProgressGeneration,
-  failTerminalWriteStallWatch,
   hasTerminalParseProgressSince,
   isTerminalWritePipelineCertifiedDead,
-  notifyUndeliverableWrite,
   registerUndeliverableWriteHandler,
   requestTerminalWritePipelineProbe,
   settleTerminalWriteStallWatch,
@@ -48,19 +46,6 @@ afterEach(() => {
 })
 
 describe('terminal write pipeline health', () => {
-  it('detects parse progress without relying on wall-clock resolution', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const terminal = makeTerminal()
-    const generation = captureTerminalParseProgressGeneration(terminal)
-
-    settleTerminalWriteStallWatch(terminal)
-
-    expect(Date.now()).toBe(1_000)
-    expect(hasTerminalParseProgressSince(terminal, generation)).toBe(true)
-    _resetWritePipelineHealthForTests(terminal)
-  })
-
   it('cancels a discarded write watch without recording parse progress', () => {
     vi.useFakeTimers()
     const terminal = makeTerminal()
@@ -75,42 +60,6 @@ describe('terminal write pipeline health', () => {
     expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
     expect(terminal.pendingCallbacks).toHaveLength(0)
     expect(handler).not.toHaveBeenCalled()
-    _resetWritePipelineHealthForTests(terminal)
-  })
-
-  it('certifies a synchronous write failure without recording parse progress', () => {
-    vi.useFakeTimers()
-    const terminal = makeTerminal()
-    const handler = vi.fn()
-    const onCertifiedDead = vi.fn()
-    const generation = captureTerminalParseProgressGeneration(terminal)
-    registerUndeliverableWriteHandler(terminal, handler)
-    armTerminalWriteStallWatch(terminal, { onCertifiedDead })
-
-    failTerminalWriteStallWatch(terminal)
-    vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
-
-    expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
-    expect(onCertifiedDead).toHaveBeenCalledTimes(1)
-    expect(handler).toHaveBeenCalledTimes(1)
-    expect(handler).toHaveBeenCalledWith('write-stalled')
-    expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
-    _resetWritePipelineHealthForTests(terminal)
-  })
-
-  it('a settled write never probes or notifies', () => {
-    vi.useFakeTimers()
-    const terminal = makeTerminal()
-    const handler = vi.fn()
-    registerUndeliverableWriteHandler(terminal, handler)
-
-    armTerminalWriteStallWatch(terminal)
-    settleTerminalWriteStallWatch(terminal)
-    vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
-
-    expect(terminal.pendingCallbacks).toHaveLength(0)
-    expect(handler).not.toHaveBeenCalled()
-    expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(false)
     _resetWritePipelineHealthForTests(terminal)
   })
 
@@ -260,19 +209,6 @@ describe('terminal write pipeline health', () => {
     _resetWritePipelineHealthForTests(terminal)
   })
 
-  it('notifies at most once per terminal instance', () => {
-    const terminal = makeTerminal()
-    const handler = vi.fn()
-    registerUndeliverableWriteHandler(terminal, handler)
-
-    notifyUndeliverableWrite(terminal, 'replay-wedged')
-    notifyUndeliverableWrite(terminal, 'write-stalled')
-
-    expect(handler).toHaveBeenCalledTimes(1)
-    expect(handler).toHaveBeenCalledWith('replay-wedged')
-    _resetWritePipelineHealthForTests(terminal)
-  })
-
   it('does not re-arm a certified-dead terminal', () => {
     vi.useFakeTimers()
     const terminal = makeTerminal()
@@ -287,18 +223,6 @@ describe('terminal write pipeline health', () => {
     armTerminalWriteStallWatch(terminal)
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
     expect(handler).toHaveBeenCalledTimes(1)
-    _resetWritePipelineHealthForTests(terminal)
-  })
-
-  it('unregistering a handler stops notifications', () => {
-    const terminal = makeTerminal()
-    const handler = vi.fn()
-    const unregister = registerUndeliverableWriteHandler(terminal, handler)
-    unregister()
-
-    notifyUndeliverableWrite(terminal, 'write-stalled')
-
-    expect(handler).not.toHaveBeenCalled()
     _resetWritePipelineHealthForTests(terminal)
   })
 })

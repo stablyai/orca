@@ -1,5 +1,4 @@
 import { AgentHookStartup, listenForAgentHooks } from '../../../shared/agent-hook-startup'
-import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -133,16 +132,14 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
-        trackEmptyPaneKeyHook(hookBody)
+        trackEmptyPaneKeyHook(hookBody, this.attributionDiagnostics)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         if (await this.ingestTmuxHook(source, aliasedBody)) {
           res.writeHead(204)
           res.end()
           return
         }
-        await checkHookOwnerPresence(this.state, source, aliasedBody, this.env, (paneKey) =>
-          this.checkAgentPresence(paneKey)
-        )
+        await this.checkHookOwner(source, aliasedBody)
         if (!isStatusCurrent()) {
           res.writeHead(204)
           res.end()
@@ -302,6 +299,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.paneKeyAliasPersistenceListener = null
     this.ownerStateInitialized = false
     // Leave the endpoint: stale files fail open, and unlinking can race another Orca instance.
+    this.providerRowsByTab = null
     clearAllListenerCaches(this.state)
     if (!options?.keepStatus) {
       this.resetCanonicalStatus()

@@ -5,7 +5,7 @@ import {
   getSelectedCodexAccountIdForTarget,
   type CodexAccountSelectionTarget
 } from './runtime-selection'
-import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
 import { hasRecordedLegacyWslCodexPane } from '../codex/codex-pane-account-registry'
 import {
   startLegacyWslRuntimeAuthDrain,

@@ -2583,8 +2583,6 @@
         "25690a3855": "Arbeitsbereich aus PR starten",
         "a459866967": "Mit dem PR verknüpften Arbeitsbereich fortsetzen",
         "347034903a": "GitHub-Link kopieren",
-        "5a01ca7253": "Der Status „Angesehen“ konnte nicht mit GitHub synchronisiert werden.",
-        "996a1897d2": "Der Status „Angesehen“ konnte für diesen Pull Request nicht synchronisiert werden.",
         "e0b15c793f": "GitHub-Link konnte nicht kopiert werden",
         "992e799227": "GitHub-Link kopiert",
         "61bfc81ada": "Der mit diesem Pull Request verknüpfte Arbeitsbereich konnte nicht geöffnet werden.",
@@ -3987,7 +3985,7 @@
             "copyFilePathFailed": "Kopieren des Dateipfads fehlgeschlagen",
             "downloadOpenWithDefaultApp": "Herunterladen und mit Standard-App öffnen",
             "downloadOpenFailed": "„{{value0}}“ konnte nicht heruntergeladen werden.",
-            "openInThisGroup": "In dieser Gruppe öffnen",
+            "openInNewTab": "In neuem Tab öffnen",
             "openInThisGroupRefused": "{{value0}} konnte nicht in dieser Gruppe geöffnet werden"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -7681,7 +7679,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Computer Use öffnen",
-          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
+          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
           "333984cf90": "Bestehende Browser-Sitzung verwenden"
         },
         "BrowserUseEnableSwitch": {
@@ -7801,7 +7799,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Ermöglicht Agenten, lokale Desktop-Apps zu untersuchen und zu bedienen.",
-          "93255aaf18": "Computer Use-Skill",
+          "93255aaf18": "Orca Computer Use-Skill",
           "45f8e22c2e": "Öffnen",
           "d95d1cfab8": "Aktualisieren",
           "0c29da5805": "Bereit",
@@ -8686,8 +8684,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Befehlsvorlage",
-          "2b2f38652b": "Benutzerdefinierter Befehl",
-          "0ffb081b3a": "Standardagenten verwenden",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Anpassen",
           "403876bb48": "Globale Einstellung verwenden",
@@ -9232,7 +9228,7 @@
           "902f5dee1f": "Beim Auswählen kopieren",
           "9129b7e805": "Das Bewegen des Mauszeigers über einen Terminalbereich aktiviert diesen ohne Klick.",
           "8eefeaa3da": "Fokus folgt der Maus",
-          "96fe15def8": "Verhalten von Maus und Zwischenablage in Terminalbereichen.",
+          "96fe15def8": "Verhalten von Scrollen, Maus und Zwischenablage in Terminalbereichen.",
           "45721f3e67": "Terminalinteraktion",
           "9c0b1c1792": "Ein",
           "c1fc9e9444": "GPU-Beschleunigung",
@@ -19127,6 +19123,7 @@
         "attachmentNotAFile": "Ein Bild in dieser Nachricht ist keine Datei, daher wurde die Nachricht nicht gesendet.",
         "attachmentNoSource": "Für ein Bild in dieser Nachricht fehlt die zu sendende Datei, daher wurde die Nachricht nicht gesendet.",
         "attachmentInvalid": "Ein Anhang dieser Nachricht kann nicht an den Agenten gesendet werden.",
+        "attachmentsExpired": "Abgelaufen: {{names}}.",
         "attachmentUnreadable": "Ein Anhang dieser Nachricht konnte nicht gelesen werden, daher wurde die Nachricht nicht gesendet.",
         "emptyMessage": "Diese Nachricht ist leer und wurde daher nicht gesendet.",
         "commandUnavailable": "Dieser Befehl ist in Chats mit {{agent}} nicht verfügbar und wurde daher nicht gesendet.",
@@ -19215,6 +19212,7 @@
         "recordFailed": "Orca konnte dies nicht im Chatverlauf speichern.",
         "attachmentExpired": "Dieser Anhang ist abgelaufen.",
         "reattachFile": "Den Anhang entfernen und erneut anhängen.",
+        "reattachFiles": "Die Anhänge entfernen und erneut anhängen.",
         "conversationCleared": "Diese Unterhaltung wurde geleert.",
         "openCurrentConversation": "Zum Fortfahren die aktuelle Unterhaltung öffnen.",
         "clearUnfinished": "Der letzte /clear-Befehl wurde nicht abgeschlossen.",
@@ -19610,7 +19608,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um in der Chat-Oberfläche fortzufahren.",
-        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen."
+        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen.",
+        "exitUnconfirmed": "{{agent}} führt diese Unterhaltung in einem anderen Terminal aus. Dort beenden oder das Terminal schließen, dann erneut versuchen."
       },
       "state": {
         "loading": {
@@ -20015,7 +20014,8 @@
         "effortPickerFailed": "Die Auswahl des Denkaufwands konnte nicht geöffnet werden.",
         "modelApplyFailed": "Modell {{value}} konnte nicht angewendet werden.",
         "effortApplyFailed": "Denkaufwand {{value}} konnte nicht angewendet werden."
-      }
+      },
+      "settings": "Chat-Einstellungen"
     },
     "tab": {
       "bar": {
@@ -20379,7 +20379,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Linken Rand beim Kopieren entfernen",
         "copyTrimsGutterDescription": "Den linken Rand vor der Agentenausgabe entfernen, damit kopierter Text nicht eingerückt ist. Entfernt wird nur die gemeinsame Einrückung aller ausgewählten Zeilen.",
-        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren."
+        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren.",
+        "scrollOnUserInput": "Bei Eingabe nach unten scrollen",
+        "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten."
       },
       "terminal": {
         "clipboard": {
@@ -20394,6 +20396,15 @@
             "whitespace": "Leerraum",
             "spaces": "Leerzeichen"
           }
+        },
+        "search": {
+          "typing": "tippen",
+          "input": "eingabe",
+          "jump": "springen",
+          "bottom": "unten",
+          "scrollback": "scrollback",
+          "snap": "einrasten",
+          "position": "position"
         }
       },
       "nativeChat": {
@@ -22482,6 +22493,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: Es gibt keine lesbare Sicherungskopie, daher startet dieser Abschnitt leer.",
+      "sectionKeptCurrent": "{{section}}: Ihre aktuellen Ausführungen bleiben erhalten",
       "sectionRestored": "{{section}}: aus der {{time}} gespeicherten Sicherungskopie wiederhergestellt.",
       "projectsForgotten": "Orca vergisst die Projekte und ihre Arbeitsbereichsdetails. Dateien auf dem Datenträger bleiben unverändert.",
       "newerProjectsRemoved": "Projekte, die nach dieser Sicherungskopie hinzugefügt wurden, werden zusammen mit ihren Arbeitsbereichsdetails aus Orca entfernt. Dateien auf dem Datenträger bleiben unverändert.",
@@ -22524,7 +22536,7 @@
       "noneFound": "(keine gefunden)",
       "sqlitePath": "SQLite-Pfad: {{path}}",
       "sectionsDamaged": "Ein Teil des gespeicherten Zustands dieses Profils ist beschädigt: {{sections}}. Alles andere ist intakt.",
-      "repairCommand": "Orca beenden und dann `{{command}}` ausführen, um nur die beschädigten Teile aus Sicherungskopien zu ersetzen und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
+      "repairCommand": "Beenden Sie Orca und führen Sie dann `{{command}}` aus, um nur die beschädigten Teile zu reparieren und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
       "restoreWholeBackup": "Um stattdessen eine vollständige Sicherungskopie wiederherzustellen, zuerst `{{exportsCommand}}` und dann `{{rollbackCommand}}` ausführen.",
       "sqliteUnreadable": "Orca kann das aktive Profil nicht sicher öffnen, da sein SQLite-Zustand nicht lesbar ist.",
       "legacyJsonPath": "Pfad der alten JSON-Datei: {{path}}",
@@ -23093,6 +23105,12 @@
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   },
   "agentPicker": {
+    "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
+    "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
+    "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
+    "catalogInstall": "Installiere {{agent}} auf diesem Host, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
+    "catalogUnresolved": "Modelle für {{agent}} wurden nicht geladen. Schließe die Agentenauswahl und öffne sie erneut.",
+    "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
@@ -23107,6 +23125,8 @@
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
+    "use": "Verwenden",
+    "select": "Agent auswählen",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
     "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
   }

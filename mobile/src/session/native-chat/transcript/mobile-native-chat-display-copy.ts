@@ -4,6 +4,6 @@ import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat
 
 export function mobileNativeChatDisplayCopyText(message: NativeChatMessage): string {
   return message.role === 'user' && message.from
-    ? agentMessageTranscriptText(message.blocks, message.from)
+    ? agentMessageTranscriptText(message.blocks, message.from, message.shortened)
     : nativeChatMessageCopyText(message)
 }
