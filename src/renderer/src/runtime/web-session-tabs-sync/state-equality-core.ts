@@ -76,13 +76,17 @@ export function isAgentStatusFresh(
   entry: Pick<
     AgentStatusEntry,
     'updatedAt' | 'evidenceObservedAt' | 'mirroredEvidenceReceivedAt' | 'restoredUnconfirmed'
-  >,
+  > &
+    Partial<Pick<AgentStatusEntry, 'interactivePrompt' | 'state' | 'structuredHostOwned'>>,
   now: number
 ): boolean {
   // Use shared reader-clock observation time like display gating; mirrored row stamps belong to host clocks.
   return (
     entry.restoredUnconfirmed !== true &&
-    now - agentStatusEvidenceObservedAt(entry) <= AGENT_STATUS_STALE_AFTER_MS
+    (entry.structuredHostOwned === true ||
+      ((entry.state === 'waiting' || entry.state === 'blocked') &&
+        entry.interactivePrompt != null) ||
+      now - agentStatusEvidenceObservedAt(entry) <= AGENT_STATUS_STALE_AFTER_MS)
   )
 }
 
