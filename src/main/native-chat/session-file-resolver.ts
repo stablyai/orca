@@ -8,7 +8,7 @@ import {
 } from '../../shared/native-chat/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
-import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
 import {
   claudeProjectsHostDirs,
   codexHomeSessionsDir,

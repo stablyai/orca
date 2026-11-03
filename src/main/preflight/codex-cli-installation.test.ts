@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../shared/codex-cli-installation'
-import { checkAgentCliVersion } from '../agent-cli-version-probe'
+import { checkAgentCliVersion } from '../agent-launch/preflight/agent-cli-version-probe'
 import { readCodexCliVersion } from '../codex/codex-cli-installation-error'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))

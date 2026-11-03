@@ -38,18 +38,13 @@ import {
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
 } from '../../structured-worker-identity'
-import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
-type StructuredWorkerBinding = {
-  handle: string
-  disposeSubscription: () => void
-}
+// The worker's handle, keyed by its root session: a reused worker outlives the Dispatch that created it.
+// Its mail waits on journal edges only while mail is parked, through that mail's own watch.
+const handlesBySessionId = new Map<string, string>()
 
-// Keyed by the worker's root session: a reused worker outlives the Dispatch that created it.
-const bindingsBySessionId = new Map<string, StructuredWorkerBinding>()
-
-/** Every stop/release/abandon must drop redrive, identity and parked mail across the worker's /clear lineage, even after restart lost its binding. */
+/** Every stop/release/abandon must drop identity and parked mail across the worker's /clear lineage, even after restart lost its binding. */
 export function releaseStructuredWorkerSession(
   workerSessionId: string | null | undefined,
   runtime?: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>
@@ -57,11 +52,10 @@ export function releaseStructuredWorkerSession(
   if (!workerSessionId) {
     return
   }
-  const binding = bindingsBySessionId.get(workerSessionId)
-  if (binding) {
-    bindingsBySessionId.delete(workerSessionId)
-    binding.disposeSubscription()
-    structuredWorkerIdentities.forget(binding.handle)
+  const handle = handlesBySessionId.get(workerSessionId)
+  if (handle) {
+    handlesBySessionId.delete(workerSessionId)
+    structuredWorkerIdentities.forget(handle)
   }
   if (!runtime?.forgetStructuredSessionMail) {
     return
@@ -71,32 +65,20 @@ export function releaseStructuredWorkerSession(
   }
 }
 
-/** Bind a worker's session for redrive once; creation and reuse share it, so a worker given new work after abandon gets its mail retried again. */
-export function ensureStructuredWorkerSessionBinding(
-  host: StructuredAgentSessionHost,
-  identity: Pick<StructuredWorkerIdentity, 'sessionId' | 'handle'>,
-  onJournalActivity: (sessionId: string) => void
+/** Bind a worker's session once; creation and reuse share it, so a worker given new work after abandon is released again. */
+function ensureStructuredWorkerSessionBinding(
+  identity: Pick<StructuredWorkerIdentity, 'sessionId' | 'handle'>
 ): void {
-  if (!bindingsBySessionId.has(identity.sessionId)) {
-    bindingsBySessionId.set(identity.sessionId, {
-      handle: identity.handle,
-      disposeSubscription: subscribeForRedrive(host, identity.sessionId, onJournalActivity)
-    })
+  if (!handlesBySessionId.has(identity.sessionId)) {
+    handlesBySessionId.set(identity.sessionId, identity.handle)
   }
 }
 
 /** A reused worker's chat may have outlived its binding (abandon releases it); bind it again. */
-export function rebindReusedStructuredWorker(
-  runtime: Pick<OrcaRuntimeService, 'notifyStructuredSessionJournalActivity'>,
-  handle: string,
-  db: OrchestrationDb
-): void {
+export function rebindReusedStructuredWorker(handle: string, db: OrchestrationDb): void {
   const identity = resolveStructuredWorkerIdentity(handle, db)
-  const host = getStructuredAgentSessionHost()
-  if (identity && host) {
-    ensureStructuredWorkerSessionBinding(host, identity, (sessionId) =>
-      runtime.notifyStructuredSessionJournalActivity(sessionId)
-    )
+  if (identity) {
+    ensureStructuredWorkerSessionBinding(identity)
   }
 }
 
@@ -107,8 +89,6 @@ export async function createStructuredWorkerSession(args: {
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
-  /** Retried whenever the session's journal moves, which is the structured idle edge. */
-  onJournalActivity: (sessionId: string) => void
 }): Promise<{
   identity: StructuredWorkerIdentity
   host: StructuredAgentSessionHost
@@ -165,7 +145,7 @@ export async function createStructuredWorkerSession(args: {
         'A structured worker must run on the local execution host outside WSL.'
       )
     }
-    ensureStructuredWorkerSessionBinding(host, identity, args.onJournalActivity)
+    ensureStructuredWorkerSessionBinding(identity)
     return { identity, host, fence: created.value.fence }
   } catch (error) {
     // Failed post-create starts must retire the otherwise unowned live provider child.
@@ -302,37 +282,4 @@ function requireInstalledHost(): StructuredAgentSessionHost {
     )
   }
   return host
-}
-
-/** Coalesce streaming batches until quiet; settled turns stop emitting, so the final nudge still lands promptly. */
-const REDRIVE_FLUSH_MS = 300
-
-/** A turn that streams without pause still gets re-evaluated this often. */
-const REDRIVE_MAX_WAIT_MS = 2_000
-
-/** Any journal batch can carry a tombstoned turn settlement; coalesce expensive parked-mail gate checks.
- * Pointers count waiting messages, so batches may combine safely. Fresh mail still uses deliverForHandle immediately. */
-function subscribeForRedrive(
-  host: StructuredAgentSessionHost,
-  sessionId: string,
-  onJournalActivity: (sessionId: string) => void
-): () => void {
-  const coalescer = createKeyedTrailingEdgeCoalescer(onJournalActivity, {
-    flushMs: REDRIVE_FLUSH_MS,
-    maxWaitMs: REDRIVE_MAX_WAIT_MS
-  })
-  try {
-    const unsubscribe = host.observeJournalPublications(sessionId, () => {
-      coalescer.schedule(sessionId)
-    })
-    // Discard pending redrive on settlement so it cannot nudge a session no dispatch owns.
-    return () => {
-      coalescer.dispose()
-      unsubscribe()
-    }
-  } catch (error) {
-    console.warn('[orchestration] structured worker redrive subscription failed', sessionId, error)
-    coalescer.dispose()
-    return () => {}
-  }
 }

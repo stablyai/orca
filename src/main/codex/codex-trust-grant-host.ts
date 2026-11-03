@@ -11,7 +11,7 @@ import {
   type CodexTrustGrantBinaryStamp,
   type CodexTrustGrantLedgerHome
 } from './codex-trust-grant-ledger'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { resolveWslInteropSpawnCwd } from '../wsl/execution/wsl-interop-spawn-directory'
 
 // Allow cold-distro and login-shell startup while bounding launch preparation.
 const WSL_GRANT_TIMEOUT_MS = 30_000

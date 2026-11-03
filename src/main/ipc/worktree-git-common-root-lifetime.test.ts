@@ -11,14 +11,17 @@ import type {
 } from './filesystem/watcher-process/parcel-watcher-process-subscription'
 import { startGitCommonNarrowWatch } from './worktree-git-common-narrow-watch'
 import { startGitCommonPolling } from './worktree-git-common-polling'
-import { handleLocalWatchEvents, type ActiveWatch } from './worktree-base-directory-watch-events'
+import {
+  handleLocalWatchEvents,
+  type ActiveWatch
+} from './worktrees/creation/worktree-base-directory-watch-events'
 import {
   createWorktreeHeadIdentityRefreshState,
   refreshWorktreeHeadIdentities
-} from './worktree-head-identity-refresh'
-import * as headReader from './worktree-head-identity-reader'
-import { EMPTY_HEAD_IDENTITY_SCOPE } from './worktree-head-identity-scope'
-import type { WorktreeBaseRepoWatchConfig } from './worktree-base-directory-event-filter'
+} from './worktrees/creation/worktree-head-identity-refresh'
+import * as headReader from './worktrees/creation/worktree-head-identity-reader'
+import { EMPTY_HEAD_IDENTITY_SCOPE } from './worktrees/creation/worktree-head-identity-scope'
+import type { WorktreeBaseRepoWatchConfig } from './worktrees/creation/worktree-base-directory-event-filter'
 import { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
 import { notifyWatchedWorktreeCatalogChanged } from './watched-worktree-catalog-notification'
 import {
@@ -28,7 +31,7 @@ import {
 import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 
 type RootFilesystemControl = {
   root: string

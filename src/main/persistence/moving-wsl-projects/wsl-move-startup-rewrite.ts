@@ -3,7 +3,7 @@
  * see a committed move's rewrite, or the renderer hydrates the old routing and later writes it
  * back over the rewrite. So startup waits for the pass, but never long.
  */
-import { wslHostsServing } from '../../wsl/wsl-host-gate'
+import { wslHostsServing } from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
   runWslMoveDesktopRewritePass,
   type WslMoveDesktopRewritePassOptions

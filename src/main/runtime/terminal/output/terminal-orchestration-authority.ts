@@ -12,7 +12,7 @@ import {
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { RecentPtyOutputBuffer } from '../../recent-pty-output-buffer'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
 import { resolveRuntimeAgentDetectionHost } from '../../runtime-agent-detection-host'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'

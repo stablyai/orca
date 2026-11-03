@@ -7,6 +7,27 @@ import { ScrollArea } from '../ui/scroll-area'
 import { filterFontSuggestions, getRenderedFontSuggestions } from './settings-form-option-filter'
 import { useInstalledFontsUnavailable } from './installed-font-list'
 import { translate } from '@/i18n/i18n'
+import { buildAppFontFamily } from '@/lib/app-font-family'
+
+// Why: these OS-shipped fonts draw pictographs or Greek for Latin letters, so their own name would be unreadable.
+const SYMBOL_FONT_FAMILIES = new Set([
+  'webdings',
+  'wingdings',
+  'wingdings 2',
+  'wingdings 3',
+  'marlett',
+  'symbol',
+  'mt extra',
+  'bookshelf symbol 7',
+  'd050000l',
+  'standard symbols ps'
+])
+
+function fontPreviewStyle(font: string): React.CSSProperties | undefined {
+  return font && !SYMBOL_FONT_FAMILIES.has(font.toLowerCase())
+    ? { fontFamily: buildAppFontFamily(font) }
+    : undefined
+}
 
 type FontAutocompleteProps = {
   value: string
@@ -354,13 +375,16 @@ export function FontAutocomplete({
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setHighlightedIndex(sourceIndex)}
                     onClick={() => commitValue(font)}
-                    className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors ${
+                    // Why content-visibility: each row loads its own font, so skip offscreen rows until scrolled to; 20px is the line height inside py-2.
+                    className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors [contain-intrinsic-size:auto_20px] [content-visibility:auto] ${
                       sourceIndex === highlightedIndex
                         ? 'bg-accent text-accent-foreground'
                         : 'hover:bg-muted/60'
                     }`}
                   >
-                    <span className="truncate">{font || defaultOptionLabel}</span>
+                    <span className="truncate" style={fontPreviewStyle(font)}>
+                      {font || defaultOptionLabel}
+                    </span>
                     {font === value ? <Check className="ml-3 size-4 shrink-0" /> : null}
                   </button>
                 ))

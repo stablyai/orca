@@ -80,6 +80,13 @@ export function claudeStructuredSpawnOptions(input: {
   return { sdkOptions, options, fastModeAtStart }
 }
 
+/** Orca passes this flag only for a Full access chat; the agent's own arguments cannot carry it. */
+export function claudeLaunchSkipsPermissions(
+  options: Pick<ClaudeStructuredSdkOptions, 'extraArgs'>
+): boolean {
+  return Object.hasOwn(options.extraArgs ?? {}, 'dangerously-skip-permissions')
+}
+
 export function adoptClaudeStructuredSpawnOptions(
   session: Pick<
     ClaudeSession,
@@ -97,7 +104,7 @@ export function adoptClaudeStructuredSpawnOptions(
   const configuredModel = typeof extraArgs?.model === 'string' ? extraArgs.model : undefined
   session.launchIntent = {
     model: spawn.sdkOptions.model ?? configuredModel,
-    permissionMode: Object.hasOwn(extraArgs ?? {}, 'dangerously-skip-permissions')
+    permissionMode: claudeLaunchSkipsPermissions(spawn.sdkOptions)
       ? 'bypassPermissions'
       : permissionMode
   }

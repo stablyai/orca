@@ -578,7 +578,7 @@
         "inheritFont": "與 IDE 字型相同",
         "fontPreviewLabel": "聊天字型預覽",
         "fontPreview": "敏捷的棕色狐狸躍過懶狗。",
-        "title": "聊天",
+        "title": "聊天介面",
         "textSize": "文字大小",
         "textSizeDescription": "訊息、工具活動和訊息輸入框。在聊天中按 {{increase}} / {{decrease}} 也會更改此設定。",
         "codeTextSize": "程式碼文字大小",
@@ -2529,8 +2529,6 @@
         "25690a3855": "從 PR 啟動工作區",
         "a459866967": "恢復關聯 PR 的工作區",
         "347034903a": "複製 GitHub 連結",
-        "5a01ca7253": "無法將檢視的狀態與 GitHub 同步。",
-        "996a1897d2": "無法同步此 PR 的檢視狀態。",
         "e0b15c793f": "複製 GitHub 連結失敗",
         "992e799227": "GitHub 連結已複製",
         "61bfc81ada": "無法開啟附加到此 PR 的工作區。",
@@ -18869,6 +18867,7 @@
         "attachmentNotAFile": "此訊息中的一張圖片不是檔案，因此訊息未傳送。",
         "attachmentNoSource": "此訊息中的一張圖片沒有可傳送的檔案，因此訊息未傳送。",
         "attachmentInvalid": "此訊息中的附件無法傳送給代理程式。",
+        "attachmentsExpired": "{{names}} 已過期。",
         "attachmentUnreadable": "無法讀取此訊息中的附件，因此訊息未傳送。",
         "emptyMessage": "此訊息為空，因此未傳送。",
         "commandUnavailable": "此命令無法在 {{agent}} 聊天中使用，因此未傳送。",
@@ -18958,6 +18957,7 @@
         "recordFailed": "Orca 無法將此內容儲存到聊天歷史記錄中。",
         "attachmentExpired": "此附件已過期。",
         "reattachFile": "請將其移除後重新附加。",
+        "reattachFiles": "請將它們移除後重新附加。",
         "conversationCleared": "此對話已被清除。",
         "openCurrentConversation": "請開啟目前對話以繼續。",
         "clearUnfinished": "上一次 /clear 未完成。",
@@ -19314,7 +19314,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "請更新此主機上的 Orca，以便在聊天介面中繼續。",
-        "notSavedYet": "{{agent}} 尚未儲存此對話。請在它回覆後重試。"
+        "notSavedYet": "{{agent}} 尚未儲存此對話。請在它回覆後重試。",
+        "exitUnconfirmed": "{{agent}} 正在另一個終端機中執行此對話。請在該處結束它或關閉該終端機，然後重試。"
       },
       "state": {
         "loading": {
@@ -20234,6 +20235,9 @@
         "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
         "keepOpen": "保持開啟"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "在 WSL 上執行：{{distro}}（Linux）"
     }
   },
   "dashboardPopout": {
@@ -21990,6 +21994,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}：沒有可讀取的備份，因此將從空白狀態開始。",
+      "sectionKeptCurrent": "{{section}}：將保留目前的執行記錄",
       "sectionRestored": "{{section}}：已從 {{time}} 儲存的備份還原。",
       "projectsForgotten": "Orca 將清除專案及其工作區詳細資訊的紀錄。磁碟上的檔案不受影響。",
       "newerProjectsRemoved": "該備份之後新增的專案及其工作區詳細資訊，將從 Orca 中移除。磁碟上的檔案不受影響。",
@@ -22032,7 +22037,7 @@
       "noneFound": "（找不到）",
       "sqlitePath": "SQLite 路徑：{{path}}",
       "sectionsDamaged": "此設定檔儲存的部分狀態已損毀：{{sections}}。其餘內容皆完好無損。",
-      "repairCommand": "關閉 Orca，然後執行 `{{command}}`，僅從備份取代損毀的部分，並保留其餘所有內容。Orca 會保留損毀檔案的副本。",
+      "repairCommand": "停止 Orca，然後執行 `{{command}}`，僅修復損壞的部分並保留其他所有內容。Orca 會保留損壞檔案的副本。",
       "restoreWholeBackup": "若要改為還原整份備份，請先執行 `{{exportsCommand}}`，再執行 `{{rollbackCommand}}`。",
       "sqliteUnreadable": "Orca 無法安全地開啟目前使用的設定檔，因為其 SQLite 狀態無法讀取。",
       "legacyJsonPath": "舊版 JSON 路徑：{{path}}",
@@ -22771,6 +22776,8 @@
     "arguments": "引數",
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
-    "launchTerminal": "啟動終端機"
+    "launchTerminal": "啟動終端機",
+    "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
+    "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案"
   }
 }

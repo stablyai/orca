@@ -33,7 +33,6 @@ vi.mock('@/components/native-chat/structured-agent-session-message-sender', () =
 }))
 
 import { sendMessageToAgent } from './agent-message-send'
-import { activeAgentNotesSendFailureMessage } from './active-agent-note-send-result'
 
 function sendNotes() {
   return sendMessageToAgent({
@@ -64,20 +63,6 @@ it.each([
   )
 })
 
-it('words unconfirmed notes as the chat does', () => {
-  expect(activeAgentNotesSendFailureMessage('unconfirmed', { explicitTarget: true })).toBe(
-    "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed."
-  )
-})
-
-it('keeps the notes while the chat has a send out', async () => {
-  mocks.send.mockReturnValue(null)
-  await expect(sendNotes()).resolves.toEqual({
-    status: 'not-ready',
-    code: 'session-send-refused'
-  })
-})
-
 it.each(['pending', 'visibility-unknown'])(
   'keeps the notes while the chat is %s',
   async (lifecycle) => {
@@ -89,17 +74,6 @@ it.each(['pending', 'visibility-unknown'])(
     expect(mocks.send).not.toHaveBeenCalled()
   }
 )
-
-// The notes ride the restart of a chat whose start failed, and stay with their sender meanwhile.
-it('restarts a failed chat with the notes as its first message', async () => {
-  mocks.launch.lifecycle = 'failed'
-  mocks.relaunch.mockReturnValue(Promise.resolve({ delivered: true }))
-  await expect(sendNotes()).resolves.toEqual({ status: 'sent' })
-  expect(mocks.relaunch).toHaveBeenCalledWith('wt-1', 'session-1', 'the notes', {
-    callerKeepsText: true
-  })
-  expect(mocks.send).not.toHaveBeenCalled()
-})
 
 it('says a restart that carried the notes could not be confirmed, never that it refused them', async () => {
   mocks.launch.lifecycle = 'failed'

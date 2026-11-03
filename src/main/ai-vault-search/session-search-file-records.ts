@@ -1,6 +1,6 @@
 import { fileIdentity } from './session-search-file-cursor'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptSessionIdentity } from '../ai-vault/transcripts/session-transcript-consumers'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type SyncDatabase from '../sqlite/sync-database'
 import { EMPTY_CONTENT_HASH, type SessionContentHash } from './session-search-content-hash'

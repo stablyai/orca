@@ -4,6 +4,7 @@ import React, { createRef, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
 import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type {
@@ -185,6 +186,14 @@ describe('workspace reference URL resolution and recovery', () => {
     Element.prototype.scrollIntoView = vi.fn()
   })
   afterEach(cleanup)
+
+  it('keeps inline attachment results from claiming composer focus', () => {
+    render(composer(jiraUrl))
+
+    const results = screen.getByRole('listbox')
+    expect(results.getClientRects().length).toBeGreaterThan(0)
+    expect(getOverlayFocusOwners()).not.toContain(results)
+  })
 
   it('blocks pasted Jira URLs while loading, including plain Enter', () => {
     Object.assign(sourceMock.jiraState, { intent: true, loading: true })

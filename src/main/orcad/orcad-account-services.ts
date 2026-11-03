@@ -11,7 +11,7 @@ import type {
 } from '../../shared/ai-vault-resume-preparation'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import { createProviderAccountServices } from '../provider-account-services'
+import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
 import { createCodexRuntimeHomeLaunchPreparation } from '../codex/codex-runtime-home-launch-preparation'
 import { createCodexSessionResumeLaunchPreparation } from '../codex/codex-session-resume-launch-preparation'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'

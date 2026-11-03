@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { dirname, extname, relative, sep } from 'node:path'
+import { dirname, extname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build, version } from 'esbuild'
 import { runProcessSync } from '@orca/process-host'
@@ -26,9 +26,14 @@ export function resolveClaudeBenchmarkCommit(ref) {
   return result.stdout.trim()
 }
 
+const SNAPSHOT_MODULE_PATHS = [
+  'src/main/usage/usage-cache-snapshot-writer.ts',
+  'src/main/usage-cache-snapshot-writer.ts'
+]
+
 function persistenceEntry(mode) {
   const exports = [
-    `export { UsageCacheSnapshotWriter } from './src/main/usage-cache-snapshot-writer';`,
+    `export { UsageCacheSnapshotWriter } from './src/main/usage/usage-cache-snapshot-writer';`,
     `export { UsageProviderStoreLifecycle } from './src/main/usage/usage-provider-store-lifecycle';`
   ]
   if (mode === 'published') {
@@ -70,6 +75,22 @@ const INACTIVE_LIFECYCLE_IMPORTS = new Map([
 export async function loadClaudeUsageBenchmarkPersistence(mode, commit = null, frozen = new Map()) {
   const sourceFingerprints = {}
   const stubFingerprints = {}
+  let snapshotModulePath = SNAPSHOT_MODULE_PATHS[0]
+  if (typeof commit === 'string') {
+    const listed = runProcessSync({
+      program: 'git',
+      args: ['ls-tree', '--name-only', commit, '--', ...SNAPSHOT_MODULE_PATHS],
+      cwd: ROOT,
+      timeoutMs: 10_000,
+      maxOutputBytes: MIB,
+      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+    })
+    assert.equal(listed.code, 0, listed.stderr)
+    assert.equal(listed.outputTruncated, false)
+    const paths = new Set(listed.stdout.trim().split('\n'))
+    snapshotModulePath = SNAPSHOT_MODULE_PATHS.find((path) => paths.has(path))
+    assert(snapshotModulePath, 'Pinned usage snapshot writer is absent')
+  }
   const result = await build({
     stdin: { contents: persistenceEntry(mode), loader: 'ts', resolveDir: ROOT },
     platform: 'node',
@@ -80,6 +101,15 @@ export async function loadClaudeUsageBenchmarkPersistence(mode, commit = null, f
       {
         name: 'pinned-usage-persistence',
         setup(bundler) {
+          bundler.onResolve({ filter: /usage-cache-snapshot-writer(?:\.ts)?$/ }, (args) => {
+            const resolved = relative(ROOT, resolve(args.resolveDir, args.path))
+              .split(sep)
+              .join('/')
+            const modulePath = resolved.endsWith('.ts') ? resolved : `${resolved}.ts`
+            return SNAPSHOT_MODULE_PATHS.includes(modulePath)
+              ? { path: resolve(ROOT, snapshotModulePath) }
+              : undefined
+          })
           bundler.onResolve(
             {
               filter:

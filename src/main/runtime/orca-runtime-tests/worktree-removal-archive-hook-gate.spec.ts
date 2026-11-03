@@ -22,8 +22,8 @@ import {
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
   asArchiveHookRefusal
 } from '../../../shared/worktree/archive-hook-removal-gate'
-import { runSerializedWorktreeRemovalAcceptance } from '../../worktree-removal-acceptance-queue'
-import { startBackgroundWorktreeRemoval } from '../../worktree-background-removal'
+import { runSerializedWorktreeRemovalAcceptance } from '../../workspaces/removal/worktree-removal-acceptance-queue'
+import { startBackgroundWorktreeRemoval } from '../../workspaces/removal/worktree-background-removal'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 
 function withArchiveHook(): void {

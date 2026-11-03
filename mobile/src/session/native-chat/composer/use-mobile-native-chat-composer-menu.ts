@@ -2,10 +2,10 @@ import { prepareQueuedMessageEditText } from '../../../../../src/shared/queued-m
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   applyMentionSuggestion,
-  applyPickerSuggestion,
   deriveComposerAutocomplete,
   isSkillPickerTriggered
-} from '../../../../../src/shared/native-chat-composer-autocomplete'
+} from '../../../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
+import { applyPickerSuggestion } from '../../../../../src/shared/native-chat/input/native-chat-picker-triggers'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import {
   boundedMenuItems,

@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../app-relaunch', () => ({ relaunchApp: vi.fn() }))
+vi.mock('../startup/quit/app-relaunch', () => ({ relaunchApp: vi.fn() }))
 vi.mock('../orca-profiles/profile-index-store', () => ({
   getOrcaProfileListState: () => ({ activeProfileId: 'source', profiles: [] }),
   setActiveOrcaProfile: select,

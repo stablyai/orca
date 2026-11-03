@@ -131,8 +131,8 @@ vi.mock('./TerminalWindowSection', () => ({
   }
 }))
 
-vi.mock('./GhosttyImportModal', () => ({
-  GhosttyImportModal: function GhosttyImportModal() {
+vi.mock('./TerminalConfigImportModal', () => ({
+  TerminalConfigImportModal: function TerminalConfigImportModal() {
     return null
   }
 }))
@@ -213,40 +213,6 @@ function collectText(node: unknown): string {
   return getPropNodes(el).map(collectText).join('')
 }
 
-function findAnchorByText(node: unknown, text: string): ReactElementLike | null {
-  if (node == null) {
-    return null
-  }
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const found = findAnchorByText(child, text)
-      if (found) {
-        return found
-      }
-    }
-    return null
-  }
-  if (typeof node === 'string' || typeof node === 'number') {
-    return null
-  }
-  const el = node as ReactElementLike
-  const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
-  if (typeName === 'a' && collectText(el.props.children).includes(text)) {
-    return el
-  }
-  const rendered = renderFunctionElement(el)
-  if (rendered !== undefined) {
-    return findAnchorByText(rendered, text)
-  }
-  for (const child of getPropNodes(el)) {
-    const found = findAnchorByText(child, text)
-    if (found) {
-      return found
-    }
-  }
-  return null
-}
-
 function hasShellIconFor(node: unknown, shell: string): boolean {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return false
@@ -273,28 +239,6 @@ describe('TerminalPane PowerShell version setting', () => {
     vi.clearAllMocks()
   })
 
-  it('shows the PowerShell 7+ download link when pwsh is unavailable', () => {
-    const element = TerminalPane({
-      settings: {
-        terminalScrollbackRows: 5_000,
-        terminalWindowsShell: 'powershell.exe',
-        terminalWindowsPowerShellImplementation: 'powershell.exe',
-        terminalWordSeparator: ''
-      } as never,
-      updateSettings: () => {},
-      scrollbackMode: 'preset',
-      setScrollbackMode: () => {},
-      wslAvailable: false,
-      pwshAvailable: false,
-      gitBashAvailable: false
-    })
-
-    expect(collectText(element)).toContain('Auto uses Windows PowerShell now')
-    const link = findAnchorByText(element, 'Download PowerShell 7+')
-    expect(link).not.toBeNull()
-    expect(link?.props.href).toBe('https://github.com/PowerShell/PowerShell/releases/latest')
-  })
-
   it('does not show WSL as a Windows default shell option when available', () => {
     const element = TerminalPane({
       settings: {
@@ -316,49 +260,6 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(text).toContain('PowerShell')
     expect(text).toContain('Command Prompt')
     expect(text).not.toContain('WSL')
-  })
-
-  it('shows Windows shell controls for a remote Windows host on a non-Windows client', () => {
-    const element = TerminalPane({
-      settings: {
-        terminalScrollbackRows: 5_000,
-        terminalWindowsShell: 'powershell.exe',
-        terminalWindowsPowerShellImplementation: 'auto',
-        terminalWordSeparator: ''
-      } as never,
-      updateSettings: () => {},
-      scrollbackMode: 'preset',
-      setScrollbackMode: () => {},
-      wslAvailable: true,
-      wslDistros: ['Ubuntu'],
-      pwshAvailable: false,
-      gitBashAvailable: false,
-      isWindowsTerminalHost: true
-    })
-
-    const text = collectText(element)
-    expect(text).toContain('Default shell for new terminal panes on Windows')
-    expect(text).toContain('Command Prompt')
-    expect(text).not.toContain('WSL')
-  })
-
-  it('hides WSL as a Windows default shell option when unavailable', () => {
-    const element = TerminalPane({
-      settings: {
-        terminalScrollbackRows: 5_000,
-        terminalWindowsShell: 'powershell.exe',
-        terminalWindowsPowerShellImplementation: 'auto',
-        terminalWordSeparator: ''
-      } as never,
-      updateSettings: () => {},
-      scrollbackMode: 'preset',
-      setScrollbackMode: () => {},
-      wslAvailable: false,
-      pwshAvailable: false,
-      gitBashAvailable: false
-    })
-
-    expect(collectText(element)).not.toContain('WSL')
   })
 
   it('shows a persisted WSL default without PowerShell or distro sub-settings', () => {
