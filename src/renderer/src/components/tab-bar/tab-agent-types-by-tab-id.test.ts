@@ -209,22 +209,6 @@ describe('selectTabAgentTypesByTabId', () => {
     expect(selectTabAgentTypesByTabId({ ':leaf-a': entry({ agentType: 'claude' }) })).toEqual({})
   })
 
-  it('prefers paneOwner.agent over a nested guest agentType', () => {
-    const statuses: Record<string, AgentStatusEntry> = {
-      'tab-1:leaf-a': entry({
-        agentType: 'grok',
-        paneOwner: { agent: 'antigravity', session: 'agy-conv-1' }
-      })
-    }
-    expect(selectTabAgentTypesByTabId(statuses)).toEqual({ 'tab-1': 'antigravity' })
-    expect(
-      createTabBarAgentProjectionSelector()({
-        agentStatusByPaneKey: statuses,
-        terminalLayoutsByTabId: {}
-      }).tabAgentTypesByTabId
-    ).toEqual({ 'tab-1': 'antigravity' })
-  })
-
   it('shares one pair of global scans across retained TabBar consumers', () => {
     const onStatusEntryVisited = vi.fn()
     const onAgentTypeLayoutVisited = vi.fn()

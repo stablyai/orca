@@ -135,18 +135,6 @@ describe('resolveMobileTerminalTabAgentId', () => {
     ).toBe('omp')
   })
 
-  it('prefers paneOwner.agent over a nested subagent agentType on mobile terminal tabs', () => {
-    const tab: Extract<MobileSessionTab, { type: 'terminal' }> = {
-      ...terminalTab('Terminal', { agentType: 'grok' }),
-      agentStatus: {
-        ...agentStatus('grok'),
-        paneOwner: { agent: 'antigravity', session: 'agy-conv-1' }
-      }
-    }
-    expect(resolveMobileTerminalTabAgentId(tab)).toBe('antigravity')
-    expect(resolveMobileTerminalTabOwnedAgentId(tab)).toBe('antigravity')
-  })
-
   it('treats unknown hook identity as unavailable', () => {
     expect(
       resolveMobileTerminalTabAgentId(terminalTab('✳ investigating', { agentType: 'unknown' }))

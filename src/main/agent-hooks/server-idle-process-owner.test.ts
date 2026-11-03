@@ -50,7 +50,7 @@ async function idleClaude(server: AgentHookServer): Promise<void> {
   }
 }
 
-function mobile(server: AgentHookServer) {
+function mobile(server: AgentHookServer, agent: 'claude' | 'antigravity' = 'claude') {
   return buildRuntimeMobileAgentStatus(
     null,
     {
@@ -58,8 +58,8 @@ function mobile(server: AgentHookServer) {
       id: 'tab-1::leaf',
       parentTabId: 'tab-1',
       leafId: 'leaf',
-      title: 'Claude',
-      launchAgent: 'claude',
+      title: agent,
+      launchAgent: agent,
       isActive: true
     },
     null,
@@ -424,60 +424,83 @@ describe('idle foreground process owns its provider session', () => {
     expect(probe).not.toHaveBeenCalled()
   })
 
-  it('keeps an idle antigravity process owner when a nested grok subagent emits hooks', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'idle-antigravity-owner-'))
-    const transcriptPath = join(directory, 'agy.jsonl')
-    try {
-      writeFileSync(
-        transcriptPath,
-        `${JSON.stringify({
-          step_index: 0,
-          source: 'USER_EXPLICIT',
-          type: 'USER_INPUT',
-          content: 'Run background Grok task'
-        })}\n`
-      )
-      const server = await start()
-      const agyProcess = { pid: 5001, platform: 'linux', startTime: 'birth-5001' }
-      for (const [hook_event_name, extra] of [
-        ['PreInvocation', {}],
-        ['Stop', { fullyIdle: true, terminationReason: 'NO_TOOL_CALL', error: '' }]
-      ] as const) {
-        await postHookEvent(
-          server,
-          buildBody(
-            {
+  it.each(['done', 'stale-working'] as const)(
+    'keeps a %s Antigravity process owner when nested Grok emits hooks',
+    async (phase) => {
+      const directory = mkdtempSync(join(tmpdir(), 'idle-antigravity-owner-'))
+      const transcriptPath = join(directory, 'agy.jsonl')
+      try {
+        writeFileSync(
+          transcriptPath,
+          `${JSON.stringify({
+            step_index: 0,
+            source: 'USER_EXPLICIT',
+            type: 'USER_INPUT',
+            content: 'Run background Grok task'
+          })}\n`
+        )
+        const server = await start()
+        const agyProcess = { pid: 5001, platform: 'linux', startTime: 'birth-5001' }
+        for (const [hook_event_name, extra] of [
+          ['PreInvocation', {}],
+          ['Stop', { fullyIdle: true, terminationReason: 'NO_TOOL_CALL', error: '' }]
+        ] as const) {
+          await postHookEvent(
+            server,
+            buildBody(
+              {
+                hook_event_name,
+                conversationId: 'agy-conv-1',
+                transcriptPath,
+                prompt: 'Run background Grok task',
+                ...extra
+              },
+              { agentProcess: JSON.stringify(agyProcess) }
+            ),
+            '/hook/antigravity'
+          )
+        }
+        if (phase === 'stale-working') {
+          await postHookEvent(
+            server,
+            buildBody(
+              {
+                hook_event_name: 'PreInvocation',
+                conversationId: 'agy-conv-1',
+                transcriptPath,
+                lastUserInput: 'Run background Grok task'
+              },
+              { agentProcess: JSON.stringify(agyProcess) }
+            ),
+            '/hook/antigravity'
+          )
+          vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60 * 60 * 1000)
+        }
+        for (const hook_event_name of ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop']) {
+          await postHookEvent(
+            server,
+            buildBody({
               hook_event_name,
-              conversationId: 'agy-conv-1',
-              transcriptPath,
-              prompt: 'Run background Grok task',
-              ...extra
-            },
-            { agentProcess: JSON.stringify(agyProcess) }
-          ),
-          '/hook/antigravity'
-        )
+              session_id: 'nested-grok-1',
+              prompt: 'Subagent task',
+              tool_name: 'Bash'
+            }),
+            '/hook/grok'
+          )
+        }
+        expect(server.getStatusSnapshot()[0]).toMatchObject({
+          agentType: 'antigravity',
+          state: phase === 'done' ? 'done' : 'working',
+          prompt: 'Run background Grok task',
+          providerSession: { key: 'conversation_id', id: 'agy-conv-1' }
+        })
+        expect(mobile(server, 'antigravity').agentStatus).toMatchObject({
+          agentType: 'antigravity',
+          providerSession: { id: 'agy-conv-1' }
+        })
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
       }
-      for (const hook_event_name of ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop']) {
-        await postHookEvent(
-          server,
-          buildBody({
-            hook_event_name,
-            session_id: 'nested-grok-1',
-            prompt: 'Subagent task',
-            tool_name: 'Bash'
-          }),
-          '/hook/grok'
-        )
-      }
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        agentType: 'antigravity',
-        state: 'done',
-        prompt: 'Run background Grok task',
-        providerSession: { key: 'conversation_id', id: 'agy-conv-1' }
-      })
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
     }
-  })
+  )
 })

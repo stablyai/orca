@@ -42,7 +42,6 @@ export function resumeStatusFromHookRow(
   return {
     paneKey: row.paneKey,
     agentType: row.agentType,
-    ...(row.paneOwner ? { paneOwner: row.paneOwner } : {}),
     state: row.state,
     prompt: row.prompt,
     updatedAt: row.receivedAt,

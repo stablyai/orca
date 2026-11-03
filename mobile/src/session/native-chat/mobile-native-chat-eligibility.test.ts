@@ -116,52 +116,6 @@ describe('resolveMobileNativeChat', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'gemini' })).toBeNull()
   })
 
-  it('keeps a terminal-only paneOwner out of Native Chat even if agentStatus reports a nested grok subagent', () => {
-    const tab = {
-      type: 'terminal' as const,
-      agentStatus: status({
-        agentType: 'grok',
-        paneOwner: { agent: 'antigravity', session: 'agy-conv-1' },
-        providerSession: {
-          key: 'session_id',
-          id: 'grok-subagent-1',
-          transcriptPath: '/tmp/grok-subagent.jsonl'
-        }
-      })
-    }
-    expect(resolveMobileNativeChat(tab)).toBeNull()
-    expect(resolveMobileNativeChatSessionId(tab)).toBeNull()
-  })
-
-  it('uses a supported paneOwner session and matching remembered transcript when agentStatus reports a nested guest', () => {
-    const tab = {
-      type: 'terminal' as const,
-      nativeChatIdentity: {
-        terminal: 'h1',
-        agent: 'claude',
-        sessionId: 'claude-owner-1',
-        transcriptPath: '/tmp/claude-owner-1.jsonl'
-      },
-      agentStatus: status({
-        agentType: 'grok',
-        paneOwner: { agent: 'claude', session: 'claude-owner-1' },
-        providerSession: {
-          key: 'session_id',
-          id: 'grok-subagent-1',
-          transcriptPath: '/tmp/grok-subagent.jsonl'
-        }
-      })
-    }
-    expect(resolveMobileNativeChat(tab)).toEqual({
-      agent: 'claude',
-      sessionId: 'claude-owner-1',
-      transcriptPath: '/tmp/claude-owner-1.jsonl',
-      agentConfirmed: true,
-      sessionLive: true
-    })
-    expect(resolveMobileNativeChatSessionId(tab)).toBe('claude-owner-1')
-  })
-
   it('admits Grok only when its transcript is readable by the serving host', () => {
     const tab = { type: 'terminal', launchAgent: 'grok' }
     expect(resolveMobileNativeChat(tab, isNativeChatTranscriptLocalReadable(null))).toMatchObject({

@@ -1,8 +1,4 @@
-import {
-  effectiveAgentStatusOwnerType,
-  type AgentStatusEntry,
-  type AgentType
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 
 export type TerminalTabAgentTypeState = Record<string, AgentStatusEntry>
@@ -49,8 +45,7 @@ export function createTerminalTabAgentTypeSelector(
       const nextByTabId = new Map<string, Record<string, AgentType>>()
       for (const [paneKey, entry] of Object.entries(state)) {
         dependencies.onEntryVisited?.(paneKey)
-        const agentType = effectiveAgentStatusOwnerType(entry)
-        if (!agentType) {
+        if (!entry.agentType) {
           continue
         }
         const separator = paneKey.indexOf(':')
@@ -61,9 +56,9 @@ export function createTerminalTabAgentTypeSelector(
         const leafId = paneKey.slice(separator + 1)
         const byLeaf = nextByTabId.get(entryTabId)
         if (byLeaf) {
-          byLeaf[leafId] = agentType
+          byLeaf[leafId] = entry.agentType
         } else {
-          nextByTabId.set(entryTabId, { [leafId]: agentType })
+          nextByTabId.set(entryTabId, { [leafId]: entry.agentType })
         }
       }
       for (const [paneKey, entry] of Object.entries(foreground)) {

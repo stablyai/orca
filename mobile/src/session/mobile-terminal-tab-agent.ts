@@ -13,7 +13,6 @@ export type MobileTerminalTabAgentIdentity = {
   title: string
   agentStatus?: {
     agentType?: AgentStatusEntry['agentType'] | null
-    paneOwner?: AgentStatusEntry['paneOwner'] | null
     state?: AgentStatusEntry['state']
   } | null
   launchAgent?: TuiAgent | null
@@ -41,7 +40,7 @@ export function resolveMobileTerminalTabOwnedAgentId(
   tab: MobileTerminalTabAgentIdentity,
   hostAgentIdentity?: string | null
 ): string | null {
-  const hookAgentType = (tab.agentStatus?.paneOwner?.agent ?? tab.agentStatus?.agentType)?.trim()
+  const hookAgentType = tab.agentStatus?.agentType?.trim()
   if (hookAgentType && hookAgentType !== 'unknown') {
     return correctCursorImportedHookAgent(hookAgentType, hostAgentIdentity) ?? null
   }
@@ -76,9 +75,8 @@ export function resolveMobileTerminalTabAgentId(
   hostAgentIdentity?: string | null
 ): string | null {
   const status = tab.agentStatus
-  const rawHookAgentType = status?.paneOwner?.agent ?? status?.agentType
   const hookAgent = agentTypeToIconAgent(
-    correctCursorImportedHookAgent(rawHookAgentType, hostAgentIdentity)
+    correctCursorImportedHookAgent(status?.agentType, hostAgentIdentity)
   )
   return resolveTabAgentFromSignalSnapshot({
     title: tab.title,

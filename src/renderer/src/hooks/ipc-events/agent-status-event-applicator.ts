@@ -217,8 +217,7 @@ export function createAgentStatusEventApplicator(args: {
       existingStatus &&
       isInheritedFromActivePane(existingStatus, data, statusPayload.agentType, {
         connectionId: ownershipConnectionId,
-        worktreeId: owningWorktreeId,
-        foreground: store.paneForegroundAgentByPaneKey?.[paneKey]
+        worktreeId: owningWorktreeId
       })
     ) {
       return 'dropped'

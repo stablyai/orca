@@ -4,11 +4,7 @@ import {
   resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import {
-  effectiveAgentStatusOwnerType,
-  type AgentStatusEntry,
-  type AgentStatusIpcPayload
-} from '../../shared/agent-status-types'
+import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult,
@@ -68,12 +64,19 @@ export function projectRuntimeMobileSessionTabs(
       statusRowsByPaneKey = new Map()
       statusRowsByTerminalHandle = new Map()
       for (const row of host.getStatusSnapshot()) {
-        statusRowsByPaneKey.set(row.paneKey, [...(statusRowsByPaneKey.get(row.paneKey) ?? []), row])
+        const paneRows = statusRowsByPaneKey.get(row.paneKey)
+        if (paneRows) {
+          paneRows.push(row)
+        } else {
+          statusRowsByPaneKey.set(row.paneKey, [row])
+        }
         if (row.terminalHandle) {
-          statusRowsByTerminalHandle.set(row.terminalHandle, [
-            ...(statusRowsByTerminalHandle.get(row.terminalHandle) ?? []),
-            row
-          ])
+          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
+          if (handleRows) {
+            handleRows.push(row)
+          } else {
+            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
+          }
         }
       }
     }
@@ -171,10 +174,8 @@ export function projectRuntimeMobileSessionTabs(
     const ownerRecord = resolvePaneAgentOwnerRecord({
       launchAgent: launchOwnerAgent,
       hookAgent:
-        effectiveAgentStatusOwnerType(tab.agentStatus) ??
-        hookAgentStatus?.paneOwner?.agent ??
+        tab.agentStatus?.agentType ??
         hookAgentStatus?.agentType ??
-        retainedAgentStatus?.paneOwner?.agent ??
         retainedAgentStatus?.payload.agentType ??
         null
     })
@@ -188,11 +189,7 @@ export function projectRuntimeMobileSessionTabs(
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Renderer status may precede hook session identity; native chat still needs a transcript address.
     const rendererStatusAgent =
-      resolveCompatibleAgentTypeForOwner(
-        effectiveAgentStatusOwnerType(tab.agentStatus),
-        ownerAgent,
-        ownerOptions
-      ) ??
+      resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent, ownerOptions) ??
       ownerAgent ??
       undefined
     const hookSessionAgent = resolveCompatibleAgentTypeForOwner(

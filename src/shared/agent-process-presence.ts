@@ -59,7 +59,7 @@ export function readAgentProcessIdentity(value: unknown): AgentProcessIdentity |
   return { pid, platform, startTime }
 }
 
-// Why: only Claude and Antigravity POSIX hook commands capture their agent's process; other hooks cannot speak for liveness.
+// Only installed Claude and Antigravity commands capture the agent process before the managed shell.
 export function readHookAgentProcess(
   source: string,
   value: unknown

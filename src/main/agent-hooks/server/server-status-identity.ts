@@ -72,9 +72,6 @@ export function toAgentStatusIpcPayload(
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
     ...(entry.programStatus ? { programStatus: entry.programStatus } : {}),
-    ...(entry.agentPresence?.session && !entry.agentPresence.ended
-      ? { paneOwner: { agent: entry.agentPresence.agent, session: entry.agentPresence.session } }
-      : {}),
     ...entry.payload
   }
 }

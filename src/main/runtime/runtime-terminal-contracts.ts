@@ -190,7 +190,6 @@ export type HookLiveAgentRow = Pick<
   | 'turnEndedAt'
   | 'turnEndDisposition'
   | 'worktreeId'
-  | 'paneOwner'
   | 'programStatus'
 >
 

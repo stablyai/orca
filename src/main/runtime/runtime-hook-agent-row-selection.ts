@@ -25,7 +25,6 @@ export type RuntimeAgentRowSnapshot = {
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
-  paneOwner?: { agent: string; session: string }
   programStatus?: ProgramStatusFacet
 }
 
@@ -138,7 +137,6 @@ export function selectFreshAgentRowForMobileTab(args: {
     ...pickHostTurnEnd(match),
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
-    ...(match.paneOwner ? { paneOwner: match.paneOwner } : {}),
     ...(match.programStatus ? { programStatus: match.programStatus } : {}),
     ...(match.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: match.evidenceObservedAt }

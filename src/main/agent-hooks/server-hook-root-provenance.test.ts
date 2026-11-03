@@ -48,6 +48,21 @@ const unboundRoot = () => {
   io.resolveRoot.mockResolvedValueOnce(null)
 }
 
+it('rechecks Antigravity on its next turn when its process becomes the pane foreground', async () => {
+  const server = await createServer()
+  runningPane(49990, [49969, 101, 49969, 'agy', 'S'], [49990, 101, 49990, 'claude', 'S+'])
+  await hook(server, 'PreInvocation', { source: 'antigravity', prompt: 'Not foreground' })
+  expect(server.row()).toBeUndefined()
+  expect(attempts()).toBe(1)
+  runningPane(49969, [49969, 101, 49969, 'agy', 'S+'])
+  await hook(server, 'PreToolUse', { source: 'antigravity' })
+  expect(server.row()).toBeUndefined()
+  expect(attempts()).toBe(1)
+  await hook(server, 'PreInvocation', { source: 'antigravity', prompt: 'Foreground task' })
+  expect(server.row()).toMatchObject({ agentType: 'antigravity', prompt: 'Foreground task' })
+  expect(server.presence()).toMatchObject({ agent: 'antigravity', process: capture(49969) })
+})
+
 describe('an empty pane whose first hook cannot be proved', () => {
   it.each<[string, () => void, string?]>([
     ['a spawning shim', () => runningPane(49960, ...SHIM)],

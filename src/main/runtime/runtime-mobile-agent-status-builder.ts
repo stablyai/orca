@@ -103,20 +103,10 @@ export function buildRuntimeMobileAgentStatus(
       return {}
     }
   }
-  const paneOwner =
-    retained?.paneOwner ??
-    hookRow.live?.paneOwner ??
-    hookRow.restored?.paneOwner ??
-    hookRow.paneOwner ??
-    undefined
   // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
   const ownerRecord = resolvePaneAgentOwnerRecord({
     launchAgent: tab.launchAgent ?? pty?.launchAgent ?? null,
-    hookAgent:
-      retained?.paneOwner?.agent ??
-      retained?.payload.agentType ??
-      hookRow.paneOwner?.agent ??
-      hookRow.agentType
+    hookAgent: retained?.payload.agentType ?? hookRow.agentType
   })
   const ownerAgent = ownerRecord?.agent ?? pty?.foregroundAgent ?? null
   const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
@@ -152,7 +142,6 @@ export function buildRuntimeMobileAgentStatus(
           tabId: tab.parentTabId,
           terminalTitle,
           stateHistory: [],
-          ...(paneOwner ? { paneOwner } : {}),
           ...providerSession
         },
         ownerAgent,
@@ -206,7 +195,6 @@ export function buildRuntimeMobileAgentStatus(
         tabId: tab.parentTabId,
         terminalTitle,
         ...providerSession,
-        ...(liveRow.paneOwner ? { paneOwner: liveRow.paneOwner } : paneOwner ? { paneOwner } : {}),
         ...(liveRow.programStatus ? { programStatus: liveRow.programStatus } : {})
       },
       ownerAgent,
@@ -251,7 +239,6 @@ export function buildRuntimeMobileAgentStatus(
           tabId: tab.parentTabId,
           terminalTitle,
           stateHistory: [],
-          ...(paneOwner ? { paneOwner } : {}),
           ...providerSession
         },
         ownerAgent,

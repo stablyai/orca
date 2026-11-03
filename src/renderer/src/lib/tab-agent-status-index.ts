@@ -1,7 +1,4 @@
-import {
-  effectiveAgentStatusOwnerType,
-  type AgentStatusEntry
-} from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
@@ -36,7 +33,7 @@ function indexAgentStatus(source: Record<string, AgentStatusEntry>): void {
   const live = new Map<string, TabAgentPane[]>()
   const completed = new Map<string, TabAgentPane[]>()
   for (const [paneKey, entry] of Object.entries(source)) {
-    const agent = agentTypeToIconAgent(effectiveAgentStatusOwnerType(entry))
+    const agent = agentTypeToIconAgent(entry?.agentType)
     if (!agent) {
       continue
     }
