@@ -83,6 +83,32 @@ describe('turn item capability at the RPC boundary', () => {
     ).toMatchObject({ ok: true, result: { page: { items: [USER_ITEM, expected] } } })
   })
 
+  it('keeps the session agent on command-turn history for an older reader', async () => {
+    const command = { ...TURN_ITEM, itemId: 'legacy:orca:command:compact:1' }
+    hostCalls.sessionAgent.mockReturnValue('claude')
+    hostCalls.history.mockReturnValue({ ok: true, page: page([USER_ITEM, command]) })
+    expect(
+      await call(
+        'agentSession.history',
+        { sessionId: SESSION, direction: 'tail' },
+        STRUCTURED_CLIENT
+      )
+    ).toMatchObject({
+      ok: true,
+      result: {
+        page: {
+          items: [
+            USER_ITEM,
+            {
+              ...command,
+              body: { kind: 'status', text: 'Claude turn completed', turnLifecycle: TURN }
+            }
+          ]
+        }
+      }
+    })
+  })
+
   it.each(['snapshot', 'batch', 'reset'] as const)(
     'downgrades the %s stream only for a legacy reader',
     async (type) => {

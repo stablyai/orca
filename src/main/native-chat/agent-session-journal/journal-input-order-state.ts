@@ -123,7 +123,6 @@ export function recordJournalInputAdmission(
 }
 
 export function readJournalInputAdmission(
-  state: JournalReducerState,
   row: JournalSubmissionRow,
   cards: JournalInputCardIndex,
   cut: number,

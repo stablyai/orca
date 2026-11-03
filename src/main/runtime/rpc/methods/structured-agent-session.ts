@@ -217,10 +217,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
               ),
               ctx
             ),
-            ctx,
-            host.sessionAgent(params.sessionId)
+            ctx
           ),
-          ctx
+          ctx,
+          host.sessionAgent(params.sessionId)
         ),
         ctx
       )

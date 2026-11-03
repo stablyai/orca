@@ -119,7 +119,7 @@ export class JournalInputCardIndex {
     originalAcceptance?: (id: string) => AgentJournalCursor | undefined
   ): JournalInputPlace {
     this.ensure(state)
-    return readAdmission(state, row, this, this.lineage.at(row.seq), originalAcceptance)
+    return readAdmission(row, this, this.lineage.at(row.seq), originalAcceptance)
   }
 
   queryCurrent(place: JournalInputPlace): InputPlaceQuery {
