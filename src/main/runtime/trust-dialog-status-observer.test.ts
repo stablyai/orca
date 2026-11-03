@@ -126,6 +126,21 @@ describe('TrustDialogStatusObserver', () => {
     expect(published).toEqual(['waiting'])
   })
 
+  it('still publishes when the shared probe answers after every retry window', async () => {
+    const { runtime, published, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
+    )
+    const probe = vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned')
+    for (let i = 0; i < 6; i++) {
+      probe.mockReturnValueOnce(Promise.resolve(undefined))
+    }
+    await write(recording)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(published).toEqual(['waiting'])
+  })
+
   // Keys verified against Claude Code 2.1.316: digits do nothing, Down+Enter trusts, Enter alone exits.
   it.each([
     ['claude-dialog-trust-workspace', 'claude', '\x1b[B\r'],
