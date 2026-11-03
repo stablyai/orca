@@ -4,6 +4,7 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../../pty/shell-startup/powershell-osc133-bootstrap'
+import { POSIX_PWSH_LOGIN_ARG } from '../../pty/shell-startup/posix-pwsh'
 import { getFishCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
 import { getFishClaudeShellFunction } from '../../../shared/claude-shell-function'
 import { getFishXdgDataDirsLaunchEnv } from '../../pty/shell-startup/fish-xdg-data-dirs-handoff'
@@ -109,6 +110,8 @@ export function getShellLaunchConfig(
   if (isPowerShellExecutableName(shellName)) {
     return {
       args: [
+        // Login shell like zsh -l / bash -l, so /etc/profile and ~/.profile apply.
+        ...(process.platform === 'win32' ? [] : [POSIX_PWSH_LOGIN_ARG]),
         '-NoLogo',
         '-NoExit',
         // Why base64 and not -Command: see powershell-osc133-bootstrap.ts (MDE review).
