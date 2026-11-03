@@ -60,7 +60,10 @@ it.each([
 ] as const)(
   'discloses the literal %s diagnostic without replacing its plain sentence',
   (failure) => {
-    const sentence = agentSessionFailureSentence(failure, 'row')
+    const sentence =
+      failure.kind === 'providerRejected'
+        ? 'Codex could not finish.'
+        : agentSessionFailureSentence(failure, 'row')
     render({ type: 'text', tone: 'error', text: sentence, failure })
     expect(text()).toContain(sentence)
     expect(text()).not.toContain(diagnostic)
