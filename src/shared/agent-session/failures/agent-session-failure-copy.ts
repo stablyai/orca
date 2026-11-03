@@ -23,7 +23,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   savedConversationMissing:
-    "{{agent}} couldn't find this chat's saved conversation. Any messages saved by Orca remain in this chat. Use Hand Off to Another Agent on desktop to start a new session from that context.",
+    "{{agent}} couldn't find this chat's saved conversation. Use Hand Off to Another Agent on desktop to start a new session.",
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',
   sendAgainToTryOnceMore: 'Send your message again to try once more.',

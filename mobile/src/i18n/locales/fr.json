@@ -1978,7 +1978,7 @@
       "providerRetrying": "{{agent}} a rencontré un problème temporaire et réessaie.",
       "providerRetryingQuoted": "{{agent}} réessaie : {{detail}}.",
       "providerStartFailed": "{{agent}} s'est arrêté avant d'avoir fini de démarrer.",
-      "savedConversationMissing": "{{agent}} n’a pas trouvé la conversation enregistrée de ce chat. Les messages enregistrés par Orca restent dans ce chat. Utilisez « Transférer à un autre Agent » sur ordinateur pour démarrer une nouvelle session avec ce contexte.",
+      "savedConversationMissing": "{{agent}} n’a pas trouvé la conversation enregistrée de ce chat. Utilisez « Transférer à un autre Agent » sur ordinateur pour démarrer une nouvelle session.",
       "queueFull": "Trop de messages attendaient l'agent, ce message n'a donc pas été envoyé.",
       "quitTerminalAgent": "Quittez cet agent pour continuer le chat ici.",
       "runCommandAgain": "Relancez /{{command}}.",

@@ -1909,7 +1909,7 @@
       "providerRetrying": "{{agent}} 遇到临时问题，正在重试。",
       "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。",
       "providerStartFailed": "{{agent}} 在完成启动前已停止。",
-      "savedConversationMissing": "{{agent}} 找不到此聊天已保存的对话。Orca 保存的消息仍保留在此聊天中。请在桌面端使用“移交给另一个智能体”，以该上下文开始新的会话。",
+      "savedConversationMissing": "{{agent}} 找不到此聊天已保存的对话。请在桌面端使用“移交给另一个智能体”开始新的会话。",
       "queueFull": "等待智能体处理的消息过多，因此此消息未发送。",
       "quitTerminalAgent": "请退出该智能体，以便在此处继续聊天。",
       "runCommandAgain": "请重新运行 /{{command}}。",
