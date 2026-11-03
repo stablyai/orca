@@ -25,6 +25,7 @@ import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
 import { leaseAppImageGenerationForCurrentProcess } from '../cli/appimage-generation-lease'
 import { createDaemonShutdownDeadline } from './daemon-shutdown-deadline'
+import { DAEMON_LOGIN_SESSION_WATCH_ARG } from './daemon-login-session-watch-arg'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -77,7 +78,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     } else if (argv[i] === '--spawner-exec-path' && argv[i + 1]) {
       spawnerExecPath = argv[i + 1]
       i++
-    } else if (argv[i] === '--login-session-watch') {
+    } else if (argv[i] === DAEMON_LOGIN_SESSION_WATCH_ARG) {
       loginSessionWatch = true
     } else if (argv[i] === '--fresh-daemon-scope') {
       freshDaemonScope = true

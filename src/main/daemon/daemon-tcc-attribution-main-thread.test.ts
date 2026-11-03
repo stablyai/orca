@@ -13,10 +13,15 @@ const { execFileMock, execFileSyncMock, psCommandLine, psError } = vi.hoisted(()
   execFileMock: vi.fn(
     (
       _file: string,
-      _args: readonly string[],
+      args: readonly string[],
       _options: unknown,
       callback: (error: Error | null, stdout: string, stderr: string) => void
-    ) => callback(psError.value, psError.value ? '' : `${PS_START} ${psCommandLine.value}\n`, '')
+    ) => {
+      const stdout = args.includes('ppid=')
+        ? `4242 ${psCommandLine.value}\n`
+        : `${PS_START} ${psCommandLine.value}\n`
+      callback(psError.value, psError.value ? '' : stdout, '')
+    }
   ),
   execFileSyncMock: vi.fn(() => ''),
   psCommandLine: { value: '' },
@@ -142,7 +147,7 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     )
 
     expect(execFileSyncMock).not.toHaveBeenCalled()
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledTimes(2)
     expect(execFileMock).toHaveBeenCalledWith(
       'ps',
       ['-p', String(process.pid), '-o', 'lstart=', '-o', 'command='],
@@ -154,13 +159,13 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
       'intact'
     )
-    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenCalledTimes(4)
 
     rmSync(spawnerExecPath)
     await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
       'severed'
     )
-    expect(execFileMock).toHaveBeenCalledTimes(3)
+    expect(execFileMock).toHaveBeenCalledTimes(5)
   })
 
   it('retries an indeterminate identity inspection', async () => {
@@ -176,7 +181,7 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     )
 
     expect(execFileSyncMock).not.toHaveBeenCalled()
-    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenCalledTimes(3)
   })
 
   it('fails open for a legacy pid record without app-version metadata', async () => {

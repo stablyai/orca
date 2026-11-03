@@ -1993,7 +1993,6 @@
       },
       "useMacTccAttributionSeveredNotice": {
         "title": "macOS izinleri Orca terminallerine ulaşmayabilir",
-        "description": "Çalışan Orca terminalleri, önceki bir Orca kurulumu tarafından başlatılan bir arka plan hizmeti (daemon) tarafından barındırılıyor. macOS, Orca'nın Erişilebilirlik, Otomasyon veya korumalı dosya izinlerini bunlara uygulamayabilir. Erişimi geri yüklemek için Oturumları Yönet'ten arka plan hizmetini yeniden başlatın. Bu, çalışan tüm Orca terminallerini kapatacaktır.",
         "openManageSessions": "Oturumları Yönet'i Aç",
         "dismiss": "Kapat",
         "folderAccessTitle": "Terminaller {{folder}} klasörünüzü okuyamıyor",
@@ -12196,7 +12195,6 @@
           "permissionDenied": "Mikrofon erişimi engellendi. Sistem ayarlarınızdan izin verip tekrar deneyin."
         },
         "TerminalTccAttributionNotice": {
-          "body": "Terminal daemon'u artık var olmayan bir Orca kurulumu tarafından başlatıldı, bu yüzden macOS komutlarını Orca'ya atfedemiyor; Erişilebilirlik ve Otomasyon izinleri sessizce yok sayılıyor (osascript -25211 hatasıyla başarısız oluyor). Daemon'u yeniden başlatmak bunu düzeltir; çalışan terminal oturumları kapanacaktır.",
           "openManageSessions": "Oturumları Yönet'i aç",
           "title": "macOS izinleri terminallerde uygulanmıyor"
         },

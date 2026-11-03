@@ -263,7 +263,7 @@ export function hostReportsChildExitStatus(file: string): boolean {
   return file !== MACOS_LOGIN_PATH
 }
 
-/** login(1) gives signed terminal CLIs independent TCC grants; positional trampoline args cannot become shell source. */
+/** Keeps login-session semantics; it does not change TCC's responsible process on macOS 27.2 (#12971). Positional trampoline args cannot become shell source. */
 export function wrapShellSpawnForMacosTccAttribution(
   file: string,
   args: string[],

@@ -2260,7 +2260,6 @@
       },
       "useMacTccAttributionSeveredNotice": {
         "title": "As permissões do macOS podem não alcançar os terminais do Orca",
-        "description": "Os terminais do Orca em execução são hospedados por um daemon iniciado por uma instalação anterior do Orca. O macOS pode não aplicar a eles as permissões de Acessibilidade, Automação ou arquivos protegidos do Orca. Reinicie o daemon em Gerenciar Sessões para restaurar o acesso. Isso encerrará todos os terminais do Orca em execução.",
         "openManageSessions": "Abrir Gerenciar Sessões",
         "dismiss": "Descartar",
         "folderAccessTitle": "Os terminais não conseguem ler sua pasta {{folder}}",
@@ -8560,7 +8559,6 @@
           "placeholder": "Mesma da fonte do terminal"
         },
         "TerminalTccAttributionNotice": {
-          "body": "O daemon do terminal foi iniciado por uma instalação do Orca que não existe mais, então o macOS não consegue atribuir seus comandos ao Orca — as concessões de Acessibilidade e Automação são ignoradas silenciosamente (o osascript falha com o erro -25211). Reiniciar o daemon corrige isso; as sessões de terminal em execução serão encerradas.",
           "openManageSessions": "Abrir Gerenciar Sessões",
           "title": "As concessões de permissão do macOS não estão alcançando os terminais"
         },

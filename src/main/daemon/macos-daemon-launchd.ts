@@ -118,22 +118,29 @@ async function recoverBlockingMacDaemonJob(options: MacDaemonLaunchOptions): Pro
   }
 }
 
+/** Node servers, SSH hosts, unpackaged builds and Macs below the helper's floor keep the fork launcher. */
+export function canLaunchMacDaemonFromStableBundle(macosLoginSessionWatch: boolean): boolean {
+  // GUI login-session watching excludes serve mode.
+  if (
+    process.platform !== 'darwin' ||
+    !macosLoginSessionWatch ||
+    !getAppEnvironment().isPackaged()
+  ) {
+    return false
+  }
+  // Older Macs need the fork path because the helper’s Node cannot load there.
+  const systemVersion = process.getSystemVersion?.()
+  return (
+    !!systemVersion && compareDottedVersions(systemVersion, NODE_RUNTIME_DARWIN_MINIMUM_OS) >= 0
+  )
+}
+
 /** Use a signed launchd helper to survive app updates; null permits safe fork fallback. */
 export async function launchMacDaemonFromStableBundle(
   options: MacDaemonLaunchOptions,
   deadlineMs: number
 ): Promise<DaemonProcessHandle | null> {
-  // GUI login-session watching excludes serve mode.
-  if (
-    process.platform !== 'darwin' ||
-    !options.macosLoginSessionWatch ||
-    !getAppEnvironment().isPackaged()
-  ) {
-    return null
-  }
-  // Older Macs need the fork path because the helper’s Node cannot load there.
-  const systemVersion = process.getSystemVersion?.()
-  if (!systemVersion || compareDottedVersions(systemVersion, NODE_RUNTIME_DARWIN_MINIMUM_OS) < 0) {
+  if (!canLaunchMacDaemonFromStableBundle(options.macosLoginSessionWatch)) {
     return null
   }
   const label = macDaemonJobLabel(options.userDataPath)

@@ -33,28 +33,31 @@ export function getPsProcessIdentity(
   }
 }
 
-export async function getPsProcessIdentityAsync(pid: number): Promise<ProcessIdentity | null> {
+async function runPsAsync(pid: number, fields: string[]): Promise<string | null> {
   try {
-    const stdout = await new Promise<string>((resolve, reject) => {
+    return await new Promise<string>((resolve, reject) => {
       execFile(
         'ps',
-        ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
-        {
-          encoding: 'utf8',
-          env: psLocaleEnvironment(),
-          timeout: PS_IDENTITY_TIMEOUT_MS
-        },
-        (error, output) => {
-          if (error) {
-            reject(error)
-            return
-          }
-          resolve(output)
-        }
+        ['-p', String(pid), ...fields],
+        { encoding: 'utf8', env: psLocaleEnvironment(), timeout: PS_IDENTITY_TIMEOUT_MS },
+        (error, output) => (error ? reject(error) : resolve(output))
       )
     })
-    return parsePsProcessIdentity(stdout)
   } catch {
     return null
   }
+}
+
+export async function getPsProcessIdentityAsync(pid: number): Promise<ProcessIdentity | null> {
+  const stdout = await runPsAsync(pid, ['-o', 'lstart=', '-o', 'command='])
+  return stdout === null ? null : parsePsProcessIdentity(stdout)
+}
+
+/** Node's ppid is only the caller's, so another process's parent comes from ps. */
+export async function getPsParentProcessAsync(
+  pid: number
+): Promise<{ parentPid: number; commandLine: string } | null> {
+  const stdout = await runPsAsync(pid, ['-o', 'ppid=', '-o', 'command='])
+  const match = stdout === null ? null : /^\s*(\d+)\s+(.*)$/s.exec(stdout)
+  return match ? { parentPid: Number(match[1]), commandLine: match[2].trim() } : null
 }

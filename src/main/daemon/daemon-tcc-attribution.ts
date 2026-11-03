@@ -1,8 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import { getDaemonPidPath } from './daemon-spawner'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { readVerifiedDaemonPid } from './daemon-pid-identity'
+import { getPsParentProcessAsync } from './daemon-process-identity-query'
+import { MAC_TERMINAL_HOST_EXECUTABLE } from './macos-daemon-bundle'
+import { canLaunchMacDaemonFromStableBundle } from './macos-daemon-launchd'
 import { PROTOCOL_VERSION } from './types'
+import { DAEMON_LOGIN_SESSION_WATCH_ARG } from './daemon-login-session-watch-arg'
+
+const LAUNCHD_PID = 1
 
 // Unknown attribution must not trigger daemon replacement.
 export type MacDaemonTccAttributionHealth = 'intact' | 'severed' | 'unknown'
@@ -58,13 +65,28 @@ export async function getMacDaemonTccAttributionHealth(
       tokenPath,
       protocolVersion
     )
-    if (!parsedPid) {
+    if (!parsedPid?.spawnerExecPath) {
       return 'unknown'
     }
-    if (parsedPid.spawnerExecPath) {
-      return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'
+    if (!existsSync(parsedPid.spawnerExecPath)) {
+      return 'severed'
     }
-    return 'unknown'
+    // The launchd terminal host is its own responsible process.
+    if (basename(parsedPid.spawnerExecPath) === MAC_TERMINAL_HOST_EXECUTABLE) {
+      return 'intact'
+    }
+    const parent = await getPsParentProcessAsync(parsedPid.pid)
+    if (!parent) {
+      return 'unknown'
+    }
+    // Once the forking app exits, tccd sees each new child as its own session, so session-scoped grants never stick (#12971).
+    // Only hosts that a restart moves onto the launchd helper report it; forking again would sever again.
+    return parent.parentPid === LAUNCHD_PID &&
+      canLaunchMacDaemonFromStableBundle(
+        parent.commandLine.includes(DAEMON_LOGIN_SESSION_WATCH_ARG)
+      )
+      ? 'severed'
+      : 'intact'
   })()
   if (cacheKey) {
     cachedMacDaemonTccAttributionHealth = { key: cacheKey, pending }

@@ -1570,7 +1570,6 @@
       },
       "useMacTccAttributionSeveredNotice": {
         "title": "Los permisos de macOS podrían no llegar a las terminales de Orca",
-        "description": "Las terminales de Orca en ejecución las aloja un daemon iniciado por una instalación anterior de Orca. Es posible que macOS no les aplique los permisos de Accesibilidad, Automatización o archivos protegidos de Orca. Reinicia el daemon desde Gestionar sesiones para restaurar el acceso. Esto cerrará todas las terminales de Orca en ejecución.",
         "openManageSessions": "Abrir Gestionar sesiones",
         "dismiss": "Descartar",
         "folderAccessTitle": "Las terminales no pueden leer tu {{folder}}",
@@ -11930,7 +11929,6 @@
         },
         "TerminalTccAttributionNotice": {
           "openManageSessions": "Abrir Gestionar sesiones",
-          "body": "El demonio de terminal se inició mediante una instalación de Orca que ya no existe, por lo que macOS no puede atribuir sus comandos a Orca: las concesiones de accesibilidad y automatización se ignoran silenciosamente (osascript falla con el error -25211). Reiniciar el demonio soluciona este problema; Se cerrarán las sesiones de terminal en ejecución.",
           "title": "Las concesiones de permisos de macOS no llegan a los terminales"
         },
         "artifacts": {
