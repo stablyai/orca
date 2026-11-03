@@ -50,6 +50,56 @@ describe('remote terminal stream watchdog delivery deadline', () => {
     expect(onStall).not.toHaveBeenCalled()
   })
 
+  it('trips 30s after the oldest unacknowledged chunk once ACKs stop, even while output keeps settling', () => {
+    const onStall = vi.fn()
+    const watchdog = createRemoteTerminalStreamWatchdog(onStall)
+
+    // Healthy start: deliveries settle and are ACKed.
+    for (let tick = 0; tick < 50; tick += 1) {
+      watchdog.beginOutputDelivery(1_000)()
+      watchdog.recordOutputAcknowledged(1_000)
+      vi.advanceTimersByTime(20)
+    }
+    const ackStoppedAtMs = Date.now()
+    // ACKs stop (only part of the oldest chunk is ever acknowledged) while output keeps settling.
+    let partialAckSent = false
+    let stalledAfterMs: number | null = null
+    for (let tick = 0; tick < 2_000 && stalledAfterMs === null; tick += 1) {
+      watchdog.beginOutputDelivery(1_000)()
+      if (!partialAckSent) {
+        watchdog.recordOutputAcknowledged(500)
+        partialAckSent = true
+      }
+      vi.advanceTimersByTime(20)
+      if (onStall.mock.calls.length > 0) {
+        stalledAfterMs = Date.now() - ackStoppedAtMs
+      }
+    }
+
+    expect(onStall).toHaveBeenCalledTimes(1)
+    expect(onStall.mock.calls[0]?.[0]).toMatchObject({ reason: 'delivery-credit-timeout' })
+    expect(stalledAfterMs).toBeGreaterThanOrEqual(REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS)
+    expect(stalledAfterMs).toBeLessThanOrEqual(REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS + 20)
+  })
+
+  it('drains a single ACK covering many tiny chunks without quadratic cost', () => {
+    vi.useRealTimers()
+    const onStall = vi.fn()
+    const watchdog = createRemoteTerminalStreamWatchdog(onStall)
+    const chunkCount = 200_000
+    for (let index = 0; index < chunkCount; index += 1) {
+      watchdog.beginOutputDelivery(1)()
+    }
+
+    const startedAt = performance.now()
+    watchdog.recordOutputAcknowledged(chunkCount)
+    const elapsedMs = performance.now() - startedAt
+    watchdog.dispose()
+
+    // Repeated Array.shift() takes seconds here; a head index takes a few ms.
+    expect(elapsedMs).toBeLessThan(100)
+  })
+
   it('stays armed while parsed bytes remain unacknowledged to the host', () => {
     const onStall = vi.fn()
     const watchdog = createRemoteTerminalStreamWatchdog(onStall)

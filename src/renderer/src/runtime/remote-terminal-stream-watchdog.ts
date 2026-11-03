@@ -27,8 +27,9 @@ export function createRemoteTerminalStreamWatchdog(
   // Unsettled deliveries in arrival order; the oldest one's start is the stall anchor.
   const unsettledDeliveries = new Set<{ startedAtMs: number }>()
   // Host credit reopens on ACK frames; parsed-but-unacked bytes remain credit whose loss can stall output.
-  const unacknowledgedChunks: { bytes: number; startedAtMs: number }[] = []
-  let armedDeadlineAnchorMs: number | null = null
+  // Why a head index: one ACK can cover thousands of tiny frames, and repeated shift() is O(n) each.
+  let unacknowledgedChunks: { bytes: number; startedAtMs: number }[] = []
+  let unacknowledgedHead = 0
   let lastInboundAtMs = Date.now()
   let commandResponseProbePending = false
   let disposed = false
@@ -62,28 +63,41 @@ export function createRemoteTerminalStreamWatchdog(
       reason
     })
   }
-  // Why oldest pending: flowing output always has bytes in flight; only the oldest byte not moving is a stall.
-  const syncDeliveryTimer = (): void => {
+  const oldestPendingAtMs = (): number => {
     const oldestDelivery = unsettledDeliveries.values().next().value
-    const anchorMs = Math.min(
+    return Math.min(
       oldestDelivery?.startedAtMs ?? Infinity,
-      unacknowledgedChunks[0]?.startedAtMs ?? Infinity
+      unacknowledgedChunks[unacknowledgedHead]?.startedAtMs ?? Infinity
     )
-    if (disposed || anchorMs === Infinity) {
-      clearDeliveryTimer()
-      armedDeadlineAnchorMs = null
-      return
-    }
-    if (deliveryTimer && armedDeadlineAnchorMs === anchorMs) {
-      return
-    }
-    clearDeliveryTimer()
-    armedDeadlineAnchorMs = anchorMs
+  }
+  // Why oldest pending: flowing output always has bytes in flight; only the oldest byte not moving is a stall.
+  // Why arm once and recheck on fire: the anchor only moves later, so re-arming per frame would churn timers on the output hot path.
+  const armDeliveryTimer = (anchorMs: number): void => {
     const remainingMs = Math.max(
       0,
       REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS - (Date.now() - anchorMs)
     )
-    deliveryTimer = setTimeout(() => trip('delivery-credit-timeout'), remainingMs)
+    deliveryTimer = setTimeout(() => {
+      deliveryTimer = null
+      const currentAnchorMs = oldestPendingAtMs()
+      if (disposed || currentAnchorMs === Infinity) {
+        return
+      }
+      if (Date.now() - currentAnchorMs >= REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS) {
+        trip('delivery-credit-timeout')
+        return
+      }
+      armDeliveryTimer(currentAnchorMs)
+    }, remainingMs)
+  }
+  const ensureDeliveryTimer = (): void => {
+    if (disposed || deliveryTimer) {
+      return
+    }
+    const anchorMs = oldestPendingAtMs()
+    if (anchorMs !== Infinity) {
+      armDeliveryTimer(anchorMs)
+    }
   }
 
   return {
@@ -97,7 +111,7 @@ export function createRemoteTerminalStreamWatchdog(
       if (bytes > 0) {
         unacknowledgedChunks.push({ bytes, startedAtMs: delivery.startedAtMs })
       }
-      syncDeliveryTimer()
+      ensureDeliveryTimer()
       let settled = false
       return () => {
         if (settled || disposed) {
@@ -106,7 +120,6 @@ export function createRemoteTerminalStreamWatchdog(
         settled = true
         outstandingDeliveryBytes = Math.max(0, outstandingDeliveryBytes - bytes)
         unsettledDeliveries.delete(delivery)
-        syncDeliveryTimer()
       }
     },
     recordOutputAcknowledged(bytes) {
@@ -114,16 +127,26 @@ export function createRemoteTerminalStreamWatchdog(
         return
       }
       let remaining = bytes
-      while (remaining > 0 && unacknowledgedChunks.length > 0) {
-        const oldest = unacknowledgedChunks[0]
+      while (remaining > 0 && unacknowledgedHead < unacknowledgedChunks.length) {
+        const oldest = unacknowledgedChunks[unacknowledgedHead]
         const consumed = Math.min(oldest.bytes, remaining)
         oldest.bytes -= consumed
         remaining -= consumed
         if (oldest.bytes === 0) {
-          unacknowledgedChunks.shift()
+          unacknowledgedHead += 1
         }
       }
-      syncDeliveryTimer()
+      // Why compact only past half: keeps slice cost amortized O(1) per consumed chunk.
+      if (unacknowledgedHead === unacknowledgedChunks.length) {
+        unacknowledgedChunks = []
+        unacknowledgedHead = 0
+      } else if (
+        unacknowledgedHead > 1024 &&
+        unacknowledgedHead * 2 > unacknowledgedChunks.length
+      ) {
+        unacknowledgedChunks = unacknowledgedChunks.slice(unacknowledgedHead)
+        unacknowledgedHead = 0
+      }
     },
     completeCommandResponseProbe() {
       commandResponseProbePending = false
@@ -150,8 +173,8 @@ export function createRemoteTerminalStreamWatchdog(
       clearDeliveryTimer()
       outstandingDeliveryBytes = 0
       unsettledDeliveries.clear()
-      unacknowledgedChunks.length = 0
-      armedDeadlineAnchorMs = null
+      unacknowledgedChunks = []
+      unacknowledgedHead = 0
     }
   }
 }
