@@ -57,6 +57,7 @@ export function structuredAgentSessionShownSnapshot(
   const descriptor = snapshot.find((entry) => entry.id === 'effort')
   if (
     view.record.values.effort !== undefined ||
+    descriptor?.valueSource === 'reported' ||
     typeof model !== 'string' ||
     descriptor?.kind.type !== 'select'
   ) {

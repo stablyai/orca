@@ -440,6 +440,26 @@ describe('Pi supported selection apart from saved intent', () => {
   const effort = (state: StructuredAgentSessionOptionState) =>
     structuredAgentSessionShownSnapshot(state).find((option) => option.id === 'effort')
 
+  it('shows a sparse native report without selecting it as input', () => {
+    for (const declaredDefaultEffort of [undefined, 'low']) {
+      const state = applyStructuredAgentSessionOptions(install(), seed, {
+        models: [{ ...row, declaredDefaultEffort }],
+        current: {
+          model: row.id,
+          reportedEffort: 'medium',
+          acceptedInputSources: { model: 'saved' },
+          defaulted: []
+        }
+      })
+      expect(effort(state)).toMatchObject({
+        valueSource: 'reported',
+        kind: { currentValue: 'medium' }
+      })
+      expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: row.id })
+      expect(state.record.values).not.toHaveProperty('effort')
+    }
+  })
+
   it('rederives new and restored blank controls on a late precise row and readback without restoring off', () => {
     const coarse = install(fresh(), levels('off', 'minimal', 'low', 'medium', 'high'))
     expect(shown(coarse, remembered, {})).toEqual(remembered)
