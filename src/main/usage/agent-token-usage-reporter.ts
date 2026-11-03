@@ -9,17 +9,28 @@ import { isTelemetryEnabled, track } from '../telemetry/client'
 import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 import type { AgentTokenSession } from './agent-token-usage'
 
-const stateSchema = z
+const legacyStateSchema = z
   .object({
     schemaVersion: z.literal(1),
     snapshots: z.array(agentTokenUsageSchema)
   })
   .strict()
 
+const currentStateSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    snapshots: z.array(agentTokenUsageSchema),
+    acceptedRevisions: z.array(
+      z.tuple([z.uuidv4(), z.number().int().positive().max(Number.MAX_SAFE_INTEGER)])
+    )
+  })
+  .strict()
+const stateSchema = z.discriminatedUnion('schemaVersion', [legacyStateSchema, currentStateSchema])
+
 /** Cumulative snapshots: consumers select the highest revision per provider/session, never sum retries. */
 export class AgentTokenUsageReporter {
   private snapshots: Map<string, AgentTokenUsage> | null = null
-  private readonly sent = new Map<string, number>()
+  private readonly acceptedRevisions = new Map<string, number>()
   private readonly writer: UsageCacheSnapshotWriter
   private pending: Promise<void> = Promise.resolve()
 
@@ -82,20 +93,25 @@ export class AgentTokenUsageReporter {
     }
     // Persist revisions before capture so a restart can only retry the same snapshot or a newer one.
     if (changed) {
-      await this.writer.write(() =>
-        JSON.stringify({ schemaVersion: 1, snapshots: [...next.values()] })
-      )
+      await this.persist(next)
     }
     this.snapshots = next
     for (const snapshot of next.values()) {
-      if (this.sent.get(snapshot.analytics_session_id) === snapshot.revision) {
+      if (this.acceptedRevisions.get(snapshot.analytics_session_id) === snapshot.revision) {
         continue
       }
       if (!track('agent_token_usage', snapshot)) {
         break
       }
-      this.sent.set(snapshot.analytics_session_id, snapshot.revision)
+      // Queue acceptance only deduplicates this process; restart must retry undelivered snapshots.
+      this.acceptedRevisions.set(snapshot.analytics_session_id, snapshot.revision)
     }
+  }
+
+  private async persist(snapshots: Map<string, AgentTokenUsage>): Promise<void> {
+    await this.writer.write(() =>
+      JSON.stringify({ schemaVersion: 1, snapshots: [...snapshots.values()] })
+    )
   }
 
   private async load(): Promise<Map<string, AgentTokenUsage>> {
@@ -117,6 +133,17 @@ export class AgentTokenUsageReporter {
       state.snapshots.some((snapshot) => snapshot.provider !== this.provider)
     ) {
       throw new Error('Invalid agent token usage state')
+    }
+    // Validate old v2 markers, but do not treat queue acceptance as durable delivery.
+    const acceptedRevisions = new Map(state.schemaVersion === 2 ? state.acceptedRevisions : [])
+    if (
+      (state.schemaVersion === 2 && acceptedRevisions.size !== state.acceptedRevisions.length) ||
+      [...acceptedRevisions].some(([id, revision]) => {
+        const snapshot = snapshots.get(id)
+        return !snapshot || revision > snapshot.revision
+      })
+    ) {
+      throw new Error('Invalid agent token usage acceptance state')
     }
     return snapshots
   }

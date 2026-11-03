@@ -436,6 +436,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(track).toHaveBeenCalledWith('agent_hook_unattributed', {
       reason: 'unknown_tab_id'
     })
+    expect(track).toHaveBeenCalledTimes(1)
 
     const previousStoreState = { ...storeState }
     storeState.terminalLayoutsByTabId = {
