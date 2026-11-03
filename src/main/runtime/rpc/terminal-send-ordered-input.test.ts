@@ -237,6 +237,37 @@ describe('ordered terminal input RPC', () => {
     }
   })
 
+  it('charges raw controls retained by the dispatcher while normalized sends wait', async () => {
+    const f = fixture()
+    const token = (await f.open())!
+    const first = f.send(token, 1, 'held')
+    await vi.waitFor(() => expect(f.sendTerminal).toHaveBeenCalledTimes(1))
+    const pending = Array.from({ length: 25 }, (_, index) =>
+      f.call('terminal.send', {
+        terminal: 'term',
+        client,
+        text: 'x',
+        enter: 'e'.repeat(350 * 1024) + index,
+        interrupt: 'i'.repeat(350 * 1024) + index,
+        inputSequence: { sessionId: token, seq: index + 2 }
+      })
+    )
+    let refused = false
+    void pending.at(-1)!.then((reply) => {
+      refused =
+        reply.ok &&
+        z.object({ send: z.object({ accepted: z.boolean() }) }).parse(reply.result).send
+          .accepted === false
+    })
+    try {
+      await vi.waitFor(() => expect(refused).toBe(true), { timeout: 100 })
+      expect(f.sendTerminal).toHaveBeenCalledTimes(1)
+    } finally {
+      f.release()
+      await Promise.all([first, ...pending])
+    }
+  })
+
   it('keeps a cancelled queued request behind its predecessor and never writes its suffix', async () => {
     const f = fixture()
     const token = (await f.open())!

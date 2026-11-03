@@ -70,7 +70,6 @@ export function withTerminalInputSequence(
         ? ledger.trackLegacy(ptyId, owner, () => send(params, context))
         : send(params, context)
     }
-    params = { ...params, ...terminalOrderedInputControls(params) }
     if (
       !owner ||
       signal?.aborted ||
@@ -79,8 +78,10 @@ export function withTerminalInputSequence(
     ) {
       return Promise.resolve(refused(params.terminal))
     }
-    const current = runtime.getTerminalPromptRequestBinding(params.terminal)
     const { sessionId, seq } = params.inputSequence
+    const bytes = terminalOrderedInputByteLength(params)
+    params = { ...params, ...terminalOrderedInputControls(params) }
+    const current = runtime.getTerminalPromptRequestBinding(params.terminal)
     const assertBinding = (expected: TerminalInputSessionBinding, writePtyId?: string) => {
       const actual = runtime.getTerminalPromptRequestBinding(params.terminal)
       if (
@@ -94,7 +95,6 @@ export function withTerminalInputSequence(
         throw new Error('terminal_input_session_replaced')
       }
     }
-    const bytes = terminalOrderedInputByteLength(params)
     const fingerprint =
       bytes > TERMINAL_ORDERED_INPUT_MAX_BYTES
         ? ''
