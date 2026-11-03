@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo } from 'react'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 import { filterJiraProjectPickerProjects } from '@/components/jira-project-picker-filter'
+import { withJiraSiteLabel } from '../../../../../shared/jira/jira-site-label'
 import { isVisibleJiraCreateField } from '@/components/task-page/jira/task-page-jira-create-fields'
 import {
   jiraProjectDisplayLabelComparator,
@@ -25,6 +26,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
     newJiraIssueProjectSearchInputRef,
     newJiraIssueTypeId,
     selectedJiraSiteId,
+    jiraSites,
     setNewJiraIssueProjectComboboxOpen,
     setNewJiraIssueProjectCommandValue,
     setNewJiraIssueProjectId,
@@ -35,11 +37,12 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
   const languageRevision = useUiLanguageRevision()
   const sortedAvailableJiraProjects = useMemo(
     () =>
-      [...availableJiraProjects].sort(
-        jiraProjectDisplayLabelComparator(includeJiraSiteNameInProjectLabel, intlLocale)
-      ),
+      availableJiraProjects
+        // Older remote hosts send a name-only siteName; same-name sites need the host to differ.
+        .map((project) => withJiraSiteLabel(project, jiraSites))
+        .sort(jiraProjectDisplayLabelComparator(includeJiraSiteNameInProjectLabel, intlLocale)),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- the comparator collates in the UI language.
-    [availableJiraProjects, includeJiraSiteNameInProjectLabel, languageRevision, intlLocale]
+    [availableJiraProjects, jiraSites, includeJiraSiteNameInProjectLabel, languageRevision, intlLocale]
   )
   const filteredNewJiraIssueProjects = useMemo(() => {
     return filterJiraProjectPickerProjects({
