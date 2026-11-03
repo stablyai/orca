@@ -1,5 +1,12 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View, type HostInstance } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type HostInstance
+} from 'react-native'
 import {
   ArrowRight,
   CircleCheck,
