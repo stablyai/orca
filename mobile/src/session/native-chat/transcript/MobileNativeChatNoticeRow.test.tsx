@@ -41,12 +41,12 @@ function render(block: NativeChatTextBlock) {
 }
 function text() {
   return tree.root
-    .findAllByType('Text')
+    .findAll((node) => String(node.type) === 'Text')
     .map((node) => node.children.join(''))
     .join('\n')
 }
 function toggle() {
-  act(() => tree.root.findByType('Pressable').props.onPress())
+  act(() => tree.root.find((node) => String(node.type) === 'Pressable').props.onPress())
 }
 afterEach(async () => {
   act(() => tree?.unmount())
@@ -67,7 +67,7 @@ it.each([
     render({ type: 'text', tone: 'error', text: sentence, failure })
     expect(text()).toContain(sentence)
     expect(text()).not.toContain(diagnostic)
-    expect(tree.root.findByType('Pressable').props).toMatchObject({
+    expect(tree.root.find((node) => String(node.type) === 'Pressable').props).toMatchObject({
       accessibilityRole: 'button',
       accessibilityLabel: 'Details',
       'aria-expanded': false
@@ -75,7 +75,9 @@ it.each([
     toggle()
     expect(text()).toContain(sentence)
     expect(text()).toContain(diagnostic)
-    const body = tree.root.findAllByType('Text').find((node) => node.children.includes(diagnostic))!
+    const body = tree.root
+      .findAll((node) => String(node.type) === 'Text')
+      .find((node) => node.children.includes(diagnostic))!
     expect(body.props.selectable).toBe(true)
     expect(body.props.style).toEqual(
       expect.arrayContaining([expect.objectContaining({ fontSize: 18 })])
@@ -95,7 +97,9 @@ it('keeps a provider frame and failure detail together behind the translated con
     failure: { kind: 'providerRejected', detail: { audience: 'person', text: diagnostic } },
     providerFrame: frame
   })
-  expect(tree.root.findByType('Pressable').props.accessibilityLabel).toBe('详情')
+  expect(tree.root.find((node) => String(node.type) === 'Pressable').props.accessibilityLabel).toBe(
+    '详情'
+  )
   expect(text()).not.toContain(frame.payload.head)
   toggle()
   expect(text()).toContain('Codex could not finish.')
@@ -140,6 +144,6 @@ it('retains settled permission disclosure and the plain stop notice', () => {
     presentation: AGENT_SESSION_ORCA_STOP_PRESENTATION,
     orcaStop: { cause: 'crash' }
   })
-  expect(tree.root.findAllByType('Pressable')).toHaveLength(0)
+  expect(tree.root.findAll((node) => String(node.type) === 'Pressable')).toHaveLength(0)
   expect(text()).not.toContain('Old host stop text')
 })
