@@ -9,7 +9,7 @@ import {
   SettingsRow,
   SettingsSubsectionHeader,
   SettingsSwitchRow
-} from './SettingsFormControls'
+} from './form-controls/SettingsFormControls'
 import { TemplateField } from './perforce-settings-inputs'
 
 /** Settings > Perforce > Workspace Copies: what a copy leaves out and the free-space floor. */

@@ -12,7 +12,7 @@ import {
 import type { GenerateCommitMessageResult } from '../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 
 type GenerateArgs = {
   worktreePath: string

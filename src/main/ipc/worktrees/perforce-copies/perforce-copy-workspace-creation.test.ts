@@ -23,7 +23,7 @@ vi.mock('../../../perforce/perforce-desktop-settings', () => ({
   desktopPerforceSettings: () => ({}),
   runWithDesktopPerforceSettings: (_store: unknown, run: () => unknown) => run()
 }))
-vi.mock('../../registered-worktree-roots-cache', () => ({
+vi.mock('../removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   resolveRegisteredWorktreePath: mocks.resolveRoot
 }))

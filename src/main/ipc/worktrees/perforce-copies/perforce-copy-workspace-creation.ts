@@ -10,11 +10,11 @@ import {
 } from '../../../perforce/perforce-desktop-settings'
 import type { Store } from '../../../persistence/loading-store/store'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
-import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
+import { requireWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
 import {
   invalidateAuthorizedRootsCache,
   resolveRegisteredWorktreePath
-} from '../../registered-worktree-roots-cache'
+} from '../removal/registered-worktree-roots-cache'
 import { emitCreateWorktreeProgress } from '../../worktree-remote'
 import { folderWorkspaceCreateMeta } from '../create/folder-workspace-creation'
 import { mergeFolderWorkspace } from '../folder-workspace-model'

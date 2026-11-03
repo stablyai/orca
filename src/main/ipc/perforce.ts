@@ -6,7 +6,7 @@ import { runWithDesktopPerforceSettings } from '../perforce/perforce-desktop-set
 import { resolvePerforceBackend } from '../perforce/perforce-ssh-backend'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { registerPerforceDescriptionGeneration } from './perforce-description-generation'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 
 type WorktreeArgs = Record<string, unknown> & { worktreePath: string; connectionId?: string }
 

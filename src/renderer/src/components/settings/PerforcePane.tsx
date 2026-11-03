@@ -6,13 +6,13 @@ import {
 } from '../../../../shared/perforce/perforce-settings'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import {
   NumberField,
   SettingsRow,
   SettingsSegmentedControl,
   SettingsSwitchRow
-} from './SettingsFormControls'
+} from './form-controls/SettingsFormControls'
 import { PerforceAiAgentFields } from './PerforceAiFields'
 import { PerforceConnectionTest } from './PerforceConnectionTest'
 import { PerforceCopySettingsFields } from './PerforceCopySettingsFields'

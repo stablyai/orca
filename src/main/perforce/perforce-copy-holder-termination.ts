@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import type { HostProcess } from '../../shared/perforce/workspace-copy/workspace-copy-host'
-import { readOrcaChromiumProcessPids } from '../orca-chromium-process-pids'
+import { readOrcaChromiumProcessPids } from '../pty/process-retirement/orca-chromium-process-pids'
 import {
   readWindowsProcessTableFresh,
   type WindowsProcessRow

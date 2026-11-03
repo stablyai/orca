@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import type { SettingsSearchEntry } from './settings-search'
+import type { SettingsSearchEntry } from './search/settings-search'
 
 export type PerforceSettingId =
   | 'p4-path'

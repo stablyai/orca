@@ -16,7 +16,7 @@ import type {
 } from '../../shared/perforce/workspace-copy/workspace-copy-types'
 import { isFolderRepo, isPerforceRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
-import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { resolveWorkspaceCopyBackend } from '../perforce/perforce-copy-backend'
 import {
   createPerforceCopyForWorkspace,

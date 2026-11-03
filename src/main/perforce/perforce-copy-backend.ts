@@ -1,4 +1,4 @@
-import { removeHostTree } from '../host-tree-removal'
+import { removeHostTree } from '../filesystem/host-tree-removal'
 import { readProcessesHoldingFolder } from '../windows/windows-folder-holders'
 import {
   createLocalWorkspaceCopyBackend,

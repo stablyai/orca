@@ -27,7 +27,7 @@ vi.mock('../perforce/perforce-ssh-backend', () => ({
 vi.mock('../perforce/perforce-desktop-settings', () => ({
   runWithDesktopPerforceSettings: (_store: unknown, run: () => unknown) => run()
 }))
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRoot
 }))
 vi.mock('./perforce-description-generation', () => ({

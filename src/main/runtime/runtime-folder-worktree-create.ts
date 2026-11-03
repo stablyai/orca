@@ -18,7 +18,7 @@ import {
 } from './runtime-folder-workspace'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import { createRuntimePerforceCopy } from './runtime-perforce-copy-commands'
-import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type {

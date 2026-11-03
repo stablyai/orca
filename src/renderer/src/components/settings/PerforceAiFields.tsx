@@ -5,7 +5,7 @@ import {
 import type { PerforceSettings } from '../../../../shared/perforce/perforce-settings'
 import { translate } from '@/i18n/i18n'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { SettingsRow } from './SettingsFormControls'
+import { SettingsRow } from './form-controls/SettingsFormControls'
 import { CommitInput, InstructionsField } from './perforce-settings-inputs'
 
 const DEFAULT_CHOICE = '__default__'

@@ -72,7 +72,7 @@ vi.mock('../perforce/perforce-ssh-backend', () => ({
     detect: async () => ({ isWorkspace: detectedWorkspace, reason: 'not-in-workspace' })
   })
 }))
-vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: () => events.push('invalidate-roots')
 }))
 

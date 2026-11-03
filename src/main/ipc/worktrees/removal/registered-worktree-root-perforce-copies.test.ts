@@ -1,11 +1,13 @@
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/repo-types'
-import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { RegisteredWorktreeRootStore } from './registered-worktree-root-store'
 
-vi.mock('../repo-worktrees', () => ({ listRepoWorktreeGraph: vi.fn(async () => []) }))
-vi.mock('../local-project-runtime-resolution', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
+  listRepoWorktreeGraph: vi.fn(async () => [])
+}))
+vi.mock('../../../workspaces/execution-host/local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: () => new Map()
 }))
 import { listWorktreeRootsWithConcurrency } from './registered-worktree-root-probes'
