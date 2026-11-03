@@ -227,6 +227,7 @@ describe('runtime environment mobile relay hosts', () => {
     await expect(hosts.resolve('env-1')).resolves.toEqual({
       environmentId: 'env-1',
       fence: '7\0runtime-a',
+      pairingRevision: 7,
       pairing: { endpoint: 'ws://vm:6768' }
     })
     expect(mocks.resolveManaged).toHaveBeenCalledWith('/user-data', 'env-1', NO_WSL_START)
