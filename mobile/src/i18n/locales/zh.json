@@ -799,7 +799,8 @@
     },
     "prSidebar": {
       "loading": "正在加载 PR…",
-      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。"
+      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。",
+      "retryLoading": "重试加载 PR"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主机列表",
