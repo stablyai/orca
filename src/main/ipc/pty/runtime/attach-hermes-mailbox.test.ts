@@ -36,7 +36,16 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
       const db = new OrchestrationDb(':memory:')
       try {
         const { runtime } = createRuntime(db, { headless: true, launchAgent: 'hermes' })
-        const write = vi.fn((_id: string, _data: string) => true)
+        const write = vi.fn((_id: string, data: string) => {
+          if (data.includes('You have')) {
+            runtime.onPtyData(
+              PTY_ID,
+              '\x1b]1;✓ Run Orca dispatched worker …\x07\x1b]2;✓ Run Orca dispatched worker … · grok-4.7 · ~/workspace\x07',
+              Date.now()
+            )
+          }
+          return true
+        })
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach reads only this provider's attach method.
         const provider = {
           attach: async () => ({
