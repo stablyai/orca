@@ -6,8 +6,16 @@ import type {
   PreloadApi
 } from '../api-types'
 import type { AgentType } from '../../shared/agent-status-types'
+import {
+  NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH,
+  type NativeChatVisualTheme
+} from '../../shared/native-chat/native-chat-visual-shell'
 
 export const nativeChatApi = {
+  // Acknowledge the in-memory snapshot before guest creation can start its preload.
+  publishVisualGuestTheme: (theme: NativeChatVisualTheme): void => {
+    ipcRenderer.sendSync(NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH, theme)
+  },
   readSession: (
     agent: AgentType,
     sessionId: string,
