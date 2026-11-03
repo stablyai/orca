@@ -18,7 +18,10 @@ import {
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../../../shared/worktree/ownership'
-import { areWorktreePathsEqual, dedupeWorktreesByPath } from '../../../git/worktree-path-comparison'
+import {
+  areWorktreePathsEqual,
+  dedupeWorktreesByPath
+} from '../../../git/worktrees/catalog/worktree-path-comparison'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources

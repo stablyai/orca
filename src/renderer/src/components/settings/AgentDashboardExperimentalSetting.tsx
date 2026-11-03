@@ -1,9 +1,9 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
-import { SearchableSetting } from './SearchableSetting'
-import { SettingsSegmentedControl, SettingsSwitch } from './SettingsFormControls'
-import { getExperimentalSearchEntry } from './experimental-search'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { SettingsSegmentedControl, SettingsSwitch } from './form-controls/SettingsFormControls'
+import { getExperimentalSearchEntry } from './advanced/experimental-search'
 import { canOpenAgentDashboardPopout } from '../dashboard/agent-dashboard-open-mode'
 
 type AgentDashboardExperimentalSettingProps = {

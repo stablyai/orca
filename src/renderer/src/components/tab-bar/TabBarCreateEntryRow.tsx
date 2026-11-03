@@ -107,7 +107,13 @@ export function EntryActionRow({
       {onUseAgent && option.kind === 'agent' && option.option.pickerEntry ? (
         <AgentLaunchSetupButton
           entry={option.option.pickerEntry}
-          initial={option.option.setup}
+          seed={option.option.setup}
+          preset={option.option.preset}
+          draftId={
+            option.option.preset
+              ? `${option.option.preset.model}:${option.option.preset.effort ?? ''}`
+              : undefined
+          }
           disabled={disabled}
           onUse={onUseAgent}
         />

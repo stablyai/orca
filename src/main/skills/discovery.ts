@@ -28,7 +28,7 @@ import {
   unavailableSkillSource,
   type StoppedWslRootsReadScope
 } from './skill-discovery-stopped-wsl-roots'
-import { wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'

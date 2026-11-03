@@ -25,7 +25,10 @@ import {
   requireLocalWorktreeMetadataPrune
 } from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
-import { assertWslUncPathRunning, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
+import {
+  assertWslUncPathRunning,
+  wslDistroForPath
+} from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 // Coalesce renderer polls while bounding external-change lag.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000

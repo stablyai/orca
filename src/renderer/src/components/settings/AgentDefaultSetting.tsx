@@ -4,7 +4,7 @@ import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsSubsectionHeader } from './form-controls/SettingsFormControls'
 
 function DefaultAgentPill({
   active,

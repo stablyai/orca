@@ -19,7 +19,7 @@ import {
 import { ChatSurfacePreview, TerminalSurfacePreview } from './AgentDefaultSurfacePreviews'
 import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from './agents-search'
 import { Card, CardContent } from '../ui/card'
-import { SettingsRow } from './SettingsFormControls'
+import { SettingsRow } from './form-controls/SettingsFormControls'
 import { Button } from '../ui/button'
 import {
   agentsKeepingOwnSurface,

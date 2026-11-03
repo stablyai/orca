@@ -1,4 +1,4 @@
-import type * as WorktreeListingModule from '../../../../../git/worktree-listing'
+import type * as WorktreeListingModule from '../../../../../git/worktrees/catalog/worktree-listing'
 import { describe, expect, it, vi } from 'vitest'
 
 const { ipcHandlers } = vi.hoisted(() => ({
@@ -6,7 +6,7 @@ const { ipcHandlers } = vi.hoisted(() => ({
 }))
 
 // Partially mock Electron: snapshot-pull is registered through ipcMain.handle, which is absent outside Electron.
-vi.mock('../../../../../git/worktree-listing', async (importOriginal) => {
+vi.mock('../../../../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
     listWorktreesStrict: listWorktreesStrict
@@ -25,10 +25,6 @@ vi.mock('electron', async (importOriginal) => ({
 }))
 const { listWorktreesStrict } = vi.hoisted(() => ({ listWorktreesStrict: vi.fn() }))
 // The git binary is the external boundary for worktree.ps; everything above it stays real.
-vi.mock('../../../../../git/worktree', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict
-}))
 
 import type Database from '../../../../../sqlite/sync-database'
 import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status-ipc-payload'

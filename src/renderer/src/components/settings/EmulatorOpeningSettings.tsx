@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getEmulatorOpeningMode } from '../../../../shared/emulator-opening-preferences'
-import { SettingsRow } from './SettingsFormControls'
+import { SettingsRow } from './form-controls/SettingsFormControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { translate } from '@/i18n/i18n'
 import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'

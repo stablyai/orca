@@ -29,7 +29,7 @@ import {
   getProfileTerminalScrollbackSnapshotRoot,
   getTerminalScrollbackSnapshotPath,
   makeTerminalScrollbackSnapshotRef
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 
 const mocks = vi.hoisted(() => {
   const state: { targetStore: unknown } = { targetStore: null }

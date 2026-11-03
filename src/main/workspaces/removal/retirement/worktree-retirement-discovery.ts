@@ -5,11 +5,11 @@ import { isWslUncPath, parseWslUncPath } from '../../../../shared/wsl-paths'
 import {
   encodeClaudeProjectPaths,
   isClaudeProjectDirInScope
-} from '../../../ai-vault/claude-project-dir-encoding'
+} from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import type { RetirementScanResult } from './worktree-retirement-backfill-scan'
 import { normalizeRetirableGeneratedName } from './worktree-name-retirement'
-import { getWslHomeAsync } from '../../../wsl'
+import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
 
 /** Prefer spending an extra name to reissuing a path whose agent history survives. */
 export function collectRetiredNamesFromLeafNames(leafNames: Iterable<string>): Set<string> {

@@ -18,7 +18,7 @@ vi.mock('@/i18n/i18n', () => ({
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
 vi.mock('@/hooks/useResetCountdownClock', () => ({ useResetCountdownClock: () => 0 }))
 vi.mock('@/components/ui/dropdown-menu', () => ({ DropdownMenuItem: () => null }))
-vi.mock('@/components/settings/SettingsFormControls', () => ({
+vi.mock('@/components/settings/form-controls/SettingsFormControls', () => ({
   SettingsSegmentedControl: () => null
 }))
 

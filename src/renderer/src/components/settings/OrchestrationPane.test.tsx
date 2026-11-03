@@ -12,7 +12,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
 import { OrchestrationPane } from './OrchestrationPane'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch } from './search/settings-search'
 
 const mocks = vi.hoisted(() => ({
   panelProps: [] as Record<string, unknown>[],
