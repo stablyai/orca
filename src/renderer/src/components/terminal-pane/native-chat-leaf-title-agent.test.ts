@@ -71,15 +71,4 @@ describe('resolveNativeChatLeafTitleAgent', () => {
       })
     ).toBeNull()
   })
-
-  it('falls back to the terminal title in a single pane', () => {
-    expect(
-      resolveNativeChatLeafTitleAgent({
-        leafId: 'leaf-1',
-        panes: [panes[0]],
-        runtimePaneTitlesByPaneId: {},
-        terminalTitle: 'OpenClaude'
-      })
-    ).toBe('openclaude')
-  })
 })

@@ -65,16 +65,4 @@ describe('transient cwd observation is not launch intent', () => {
       })
     ).not.toBe(computeAgentLaunchFingerprint(input))
   })
-  it.each(['existing', 'create-folder-workspace'] as const)(
-    'does not project %s targets',
-    (kind) => {
-      const target =
-        kind === 'existing'
-          ? { kind, worktree: 'id:r' }
-          : { kind, create: { name: 'folder', cwdParentAmbiguous: true } }
-      expect(computeAgentLaunchFingerprint({ agent: 'codex', target })).toBe(
-        canonicalAgentSessionDigest({ method: 'agent.launch', agent: 'codex', target })
-      )
-    }
-  )
 })

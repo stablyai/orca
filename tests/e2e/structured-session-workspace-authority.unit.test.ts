@@ -19,7 +19,7 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/ag
 import {
   acquireWatcherRemovalGate,
   beginWatcherInstall
-} from '../../src/main/ipc/watcher-removal-gate'
+} from '../../src/main/workspaces/removal/watcher-removal-gate'
 import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
 import {
   root,

@@ -36,7 +36,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../browser/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
-  '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
+  '../ipc/browser/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
   '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
   '../browser/browser-manager': {
     browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }

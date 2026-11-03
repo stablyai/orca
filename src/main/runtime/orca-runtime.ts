@@ -20,7 +20,7 @@ import type {
   AgentLaunchPaneAddress,
   AgentLaunchPaneVerdict
 } from '../../shared/agent-launch-pane-verdict'
-import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
+import { registerWorktreeChangeInvalidator } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'

@@ -42,6 +42,63 @@ beforeEach(() => {
   document.body.append(host)
   root = createRoot(host)
 })
+
+it('requests current supplied inventory after Agent Settings closes the root programmatically', () => {
+  const claude: AgentPickerEntry = {
+    ...entry,
+    agent: 'claude',
+    label: 'Claude',
+    rows: [{ agent: 'claude', kind: 'cli' }]
+  }
+  const entries = [entry, claude]
+  vi.spyOn(inventoryModule, 'useAgentLaunchPickerInventory').mockReturnValue([])
+  const onCatalogOpen = vi.fn()
+  const onOpenAgentSettings = vi.fn()
+  const model = {
+    state: 'settled' as const,
+    rows: entries.flatMap((entry) => entry.rows),
+    detection: {
+      detectedIds: entries.map((entry) => entry.agent),
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => entries.map((entry) => entry.agent)
+    }
+  }
+  const show = (agent: AgentPickerEntry['agent']) =>
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AgentLaunchPicker
+            model={model}
+            entries={entries}
+            agent={agent}
+            onPick={launch}
+            onCatalogOpen={onCatalogOpen}
+            onOpenAgentSettings={onOpenAgentSettings}
+          />
+        </TooltipProvider>
+      )
+    )
+  const open = () =>
+    fireEvent.pointerDown(getByRole(document.body, 'button', { name: 'Select agent' }), {
+      button: 0
+    })
+  show('claude')
+  open()
+  fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Claude' }))
+  fireEvent.keyDown(document.querySelector('input[aria-label="Search models"]')!, {
+    key: 'ArrowLeft'
+  })
+  fireEvent.click(getByRole(document.body, 'menuitem', { name: 'Agent settings…' }))
+  expect(onOpenAgentSettings).toHaveBeenCalledTimes(1)
+  expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude']])
+  show('codex')
+  expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude']])
+  open()
+  expect(onCatalogOpen.mock.calls).toEqual([['claude'], ['claude'], ['codex']])
+})
 afterEach(() => {
   act(() => root.unmount())
   host.remove()

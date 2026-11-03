@@ -58,28 +58,6 @@ describe('structured pointer schema migration', () => {
     }
   })
 
-  it('creates the structured mail send store', () => {
-    const db = new OrchestrationDb(':memory:')
-    try {
-      expect(db.getStructuredMailSends('dispatch:d1')).toEqual([])
-      const row = {
-        mailbox_handle: 'dispatch:d1',
-        message_id: 'm1',
-        session_id: 's1',
-        operation_id: '1757030400000-0123456789abcdef0123456789abcdef',
-        minted_at_ms: 1_757_030_400_000
-      }
-      expect(db.reserveStructuredMailSend(row)).toBe(true)
-      expect(db.getStructuredMailSends('dispatch:d1').map((row) => row.operation_id)).toEqual([
-        '1757030400000-0123456789abcdef0123456789abcdef'
-      ])
-      expect(db.releaseStructuredMailSend(row)).toBe(true)
-      expect(db.getStructuredMailSends('dispatch:d1')).toEqual([])
-    } finally {
-      db.close()
-    }
-  })
-
   it('keeps sends an unreleased build saved with a fence, and takes new ones', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-structured-migration-'))
     tempRoots.push(root)

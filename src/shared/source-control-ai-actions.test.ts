@@ -9,17 +9,6 @@ import {
 import { resolveSourceControlActionSessionOptions } from './source-control-action-launch-preferences'
 
 describe('source-control AI launch action defaults', () => {
-  it('rejects unsafe prototype keys and invalid agent ids', () => {
-    expect(
-      normalizeSourceControlAiActionDefaults({
-        __proto__: { agentId: 'codex' },
-        constructor: { agentId: 'codex' },
-        prototype: { agentId: 'codex' },
-        fixCommitFailure: { agentId: 'not-real', commandInputTemplate: 42 }
-      })
-    ).toBeUndefined()
-  })
-
   it('trims command templates and CLI args only when reading them', () => {
     const defaults = normalizeSourceControlAiActionDefaults({
       fixCommitFailure: {

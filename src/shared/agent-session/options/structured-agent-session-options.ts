@@ -138,7 +138,7 @@ export function applyStructuredAgentSessionModelCatalog(
     acceptedInputSources: state.optionsAnswerPresent
       ? state.acceptedInputSources
       : {
-          ...(namesDefault ? { model: 'policy', effort: 'policy' } : {}),
+          ...(namesDefault ? { model: 'policy' } : {}),
           fastMode: 'policy',
           ...Object.fromEntries(
             Object.entries(state.acceptedInputSources ?? {}).filter(
@@ -157,6 +157,12 @@ export function applyStructuredAgentSessionOptions(
   launch: { newLaunch: boolean; coherentCatalog?: boolean } = { newLaunch: false }
 ): StructuredAgentSessionOptionState {
   const { current } = result
+  let acceptedInputSources = current.acceptedInputSources
+  const policyEffort = acceptedInputSources?.effort === 'policy'
+  if (policyEffort) {
+    acceptedInputSources = { ...acceptedInputSources }
+    delete acceptedInputSources.effort
+  }
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
   const keepCatalog = installed || result.modelsKnown === false
   // Catalog defaults supply picker context without claiming the chat chose them.
@@ -164,7 +170,7 @@ export function applyStructuredAgentSessionOptions(
     state.record,
     {
       ...(current.model ? { model: current.model } : {}),
-      ...(current.effort ? { effort: current.effort } : {}),
+      ...(!policyEffort && current.effort ? { effort: current.effort } : {}),
       ...(current.fastMode !== undefined ? { fastMode: current.fastMode } : {}),
       ...(current.serviceTier ? { serviceTier: current.serviceTier } : {})
     },
@@ -197,7 +203,7 @@ export function applyStructuredAgentSessionOptions(
         : installed && state.catalogSource === 'seed'
           ? 'seed'
           : 'live',
-    acceptedInputSources: current.acceptedInputSources,
+    acceptedInputSources,
     olderHost: current.defaulted === undefined ? true : undefined,
     defaultsUnsent: current.defaulted !== undefined && !launch.newLaunch ? true : undefined,
     verifiedModelIds: keepCatalog

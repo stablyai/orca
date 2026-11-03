@@ -1,3 +1,7 @@
+import {
+  textActionPickerEffectiveChoices,
+  type TextActionPickerCatalog
+} from './source-control-text-action-picker'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
 import { agentPickerArgumentsKnown } from './agent-launch-picker-authority'
 export {
@@ -34,6 +38,7 @@ export type AgentPickerSurface = 'chat' | 'terminal'
 export type AgentPickerDraftOwner = object
 export type AgentPickerModel = AgentSessionModelOption & { isLegacy?: true; hidden?: true }
 export type AgentPickerEntry = {
+  textGeneration?: TextActionPickerCatalog
   agent: TuiAgent
   label: string
   aliases?: string[]
@@ -61,6 +66,7 @@ export type AgentPickerDraft = {
   pendingArguments?: string
   delegated?: readonly string[]
   literalKeys?: readonly string[]
+  textChanges?: readonly ('model' | 'effort')[]
   /** A folded sparse edit receipt; never part of a launch or persisted recipe. */
   recipeEdits?: {
     selection: CurrentActionSelection
@@ -69,12 +75,6 @@ export type AgentPickerDraft = {
   }
   /** The first prompt typed in the panel, set only on the launch: never part of a kept setup. */
   prompt?: string
-}
-export type AgentPickerSetup = {
-  entry: AgentPickerEntry
-  model: AgentPickerModel
-  choices: AgentDedicatedChoices
-  label: string
 }
 
 export function agentPickerDraft(
@@ -88,6 +88,9 @@ export function agentPickerEffectiveChoices(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft
 ): AgentDedicatedChoices {
+  if (entry.textGeneration) {
+    return textActionPickerEffectiveChoices(entry, draft)
+  }
   const defaults =
     draft.surface === 'chat'
       ? entry.structured
@@ -260,7 +263,7 @@ export function agentPickerButtonOrder(entry: AgentPickerEntry): AgentPickerSurf
   ]
 }
 
-export { searchAgentPickerSetups } from './agent-launch-picker-search'
+export { searchAgentPickerSetups, type AgentPickerSetup } from './agent-launch-picker-search'
 
 export function agentPickerSessionOptions(choices: AgentDedicatedChoices): Record<string, string> {
   return {
