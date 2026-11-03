@@ -79,7 +79,7 @@ import {
   stageRemoteOrcadMigrationBlobChunk
 } from '../ssh/orcad-migration-catalog-client'
 import { listRemoteOrcadFolderCatalog } from '../ssh/orcad-server-folder-workspaces'
-import { makeTerminalScrollbackSnapshotRef } from '../terminal-scrollback-snapshots'
+import { makeTerminalScrollbackSnapshotRef } from '../pty/scrollback/terminal-scrollback-snapshots'
 import { pauseWorkspacesForProjectMove } from '../window/project-move-pause'
 import { getWslHostService } from '../wsl/wsl-host-service-instance'
 import { readWslGuestProcessTable } from '../wsl/wsl-guest-process-table'

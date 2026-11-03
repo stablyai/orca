@@ -60,6 +60,7 @@ const detailTransport = vi.hoisted(() => {
     workspaces: ['workspace-1'],
     accountFixture: false,
     credential,
+    LinearError: class LinearError extends Error {},
     AuthError: class AuthenticationLinearError extends Error {}
   }
 })
@@ -79,7 +80,9 @@ vi.mock('../../src/main/linear/client', async (original) => {
               workspace: { id: workspaceId, organizationName: 'Acme' },
               client: {
                 issue: (id: string) => detailTransport.issue(id, workspaceId),
-                client: { rawRequest: (...args: unknown[]) => detailTransport.search(...args) }
+                client: {
+                  rawRequest: (...args: unknown[]) => detailTransport.search(...args, workspaceId)
+                }
               }
             }
           ]
@@ -98,7 +101,11 @@ vi.mock('../../src/main/linear/linear-sdk', () => {
     }
   }
   return {
-    loadLinearSdk: () => ({ AuthenticationLinearError: detailTransport.AuthError, LinearClient }),
+    loadLinearSdk: () => ({
+      LinearError: detailTransport.LinearError,
+      AuthenticationLinearError: detailTransport.AuthError,
+      LinearClient
+    }),
     createLinearClient: (options: { apiKey: string }) => new LinearClient(options)
   }
 })

@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 
@@ -61,6 +62,15 @@ const {
   deleteWorktreeHistoryDirMock: vi.fn()
 }))
 
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock,
@@ -77,6 +87,11 @@ vi.mock('../git/worktree', () => ({
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
+}))
+
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesMock
 }))
 
 vi.mock('../git/runner', () => ({
@@ -128,7 +143,7 @@ vi.mock('./pty/provider/state-cleanup', () => ({
 }))
 vi.mock('./pty/provider/registry', () => ({ getLocalPtyProvider: getLocalPtyProviderMock }))
 
-vi.mock('../terminal-history-deletion', () => ({
+vi.mock('../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -142,7 +157,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
 })
 
 import { registerWorktreeHandlers } from './worktrees'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>

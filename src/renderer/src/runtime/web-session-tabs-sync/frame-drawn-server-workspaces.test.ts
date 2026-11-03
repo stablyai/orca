@@ -109,6 +109,21 @@ describe('frame-drawn server workspaces', () => {
     resetFrameDrawnServerWorkspacesForTests()
   })
 
+  it('keeps a repeated sender publication and unchanged frame status as a no-op', () => {
+    const snapshot = {
+      ...shell('a', 2),
+      agentSenderAssociations: {
+        associations: [],
+        principals: [],
+        attachments: [],
+        revision: { epoch: 'host', revision: 1 }
+      }
+    }
+    const previous = frameDrawnStore()
+    const store = merge(previous, applyWebSessionTabsSnapshot(previous, snapshot, ENV, NOW))
+    expect(applyWebSessionTabsSnapshot(store, snapshot, ENV, NOW)).toBe(store)
+  })
+
   it('hands a workspace back: the snapshot replaces the frame tree in one write', async () => {
     let store = frameDrawnStore()
     const commits: WebSessionTabsSyncState[] = []

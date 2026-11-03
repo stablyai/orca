@@ -14,7 +14,7 @@ import type { CodexSessionResumePreparation } from '../../codex/codex-session-re
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 import { isSafePtySessionId } from '../../daemon/pty-session-id'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
-import { stampWslOrchestrationCompatibilityHost } from '../../pty/wsl-orca-env'
+import { stampWslOrchestrationCompatibilityHost } from '../../pty/shell-startup/wsl-orca-env'
 import { getRuntimeSourceStamp } from '../../runtime/host-descriptor'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { buildPtyHostEnv } from './host-env/assembly'

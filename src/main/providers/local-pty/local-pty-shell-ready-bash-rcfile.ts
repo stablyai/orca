@@ -1,16 +1,16 @@
 /** Bash has one --rcfile wrapper, so login startup, OSC hooks and readiness share this file. */
-import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../../bash-prompt-command-composition'
+import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../../pty/shell-startup/bash-prompt-command-composition'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/managed-data-account-shell'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../../wsl-managed-cli-path-restore'
-import { getPosixOmpShellWrapper } from '../../pty/omp-shell-wrapper'
+import { getPosixOmpShellWrapper } from '../../pty/shell-startup/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../../shared/claude-shell-function'
-import { getBashStartupCommandPromptBlock } from '../../pty/posix-shell-startup-command'
+import { getBashStartupCommandPromptBlock } from '../../pty/shell-startup/posix-shell-startup-command'
 import {
   BASH_FEATURE_CHANNEL_BLOCK,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK
-} from '../../shell-templates'
+} from '../../pty/shell-startup/shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 import { BASH_WSL_CWD_REPORT_BLOCK } from '../../wsl-shell-cwd-report'
 

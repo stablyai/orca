@@ -2650,6 +2650,9 @@
       "title": "Ses",
       "toggleMode": "Aç/kapat",
       "updateFailed": "Güncellenemedi"
+    },
+    "agents": {
+      "permissionOwnAll": "Ajanların kendi ayarları"
     }
   },
   "sourceControl": {

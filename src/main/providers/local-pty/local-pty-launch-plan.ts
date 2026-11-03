@@ -1,7 +1,7 @@
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
-import { resolveWindowsGitBashShellPath } from '../../git-bash'
+import { resolveWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import { resolveUnixPaneShellPath } from '../../daemon/shell-ready'
 import { getDefaultWslDistro, parseWslPath } from '../../wsl'
 import {

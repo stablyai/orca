@@ -1,8 +1,8 @@
 import type * as NodeFsPromises from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RepoWorktrees from '../repo-worktrees'
-import { listRepoWorktreeGraph } from '../repo-worktrees'
+import type * as RepoWorktrees from '../workspaces/catalog/repo-worktrees'
+import { listRepoWorktreeGraph } from '../workspaces/catalog/repo-worktrees'
 import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import {
@@ -11,7 +11,7 @@ import {
   rebuildAuthorizedRootsCache,
   registerCreatedWorktreeRoot,
   resolveRegisteredWorktreePath
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 
 const { statMock } = vi.hoisted(() => ({ statMock: vi.fn() }))
 
@@ -20,8 +20,8 @@ vi.mock('node:fs/promises', async () => {
   return { ...actual, stat: statMock }
 })
 
-vi.mock('../repo-worktrees', async () => {
-  const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
+vi.mock('../workspaces/catalog/repo-worktrees', async () => {
+  const actual = await vi.importActual<typeof RepoWorktrees>('../workspaces/catalog/repo-worktrees')
   return { ...actual, listRepoWorktreeGraph: vi.fn() }
 })
 

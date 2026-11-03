@@ -25,7 +25,7 @@ vi.mock('../../shared/windows-transient-lock-removal', async (original) => ({
   ...(await original<typeof Removal>()),
   removeTree: removeTreeMock
 }))
-vi.mock('../windows-process-tree-kill', () => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: vi.fn(async () => true)
 }))
 vi.mock('../wsl-background-distro-gate', () => ({ noteWslDistroLaunched: vi.fn() }))

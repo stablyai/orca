@@ -23,7 +23,7 @@ import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-prote
 import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guard'
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
-import { neutralizeLegacyTerminalShimDir } from '../pty/legacy-terminal-shim-dir'
+import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
 import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
 import {
   configureWindowsHostGitEnvironmentReadiness,

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import type { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
+import type { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 
 export class UsageInlineCachePreservation {
   active = false

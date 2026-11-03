@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { MAX_ORCAD_MIGRATION_STAGED_CATALOGS } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import { MAX_RETIREMENT_NAMESPACES } from '../../worktree-retirement-namespace'
+import { MAX_RETIREMENT_NAMESPACES } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   DORMANT_AUTOMATION,
   DORMANT_AUTOMATION_RUN,

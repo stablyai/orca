@@ -10,7 +10,7 @@ import { userInfo } from 'node:os'
 import { resetMacosLoginShellPreflightForTests } from '../../providers/macos-tcc-login-shell'
 import { registerPtyHandlers } from './register-handlers'
 import { join } from 'node:path'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/posix-shell-startup-command'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 // Wrapper roots are content-addressed.
 import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'
 
@@ -32,7 +32,9 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
 vi.mock('../../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )

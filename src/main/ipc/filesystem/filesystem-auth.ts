@@ -9,7 +9,7 @@ import {
   ensureAuthorizedRootsCache,
   isPathAllowedByCanonicalRegisteredRoot,
   isRegisteredWorktreePath
-} from '../registered-worktree-roots-cache'
+} from '../worktrees/removal/registered-worktree-roots-cache'
 
 export const PATH_ACCESS_DENIED_MESSAGE = `${PATH_OUTSIDE_ALLOWED_DIRECTORIES}. If this blocks a legitimate workflow, please file a GitHub issue.`
 /** Lazily share allowed roots across every check in one authorization. */

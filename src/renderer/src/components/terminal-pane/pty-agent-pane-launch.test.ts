@@ -101,7 +101,7 @@ vi.mock('../../../../main/pi/titlebar-extension-service', () =>
     m.piTitlebarExtensionModuleMock()
   )
 )
-vi.mock('../../../../main/pwsh', () =>
+vi.mock('../../../../main/pty/shell-startup/pwsh', () =>
   import('../../../../main/ipc/pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
 vi.mock('../../../../main/wsl', async (importOriginal) =>

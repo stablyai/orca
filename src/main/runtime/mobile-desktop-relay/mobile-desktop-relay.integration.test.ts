@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from '../rpc/methods/github-repo-work-item-methods'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
 import { GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
@@ -54,6 +56,18 @@ const passthroughOpens = vi.hoisted(() => {
     heldStatus
   }
 })
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+  listWorktrees: (await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree'))
+    .listWorktrees
+}))
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeListingModule>()),
+  listWorktreesStrict: (await vi.importMock<typeof WorktreeListingModule>('../../git/worktree'))
+    .listWorktreesStrict
+}))
+
 vi.mock(
   '../../../shared/remote-runtime/remote-runtime-passthrough-socket',
   async (importOriginal) => {
@@ -93,21 +107,9 @@ vi.mock(
   }
 )
 
-vi.mock('../../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
-  }
-})
+vi.mock('../../git/worktree', async () =>
+  (await import('../runtime-rpc-worktree-store-fixtures')).createWorktreeListingMocks()
+)
 
 class SeatObservableRuntime extends OrcaRuntimeService {
   seatClientIds(ptyId: string): string[] {

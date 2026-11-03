@@ -12,7 +12,7 @@ import {
 } from './persistence/persistence-test-harness'
 import { makeTerminalTab, TEST_LEAF_1 } from './persistence/persistence-session-fixtures'
 
-import { PtyExitProof } from './pty-exit-proof'
+import { PtyExitProof } from './pty/process-retirement/pty-exit-proof'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

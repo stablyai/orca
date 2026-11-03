@@ -15,9 +15,9 @@ import { prepareWindowsAdministratorRestart } from '../windows/windows-administr
 import { quitProcess } from '../startup/process-quit-request'
 import type { Store } from '../persistence/loading-store/store'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
-import { isPwshAvailableAsync } from '../pwsh'
+import { isPwshAvailableAsync } from '../pty/shell-startup/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
-import { isGitBashAvailable } from '../git-bash'
+import { isGitBashAvailable } from '../pty/shell-startup/git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
 import {

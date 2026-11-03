@@ -94,8 +94,8 @@ import {
   unregisterPty as unregisterLocalPtyMemoryRow
 } from '../../memory/pty-registry'
 import { inspectPtyProviderProcess } from '../../providers/pty-process-inspection'
-import * as worktreePathComparison from '../../worktree-path-comparison-key'
-import * as localWorktreeFilesystem from '../../local-worktree-filesystem'
+import * as worktreePathComparison from '../../workspaces/catalog/worktree-path-comparison-key'
+import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID,

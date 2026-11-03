@@ -40,10 +40,12 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromises>()),
   ...fsMock
 }))
-vi.mock('../../repo-worktrees', () => ({ listRepoWorktreeGraph: vi.fn(async () => []) }))
+vi.mock('../../workspaces/catalog/repo-worktrees', () => ({
+  listRepoWorktreeGraph: vi.fn(async () => [])
+}))
 
 import { resolveAuthorizedPath } from './filesystem-auth'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 
 const UNC = String.raw`\\wsl.localhost\Ubuntu\mnt\c\src\app`
 const originalPlatform = process.platform

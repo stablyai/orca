@@ -7,10 +7,10 @@ import {
 import { pruneGitWorktrees } from '../git/worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { ArchiveHookOverride } from '../../shared/worktree/archive-hook-removal-gate'
-import { gateWorktreeRemovalOnArchiveHook } from '../worktree-archive-hook-gate'
+import { gateWorktreeRemovalOnArchiveHook } from '../workspaces/removal/worktree-archive-hook-gate'
 import type { Repo } from '../../shared/repo-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
-import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from '../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { runHook, getEffectiveHooks } from '../workspace-hooks/hooks'
@@ -25,18 +25,18 @@ import {
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from '../ipc/worktree-logic'
-import { cleanupLocalOrphanedWorktreeDirectory } from '../local-orphaned-worktree-cleanup'
-import { recoverPartialLocalWorktreeRemoval } from '../local-worktree-removal-recovery'
-import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
-import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
+import { cleanupLocalOrphanedWorktreeDirectory } from '../workspaces/removal/local-orphaned-worktree-cleanup'
+import { recoverPartialLocalWorktreeRemoval } from '../workspaces/removal/local-worktree-removal-recovery'
+import { findRegisteredDeletableWorktree } from '../workspaces/removal/worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../workspaces/removal/worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 import {
   removesInBackground,
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../worktree-background-removal'
-import { runSerializedWorktreeRemovalAcceptance } from '../worktree-removal-acceptance-queue'
+} from '../workspaces/removal/worktree-background-removal'
+import { runSerializedWorktreeRemovalAcceptance } from '../workspaces/removal/worktree-removal-acceptance-queue'
 
 /** Runs after the previous same-repo removal was accepted; see runSerializedWorktreeRemovalAcceptance. */
 export function removeRuntimeRegisteredLocalWorktree(

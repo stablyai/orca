@@ -1,4 +1,4 @@
-import { readProcessTable } from '../pty-descendant-termination'
+import { readProcessTable } from '../pty/process-retirement/pty-descendant-termination'
 import {
   isWindowsProcessTableAvailable,
   readWindowsProcessIdentityTableFresh

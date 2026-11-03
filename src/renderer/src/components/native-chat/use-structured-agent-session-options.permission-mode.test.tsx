@@ -138,7 +138,7 @@ describe('the permission mode another device picks', () => {
     unmount()
   })
 
-  it('waits for the new child’s report after an own-settings chat restarts', async () => {
+  it('keeps Own distinct from the running report across a restart', async () => {
     optionsAnswering('own')
     const read = mocks.call.getMockImplementation()!
     mocks.call.mockImplementation(async (...args) => {
@@ -151,13 +151,15 @@ describe('the permission mode another device picks', () => {
       committed.push(`${entry?.description}/${entry?.settable}`)
     })
     const row = () => result.current.optionSnapshot.find((entry) => entry.id === 'permissionMode')
-    await waitFor(() => expect(row()).toMatchObject({ description: 'Full access', settable: true }))
+    await waitFor(() =>
+      expect(row()).toMatchObject({ description: "Agent's own settings", settable: true })
+    )
     mocks.call.mockImplementation(() => new Promise(() => {}))
     committed.length = 0
     rerender({ fence: 2, stamp: 'model-a|own' })
     // Every frame of the new process, including the one before its read lease attaches.
-    expect([...new Set(committed)]).toEqual(['Permissions/false'])
-    expect(row()).toMatchObject({ description: 'Permissions', settable: false })
+    expect([...new Set(committed)]).toEqual(["Agent's own settings/true"])
+    expect(row()).toMatchObject({ description: "Agent's own settings", settable: true })
     unmount()
   })
 
@@ -204,7 +206,7 @@ describe('a permission pick on this device', () => {
     )
     vi.mocked(enqueueSessionOptionSettingsWrite).mockClear()
     const { result, unmount } = renderReopened(1)
-    await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('full-access'))
+    await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('own'))
     await act(async () => {
       expect(await result.current.setStructuredOption('permissionMode', 'full-access')).toBe(true)
     })

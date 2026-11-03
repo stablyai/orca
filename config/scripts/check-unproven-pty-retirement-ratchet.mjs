@@ -50,7 +50,7 @@ export function main(root = process.cwd(), arg = undefined) {
       collect: collectUnprovenPtyRetirementCounts,
       unit: 'unproven PTY retirement(s)',
       fix: [
-        'Retire a PTY through finishPtyShutdown on a PtyExitProof (src/main/pty-exit-proof.ts), or',
+        'Retire a PTY through finishPtyShutdown on a PtyExitProof (src/main/pty/process-retirement/pty-exit-proof.ts), or',
         'keep its ownership until one arrives. A close the host cannot answer must read unverifiable.'
       ]
     },

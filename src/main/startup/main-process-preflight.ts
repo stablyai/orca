@@ -18,7 +18,7 @@ import {
   patchPackagedProcessPath,
   optOutOfHiddenPageWakeUpThrottling
 } from './configure-process'
-import { installServeSupervisorDisconnectQuit } from '../serve-update-handoff'
+import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
   installUncaughtPipeErrorGuard,
   installUnhandledRejectionLogging
@@ -31,7 +31,7 @@ import {
   downloadRemoteServerUpdate,
   installRemoteServerUpdate,
   isQuittingForUpdate
-} from '../updater'
+} from '../updater/updater-service'
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'
@@ -57,7 +57,7 @@ import {
 } from './single-instance-lock'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
-import { installMainProcessTreeKillGate } from '../own-chromium-tree-kill-guard'
+import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import { setSecretStore } from '../../shared/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
 import { selectLinuxKeyringBackend } from './select-linux-keyring-backend'

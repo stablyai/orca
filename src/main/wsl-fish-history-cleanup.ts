@@ -1,5 +1,5 @@
 import { runWslProcess } from './wsl/wsl-runner'
-import { isSafeFishHistorySession } from './fish-history-session'
+import { isSafeFishHistorySession } from './pty/history/fish-history-session'
 import { isWslDistroRunning } from './wsl-background-distro-gate'
 
 /** Stopped distros must wait for a later cleanup; GC cannot boot them. */

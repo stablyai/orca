@@ -1,6 +1,8 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
+import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
 import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
@@ -14,6 +16,14 @@ import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 type TestMock = Mock
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
 vi.mock('../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({
     reconcile: reconcileClaudeAgentViewMock,
@@ -276,10 +286,17 @@ const {
   }
 })
 
+const listWorktreesStrictMock = vi.hoisted(() => vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES))
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesStrictMock
+}))
+
 vi.mock('../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
   listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+  listWorktreesStrict: listWorktreesStrictMock,
   describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
   assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addSparseWorktree: addSparseWorktreeMock,
@@ -319,7 +336,7 @@ vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
   }
 })
 
-vi.mock('../../terminal-history-deletion', () => ({
+vi.mock('../../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -395,11 +412,11 @@ vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
-vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 
@@ -411,7 +428,7 @@ vi.mock('../../ipc/filesystem/filesystem-path-containment', async () => {
   return { isENOENT: actual.isENOENT }
 })
 
-vi.mock('../../worktree-root-preparation', () => ({
+vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
@@ -539,12 +556,9 @@ vi.mock('../../github/issues', async (importOriginal) => {
 })
 
 // Fabricated repo paths need deterministic async default-ref resolution.
-vi.mock('../../git/repo', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  const actualGetBaseRefDefault = actual.getBaseRefDefault as (
-    path: string,
-    options?: { wslDistro?: string }
-  ) => Promise<string | null>
+vi.mock('../../git/repo-default-base-ref', async (importOriginal) => {
+  const actual = await importOriginal<typeof GitRepoDefaultBaseRefModule>()
+  const actualGetBaseRefDefault = actual.getBaseRefDefault
   return {
     ...actual,
     // Keep fake local defaults deterministic while WSL exercises real async Git options.
@@ -559,10 +573,14 @@ vi.mock('../../git/repo', async (importOriginal) => {
         options.wslDistro
           ? actualGetBaseRefDefault(options.cwd, options)
           : Promise.resolve('origin/main')
-      ),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null)
+      )
   }
 })
+
+vi.mock('../../git/repo', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchConflictKind: vi.fn().mockResolvedValue(null)
+}))
 
 vi.mock('../../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../../git/git-username')

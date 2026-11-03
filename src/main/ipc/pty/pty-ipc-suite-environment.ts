@@ -54,7 +54,7 @@ import {
 } from '../../providers/local-pty/local-pty-provider'
 import { setLocalPtyProvider } from './provider/registry'
 import { _resetHiddenRendererPtyDeliveryGateForTest } from './delivery/pty-hidden-delivery-gate'
-import { __resetShellStartupEnvCache } from '../../pty/shell-startup-env'
+import { __resetShellStartupEnvCache } from '../../pty/shell-startup/shell-startup-env'
 import { _resetWslCachesForTests } from '../../wsl'
 
 export type PtyIpcTestWebContents = {
