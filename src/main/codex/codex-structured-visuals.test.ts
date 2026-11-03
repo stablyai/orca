@@ -4,7 +4,7 @@ import {
   type NativeChatVisualsLaunch
 } from '../native-chat/native-chat-visuals-delivery'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { CodexAppServerTimeoutError } from './codex-app-server-session'
+import { CodexAppServerTimeoutError } from './app-server/codex-app-server-session'
 import {
   adapterFor,
   acquireReadyCodexForTest,

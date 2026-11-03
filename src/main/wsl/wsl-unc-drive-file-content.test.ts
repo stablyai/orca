@@ -85,7 +85,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 import { readLocalFileContent } from '../ipc/filesystem/filesystem-file-content-inspection'
 import { readLocalFileRange } from '../ipc/filesystem/local-file-range-read'
 import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
-import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
+import { renameLocalPathSerializedByDestination } from '../filesystem/destination-serialized-local-rename'
 
 const UNC = String.raw`\\wsl.localhost\Ubuntu\mnt\c\src\app`
 const originalPlatform = process.platform

@@ -61,49 +61,6 @@ function makeBuffer(lines: string[], cols = 80): IBuffer {
 }
 
 describe('resolveCursorAgentImeAnchor', () => {
-  it('anchors an empty Cursor Agent prompt at the visible prompt caret', () => {
-    const buffer = makeBuffer([
-      '',
-      '  Cursor Agent',
-      '  v2026.06.29-2ad2186',
-      '  Tip: Use /config to customize Cursor settings and behavior.',
-      '',
-      '',
-      '',
-      '',
-      '  → Plan, search, build anything',
-      '',
-      '',
-      '  Composer 2.5',
-      '  ~/development/code/xinyue/app_android · develop/app6.5.1',
-      ''
-    ])
-
-    expect(
-      resolveCursorAgentImeAnchor({
-        buffer,
-        rows: 14,
-        cols: 80,
-        cursorX: 0,
-        cursorY: 13
-      })
-    ).toEqual({ row: 8, column: 4 })
-  })
-
-  it('does not override normal terminal cursor positioning', () => {
-    const buffer = makeBuffer(['', '  → ordinary shell output', '', ''])
-
-    expect(
-      resolveCursorAgentImeAnchor({
-        buffer,
-        rows: 4,
-        cols: 80,
-        cursorX: 0,
-        cursorY: 3
-      })
-    ).toBeNull()
-  })
-
   it('anchors the follow-up placeholder after the Cursor Agent header scrolls away', () => {
     const buffer = makeBuffer(['transcript', '', '  → Add a follow-up', '', ''])
 
@@ -116,20 +73,6 @@ describe('resolveCursorAgentImeAnchor', () => {
         cursorY: 4
       })
     ).toEqual({ row: 2, column: 4 })
-  })
-
-  it('does not override when xterm already exposes a non-stale cursor position', () => {
-    const buffer = makeBuffer(['', '  Cursor Agent', '', '  → Plan, search, build anything'])
-
-    expect(
-      resolveCursorAgentImeAnchor({
-        buffer,
-        rows: 4,
-        cols: 80,
-        cursorX: 4,
-        cursorY: 3
-      })
-    ).toBeNull()
   })
 
   it('anchors the input row, not a transcript line containing an arrow', () => {

@@ -74,7 +74,11 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../../../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 // Keep the real drawer lifecycle; only native animation completion is driven by the test.
-vi.mock('../../../components/mounted-bottom-drawer', () => ({
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
+vi.mock('../../../components/bottom-drawer/mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'MountedDrawer'
 }))
 

@@ -1,3 +1,4 @@
+import { MobileNativeChatTextAttachmentActions } from './MobileNativeChatTextAttachmentActions'
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
@@ -5,22 +6,13 @@ import { MobileNativeChatLongPressContent as Content } from '../MobileNativeChat
 import { splitNativeChatBlocks } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatToolRunViewedImages } from '../../../../../src/shared/native-chat/tools/native-chat-tool-viewed-images'
 import { selectActiveToolCall } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
-import {
-  isImageRefBlock,
-  isSubagentGroupBlock,
-  isTextBlock
-} from '../../../../../src/shared/native-chat/native-chat-types'
+import * as Chat from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
-import type {
-  NativeChatBlock,
-  NativeChatMessage,
-  NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
-import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat/transcript/native-chat-message-copy-text'
 import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import {
   MobileNativeChatGroupedThought,
@@ -85,15 +77,15 @@ function MobileNativeChatMessageImpl({
   userMessageOpen,
   onToggleUserMessage
 }: {
-  message: NativeChatMessage
+  message: Chat.NativeChatMessage
   // Stable placement key survives older messages joining a folded row.
   rowKey?: string
   runOwner?: string
   // Only the newest live assistant row can still grow.
   mayStillGrow?: boolean
   // Compare plan updates against the prior write, not an empty checklist.
-  previousTodoWrite?: NativeChatToolCallBlock
-  previousUpdatePlan?: NativeChatToolCallBlock
+  previousTodoWrite?: Chat.NativeChatToolCallBlock
+  previousUpdatePlan?: Chat.NativeChatToolCallBlock
   fontScale?: number
   onOpenFile?: (relativePath: string) => void
   turnStatus?: NativeChatTurnStatus | null
@@ -104,7 +96,7 @@ function MobileNativeChatMessageImpl({
   activeTurnIsWorking?: boolean
   trailingRun?: boolean
   // The run’s first row draws all members; later members render no duplicate activity.
-  workRun?: readonly NativeChatMessage[]
+  workRun?: readonly Chat.NativeChatMessage[]
   joinsWorkRun?: boolean
   foldedAway?: boolean
   openReasoning?: ReadonlySet<string>
@@ -136,7 +128,7 @@ function MobileNativeChatMessageImpl({
     if (!run) {
       return undefined
     }
-    const aside = (thoughtMessage: NativeChatMessage): React.JSX.Element =>
+    const aside = (thoughtMessage: Chat.NativeChatMessage): React.JSX.Element =>
       thoughtMessage.role === 'system' ? (
         <View key={`notice:${thoughtMessage.id}`}>
           <MobileNativeChatNoticeRow
@@ -160,7 +152,7 @@ function MobileNativeChatMessageImpl({
           onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openSheet(thoughtMessage)}
         />
       )
-    const before = new Map<NativeChatBlock, React.JSX.Element[]>()
+    const before = new Map<Chat.NativeChatBlock, React.JSX.Element[]>()
     for (const [block, thoughts] of run.asidesBefore) {
       before.set(block, thoughts.map(aside))
     }
@@ -254,17 +246,36 @@ function MobileNativeChatMessageImpl({
   }
   const isChatTurn = message.role === 'user' || message.role === 'assistant'
   const copyText = isChatTurn ? nativeChatMessageCopyText(message) : ''
-  const proseRow = (block: NativeChatBlock, index: number, text: string, revealing = false) =>
-    isSubagentGroupBlock(block) && isRenderableSubagentGroup(block) ? (
+  let proseOffset = 0
+  const proseRow = (block: Chat.NativeChatBlock, key: number, text: string, revealing = false) => {
+    const textKey = `${message.id}:text:${proseOffset}`
+    proseOffset += text.length + 1
+    return Chat.isSubagentGroupBlock(block) && isRenderableSubagentGroup(block) ? (
       <MobileNativeChatSubagentGroup
         key={`subagent-group:${block.groupId}`}
         block={block}
         open={subagentGroupsOpen?.has(block.groupId) === true}
         onToggle={onToggleSubagentGroup}
       />
-    ) : isSystem ? null : (
+    ) : isSystem ? null : isUser && structuredActivityUi && Chat.isTextBlock(block) ? (
+      <View key={textKey}>
+        <Prose
+          block={block}
+          userMessage
+          fontScale={fontScale}
+          onOpenFile={onOpenFile}
+          onLongPress={onLongPress}
+          text={text}
+        />
+        <MobileNativeChatTextAttachmentActions
+          text={text}
+          onOpenFile={onOpenFile}
+          pastedText={t('chat.textAttachmentPreview.pastedText', 'Pasted text')}
+        />
+      </View>
+    ) : (
       <Prose
-        key={index}
+        key={key}
         block={block}
         userMessage={isUser}
         fontScale={fontScale}
@@ -276,8 +287,9 @@ function MobileNativeChatMessageImpl({
         revealing={revealing}
       />
     )
-  const proseRows = (blocks: NativeChatBlock[]) =>
-    blocks.map((block, index) => proseRow(block, index, isTextBlock(block) ? block.text : ''))
+  }
+  const proseRows = (blocks: Chat.NativeChatBlock[]) =>
+    blocks.map((block, index) => proseRow(block, index, Chat.isTextBlock(block) ? block.text : ''))
   return (
     <>
       {}
@@ -292,7 +304,7 @@ function MobileNativeChatMessageImpl({
               message={message}
               from={agentFrom}
               fontScale={fontScale}
-              attachments={proseRows(drawnProse.filter(isImageRefBlock))}
+              attachments={proseRows(drawnProse.filter(Chat.isImageRefBlock))}
               onOpenFile={onOpenFile}
               onLongPress={onLongPress}
               status={showFull}
@@ -310,7 +322,7 @@ function MobileNativeChatMessageImpl({
               ) : null}
               {isUser ? (
                 <>
-                  {proseRows(drawnProse.filter(isImageRefBlock))}
+                  {proseRows(drawnProse.filter(Chat.isImageRefBlock))}
                   <MobileNativeChatUserMessageFold
                     text={deriveNativeChatRowContent(message.blocks).markdown}
                     fontScale={fontScale}
@@ -319,7 +331,7 @@ function MobileNativeChatMessageImpl({
                     recovery={recovery}
                     status={showFull}
                   >
-                    {proseRows(drawnProse.filter((block) => !isImageRefBlock(block)))}
+                    {proseRows(drawnProse.filter((block) => !Chat.isImageRefBlock(block)))}
                   </MobileNativeChatUserMessageFold>
                 </>
               ) : (

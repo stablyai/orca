@@ -13,7 +13,7 @@ import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
 } from './agent-session/ownership/agent-session-provider-handle-transition'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps

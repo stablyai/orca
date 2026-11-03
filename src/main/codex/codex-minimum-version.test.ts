@@ -5,7 +5,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/ag
 import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readWholeAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
-import type { AgentCliVersionReader } from '../agent-cli-version-probe'
+import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   failedAcquisitionRefusal,
@@ -19,7 +19,7 @@ import {
 } from '../runtime/structured-agent-launch-composition.test-support'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import { identityFor } from './codex-structured-session-adapter-fixture'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 
 const readVersion = vi.fn<AgentCliVersionReader>()
 beforeEach(() => {

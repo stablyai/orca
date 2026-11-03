@@ -34,6 +34,8 @@ function mutationStatusOperation<Method extends RpcMethodName>(name: string, met
 
 export const githubPrMergeRun = mutationStatusOperation('github.merge-pr', 'github.mergePR')
 
+export const githubPrBodySet = mutationStatusOperation('github.update-pr', 'github.updatePR')
+
 export const githubPrAutoMergeSet = mutationStatusOperation(
   'github.set-pr-auto-merge',
   'github.setPRAutoMerge'
@@ -47,6 +49,11 @@ export const githubPrStateSet = mutationStatusOperation(
 export const githubPrReadyForReviewMark = mutationStatusOperation(
   'github.mark-pr-ready-for-review',
   'github.markPRReadyForReview'
+)
+
+export const githubPrDraftMark = mutationStatusOperation(
+  'github.mark-pr-draft',
+  'github.markPRDraft'
 )
 
 export const githubPrReviewersRequest = mutationStatusOperation(
@@ -67,6 +74,11 @@ export const githubPrChecksRerun = mutationStatusOperation(
 export const githubPrReviewCommentReplyAdd = mutationStatusOperation(
   'github.add-pr-review-comment-reply',
   'github.addPRReviewCommentReply'
+)
+
+export const githubPrReviewCommentAdd = mutationStatusOperation(
+  'github.add-pr-review-comment',
+  'github.addPRReviewComment'
 )
 
 export const githubPrIssueCommentAdd = mutationStatusOperation(
@@ -99,6 +111,17 @@ export const githubPrReviewThreadResolve = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.resolve-review-thread',
     method: 'github.resolveReviewThread',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('pr-mutation-confirmation', githubPrMutationConfirmationSchema)
+  })
+)
+
+// GitHub's viewed mark answers a bare boolean; false means it was not applied.
+export const githubPrFileViewedSet = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'github.set-pr-file-viewed',
+    method: 'github.setPRFileViewed',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('pr-mutation-confirmation', githubPrMutationConfirmationSchema)

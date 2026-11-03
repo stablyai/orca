@@ -6,6 +6,7 @@ type TerminalCursorCell = {
   isBold(): boolean | number
   isDim(): boolean | number
   isFgDefault(): boolean | number
+  isInverse(): boolean | number
 }
 
 type TerminalCursorLine<Cell extends TerminalCursorCell> = {
@@ -20,6 +21,7 @@ export type TerminalCursorContextSource<Cell extends TerminalCursorCell = Termin
   readonly modes: { readonly showCursor: boolean }
   readonly buffer: {
     readonly active: {
+      readonly type?: 'normal' | 'alternate'
       readonly baseY: number
       readonly cursorX: number
       readonly cursorY: number
@@ -84,12 +86,21 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
     return null
   }
   const reusableCell = buffer.getNullCell?.()
+  const cursorHidden = !terminal.modes.showCursor
+  // Why: a hidden native cursor needs screen evidence, read from the cursor cell alone and only then.
+  const hiddenCursorEvidence = cursorHidden
+    ? {
+        activeBuffer: buffer.type,
+        cursorInverse: Boolean(cursorLine.getCell(buffer.cursorX, reusableCell)?.isInverse())
+      }
+    : {}
   const rows: string[] = []
   const typedRows: string[] = []
   const promptGlyphBoldRows: boolean[] = []
   const rowsWrapped: boolean[] = []
   const rowRadius = Math.max(0, Math.floor(rowsAroundCursor))
-  const start = Math.max(buffer.viewportY, cursorRow - rowRadius)
+  // The cursor lives on the live screen; bound by it, not the viewport, so scrollback doesn't cut the input.
+  const start = Math.max(buffer.baseY, cursorRow - rowRadius)
   for (let row = start; row <= cursorRow; row += 1) {
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
@@ -105,7 +116,7 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
   const typedRowsBelow: string[] = []
   const rowsBelowWrapped: boolean[] = []
   const rowsBelowCustomForeground: boolean[] = []
-  const end = Math.min(buffer.viewportY + terminal.rows - 1, cursorRow + rowRadius)
+  const end = Math.min(buffer.baseY + terminal.rows - 1, cursorRow + rowRadius)
   for (let row = cursorRow + 1; row <= end; row += 1) {
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
@@ -142,7 +153,8 @@ export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
       !(buffer.getLine(cursorRow + 1)?.isWrapped ?? false),
       buffer.cursorX
     ),
-    cursorHidden: !terminal.modes.showCursor,
-    cursorViewportRow: cursorRow - buffer.viewportY
+    cursorHidden,
+    cursorViewportRow: cursorRow - buffer.viewportY,
+    ...hiddenCursorEvidence
   }
 }

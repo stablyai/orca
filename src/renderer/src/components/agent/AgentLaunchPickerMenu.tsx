@@ -29,7 +29,11 @@ export function pickerLaunchRow(
   }
 }
 
-type Launch = (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, entry?: AgentPickerEntry) => void
+type Launch = (
+  row: NewTabAgentMenuRow,
+  draft?: AgentPickerDraft,
+  entry?: AgentPickerEntry
+) => boolean | void | Promise<boolean>
 
 function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
   // Radix row hover must not steal focus from the row's portaled setup or its nested controls.
@@ -176,7 +180,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     : undefined
   const setupId = useId()
   const item = useRef<HTMLDivElement>(null)
-  const configured = useRef<AgentPickerDraft | undefined>(undefined)
+  const dismissing = useRef(false)
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
   return (
     <AgentLaunchSetupButton
@@ -192,17 +196,25 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         }
       }}
       onUse={(draft) => {
-        configured.current = draft
-        item.current?.click()
+        const result = runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
+        if (result !== false) {
+          // The row click dismisses Radix only; the operation above owns acceptance.
+          dismissing.current = true
+          item.current?.click()
+        }
+        return result
       }}
       renderAnchor={(trigger) => (
         <DropdownMenuItem
           ref={item}
           variant="launch"
           disabled={disabled || !entry.surfaces.length}
-          onSelect={() => {
-            const draft = configured.current ?? initial
-            configured.current = undefined
+          onSelect={(event) => {
+            if (dismissing.current) {
+              dismissing.current = false
+              return
+            }
+            const draft = initial
             const surface = draft?.surface ?? entry.defaultSurface
             const row = draft
               ? pickerLaunchRow(entry, surface)
@@ -211,10 +223,9 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
                     ? row.kind === 'chat'
                     : row.kind === 'terminal' || row.kind === 'cli'
                 ) ?? pickerLaunchRow(entry, surface))
-            if (draft) {
-              runLaunch(row, draft, entry)
-            } else {
-              runLaunch(row, undefined)
+            const result = draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)
+            if (result === false) {
+              event.preventDefault()
             }
           }}
           onKeyDown={(event) => {

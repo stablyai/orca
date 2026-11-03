@@ -53,7 +53,7 @@ import {
   saveStructuredAgentSessionStartReadbackListing,
   type StructuredAgentSessionStartListingContext
 } from './structured-agent-session-start-listing'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
+import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 import {
   claudeAndCodexAgents,
   NO_STRUCTURED_AGENTS

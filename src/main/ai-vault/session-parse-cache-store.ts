@@ -34,7 +34,7 @@ export type SessionParseCacheEntry = {
   // Retain the transcript-only result so sidecar changes do not force a reparse.
   foldSession?: AiVaultSession | null
   resume: SessionParseResumePoint | null
-  // Keep skipped-record notices after incremental parser state is dropped.
+  // Diagnostics outlive the heavy parser state, including across restarts.
   skippedRecords?: SkippedTranscriptRecord[]
   // Parser identity is runtime-only; persisted sessions carry their agent.
   agent?: AiVaultAgent
@@ -43,7 +43,7 @@ export type SessionParseCacheEntry = {
 // Omit parser state and duplicate fold results; sibling changes after restart pay one reparse.
 export type PersistedSessionParseCacheEntry = Omit<
   SessionParseCacheEntry,
-  'resume' | 'foldSession' | 'skippedRecords' | 'agent'
+  'resume' | 'foldSession' | 'agent'
 >
 
 // Null proves this transcript version belongs to no scoped path.
@@ -228,6 +228,7 @@ export function scopeCwdStampOf(entry: PersistedSessionParseCacheEntry): Session
 }
 
 export function storeSessionParseCacheEntry(path: string, entry: SessionParseCacheEntry): void {
+  entry = { ...entry, skippedRecords: entry.resume?.skippedRecords ?? entry.skippedRecords ?? [] }
   if (scopeKnowledge.has(path)) {
     scopeKnowledge.set(path, 'changed')
   }
@@ -238,6 +239,7 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
     previous.sizeBytes !== entry.sizeBytes ||
     previous.platform !== entry.platform ||
     previous.session !== entry.session ||
+    previous.skippedRecords !== entry.skippedRecords ||
     !sameSidecar(previous.sidecar, entry.sidecar)
   placeRow(path, entry)
   if (changed) {
@@ -246,6 +248,7 @@ export function storeSessionParseCacheEntry(path: string, entry: SessionParseCac
       sizeBytes: entry.sizeBytes,
       platform: entry.platform,
       session: entry.session,
+      skippedRecords: entry.skippedRecords,
       ...(entry.sidecar === undefined ? {} : { sidecar: entry.sidecar })
     })
   }
@@ -292,7 +295,7 @@ function dropRow(path: string): void {
 function dropResumePoint(path: string): void {
   const entry = cache.get(path)
   if (entry?.resume) {
-    cache.set(path, { ...entry, resume: null, skippedRecords: entry.resume.skippedRecords })
+    cache.set(path, { ...entry, resume: null })
   }
 }
 

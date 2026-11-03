@@ -63,7 +63,7 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
     journalPosition: { sequence: 7, index: 0 },
     timestamp: 1
   })
-  expect(agentMessageHeading(message.from, message.agentStart)).toBe('started')
+  expect(agentMessageHeading(message.from, message)).toBe('started')
   expect(nativeChatTurnFoldRow(message, 'turn', false).outlivesTurn).toBe(true)
   expect(isNoiseMessage(message)).toBe(false)
   expect(nativeChatRowSpeaksOrActs(message, true, new Map())).toBe(false)
@@ -109,7 +109,7 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
   expect(navigation.rpc).toHaveBeenCalledWith(
     { kind: 'local' },
-    'orchestration.partyLocation',
+    'orchestration.partyOpen',
     {
       address: 'term_0'
     },
@@ -143,6 +143,25 @@ it.each(['', '   ', '<system-reminder>Internal noise</system-reminder>'])(
     expect(screen.getByText('Started worker')).toBeInTheDocument()
   }
 )
+
+it.each([
+  ['Fix it', 'Handed off to agent'],
+  ['', 'Started agent']
+])('heads a launch its chat made on its own with task %j as %j, not a worker', (task, title) => {
+  const message = projectStructuredAgentStartItem({
+    itemId: 'handoff',
+    revision: 1,
+    sequence: 2,
+    observedAt: 1,
+    body: { kind: 'agent-handoff', launchId: 'launch-1', agent: from.senders[0], task }
+  })!
+  render(<MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />)
+  expect(screen.getByText(title)).toBeInTheDocument()
+  expect(screen.queryByText('Started worker')).not.toBeInTheDocument()
+  // With no task the card is the agent's name alone: nothing to copy.
+  expect(screen.getByText('Build cards')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Copy message' }) !== null).toBe(task !== '')
+})
 
 it('renders unreadable worker metadata with the existing unnamed fallback and no navigation', () => {
   const raw: unknown = {
@@ -431,7 +450,7 @@ it.each(['task', 'mail'] as const)(
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
     expect(navigation.rpc).toHaveBeenCalledWith(
       { kind: 'local' },
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       {
         address: 'term_0'
       },
@@ -440,7 +459,7 @@ it.each(['task', 'mail'] as const)(
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Other sender' })))
     expect(navigation.rpc).toHaveBeenLastCalledWith(
       { kind: 'local' },
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       { address: 'term_1' },
       { timeoutMs: 5000 }
     )
@@ -639,6 +658,13 @@ it.each([10, 100])(
       return projection.messages(counted).filter(({ agentStart }) => agentStart)
     }
     let messages = readRows()
+    for (const item of items) {
+      if (item.body.kind === 'agent-start') {
+        expect(messages.find((message) => message.id === item.itemId)?.agentStartDispatchId).toBe(
+          item.body.dispatchId
+        )
+      }
+    }
     expect(conversions).toBe(items.length)
     expect(taskReads).toBe(count)
     // One existing question pass visits the source array once; the second pass visits its composed rows.

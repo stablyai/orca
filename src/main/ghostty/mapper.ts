@@ -1,4 +1,4 @@
-import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import { HEX_COLOR_RE } from '../../shared/color-validation'
 import { parsePaddingValue, parseStrictInt } from './numeric-config-values'
@@ -31,6 +31,12 @@ function mapGhosttyBackgroundBlur(v: string): FieldAssignment | null {
     return { key: 'windowMaterial', value: 'blur' }
   }
   return radius === 0 ? { key: 'windowMaterial', value: 'translucent' } : null
+}
+
+// Repeated font-family is a fallback list whose first entry is primary; `""` resets the list.
+function activeGhosttyFontFamilies(rawValue: string | string[]): string[] {
+  const entries = Array.isArray(rawValue) ? rawValue : [rawValue]
+  return entries.slice(entries.findLastIndex((entry) => entry.trim().length === 0) + 1)
 }
 
 type FieldResult =
@@ -214,11 +220,9 @@ export function mapGhosttyToOrca(
       return { key: 'terminalCursorOpacity', value: num }
     },
 
-    'font-family': (v) => {
-      if (typeof v !== 'string' || v.trim().length === 0) {
-        return null
-      }
-      return { key: 'terminalFontFamily', value: v }
+    'font-family': (_v, rawValue) => {
+      const primary = activeGhosttyFontFamilies(rawValue)[0]
+      return primary ? { key: 'terminalFontFamily', value: primary } : null
     },
 
     'font-size': (v) => {
@@ -306,6 +310,11 @@ export function mapGhosttyToOrca(
       unsupportedKeys.push(`${key} (radius value not preserved)`)
     }
 
+    // Orca stores one terminal font, so Ghostty's fallback fonts are dropped.
+    if (key === 'font-family' && activeGhosttyFontFamilies(rawValue).length > 1) {
+      unsupportedKeys.push(`${key} (fallback fonts not preserved)`)
+    }
+
     if (Array.isArray(result)) {
       for (const entry of result) {
         // Why: TypeScript's strict assignment checking for Partial<T>[K] requires
@@ -325,5 +334,3 @@ export function mapGhosttyToOrca(
 
   return { diff, unsupportedKeys }
 }
-
-export type { GhosttyImportPreview }

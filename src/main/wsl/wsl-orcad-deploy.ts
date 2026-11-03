@@ -35,6 +35,7 @@ import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { holdWslDistroWithContext } from './wsl-orcad-held-context'
 import { deployWslOrcadWithOneFence } from './wsl-orcad-one-fence-deploy'
+import { removeFailedFreshWslOrcadInstall } from './wsl-orcad-failed-install-removal'
 import { probeWslActiveOrcad, readWslOrcadPid } from './wsl-orcad-active-probe'
 import { wslOrcadConnectStateHints } from './wsl-orcad-connect-state-snapshot'
 import { readWslOrcadIncumbent, type WslOrcadIncumbent } from './wsl-orcad-incumbent'
@@ -228,6 +229,7 @@ async function launchOverTransport(
     hints.deployPreRead(context.activationRecord)
   )
   if (deployed.outcome === 'installed-not-activated') {
+    await removeFailedFreshWslOrcadInstall(slot, deployed)
     const failure = wslOrcadDeferralFailure(deployed)
     recordWslOrcadUpdateFailure(failureHost, incumbentVersion, failure)
     const restored =

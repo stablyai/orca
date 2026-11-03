@@ -1,6 +1,6 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { ControlRenewalOutcome } from './control-renewal-statement.js'
 import {
   openInMemoryRelayDatabase,

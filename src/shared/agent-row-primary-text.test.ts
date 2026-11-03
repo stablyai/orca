@@ -75,6 +75,35 @@ Keep the raw preamble out of the sidebar.`
     expect(getAgentRowPrimaryText({ prompt: '  Fix checkout race\n ' })).toBe('Fix checkout race')
   })
 
+  it.each([
+    // Pi 1.5.0 `pi @report.txt "summarize"`, folded and cut by status normalization before the closer.
+    ['<file name="/home/me/report.txt"> long contents the preview cut off', 'report.txt'],
+    ['<file name="C:\\logs\\main.log"></file> ', 'main.log'],
+    ['<file name="/home/me/a.txt"> hi </file> summarize this', 'summarize this'],
+    ['<file name="/a.png"></file> <file name="/b.png"></file> compare these', 'compare these'],
+    ['<file name="/a.txt"></file> <file name="/b.txt"> contents cut off', 'b.txt'],
+    ['<file name="/a.txt"></file> { "tool": "x"', 'a.txt'],
+    // Real paste from the report, folded by status normalization.
+    ['{   "tool": "orca diagnostics",   "takenAt": "2026-10-16T21:04:57.936Z"', ''],
+    ['[{"code": "ETIMEDOUT", "count": 12}]', ''],
+    ['[ "a", "b" ]', ''],
+    ['<?xml version="1.0"?><project>', ''],
+    ['<!DOCTYPE html> <html>', '']
+  ])('labels a prompt that opens with pasted data: %s', (prompt, label) => {
+    expect(getAgentRowPrimaryText({ prompt })).toBe(label)
+  })
+
+  it.each([
+    '{foo} is undefined in the template',
+    '{ fix this block',
+    '[1, 2, 3] should come back sorted',
+    '[WIP] finish the login flow',
+    '<my-custom-element> render this component',
+    '<file> tags are not closing'
+  ])('keeps a typed prompt that merely starts with punctuation: %s', (prompt) => {
+    expect(getAgentRowPrimaryText({ prompt })).toBe(prompt)
+  })
+
   // The normalizer must preserve a meaningful task preview within 200 chars despite multi-KB dispatch preambles.
   it('derives a task preview from a normalized 200-char dispatch prompt without labels', () => {
     const longCliNoise = Array.from(

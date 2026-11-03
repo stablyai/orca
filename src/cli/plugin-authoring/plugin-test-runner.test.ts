@@ -4,8 +4,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
+import { parsePluginDeclarativeTree } from '../../shared/plugins/declarative/plugin-declarative-tree'
 import {
   checkPluginPanels,
+  formatPluginPanelCheck,
+  readPluginCheckScenarioNames,
   pluginPanelCheckIssues,
   pluginStackLocation
 } from './plugin-panel-check'
@@ -265,6 +268,26 @@ describe('orca plugin check', () => {
         { scenario: 'empty', elements: 1, issues: [], warnings: [] },
         { scenario: 'busy', elements: 3, issues: [], warnings: [] }
       ])
+      // What each scenario drew, at a glance, and the full tree for --json.
+      expect(checks.map((check) => check.summary)).toEqual([
+        ['List "Agents": 1 item(s)'],
+        ['List "Agents": 3 item(s)']
+      ])
+      expect(checks[1]?.tree).toMatchObject({ type: 'List', props: { label: 'Agents' } })
+      // One scenario, with the tree Orca would draw: it validates and keeps live handler ids.
+      expect(await readPluginCheckScenarioNames(dir, 'src/panel.tsx')).toEqual(['empty', 'busy'])
+      const [busy] = await checkPluginPanels(dir, { scenario: 'busy', drawnTree: true })
+      expect(busy).toMatchObject({ scenario: 'busy', issues: [] })
+      expect(busy?.drawnTree).toMatchObject({ type: 'List', props: { label: 'Agents' } })
+      expect(parsePluginDeclarativeTree(busy?.drawnTree).ok).toBe(true)
+      const [missing] = await checkPluginPanels(dir, { scenario: 'nope' })
+      expect(missing?.issues.map((issue) => issue.message)).toEqual([
+        'no check scenario named "nope" in src/panel.check.ts'
+      ])
+      expect(formatPluginPanelCheck(checks[1]!)).toEqual([
+        'todo-panel (src/panel.tsx, scenario "busy"): rendered 3 element(s)',
+        '  List "Agents": 3 item(s)'
+      ])
 
       await writeFile(join(dir, 'src', 'worker.ts'), 'export function activate(): void {}\n')
       await writeFile(join(dir, 'src', 'panel.check.ts'), 'export default {}\n')
@@ -288,6 +311,8 @@ describe('orca plugin check', () => {
           panel: 'todo-panel',
           entry: 'src/panel.tsx',
           elements: expect.any(Number),
+          summary: ['Heading "Counter"'],
+          tree: expect.objectContaining({ type: 'Stack' }),
           issues: [],
           warnings: []
         }

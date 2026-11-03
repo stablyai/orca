@@ -21,7 +21,7 @@ import {
 } from './runtime-environment-host-service-ops'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
@@ -178,9 +178,12 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
 }
 
-export function registerRuntimeEnvironmentPassiveHandlers(getUserDataPath: () => string): void {
+export function registerRuntimeEnvironmentPassiveHandlers(
+  getUserDataPath: () => string,
+  recordAnswer?: RecordRuntimeEnvironmentAnswer
+): void {
   registerPassiveStatusHandler(getUserDataPath)
-  registerPassiveCallHandler(getUserDataPath)
+  registerPassiveCallHandler(getUserDataPath, recordAnswer)
 }
 
 function closeLegacySelectorTransport(selector: string, environmentId: string): void {
@@ -215,7 +218,16 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
   )
 }
 
-function registerPassiveCallHandler(getUserDataPath: () => string): void {
+type RecordRuntimeEnvironmentAnswer = (
+  environment: ReturnType<typeof resolveEnvironment>,
+  method: string,
+  response: RuntimeRpcResponse<unknown>
+) => void
+
+function registerPassiveCallHandler(
+  getUserDataPath: () => string,
+  recordAnswer?: RecordRuntimeEnvironmentAnswer
+): void {
   ipcMain.handle(
     'runtimeEnvironments:call',
     async (
@@ -279,6 +291,7 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
         throw error
       }
       observeWslOrcadHostResponse(environment.id, args.method, response)
+      recordAnswer?.(environment, args.method, response)
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)
         : response

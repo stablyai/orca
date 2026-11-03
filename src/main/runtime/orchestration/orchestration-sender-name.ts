@@ -1,13 +1,15 @@
+import { crewDisplayName } from './crew/crew-rules'
 import type { AgentMessageSender } from '../../../shared/agent-session/agent-session-message-source'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import {
   getAgentRowConversationName,
   type ConversationNameTab
 } from '../../../shared/agent-row-conversation-name'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-status-types'
 import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import { structuredChatDisplayName } from '../../../shared/structured-chat-row-name'
 import type { Tab } from '../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
@@ -15,6 +17,118 @@ import {
   logWorkerLaunchObservationFailure,
   workerStartOptionsAgent
 } from './worker-launch-observation'
+
+export type SenderHookRow = Pick<
+  AgentStatusIpcPayload,
+  | 'paneKey'
+  | 'worktreeId'
+  | 'agentType'
+  | 'providerSession'
+  | 'receivedAt'
+  | 'connectionId'
+  | 'launchToken'
+>
+
+export type MirroredTabs = {
+  unifiedTabs?: Readonly<
+    Record<string, readonly Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>[]>
+  >
+  tabsByWorktree?: Readonly<
+    Record<string, readonly (Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>)[]>
+  >
+  terminalLayoutsByTabId?: Readonly<
+    Record<string, Pick<TerminalLayoutSnapshot, 'root' | 'titlesByLeafId'>>
+  >
+}
+
+type MirroredTerminalTab = Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>
+type MirroredChatTab = Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>
+
+export type SenderNamingLayout = {
+  root: { type: 'leaf' | 'split' } | null
+  titlesByLeafId?: Record<string, string>
+}
+
+export function terminalNameInputs(tab: MirroredTerminalTab): MirroredTerminalTab {
+  const provider = tab.aiVaultTitle
+  return {
+    id: tab.id,
+    title: tab.title,
+    customTitle: tab.customTitle,
+    quickCommandLabel: tab.quickCommandLabel,
+    generatedTitle: tab.generatedTitle,
+    defaultTitle: tab.defaultTitle,
+    aiVaultTitle: provider
+      ? { agent: provider.agent, sessionId: provider.sessionId, title: provider.title }
+      : provider
+  }
+}
+
+export function chatNameInputs(tab: MirroredChatTab): MirroredChatTab {
+  return {
+    contentType: tab.contentType,
+    entityId: tab.entityId,
+    customLabel: tab.customLabel,
+    label: tab.label
+  }
+}
+
+export function layoutNameInputs(layout: SenderNamingLayout): SenderNamingLayout {
+  return {
+    root: layout.root ? { type: layout.root.type } : null,
+    titlesByLeafId: layout.titlesByLeafId ? { ...layout.titlesByLeafId } : undefined
+  }
+}
+
+/** Capture naming values, never workspace buffers or editor drafts. */
+export function captureMirroredTabs(read: (worktreeId: string) => MirroredTabs | null | undefined) {
+  const workspaces = new Map<string, MirroredTabs | null>()
+  const terminalTabs = new Map<string, Map<string, MirroredTerminalTab>>()
+  const chatTabs = new Map<string, Map<string, MirroredChatTab>>()
+  const layouts = new Map<string, SenderNamingLayout | undefined>()
+  const session = (id: string) => {
+    if (!workspaces.has(id)) {
+      const live = read(id)
+      const terminals = (live?.tabsByWorktree?.[id] ?? []).map(terminalNameInputs)
+      const chats = (live?.unifiedTabs?.[id] ?? []).map(chatNameInputs)
+      for (const tab of terminals) {
+        const layout = live?.terminalLayoutsByTabId?.[tab.id]
+        layouts.set(JSON.stringify([id, tab.id]), layout ? layoutNameInputs(layout) : undefined)
+      }
+      workspaces.set(
+        id,
+        live ? { tabsByWorktree: { [id]: terminals }, unifiedTabs: { [id]: chats } } : null
+      )
+      terminalTabs.set(id, new Map(terminals.toReversed().map((tab) => [tab.id, tab])))
+      chatTabs.set(
+        id,
+        new Map(
+          chats
+            .filter((tab) => tab.contentType === 'agent-session')
+            .toReversed()
+            .map((tab) => [tab.entityId, tab])
+        )
+      )
+    }
+    return workspaces.get(id)
+  }
+  return {
+    session,
+    terminalTab: (worktreeId: string, tabId: string) => terminalTabs.get(worktreeId)?.get(tabId),
+    chatTab: (worktreeId: string, sessionId: string) => {
+      session(worktreeId)
+      return chatTabs.get(worktreeId)?.get(sessionId) ?? null
+    },
+    layout: (worktreeId: string, tabId: string) => {
+      const key = JSON.stringify([worktreeId, tabId])
+      if (!layouts.has(key)) {
+        const live = read(worktreeId)?.terminalLayoutsByTabId?.[tabId]
+        layouts.set(key, live ? layoutNameInputs(live) : undefined)
+      }
+      return layouts.get(key)
+    }
+  }
+}
 
 export type TerminalSenderNaming = {
   /** The tab as this host mirrors the workspace session. */
@@ -83,7 +197,8 @@ export function orchestrationSenderName(
   party: Party,
   sources: SenderNamingSources,
   reportedDispatchId?: string,
-  observation = observeOrchestrationSender(party, sources, reportedDispatchId)
+  observation = observeOrchestrationSender(party, sources, reportedDispatchId),
+  taskName?: string | null
 ): string | null {
   const { chat, terminal } = observation
   const terminalName = terminal?.tab
@@ -95,18 +210,24 @@ export function orchestrationSenderName(
         terminal.providerSessionId
       )
     : null
-  const ownName = chat?.ownName || terminalName
+  const ownName = crewDisplayName(chat?.ownName, terminalName)
   if (ownName) {
     return ownName
   }
-  const dispatch = observation.dispatch
-  const task = dispatch ? sources.db?.getTask(dispatch.task_id) : null
-  return (
-    task?.display_name ||
-    task?.task_title ||
-    chat?.fallback ||
-    (terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null)
+  return crewDisplayName(
+    taskName !== undefined ? taskName : observedTaskName(observation, sources.db),
+    chat?.fallback,
+    terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null
   )
+}
+
+function observedTaskName(
+  observation: SenderObservation,
+  db: OrchestrationDb | null
+): string | null {
+  const dispatch = observation.dispatch
+  const task = dispatch ? db?.getTask(dispatch.task_id) : null
+  return task?.display_name || task?.task_title || null
 }
 
 /** Current live kind wins; exact durable dispatch knowledge survives loss of live observations. */

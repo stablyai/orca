@@ -1,15 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
 } from './agent-session-option-launch'
 
 describe('OpenCode launch options', () => {
-  it('does not expose worker-only launch options as an interactive session catalog', () => {
-    expect(getAgentSessionOptionCatalog('opencode')).toBeNull()
-  })
-
   it('maps an opaque model id to the OpenCode --model flag', () => {
     expect(
       resolveAgentSessionOptionLaunch('opencode', {

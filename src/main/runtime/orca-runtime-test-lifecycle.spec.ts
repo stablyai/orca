@@ -6,7 +6,7 @@ import { commitFakeSpawnsInRuntimeTests } from './bind-first-pane.test-fixture'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
-} from '../worktree-background-removal'
+} from '../workspaces/removal/worktree-background-removal'
 import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
 
 const { MOCK_GIT_WORKTREES, RuntimeBrowserCommands, _resetTerminalViewAttributesForTest } = mocks

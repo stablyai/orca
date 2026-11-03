@@ -1,16 +1,16 @@
 import { expect, vi, type Mock } from 'vitest'
 import { resolve } from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import { resolveGitAdmissionTier } from '../git/command-runner/git-operation-executor'
-import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import type { PreparationRearmHolder } from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   createWorktreeCreateTimingRecorder,
   type WorktreeCreateTimingRecorder
-} from '../worktree-create-timing'
+} from '../workspaces/creation/worktree-create-timing'
 import type { SparsePreset } from '../../shared/worktree/create-types'
 
 type RuntimeCreateMocks = {

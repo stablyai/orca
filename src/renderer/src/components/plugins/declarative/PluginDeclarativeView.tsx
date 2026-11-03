@@ -136,8 +136,9 @@ function PluginDeclarativeNodeView({
       return (
         <div
           data-gap={node.props.gap ?? 'md'}
-          data-align={node.props.align ?? 'stretch'}
-          className="flex min-w-0 flex-col data-[align=center]:items-center data-[align=end]:items-end data-[align=start]:items-start data-[align=stretch]:items-stretch data-[gap=lg]:gap-4 data-[gap=md]:gap-3 data-[gap=none]:gap-0 data-[gap=sm]:gap-2 data-[gap=xs]:gap-1"
+          data-align={node.props.align ?? 'default'}
+          // Default: fields and tables fill the width, buttons keep their own; `stretch` stretches all.
+          className="flex min-w-0 flex-col data-[align=center]:items-center data-[align=default]:items-stretch data-[align=default]:[&>[data-slot=button]]:self-start data-[align=end]:items-end data-[align=start]:items-start data-[align=stretch]:items-stretch data-[gap=lg]:gap-4 data-[gap=md]:gap-3 data-[gap=none]:gap-0 data-[gap=sm]:gap-2 data-[gap=xs]:gap-1"
         >
           {children}
         </div>

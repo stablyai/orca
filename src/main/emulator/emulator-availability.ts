@@ -16,20 +16,6 @@ export type EmulatorAvailability = EmulatorCodedMessage & {
   android: EmulatorCodedMessage & { sdkFound: boolean; sdkPath?: string }
 }
 
-export function pickDefaultSimulatorDevice(devices: SimulatorDevice[]): SimulatorDevice | null {
-  const available = devices.filter((device) => device.isAvailable !== false)
-  const booted = available.filter((device) => device.state === 'Booted')
-  const bootedIphone = booted.find((device) => /iPhone/i.test(device.name || ''))
-  return (
-    bootedIphone ||
-    booted[0] ||
-    available.find((device) => /iPhone/i.test(device.name || '')) ||
-    available[0] ||
-    devices[0] ||
-    null
-  )
-}
-
 type IosAvailability = {
   available: boolean
   devices: SimulatorDevice[]

@@ -4,12 +4,12 @@
  */
 import { join } from 'node:path'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { readWorktreeLinks as readWorktreeAdminLinks } from '../git/worktree-prune-guard'
-import { resolveLocalProjectRuntimeForProject } from '../local-project-runtime-resolution'
+import { resolveLocalProjectRuntimeForProject } from '../workspaces/execution-host/local-project-runtime-resolution'
 import { wslHostsOptedIn } from '../wsl/wsl-host-gate'
 import {
   convertWslDriveProjectToWindowsGit,
