@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { z } from 'zod'
 import type { GeneratedAgentInputNotice } from '../../../src/shared/generated-agent-input-notice'
 import { generatedInputAgentName } from '../../../src/shared/generated-agent-input-notice'
@@ -38,6 +38,44 @@ const readNoticePage = bindDeferredRpcOperation(
 
 type Shown = { key: string; notice: GeneratedAgentInputNotice }
 
+/** One notice's banner. Memoized on its notice record, which the indexed view keeps by identity,
+ *  so a change to another notice never re-renders it. */
+const GeneratedInputNoticeBanner = memo(function GeneratedInputNoticeBanner({
+  notice,
+  client
+}: {
+  notice: GeneratedAgentInputNotice
+  client: RpcClient
+}) {
+  const t = useMobileTranslation()
+  const clipboard = useClipboardWriter()
+  const agent = generatedInputAgentName(notice.agent)
+  return (
+    <HostRouteNoticeBanner
+      message={generatedInputNoticeMessage(t, notice, agent)}
+      tone="failure"
+      action={{
+        label:
+          notice.submitted === false
+            ? t('agentPrompt.copyNotes', 'Copy notes')
+            : t('agentPrompt.copy', 'Copy prompt'),
+        onPress: () => {
+          void clipboard.writeText(notice.text).catch(() => {})
+        }
+      }}
+      onDismiss={() => {
+        // The owning runtime removes it for every client; this view waits for that change.
+        void dismissNotice
+          .request(client, { id: notice.id })
+          .then((reply) => {
+            dismissNotice.interpret(reply)
+          })
+          .catch(() => {})
+      }}
+    />
+  )
+})
+
 /** Notices of the one runtime `client` reaches: the paired desktop, or a server workspace's host. */
 export function GeneratedInputNotices({
   client,
@@ -46,9 +84,9 @@ export function GeneratedInputNotices({
   client: RpcClient | null
   capabilities: readonly string[]
 }) {
-  const t = useMobileTranslation()
-  const clipboard = useClipboardWriter()
-  const [shown, setShown] = useState<Shown[]>([])
+  // Indexed by id in add order: a live change touches only its own entry. The wrapper is new on
+  // each change so React re-renders; the map itself is not copied.
+  const [view, setView] = useState(() => ({ notices: new Map<string, Shown>() }))
   const capable = capabilities.includes(GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY)
   useEffect(() => {
     if (!client || !capable) {
@@ -58,17 +96,30 @@ export function GeneratedInputNotices({
       // A refused page throws; the feed then keeps what it has rather than deleting anything.
       readPage: async (from) =>
         readNoticePage.interpret(await readNoticePage.request(client, from ?? {})),
-      onSnapshot: (notices, session) => {
-        setShown(notices.map((notice) => ({ key: `${session}:${notice.id}`, notice })))
-      },
-      // A live change adds or removes its own banner; the rest keep their identity.
-      onDelta: (delta, session) => {
-        setShown((current) =>
-          delta.kind === 'added'
-            ? [...current, { key: `${session}:${delta.notice.id}`, notice: delta.notice }]
-            : current.filter(({ notice }) => notice.id !== delta.id)
-        )
-      }
+      onSnapshot: (notices, session) =>
+        setView(({ notices: previous }) => ({
+          // Unchanged notices keep their record, so their banners do not re-render.
+          notices: new Map(
+            notices.map((notice) => {
+              const kept = previous.get(notice.id)
+              const key = `${session}:${notice.id}`
+              return [notice.id, kept?.key === key ? kept : { key, notice }]
+            })
+          )
+        })),
+      // Set and delete are idempotent, so an updater React runs twice changes nothing more.
+      onDelta: (delta, session) =>
+        setView(({ notices }) => {
+          if (delta.kind === 'added') {
+            notices.set(delta.notice.id, {
+              key: `${session}:${delta.notice.id}`,
+              notice: delta.notice
+            })
+          } else {
+            notices.delete(delta.id)
+          }
+          return { notices }
+        })
     })
     const unsubscribe = client.subscribe(
       'terminal.generatedInputNotices.subscribe',
@@ -78,7 +129,7 @@ export function GeneratedInputNotices({
     return () => {
       feed.stop()
       unsubscribe()
-      setShown([])
+      setView({ notices: new Map() })
     }
   }, [client, capable])
   if (!client || !capable) {
@@ -86,35 +137,9 @@ export function GeneratedInputNotices({
   }
   return (
     <>
-      {shown.map(({ key, notice }) => {
-        const agent = generatedInputAgentName(notice.agent)
-        const message = generatedInputNoticeMessage(t, notice, agent)
-        return (
-          <HostRouteNoticeBanner
-            key={key}
-            message={message}
-            tone="failure"
-            action={{
-              label:
-                notice.submitted === false
-                  ? t('agentPrompt.copyNotes', 'Copy notes')
-                  : t('agentPrompt.copy', 'Copy prompt'),
-              onPress: () => {
-                void clipboard.writeText(notice.text).catch(() => {})
-              }
-            }}
-            onDismiss={() => {
-              // The owning runtime removes it for every client; this view waits for that change.
-              void dismissNotice
-                .request(client, { id: notice.id })
-                .then((reply) => {
-                  dismissNotice.interpret(reply)
-                })
-                .catch(() => {})
-            }}
-          />
-        )
-      })}
+      {Array.from(view.notices.values(), ({ key, notice }) => (
+        <GeneratedInputNoticeBanner key={key} notice={notice} client={client} />
+      ))}
     </>
   )
 }

@@ -6,6 +6,8 @@ import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY } from '../../../src/shared/terminal-runtime-capabilities'
 
 const writeText = vi.hoisted(() => vi.fn(async () => {}))
+// Banner renders, for the population contract below.
+const bannerRenders = vi.hoisted(() => ({ count: 0 }))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 type BannerProps = { message: string; action: { onPress: () => void }; onDismiss: () => void }
 // The per-server feed's host discovery reaches React Native; this case drives one runtime's feed.
@@ -17,7 +19,10 @@ vi.mock('../transport/host-status-gates', () => ({
   useHostStatusGates: () => ({ hostCapabilities: [] })
 }))
 vi.mock('./HostRouteNoticeBanner', () => ({
-  HostRouteNoticeBanner: (props: BannerProps) => createElement('notice', props)
+  HostRouteNoticeBanner: (props: BannerProps) => {
+    bannerRenders.count += 1
+    return createElement('notice', props)
+  }
 }))
 
 const frame = (chunk: string, offset: number, textLength: number) => ({
@@ -91,3 +96,62 @@ it('pages, copies only complete text, and dismisses on the runtime that owns the
     mounted.unmount()
   })
 })
+
+// Z2-1: after the snapshot, one live add renders one banner and one dismissal renders none,
+// whatever the retained population; the rest keep their rendered banners.
+it.each([100, 1000])(
+  'renders only the changed banner for a live change among %i notices',
+  async (n) => {
+    let emit = (_payload: unknown): void => {}
+    const frames = Array.from({ length: n }, (_, index) => ({
+      ...frame('x', 0, 1),
+      id: `n${index}`
+    }))
+    const client = stubRpcClient({
+      sendRequest: vi.fn(async () => ({
+        id: 'page',
+        ok: true as const,
+        result: { session: 's', revision: n, frames, next: null }
+      })),
+      subscribe: (_method, _params, listener) => {
+        emit = listener
+        return () => {}
+      }
+    })
+    let renderer: ReturnType<typeof create> | undefined
+    act(() => {
+      renderer = create(
+        createElement(GeneratedInputNotices, {
+          client,
+          capabilities: [GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY]
+        })
+      )
+    })
+    const mounted = renderer!
+    const banners = () => mounted.root.findAll((node) => String(node.type) === 'notice')
+    await act(async () => {
+      emit({ type: 'ready', subscriptionId: 'sub', session: 's', revision: n })
+    })
+    expect(banners()).toHaveLength(n)
+    bannerRenders.count = 0
+    await act(async () => {
+      emit({
+        type: 'notice',
+        session: 's',
+        revision: n + 1,
+        frame: { ...frame('y', 0, 1), id: 'new' }
+      })
+    })
+    expect(banners()).toHaveLength(n + 1)
+    expect(bannerRenders.count).toBe(1)
+    bannerRenders.count = 0
+    await act(async () => {
+      emit({ type: 'dismissed', session: 's', revision: n + 2, id: 'new' })
+    })
+    expect(banners()).toHaveLength(n)
+    expect(bannerRenders.count).toBe(0)
+    act(() => {
+      mounted.unmount()
+    })
+  }
+)
