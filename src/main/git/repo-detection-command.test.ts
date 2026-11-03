@@ -2,7 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { gitExecFileAsync, gitExecFileSync } from './runner'
 import { gitRepoOutput, runGitRepoCommands, runGitRepoCommandsSync } from './repo-detection-command'
 
-vi.mock('./runner', () => ({ gitExecFileAsync: vi.fn(), gitExecFileSync: vi.fn() }))
+vi.mock('./command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn()
+}))
+
+vi.mock('./command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileSync: vi.fn()
+}))
 afterEach(() => vi.resetAllMocks())
 
 describe('repository command execution', () => {

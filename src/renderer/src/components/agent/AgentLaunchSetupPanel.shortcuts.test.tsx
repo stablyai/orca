@@ -3,8 +3,13 @@ import { act } from 'react'
 import { fireEvent, getByRole, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
-import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import type { AgentPickerSurface } from '../../../../shared/agent-launch-picker'
@@ -90,6 +95,8 @@ it.each(cases)(
     const button = getByRole(host, 'button', { name: `Launch ${alternate}` })
     expect(button.getAttribute('aria-keyshortcuts')).toBe(mac ? 'Meta+Enter' : 'Control+Enter')
     expect(button.textContent).toContain(mac ? '⌘' : 'Ctrl')
+    expect(button.textContent).not.toContain('Enter')
+    expect(button.querySelector('svg.lucide-corner-down-left')).not.toBeNull()
     expect(
       getByRole(host, 'button', { name: `Launch ${defaultSurface}` }).getAttribute(
         'aria-keyshortcuts'

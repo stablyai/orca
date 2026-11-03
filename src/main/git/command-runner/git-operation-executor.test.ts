@@ -6,7 +6,10 @@ import {
   _resetGitAdmissionForTests,
   _gitAdmissionSnapshotForTests
 } from './git-subprocess-admission'
-import { worktreeCreateGit, worktreePreparationGit } from '../worktree-create-git-executor'
+import {
+  worktreeCreateGit,
+  worktreePreparationGit
+} from '../worktrees/creation/worktree-create-git-executor'
 
 afterEach(() => _resetGitAdmissionForTests())
 

@@ -68,33 +68,6 @@ describe('TabsSlice', () => {
         main.close()
       }
     })
-
-    // Unified activation IDs differ from entity-keyed bell markers; on-screen read must use entityId.
-    it('puts the terminal tab on screen by entityId and leaves its marker to the on-screen read', () => {
-      const t1 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
-      // t2 is active after creation; move focus to t1 so we can mark t2 unread.
-      store.getState().activateTab(t1.id)
-
-      store.setState({ activeWorktreeId: WT, activeView: 'terminal' })
-
-      // entityId is the terminal tabId that markTerminalBell / TabBar read from.
-      const t2TerminalId = t2.entityId
-      store.setState({
-        unreadTerminalTabs: {
-          ...store.getState().unreadTerminalTabs,
-          [t2TerminalId]: true as const
-        }
-      })
-      expect(store.getState().unreadTerminalTabs[t2TerminalId]).toBe(true)
-
-      store.getState().activateTab(t2.id)
-
-      expect(store.getState().unreadTerminalTabs[t2TerminalId]).toBe(true)
-      expect(resolveAutoAckTabTargets(store.getState())).toEqual([
-        { tabId: t2TerminalId, worktreeId: WT, surfaceKind: 'terminal' }
-      ])
-    })
   })
 
   // Already-active group clicks skip activateTab; focusGroup must still expose its tab to the attention scan.

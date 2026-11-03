@@ -18,7 +18,7 @@ import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connect
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { createFakeSpawnedChild } from '../../__fixtures__/fake-spawned-child'
 import * as commandResolution from '../../../main/git/command-runner/git-command-resolution'
-import * as gitRunner from '../../../main/git/runner'
+import * as gitRunner from '../../../main/git/command-runner/git-exec-file'
 import {
   acquireGitAdmission,
   _gitAdmissionSnapshotForTests,

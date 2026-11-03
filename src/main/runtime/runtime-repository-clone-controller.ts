@@ -14,7 +14,7 @@ import {
 } from '../git/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../git/runner'
 import { reuseSavedCloneTarget } from '../git/saved-clone-target'
-import { runWithGitReadCacheInvalidation } from '../git/status'
+import { runWithGitReadCacheInvalidation } from '../git/source-control/git-read-cache-invalidation'
 import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
 import { getRepoName } from '../git/repo'

@@ -102,6 +102,9 @@ export function NativeChatResolvedView({
   )
   // A coalesced interrupt/restart can stay working; the newer epoch must still clear Stop suppression.
   const workingEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null)
+  const turnEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.turnStartedAt ?? null)
+  const sendWorkingEpoch =
+    (session.hookWorking ?? liveWorking) || session.hookAwaitingInput ? turnEpoch : undefined
   const canSend = useNativeChatCanSend(targetPtyId)
   // Share verified composer delivery with prompt answers and ESC-based Stop.
   const send = useNativeChatInteractiveSend(paneKey, targetPtyId, agent)
@@ -121,7 +124,12 @@ export function NativeChatResolvedView({
     () => ({ paneKey, agent, sessionId }),
     [paneKey, agent, sessionId]
   )
-  const delivery = useNativeChatPendingDelivery({ paneKey, agent, session })
+  const delivery = useNativeChatPendingDelivery({
+    paneKey,
+    agent,
+    session,
+    workingEpoch: sendWorkingEpoch
+  })
   const { pending, record, clear } = delivery
   // Slash commands are local session-scoped feedback, not user turns; cap and cache their markers.
   const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
@@ -210,17 +218,13 @@ export function NativeChatResolvedView({
     composerReady
   })
 
-  // Match mobile ordering: hook preview before optimistic user echoes.
   const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages),
-    [pending, sessionAfterCommandBoundaries.messages]
+    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
+    [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch]
   )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({
-      messages:
-        pendingMessages.length > 0
-          ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
-          : sessionAfterCommandBoundaries.messages,
+      messages: [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
       previewText: hookPreview,
       working: liveWorking,
       previewIsToolOutput: hookPreviewIsToolOutput

@@ -86,6 +86,24 @@ it('moves one agent per Up/Down press, including after returning from its submen
   expect(launched).not.toHaveBeenCalled()
 })
 
+it('hands mouse highlighting to keyboard navigation and keeps it when the pointer leaves', async () => {
+  const { launched } = show()
+  const user = userEvent.setup()
+  const codex = screen.getByRole('menuitem', { name: /^Codex/ })
+  const claude = screen.getByRole('menuitem', { name: /^Claude/ })
+  await user.hover(screen.getByText('Codex'))
+  expect(document.activeElement).toBe(codex)
+  await user.keyboard('{ArrowDown}')
+  await waitFor(() => expect(document.activeElement).toBe(claude))
+  expect(codex.hasAttribute('data-highlighted')).toBe(false)
+  await user.unhover(screen.getByText('Codex'))
+  expect(document.activeElement).toBe(claude)
+  await user.keyboard('{ArrowUp}')
+  await waitFor(() => expect(document.activeElement).toBe(codex))
+  expect(claude.hasAttribute('data-highlighted')).toBe(false)
+  expect(launched).not.toHaveBeenCalled()
+})
+
 it.each(['hover', 'click'] as const)(
   'focuses model search when the chevron opens by %s',
   async (method) => {

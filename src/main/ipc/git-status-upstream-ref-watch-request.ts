@@ -1,5 +1,5 @@
 import type { Store } from '../persistence/loading-store/store'
-import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
+import { resolveGitStatusUpstreamRef } from '../git/source-control/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
@@ -11,7 +11,7 @@ import { setWorktreeGitStatusRefWatch } from './worktrees/creation/worktree-base
 import type { GitStatusRefBindingRequest } from './worktree-git-status-ref-watch'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
-import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export type GitStatusUpstreamRefWatchRequest = GitStatusRefBindingRequest
 

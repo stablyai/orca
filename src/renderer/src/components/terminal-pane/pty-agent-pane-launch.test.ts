@@ -101,10 +101,10 @@ vi.mock('../../../../main/pi/titlebar-extension-service', () =>
     m.piTitlebarExtensionModuleMock()
   )
 )
-vi.mock('../../../../main/pwsh', () =>
+vi.mock('../../../../main/pty/shell-startup/pwsh', () =>
   import('../../../../main/ipc/pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
-vi.mock('../../../../main/wsl', async (importOriginal) =>
+vi.mock('../../../../main/wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('../../../../main/ipc/pty/pty-ipc-mock-registry')).wslModuleMock(
     await importOriginal()
   )
@@ -235,7 +235,8 @@ describe('a pane that starts its own agent launch', () => {
 
     expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
       worktreeId,
-      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true })
+      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true }),
+      undefined
     )
   })
 
@@ -256,7 +257,8 @@ describe('a pane that starts its own agent launch', () => {
 
     expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
       worktreeId,
-      expect.not.objectContaining({ shellOverride: expect.anything() })
+      expect.not.objectContaining({ shellOverride: expect.anything() }),
+      undefined
     )
     expect(providerSpawn.mock.calls[0]?.[0].shellOverride).toBe('/bin/planned-shell')
   })

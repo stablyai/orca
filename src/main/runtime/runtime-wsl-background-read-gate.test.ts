@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const readWslDistroRunningStateMock = vi.hoisted(() => vi.fn())
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))
@@ -13,7 +13,7 @@ import { RuntimeFileAccess } from './files/file-access'
 import { RuntimeFileReads } from './files/file-reads'
 import { RuntimeFileWatches } from './files/watch/file-watches'
 import type { RuntimeGitCommandHost, RuntimeGitTarget } from './runtime-git-command-target'
-import { WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
+import { WslDistroStoppedError } from '../wsl/filesystem/wsl-unc-access-gate'
 import { mapRuntimeError } from './rpc/errors'
 
 const UNC_ROOT = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'

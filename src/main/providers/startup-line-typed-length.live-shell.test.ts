@@ -9,8 +9,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createShellStartupOutputScanState,
   scanShellStartupOutput
-} from '../shell-startup-output-scanner'
-import { selectShellStartupFeatures } from '../shell-startup-features'
+} from '../pty/shell-startup/shell-startup-output-scanner'
+import { selectShellStartupFeatures } from '../pty/shell-startup/shell-startup-features'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES,

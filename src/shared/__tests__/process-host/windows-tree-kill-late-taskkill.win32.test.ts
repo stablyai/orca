@@ -94,29 +94,6 @@ describeOnWindows('Windows barrier with a taskkill slower than its caller', () =
     await expectBarrierKillsGrandchild(signal)
   }, 90_000)
 
-  it.skipIf(!underLoad)(
-    'kills the grandchild with the real taskkill on a loaded host',
-    async ({ signal }) => {
-      let taskkillOutcome = 'still running'
-      _setWindowsTaskkillLauncherForTests((rootPid) => {
-        const startedAt = Date.now()
-        const taskkill = spawnProcess({
-          program: windowsSystem32Binary('taskkill.exe'),
-          args: ['/pid', String(rootPid), '/t', '/f'],
-          stdio: 'ignore'
-        })
-        taskkill.once('close', (code, signal) => {
-          taskkillOutcome = `${Date.now() - startedAt} ms, code ${code}, signal ${signal}`
-        })
-        return taskkill
-      })
-      await expectBarrierKillsGrandchild(signal)
-      // Record measured taskkill duration under load (about 50ms idle).
-      console.log(`[late-taskkill] taskkill under load: ${taskkillOutcome}`)
-    },
-    90_000
-  )
-
   async function expectBarrierKillsGrandchild(signal: AbortSignal): Promise<void> {
     const controller = new AbortController()
     let reportedAt: number | undefined

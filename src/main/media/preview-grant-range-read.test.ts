@@ -9,12 +9,12 @@ vi.mock('electron', () => ({ protocol: { handle: vi.fn() } }))
 vi.mock('../ipc/local-file-access-resolution', () => ({
   resolveLocalFileRequestPath: vi.fn(async (filePath: string) => filePath)
 }))
-vi.mock('../wsl/wsl-unc-access-gate', () => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({
   guardWslUncPathAccess: vi.fn((_path: string, access: () => Promise<unknown>) => access())
 }))
 
 import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
-import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
+import { guardWslUncPathAccess } from '../wsl/filesystem/wsl-unc-access-gate'
 import { readLocalFilePreview } from './media-preview-protocol'
 import { readPreviewGrantRange } from './preview-grant-range-read'
 

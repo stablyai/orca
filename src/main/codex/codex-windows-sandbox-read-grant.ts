@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'nod
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { getSystem32ExePath } from '../win32-utils'
+import { getSystem32ExePath } from '../windows/windows-command-paths'
 
 // Codex's elevated sandbox runs commands as members of this local group (codex-rs windows-sandbox-rs/src/winutil.rs).
 const CODEX_SANDBOX_USERS_GROUP = 'CodexSandboxUsers'

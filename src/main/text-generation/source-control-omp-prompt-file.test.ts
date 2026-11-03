@@ -25,7 +25,7 @@ import {
   withPlatform
 } from './commit-message-text-generation-test-harness'
 
-vi.mock('../windows-process-tree-kill', () => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: vi.fn(async () => true)
 }))
 

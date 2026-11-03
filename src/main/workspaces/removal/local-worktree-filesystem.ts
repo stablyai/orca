@@ -5,8 +5,8 @@ import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { removeHostTree } from '../../filesystem/host-tree-removal'
 import { toLinuxPath } from '../../../shared/wsl-paths'
-import { resolveWslInteropSpawnCwd } from '../../wsl-interop-spawn-directory'
-import { describeWslProcessFailure } from '../../wsl/wsl-process-failure'
+import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
+import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
 
 export type LocalWorktreeFilesystemOptions = {

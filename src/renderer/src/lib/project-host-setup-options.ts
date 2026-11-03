@@ -16,7 +16,10 @@ import {
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
-import { dedupeReadySetupRows } from './project-host-setup-row-dedupe'
+import {
+  dedupeReadySetupRows,
+  type SelectedProjectHostSetup
+} from './project-host-setup-row-dedupe'
 
 export type ProjectHostSetupSelection = { id: string; hostId: ExecutionHostId }
 
@@ -63,6 +66,7 @@ type BuildReadySetupOptionsInput = {
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
   hosts: readonly ExecutionHostRegistryEntry[]
+  selectedSetup?: SelectedProjectHostSetup | null
 }
 
 type BuildNeedsSetupOptionsInput = {
@@ -77,13 +81,16 @@ type BuildProjectHostSetupOptionsInput = {
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
   hosts: readonly ExecutionHostRegistryEntry[]
+  /** Shown as its host's row when that host has several checkouts of the project. */
+  selectedSetup?: SelectedProjectHostSetup | null
 }
 
 export function buildProjectHostSetupOptions({
   projectId,
   projectHostSetups,
   eligibleRepos,
-  hosts
+  hosts,
+  selectedSetup
 }: BuildProjectHostSetupOptionsInput): ProjectHostSetupOption[] {
   if (!projectId) {
     return []
@@ -92,7 +99,8 @@ export function buildProjectHostSetupOptions({
     projectId,
     projectHostSetups,
     eligibleRepos,
-    hosts
+    hosts,
+    selectedSetup
   })
   const readySetupByHost = new Map(readyOptions.map((option) => [option.hostId, option]))
   const pendingSetupByHost = getPendingSetupByHost(projectId, projectHostSetups)
@@ -127,7 +135,8 @@ function buildReadySetupOptions({
   projectId,
   projectHostSetups,
   eligibleRepos,
-  hosts
+  hosts,
+  selectedSetup
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
   const hostById = new Map(hosts.map((host) => [host.id, host]))
@@ -153,7 +162,7 @@ function buildReadySetupOptions({
       detail: setup.displayName,
       path: setup.path
     }))
-  return dedupeReadySetupRows(options, hostById)
+  return dedupeReadySetupRows(options, hostById, selectedSetup)
 }
 
 function buildNeedsSetupOptions({

@@ -7,7 +7,7 @@ const wslMocks = vi.hoisted(() => ({
     vi.fn<(options?: { requireConfirmed?: boolean; startedAfter?: number }) => Promise<string[]>>(),
   listWslDistrosAsync: vi.fn<() => Promise<string[]>>()
 }))
-vi.mock('../wsl', () => wslMocks)
+vi.mock('../wsl/discovery/distro-catalog', () => wslMocks)
 
 import {
   _resetWslBackgroundDistroGateForTests,
@@ -15,11 +15,11 @@ import {
   noteWslDistroMayHaveStopped,
   readConfirmedRunningWslDistros,
   wasWslDistroLastSeenRunningSettled
-} from '../wsl-background-distro-gate'
+} from '../wsl/discovery/wsl-background-distro-gate'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
-} from '../wsl-running-distro-cache'
+} from '../wsl/discovery/wsl-running-distro-cache'
 import {
   PRODUCTION_WSL_BRIDGE_BOOT_IDENTITY_DEPS,
   WslBridgeBootIdentity

@@ -1,12 +1,12 @@
-import { prioritizeAntigravityTranscriptCandidates } from './antigravity-transcript-candidates'
+import { prioritizeAntigravityTranscriptCandidates } from './scanners/antigravity/antigravity-transcript-candidates'
 import { readCodexRolloutSessionMetaId } from '../codex/codex-rollout-session-meta'
 import {
   codexRolloutHardlinkIdentity,
   dedupeCodexRolloutAliases,
   dedupeCodexRolloutFileAliases
-} from './codex-session-root-dedup'
-import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
-import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
+} from './scanners/codex/codex-session-root-dedup'
+import { antigravityHistoryPathForBrainDir } from './scanners/antigravity/session-scanner-antigravity-paths'
+import { codexHomeForSessionsDir } from './scanners/codex/session-scanner-codex-paths'
 import { DEFAULT_CODEX_HOME_DIR } from './session-scanner-source-discovery'
 import type {
   AiVaultScanOptions,

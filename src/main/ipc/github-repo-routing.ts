@@ -15,7 +15,7 @@ import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
 } from '../workspaces/execution-host/project-runtime-git-options'
-import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
+import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export type GitHubRepoScopedArgs = {
   repoPath: string

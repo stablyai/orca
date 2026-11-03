@@ -1,6 +1,6 @@
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import type { WorktreeCreateBaseFallback } from '../../shared/worktree/create-types'
-import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
+import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
 import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 

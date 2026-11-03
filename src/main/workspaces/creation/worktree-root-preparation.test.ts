@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WslModule from '../../wsl'
+import type * as WslModule from '../../wsl/discovery/distro-catalog'
 import type { Repo } from '../../../shared/repo-types'
 
 const { mkdirMock, getWslHomeMock, getWslHomeAsyncMock, runningStateMock } = vi.hoisted(() => ({
@@ -13,13 +13,13 @@ vi.mock('fs/promises', () => ({
   mkdir: mkdirMock
 }))
 
-vi.mock('../../wsl', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getWslHome: getWslHomeMock,
   getWslHomeAsync: getWslHomeAsyncMock
 }))
 
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: runningStateMock
 }))

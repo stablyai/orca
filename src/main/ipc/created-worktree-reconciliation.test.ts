@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { describeCreatedWorktree, listWorktreesSharedStrict } from '../git/worktree'
+import { describeCreatedWorktree } from '../git/worktrees/catalog/worktree-listing'
+import { listWorktreesSharedStrict } from '../git/worktrees/catalog/worktree-scan-cache'
 import { findCreatedWorktree, resolveCreatedWorktree } from './created-worktree-reconciliation'
 
-vi.mock('../git/worktree', () => ({
-  listWorktreesSharedStrict: vi.fn(),
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', () => ({
+  listWorktreesSharedStrict: vi.fn()
+}))
+
+vi.mock('../git/worktrees/catalog/worktree-listing', () => ({
   describeCreatedWorktree: vi.fn()
 }))
 

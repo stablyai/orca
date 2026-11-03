@@ -190,7 +190,10 @@ async function startOrcadRuntime(
 
   const { loadAgentSessionClaimSigner } =
     await import('../runtime/agent-session/ownership/agent-session-claim-identity')
+  let runtimeRpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
   const runtime = new OrcaRuntimeService(profileStore, stats, {
+    getPairedDeviceName: (deviceId) =>
+      runtimeRpc?.getDeviceRegistry()?.getDevice(deviceId)?.name ?? null,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
     getAdditionalAiVaultCodexHomePaths: () => [
@@ -302,6 +305,7 @@ async function startOrcadRuntime(
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })
+  runtimeRpc = rpc
   runtime.setAgentSenderPeerKey(() => rpc.getE2EEPublicKey())
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())

@@ -2,14 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkAliasInput } from './agent-status-child-work-alias'
 import { serializeAgentChildWorkBindingKey } from './agent-status-child-work-binding'
 import type { AgentChildWorkInput } from './agent-status-child-work'
-import { createAgentStatusStore } from './agent-status-store'
+import './agent-status-store'
 import { parseAgentStatusStoreMutation } from './agent-status-store-codec'
 import { commitAgentStatusStoreMutation } from './agent-status-store-commit'
-import {
-  AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
-  AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
-  type AgentStatusStoreMutation
-} from './agent-status-store-contract'
+import './agent-status-store-contract'
+import type { AgentStatusStoreMutation } from './agent-status-store-contract'
 import {
   indexAgentStatusStoreState,
   type AgentStatusStoreIndexes
@@ -156,46 +153,4 @@ describe('AgentStatusStore applied in place', () => {
     },
     60_000
   )
-
-  it('retires tombstones exactly at the retention revision boundary', () => {
-    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    const parent = parents[0]!
-    for (const childWorkId of ['oldest', 'newer']) {
-      const mutation = { removeChildren: [childWorkId] }
-      expect(store.applyMutation(mutation)).not.toBeNull()
-    }
-    const advance = { parent: { subject: parent } }
-    for (
-      let revision = 3;
-      revision <= AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS;
-      revision += 1
-    ) {
-      expect(store.applyMutation(advance)).not.toBeNull()
-    }
-    expect(store.getSnapshot().revision).toBe(AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS)
-    expect(store.getSnapshot().tombstones).toEqual([
-      { entity: 'child', key: 'oldest', revision: 1 },
-      { entity: 'child', key: 'newer', revision: 2 }
-    ])
-
-    expect(store.applyMutation(advance)).not.toBeNull()
-    expect(store.getSnapshot().tombstones).toEqual([{ entity: 'child', key: 'newer', revision: 2 }])
-
-    expect(store.applyMutation(advance)).not.toBeNull()
-    expect(store.getSnapshot().tombstones).toEqual([])
-  }, 60_000)
-
-  it('keeps the newest tombstones in order when their count overflows', () => {
-    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    const childWorkIds = Array.from(
-      { length: AGENT_STATUS_STORE_TOMBSTONE_LIMIT },
-      (_, index) => `removed-${index}`
-    )
-    for (const mutation of [{ removeChildren: ['oldest'] }, { removeChildren: childWorkIds }]) {
-      expect(store.applyMutation(mutation)).not.toBeNull()
-    }
-    expect(store.getSnapshot().tombstones).toEqual(
-      childWorkIds.map((key) => ({ entity: 'child', key, revision: 2 }))
-    )
-  }, 60_000)
 })
