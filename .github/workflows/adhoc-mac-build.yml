@@ -302,6 +302,11 @@ jobs:
           # Read this repo without persisted checkout credentials; all writes use an env-passed App token for orca-adhoc (zizmor: artipacked).
           persist-credentials: false
 
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.0'
+
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:

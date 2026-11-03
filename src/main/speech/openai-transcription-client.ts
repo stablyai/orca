@@ -37,7 +37,7 @@ function writePcm16Samples(view: DataView, samples: Float32Array, offset: number
   }
 }
 
-function encodePcm16Wav(chunks: Float32Array[], sampleRate: number): Buffer<ArrayBuffer> {
+export function encodePcm16Wav(chunks: Float32Array[], sampleRate: number): Buffer<ArrayBuffer> {
   const dataBytes = chunks.reduce((sum, chunk) => sum + chunk.length, 0) * 2
   const buffer = Buffer.alloc(44 + dataBytes)
 
