@@ -21834,7 +21834,7 @@
         "busy": "Trabalhando",
         "idle": "Ociosa",
         "settingTitle": "Ao trocar de conta com o Claude em execução",
-        "settingDescription": "Reiniciar continua cada conversa em execução na nova conta.",
+        "settingDescription": "Reiniciar continua cada conversa em execução na nova conta. As sessões ocupadas interrompem o que estão fazendo.",
         "keyword": {
           "restart": "reiniciar",
           "running": "em execução"

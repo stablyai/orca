@@ -21056,7 +21056,7 @@
         "keep": "그대로 유지",
         "listLabel": "다시 시작할 Claude 세션",
         "settingTitle": "터미널에서 Claude가 실행되는 동안 계정을 전환하는 경우",
-        "settingDescription": "다시 시작하면 각 터미널 대화가 새 계정에서 계속됩니다.",
+        "settingDescription": "다시 시작하면 각 터미널 대화가 새 계정에서 계속됩니다. 작업 중인 세션은 진행 중인 작업을 중단합니다.",
         "settingRestart": "항상 다시 시작",
         "settingKeep": "다시 시작하지 않음",
         "restartingOther": "{{account}} 계정에서 Claude 세션 {{count}}개를 다시 시작하는 중",

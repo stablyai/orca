@@ -21712,7 +21712,7 @@
         "listLabel": "Sessions Claude à redémarrer",
         "settingRestart": "Toujours redémarrer",
         "settingKeep": "Ne jamais redémarrer",
-        "settingDescription": "Le redémarrage poursuit chaque conversation dans un terminal sur le nouveau compte.",
+        "settingDescription": "Le redémarrage poursuit chaque conversation dans un terminal sur le nouveau compte. Les sessions occupées interrompent leur travail en cours.",
         "restartingOne": "Redémarrage d’une session Claude sur {{account}}",
         "restartingOther": "Redémarrage de {{count}} sessions Claude sur {{account}}",
         "groupOnAccount": "En cours sur {{account}}",

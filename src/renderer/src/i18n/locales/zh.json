@@ -21056,7 +21056,7 @@
         "dontAskAgainHint": "您可以在“设置”→“AI 提供商帐户”中关闭此功能。",
         "listLabel": "要重新启动的 Claude 会话",
         "settingTitle": "Claude 在终端中运行期间切换账户时",
-        "settingDescription": "重启后，每个终端对话都会在新账户上继续。",
+        "settingDescription": "重启后，每个终端对话都会在新账户上继续。忙碌的会话会中断当前工作。",
         "settingRestart": "总是重新启动",
         "session": "Claude 会话",
         "restartingOther": "正在 {{account}} 账户上重启 {{count}} 个 Claude 会话",

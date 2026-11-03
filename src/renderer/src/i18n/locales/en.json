@@ -21949,7 +21949,7 @@
         "busy": "Working",
         "idle": "Idle",
         "settingTitle": "When you switch accounts while Claude is running in terminals",
-        "settingDescription": "Restarting continues each terminal conversation on the new account.",
+        "settingDescription": "Restarting continues each terminal conversation on the new account. Busy sessions stop their current work.",
         "keyword": {
           "restart": "restart",
           "running": "running"

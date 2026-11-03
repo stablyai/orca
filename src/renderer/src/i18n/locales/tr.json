@@ -21457,7 +21457,7 @@
         "busy": "Çalışıyor",
         "idle": "Boşta",
         "settingTitle": "Claude çalışırken hesap değiştirdiğinizde",
-        "settingDescription": "Yeniden başlatma, devam eden her sohbeti yeni hesapta sürdürür.",
+        "settingDescription": "Yeniden başlatma, devam eden her sohbeti yeni hesapta sürdürür. Meşgul oturumlar yaptıkları işi keser.",
         "keyword": {
           "restart": "yeniden başlat",
           "running": "çalışıyor"

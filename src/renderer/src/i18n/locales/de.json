@@ -21474,7 +21474,7 @@
         "busy": "In Arbeit",
         "idle": "Inaktiv",
         "settingTitle": "Bei Kontowechsel, während Claude läuft",
-        "settingDescription": "Ein Neustart setzt jedes laufende Gespräch mit dem neuen Konto fort.",
+        "settingDescription": "Ein Neustart setzt jedes laufende Gespräch mit dem neuen Konto fort. Beschäftigte Sitzungen brechen ihre aktuelle Arbeit ab.",
         "keyword": {
           "restart": "Neustart",
           "running": "laufend"

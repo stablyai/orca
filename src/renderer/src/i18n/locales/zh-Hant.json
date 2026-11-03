@@ -21153,7 +21153,7 @@
         "busy": "工作中",
         "idle": "閒置",
         "settingTitle": "Claude 執行期間切換帳戶時",
-        "settingDescription": "重新啟動後，所有進行中的對話都會使用新帳戶繼續。",
+        "settingDescription": "重新啟動後，所有進行中的對話都會使用新帳戶繼續。忙碌的工作階段會中斷目前的工作。",
         "keyword": {
           "restart": "重新啟動",
           "running": "執行中"
