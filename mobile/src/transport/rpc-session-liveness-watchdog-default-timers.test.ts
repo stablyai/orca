@@ -15,7 +15,7 @@ describe('RpcSessionLivenessWatchdog default timers', () => {
 
   it('schedules and clears with no injected timers when the global rejects a non-global receiver', async () => {
     const timers = installIllegalInvocationTimerGuards()
-    const sendProbe = vi.fn((_identity: object, _id: string) => true)
+    const sendProbe = vi.fn(() => true)
     const terminate = vi.fn()
     const watchdog = new RpcSessionLivenessWatchdog({ transport: 'direct', sendProbe, terminate })
     const identity = {}

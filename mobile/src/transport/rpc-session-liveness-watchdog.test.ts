@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   LIVENESS_IDLE_MS,
   LIVENESS_PROBE_TIMEOUT_MS,
-  RpcSessionLivenessWatchdog
+  RpcSessionLivenessWatchdog,
+  type RpcSessionIdentity
 } from './rpc-session-liveness-watchdog'
 
 describe('RpcSessionLivenessWatchdog', () => {
@@ -10,7 +11,7 @@ describe('RpcSessionLivenessWatchdog', () => {
   afterEach(() => vi.useRealTimers())
 
   function fixture() {
-    const sendProbe = vi.fn((_identity: object, _id: string) => true)
+    const sendProbe = vi.fn((_identity: RpcSessionIdentity, _id: string) => true)
     const terminate = vi.fn()
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
@@ -48,7 +49,7 @@ describe('RpcSessionLivenessWatchdog', () => {
 
   it('coalesces recent network hints without losing or postponing a decisive probe', async () => {
     const identity = {}
-    const sendProbe = vi.fn((_identity: object, _id: string) => true)
+    const sendProbe = vi.fn((_identity: RpcSessionIdentity, _id: string) => true)
     const terminate = vi.fn()
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
@@ -128,7 +129,7 @@ describe('RpcSessionLivenessWatchdog', () => {
 
   it('does not churn timers during continuous authenticated traffic', async () => {
     const setTimer = vi.fn(setTimeout)
-    const sendProbe = vi.fn((_identity: object, _id: string) => true)
+    const sendProbe = vi.fn(() => true)
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
       sendProbe,
@@ -166,7 +167,7 @@ describe('RpcSessionLivenessWatchdog', () => {
     let now = 0
     let callback: (() => void) | undefined
     const terminate = vi.fn()
-    const sendProbe = vi.fn((_identity: object, _id: string) => true)
+    const sendProbe = vi.fn(() => true)
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'relay',
       idleProbeMs: null,
@@ -204,7 +205,7 @@ describe('RpcSessionLivenessWatchdog', () => {
   it('invalidates late callbacks after identity replacement', () => {
     const callbacks: (() => void)[] = []
     const terminate = vi.fn()
-    const sendProbe = vi.fn((_identity: object, _id: string) => true)
+    const sendProbe = vi.fn(() => true)
     let now = 0
     const watchdog = new RpcSessionLivenessWatchdog({
       transport: 'direct',
