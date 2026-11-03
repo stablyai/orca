@@ -92,6 +92,7 @@ it('hydrates the preserved opt-in and responds to a live settings change', async
 it.each([2, 20])('isolates %i gate consumers from unrelated store updates', async (count) => {
   useAppStore.setState({ settings: getDefaultSettings('/home/test') })
   const renders = Array<number>(count).fill(0)
+  const consumers = Array.from({ length: count }, (_, index) => ({ id: `gate-${index}`, index }))
   function Gate({ index }: { index: number }) {
     const enabled = useOrchestrationPanelEnabled()
     renders[index] += 1
@@ -99,8 +100,8 @@ it.each([2, 20])('isolates %i gate consumers from unrelated store updates', asyn
   }
   render(
     <>
-      {renders.map((_, index) => (
-        <Gate key={index} index={index} />
+      {consumers.map(({ id, index }) => (
+        <Gate key={id} index={index} />
       ))}
     </>
   )
