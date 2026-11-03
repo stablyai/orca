@@ -1,6 +1,6 @@
 // Per-execution-host layout data; view selection, content facts and drafts stay beside it. Disk-field tables assign each persisted field one source.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
 import type { PersistedClientHostedBrowserPage } from '../client-hosted-browser-page-record'

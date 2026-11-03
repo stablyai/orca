@@ -2,11 +2,13 @@
 
 import type {
   AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
+import type {
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { queuedMessageEditableText } from '../../../shared/queued-message-edit'
 import {
   queuedMessageUpdateDecision,
@@ -60,7 +62,7 @@ export function updateQueuedStructuredAgentMessage(
         return { ok: true, value: await queued.update(fields) }
       } catch (error) {
         if (isAgentSessionAttachmentExpiredError(error)) {
-          return agentSessionAttachmentExpiredRefusal()
+          return agentSessionAttachmentExpiredRefusal(error)
         }
         throw error
       }

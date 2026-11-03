@@ -1,20 +1,20 @@
 import { open, realpath } from 'node:fs/promises'
 import { isAbsolute, normalize } from 'node:path'
 import { z } from 'zod'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey,
   type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from '../../shared/agent-session-provider-handle'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
   type AgentCliVersionReader
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,

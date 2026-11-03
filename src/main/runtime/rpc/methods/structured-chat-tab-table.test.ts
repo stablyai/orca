@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session-record-store-test-harness'
+import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
 import { DeviceRegistry } from '../../device-registry'
 import WebSocket from 'ws'

@@ -24,7 +24,7 @@ import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
 } from '../../git/huge-folder-ignore'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { validateGitRelativeFilePath } from './filesystem-path-containment'
 import {
   getLocalGitOptionsForRegisteredWorktree,
@@ -198,7 +198,12 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         wakeWslDistro?: boolean
       } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
-      const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
+      const options: GitHistoryOptions = {
+        limit: args.limit,
+        baseRef: args.baseRef,
+        branchOnly: args.branchOnly,
+        skip: args.skip
+      }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       return readWorktreeGitUnlessWslStopped(
         store,

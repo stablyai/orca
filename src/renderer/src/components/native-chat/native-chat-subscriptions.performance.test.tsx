@@ -4,7 +4,6 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { NativeChatSkillDiscovery } from './use-native-chat-skills'
 import {
   useNativeChatImageRuntimeContext,
   type NativeChatImageRuntimeContext
@@ -19,7 +18,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../s
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import type * as StructuredClient from '@/runtime/structured-agent-session-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNativeChatHandOff, type NativeChatHandOff } from './use-native-chat-hand-off'
 import {
@@ -48,6 +47,7 @@ vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog'
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatSkillDiscovery: vi.fn() }))
 
 import {
+  type NativeChatSkillDiscovery,
   resetNativeChatSkillDiscoveryCacheForTests,
   useNativeChatSkills
 } from './use-native-chat-skills'
@@ -223,6 +223,58 @@ function corpus(scale: number, dense = false) {
 }
 
 const initialState = useAppStore.getState()
+it('updates only chats belonging to a re-paired image host', () => {
+  const fixture = nativeChatFanoutFixture(2, 2, 0)
+  const environments = ['one', 'two'].map((id) => ({
+    id,
+    name: id,
+    createdAt: 1,
+    updatedAt: 1,
+    pairingRevision: 7,
+    lastUsedAt: null,
+    runtimeId: id,
+    endpoints: [],
+    preferredEndpointId: 'endpoint'
+  }))
+  useAppStore.setState({
+    ...useAppStore.getInitialState(),
+    ...fixture,
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
+    runtimeEnvironmentCatalogHydrated: true,
+    runtimeEnvironments: environments,
+    folderWorkspaces: fixture.folderWorkspaces.map((row, index) => ({
+      ...row,
+      executionHostId: `runtime:${environments[index]!.id}` as const
+    }))
+  })
+  const renders = [0, 0]
+  const revisions: (number | undefined)[] = []
+  function Probe({ index }: { index: number }) {
+    revisions[index] = useNativeChatImageRuntimeContext(
+      `chat-${index}`
+    )?.expectedEnvironmentPairingRevision
+    renders[index] = renders[index]! + 1
+    return null
+  }
+  render(
+    <>
+      <Probe index={0} />
+      <Probe index={1} />
+    </>
+  )
+  expect(revisions).toEqual([7, 7])
+  const baseline = [...renders]
+  act(() =>
+    useAppStore.setState({
+      runtimeEnvironments: environments.map((entry) =>
+        entry.id === 'one' ? { ...entry, pairingRevision: 8 } : entry
+      )
+    })
+  )
+  expect(revisions).toEqual([8, 7])
+  expect(renders).toEqual([baseline[0]! + 1, baseline[1]])
+})
 afterEach(() => {
   cleanup()
   useAppStore.setState(initialState, true)

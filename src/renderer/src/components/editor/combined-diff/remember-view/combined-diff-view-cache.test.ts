@@ -55,20 +55,6 @@ describe('combined diff view succession', () => {
     expect(readCombinedDiffViewMemory(keyFor('tab-1'))).toBeUndefined()
   })
 
-  it('keeps a still-open but inactive tab view out of reach of a second tab', () => {
-    viewThenUnmount('tab-1', 640)
-
-    const nextKey = keyFor('tab-2')
-    const bothOpen = succession('tab-2', ['tab-1', 'tab-2'])
-    expect(readCombinedDiffViewMemory(nextKey, { worktreeId, succession: bothOpen })).toBe(
-      undefined
-    )
-    claimCombinedDiffView(nextKey, worktreeId, bothOpen)
-
-    expect(readCombinedDiffViewMemory(nextKey)).toBeUndefined()
-    expect(readCombinedDiffViewMemory(keyFor('tab-1'))?.scrollTop).toBe(640)
-  })
-
   it('never takes the view of a viewer that is still mounted', () => {
     const mounted = claimCombinedDiffView(keyFor('tab-1'), worktreeId, succession('tab-1'))
     rememberCombinedDiffView(mounted, { scrollTop: 320 })

@@ -4,7 +4,7 @@ import {
   agentChildWorkStopTargets,
   type AgentChildWorkStopAcknowledgement
 } from '../../shared/agent-child-work-stop-targets'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liveness'
 import { conversationCommandBlocked } from '../native-chat/agent-session-wire/structured-conversation-command-admission'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
@@ -99,6 +99,15 @@ describe('a background Stop acts on the host child records', () => {
           subtype: 'task_updated',
           task_id: 'agent-1',
           patch: { status: 'completed' }
+        }
+      },
+      {
+        at: 7_000,
+        frame: {
+          type: 'system',
+          subtype: 'task_notification',
+          task_id: 'agent-1',
+          status: 'completed'
         }
       }
     ])

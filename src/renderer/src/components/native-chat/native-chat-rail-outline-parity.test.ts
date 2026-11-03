@@ -9,9 +9,9 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'

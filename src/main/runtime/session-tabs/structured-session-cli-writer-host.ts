@@ -1,12 +1,12 @@
 import {
   terminalLaunchFacts,
   type TerminalLaunchResult
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { assertCliConversationWritersExited } from '../structured-agent-cli-writers'
 import type { EnrichedAgentHookEventPayload } from '../../agent-hooks/server/server-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { recordConversationKey } from '../../native-chat/structured-conversation-key'
 import type { StructuredAgentCliSourceRoute } from '../../native-chat/structured-agent-cli-source'
@@ -91,15 +91,22 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
 
   async assertStructuredAdoptionTerminalWritersExited(
     agent: StructuredAgentId,
-    providerSessionId: string
+    providerSessionId: string,
+    closingPaneKeys?: readonly string[]
   ): Promise<void> {
     await assertCliConversationWritersExited(
       {
         rows: () => this.getAgentProviderSessionRows(),
-        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null
+        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null,
+        ptyResolver: () => {
+          // One identity read for every key, rather than a scan of all terminals per key.
+          const context = this.createTerminalIdentityReadContext()
+          return (paneKey) => this.getPtyRecordForPaneKey(paneKey, context)?.ptyId ?? null
+        }
       },
       agent,
-      providerSessionId
+      providerSessionId,
+      closingPaneKeys
     )
   }
 }

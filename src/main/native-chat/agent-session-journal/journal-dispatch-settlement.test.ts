@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionFailureFact,
   type SubmissionRejectionKind
-} from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { queuedHandOffOutcome } from './journal-dispatch-settlement'
 import {
   journalPendingSubmissionResolutions,

@@ -98,7 +98,10 @@ export function EditorPanelHeader({
   onExportMarkdownToPdf,
   createArtifactRequest
 }: EditorPanelHeaderProps): React.JSX.Element {
-  const { comments: diffComments } = useVisibleWorktreeDiffComments(activeFile.worktreeId)
+  const { owner: commentOwner, comments: diffComments } = useVisibleWorktreeDiffComments(
+    activeFile.worktreeId,
+    activeFile
+  )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
@@ -184,6 +187,7 @@ export function EditorPanelHeader({
       )}
       {isSingleDiff && fileDiffComments.length > 0 && (
         <DiffNotesSendMenu
+          owner={commentOwner}
           worktreeId={activeFile.worktreeId}
           groupId={activeGroupId ?? activeFile.worktreeId}
           comments={diffComments}

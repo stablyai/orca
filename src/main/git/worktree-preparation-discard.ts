@@ -4,7 +4,7 @@ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { resolveWorktreeHostPath } from '../../shared/git-metadata-path'
 import { findLinkedWorktreeGitDirectory } from '../../shared/git-worktree-admin'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
-import { toHostFilesystemPath } from '../host-tree-removal'
+import { toHostFilesystemPath } from '../filesystem/host-tree-removal'
 import { gitExecFileAsync } from './runner'
 import {
   getErrorCode,

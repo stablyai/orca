@@ -4,15 +4,15 @@ import { join } from 'node:path'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { redactForTransport } from '../../shared/ai-vault-search-transport'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   acquiredAgentSessionAccount,
   withAcquiredAgentSessionAccount
-} from '../../shared/agent-session-acquired-account'
+} from '../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,

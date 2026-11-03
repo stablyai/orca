@@ -50,10 +50,7 @@ export const REPO_METHODS = [
           .listVisibleRepos()
           .map((repo) => projectRepoVisibilityForClient(repo, context))
       }
-      // Why: callers that never send the field get the byte-exact legacy response.
-      return params.afterSnapshotId === undefined
-        ? reply
-        : resolveReplySnapshot(reply, params.afterSnapshotId)
+      return resolveReplySnapshot(reply, params.afterSnapshotId)
     }
   }),
   ...PROJECT_RUNTIME_METHODS,

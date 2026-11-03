@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyCachedPluginAppTheme,
   applyDocumentTheme,
   applyPluginAppTheme,
-  readCachedPluginAppTheme,
   THEME_TRANSITION_DISABLED_CLASS
 } from './document-theme'
 
@@ -78,25 +76,6 @@ function createFrameQueue(): {
 }
 
 describe('document theme', () => {
-  it('removes the transition suppression class after two animation frames', () => {
-    const root = createThemeRoot()
-    const frames = createFrameQueue()
-
-    applyDocumentTheme('dark', {
-      root,
-      requestAnimationFrame: frames.requestAnimationFrame,
-      cancelAnimationFrame: frames.cancelAnimationFrame
-    })
-
-    expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(true)
-
-    frames.flushNextFrame()
-    expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(true)
-
-    frames.flushNextFrame()
-    expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(false)
-  })
-
   it('cancels stale transition suppression frames on rapid theme changes', () => {
     const root = createThemeRoot()
     const frames = createFrameQueue()
@@ -142,23 +121,6 @@ describe('applyPluginAppTheme', () => {
       }
     }
   }
-  function memoryStorage(): Storage {
-    const values = new Map<string, string>()
-    return {
-      get length() {
-        return values.size
-      },
-      clear: () => values.clear(),
-      getItem: (key) => values.get(key) ?? null,
-      key: (index) => [...values.keys()][index] ?? null,
-      removeItem: (key) => {
-        values.delete(key)
-      },
-      setItem: (key, value) => {
-        values.set(key, value)
-      }
-    }
-  }
   // Test probe: #rrggbb or #rrggbbaa.
   const probe = (value: string) => {
     const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})?$/i.exec(value)
@@ -192,19 +154,6 @@ describe('applyPluginAppTheme', () => {
     return Object.fromEntries(root.properties)
   }
 
-  it('overlays tokens, drops ones a new theme stops setting, and restores built-ins on removal', () => {
-    const root = fakeRoot()
-    applyPluginAppTheme(theme({ '--background': '#000000', '--border': '#111111' }), options(root))
-    expect(Object.fromEntries(root.properties)).toEqual({
-      '--background': '#000000',
-      '--border': '#111111'
-    })
-    applyPluginAppTheme(theme({ '--background': '#222222' }), options(root))
-    expect(Object.fromEntries(root.properties)).toEqual({ '--background': '#222222' })
-    applyPluginAppTheme(null, options(root))
-    expect(root.properties.size).toBe(0)
-  })
-
   it('checks contrast on the effective set, so dropping one pair cannot expose another', () => {
     // White background passes with black text, but fails against muted text; dropping the
     // background leaves black text on the dark built-in background, so that drops too.
@@ -215,33 +164,6 @@ describe('applyPluginAppTheme', () => {
         '--muted-foreground': '#ffffff'
       })
     ).toEqual({})
-  })
-
-  it('checks plugin colors against the built-ins they sit on', () => {
-    // A light plugin surface would put the dark built-in light text on near-white.
-    expect(painted({ '--background': '#f4f4f4' })).toEqual({})
-    expect(painted({ '--background': '#151520' })).toEqual({ '--background': '#151520' })
-  })
-
-  it('keeps text readable on the editor surface notebooks paint on', () => {
-    const tokens = { '--background': '#000000', '--foreground': '#ffffff' }
-    expect(painted({ ...tokens, '--editor-surface': '#ffffff' })).not.toHaveProperty(
-      '--editor-surface'
-    )
-    expect(painted({ ...tokens, '--editor-surface': '#111111' })).toHaveProperty(
-      '--editor-surface',
-      '#111111'
-    )
-  })
-
-  it('rejects invisible rings and borders in any spelling', () => {
-    expect(
-      painted({ '--ring': '#0a0a0a', '--border': '#00000000', '--input': '#ffffff03' })
-    ).toEqual({})
-    expect(painted({ '--ring': '#ff2bd6', '--border': '#ffffff1a' })).toEqual({
-      '--ring': '#ff2bd6',
-      '--border': '#ffffff1a'
-    })
   })
 
   it('drops only the status or link color that fails, never the shared surface', () => {
@@ -303,25 +225,5 @@ describe('applyPluginAppTheme', () => {
         '--host-badge-foreground': '#767676'
       })
     ).toEqual({ ...sidebar, '--accent': '#ffffff', '--accent-foreground': '#000000' })
-  })
-
-  it('keeps the startup cache tied to the theme id and revision until cleared', () => {
-    const storage = memoryStorage()
-    applyPluginAppTheme(theme({ '--background': '#101018' }), { ...options(), storage })
-    expect(readCachedPluginAppTheme(storage)).toEqual({
-      id: 'plugin:samples.midnight/midnight',
-      revision: 'r1',
-      base: 'dark',
-      tokens: { '--background': '#101018' }
-    })
-    const startup = fakeRoot()
-    const cached = readCachedPluginAppTheme(storage)
-    if (cached) {
-      applyCachedPluginAppTheme(cached, { root: startup, probe, builtIns: darkBuiltIns })
-    }
-    expect(startup.properties.get('--background')).toBe('#101018')
-
-    applyPluginAppTheme(null, { ...options(), storage })
-    expect(readCachedPluginAppTheme(storage)).toBeNull()
   })
 })

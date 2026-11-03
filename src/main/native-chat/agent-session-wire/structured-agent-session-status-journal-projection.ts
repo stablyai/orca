@@ -1,9 +1,13 @@
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import {
+  latestNativeChatUsageLimitCut,
+  type NativeChatUsageLimitCut
+} from '../../../shared/native-chat/native-chat-usage-limit-cut'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/structured-agent-session-command-entry'
 
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   structuredAgentSessionCurrentWork,
@@ -27,6 +31,7 @@ export type StructuredAgentSessionJournalProjection = {
   workRevision: number
   /** Stop settlement edges write no row and need an independent cache key. */
   stopRevision: number
+  usageLimitCut: NativeChatUsageLimitCut | null
   state: StructuredAgentSessionStatusState
   acceptedSendKey: string
   firstInputSubmissionKey: string | null
@@ -111,6 +116,11 @@ export class StructuredAgentSessionJournalProjections {
       projection = {
         ...cursor,
         contextId,
+        usageLimitCut: latestNativeChatUsageLimitCut(
+          snapshot.items,
+          snapshot.submissions,
+          journal.itemBody
+        ),
         firstInputSubmissionKey,
         submissionCount: snapshot.submissions.length,
         fence,

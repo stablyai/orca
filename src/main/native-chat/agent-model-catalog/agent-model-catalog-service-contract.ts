@@ -1,16 +1,14 @@
 import type { AgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentModelCatalogEntry,
   AgentModelCatalogLiveListing,
   AgentModelCatalogProbe
 } from './agent-model-catalog-store'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentModelCatalogWorkspaceDeps,
   AgentModelCatalogRecord

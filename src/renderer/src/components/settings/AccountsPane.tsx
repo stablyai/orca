@@ -78,6 +78,7 @@ export { getAccountsPaneSearchEntries }
 export function AccountsPane({
   settings,
   updateSettings,
+  updateSettingsOrThrow,
   hostScope,
   nativeAccounts = false,
   onAccountLocationChange,
@@ -286,6 +287,7 @@ export function AccountsPane({
     settings,
     accountOwner,
     updateSettings,
+    updateSettingsOrThrow,
     onAccountLocationChange,
     searchQuery,
     recordFeatureInteraction,

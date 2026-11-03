@@ -1,6 +1,6 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalSubmissionRow } from './journal-row-schema'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { JournalInputPlace } from './journal-input-order'
@@ -20,6 +20,7 @@ import {
   queryInputContext
 } from './journal-input-lineage'
 import { JournalInputDomainIndex } from './journal-input-domain-index'
+import { JournalInputCandidates } from './journal-input-candidates'
 
 export class JournalInputCardIndex {
   private index: JournalInputPlaceIndex | undefined
@@ -34,6 +35,7 @@ export class JournalInputCardIndex {
       source?: JournalInputCard
     }
   >()
+  readonly candidates = new JournalInputCandidates()
   // Derived current membership only; the prepared transition owns introduction values.
   private readonly unintroduced = new Set<string>()
   private overlayRows: readonly QueuedMessageRow[] = []
@@ -169,6 +171,7 @@ export class JournalInputCardIndex {
       this.currentCoordinates = new JournalInputPlaceIndex(state.epoch)
       this.domains = undefined
       this.indexed.clear()
+      this.candidates.clear()
       this.pauses = [
         ...(pauseInputs[0] && marks.latestStop
           ? [
@@ -235,6 +238,10 @@ export class JournalInputCardIndex {
       introduced: this.lineage.at(state.lastSequence),
       baseline: { coordinate: card.queuedAt }
     }
+    this.candidates.set(
+      card,
+      (card.state === 'waiting' && card.holdReason === null) || card.state === 'returned'
+    )
     this.currentCoordinates!.set(card, actionable, handoff)
     this.index!.set(card, actionable, handoff, {
       epoch: 'introduction',

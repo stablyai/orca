@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { admitTranscriptPath } from '../native-chat/transcript-path-admission'
 import { dirname } from 'node:path'
 import { homedir } from 'node:os'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import {
   absoluteConversationStore,

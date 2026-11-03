@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { saveNativeChatProviderChoice } from './native-chat-provider-choice'
 import { AgentDefaultSurfaceSection } from './AgentDefaultSurfaceSection'
@@ -11,9 +12,11 @@ import { AgentDefaultSurfaceSection } from './AgentDefaultSurfaceSection'
 vi.mock('@/lib/chat-provider-agents', () => ({
   chatProviderAgents: () => ['claude', 'codex', 'grok', 'opencode']
 }))
+vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), dismiss: vi.fn(), error: vi.fn() } }))
 
 let persisted: GlobalSettings
+let presentation: 'tiles' | 'switch'
 const settingsSet = vi.fn(async (updates: Partial<GlobalSettings>) => {
   persisted = { ...persisted, ...updates }
   return persisted
@@ -21,7 +24,9 @@ const settingsSet = vi.fn(async (updates: Partial<GlobalSettings>) => {
 
 function Section(): React.JSX.Element | null {
   const settings = useAppStore((state) => state.settings)
-  return settings ? <AgentDefaultSurfaceSection settings={settings} /> : null
+  return settings ? (
+    <AgentDefaultSurfaceSection settings={settings} presentation={presentation} />
+  ) : null
 }
 
 function renderSection(settings: Partial<GlobalSettings>): void {
@@ -31,8 +36,10 @@ function renderSection(settings: Partial<GlobalSettings>): void {
 }
 
 beforeEach(() => {
+  presentation = 'tiles'
   useAppStore.setState(useAppStore.getInitialState(), true)
   settingsSet.mockClear()
+  vi.mocked(track).mockClear()
   vi.mocked(toast.success).mockClear()
   vi.mocked(toast.error).mockClear()
   Object.defineProperty(window, 'api', {
@@ -43,6 +50,26 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Open agents as', () => {
+  it('reuses the default write from the Chat UI button and retains per-agent choices', async () => {
+    presentation = 'switch'
+    renderSection({ agentDefaultSurface: 'terminal', nativeChatProviders: { claude: false } })
+    const control = screen.getByRole('button', { name: 'Turn on' })
+    expect(screen.getByText('Chat UI is off')).toBeTruthy()
+    expect(screen.getByText('New agents will launch as CLI by default.')).toBeTruthy()
+    fireEvent.click(control)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Turn off' })).toBeTruthy())
+    expect(settingsSet).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
+    expect(persisted.nativeChatProviders).toEqual({ claude: false })
+    expect(screen.getByText('Chat UI is on')).toBeTruthy()
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith(
+      'Agents now open as chats',
+      expect.objectContaining({
+        description: 'Claude stays in the terminal, as you set.',
+        action: expect.objectContaining({ label: 'Set all to Chat' })
+      })
+    )
+  })
+
   it('sets only the default, names agents set to the other surface, and Set all makes them follow', async () => {
     renderSection({
       agentDefaultSurface: 'terminal',
@@ -84,6 +111,37 @@ describe('Open agents as', () => {
     await Promise.resolve()
     expect(toast.success).not.toHaveBeenCalled()
   })
+})
+
+describe('Chat UI launch tip experiment', () => {
+  it.each([
+    [[], 'treatment', false],
+    [['chat-ui-here'], 'treatment', true],
+    [['chat-ui-here'], 'control', false]
+  ] as const)(
+    'reports a switch to Chat with seen tips %j in %s as launch_tip_shown=%s',
+    async (seen, cohort, shown) => {
+      useAppStore.setState({ featureTipsSeenIds: [...seen] })
+      renderSection({
+        agentDefaultSurface: 'terminal',
+        telemetry: {
+          optedIn: true,
+          installId: 'install',
+          existedBeforeTelemetryRelease: true,
+          chatUiLaunchTipCohort: cohort
+        }
+      })
+      fireEvent.click(screen.getByRole('radio', { name: /^Chat/ }))
+      await waitFor(() =>
+        expect(track).toHaveBeenCalledExactlyOnceWith('agent_default_surface_changed', {
+          from_mode: 'terminal',
+          to_mode: 'chat',
+          source: 'settings',
+          launch_tip_shown: shown
+        })
+      )
+    }
+  )
 })
 
 describe('acknowledged default writes', () => {

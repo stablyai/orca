@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionConversationOutline } from './agent-session-conversation-outline'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 

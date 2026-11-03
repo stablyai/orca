@@ -13,7 +13,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
@@ -21,7 +21,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
@@ -238,9 +238,12 @@ describe('declared context at the desktop consumer', () => {
             true
           )
         )
-        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        // A readback without this model's effort menu shows no effort, whatever the declaration.
+        const offersEffort = answer.models.find((row) => row.id === model)!.efforts.length > 0
+        const shown = offersEffort ? display : null
+        expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
         const effort = chat.result.current.optionSnapshot.find((o) => o.id === 'effort')
-        if (answer.models.find((row) => row.id === model)!.efforts.length > 0) {
+        if (offersEffort) {
           expect(effort?.valueSource).toBe(display ? 'default' : 'unknown')
         } else {
           expect(effort).toBeUndefined()
@@ -248,7 +251,7 @@ describe('declared context at the desktop consumer', () => {
         expect(chat.result.current.capture()).toEqual({ selection: { model } })
         mocks.call.mockImplementation(() => new Promise(() => {}))
         chat.rerender({ running: { fence: 2 } })
-        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        expect(chat.frames.at(-1)).toEqual({ model, effort: shown ?? null })
         expect(chat.result.current.capture()).toEqual({ selection: { model } })
         chat.unmount()
       }

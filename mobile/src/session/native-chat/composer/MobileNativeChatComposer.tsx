@@ -1,5 +1,5 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
@@ -11,7 +11,7 @@ import {
 } from './mobile-native-chat-draft-inputs'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, type TextInput, Text, View } from 'react-native'
+import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -21,7 +21,7 @@ import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
-import { mobileNativeChatAttachActions } from '../../mobile-native-chat-attach-actions'
+import { mobileNativeChatAttachActions } from '../mobile-native-chat-attach-actions'
 import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatPickerPresentation,
@@ -39,6 +39,7 @@ import {
   composerInputStyles as inputStyles
 } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
+import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import {
   MobileNativeChatComposerMic,
@@ -52,6 +53,7 @@ const NO_FILES: PendingNativeChatFile[] = []
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
   onSlashMenuOpen: () => void
+  onOpenFile?: (path: string) => void
   onSlashMenuDemand?: (open: boolean) => void
   onAttachFiles?: () => void
   // An uploading attachment must hold Send.
@@ -283,6 +285,7 @@ export function MobileNativeChatComposer({
             files={files}
             onRemoveImage={editSession?.locked ? undefined : onRemoveAttachment}
             onRemoveFile={editSession?.locked ? undefined : structured?.onRemoveFile}
+            onOpenFile={structured?.onOpenFile}
           />
           <MobileNativeChatComposerField
             ref={fieldRef}
@@ -361,46 +364,25 @@ export function MobileNativeChatComposer({
               />
             ) : null}
             {editSession ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('chat.composer.cancelEditing', 'Cancel editing')}
-                style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
-                onPress={editSession.cancel}
-                hitSlop={COMPOSER_CONTROL_HIT_SLOP}
-              >
-                <Text style={{ color: colors.textSecondary }}>{t('common.cancel', 'Cancel')}</Text>
-              </Pressable>
-            ) : null}
-            <MobileNativeChatControlSwap
-              swapKey={showsStop && stop ? 'stop' : editSession ? 'save' : 'send'}
-            >
-              {showsStop && stop ? (
-                // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
-                <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
-              ) : editSession ? (
-                <Pressable
-                  accessibilityLabel={t('chat.composer.saveEditedMessage', 'Save edited message')}
-                  style={({ pressed }) => [
-                    inputStyles.sendButton,
-                    !canSend && inputStyles.sendButtonDisabled,
-                    pressed && canSend && inputStyles.pressed
-                  ]}
-                  onPress={() => void handleSend()}
-                  disabled={!canSend}
-                  hitSlop={COMPOSER_CONTROL_HIT_SLOP}
-                >
-                  <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>
-                    {t('common.save', 'Save')}
-                  </Text>
-                </Pressable>
-              ) : (
-                <MobileNativeChatSendButton
-                  canSend={canSend}
-                  sendFollowUp={sendFollowUp}
-                  onSend={(intent) => void handleSend(intent)}
-                />
-              )}
-            </MobileNativeChatControlSwap>
+              <MobileNativeChatEditActions
+                canSave={canSend}
+                onCancel={editSession.cancel}
+                onSave={() => void handleSend()}
+              />
+            ) : (
+              <MobileNativeChatControlSwap swapKey={showsStop && stop ? 'stop' : 'send'}>
+                {showsStop && stop ? (
+                  // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
+                  <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
+                ) : (
+                  <MobileNativeChatSendButton
+                    canSend={canSend}
+                    sendFollowUp={sendFollowUp}
+                    onSend={(intent) => void handleSend(intent)}
+                  />
+                )}
+              </MobileNativeChatControlSwap>
+            )}
           </View>
         </View>
       </View>

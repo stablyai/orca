@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
-import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { continuingStructuredAgentSessionCompilerPermission } from './structured-agent-session-handing-over'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentChatPermissionModes,
   savedChatPermissionMode,
@@ -34,11 +34,11 @@ export function structuredAgentSessionImmediatePermission(
 
 /** Only the exact live, positively unwritten input pins its acquisition compiler to Auto. */
 export function structuredAgentSessionInputCompilerPermission(
-  journal: Parameters<typeof continuingStructuredAgentSessionInput>[0] | undefined,
+  journal: Parameters<typeof continuingStructuredAgentSessionCompilerPermission>[0] | undefined,
   startedFor?: string
 ): 'auto' | undefined {
-  return journal && startedFor && continuingStructuredAgentSessionInput(journal, startedFor)
-    ? 'auto'
+  return journal && startedFor
+    ? continuingStructuredAgentSessionCompilerPermission(journal, startedFor)
     : undefined
 }
 

@@ -2,7 +2,7 @@ import {
   toolExecutionMetadata,
   toolWebSearchResults
 } from '../../shared/native-chat/tools/native-chat-tool-identity'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'

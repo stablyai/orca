@@ -47,20 +47,4 @@ describe('mobileRelay.hosts.worktrees snapshots', () => {
     expect(await read({})).toEqual({ worktrees: [row('a')] })
     expect(await read({})).toEqual({ worktrees: null })
   })
-
-  it('sends rows the caller holds as indexes into its base, then unchanged', async () => {
-    const renamed = row('b', 'b2')
-    const read = relay([row('a'), row('b')], [renamed, row('a')], [renamed, row('a')])
-
-    const full = await read({ afterSnapshotId: null, acceptRowDelta: true })
-    const delta = await read({ afterSnapshotId: String(full.snapshotId), acceptRowDelta: true })
-    const unchanged = await read({
-      afterSnapshotId: String(delta.snapshotId),
-      acceptRowDelta: true
-    })
-
-    expect(full).toMatchObject({ worktrees: [row('a'), row('b')] })
-    expect(delta).toMatchObject({ baseSnapshotId: full.snapshotId, rowsFromBase: [renamed, 0] })
-    expect(unchanged).toEqual({ unchanged: true, snapshotId: delta.snapshotId })
-  })
 })

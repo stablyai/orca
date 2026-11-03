@@ -10,7 +10,7 @@ import { parseAgentStatusPaneIdentity } from '../../../shared/agent-status-workt
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status-types'
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
 import {

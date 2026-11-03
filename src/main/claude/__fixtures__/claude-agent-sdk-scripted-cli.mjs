@@ -112,7 +112,13 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         response: scenario.controlResponses?.[frame.request?.subtype] ?? {
           commands: [],
           models: []
-        }
+        },
+        // Requests the CLI resends to a client that (re)initializes while they wait.
+        ...(scenario.pendingPermissionRequests?.[frame.request?.subtype]
+          ? {
+              pending_permission_requests: scenario.pendingPermissionRequests[frame.request.subtype]
+            }
+          : {})
       }
     }
     // Write leading frames and the control reply together to exercise SDK delivery reordering.
@@ -142,6 +148,9 @@ setTimeout(
 for (const step of scenario.steps) {
   if (step.emit) {
     emit(step.emit)
+  } else if (step.emitTogether) {
+    // One write, so the reader receives these frames in a single chunk.
+    process.stdout.write(step.emitTogether.map((frame) => `${JSON.stringify(frame)}\n`).join(''))
   } else if (step.stderr !== undefined) {
     process.stderr.write(step.stderr)
   } else if (step.awaitUserMessage) {

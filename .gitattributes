@@ -78,3 +78,5 @@
 /resources/skills/*.json linguist-generated=true text eol=lf
 # Vitest writes snapshots with LF, so checkout bytes must match on every host.
 **/__snapshots__/*.snap text eol=lf
+# Generated, minified bundles (config/scripts/build-plugin-declarative-runtime.mjs).
+/resources/plugins/declarative/orca-test*.mjs linguist-generated=true -diff

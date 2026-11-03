@@ -18,7 +18,7 @@ import {
   nativeChatOptionsPillTitle,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason
-} from '../../../../shared/native-chat-session-option-labels'
+} from '../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'

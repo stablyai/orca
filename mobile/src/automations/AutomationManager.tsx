@@ -1,6 +1,6 @@
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
 import { describeLoadError } from '../components/load-error-description'
-import { SetupHookTrustDrawer } from '../components/SetupHookTrustDrawer'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAutomationRuns, type AutomationRunScope } from './use-automation-runs'
@@ -383,7 +383,7 @@ export function AutomationManager(props: {
           </View>
         ) : null}
       </ScrollView>
-      <SetupHookTrustDrawer {...setupConsent.drawer} />
+      <OrcaHookTrustDrawer {...setupConsent.drawer} />
       <ConfirmModal
         visible={deleting !== null}
         title={t('automations.mobile.deleteAutomationTitle', 'Delete automation?')}

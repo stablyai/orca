@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+} from '../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../agent-session/journal/agent-session-journal-turn-scope'
 import type { NativeChatMessage } from '../native-chat-types'
 import {
   projectNativeChatTranscript,

@@ -4,7 +4,7 @@ import { vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionResult
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
@@ -181,8 +181,10 @@ async function settle() {
 
 async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   let rendered: Controller | null = null
+  const commits: Controller[] = []
   const onRender = (controller: Controller) => {
     rendered = controller
+    commits.push(controller)
   }
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
@@ -197,6 +199,7 @@ async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   }
   return {
     current,
+    commits,
     rerender: async (next: Partial<Omit<ProbeProps, 'onRender'>>) => {
       await act(async () => {
         renderer?.update(createElement(Probe, { ...props, ...next, onRender }))

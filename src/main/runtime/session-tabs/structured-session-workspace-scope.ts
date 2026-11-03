@@ -1,5 +1,5 @@
 import { prepareStructuredWorkspaceAuthority } from './structured-workspace-authority'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { OrcaRuntimeWithStructuredSessionAccountHome } from './structured-session-account-home'
 import {
   isNativeLocalLocation,
@@ -8,7 +8,7 @@ import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
 } from '../../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector

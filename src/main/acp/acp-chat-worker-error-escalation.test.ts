@@ -6,7 +6,7 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionSinkAdmission } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { OrchestrationDb } from '../runtime/orchestration/db'
 import { createRootDispatch } from '../runtime/orchestration/db/root-dispatch-test-fixture'
 import { escalateChatWorkerError } from '../runtime/orchestration/chat-worker-error-escalation'

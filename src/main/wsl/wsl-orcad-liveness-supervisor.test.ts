@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
-import type { SystemPowerLifecycleListener } from '../system-power-lifecycle'
+import type { SystemPowerLifecycleListener } from '../power/system-power-lifecycle'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import type { WslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection } from './wsl-orcad-connection'

@@ -135,7 +135,10 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       this.notifyBrowserGuestStateChanged(guest.id)
     }
 
+    let publishedUrl: string | null = null
+
     const didNavigateHandler = (_event: Electron.Event, url: string): void => {
+      publishedUrl = guest.getURL()
       this.pendingNavigationByGuestId.delete(guest.id)
       // Committing makes the hidden error obsolete; a later abort must not restore it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
@@ -145,10 +148,27 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       this.notifyBrowserGuestStateChanged(guest.id)
     }
 
+    const didNavigateInPageHandler = (
+      _event: Electron.Event,
+      _url: string,
+      isMainFrame: boolean
+    ): void => {
+      if (!isMainFrame) {
+        return
+      }
+      const address = guest.getURL()
+      // replaceState reports here even when the address stays the same.
+      if (address !== publishedUrl) {
+        publishedUrl = address
+        this.notifyBrowserGuestStateChanged(guest.id)
+      }
+    }
+
     guest.on('will-navigate', willNavigateHandler)
     guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
+    guest.on('did-navigate-in-page', didNavigateInPageHandler)
     guest.on('did-fail-load', didFailLoadHandler)
     // Why emit: an extension-blocked guest main frame commits no error page, so Electron reports
     // nothing; every did-fail-load reader (this policy, the pane, webNavigation) needs the failure.
@@ -180,6 +200,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('will-redirect', willRedirectHandler)
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
+        guest.off('did-navigate-in-page', didNavigateInPageHandler)
         guest.off('did-fail-load', didFailLoadHandler)
         guest.off('will-prevent-unload', allowPageUnload)
       }

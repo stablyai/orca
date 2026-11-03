@@ -2,14 +2,14 @@ import { z } from 'zod'
 import {
   AgentJournalKnownSchemas,
   AgentJournalRenderItemSchema
-} from '../../../shared/agent-session-journal-schemas'
-import { AgentJournalSubmissionSchema } from '../../../shared/agent-session-journal-submission-schema'
-import { AgentSessionFailureFactSchema } from '../../../shared/agent-session-failure-fact-schema'
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
+import { AgentSessionFailureFactSchema } from '../../../shared/agent-session/failures/agent-session-failure-fact-schema'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StorageDeclaresAll, UndeclaredStorageKeys } from './journal-storage-strict'
 
 // What saved outcomes declare beyond the wire's open schemas, which read only the keys their
@@ -30,6 +30,7 @@ const [
 const [
   messageBody,
   agentStartBody,
+  agentHandoffBody,
   toolCallBody,
   diffBody,
   approvalBody,
@@ -55,6 +56,7 @@ const refusalDetails = z.object({
   codexInstallation: z
     .object({ installedVersion: z.string().nullable(), minimumVersion: z.string() })
     .optional(),
+  expiredAttachments: z.array(z.object({ uploadId: z.string(), name: z.string() })).optional(),
   currentFence: count,
   currentRevision: count,
   resolution: AgentJournalKnownSchemas.resolution.optional(),
@@ -145,6 +147,7 @@ export const storedMessageBody = messageBody.extend({
 export const storedItemBody = z.discriminatedUnion('kind', [
   storedMessageBody,
   agentStartBody.extend({ worker: sender.nullable().optional() }),
+  agentHandoffBody.extend({ agent: sender.nullable().optional() }),
   toolCallBody,
   diffBody,
   approvalBody,

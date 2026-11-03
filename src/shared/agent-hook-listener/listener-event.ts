@@ -1,7 +1,7 @@
 import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload, TurnEndDisposition } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
-import type { AgentProviderSessionMetadata } from '../agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../agent-session/lifecycle/agent-session-resume'
 import type { ClaudeSettledRequest } from './claude-settled-permission-requests'
 
 /** Execution-host turn record, saved with rows but private; turnEndedAt is the public fact. */

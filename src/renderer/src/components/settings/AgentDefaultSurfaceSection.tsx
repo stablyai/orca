@@ -12,8 +12,15 @@ import { getIntlLocale, translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import {
+  trackAgentDefaultSurfaceChanged,
+  wasChatUiLaunchTipShown
+} from '../feature-tips/feature-tip-telemetry'
 import { ChatSurfacePreview, TerminalSurfacePreview } from './AgentDefaultSurfacePreviews'
 import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from './agents-search'
+import { Card, CardContent } from '../ui/card'
+import { SettingsRow } from './SettingsFormControls'
+import { Button } from '../ui/button'
 import {
   agentsKeepingOwnSurface,
   followAgentDefaultSurface,
@@ -160,9 +167,11 @@ function SurfaceTile({
 
 /** This computer's default surface; agents set on their own Installed row keep their choice. */
 export function AgentDefaultSurfaceSection({
-  settings
+  settings,
+  presentation = 'tiles'
 }: {
   settings: GlobalSettings
+  presentation?: 'tiles' | 'switch'
 }): JSX.Element {
   const name = useId()
   const notify = useKeptSurfaceNotice()
@@ -175,7 +184,18 @@ export function AgentDefaultSurfaceSection({
     const writer = { fallbackSettings: settings, updateSettings }
     void mutation.run('default-surface', {
       mutate: () => saveAgentDefaultSurface({ surface: next, ...writer }),
-      onSuccess: () => notify(next, writer),
+      onSuccess: () => {
+        trackAgentDefaultSurfaceChanged({
+          from_mode: surface,
+          to_mode: next,
+          source: 'settings',
+          launch_tip_shown: wasChatUiLaunchTipShown(
+            useAppStore.getState().featureTipsSeenIds,
+            settings
+          )
+        })
+        notify(next, writer)
+      },
       onError: saveFailed
     })
   }
@@ -183,6 +203,45 @@ export function AgentDefaultSurfaceSection({
     const list = document.getElementById(AGENTS_INSTALLED_SECTION_ID)
     list?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
     list?.focus({ preventScroll: true })
+  }
+  if (presentation === 'switch') {
+    return (
+      <Card>
+        <CardContent>
+          <SettingsRow
+            label={
+              <span className="text-lg font-semibold">
+                {surface === 'chat'
+                  ? translate('settings.chat.launch.on', 'Chat UI is on')
+                  : translate('settings.chat.launch.off', 'Chat UI is off')}
+              </span>
+            }
+            description={
+              surface === 'chat'
+                ? translate(
+                    'settings.chat.launch.chatDescription',
+                    'New agents will launch in chat mode by default.'
+                  )
+                : translate(
+                    'settings.chat.launch.cliDescription',
+                    'New agents will launch as CLI by default.'
+                  )
+            }
+            control={
+              <Button
+                variant={surface === 'chat' ? 'outline' : 'default'}
+                disabled={pending}
+                onClick={() => choose(surface === 'chat' ? 'terminal' : 'chat')}
+              >
+                {surface === 'chat'
+                  ? translate('settings.chat.launch.turnOff', 'Turn off')
+                  : translate('settings.chat.launch.turnOn', 'Turn on')}
+              </Button>
+            }
+          />
+        </CardContent>
+      </Card>
+    )
   }
   return (
     <section id={AGENT_DEFAULT_SURFACE_SECTION_ID} className="@container scroll-mt-8">

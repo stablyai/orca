@@ -2,28 +2,28 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../sha
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listRepoWorktreesForDetectedScan } from '../../../repo-worktrees'
+import { listRepoWorktreesForDetectedScan } from '../../../workspaces/catalog/repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
-} from '../../registered-worktree-roots-cache'
+} from '../removal/registered-worktree-roots-cache'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent,
   resetLocalWorktreeScanGenerationsForTests
-} from '../../../local-worktree-scan-generation'
-import { pruneLineageForMissingRepoWorktrees } from '../../../worktree-lineage-pruning'
+} from '../../../workspaces/catalog/local-worktree-scan-generation'
+import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import {
   __resetLocalWorktreeMetadataPruneGateForTests,
   isLocalWorktreeMetadataPruneDue,
   markLocalWorktreeMetadataPruneStarted,
   recordLocalWorktreeListingForPruneGate,
   requireLocalWorktreeMetadataPrune
-} from '../../../local-worktree-metadata-prune-gate'
+} from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
 import { assertWslUncPathRunning, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
 

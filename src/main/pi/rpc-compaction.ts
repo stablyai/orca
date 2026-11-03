@@ -1,5 +1,8 @@
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
@@ -13,7 +16,11 @@ export async function compactPiRpcSession(
 ): Promise<AgentSessionCommandAdmission> {
   session.turns.beginCommand(command)
   try {
-    await session.connection.request('compact', {}, { timeoutMs: null })
+    await session.connection.request(
+      'compact',
+      command.instructions ? { customInstructions: command.instructions } : {},
+      { timeoutMs: null }
+    )
     session.turns.commandCompleted()
     return { state: 'accepted', providerIdentity: null }
   } catch (error) {

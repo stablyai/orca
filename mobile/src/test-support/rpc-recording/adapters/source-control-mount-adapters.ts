@@ -86,36 +86,6 @@ export function sourceControlMountAdapters(
         state: () => ({ outcome, linkedPR }),
         dispose: () => {}
       }
-    },
-    'source-control.session-diff-reveal': ({ client }) => {
-      const reveal = modules.load<
-        typeof import('../../../source-control/reveal-mobile-source-control-session-diff')
-      >(
-        'mobile/src/source-control/reveal-mobile-source-control-session-diff.ts'
-      ).revealMobileSourceControlSessionDiff
-      let result: unknown = 'unrevealed'
-      let current = true
-      return {
-        action(name, args) {
-          if (name === 'cancel') {
-            current = false
-            return
-          }
-          return reveal({
-            client,
-            worktreeId: WORKTREE,
-            relativePath: 'src/app.ts',
-            tabMode: args.tabMode === 'edit' ? 'edit' : 'diff',
-            staged: args.staged === true,
-            isCurrent: () => current
-          }).then((value) => {
-            result = value
-            return value
-          })
-        },
-        state: () => ({ result }),
-        dispose: () => {}
-      }
     }
   }
 }

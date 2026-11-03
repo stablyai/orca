@@ -1,5 +1,5 @@
 import { subscribeWebWorkspaceSleep } from './web-workspace-sleep-notices'
-import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session/agent-session-attachments'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'

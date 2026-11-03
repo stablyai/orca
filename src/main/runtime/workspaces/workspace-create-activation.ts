@@ -42,3 +42,8 @@ export function createdWorkspaceActivationCallbacks(
     )
   return { folder, local }
 }
+
+// A create someone asked for starts its terminals as theirs; an automation's stay background.
+export function wslUserAct(args: { wslUserAct?: true }): { wslUserAct?: true } {
+  return args.wslUserAct ? { wslUserAct: true } : {}
+}

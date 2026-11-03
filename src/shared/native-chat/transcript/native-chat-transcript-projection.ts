@@ -2,8 +2,8 @@
 // Journal subagent rows belong to separate agent transcripts and fold beside their spawn, never into the conversation.
 
 import { nativeChatSemanticRowId, type NativeChatMessage } from '../native-chat-types'
-import { compareAgentJournalPositions } from '../../agent-session-journal-position'
-import { agentJournalItemSubagentId } from '../../agent-session-journal-producer'
+import { compareAgentJournalPositions } from '../../agent-session/journal/agent-session-journal-position'
+import { agentJournalItemSubagentId } from '../../agent-session/journal/agent-session-journal-producer'
 import { stripNoiseMessages } from '../native-chat-noise'
 import { foldToolMessages } from '../tools/native-chat-tool-fold'
 import { foldSubagentItems } from './native-chat-subagent-items'

@@ -18,12 +18,13 @@ import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import type { FileContent } from './editor-panel-content-types'
-import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { CustomEditorExternalChangeBanner } from './CustomEditorExternalChangeBanner'
 import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown-render-mode'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import { PluginEditorSourceFallbackNotice } from './PluginEditorNeedsDesktopNotice'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
 import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
 
@@ -136,6 +137,7 @@ export function EditorEditFileSurface({
         code={fileContent.loadErrorCode}
         worktreeId={activeFile.worktreeId}
         onRetry={() => reloadContent(activeFile, USER_RETRY)}
+        onHostStarted={() => reloadContent(activeFile)}
       />
     )
   }
@@ -183,6 +185,7 @@ export function EditorEditFileSurface({
     }
     return (
       <div className="flex h-full flex-col">
+        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
         <PluginFileTypeSuggestion filePath={activeFile.filePath} />
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {translate(
@@ -197,7 +200,7 @@ export function EditorEditFileSurface({
   const currentContent = editBuffer ?? fileContent.content
   const externalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
-      <ExternalFileChangeBanner
+      <CustomEditorExternalChangeBanner
         file={activeFile}
         currentContent={currentContent}
         reloadContent={reloadContent}
@@ -243,6 +246,7 @@ export function EditorEditFileSurface({
         key={monacoRemountKey}
         fileId={activeFile.id}
         filePath={activeFile.filePath}
+        noteSource={activeFile}
         viewStateKey={editorViewStateKey}
         viewStateId={viewStateScopeId}
         relativePath={activeFile.relativePath}
@@ -358,6 +362,9 @@ export function EditorEditFileSurface({
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {externalChangeBanner}
+      {customEditor ? null : (
+        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
+      )}
       {customEditor ? null : (
         <PluginFileTypeSuggestion
           filePath={activeFile.filePath}

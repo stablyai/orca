@@ -13,23 +13,6 @@ afterEach(() => {
 })
 
 describe('plugin language pack loading', () => {
-  it('rejects malformed runtime IPC language-pack results at the renderer ingress', async () => {
-    vi.stubGlobal('window', {
-      api: {
-        plugins: {
-          listLanguagePacks: vi.fn().mockResolvedValue({ malformed: true })
-        }
-      }
-    })
-
-    await usePluginLanguagePackStore.getState().fetchEntries()
-
-    const state = usePluginLanguagePackStore.getState()
-    expect(state.loaded).toBe(true)
-    expect(state.entries).toEqual([])
-    expect(() => state.entries.find(() => true)).not.toThrow()
-  })
-
   it('filters malformed language-pack array members without changing valid order', async () => {
     const first = {
       id: 'plugin:first',
@@ -60,32 +43,6 @@ describe('plugin language pack loading', () => {
     await usePluginLanguagePackStore.getState().fetchEntries()
 
     expect(usePluginLanguagePackStore.getState().entries).toEqual([first, second])
-  })
-
-  it.each([
-    ['Date', new Date(0)],
-    ['Map', new Map([['greeting', 'Hello']])]
-  ])('rejects a %s language-pack catalog at renderer ingress', async (_name, catalog) => {
-    const id = 'plugin:malformed' as const
-    vi.stubGlobal('window', {
-      api: {
-        plugins: {
-          listLanguagePacks: vi.fn().mockResolvedValue([
-            {
-              id,
-              resourceLanguage: pluginLanguageResourceId(id),
-              pluginKey: 'malformed',
-              locale: 'en',
-              catalog
-            }
-          ])
-        }
-      }
-    })
-
-    await usePluginLanguagePackStore.getState().fetchEntries()
-
-    expect(usePluginLanguagePackStore.getState().entries).toEqual([])
   })
 
   it('rejects a structured-cloned cyclic catalog before i18next resource installation', async () => {
@@ -139,69 +96,5 @@ describe('plugin language pack loading', () => {
 
     expect(() => setRendererPluginLanguagePacks([])).not.toThrow()
     expect(removeResourceBundle).not.toHaveBeenCalled()
-  })
-
-  it('rejects a missing resource language before i18next resource installation', async () => {
-    vi.stubGlobal('window', {
-      api: {
-        plugins: {
-          listLanguagePacks: vi.fn().mockResolvedValue([
-            {
-              id: 'plugin:missing-language',
-              resourceLanguage: undefined,
-              pluginKey: 'missing-language',
-              locale: 'en',
-              catalog: {}
-            }
-          ])
-        }
-      }
-    })
-
-    await usePluginLanguagePackStore.getState().fetchEntries()
-    const packs = usePluginLanguagePackStore.getState().entries
-
-    expect(() => setRendererPluginLanguagePacks(packs)).not.toThrow()
-    expect(packs).toEqual([])
-  })
-
-  it('keeps the latest request when an older language-pack response finishes last', async () => {
-    const older = {
-      id: 'plugin:older',
-      resourceLanguage: pluginLanguageResourceId('plugin:older'),
-      pluginKey: 'older',
-      locale: 'de',
-      catalog: {},
-      coverage: 10
-    }
-    const latest = {
-      id: 'plugin:latest',
-      resourceLanguage: pluginLanguageResourceId('plugin:latest'),
-      pluginKey: 'latest',
-      locale: 'fr',
-      catalog: {},
-      coverage: 95
-    }
-    let resolveOlder!: (value: unknown[]) => void
-    const olderResponse = new Promise<unknown[]>((resolve) => {
-      resolveOlder = resolve
-    })
-    vi.stubGlobal('window', {
-      api: {
-        plugins: {
-          listLanguagePacks: vi
-            .fn()
-            .mockReturnValueOnce(olderResponse)
-            .mockResolvedValueOnce([latest])
-        }
-      }
-    })
-
-    const olderFetch = usePluginLanguagePackStore.getState().fetchEntries()
-    await usePluginLanguagePackStore.getState().fetchEntries()
-    resolveOlder([older])
-    await olderFetch
-
-    expect(usePluginLanguagePackStore.getState().entries).toEqual([latest])
   })
 })

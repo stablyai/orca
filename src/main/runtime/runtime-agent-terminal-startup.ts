@@ -1,6 +1,6 @@
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import {
   agentLaunchQuotingShell,
   remoteExecutionPlatform,
@@ -26,7 +26,7 @@ import { terminalShellOverrideRefusal } from './terminal-shell-override-host-sup
 import {
   resolvePlainTerminalProjectRuntime,
   resolvePlainTerminalPtyOptions
-} from '../local-project-runtime-resolution'
+} from '../workspaces/execution-host/local-project-runtime-resolution'
 import {
   agentLaunchPlatformForScope,
   agentLaunchProjectRuntime,

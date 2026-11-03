@@ -1,9 +1,9 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session-journal-schemas'
-import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
+import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatMessage
@@ -11,8 +11,8 @@ import {
 import {
   agentSessionFailureFact,
   readProviderRetry
-} from '../../../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../src/shared/agent-session-failure-words'
+} from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
@@ -138,6 +138,21 @@ describe('MobileNativeChatMessage status notices', () => {
     )
     expect(text.props.children).toBe(
       'Orca on MacBook Pro stopped while this response was in progress. You can continue in this conversation.'
+    )
+  })
+
+  it("rewords the host's missing saved conversation words in the reader's language", async () => {
+    await activateMobileUiLocale('fr')
+    const host = agentSessionFailureWords(agentSessionFailureFact('savedConversationMissing'), {
+      surface: 'row',
+      agentName: 'Claude'
+    })
+    const text = renderNotice(
+      { kind: 'status', tone: 'error', ...host },
+      { hostName: null, agentName: 'Claude' }
+    )
+    expect(text.props.children).toBe(
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
     )
   })
 

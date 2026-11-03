@@ -91,7 +91,10 @@ export default function MonacoCodeExcerpt({
 
   return (
     <div
-      className={cn('overflow-x-auto py-1 text-[12px] leading-5', EDITOR_TYPOGRAPHY_SURFACE_CLASS)}
+      className={cn(
+        'code-editor-colors overflow-x-auto py-1 text-[12px] leading-5',
+        EDITOR_TYPOGRAPHY_SURFACE_CLASS
+      )}
       style={editorTypographyTextStyle(typography)}
     >
       {lines.map((codeLine, index) => {
