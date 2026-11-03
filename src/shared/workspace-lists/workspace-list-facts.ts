@@ -1,3 +1,4 @@
+import { getRepoRoutingConnectionId } from '../execution-host'
 import type { Repo } from '../repo-types'
 import { isFolderRepo } from '../repo-kind'
 import type { PRGroupKey } from '../sidebar-list/group-keys'
@@ -46,7 +47,9 @@ export function buildWorkspaceListFacts(
       lastActivityAt: worktree.lastActivityAt,
       createdAt: worktree.createdAt ?? 0
     },
-    repo: repo ? { id: repo.id, name: repo.displayName, ssh: Boolean(repo.connectionId) } : null,
+    repo: repo
+      ? { id: repo.id, name: repo.displayName, ssh: getRepoRoutingConnectionId(repo) !== null }
+      : null,
     review: { lane: prLane },
     activity: { tier: worktree.smartTier ?? null }
   }
