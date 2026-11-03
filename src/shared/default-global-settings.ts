@@ -39,6 +39,7 @@ export function buildDefaultSettings(args: {
     autoRenameBranchFromWorkDefaultedOn: true,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
+    branchPrefixSeparator: '/',
     jiraIssueKeyCasing: 'lowercase',
     theme: 'system',
     pluginAppTheme: null,
