@@ -5,14 +5,11 @@ import {
   HOST_SIDEBAR_MIN_WIDTH,
   clampHostDockWidth,
   clampHostSidebarWidth,
-  loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
-  readDisabledTerminalLiveInputHandlesPreference,
-  saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
   savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
@@ -391,72 +388,6 @@ describe('terminal autocomplete preference', () => {
 
     await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(false)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'false')
-  })
-})
-
-describe('terminal live input disabled handles preference', () => {
-  beforeEach(() => {
-    stored.clear()
-    vi.mocked(AsyncStorage.getItem)
-      .mockReset()
-      .mockImplementation(async (key) => stored.get(key) ?? null)
-    vi.mocked(AsyncStorage.setItem)
-      .mockReset()
-      .mockImplementation(async (key, value) => {
-        stored.set(key, value)
-      })
-  })
-
-  it('defaults to no disabled handles when unset', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
-
-    await expect(loadDisabledTerminalLiveInputHandles('host-1', 'worktree-1')).resolves.toEqual(
-      new Set()
-    )
-    await expect(
-      readDisabledTerminalLiveInputHandlesPreference('host-1', 'worktree-1')
-    ).resolves.toEqual({ handles: new Set(), loaded: true })
-  })
-
-  it('loads only string terminal handles from storage', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(['pty-1', 42, 'pty-2']))
-
-    await expect(loadDisabledTerminalLiveInputHandles('host-1', 'worktree-1')).resolves.toEqual(
-      new Set(['pty-1', 'pty-2'])
-    )
-  })
-
-  it('falls back to no disabled handles for invalid or unreadable storage', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-json')
-
-    await expect(loadDisabledTerminalLiveInputHandles('host-1', 'worktree-1')).resolves.toEqual(
-      new Set()
-    )
-
-    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
-
-    await expect(loadDisabledTerminalLiveInputHandles('host-1', 'worktree-1')).resolves.toEqual(
-      new Set()
-    )
-    await expect(
-      readDisabledTerminalLiveInputHandlesPreference('host-1', 'worktree-1')
-    ).resolves.toEqual({ handles: new Set(), loaded: false })
-  })
-
-  it('persists disabled handles per host and worktree', async () => {
-    await saveDisabledTerminalLiveInputHandles(
-      'host/one',
-      'folder:C:\\repo',
-      new Set(['pty-2', 'pty-1'])
-    )
-    await expect(
-      loadDisabledTerminalLiveInputHandles('host/one', 'folder:C:\\repo')
-    ).resolves.toEqual(new Set(['pty-2', 'pty-1']))
-
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:terminalLiveInputDisabled:host%2Fone:folder%3AC%3A%5Crepo',
-      JSON.stringify(['pty-2', 'pty-1'])
-    )
   })
 })
 

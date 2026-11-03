@@ -27,10 +27,9 @@ const accepted: Awaited<ReturnType<typeof terminalInputSend.request>> = {
   result: { send: { accepted: true } }
 }
 
-function fixture(liveField: boolean) {
+function fixture() {
   const client = {}
   const sendLiveInputClick = vi.fn(async () => true)
-  const sendLiveTerminalInput = vi.fn(async () => true)
   const legacySend: typeof terminalInputSend.request = (rpc, params, options) =>
     terminalInputSend.request(rpc, params, options)
   const scope = {
@@ -47,9 +46,7 @@ function fixture(liveField: boolean) {
     terminalGestureInputQueuesRef: ref(new Map()),
     terminalGestureInputInFlightRef: ref(new Set()),
     deviceTokenRef: ref('synthetic-device'),
-    liveInputTerminalHandlesRef: ref(new Set(liveField ? [handle] : [])),
-    sendLiveInputClick,
-    sendLiveTerminalInputRef: ref(sendLiveTerminalInput)
+    sendLiveInputClick
   }
   let actions!: ReturnType<typeof useMobileSessionTerminalInput>
   function Harness() {
@@ -62,7 +59,7 @@ function fixture(liveField: boolean) {
   act(() => {
     renderers.push(create(createElement(Harness)))
   })
-  return { actions, sendLiveInputClick, sendLiveTerminalInput }
+  return { actions, sendLiveInputClick }
 }
 
 function holdFirstRequest() {
@@ -91,7 +88,7 @@ afterEach(() => {
 
 it('sends a tap click through the live field queue even after a fling drained the bucket', async () => {
   const release = holdFirstRequest()
-  const { actions, sendLiveInputClick } = fixture(true)
+  const { actions, sendLiveInputClick } = fixture()
   await actions.handleTerminalInput(handle, up.repeat(32))
   await actions.handleTerminalInput(handle, down.repeat(32))
   await actions.handleTerminalInput(handle, click, { click: true })
@@ -104,27 +101,11 @@ it('sends a tap click through the live field queue even after a fling drained th
   )
 })
 
-it('sends a click at once for a terminal without the live field, past a wheel in flight', async () => {
-  const release = holdFirstRequest()
-  const { actions, sendLiveInputClick, sendLiveTerminalInput } = fixture(false)
-  await actions.handleTerminalInput(handle, up)
-  await vi.advanceTimersByTimeAsync(16)
-  expect(request).toHaveBeenCalledTimes(1)
-  await actions.handleTerminalInput(handle, click, { click: true })
-  await vi.advanceTimersByTimeAsync(300)
-  expect(sendLiveTerminalInput).toHaveBeenCalledWith(handle, click, 'pointer')
-  expect(sendLiveInputClick).not.toHaveBeenCalled()
-  release()
-  await settle()
-  expect(request).toHaveBeenCalledTimes(1)
-})
-
 it('keeps the gesture validation in front of a click', async () => {
-  const { actions, sendLiveInputClick, sendLiveTerminalInput } = fixture(false)
+  const { actions, sendLiveInputClick } = fixture()
   await actions.handleTerminalInput(handle, 'plain text', { click: true })
   await actions.handleTerminalInput('another-terminal', click, { click: true })
   await vi.advanceTimersByTimeAsync(16)
-  expect(sendLiveTerminalInput).not.toHaveBeenCalled()
   expect(sendLiveInputClick).not.toHaveBeenCalled()
   expect(request).not.toHaveBeenCalled()
 })

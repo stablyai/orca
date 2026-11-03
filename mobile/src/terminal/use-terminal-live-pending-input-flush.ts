@@ -30,7 +30,6 @@ type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly onFieldSessionEnded?: (handle: string) => void
   readonly onSendFailure?: (failure: TerminalLiveInputFailure) => void
   readonly liveInputRef: RefObject<TextInput | null>
-  readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
 }
@@ -66,7 +65,6 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   onFieldSessionEnded,
   onSendFailure,
   liveInputRef,
-  liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
   setLiveInputCapture
 }: TerminalLivePendingInputFlushOptions<TTabType>): TerminalLivePendingInputFlush {
@@ -148,9 +146,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     async (handle, fieldText, commitHeld, composing) => {
       if (
         handle !== activeHandleRef.current ||
-        (activeSessionTabTypeRef.current != null &&
-          activeSessionTabTypeRef.current !== 'terminal') ||
-        !liveInputTerminalHandlesRef.current.has(handle)
+        (activeSessionTabTypeRef.current != null && activeSessionTabTypeRef.current !== 'terminal')
       ) {
         // Stale handles must drop mirror erase counts, but null tab type during list lag does not prove departure.
         resetMirrorState()
@@ -218,7 +214,6 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       isFramedPasteAppend,
       liveInputRef,
       onFieldSessionEnded,
-      liveInputTerminalHandlesRef,
       resetMirrorState,
       sendQueuedMirrorPayload,
       setLiveInputCapture,

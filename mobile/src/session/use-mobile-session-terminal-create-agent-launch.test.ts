@@ -80,7 +80,6 @@ function scope(client: RpcClient, hostCapabilities: string[] = LAUNCH_CAPABILITI
     terminalsRef: { current: [] },
     setSessionTabs: vi.fn(),
     sessionTabsRef: mutableRef<MobileSessionTab[]>([]),
-    defaultTerminalHandlesToLiveInput: vi.fn(),
     setActiveHandle: vi.fn(),
     activeSessionTabId: 'existing-tab',
     activeSessionTabIdRef: mutableRef<string | null>('existing-tab'),

@@ -1918,22 +1918,21 @@
     "accessoryKeys": {
       "dismissKeyboard": "Dismiss keyboard",
       "sendKey": "Send {{label}}",
-      "modifierHint": "Applies to the next key. Double tap to keep it on.",
       "typeCharacter": "Type {{character}}",
       "control": "Control",
-      "escape": "Escape",
-      "shiftTab": "Shift Tab",
-      "enter": "Enter",
       "interrupt": "Interrupt terminal",
-      "tab": "Tab",
       "alt": "Alt",
       "shift": "Shift",
       "keysModeLabel": "Keys mode: typing goes straight to the terminal. Switch to Message mode",
       "messageModeLabel": "Message mode: write, then send. Switch to Keys mode",
-      "keysMode": "Keys",
-      "messageMode": "Message",
       "moreKeys": "More keys and actions",
-      "showKeyboard": "Show keyboard"
+      "showKeyboard": "Show keyboard",
+      "dismissKeyboardHint": "Hides the software keyboard and keeps the current terminal session open.",
+      "switchToDesktopMode": "Switch to desktop mode",
+      "switchToPhoneMode": "Switch to phone mode",
+      "pasteFromClipboard": "Paste from clipboard",
+      "paste": "Paste",
+      "addCustomShortcut": "Add custom shortcut"
     },
     "activeContent": {
       "noTabs": "No tabs in this session",
@@ -1947,10 +1946,7 @@
     "commandDock": {
       "liveInputLabel": "Live terminal input",
       "liveInputHint": "Typed text is sent directly to the active terminal",
-      "sendCommand": "Send command",
-      "messageAgentPlaceholder": "Message {{agent}}",
-      "theAgent": "the agent",
-      "writeCommandPlaceholder": "Write a command, then send"
+      "tapToShowKeyboard": "Tap to show keyboard"
     },
     "contentRow": {
       "dismissCreationWarning": "Dismiss workspace creation warning"
@@ -2663,14 +2659,6 @@
       "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
       "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
       "keepOpen": "Keep open"
-    },
-    "terminalArrowPad": {
-      "label": "Arrow keys",
-      "hint": "Tap a side for one arrow press, or hold and drag to repeat",
-      "up": "Up",
-      "down": "Down",
-      "left": "Left",
-      "right": "Right"
     },
     "terminalMoreKeys": {
       "sendKey": "Send {{label}}",

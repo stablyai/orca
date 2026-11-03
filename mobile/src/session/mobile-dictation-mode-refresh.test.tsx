@@ -44,9 +44,6 @@ vi.mock('../platform/haptics', () => ({
   triggerEdgeBump: () => {},
   triggerSelection: () => {}
 }))
-vi.mock('./use-terminal-live-input-mode-preference', () => ({
-  useTerminalLiveInputModePreference: () => ({ liveInputTerminalHandles: new Set<string>() })
-}))
 // Stub unused capture/native-chat paths to avoid Expo runtime imports.
 vi.mock('../hooks/use-mobile-dictation', () => ({
   useMobileDictation: (options: { enabled: boolean }) => {
@@ -150,7 +147,7 @@ function Probe() {
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: env.connected,
     canCompose: true,
-    liveInputEnabled: false,
+    liveInputEnabled: true,
     showToast: () => {},
     resetLiveInputFocus: () => {}
   }

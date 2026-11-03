@@ -20,13 +20,12 @@ type MobileDictationTarget =
 // The terminal a dictation starts in. Terminals share one command field: a selection read in another terminal doesn't place this one's words.
 export function dictationRouteContextFor(
   handle: string | null,
-  liveInputHandles: ReadonlySet<string>,
   saved: { handle: string | null; anchor: MobileDictationAnchor } | null
 ) {
   return handle
     ? {
         handle,
-        liveInputEnabled: liveInputHandles.has(handle),
+        liveInputEnabled: true,
         anchor: saved?.handle === handle ? saved.anchor : null
       }
     : null

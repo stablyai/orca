@@ -1738,15 +1738,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Ocultar teclado",
       "sendKey": "Enviar {{label}}",
-      "modifierHint": "Se aplica a la siguiente tecla. Toca dos veces para mantenerla activa.",
       "typeCharacter": "Escribir {{character}}",
       "interrupt": "Interrumpir terminal",
       "keysModeLabel": "Modo teclas: lo que escribes va directamente al terminal. Cambiar al modo mensaje",
       "messageModeLabel": "Modo mensaje: escribe y luego envía. Cambiar al modo teclas",
-      "keysMode": "Teclas",
-      "messageMode": "Mensaje",
       "moreKeys": "Más teclas y acciones",
-      "showKeyboard": "Mostrar teclado"
+      "showKeyboard": "Mostrar teclado",
+      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierta la sesión de terminal actual.",
+      "switchToDesktopMode": "Cambiar al modo de escritorio",
+      "switchToPhoneMode": "Cambiar al modo teléfono",
+      "pasteFromClipboard": "Pegar desde el portapapeles",
+      "paste": "Pegar",
+      "addCustomShortcut": "Agregar atajo personalizado"
     },
     "activeContent": {
       "createTab": "Crear pestaña",
@@ -1873,11 +1876,7 @@
     },
     "commandDock": {
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
-      "liveInputLabel": "Entrada al terminal en tiempo real",
-      "sendCommand": "Enviar comando",
-      "messageAgentPlaceholder": "Mensaje para {{agent}}",
-      "writeCommandPlaceholder": "Escribe un comando y luego envíalo",
-      "theAgent": "el agente"
+      "liveInputLabel": "Entrada al terminal en tiempo real"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
@@ -2560,14 +2559,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "No se pudo guardar el diseño",
       "saveFailedMessage": "Este diseño se aplica por ahora. Vuelve a seleccionarlo para intentar guardarlo de nuevo."
-    },
-    "terminalArrowPad": {
-      "label": "Teclas de dirección",
-      "hint": "Toca un lado para pulsar una flecha o mantén pulsado y arrastra para repetir",
-      "up": "Arriba",
-      "down": "Abajo",
-      "left": "Izquierda",
-      "right": "Derecha"
     },
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",

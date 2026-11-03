@@ -1685,15 +1685,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "收起鍵盤",
       "sendKey": "傳送 {{label}}",
-      "modifierHint": "套用至下一個按鍵。點兩下可保持啟用。",
       "typeCharacter": "輸入 {{character}}",
       "interrupt": "中斷終端機",
       "keysModeLabel": "按鍵模式：輸入內容會直接傳送至終端機。切換至訊息模式",
       "messageModeLabel": "訊息模式：輸入後再傳送。切換至按鍵模式",
-      "keysMode": "按鍵",
-      "messageMode": "訊息",
       "moreKeys": "更多按鍵與操作",
-      "showKeyboard": "顯示鍵盤"
+      "showKeyboard": "顯示鍵盤",
+      "dismissKeyboardHint": "隱藏螢幕鍵盤，並保持目前的終端機工作階段開啟。",
+      "switchToDesktopMode": "切換至桌面模式",
+      "switchToPhoneMode": "切換到手機模式",
+      "pasteFromClipboard": "從剪貼簿貼上",
+      "paste": "貼上",
+      "addCustomShortcut": "新增自訂快速鍵"
     },
     "activeContent": {
       "createTab": "建立分頁",
@@ -1804,11 +1807,7 @@
     },
     "commandDock": {
       "liveInputHint": "輸入的文字會直接傳送至目前使用中的終端機",
-      "liveInputLabel": "終端機即時輸入",
-      "sendCommand": "傳送命令",
-      "messageAgentPlaceholder": "傳送訊息給 {{agent}}",
-      "writeCommandPlaceholder": "輸入指令後傳送",
-      "theAgent": "代理程式"
+      "liveInputLabel": "終端機即時輸入"
     },
     "contentRow": {
       "dismissCreationWarning": "關閉工作區建立警告"
@@ -2489,14 +2488,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "無法儲存版面配置",
       "saveFailedMessage": "此版面配置暫時生效。請再次選取以重試儲存。"
-    },
-    "terminalArrowPad": {
-      "label": "方向鍵",
-      "hint": "點按一側可按一次方向鍵，或按住並拖曳以重複",
-      "up": "上",
-      "down": "下",
-      "left": "左",
-      "right": "右"
     },
     "terminalMoreKeys": {
       "sendKey": "傳送 {{label}}",

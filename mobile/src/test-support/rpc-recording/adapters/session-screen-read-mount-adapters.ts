@@ -102,11 +102,6 @@ export function sessionScreenReadMountAdapters(
             },
             terminalsRef,
             sessionTabsRef,
-            pruneTerminalHandlesFromLiveInput: (handles) =>
-              effect('prune-live-input', [...handles]),
-            defaultTerminalHandlesToLiveInput: (handles) =>
-              effect('default-live-input', [...handles]),
-            clearTerminalLiveInputDefault: (handle) => effect('clear-live-input', { handle }),
             setTerminalKeyboardMetrics: () => {},
             setTerminalModes: () => {},
             ptyModesRef: { current: new Map() },

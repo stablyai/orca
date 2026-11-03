@@ -1685,15 +1685,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "キーボードを閉じる",
       "sendKey": "{{label}} を送信",
-      "modifierHint": "次のキーに適用されます。ダブルタップすると維持されます。",
       "typeCharacter": "{{character}}を入力",
       "interrupt": "ターミナルを中断",
       "keysModeLabel": "キーモード：入力はターミナルに直接送られます。メッセージモードに切り替える",
       "messageModeLabel": "メッセージモード：入力してから送信します。キーモードに切り替える",
-      "keysMode": "キー",
-      "messageMode": "メッセージ",
       "moreKeys": "その他のキーと操作",
-      "showKeyboard": "キーボードを表示"
+      "showKeyboard": "キーボードを表示",
+      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
+      "switchToDesktopMode": "デスクトップモードに切り替え",
+      "switchToPhoneMode": "スマートフォンモードに切り替え",
+      "pasteFromClipboard": "クリップボードから貼り付け",
+      "paste": "貼り付け",
+      "addCustomShortcut": "カスタムショートカットを追加"
     },
     "activeContent": {
       "createTab": "タブを作成",
@@ -1804,11 +1807,7 @@
     },
     "commandDock": {
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
-      "liveInputLabel": "ターミナルへのリアルタイム入力",
-      "sendCommand": "コマンドを送信",
-      "messageAgentPlaceholder": "{{agent}}にメッセージ",
-      "writeCommandPlaceholder": "コマンドを入力して送信",
-      "theAgent": "Agent"
+      "liveInputLabel": "ターミナルへのリアルタイム入力"
     },
     "contentRow": {
       "dismissCreationWarning": "ワークスペース作成の警告を閉じる"
@@ -2489,14 +2488,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "レイアウトを保存できませんでした",
       "saveFailedMessage": "このレイアウトは一時的に適用されます。もう一度選択すると保存を再試行できます。"
-    },
-    "terminalArrowPad": {
-      "label": "矢印キー",
-      "hint": "端をタップすると矢印キーを1回押し、長押ししてドラッグすると繰り返します",
-      "up": "上",
-      "down": "下",
-      "left": "左",
-      "right": "右"
     },
     "terminalMoreKeys": {
       "sendKey": "{{label}}を送信",

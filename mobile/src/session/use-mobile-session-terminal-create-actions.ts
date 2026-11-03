@@ -39,7 +39,6 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     setTerminals,
     terminalsRef,
     setSessionTabs,
-    defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     activeSessionTabId,
     setActiveSessionTabId,
@@ -213,7 +212,6 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       }
       if (typeof created.terminal === 'string') {
         const createdHandle = created.terminal
-        defaultTerminalHandlesToLiveInput([createdHandle])
         // Protect the new active handle until host snapshots catch up or the pane can blank.
         pendingSelectionRef.current = { kind: 'terminal', handle: createdHandle, tabId: created.id }
         activeHandleRef.current = createdHandle

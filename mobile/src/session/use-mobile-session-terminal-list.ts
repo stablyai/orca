@@ -19,9 +19,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     setTerminals,
     terminalsRef,
     sessionTabsRef,
-    pruneTerminalHandlesFromLiveInput,
-    defaultTerminalHandlesToLiveInput,
-    clearTerminalLiveInputDefault,
     setTerminalKeyboardMetrics,
     setTerminalModes,
     ptyModesRef,
@@ -86,11 +83,8 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               showNativeChat: showNativeChatRef.current,
               activeHandle: activeHandleRef.current
             }
-            // Sweep preferences against retained subscriptions, not transient list omissions, so chat leases keep their live-input opt-out.
-            const retainedHandles = resolveRetainedTerminalHandles(pruneContext)
-            pruneTerminalHandlesFromLiveInput(retainedHandles)
-            bufferedTerminalDraftState.pruneDrafts(retainedHandles)
-            defaultTerminalHandlesToLiveInput([...liveHandles])
+            // Sweep drafts against retained subscriptions, not transient list omissions.
+            bufferedTerminalDraftState.pruneDrafts(resolveRetainedTerminalHandles(pruneContext))
             const shouldPrune = createTerminalPrunePredicate(pruneContext)
             for (const handle of Array.from(terminalUnsubsRef.current.keys())) {
               if (!shouldPrune(handle)) {
@@ -99,7 +93,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               unsubscribeTerminal(handle)
               terminalRefs.current.delete(handle)
               viewportResubscribeBudgetRef.current.forget(handle)
-              clearTerminalLiveInputDefault(handle)
             }
             for (const cache of [
               ptyModesRef.current,
@@ -159,11 +152,8 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     [
       client,
       worktreeId,
-      clearTerminalLiveInputDefault,
-      defaultTerminalHandlesToLiveInput,
       nativeChatStream,
       bufferedTerminalDraftState.pruneDrafts,
-      pruneTerminalHandlesFromLiveInput,
       terminalInventoryRequest,
       unsubscribeTerminal
     ]

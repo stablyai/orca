@@ -101,7 +101,6 @@ describe('legacy terminal close acknowledgments', () => {
         ...tabSelection,
         reconcileBufferedDraftsRef: { current: vi.fn() },
         closedTabTombstonesRef: { current: tabTombstones },
-        clearTerminalLiveInputDefault: vi.fn(),
         setActiveSessionTabId,
         renameTarget: null,
         setRenameTarget: vi.fn(),

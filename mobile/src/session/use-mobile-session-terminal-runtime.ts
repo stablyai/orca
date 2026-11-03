@@ -42,8 +42,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     sessionTabs,
     terminals,
     setLiveInputCapture,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
     activeHandle,
     activeSessionTabId,
     keyboardHeight
@@ -169,8 +167,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     onSendFailure: handleLiveInputSendFailure,
     connected: connState === 'connected',
     liveInputRef,
-    liveInputTerminalHandles,
-    liveInputTerminalHandlesRef,
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
@@ -181,7 +177,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   })
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
-  const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
+  const liveInputEnabled = activeHandle !== null
   const { handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
