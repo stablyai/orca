@@ -989,10 +989,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Use blob:none for merge-base history because blobs are ~89% of pack; fetch rare historical contents on demand.
+          # Fetch historical blobs before timed per-pin archives, where lazy fetches exhausted the deadline.
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
+
+      - name: Historical checkout diagnostic size
+        run: |
+          git count-objects -v
+          df -k .
 
       - uses: ./.github/actions/install-node-dependencies
         with:
