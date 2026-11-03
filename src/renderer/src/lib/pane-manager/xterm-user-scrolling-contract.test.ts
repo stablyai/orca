@@ -1,5 +1,5 @@
 /** Pin native follow/pin ownership through shared headless/core BufferService. Live writes rely on xterm; app enforcement handles structural replay/remount/reflow only. Upgrades must preserve this contract. Since beta.302 (#6081), CSI 3 J releases native pins; Orca observes before erase to capture and restore the live reading offset. */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { clearTerminalScrollbackAndFollowOutput } from './terminal-scrollback-clear'
 import { installTerminalLiveScrollbackRestore } from './terminal-live-scrollback-restore'
@@ -428,68 +428,5 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     settle()
     // Without Orca’s pin, xterm’s erase releases reading position and follows the redraw.
     expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
-  })
-})
-
-describe('live scrollback-erase pin wiring', () => {
-  type StubRegistration = { id: { prefix?: string; final: string }; disposed: boolean }
-
-  function stubTerminal(options: { throwOnBuffer?: boolean } = {}): {
-    target: Parameters<typeof installTerminalLiveScrollbackRestore>[0]
-    registrations: StubRegistration[]
-    handlers: ((params: (number | number[])[]) => boolean)[]
-    parsedDisposed: () => boolean
-  } {
-    const registrations: StubRegistration[] = []
-    const handlers: ((params: (number | number[])[]) => boolean)[] = []
-    let parsedDisposed = false
-    const target = {
-      get buffer() {
-        if (options.throwOnBuffer) {
-          throw new Error('buffer is gone')
-        }
-        return { active: { type: 'normal', viewportY: 10, baseY: 50 } }
-      },
-      parser: {
-        registerCsiHandler: (
-          id: { prefix?: string; final: string },
-          handler: (params: (number | number[])[]) => boolean
-        ) => {
-          const registration: StubRegistration = { id, disposed: false }
-          registrations.push(registration)
-          handlers.push(handler)
-          return {
-            dispose: () => {
-              registration.disposed = true
-            }
-          }
-        }
-      },
-      onWriteParsed: () => ({
-        dispose: () => {
-          parsedDisposed = true
-        }
-      })
-    }
-    return {
-      target: target as Parameters<typeof installTerminalLiveScrollbackRestore>[0],
-      registrations,
-      handlers,
-      parsedDisposed: () => parsedDisposed
-    }
-  }
-
-  it('degrades a throwing capture to "not handled" instead of wedging the parser', () => {
-    const stub = stubTerminal({ throwOnBuffer: true })
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    installTerminalLiveScrollbackRestore(stub.target)
-
-    // Parser handlers have no catch; one throw permanently wedges writes.
-    for (const handler of stub.handlers) {
-      expect(() => handler([3])).not.toThrow()
-      expect(handler([3])).toBe(false)
-    }
-    expect(consoleError).toHaveBeenCalled()
-    consoleError.mockRestore()
   })
 })

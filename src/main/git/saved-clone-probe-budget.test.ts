@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
-import { runGitProbeOnHost } from '../repo-git-remote-identity'
+import { runGitProbeOnHost } from '../workspaces/catalog/repo-git-remote-identity'
 import { reuseSavedCloneTarget } from './saved-clone-target'
 
-vi.mock('../repo-git-remote-identity', () => ({ runGitProbeOnHost: vi.fn() }))
+vi.mock('../workspaces/catalog/repo-git-remote-identity', () => ({ runGitProbeOnHost: vi.fn() }))
 
 const url = 'https://gitlab.example.com/team/orca.git'
 const project: Repo = {

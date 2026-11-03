@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import { makeWorkspaceLineage } from '../../src/main/persistence/persistence-test-harness'
 import * as folderTeardown from '../../src/main/runtime/folder-workspace-pty-teardown'
-import * as pathPresence from '../../src/main/local-worktree-path-presence'
+import * as pathPresence from '../../src/main/workspaces/catalog/local-worktree-path-presence'
 import { mkdir } from 'node:fs/promises'
 import { basename } from 'node:path'
 import * as worktreePaths from '../../src/main/git/worktree-path-comparison'

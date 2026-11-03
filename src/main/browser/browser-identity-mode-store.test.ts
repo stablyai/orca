@@ -2,11 +2,11 @@ import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DurableFileWrite from '../durable-file-write'
+import type * as DurableFileWrite from '../filesystem/durable-file-write'
 
 const mocks = vi.hoisted(() => ({ failWrite: false }))
 
-vi.mock('../durable-file-write', async (importOriginal) => {
+vi.mock('../filesystem/durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
   return {
     ...actual,

@@ -16,7 +16,7 @@ import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/commit-me
 import { getPullRequestDraftContext } from '../../text-generation/pull-request-context'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { gitExecFileAsync } from '../../git/runner'
 import { withLinkedIssueDraftContext } from '../../../shared/source-control-ai-action-variables'

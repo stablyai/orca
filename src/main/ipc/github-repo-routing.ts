@@ -14,7 +14,7 @@ import type { Store } from '../persistence/loading-store/store'
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 
 export type GitHubRepoScopedArgs = {

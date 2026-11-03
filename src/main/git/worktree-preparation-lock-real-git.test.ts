@@ -16,7 +16,7 @@ import {
   listPreparations,
   startPreparation,
   WORKTREE_CREATE_PREPARATION_TTL_MS
-} from '../worktree-create-preparation-pool'
+} from '../workspaces/creation/preparation/worktree-create-preparation-pool'
 
 const roots: string[] = []
 afterEach(async () => {

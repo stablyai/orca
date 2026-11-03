@@ -36,9 +36,12 @@ import {
   _settlePendingWorktreeRemovalsForTests,
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../../worktree-background-removal'
-import * as acceptance from '../../worktree-removal-acceptance-queue'
-import { failedWorktreeRemovals, pendingWorktreeRemovals } from '../../worktree-removal-table'
+} from '../../workspaces/removal/worktree-background-removal'
+import * as acceptance from '../../workspaces/removal/worktree-removal-acceptance-queue'
+import {
+  failedWorktreeRemovals,
+  pendingWorktreeRemovals
+} from '../../workspaces/removal/worktree-removal-table'
 
 installRealWorkerThreadChildProcesses()
 const cliPath = '../../../cli/index'

@@ -127,15 +127,17 @@ export class AcpStructuredLane {
   }
 
   /** Resolves when the turn leaves or further writes become impossible. */
-  whenTurnLeaves(turnId: string): Promise<void> {
+  whenTurnLeaves(turnId: string, signal?: AbortSignal): Promise<void> {
     return new Promise((resolve) => {
       const check = (): void => {
-        if (this.failed || this.disposed || this.openTurnId !== turnId) {
+        if (signal?.aborted || this.failed || this.disposed || this.openTurnId !== turnId) {
           this.turnWatchers.delete(check)
+          signal?.removeEventListener('abort', check)
           resolve()
         }
       }
       this.turnWatchers.add(check)
+      signal?.addEventListener('abort', check, { once: true })
       check()
     })
   }

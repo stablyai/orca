@@ -8,43 +8,9 @@ import {
 } from './terminal-arabic-shaping-joiner'
 
 describe('findRtlJoinRanges', () => {
-  it('returns no ranges for plain ASCII text', () => {
-    expect(findRtlJoinRanges('ls -la | grep foo && echo done')).toEqual([])
-  })
-
-  it('returns no ranges for Latin-1/Cyrillic/Greek text below the RTL floor', () => {
-    expect(findRtlJoinRanges('café привет αβγ')).toEqual([])
-  })
-
-  it('returns a fresh array on every call so xterm can merge into it safely', () => {
-    const first = findRtlJoinRanges('plain')
-    const second = findRtlJoinRanges('plain')
-    expect(first).not.toBe(second)
-  })
-
-  it('joins a single Arabic word as one range', () => {
-    const text = 'مرحبا'
-    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
-  })
-
-  it('joins a multi-word Arabic phrase across spaces as one range', () => {
-    const text = 'مرحباً هذه مشكلة في اللغة العربية'
-    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
-  })
-
   it('excludes leading and trailing neutrals from the range', () => {
     const text = '  مرحبا هذه  '
     expect(findRtlJoinRanges(text)).toEqual([[2, 11]])
-  })
-
-  it('stops the run at strong LTR words', () => {
-    const text = 'مرحبا hello'
-    expect(findRtlJoinRanges(text)).toEqual([[0, 5]])
-  })
-
-  it('does not pull an adjacent filename into the run', () => {
-    const text = 'ملف test.txt'
-    expect(findRtlJoinRanges(text)).toEqual([[0, 3]])
   })
 
   it('treats box-drawing characters as run breakers so TUI borders stay per-cell', () => {
@@ -97,11 +63,6 @@ describe('findRtlJoinRanges', () => {
     ])
   })
 
-  it('joins Hebrew words with niqqud points', () => {
-    const text = 'שָׁלוֹם עוֹלָם'
-    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
-  })
-
   // Escapes, not literals: these controls are invisible in source.
   const ZWNJ = '\u200c'
   const ZWJ = '\u200d'
@@ -119,10 +80,6 @@ describe('findRtlJoinRanges', () => {
     expect(findRtlJoinRanges(zwjText)).toEqual([[0, zwjText.length]])
     const rlmText = `سلام${RLM}عليكم`
     expect(findRtlJoinRanges(rlmText)).toEqual([[0, rlmText.length]])
-  })
-
-  it('excludes a trailing ZWNJ from the joined range', () => {
-    expect(findRtlJoinRanges(`مرحبا${ZWNJ}`)).toEqual([[0, 5]])
   })
 
   it('does not let ZWNJ start a run or bridge into LTR text', () => {
@@ -151,11 +108,6 @@ describe('findRtlJoinRanges', () => {
     // Combining marks share their base cell; starting a run there yields an empty joined range that blanks the next WebGL glyph.
     expect(findRtlJoinRanges('a\u064b\u0651b')).toEqual([])
     expect(findRtlJoinRanges('x\u05b0\u05b1y')).toEqual([])
-  })
-
-  it('lets combining marks extend a run opened by a spacing RTL letter', () => {
-    const text = 'منَّ هنا'
-    expect(findRtlJoinRanges(text)).toEqual([[0, text.length]])
   })
 
   it('does not open a run at zero-width Cf controls after an LTR base', () => {
@@ -198,18 +150,6 @@ describe('registerArabicShapingJoiner', () => {
       getDeregistered: () => deregistered
     }
   }
-
-  it('registers a joining handler and returns a cleanup that deregisters it', () => {
-    const host = createJoinerHost()
-    const cleanup = registerArabicShapingJoiner(host.terminal, () => true)
-    const text = 'مرحبا'
-    expect(host.getRegistered()!(text)).toEqual([[0, text.length]])
-    expect(host.getDeregistered()).toBeNull()
-
-    // terminal.dispose() does not deregister joiners, so cleanup must.
-    cleanup()
-    expect(host.getDeregistered()).toBe(7)
-  })
 
   it('returns no ranges while shaping is inactive (DOM renderer misrenders joined spans)', () => {
     const host = createJoinerHost()

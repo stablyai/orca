@@ -8,7 +8,7 @@ import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-
 import type {
   WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 
 vi.mock('node:fs/promises', () => ({ stat: vi.fn(async () => ({ isDirectory: () => true })) }))
 vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({

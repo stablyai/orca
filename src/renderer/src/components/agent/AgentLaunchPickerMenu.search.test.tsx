@@ -7,15 +7,21 @@ import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 vi.mock('./AgentLaunchSetupButton', () => ({
-  AgentLaunchSetupButton: vi.fn((props: ComponentProps<typeof AgentLaunchSetupButton>) =>
-    props.renderAnchor?.(<button>Setup</button>)
-  )
+  AgentLaunchSetupButton: vi.fn((props: ComponentProps<typeof AgentLaunchSetupButton>) => (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger asChild hideChevron>
+        {props.renderAnchor?.(<button>Setup</button>)}
+      </DropdownMenuSubTrigger>
+    </DropdownMenuSub>
+  ))
 }))
 afterEach(() => {
   cleanup()

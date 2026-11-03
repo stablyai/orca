@@ -12,8 +12,8 @@ import type { Repo } from '../../shared/repo-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence/loading-store/store'
-import type * as HostTreeRemoval from '../host-tree-removal'
-import { removeHostTree } from '../host-tree-removal'
+import type * as HostTreeRemoval from '../filesystem/host-tree-removal'
+import { removeHostTree } from '../filesystem/host-tree-removal'
 import { listWorktreesStrict, removeWorktree } from '../git/worktree'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 import { acquireWatcherRemovalGate, beginTerminalInstall } from '../ipc/watcher-removal-gate'
@@ -25,22 +25,22 @@ import {
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../worktree-background-removal'
-import { withUnregisteredRemovalCheckouts } from '../worktree-removal-listing'
-import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-leftover'
+} from '../workspaces/removal/worktree-background-removal'
+import { withUnregisteredRemovalCheckouts } from '../workspaces/removal/worktree-removal-listing'
+import { retryFailedRemovalUnlessRegistered } from '../workspaces/removal/worktree-removal-leftover'
 import {
   readWorktreeRemovalRecords,
   writeWorktreeRemovalRecords,
   type WorktreeRemovalRecord
-} from '../worktree-removal-records'
+} from '../workspaces/removal/worktree-removal-records'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import type { RuntimeStore } from './runtime-store-contract'
 
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
-vi.mock('../host-tree-removal', async (importOriginal) => {
+vi.mock('../filesystem/host-tree-removal', async (importOriginal) => {
   const actual = await importOriginal<typeof HostTreeRemoval>()
   return { ...actual, removeHostTree: vi.fn(actual.removeHostTree) }
 })
