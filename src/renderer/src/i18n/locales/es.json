@@ -3007,16 +3007,7 @@
           "showingIssuesFromRepo": "Mostrando issues de <repo/>"
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "Asignado",
-          "b27b7e526c": "Revisión de",
-          "7f1ba66c3e": "Revisado por",
-          "9d0f2eda6d": "Etiqueta",
-          "01f3f3d161": "Autor",
-          "13b3ac0a84": "Estado",
-          "79c54552f7": "Filtros",
-          "8a2ffbf9b3": "Quitar filtro {{value0}}",
-          "anyState": "Cualquiera",
-          "currentUser": "Usuario actual"
+          "79c54552f7": "Filtros"
         },
         "PRFilterPickers": {
           "472c12ae03": "Limpiar",
@@ -3026,36 +3017,6 @@
           "loading": "Cargando…",
           "searchTextTooLarge": "El texto de búsqueda es demasiado grande.",
           "noMatches": "Sin coincidencias"
-        },
-        "PRFilterSections": {
-          "a00830d3f7": "Sin usuarios",
-          "0103e1cb18": "Revisado por",
-          "94b42b0edf": "Revisión solicitada",
-          "de26e2eb06": "Sin etiquetas",
-          "458ea3602b": "Sin autores",
-          "b69fa4fa20": "Volver",
-          "30ebb6ca44": "Limpiar todos los filtros",
-          "ea3416d646": "Asignado",
-          "b1d9fdea08": "Etiqueta",
-          "24754c44ad": "Autor",
-          "764a0b4ce1": "Estado",
-          "f0cf6dd591": "desactivado",
-          "1e9b5244f2": "activado",
-          "b930de7194": "Solo borrador",
-          "e0002f1eba": "seleccionado",
-          "2b2f019091": "Cualquier estado",
-          "0fd3249e2e": "Cerrado",
-          "d78b60b5c2": "Abierto",
-          "bd162b7d5a": "Mergeado",
-          "draft": "Borrador",
-          "labelCount_one": "{{count}} etiqueta",
-          "labelCount_other": "{{count}} etiquetas",
-          "labelCount_many": "{{count}} etiquetas",
-          "allStates": "Todos",
-          "filterPullRequests": "Filtrar pull requests",
-          "filterIssues": "Filtrar issues",
-          "filterOrTypeLogin": "Filtrar o escribir un nombre de usuario...",
-          "filterLabels": "Filtrar etiquetas..."
         },
         "github": {
           "rate": {

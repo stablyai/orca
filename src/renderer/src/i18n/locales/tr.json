@@ -3457,16 +3457,7 @@
           "showingIssuesFromRepo": "<repo/> kaynağındaki sorunlar gösteriliyor"
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "Atanan",
-          "b27b7e526c": "İnceleme istenen",
-          "7f1ba66c3e": "İnceleyen",
-          "9d0f2eda6d": "Etiket",
-          "01f3f3d161": "Yazar",
-          "13b3ac0a84": "Durum",
-          "79c54552f7": "Filtreler",
-          "8a2ffbf9b3": "{{value0}} filtresini kaldır",
-          "anyState": "Herhangi biri",
-          "currentUser": "Geçerli kullanıcı"
+          "79c54552f7": "Filtreler"
         },
         "PRFilterPickers": {
           "472c12ae03": "Temizle",
@@ -3476,35 +3467,6 @@
           "loading": "Yükleniyor…",
           "searchTextTooLarge": "Arama metni çok uzun.",
           "noMatches": "Eşleşme yok"
-        },
-        "PRFilterSections": {
-          "a00830d3f7": "Kullanıcı yok",
-          "0103e1cb18": "İnceleyen",
-          "94b42b0edf": "İnceleme istendi",
-          "de26e2eb06": "Etiket yok",
-          "458ea3602b": "Yazar yok",
-          "b69fa4fa20": "Geri",
-          "30ebb6ca44": "Tüm filtreleri temizle",
-          "ea3416d646": "Atanan",
-          "b1d9fdea08": "Etiket",
-          "24754c44ad": "Yazar",
-          "764a0b4ce1": "Durum",
-          "f0cf6dd591": "kapalı",
-          "1e9b5244f2": "açık",
-          "b930de7194": "Yalnızca taslak",
-          "e0002f1eba": "seçili",
-          "2b2f019091": "Herhangi bir durum",
-          "0fd3249e2e": "Kapatıldı",
-          "d78b60b5c2": "Açık",
-          "bd162b7d5a": "Merge Edildi",
-          "draft": "Taslak",
-          "labelCount_other": "{{count}} etiket",
-          "labelCount_one": "{{count}} etiket",
-          "allStates": "Tümü",
-          "filterPullRequests": "Pull request'leri filtrele",
-          "filterIssues": "Sorunları filtrele",
-          "filterOrTypeLogin": "Filtreleyin veya bir kullanıcı adı yazın...",
-          "filterLabels": "Etiketleri filtreleyin..."
         },
         "github": {
           "rate": {

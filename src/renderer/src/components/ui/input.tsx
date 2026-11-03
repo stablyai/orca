@@ -8,7 +8,8 @@ const inputVariants = cva('', {
   variants: {
     variant: {
       default: '',
-      code: 'font-mono text-xs md:text-xs'
+      code: 'font-mono text-xs md:text-xs',
+      overlay: 'relative z-10 bg-transparent text-transparent caret-foreground dark:bg-transparent'
     },
     surface: {
       default: '',
@@ -17,7 +18,8 @@ const inputVariants = cva('', {
     },
     density: {
       default: '',
-      compact: 'h-7 border-border bg-input/50 px-2 text-xs shadow-none md:text-xs'
+      compact: 'h-7 border-border bg-input/50 px-2 text-xs shadow-none md:text-xs',
+      search: 'h-8 border-border/60 pl-8 pr-8 text-xs shadow-xs'
     },
     // Reserves room for an icon button absolutely positioned inside the field's right edge.
     adornment: {

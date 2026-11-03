@@ -30,7 +30,7 @@ import { useTaskPageSourceDisplay } from './use-task-page-source-display'
 import { TaskPageGitHubFilters } from './github/Filters'
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 
-vi.mock('@/components/github/PRFilterDropdowns', () => ({ default: () => null }))
+vi.mock('@/components/github/TaskQueryInput', () => ({ default: () => null }))
 // Count the source reader's own work at its boundary; writers keep the uninstrumented cache.
 const readerWork = vi.hoisted(() => ({
   invocations: 0,

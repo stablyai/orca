@@ -2955,16 +2955,7 @@
           "showingIssuesFromRepo": "正在显示来自 <repo/> 的议题"
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "负责人",
-          "b27b7e526c": "评审来自",
-          "7f1ba66c3e": "评审人",
-          "9d0f2eda6d": "标签",
-          "01f3f3d161": "作者",
-          "13b3ac0a84": "状态",
-          "79c54552f7": "筛选条件",
-          "8a2ffbf9b3": "删除 {{value0}} 筛选条件",
-          "anyState": "任意",
-          "currentUser": "当前用户"
+          "79c54552f7": "筛选条件"
         },
         "PRFilterPickers": {
           "472c12ae03": "清除",
@@ -2974,34 +2965,6 @@
           "loading": "加载中…",
           "searchTextTooLarge": "搜索文本过长。",
           "noMatches": "无匹配项"
-        },
-        "PRFilterSections": {
-          "a00830d3f7": "没有用户",
-          "0103e1cb18": "评审人",
-          "94b42b0edf": "已请求评审",
-          "de26e2eb06": "无标签",
-          "458ea3602b": "没有作者",
-          "b69fa4fa20": "返回",
-          "30ebb6ca44": "清除所有筛选条件",
-          "ea3416d646": "负责人",
-          "b1d9fdea08": "标签",
-          "24754c44ad": "作者",
-          "764a0b4ce1": "状态",
-          "f0cf6dd591": "关",
-          "1e9b5244f2": "开",
-          "b930de7194": "仅草稿",
-          "e0002f1eba": "已选择",
-          "2b2f019091": "任意状态",
-          "0fd3249e2e": "已关闭",
-          "d78b60b5c2": "开放",
-          "bd162b7d5a": "合并",
-          "draft": "草稿",
-          "labelCount_other": "{{count}} 个标签",
-          "allStates": "全部",
-          "filterPullRequests": "筛选 PR",
-          "filterIssues": "筛选议题",
-          "filterOrTypeLogin": "筛选或输入登录名...",
-          "filterLabels": "筛选标签..."
         },
         "github": {
           "rate": {

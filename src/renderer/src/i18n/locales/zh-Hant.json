@@ -3409,16 +3409,7 @@
           "showingIssuesFromRepo": "正在顯示來自 <repo/> 的議題"
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "負責人",
-          "b27b7e526c": "審查來自",
-          "7f1ba66c3e": "審查人",
-          "9d0f2eda6d": "標籤",
-          "01f3f3d161": "作者",
-          "13b3ac0a84": "狀態",
-          "79c54552f7": "篩選條件",
-          "8a2ffbf9b3": "刪除 {{value0}} 篩選條件",
-          "anyState": "任意",
-          "currentUser": "目前使用者"
+          "79c54552f7": "篩選條件"
         },
         "PRFilterPickers": {
           "472c12ae03": "清除",
@@ -3428,34 +3419,6 @@
           "loading": "載入中…",
           "searchTextTooLarge": "搜尋文字過長。",
           "noMatches": "沒有符合項目"
-        },
-        "PRFilterSections": {
-          "a00830d3f7": "沒有使用者",
-          "0103e1cb18": "審查人",
-          "94b42b0edf": "已請求審查",
-          "de26e2eb06": "無標籤",
-          "458ea3602b": "沒有作者",
-          "b69fa4fa20": "返回",
-          "30ebb6ca44": "清除所有篩選條件",
-          "ea3416d646": "負責人",
-          "b1d9fdea08": "標籤",
-          "24754c44ad": "作者",
-          "764a0b4ce1": "狀態",
-          "f0cf6dd591": "關",
-          "1e9b5244f2": "開",
-          "b930de7194": "僅草稿",
-          "e0002f1eba": "已選擇",
-          "2b2f019091": "任意狀態",
-          "0fd3249e2e": "已關閉",
-          "d78b60b5c2": "開放",
-          "bd162b7d5a": "已合併",
-          "draft": "草稿",
-          "labelCount_other": "{{count}} 個標籤",
-          "allStates": "全部",
-          "filterPullRequests": "篩選 PR",
-          "filterIssues": "篩選議題",
-          "filterOrTypeLogin": "篩選或輸入登入名稱...",
-          "filterLabels": "篩選標籤..."
         },
         "github": {
           "rate": {

@@ -15908,36 +15908,6 @@
             }
           }
         },
-        "PRFilterSections": {
-          "a00830d3f7": "Nenhum usuário",
-          "0103e1cb18": "Revisado por",
-          "94b42b0edf": "Revisão solicitada",
-          "de26e2eb06": "Nenhum rótulo",
-          "458ea3602b": "Nenhum autor",
-          "b69fa4fa20": "Voltar",
-          "30ebb6ca44": "Limpar todos os filtros",
-          "ea3416d646": "Responsável",
-          "b1d9fdea08": "Rótulo",
-          "24754c44ad": "Autor",
-          "764a0b4ce1": "Status",
-          "f0cf6dd591": "desativado",
-          "1e9b5244f2": "ativado",
-          "b930de7194": "Somente rascunhos",
-          "e0002f1eba": "selecionado",
-          "2b2f019091": "Qualquer estado",
-          "0fd3249e2e": "Fechado",
-          "d78b60b5c2": "Aberto",
-          "bd162b7d5a": "Mergeado",
-          "draft": "Rascunho",
-          "labelCount_one": "{{count}} rótulo",
-          "labelCount_other": "{{count}} rótulos",
-          "labelCount_many": "{{count}} rótulos",
-          "allStates": "Todos",
-          "filterPullRequests": "Filtrar pull requests",
-          "filterIssues": "Filtrar issues",
-          "filterOrTypeLogin": "Filtrar ou digitar um login...",
-          "filterLabels": "Filtrar rótulos..."
-        },
         "github": {
           "rate": {
             "limit": {
@@ -15971,16 +15941,7 @@
           "imageUrlTooLarge": "A URL da imagem é muito grande."
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "Responsável",
-          "b27b7e526c": "Review de",
-          "7f1ba66c3e": "Revisado por",
-          "9d0f2eda6d": "Rótulo",
-          "01f3f3d161": "Autor",
-          "13b3ac0a84": "Status",
-          "79c54552f7": "Filtros",
-          "8a2ffbf9b3": "Remover filtro de {{value0}}",
-          "anyState": "Qualquer",
-          "currentUser": "Usuário atual"
+          "79c54552f7": "Filtros"
         },
         "IssueSourceSelector": {
           "787c970baf": "Origem da issue",
