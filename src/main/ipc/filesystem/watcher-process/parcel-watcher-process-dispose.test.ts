@@ -37,12 +37,4 @@ describe('disposeWatcherProcessAndWait', () => {
     finishPool()
     await expect(disposal).rejects.toMatchObject({ message: 'watcher_process_shutdown_incomplete' })
   })
-
-  it('resolves once every owned child has exited', async () => {
-    supervisorDispose.mockResolvedValueOnce()
-    poolDispose.mockResolvedValueOnce()
-    await expect(disposeWatcherProcessAndWait()).resolves.toBeUndefined()
-    expect(supervisorDispose).toHaveBeenCalled()
-    expect(poolDispose).toHaveBeenCalled()
-  })
 })

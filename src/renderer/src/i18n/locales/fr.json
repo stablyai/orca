@@ -8556,8 +8556,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Modèle de commande",
-          "2b2f38652b": "Commande personnalisée",
-          "0ffb081b3a": "Utiliser l'agent par défaut",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Personnaliser",
           "403876bb48": "Utiliser la valeur globale",
@@ -19747,7 +19745,7 @@
           "unverifiableCount_other": "{{count}} au statut indisponible",
           "unverifiableCount_many": "{{count}} au statut indisponible"
         },
-        "tokens": "Jetons {{value0}}",
+        "tokens": "{{value0}} tokens",
         "unnamed": "Sous-agent",
         "started_one": "A lancé {{count}} sous-agent",
         "started_other": "A lancé {{count}} sous-agents",
@@ -23016,6 +23014,7 @@
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
     "legacyModelCount": "{{total}} modèles",
+    "use": "Utiliser",
     "select": "Choisir un agent",
     "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
     "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers"

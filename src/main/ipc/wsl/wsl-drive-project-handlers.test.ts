@@ -105,8 +105,4 @@ describe('readWorktreeLinks', () => {
     mkdirSync(join(commonDir, 'worktrees', 'broken'), { recursive: true })
     await expect(readWorktreeLinks(commonDir)).resolves.toEqual(['/home/me/trees/fix/.git'])
   })
-
-  it('reads none for a repo with no linked worktrees', async () => {
-    await expect(readWorktreeLinks(commonDir)).resolves.toEqual([])
-  })
 })

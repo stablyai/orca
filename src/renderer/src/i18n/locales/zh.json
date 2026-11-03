@@ -7995,8 +7995,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",
-          "2b2f38652b": "自定义命令",
-          "0ffb081b3a": "使用默认智能体",
           "f4310cf63f": "智能体",
           "1cd88d470a": "定制",
           "403876bb48": "使用全局",
@@ -18964,7 +18962,7 @@
           "stoppedCount_other": "{{count}} 个已停止",
           "unverifiableCount_other": "{{count}} 个状态不可用"
         },
-        "tokens": "{{value0}} 代币",
+        "tokens": "{{value0}} token",
         "unnamed": "子智能体",
         "started_other": "已启动 {{count}} 个子智能体",
         "ran_other": "已运行 {{count}} 个子智能体"
@@ -22327,6 +22325,7 @@
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
     "legacyModelCount": "{{total}} 个模型",
+    "use": "使用",
     "select": "选择智能体",
     "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
     "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"

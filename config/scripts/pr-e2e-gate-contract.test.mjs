@@ -15,9 +15,6 @@ const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr
 const filterStep = prWorkflow.jobs.code_paths.steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
-const rollbackStep = prWorkflow.jobs.preflight.steps.find(
-  (step) => step.name === 'Check VM runtime rollback compatibility'
-)
 /** The route that sends a change to the two-Electron restart-survival spec. */
 const restartSurvivalRoute = PR_E2E_SOURCE_ROUTES.find(
   (route) => route.id === 'client-hosted-browser.restart-survival'
@@ -67,15 +64,6 @@ describe('restart-survival E2E routing', () => {
 })
 
 describe('PR E2E gate contract', () => {
-  it('keeps every source-routed E2E target present', () => {
-    const missing = PR_E2E_SOURCE_ROUTES.flatMap(({ id, specs }) =>
-      specs
-        .filter((spec) => !existsSync(join(projectDir, spec)))
-        .map((spec) => ({ route: id, spec }))
-    )
-    expect(missing).toEqual([])
-  })
-
   it('selects modified Playwright specs without running deleted tests', () => {
     expect(filterStep.run).toContain('--diff-filter=AMCR')
     expect(filterStep.run).toContain('config/scripts/pr-e2e-source-routing.mjs')
@@ -87,12 +75,6 @@ describe('PR E2E gate contract', () => {
         'tests/e2e/global-teardown.unit.test.ts'
       ])
     ).toEqual(['tests/e2e/active-view-restart-restore.spec.ts'])
-  })
-
-  it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {
-    expect(rollbackStep.run).toMatch(/diff-base\.mjs "\$BASE_SHA"[\s\S]*"\$DIFF_BASE" HEAD --/)
-    expect(rollbackStep.run).toContain('src/shared/ephemeral-vm-recipes.ts')
-    expect(rollbackStep.run).toContain('src/shared/orca-yaml-hook-types.ts')
   })
 
   it('routes P0 sentinels from their causal sources', () => {

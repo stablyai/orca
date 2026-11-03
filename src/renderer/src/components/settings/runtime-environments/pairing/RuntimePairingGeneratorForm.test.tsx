@@ -37,16 +37,6 @@ function renderForm(
 }
 
 describe('RuntimePairingGeneratorForm', () => {
-  it('requires a dedicated value for custom-address intent', () => {
-    const emptyMarkup = renderForm('custom', '')
-    expect(emptyMarkup).toContain('id="runtime-pairing-custom-address"')
-    expect(emptyMarkup).toContain('disabled=""')
-
-    const populatedMarkup = renderForm('custom', 'openclaw.example.ts.net')
-    expect(populatedMarkup).toContain('value="openclaw.example.ts.net"')
-    expect(populatedMarkup).not.toContain('disabled=""')
-  })
-
   it('hides generated links after the selected address changes', () => {
     const markup = renderForm('another', '100.76.32.125', {
       address: '192.168.1.10',

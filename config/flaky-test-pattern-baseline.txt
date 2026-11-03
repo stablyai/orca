@@ -786,7 +786,6 @@
 3 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel.test.ts
 1 test-no-wall-clock:src/main/pty/history/fish-history-session.test.ts
 2 test-no-wall-clock:src/main/git/command-runner/git-command-resolution-windows-checkout.test.ts
-1 test-no-wall-clock:src/main/git/command-runner/git-command-timeout-behavior.test.ts
 4 test-no-wall-clock:src/main/git/gh-rate-limit-breaker.test.ts
 1 test-no-wall-clock:src/main/git/refs/maintenance/pack-refs-lock-ownership.test.ts
 2 test-no-wall-clock:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
@@ -1177,7 +1176,6 @@
 1 test-timeout-needs-reason:src/main/daemon/slow-daemon-session-verification.test.ts
 1 test-timeout-needs-reason:src/main/daemon/terminal-history-large-checkpoint-cold-restore.test.ts
 1 test-timeout-needs-reason:src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts
-1 test-timeout-needs-reason:src/main/git/command-runner/git-command-timeout-behavior.test.ts
 6 test-timeout-needs-reason:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
 1 test-timeout-needs-reason:src/main/git/worktrees/creation/worktree-preparation-cancel-latency.bench.test.ts
 1 test-timeout-needs-reason:src/main/git/worktrees/removal/worktree-removal-large-tree.bench.test.ts

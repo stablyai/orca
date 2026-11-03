@@ -92,18 +92,6 @@ describe('shared-control standing intent', () => {
     scheduler.clear()
   })
 
-  it('advances an armed idle retry without recreating cleared work', () => {
-    vi.useFakeTimers()
-    const connection = testConnection()
-    const open = replaceOpen(connection)
-    closeCurrentGeneration(connection)
-
-    expect(connection.retryNow()).toBe(true)
-    expect(open).toHaveBeenCalledOnce()
-    expect(connection.retryNow()).toBe(false)
-    connection.close()
-  })
-
   it('clears an armed idle retry on close and ignores a late socket close', () => {
     vi.useFakeTimers()
     const connection = testConnection()

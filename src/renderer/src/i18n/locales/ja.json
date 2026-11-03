@@ -8043,8 +8043,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",
-          "2b2f38652b": "カスタムコマンド",
-          "0ffb081b3a": "デフォルトの Agent を使用する",
           "f4310cf63f": "Agent",
           "1cd88d470a": "カスタマイズ",
           "403876bb48": "グローバルを使用する",
@@ -22337,6 +22335,7 @@
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
     "legacyModelCount": "{{total}} 個のモデル",
+    "use": "使用",
     "select": "Agent を選択",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
     "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
