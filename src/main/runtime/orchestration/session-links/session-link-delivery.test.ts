@@ -71,7 +71,11 @@ describe('session link delivery through the real structured host', () => {
       body: 'Review complete; local checks only.'
     })
 
-  async function providerTurn(state: 'running' | 'completed', operationId = 'human-input') {
+  async function providerTurn(
+    state: 'running' | 'completed',
+    operationId = 'human-input',
+    turnId = 'turn-1'
+  ) {
     const events = hostTestState().acquire.mock.calls.at(-1)?.[0].events
     if (!events) {
       throw new Error('Missing provider event channel')
@@ -80,12 +84,12 @@ describe('session link delivery through the real structured host', () => {
       {
         provider: 'codex',
         threadId: '019fd532-7c11-7a90-b6de-4e1a2c3d5f60',
-        turnId: 'turn-1',
+        turnId,
         ordinal: 100
       },
       {
         kind: 'turn',
-        turnId: 'turn-1',
+        turnId,
         state,
         startedAt: 1,
         userItemId: agentJournalSubmissionKey(operationId)
@@ -224,6 +228,70 @@ describe('session link delivery through the real structured host', () => {
     expect(cancelTurn).toHaveBeenCalledOnce()
   })
 
+  it('lets only the current calling delivery finish its control reply', async () => {
+    const { cancelTurn } = hostTestState()
+    const current = message()
+    await redriveSessionLinks(db, SESSION)
+    await providerTurn('running', current.operationId)
+    await stopSessionLinkTurns(store, 'link-test', 'current-control', {
+      sessionId: SESSION,
+      operationId: current.operationId
+    })
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(store.events('link-test')).toContainEqual(
+      expect.objectContaining({
+        targetTurnId: 'turn-1',
+        detail: 'stop-calling-turn-kept'
+      })
+    )
+    await providerTurn('completed', current.operationId)
+    const next = store.append({
+      id: 'after-control',
+      linkId: 'link-test',
+      actor: 'reviewer',
+      recipient: SESSION,
+      kind: 'message',
+      body: 'A later owner-approved continuation.'
+    })
+    await redriveSessionLinks(db, SESSION)
+    await providerTurn('running', next.operationId, 'turn-2')
+    await stopSessionLinkTurns(store, 'link-test', 'current-control', {
+      sessionId: SESSION,
+      operationId: current.operationId
+    })
+    expect(cancelTurn).not.toHaveBeenCalled()
+  })
+
+  it('does not exempt a later link turn when an older background command stops the link', async () => {
+    const { cancelTurn } = hostTestState()
+    const first = message()
+    await redriveSessionLinks(db, SESSION)
+    await providerTurn('completed', first.operationId)
+    const next = store.append({
+      id: 'next-report',
+      linkId: 'link-test',
+      actor: 'reviewer',
+      recipient: SESSION,
+      kind: 'message',
+      body: 'A later review report.'
+    })
+    await redriveSessionLinks(db, SESSION)
+    await providerTurn('running', next.operationId, 'turn-2')
+    await stopSessionLinkTurns(store, 'link-test', 'background-stop', {
+      sessionId: SESSION,
+      operationId: first.operationId
+    })
+    expect(cancelTurn).toHaveBeenCalledOnce()
+    expect(store.events('link-test')).toContainEqual(
+      expect.objectContaining({
+        kind: 'control',
+        recipient: SESSION,
+        targetTurnId: 'turn-2',
+        detail: 'stop-acknowledged'
+      })
+    )
+  })
+
   it('records an already idle participant without a false unconfirmed-stop warning', async () => {
     const { cancelTurn } = hostTestState()
     message()
@@ -234,6 +302,40 @@ describe('session link delivery through the real structured host', () => {
     expect(
       store.events('link-test').find((e) => e.kind === 'control' && e.recipient === SESSION)?.detail
     ).toBe('stop-idle')
+  })
+
+  it('does not retarget an idle stop receipt after a later continuation', async () => {
+    const { cancelTurn } = hostTestState()
+    await stopSessionLinkTurns(store, 'link-test', 'idle-control')
+    const next = message()
+    await redriveSessionLinks(db, SESSION)
+    await providerTurn('running', next.operationId)
+    await stopSessionLinkTurns(store, 'link-test', 'idle-control')
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(store.events('link-test')).toContainEqual(
+      expect.objectContaining({
+        recipient: SESSION,
+        detail: 'stop-idle'
+      })
+    )
+  })
+
+  it('retains an unconfirmed stop when the host was absent instead of targeting a future turn', async () => {
+    const { host, cancelTurn } = hostTestState()
+    vi.mocked(getStructuredAgentSessionHost).mockReturnValue(null)
+    await stopSessionLinkTurns(store, 'link-test', 'host-absent')
+    vi.mocked(getStructuredAgentSessionHost).mockReturnValue(host)
+    const next = message()
+    await redriveSessionLinks(db, SESSION)
+    await providerTurn('running', next.operationId)
+    await stopSessionLinkTurns(store, 'link-test', 'host-absent')
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(store.events('link-test')).toContainEqual(
+      expect.objectContaining({
+        recipient: SESSION,
+        detail: 'stop-unconfirmed'
+      })
+    )
   })
 
   it('keeps a stop unconfirmed while an accepted send has no provable provider turn', async () => {

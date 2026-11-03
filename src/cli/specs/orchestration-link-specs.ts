@@ -25,10 +25,10 @@ export const ORCHESTRATION_LINK_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'link-control'],
     summary: 'Stop or leave your existing session link',
     usage:
-      'orca orchestration link-control --id <link_id> --action <stop|end> [--operation <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'action', 'operation'],
+      'orca orchestration link-control --id <link_id> --action <stop|end> --turn-operation <delivery_operation> [--operation <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'action', 'turn-operation', 'operation'],
     notes: [
-      'Only the owner can create or resume a link. Stop pauses it and cancels only turns started by this link. End keeps the journal.'
+      'Only the owner can create or resume a link. Stop pauses it and cancels only turns started by this link. End keeps the journal. Copy --turn-operation from the originating link message; an older background command cannot exempt a later turn.'
     ]
   }
 ]

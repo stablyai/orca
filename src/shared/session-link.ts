@@ -87,6 +87,7 @@ export const LinkControlParams = z
     id: identifier,
     operationId: identifier,
     action: z.enum(['pause', 'resume', 'stop', 'end']),
+    callerOperationId: identifier.optional(),
     version: z.number().int().positive()
   })
   .strict()

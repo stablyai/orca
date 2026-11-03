@@ -147,9 +147,23 @@ describe('session link caller authority', () => {
       recipient: 'claude_review',
       kind: 'checkpoint'
     })
+    const incoming = store.append({
+      id: 'intro-context',
+      linkId: 'link-1',
+      actor: 'host',
+      recipient: 'codex_implement',
+      kind: 'introduction',
+      body: 'Control context'
+    })
     await call(
       'orchestration.linkControl',
-      { id: 'link-1', operationId: 'leave', version: 1, action: 'end' },
+      {
+        id: 'link-1',
+        operationId: 'leave',
+        version: 1,
+        action: 'end',
+        callerOperationId: incoming.operationId
+      },
       agent()
     )
     expect(store.get('link-1').state).toBe('ended')
@@ -272,17 +286,61 @@ describe('session link caller authority', () => {
   it.each(['end', 'stop'] as const)(
     'lets a participant %s without cancelling its own closing turn',
     async (action) => {
+      const event = store.append({
+        id: 'calling-delivery',
+        linkId: 'link-1',
+        actor: 'claude_review',
+        recipient: 'codex_implement',
+        kind: 'message',
+        body: 'Control context'
+      })
       await call(
         'orchestration.linkControl',
-        { id: 'link-1', operationId: 'leave-safely', version: 1, action },
+        {
+          id: 'link-1',
+          operationId: 'leave-safely',
+          version: 1,
+          action,
+          callerOperationId: event.operationId
+        },
         agent()
       )
-      expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(
-        store,
-        'link-1',
-        'leave-safely',
-        'codex_implement'
-      )
+      expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(store, 'link-1', 'leave-safely', {
+        sessionId: 'codex_implement',
+        operationId: event.operationId
+      })
+    }
+  )
+
+  it.each(['stop', 'end'] as const)(
+    'refuses participant %s without an attributable delivery before effects',
+    async (action) => {
+      const foreign = store.append({
+        id: 'foreign-delivery',
+        linkId: 'link-1',
+        actor: 'codex_implement',
+        recipient: 'claude_review',
+        kind: 'message',
+        body: 'Peer context'
+      })
+      const before = store.events('link-1')
+      for (const callerOperationId of [undefined, 'not-a-delivery', foreign.operationId]) {
+        await expect(
+          call(
+            'orchestration.linkControl',
+            {
+              id: 'link-1',
+              operationId: 'missing-origin',
+              version: 1,
+              action,
+              ...(callerOperationId ? { callerOperationId } : {})
+            },
+            agent()
+          )
+        ).rejects.toThrow('Use --turn-operation')
+        expect(store.get('link-1')).toMatchObject({ state: 'active', version: 1 })
+        expect(store.events('link-1')).toEqual(before)
+      }
     }
   )
 

@@ -22,7 +22,8 @@ describe('link operation recovery errors', () => {
           ['id', 'pair'],
           ['body', 'Report'],
           ['action', 'end'],
-          ['operation', 'retry-op']
+          ['operation', 'retry-op'],
+          ['turn-operation', 'delivery-op']
         ]),
         true
       )

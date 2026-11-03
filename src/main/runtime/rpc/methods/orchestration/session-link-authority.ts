@@ -1,3 +1,5 @@
+import type { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
+import type { SessionLinkControlTurn } from '../../../orchestration/session-links/session-link-stop'
 import type { RpcContext } from '../../core'
 import type { SessionLink } from '../../../../../shared/session-link'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
@@ -28,4 +30,28 @@ export function sessionLinkActor(context: RpcContext, link: SessionLink): string
     )
   }
   return participant.sessionId
+}
+
+export function sessionLinkControlTurn(
+  store: SessionLinkStore,
+  link: SessionLink,
+  actor: string,
+  operationId: string | undefined
+): SessionLinkControlTurn | undefined {
+  if (actor === 'owner') {
+    return undefined
+  }
+  if (
+    !operationId ||
+    !store
+      .events(link.id)
+      .some((event) => event.recipient === actor && event.operationId === operationId)
+  ) {
+    throw new OrchestrationError(
+      'control_turn_required',
+      'Use --turn-operation from the link message that issued this control. No effects were applied.',
+      { effectsApplied: false }
+    )
+  }
+  return { sessionId: actor, operationId }
 }

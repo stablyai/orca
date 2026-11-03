@@ -62,6 +62,7 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
       const result = await client.call('orchestration.linkControl', {
         id,
         action,
+        callerOperationId: getRequiredStringFlag(flags, 'turn-operation'),
         version: current.link.version,
         operationId
       })

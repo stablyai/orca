@@ -1,7 +1,8 @@
 import {
   isSessionLinkOwner,
   requireSessionLinkOwner,
-  sessionLinkActor
+  sessionLinkActor,
+  sessionLinkControlTurn
 } from './session-link-authority'
 import { sessionLinkIntroduction } from '../../../orchestration/session-links/session-link-message'
 import { resolveUnknownSessionLinkDelivery } from '../../../orchestration/session-links/session-link-resolution'
@@ -216,6 +217,7 @@ export const SESSION_LINK_METHODS = [
       if (from !== 'owner' && params.action !== 'end' && params.action !== 'stop') {
         requireSessionLinkOwner(context)
       }
+      const callingTurn = sessionLinkControlTurn(store, link, from, params.callerOperationId)
       const replay = store.event(eventId(link.id, from, params.operationId))
       if (params.action === 'resume' && !replay) {
         const candidates = await sessionLinkCandidates(context.runtime)
@@ -272,12 +274,7 @@ export const SESSION_LINK_METHODS = [
         )
       )
       if (params.action === 'stop' || params.action === 'end') {
-        await stopSessionLinkTurns(
-          store,
-          link.id,
-          params.operationId,
-          from !== 'owner' ? from : undefined
-        )
+        await stopSessionLinkTurns(store, link.id, params.operationId, callingTurn)
       }
       void redriveSessionLinks(store.orchestration).catch((error) =>
         console.warn('[session-link] redrive unavailable', error)
