@@ -11,6 +11,7 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
+import { cwdInsideOtherTabbedWorktree } from './hook-status-resume-records'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
@@ -111,6 +112,11 @@ export function applyWorktreeSleepResumeRecords(
       }
     }
     for (const record of entry?.records ?? []) {
+      // A conversation whose folder belongs to another tabbed worktree never becomes this pane's
+      // record: its hook spoke through pane identity inherited from a shared tmux server (#37799).
+      if (cwdInsideOtherTabbedWorktree(session, record.worktreeId, record.providerSession.cwd)) {
+        continue
+      }
       const previous = next[record.paneKey]
       // Reattach can lose launch recipes; retain an earlier capture's config for the same session.
       const keptLaunchConfig =
