@@ -18,7 +18,9 @@ export function checksLabel(status: CheckPresentationOutcome): string {
       return translate('auto.components.sidebar.WorktreeCardHelpers.checksPending', 'Pending')
     case 'cancelled':
       return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
-    default:
+    case 'neutral':
+    case 'none':
+    case 'unknown':
       return ''
   }
 }
