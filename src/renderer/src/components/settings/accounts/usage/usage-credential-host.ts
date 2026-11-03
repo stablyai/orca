@@ -108,3 +108,16 @@ export function zcodePlanKeyDescription(
         { host: host.label }
       )
 }
+
+export function ollamaCloudKeyDescription(host: UsageCredentialHost): string {
+  return host.label === null
+    ? translate(
+        'auto.components.settings.OllamaCloudAccountsSection.keyDescription',
+        'Paste the API key from ollama.com/settings/keys. Stored locally, encrypted when the OS supports it, and sent only to ollama.com for usage refreshes.'
+      )
+    : translate(
+        'auto.components.settings.OllamaCloudAccountsSection.keyOnHostDescription',
+        'Paste the API key from ollama.com/settings/keys. Stored on {{host}} and sent from there only to ollama.com for usage refreshes.',
+        { host: host.label }
+      )
+}

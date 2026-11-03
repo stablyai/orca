@@ -27,6 +27,7 @@ import {
   getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
+  getAccountsOllamaSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsZcodePlanSearchEntries
 } from './accounts-search'
@@ -47,6 +48,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
+import { OllamaCloudAccountsSection } from '../OllamaCloudAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -409,6 +411,9 @@ export function AccountsPane({
         host={usageCredentialHost}
         usageSettings={usageHostSettings}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsOllamaSearchEntries()) ? (
+      <OllamaCloudAccountsSection key={`ollama:${accountOwnerKey}`} host={usageCredentialHost} />
     ) : null
   ]
 
