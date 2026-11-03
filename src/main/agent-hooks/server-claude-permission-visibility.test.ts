@@ -722,6 +722,24 @@ describe('the represented Claude request on its execution host', () => {
     })
   })
 
+  it('keeps a later turn’s sole prompt when an earlier turn’s identical batch arrives late', async () => {
+    await withClaudePane(async (post) => {
+      const tool = readAt(0)
+      const first = { prompt_id: '11111111-1111-4111-8111-111111111111' }
+      const second = { prompt_id: '22222222-2222-4222-8222-222222222222' }
+      await post(start)
+      await post(hook('UserPromptSubmit', { prompt: 'first', ...first }))
+      await post(pre('W', tool, first))
+      await post(hook('Stop', first))
+      await post(hook('UserPromptSubmit', { prompt: 'second', ...second }))
+      await post(pre('T', tool, second))
+      expect(await post(ask(tool, second))).toBe('waiting')
+      // Both turns are known and differ, so W's batch cannot be T's; NC1 stays for one turn.
+      expect(await post(batch([['W', tool]], first))).toBe('waiting')
+      expect(await post(batch([['T', tool]], second))).toBe('working')
+    })
+  })
+
   it('accepted (Brennan 2026-11-03): NC4 a helper’s request whose own end is lost outlives the parent’s finish', async () => {
     await withClaudePane(async (post) => {
       const helper = { agent_id: 'hook-agent-1' }

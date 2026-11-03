@@ -120,6 +120,28 @@ export function isSameAgentProcess(a: AgentProcessIdentity, b: AgentProcessIdent
   return a.pid === b.pid && a.platform === b.platform && a.startTime === b.startTime
 }
 
+/** One pane association: the same owner, process, session, binding and every recorded flag. */
+export function sameAgentProcessPresence(
+  a: AgentProcessPresence | undefined,
+  b: AgentProcessPresence | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  return Boolean(
+    a &&
+    b &&
+    a.agent === b.agent &&
+    (a.process && b.process ? isSameAgentProcess(a.process, b.process) : a.process === b.process) &&
+    a.session === b.session &&
+    a.ended === b.ended &&
+    a.sessionOwner === b.sessionOwner &&
+    a.suspended === b.suspended &&
+    a.fallback === b.fallback &&
+    a.paneRoot === b.paneRoot
+  )
+}
+
 /** A hook without a process identity can only be told apart from the owner by its provider. */
 export function hasOtherAgentProcessOwner(
   presence: AgentProcessPresence | undefined,

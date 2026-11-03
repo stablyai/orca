@@ -8,6 +8,7 @@ import {
   resumeClaudeRequestLead,
   shouldKeepClaudePermissionVisible
 } from '../../../shared/agent-hook-listener/claude-permission-transition'
+import { isOrdinaryClaudeRequest } from '../../../shared/agent-hook-listener/claude-permission-host-rules'
 
 /** A projected row was already decided by its execution host; this server decides only its own hooks. */
 export function attachLocalClaudeToolUseId(
@@ -37,7 +38,8 @@ export function decideLocalClaudePermission<T extends AgentHookEventPayload>(
   if (
     previous &&
     (projection
-      ? projection.held === true && !projection.row
+      ? // A bare marker vouches only for the request a receiver already shows, never another row.
+        projection.held === true && !projection.row && isOrdinaryClaudeRequest(previous)
       : shouldKeepClaudePermissionVisible(previous, next, host))
   ) {
     return { held: holdClaudeRequest(previous, next, !!host || !!projection), next }

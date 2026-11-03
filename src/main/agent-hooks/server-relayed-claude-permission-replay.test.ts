@@ -264,6 +264,29 @@ describe('a relayed request decided by its execution host', () => {
     }
   })
 
+  it('keeps a later turn’s sole request when an earlier turn’s identical batch arrives late', async () => {
+    const pair = await startPair()
+    const tool = { tool_name: 'Read', tool_input: { file_path: '/x' } }
+    const first = { ...root, prompt_id: '11111111-1111-4111-8111-111111111111' }
+    const second = { ...root, prompt_id: '22222222-2222-4222-8222-222222222222' }
+    await pair.post(start)
+    await pair.post({ ...first, hook_event_name: 'UserPromptSubmit', prompt: 'first' })
+    await pair.post({ ...first, hook_event_name: 'PreToolUse', tool_use_id: 'W', ...tool })
+    await pair.post({ ...first, hook_event_name: 'Stop' })
+    await pair.post({ ...second, hook_event_name: 'UserPromptSubmit', prompt: 'second' })
+    await pair.post({ ...second, hook_event_name: 'PreToolUse', tool_use_id: 'T', ...tool })
+    expect(await pair.post({ ...second, hook_event_name: 'PermissionRequest', ...tool })).toBe(
+      'waiting'
+    )
+    const late = (prompt: typeof first, id: string) => ({
+      ...prompt,
+      hook_event_name: 'PostToolBatch',
+      tool_calls: [{ ...tool, tool_use_id: id }]
+    })
+    expect(await pair.post(late(first, 'W'))).toBe('waiting')
+    expect(await pair.post(late(second, 'T'))).toBe('working')
+  })
+
   it.each(['question', 'elicitation'] as const)(
     'catches a desktop that missed a newer %s up to it at the older request’s batch, under its own identity',
     async (kind) => {
@@ -504,6 +527,57 @@ describe('current-state delivery through the relay’s real sink', () => {
     expect(row(sink.current).state).toBe('waiting')
     return sink
   }
+
+  it.each(['an answered elicitation', 'working'] as const)(
+    'delivers the current request itself after a stall left only a held sibling owed (desktop showed %s)',
+    async (before) => {
+      const sink = await startSinkPair()
+      const t = { tool_name: 'Read', tool_input: { file_path: '/t' } }
+      const elicitation = { mcp_server_name: 'server', message: 'Allow?', mode: 'form' }
+      await sink.post(start)
+      await sink.post(submit)
+      if (before === 'an answered elicitation') {
+        await sink.post({ ...root, hook_event_name: 'Elicitation', ...elicitation })
+      }
+      sink.deliver()
+      const shown = row(sink.current)
+      sink.block()
+      if (before === 'an answered elicitation') {
+        await sink.post({ ...root, hook_event_name: 'ElicitationResult', ...elicitation })
+      }
+      await sink.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'T', ...t })
+      await sink.post({ ...root, hook_event_name: 'PermissionRequest', ...t })
+      // An unrelated sibling while T stays open: its held snapshot replaces T's in the stalled queue.
+      const u = { tool_name: 'Bash', tool_input: { command: 'true' } }
+      await sink.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'U', ...u })
+      sink.deliver()
+      expect(row(sink.current)).toEqual(shown)
+      sink.drain()
+      await vi.waitFor(
+        () => {
+          sink.deliver()
+          expect(row(sink.current)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+        },
+        { timeout: 2_000 }
+      )
+      expect(row(sink.current).toolInput).toContain('/t')
+      expect(sink.current._getStateForTests().lastStatusByPaneKey.get(PANE)).toMatchObject({
+        hookEventName: 'PermissionRequest',
+        toolAgentId: undefined
+      })
+      // T's own batch still releases it.
+      await sink.post({
+        ...root,
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [
+          { ...t, tool_use_id: 'T' },
+          { ...u, tool_use_id: 'U' }
+        ]
+      })
+      sink.deliver()
+      expect(row(sink.current).state).toBe('working')
+    }
+  )
 
   it('reaches the latest state after 257 batches pile up behind a stalled sink, with nothing older owed', async () => {
     const sink = await waitingOnA()

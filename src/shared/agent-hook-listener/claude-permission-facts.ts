@@ -13,10 +13,15 @@ export type ClaudePermissionRequestFacts = {
   digest?: string
   /** Only an id the provider itself put on the request; a legacy inherited id is never one. */
   providerToolUseId?: string
+  /** The digest's tool name, so a batch member of another tool needs no digest. */
+  toolName?: string
 }
 
-/** Host-private: each member of a completed tool batch, by its own id and whole-input digest. */
-export type ClaudeToolBatchFacts = { members: { toolUseId?: string; digest?: string }[] }
+/**
+ * Host-private: a completed tool batch's calls as the provider sent them. Admitting one costs nothing;
+ * a member is read only once a represented request's scope admits the batch, and dies with the decision.
+ */
+export type ClaudeToolBatchFacts = { calls: readonly unknown[] }
 
 /** The current-state projection a host publishes once its own transition has decided the row. */
 export type ClaudePermissionProjection = {
@@ -65,25 +70,47 @@ export function readClaudePermissionFacts(
     return {
       claudeRequest: {
         digest: digest(toolName, raw.tool_input),
-        ...(providerToolUseId ? { providerToolUseId } : {})
+        ...(providerToolUseId ? { providerToolUseId } : {}),
+        ...(toolName ? { toolName } : {})
       }
     }
   }
   if (eventName === 'PostToolBatch' && Array.isArray(raw.tool_calls)) {
-    return {
-      claudeBatch: {
-        members: raw.tool_calls.map((call: unknown) =>
-          isRecord(call)
-            ? {
-                toolUseId: readString(call, 'tool_use_id'),
-                digest: digest(readString(call, 'tool_name'), call.tool_input)
-              }
-            : {}
-        )
-      }
-    }
+    return { claudeBatch: { calls: raw.tool_calls } }
   }
   return {}
+}
+
+/** Each call's digest, at most once however many decisions consult it; dies with the call. */
+const callDigests = new WeakMap<Record<string, unknown>, string | undefined>()
+
+function callDigest(call: Record<string, unknown>): string | undefined {
+  if (!callDigests.has(call)) {
+    callDigests.set(call, digest(readString(call, 'tool_name'), call.tool_input))
+  }
+  return callDigests.get(call)
+}
+
+/** The batch lists the request: by the id the provider gave it, else by its whole input. */
+export function claudeBatchListsRequest(
+  batch: ClaudeToolBatchFacts,
+  request: ClaudePermissionRequestFacts
+): boolean {
+  const { providerToolUseId, digest: requestDigest, toolName } = request
+  if (providerToolUseId) {
+    return batch.calls.some(
+      (call) => isRecord(call) && readString(call, 'tool_use_id') === providerToolUseId
+    )
+  }
+  return (
+    requestDigest !== undefined &&
+    batch.calls.some(
+      (call) =>
+        isRecord(call) &&
+        (toolName === undefined || readString(call, 'tool_name') === toolName) &&
+        callDigest(call) === requestDigest
+    )
+  )
 }
 
 function readId(value: unknown): string | undefined | null {

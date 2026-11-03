@@ -182,6 +182,8 @@ export async function hook(
     reason?: string
     source?: string
     tmuxPane?: string
+    /** Any other hook fields, such as a tool call. */
+    fields?: Record<string, unknown>
   } = {}
 ): Promise<void> {
   const pid = options.pid === undefined ? 49969 : options.pid
@@ -193,7 +195,8 @@ export async function hook(
         ...(event === 'SessionStart' ? { source: 'startup' } : {}),
         ...(options.session !== undefined ? { session_id: options.session } : {}),
         ...(options.reason ? { reason: options.reason } : {}),
-        ...(options.prompt ? { prompt: options.prompt } : {})
+        ...(options.prompt ? { prompt: options.prompt } : {}),
+        ...options.fields
       },
       {
         ...(pid === null ? {} : { agentProcess: JSON.stringify(capture(pid)) }),

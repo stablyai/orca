@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
+import { AgentHookServer } from '../main/agent-hooks/server'
 import { createRelayPaneRootResolver } from './relay-pane-root'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
@@ -72,8 +73,108 @@ async function relay(request: (paneKey: string) => Promise<unknown>) {
     server.stop()
     await rm(dir, { recursive: true, force: true })
   }
-  return { post, forward, io, stop }
+  return { post, forward, io, server, stop }
 }
+
+const LINK = 'wsl:Ubuntu'
+const readA = { tool_name: 'Read', tool_input: { file_path: '/a' } }
+
+/** A relay whose desktop names the pane's root only once released, as on a loaded host, feeding
+ *  that desktop, which issues the binding the relay echoes. */
+async function slowRootPair() {
+  const desktop = new AgentHookServer()
+  let release = (): void => {}
+  const named = new Promise<unknown>((resolve) => {
+    release = () =>
+      resolve({
+        root: { pid: 100, startTime: `${BOOT}:10000` },
+        incarnation: desktop.relayPaneRootIssuer(LINK)(paneKey, 'inc-1', () => true)
+      })
+  })
+  const pair = await relay(() => named)
+  pair.forward.mockImplementation((envelope) => desktop.ingestRemote(envelope, LINK))
+  const stored = () => desktop._getStateForTests().lastStatusByPaneKey.get(paneKey)
+  const proved = () =>
+    vi.waitFor(() =>
+      expect(pair.forward.mock.lastCall?.[0]).toMatchObject({
+        agentPresence: { process: { pid: 4001 }, paneRoot: expect.any(String) }
+      })
+    )
+  const stop = async () => {
+    desktop.stop()
+    await pair.stop()
+  }
+  return { ...pair, desktop, stored, proved, release, stop }
+}
+
+async function waitingOnA(post: Awaited<ReturnType<typeof relay>>['post']): Promise<void> {
+  await post(4001, { hook_event_name: 'UserPromptSubmit', session_id: 'parent', prompt: 'Read' })
+  await post(4001, {
+    hook_event_name: 'PreToolUse',
+    session_id: 'parent',
+    tool_use_id: 'A',
+    ...readA
+  })
+  await post(4001, { hook_event_name: 'PermissionRequest', session_id: 'parent', ...readA })
+}
+
+it('records a late root under a held request, keeping the request on the relay and the desktop', async () => {
+  const { post, forward, desktop, stored, proved, release, stop } = await slowRootPair()
+  try {
+    await waitingOnA(post)
+    expect(stored()).toMatchObject({
+      hookEventName: 'PermissionRequest',
+      payload: { state: 'waiting' }
+    })
+    release()
+    await proved()
+    expect(forward.mock.lastCall?.[0].claudePermission).toMatchObject({
+      held: true,
+      row: { hookEventName: 'PermissionRequest', payload: { state: 'waiting', toolName: 'Read' } }
+    })
+    // The desktop keeps A's card and takes the proved owner, so its exit can still be seen.
+    expect(stored()).toMatchObject({
+      hookEventName: 'PermissionRequest',
+      payload: { state: 'waiting', toolName: 'Read' },
+      agentPresence: { process: { pid: 4001 } }
+    })
+    expect(stored()?.agentPresence?.fallback).toBeUndefined()
+    expect(desktop.hasVerifiableAgentProcess(paneKey)).toBe(true)
+  } finally {
+    await stop()
+  }
+})
+
+it('caches and forwards a released request’s late root as the current row, never as its batch again', async () => {
+  const { post, forward, server, desktop, stored, proved, release, stop } = await slowRootPair()
+  try {
+    await waitingOnA(post)
+    await post(4001, {
+      hook_event_name: 'PostToolBatch',
+      session_id: 'parent',
+      tool_calls: [{ ...readA, tool_use_id: 'A' }]
+    })
+    expect(stored()?.payload.state).toBe('working')
+    release()
+    await proved()
+    expect(forward.mock.lastCall?.[0]).toMatchObject({ payload: { state: 'working' } })
+    expect(stored()).toMatchObject({
+      payload: { state: 'working' },
+      agentPresence: { process: { pid: 4001 } }
+    })
+    expect(desktop.hasVerifiableAgentProcess(paneKey)).toBe(true)
+    // The relay cached that row: a reconnect replays the proved owner with A still released.
+    server.replayCachedPayloadsForPanes()
+    expect(forward.mock.lastCall?.[0]).toMatchObject({
+      isReplay: true,
+      agentPresence: { process: { pid: 4001 }, paneRoot: expect.any(String) },
+      payload: { state: 'working' }
+    })
+    expect(stored()?.payload.state).toBe('working')
+  } finally {
+    await stop()
+  }
+})
 
 it('acquires from the guest root its desktop names, and keeps a nested run out', async () => {
   const request = vi.fn(async () => ({

@@ -13,6 +13,7 @@ import {
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
+import { withoutClaudeBatch } from '../shared/agent-hook-listener/claude-permission-host-rules'
 import { MAX_CACHED_PANES } from './agent-hook-cached-pane-status'
 
 /** Forward every provider; only the client knows about desktop-only owner completion. */
@@ -48,7 +49,8 @@ export class RelayProviderHookNormalization {
     })
     if (event) {
       const providerState = state
-      cacheRelayLegacyAgentStatus(state, event, MAX_CACHED_PANES, (paneKey) =>
+      // A batch's calls serve only the decision ahead; the cached row keeps what it showed.
+      cacheRelayLegacyAgentStatus(state, withoutClaudeBatch(event), MAX_CACHED_PANES, (paneKey) =>
         clearPaneCacheState(providerState, paneKey)
       )
       const owner = canonical.lastStatusByPaneKey.get(event.paneKey)

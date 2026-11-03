@@ -1,7 +1,10 @@
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { ParsedAgentStatusPayload } from '../shared/agent-status-types'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
-import type { ClaudePermissionProjection } from '../shared/agent-hook-listener/claude-permission-facts'
+import type {
+  ClaudePermissionProjection,
+  ClaudeProjectedRow
+} from '../shared/agent-hook-listener/claude-permission-facts'
 import {
   attachClaudePermissionToolUseId,
   claudeBatchSettlesRequest,
@@ -9,6 +12,7 @@ import {
   holdClaudeRequest,
   shouldKeepClaudePermissionVisible
 } from '../shared/agent-hook-listener/claude-permission-transition'
+import { withoutClaudeBatch } from '../shared/agent-hook-listener/claude-permission-host-rules'
 
 export type RelayClaudePermissionDecision =
   /** Cache and forward this row (with the host's projection when the host knows the pane's dialog). */
@@ -57,10 +61,11 @@ export function decideRelayClaudePermission(
   if (event.claudeBatch) {
     if (!isReplay && represented && claudeBatchSettlesRequest(represented, event)) {
       requests.set(event.paneKey, null)
+      // The batch's calls end with this decision; nothing cached may replay them as another batch.
       return {
         kind: 'publish',
         event: {
-          ...resumeClaudeRequestLead(state, represented, event),
+          ...withoutClaudeBatch(resumeClaudeRequestLead(state, represented, event)),
           claudePermission: PROJECTED
         }
       }
@@ -72,8 +77,16 @@ export function decideRelayClaudePermission(
   }
   const attached = attachClaudePermissionToolUseId(represented ?? cached, event)
   if (represented && shouldKeepClaudePermissionVisible(represented, attached, state)) {
-    requests.set(event.paneKey, holdClaudeRequest(represented, attached, true))
-    return { kind: 'publish', event: { ...event, claudePermission: { version: 1, held: true } } }
+    const held = holdClaudeRequest(represented, attached, true)
+    requests.set(event.paneKey, held)
+    // Each publication carries the request itself: a coalesced retry may be the only one delivered.
+    return {
+      kind: 'publish',
+      event: {
+        ...event,
+        claudePermission: { version: 1, held: true, row: projectedRequestRow(held, held.payload) }
+      }
+    }
   }
   if (!known && !observesCurrentDialog(event)) {
     // A cold host has not seen this pane's dialog: it must not overrule a receiver that has.
@@ -95,18 +108,29 @@ export function relayClaudeReplayProjection(
   if (!request) {
     return PROJECTED
   }
-  const toolUseId = request.claudeRequest?.providerToolUseId
   return {
     version: 1,
     held: true,
-    row: {
-      hookEventName: request.hookEventName ?? 'PermissionRequest',
-      // A host-inherited id is the legacy guess, never published as the request's own.
-      ...(toolUseId ? { toolUseId } : {}),
-      ...(request.toolAgentId ? { toolAgentId: request.toolAgentId } : {}),
-      ...(request.toolAgentType ? { toolAgentType: request.toolAgentType } : {}),
-      payload: currentRoster(request.payload, state.lastStatusByPaneKey.get(paneKey)?.payload)
-    }
+    row: projectedRequestRow(
+      request,
+      currentRoster(request.payload, state.lastStatusByPaneKey.get(paneKey)?.payload)
+    )
+  }
+}
+
+/** The represented request as a projected row: its own identity, with `payload` as its current view. */
+function projectedRequestRow(
+  request: AgentHookEventPayload,
+  payload: ParsedAgentStatusPayload
+): ClaudeProjectedRow {
+  const toolUseId = request.claudeRequest?.providerToolUseId
+  return {
+    hookEventName: request.hookEventName ?? 'PermissionRequest',
+    // A host-inherited id is the legacy guess, never published as the request's own.
+    ...(toolUseId ? { toolUseId } : {}),
+    ...(request.toolAgentId ? { toolAgentId: request.toolAgentId } : {}),
+    ...(request.toolAgentType ? { toolAgentType: request.toolAgentType } : {}),
+    payload
   }
 }
 

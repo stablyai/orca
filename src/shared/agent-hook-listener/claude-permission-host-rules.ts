@@ -1,5 +1,7 @@
 import { isAskUserQuestionTool } from '../agent-question-answered-intent'
 import { agentSubagentsEqual } from '../agent-status-subagent-snapshot'
+import { sameAgentProcessPresence } from '../agent-process-presence'
+import { claudeBatchListsRequest } from './claude-permission-facts'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { buildClaudeCachedLeadStatusPayload } from './providers/claude-lifecycle-events'
@@ -21,7 +23,7 @@ export function replacesSession(next: AgentHookEventPayload): boolean {
   )
 }
 
-function isOrdinaryClaudeRequest(row: AgentHookEventPayload): boolean {
+export function isOrdinaryClaudeRequest(row: AgentHookEventPayload): boolean {
   return (
     row.payload.agentType === 'claude' &&
     row.payload.state === 'waiting' &&
@@ -52,18 +54,40 @@ export function restatesRequest(
   )
 }
 
-/** Hold the request; refresh the live roster around it, so a held request never archives ended children. */
+/**
+ * Hold the request with the pane's current state around it: its live roster, so a held request never
+ * archives ended children, and the pane association `next` was admitted with, whole, so a proved or
+ * withdrawn owner is never undone. The request keeps its own identity and card.
+ */
 export function holdClaudeRequest<T extends AgentHookEventPayload>(
   previous: T,
   next: AgentHookEventPayload,
-  refreshRoster: boolean
+  refreshCurrent: boolean
 ): T {
   const held = withHeldChildWaitMainAgent(previous, next)
-  const roster = next.payload.subagents
-  if (!refreshRoster || agentSubagentsEqual(held.payload.subagents, roster)) {
+  if (!refreshCurrent) {
     return held
   }
-  return { ...held, payload: { ...held.payload, subagents: roster } }
+  const roster = next.payload.subagents
+  const sameRoster = agentSubagentsEqual(held.payload.subagents, roster)
+  const samePresence = sameAgentProcessPresence(held.agentPresence, next.agentPresence)
+  if (sameRoster && samePresence) {
+    return held
+  }
+  return {
+    ...held,
+    agentPresence: next.agentPresence,
+    payload: sameRoster ? held.payload : { ...held.payload, subagents: roster }
+  }
+}
+
+/** A row without its batch's calls: they vouch only for the decision they were admitted for. */
+export function withoutClaudeBatch(row: AgentHookEventPayload): AgentHookEventPayload {
+  if (row.claudeBatch === undefined) {
+    return row
+  }
+  const { claudeBatch: _calls, ...rest } = row
+  return rest
 }
 
 /** A parent's turn end is not its child's: a live child's request stays until its own end. */
@@ -87,8 +111,9 @@ export function childRequestOutlivesParentEnd(
 }
 
 /**
- * A completed batch from the request's own owner and run lists the request: by the id the provider gave it,
- * else by its whole input. A match is not an identity; no member id is ever assigned to the request.
+ * A completed batch from the request's own owner, run and user turn lists the request: by the id the
+ * provider gave it, else by its whole input. A match is not an identity; no member id is ever assigned to
+ * the request. A turn missing on either side is no contradiction.
  */
 export function claudeBatchSettlesRequest(
   previous: AgentHookEventPayload | undefined,
@@ -106,15 +131,14 @@ export function claudeBatchSettlesRequest(
     previous.toolAgentId !== batch.toolAgentId ||
     previous.connectionId !== batch.connectionId ||
     previous.launchToken !== batch.launchToken ||
-    previous.providerSession?.id !== batch.providerSession?.id
+    previous.providerSession?.id !== batch.providerSession?.id ||
+    (previous.providerPromptId !== undefined &&
+      batch.providerPromptId !== undefined &&
+      previous.providerPromptId !== batch.providerPromptId)
   ) {
     return false
   }
-  return batch.claudeBatch.members.some((member) =>
-    request.providerToolUseId
-      ? member.toolUseId === request.providerToolUseId
-      : request.digest !== undefined && member.digest === request.digest
-  )
+  return claudeBatchListsRequest(batch.claudeBatch, request)
 }
 
 /** The batch ended the request the lead was waiting on: resume what that wait displaced, then show it. */

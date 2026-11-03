@@ -391,6 +391,41 @@ describe('relayed panes', () => {
     expect(server.exits).toBe(0)
   })
 
+  it('keeps a relay’s held request while adopting the owner it stamped with this link’s binding', async () => {
+    const server = await createServer()
+    const read = { toolName: 'Read', toolInput: '/a' }
+    server.ingestRemote(envelope, RELAY)
+    server.ingestRemote(
+      {
+        ...envelope,
+        hookEventName: 'PermissionRequest',
+        claudePermission: { version: 1 },
+        payload: { ...envelope.payload, state: 'waiting', ...read }
+      },
+      RELAY
+    )
+    const root = { pid: 4001, platform: 'linux' as const, startTime: 'boot:4001' }
+    // The relay held its request through a restatement that proved the pane's root.
+    server.ingestRemote(
+      {
+        ...envelope,
+        hookEventName: undefined,
+        claudePermission: { version: 1, held: true },
+        agentPresence: {
+          agent: 'claude',
+          process: root,
+          session: 'parent',
+          paneRoot: issue(server)
+        },
+        payload: { ...envelope.payload, state: 'waiting' }
+      },
+      RELAY
+    )
+    expect(server.row()).toMatchObject({ state: 'waiting', ...read })
+    expect(server.presence()).toMatchObject({ process: root, session: 'parent' })
+    expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
+  })
+
   it('records a relayed fallback only into an empty pane, where a stamped root replaces it', async () => {
     const server = await createServer()
     const fallback = { ...nested, fallback: true }

@@ -219,6 +219,29 @@ describe('a late answer on a slow host', () => {
     }
   )
 
+  it('records a late root under a waiting permission request, keeping the request', async () => {
+    const server = await createServer()
+    runningPane(49969, CLAUDE)
+    const release = slowRoot()
+    const tmuxPane = TMUX_HINT
+    const read = { tool_name: 'Read', tool_input: { file_path: '/a' } }
+    await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Task', tmuxPane })
+    await hook(server, 'PreToolUse', {
+      session: 'session-a',
+      tmuxPane,
+      fields: { ...read, tool_use_id: 'A' }
+    })
+    await hook(server, 'PermissionRequest', { session: 'session-a', tmuxPane, fields: read })
+    expect(server.row()).toMatchObject({ state: 'waiting', toolName: 'Read' })
+    expect(server.presence()?.process).toBeUndefined()
+    release()
+    await settled()
+    // A's card stays, and its proved owner is stored, so the process's exit can still end the wait.
+    expect(server.row()).toMatchObject({ state: 'waiting', toolName: 'Read' })
+    expect(server.presence()?.process).toEqual(capture(49969))
+    expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
+  })
+
   it.each(lateStarts)(
     'retires %s on a late exit proof once, with no later hook',
     async (_name, start, tmuxPane) => {
