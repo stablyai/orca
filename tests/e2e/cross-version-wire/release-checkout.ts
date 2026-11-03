@@ -12,7 +12,6 @@ import {
   type MaterializeReleaseCheckoutTestHooks
 } from './release-checkout-publication.ts'
 import { releaseModuleLocation } from './release-module-locations.ts'
-import { checkoutDiagnostic, checkoutDiagnosticEnabled } from './release-checkout-diagnostic.ts'
 export type {
   CheckoutLockOptions,
   CheckoutLifecycleContext,
@@ -130,10 +129,9 @@ export function importReleaseCheckoutModule(
   importModule: (specifier: string) => Promise<Record<string, unknown>> = (specifier) =>
     import(/* @vite-ignore */ specifier) as Promise<Record<string, unknown>>
 ): Promise<Record<string, unknown>> {
-  checkoutDiagnostic('module-import-start', checkout.commit)
   return importModule(
     checkoutModulePath(checkout.root, releaseModuleLocation(checkout.root, rootRelativePath))
-  ).finally(() => checkoutDiagnostic('module-import-end', checkout.commit))
+  )
 }
 
 /** An export a release module must define; callers name the shape they use, so a changed one fails the test. */
@@ -175,9 +173,7 @@ export async function materializeReleaseCheckout(
   ref: string,
   options: MaterializeReleaseCheckoutOptions = {}
 ): Promise<ReleaseCheckout> {
-  checkoutDiagnostic('materialize-start', ref)
   const commit = resolveCommit(ref)
-  checkoutDiagnostic('resolve-end', commit)
   const label = ref.replace(/[^A-Za-z0-9._-]/g, '_')
   const cacheRoot = options.cacheRoot ?? DEFAULT_CACHE_ROOT
   const root = join(cacheRoot, label, `${commit}-format-${CHECKOUT_FORMAT}`)
@@ -185,19 +181,7 @@ export async function materializeReleaseCheckout(
     root,
     ref,
     commit,
-    hooks: checkoutDiagnosticEnabled()
-      ? {
-          ...options.testHooks,
-          onLockAttempt(context) {
-            checkoutDiagnostic('lock-attempt', commit)
-            options.testHooks?.onLockAttempt?.(context)
-          },
-          async onLockAcquired(context) {
-            checkoutDiagnostic('lock-acquired', commit)
-            await options.testHooks?.onLockAcquired?.(context)
-          }
-        }
-      : options.testHooks,
+    hooks: options.testHooks,
     populateStaging: async (staging) => {
       const sharedCacheRoot =
         options.sharedCacheRoot ??
@@ -205,6 +189,5 @@ export async function materializeReleaseCheckout(
       await populateReleaseCheckoutSource(REPO_ROOT, staging, commit, sharedCacheRoot)
     }
   })
-  checkoutDiagnostic('materialize-end', commit)
   return { ref, commit, label, root }
 }

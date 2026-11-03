@@ -2,7 +2,6 @@ import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { parse } from 'yaml'
 import { createWorkspaceSourceResolver } from '../../../config/scripts/workspace-source-exports.mjs'
-import { checkoutDiagnostic, checkoutFetchTrace } from './release-checkout-diagnostic.ts'
 import {
   collectPackageImports,
   installMissingPackageStandIns,
@@ -165,37 +164,25 @@ async function runCheckoutProcess(
   repoRoot: string,
   program: string,
   args: string[],
-  deadline: number,
-  commit: string
+  deadline: number
 ): Promise<string> {
   // Kept lazy so plain Node 24 contention children never load Vite's TS graph.
-  checkoutDiagnostic('process-host-import-start', commit, deadline)
   const { runProcess } = await import('@orca/process-host')
-  checkoutDiagnostic('process-host-import-end', commit, deadline)
-  const phase = program === 'git' ? `git-${args[0]}` : 'tar'
-  const trace = program === 'git' ? await checkoutFetchTrace() : undefined
-  checkoutDiagnostic(`${phase}-start`, commit, deadline)
-  try {
-    const result = await runProcess({
-      program,
-      args,
-      cwd: repoRoot,
-      env: trace?.env,
-      timeoutMs: Math.max(1, deadline - Date.now()),
-      maxOutputBytes: CHECKOUT_MAX_OUTPUT_BYTES,
-      terminationBarrier: true
-    })
-    if (result.code === 0 && !result.timedOut) {
-      return result.stdout
-    }
-    const detail = result.timedOut
-      ? `timed out after ${CHECKOUT_PROCESS_TIMEOUT_MS}ms`
-      : result.stderr.trim() || `exited with ${result.code}`
-    throw new Error(`${program} ${args[0] ?? ''} ${detail}`)
-  } finally {
-    checkoutDiagnostic(`${phase}-end`, commit, deadline)
-    await trace?.finish(commit, phase)
+  const result = await runProcess({
+    program,
+    args,
+    cwd: repoRoot,
+    timeoutMs: Math.max(1, deadline - Date.now()),
+    maxOutputBytes: CHECKOUT_MAX_OUTPUT_BYTES,
+    terminationBarrier: true
+  })
+  if (result.code === 0 && !result.timedOut) {
+    return result.stdout
   }
+  const detail = result.timedOut
+    ? `timed out after ${CHECKOUT_PROCESS_TIMEOUT_MS}ms`
+    : result.stderr.trim() || `exited with ${result.code}`
+  throw new Error(`${program} ${args[0] ?? ''} ${detail}`)
 }
 
 function workspacePatternRoot(pattern: string): string {
@@ -223,8 +210,7 @@ async function listReleasePaths(
       repoRoot,
       'git',
       ['ls-tree', '-z', '--name-only', commit, '--', ...paths],
-      deadline,
-      commit
+      deadline
     )
   )
     .split('\0')
@@ -245,8 +231,7 @@ async function releaseWorkspaceArchivePaths(
     repoRoot,
     'git',
     ['cat-file', 'blob', `${commit}:${WORKSPACE_POLICY}`],
-    deadline,
-    commit
+    deadline
   )
   const { packages = [] } = parse(policy) ?? {}
   if (!Array.isArray(packages) || packages.some((pattern) => typeof pattern !== 'string')) {
@@ -270,7 +255,6 @@ export async function extractReleaseCheckoutTree(
 ): Promise<PackageImports> {
   const archive = join(staging, '.release-checkout.tar')
   const deadline = Date.now() + CHECKOUT_PROCESS_TIMEOUT_MS
-  checkoutDiagnostic('extraction-start', commit, deadline)
   const workspacePaths = await releaseWorkspaceArchivePaths(repoRoot, commit, deadline)
   const optionalPaths = await listReleasePaths(repoRoot, commit, OPTIONAL_ARCHIVE_PATHS, deadline)
   try {
@@ -287,32 +271,26 @@ export async function extractReleaseCheckoutTree(
         ...optionalPaths,
         ...workspacePaths
       ],
-      deadline,
-      commit
+      deadline
     )
     await runCheckoutProcess(
       repoRoot,
       checkoutTarProgram(),
       ['-xf', archive, '-C', staging],
-      deadline,
-      commit
+      deadline
     )
   } finally {
     await rm(archive, { force: true })
   }
   const packageImports: PackageImports = new Map()
-  checkoutDiagnostic('preparation-start', commit)
   await prepareExtractedTree(staging, workspacePaths, packageImports)
-  checkoutDiagnostic('preparation-end', commit)
   if (!sourceOnly) {
-    checkoutDiagnostic('stand-ins-start', commit)
     await installMissingPackageStandIns(
       staging,
       commit,
       packageImports,
       JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'))
     )
-    checkoutDiagnostic('stand-ins-end', commit)
   }
   return packageImports
 }
