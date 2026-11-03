@@ -4,8 +4,13 @@ import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileSync: vi.fn()
 }))
 

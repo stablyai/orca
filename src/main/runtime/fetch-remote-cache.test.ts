@@ -1,5 +1,5 @@
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
+import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'
 import { resolveGitAdmissionTier } from '../git/command-runner/git-operation-executor'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

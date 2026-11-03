@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import * as worktreePaths from '../git/worktree-path-comparison'
+import * as worktreePaths from '../git/worktrees/catalog/worktree-path-comparison'
 import {
   acquireWatcherRemovalGate,
   beginTerminalInstall,

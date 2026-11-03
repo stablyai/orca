@@ -148,8 +148,13 @@ vi.mock('./windows-shell-path-hydration', () => ({
     whenReady: Promise.resolve()
   })
 }))
-vi.mock('../git/runner', () => ({
-  configureWindowsHostGitEnvironmentReadiness: vi.fn(),
+vi.mock('../git/command-runner/windows-host-git-environment', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  configureWindowsHostGitEnvironmentReadiness: vi.fn()
+}))
+
+vi.mock('../git/command-runner/wsl-command-resolution', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   setDefaultWslDistroOverride: vi.fn()
 }))
 vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
