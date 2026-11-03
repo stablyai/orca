@@ -36,7 +36,7 @@ describe('per-job path classification', () => {
       'src/main/codex/codex-index-heal-binary-contract.test.ts',
       'src/main/pty/codex-no-daemon-binary-contract.test.ts',
       'src/main/codex/codex-hook-file-entry-binary-contract.test.ts',
-      'src/main/agent-trust-presets.test.ts',
+      'src/main/agent-launch/trust/agent-trust-presets.test.ts',
       '.github/workflows/pr.yml'
     ]) {
       expect(classifyPrJobs([unit, file]).codex_index_heal_contract, file).toBe(true)

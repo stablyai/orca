@@ -20,8 +20,8 @@ import { resolveRepoForExecutionHost } from '../repo-host-ownership'
 import {
   finishAcceptedWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../../../worktree-background-removal'
-import { runSerializedWorktreeRemovalAcceptance } from '../../../worktree-removal-acceptance-queue'
+} from '../../../workspaces/removal/worktree-background-removal'
+import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import {
   deleteLostContact,

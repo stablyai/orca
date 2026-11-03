@@ -1,5 +1,5 @@
+import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
 import {
-  launchStateLifecycle,
   structuredLaunchStates,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'

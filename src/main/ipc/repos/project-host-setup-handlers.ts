@@ -16,9 +16,9 @@ import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-l
 import { resolveImportedFolderProjectLink } from '../../../shared/imported-folder-project-identity'
 import { readCurrentGitRemoteIdentity } from '../../repo-git-remote-identity'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../../folder-repo-git-conversion'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import {

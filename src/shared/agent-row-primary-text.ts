@@ -1,4 +1,5 @@
 import type { AgentStatusEntry } from './agent-status-types'
+import { getRuntimePathBasename } from './cross-platform-path'
 import {
   findOrcaDispatchPreambleStart,
   findOrcaDispatchTaskMarkerIndex,
@@ -12,6 +13,11 @@ const ORCA_DISPATCH_TASK_PREVIEW_SCAN_LIMIT = 512
 const ORCA_DISPATCH_TASK_ID_SCAN_LIMIT = 1024
 // Bound searches past multi-KB CLI preambles so malformed large prompts cannot force a full scan.
 const ORCA_DISPATCH_TASK_MARKER_SCAN_LIMIT = 32_768
+// Pi and OMP put CLI-attached files first, as `<file name="/abs/path">…</file>`, before the typed words.
+const ATTACHED_FILE_LEAD = /^<file name="([^"]+)/
+const ATTACHED_FILE_CLOSER = '</file>'
+// Openers people don't type: a keyed object, an array of objects or strings, an XML or HTML document.
+const PASTED_DATA_LEAD = /^(?:\{\s*"[^"]*"\s*:|\[\s*\{\s*"|\[\s*"[^"]*"\s*,|<\?xml\s|<!doctype\s)/i
 
 /** True when the live prompt is still an Orca dispatch turn (not sticky metadata alone). */
 export function isOrcaDispatchPrompt(prompt: string): boolean {
@@ -50,7 +56,19 @@ export function getAgentRowPrimaryText(
   if (isOrcaDispatchPrompt(entry.prompt)) {
     return getOrcaDispatchTaskPreview(entry.prompt)
   }
-  return entry.prompt.trim()
+  return getAgentPromptLabel(entry.prompt)
+}
+
+/** A prompt as a label: its words, else an attached file's name, else '' when it opens with pasted data. */
+export function getAgentPromptLabel(prompt: string): string {
+  const text = prompt.trim()
+  const attachedFile = ATTACHED_FILE_LEAD.exec(text)
+  if (attachedFile) {
+    const closer = text.lastIndexOf(ATTACHED_FILE_CLOSER)
+    const afterFiles = closer === -1 ? '' : text.slice(closer + ATTACHED_FILE_CLOSER.length)
+    return getAgentPromptLabel(afterFiles) || getRuntimePathBasename(attachedFile[1])
+  }
+  return PASTED_DATA_LEAD.test(text) ? '' : text
 }
 
 export function getAgentRowGeneratedTitleText(

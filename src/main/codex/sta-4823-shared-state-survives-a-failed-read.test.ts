@@ -117,7 +117,7 @@ const {
   getCodexTrustGrantLedgerPath
 } = await import('./codex-trust-grant-ledger')
 const { readHooksJson } = await import('../agent-hooks/hooks-json-read')
-const { MAX_AGENT_STATE_FILE_BYTES } = await import('../agent-state-file-reader')
+const { MAX_AGENT_STATE_FILE_BYTES } = await import('./configuration/agent-state-file-reader')
 const { observeCodexSettingsBaseline } = await import('./config-settings-baseline')
 const { snapshotCodexRuntimeSettingsBaseline } = await import('./config-settings-promotion')
 const { getCodexConfigSyncStatus } = await import('./config-sync-stall')

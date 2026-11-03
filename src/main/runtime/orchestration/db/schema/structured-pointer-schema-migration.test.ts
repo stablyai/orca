@@ -58,22 +58,74 @@ describe('structured pointer schema migration', () => {
     }
   })
 
-  it('creates the structured pointer operation store', () => {
+  it('creates the structured mail send store', () => {
     const db = new OrchestrationDb(':memory:')
     try {
-      expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
-      db.putStructuredPointerOperation({
+      expect(db.getStructuredMailSends('dispatch:d1')).toEqual([])
+      const row = {
         mailbox_handle: 'dispatch:d1',
+        message_id: 'm1',
         session_id: 's1',
         operation_id: '1757030400000-0123456789abcdef0123456789abcdef',
-        batch_fingerprint: 'fp',
         minted_at_ms: 1_757_030_400_000
-      })
-      expect(db.getStructuredPointerOperation('dispatch:d1')?.operation_id).toBe(
+      }
+      expect(db.reserveStructuredMailSend(row)).toBe(true)
+      expect(db.getStructuredMailSends('dispatch:d1').map((row) => row.operation_id)).toEqual([
         '1757030400000-0123456789abcdef0123456789abcdef'
-      )
-      db.deleteStructuredPointerOperation('dispatch:d1')
-      expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
+      ])
+      expect(db.releaseStructuredMailSend(row)).toBe(true)
+      expect(db.getStructuredMailSends('dispatch:d1')).toEqual([])
+    } finally {
+      db.close()
+    }
+  })
+
+  it('keeps sends an unreleased build saved with a fence, and takes new ones', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-structured-migration-'))
+    tempRoots.push(root)
+    const path = join(root, 'orchestration.db')
+    const seeded = new Database(path)
+    seeded.exec(`
+      CREATE TABLE structured_mail_sends (
+        mailbox_handle TEXT NOT NULL,
+        message_id     TEXT NOT NULL,
+        session_id     TEXT NOT NULL,
+        operation_id   TEXT NOT NULL,
+        minted_at_ms   INTEGER NOT NULL,
+        fence          INTEGER NOT NULL,
+        PRIMARY KEY (mailbox_handle, message_id)
+      );
+      INSERT INTO structured_mail_sends VALUES ('dispatch:d1', 'm1', 's1', 'op-saved', 1, 3);
+    `)
+    seeded.pragma(`user_version = ${SCHEMA_VERSION}`)
+    seeded.close()
+    const db = new OrchestrationDb(path)
+    try {
+      expect(
+        db.reserveStructuredMailSend({
+          mailbox_handle: 'dispatch:d1',
+          message_id: 'm2',
+          session_id: 's1',
+          operation_id: 'op-new',
+          minted_at_ms: 2
+        })
+      ).toBe(true)
+      expect(db.getStructuredMailSends('dispatch:d1')).toEqual([
+        {
+          mailbox_handle: 'dispatch:d1',
+          message_id: 'm1',
+          session_id: 's1',
+          operation_id: 'op-saved',
+          minted_at_ms: 1
+        },
+        {
+          mailbox_handle: 'dispatch:d1',
+          message_id: 'm2',
+          session_id: 's1',
+          operation_id: 'op-new',
+          minted_at_ms: 2
+        }
+      ])
     } finally {
       db.close()
     }

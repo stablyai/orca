@@ -223,6 +223,58 @@ function corpus(scale: number, dense = false) {
 }
 
 const initialState = useAppStore.getState()
+it('updates only chats belonging to a re-paired image host', () => {
+  const fixture = nativeChatFanoutFixture(2, 2, 0)
+  const environments = ['one', 'two'].map((id) => ({
+    id,
+    name: id,
+    createdAt: 1,
+    updatedAt: 1,
+    pairingRevision: 7,
+    lastUsedAt: null,
+    runtimeId: id,
+    endpoints: [],
+    preferredEndpointId: 'endpoint'
+  }))
+  useAppStore.setState({
+    ...useAppStore.getInitialState(),
+    ...fixture,
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
+    runtimeEnvironmentCatalogHydrated: true,
+    runtimeEnvironments: environments,
+    folderWorkspaces: fixture.folderWorkspaces.map((row, index) => ({
+      ...row,
+      executionHostId: `runtime:${environments[index]!.id}` as const
+    }))
+  })
+  const renders = [0, 0]
+  const revisions: (number | undefined)[] = []
+  function Probe({ index }: { index: number }) {
+    revisions[index] = useNativeChatImageRuntimeContext(
+      `chat-${index}`
+    )?.expectedEnvironmentPairingRevision
+    renders[index] = renders[index]! + 1
+    return null
+  }
+  render(
+    <>
+      <Probe index={0} />
+      <Probe index={1} />
+    </>
+  )
+  expect(revisions).toEqual([7, 7])
+  const baseline = [...renders]
+  act(() =>
+    useAppStore.setState({
+      runtimeEnvironments: environments.map((entry) =>
+        entry.id === 'one' ? { ...entry, pairingRevision: 8 } : entry
+      )
+    })
+  )
+  expect(revisions).toEqual([8, 7])
+  expect(renders).toEqual([baseline[0]! + 1, baseline[1]])
+})
 afterEach(() => {
   cleanup()
   useAppStore.setState(initialState, true)

@@ -55,7 +55,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 
 describe('registerFilesystemHandlers', () => {
   const folderDownloadSender = Object.assign(new EventEmitter(), {

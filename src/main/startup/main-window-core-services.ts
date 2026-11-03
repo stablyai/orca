@@ -1,13 +1,13 @@
 import type { BrowserWindow } from 'electron'
 import { registerCoreHandlers } from '../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../window/attach-main-window-services'
-import { initTccPromptNotice } from '../macos-tcc-prompt-notice'
+import { initTccPromptNotice } from '../macos-permissions/macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../updater'
 import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
-import { preserveAgentAuthBeforeRestart } from '../agent-auth-restart-preservation'
+import { preserveAgentAuthBeforeRestart } from '../providers/accounts/agent-auth-restart-preservation'
 import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
 import {
   emitPluginWorktreeLifecycle,

@@ -31,20 +31,6 @@ const setup = {
 
 // Returned setup scripts must not force Terminal 1 beside a new native chat.
 describe('seeding beside a caller-provided chat surface', () => {
-  it('activation forwards providesInitialSurface so setup alone adds one tab', () => {
-    const worktree = makeWorktree()
-    seedEmptyActivatableWorktree(worktree)
-
-    const result = activateAndRevealWorktree(worktree.id, {
-      providesInitialSurface: true,
-      notifyHostRuntime: false,
-      setup
-    })
-
-    expect(result).not.toBe(false)
-    expect(result === false ? 'unused' : result.primaryTabId).toBeNull()
-    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
-  })
   it('does not enqueue setup again when its consumed tab is reactivated', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)

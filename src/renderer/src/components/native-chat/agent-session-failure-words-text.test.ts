@@ -37,6 +37,24 @@ describe('desktop words for a failure fact', () => {
   })
 
   it.each([
+    ['en', 'Claude hit its session limit.'],
+    ['fr', 'Claude a atteint sa limite de session.']
+  ])(
+    'renders a compact quota cause in %s through existing failure words',
+    async (locale, expected) => {
+      await i18n.changeLanguage(locale)
+      expect(
+        agentSessionFailureSentence(
+          { kind: 'usageLimitReached', usageLimit: { window: 'session' } },
+          'row',
+          { agentName: 'Claude' },
+          sayAgentSessionFailureTranslated
+        )
+      ).toBe(expected)
+    }
+  )
+
+  it.each([
     ['en', 'Then send your message again.'],
     ['es', 'Después, envía tu mensaje de nuevo.'],
     ['fr', 'Puis envoyez à nouveau votre message.'],

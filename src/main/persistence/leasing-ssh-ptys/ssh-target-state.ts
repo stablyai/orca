@@ -1,7 +1,7 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
-import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
-import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
+import type { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
+import { sshPtyOwnerLeaseSecretSlot } from '../../credentials/protected-secret-persistence'
 import {
   MAX_REMOVED_SSH_TARGET_TOMBSTONES,
   capRemovedSshTargetTombstones,
@@ -12,7 +12,7 @@ import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import {
   migrateRetirementNamespaceHostIdentity,
   sshHostIdentity
-} from '../../worktree-retirement-namespace'
+} from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 
 export type SshTargetStateOperations = {
   state: PersistedState
