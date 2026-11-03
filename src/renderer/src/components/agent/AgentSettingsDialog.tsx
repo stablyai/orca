@@ -16,7 +16,7 @@ import {
 } from '@/lib/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
-import { resolveSettingsHostScope } from '@/components/settings/settings-host-scope'
+import { resolveSettingsHostScope } from '@/components/settings/host-scope/settings-host-scope'
 
 type AgentSettingsDialogProps = {
   open: boolean

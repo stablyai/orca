@@ -14,7 +14,7 @@ import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-brid
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch-runtime-capability'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { consumeOldHostPreparedCommand } from './prepared-action-launch.test-fixture'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
 import { describe, expect, it, vi } from 'vitest'
 

@@ -20,7 +20,7 @@ import {
   CLIENT_DEFAULT_SCOPE,
   isHostScope,
   type HostSettingScope
-} from '../host-scoped-setting-scope'
+} from '../workspaces/directory/host-scoped-setting-scope'
 import { translate } from '@/i18n/i18n'
 
 type WorkspaceDirectorySettingProps = {

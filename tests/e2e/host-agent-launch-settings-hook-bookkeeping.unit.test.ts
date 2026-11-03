@@ -24,14 +24,17 @@ vi.mock('../../src/main/ssh/config/ssh-config-parser', () => ({
 vi.mock('../../src/main/agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: hooks.apply
 }))
-vi.mock('../../src/renderer/src/components/settings/agent-launch-settings-transport', () => ({
-  readHostAgentLaunchSettings: transport.read,
-  mutateHostAgentLaunchSettings: transport.mutate,
-  hostSupportsLaunchChoices: async () => false,
-  hostSupportsOwnChatPermissions: async () => true,
-  hostSupportsAutoPermissions: async () => true,
-  hostSupportsNativeChatPermissions: async () => true
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/agent-launch-settings/agent-launch-settings-transport',
+  () => ({
+    readHostAgentLaunchSettings: transport.read,
+    mutateHostAgentLaunchSettings: transport.mutate,
+    hostSupportsLaunchChoices: async () => false,
+    hostSupportsOwnChatPermissions: async () => true,
+    hostSupportsAutoPermissions: async () => true,
+    hostSupportsNativeChatPermissions: async () => true
+  })
+)
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: () => ({
     detectedIds: ['claude'],

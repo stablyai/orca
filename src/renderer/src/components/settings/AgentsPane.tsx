@@ -32,7 +32,7 @@ import {
   AgentPermissionsSetting,
   type AgentPermissionsSettingProps
 } from './AgentPermissionsSetting'
-import type { SettingsHostScope } from './settings-host-scope'
+import type { SettingsHostScope } from './host-scope/settings-host-scope'
 
 export {
   buildAgentAvailabilitySettingsUpdate,

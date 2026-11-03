@@ -17,8 +17,8 @@ import {
   type AgentPermissionsRenderer
 } from './AgentLaunchSettingsCatalog'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
-import { SettingsHostScopeUnavailableNotice } from './SettingsHostScopePicker'
-import type { SettingsHostScope } from './settings-host-scope'
+import { SettingsHostScopeUnavailableNotice } from './host-scope/SettingsHostScopePicker'
+import type { SettingsHostScope } from './host-scope/settings-host-scope'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'

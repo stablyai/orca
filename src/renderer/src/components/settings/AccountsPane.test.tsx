@@ -10,7 +10,7 @@ import type {
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { AccountsPane } from './AccountsPane'
-import { resolveSettingsHostScope } from './settings-host-scope'
+import { resolveSettingsHostScope } from './host-scope/settings-host-scope'
 import { renderClaudeAccountsSection } from './accounts-pane-claude-section'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 

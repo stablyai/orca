@@ -476,7 +476,7 @@
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/file-explorer-watch-refresh-scheduler.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/parent-pr-checks-refresh.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/source-control/review/use-pull-request-generation.test.tsx
-2 test-no-real-time-wait:src/renderer/src/components/settings/MobilePane.test.tsx
+2 test-no-real-time-wait:src/renderer/src/components/settings/mobile/MobilePane.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/sidebar/SidebarFeedbackDialog.test.tsx
 8 test-no-real-time-wait:src/renderer/src/components/sidebar/worktree-list/rows/ProjectHeaderHostLabel.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/status-bar/NativeChatResumeStatusSegment.test.tsx

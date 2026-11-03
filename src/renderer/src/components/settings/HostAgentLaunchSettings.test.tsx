@@ -33,7 +33,7 @@ const transport = vi.hoisted(() => ({
   own: vi.fn(),
   choices: vi.fn()
 }))
-vi.mock('./agent-launch-settings-transport', () => ({
+vi.mock('../../runtime/agent-launch-settings/agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: transport.read,
   mutateHostAgentLaunchSettings: transport.mutate,
   hostSupportsAutoPermissions: transport.auto,

@@ -1,6 +1,6 @@
 import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
 import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { LaunchSource } from '../../../../shared/telemetry-events'

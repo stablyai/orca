@@ -1,5 +1,9 @@
 import { registerRepoSourceExtentTests } from './repository-source-extent.test-fixture'
-import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
+import {
+  type SourceControlAiRepoUpdate,
+  saveSourceControlActionRecipe,
+  toSourceControlAiRepoUpdate
+} from '../../../../../../shared/source-control-ai-recipe-save'
 // @vitest-environment happy-dom
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -17,10 +21,7 @@ import {
 } from './repository-source-control-ai-draft'
 import { withRepoAiActionAgent } from '../../repository-source-control-ai-action-agent-draft'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
-import {
-  saveSourceControlActionRecipe,
-  toSourceControlAiRepoUpdate
-} from '../../../../../../shared/source-control-ai-recipe-save'
+
 import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../SourceControlActionAgentPicker'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
@@ -32,8 +33,8 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '../../host-agent-launch-preferences-resource'
-import { mutateHostAgentLaunchSettings } from '../../agent-launch-settings-transport'
+import { clearHostAgentMenuSettingsForTests } from '../../../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import { mutateHostAgentLaunchSettings } from '../../../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-startup-plan-inputs'

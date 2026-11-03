@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import type { SettingsHostScope } from './settings-host-scope'
+import type { SettingsHostScope } from './host-scope/settings-host-scope'
 import { SettingsSwitchRow } from './form-controls/SettingsFormControls'
 import {
   getCodexHistorySharingDescription,

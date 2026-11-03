@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   store: { repos: [{ id: 'repo-prospective', path: '/host/repo' }] }
 }))
-vi.mock('../settings/agent-launch-settings-transport', () => ({
+vi.mock('../../runtime/agent-launch-settings/agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: mocks.settings
 }))
 vi.mock('@/store', () => ({

@@ -1,7 +1,7 @@
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useAppStore } from '../../../store/index'
-import { CliSection } from '../CliSection'
+import { CliSection } from '../cli/install/CliSection'
 import { GeneralEditorSettingsSection } from '../editor/GeneralEditorSettingsSection'
 import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from '../updates/GeneralUpdateSettingsSection'

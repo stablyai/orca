@@ -8,7 +8,7 @@ import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-cont
 import {
   readHostAgentLaunchSettings,
   subscribeHostAgentLaunchSettings
-} from '../agent-launch-settings-transport'
+} from '../../../runtime/agent-launch-settings/agent-launch-settings-transport'
 
 export function useChatPermissionSettings(settings: GlobalSettings) {
   const web = isWebClientLocation()

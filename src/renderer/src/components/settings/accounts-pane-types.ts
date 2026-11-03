@@ -12,7 +12,7 @@ import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
 import type { ProviderAccountRuntimeView } from './provider-account-visibility'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { SettingsHostScope } from './settings-host-scope'
+import type { SettingsHostScope } from './host-scope/settings-host-scope'
 
 export type AccountsPaneProps = {
   settings: GlobalSettings

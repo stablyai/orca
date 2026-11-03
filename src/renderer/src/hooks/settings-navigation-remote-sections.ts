@@ -8,7 +8,7 @@ import {
 import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy/privacy-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
 import { buildSettingsProjectList } from '@/components/settings/navigation/settings-project-list'
-import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
+import { getSshPaneSearchEntries } from '@/components/settings/ssh/ssh-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'

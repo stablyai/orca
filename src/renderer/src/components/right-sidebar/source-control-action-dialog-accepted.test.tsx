@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import { afterEach, it, expect, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { clearHostAgentMenuSettingsForTests } from '../settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
 import { mountSourceDialog } from './source-control-action-dialog.test-fixture'
