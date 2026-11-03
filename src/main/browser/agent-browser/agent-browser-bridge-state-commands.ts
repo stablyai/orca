@@ -15,14 +15,14 @@ import type {
 import { BrowserError } from '../browser-error'
 import { parseShellArgs, stripAgentBrowserTargetArgs } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeInteractionCommands } from './agent-browser-bridge-interaction-commands'
-import { sendGuestCdpCommand } from '../guest-cdp-command'
+import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
 import {
   toBrowserConsoleResult,
   toBrowserNetworkLogResult,
   type AgentBrowserConsoleOutput,
   type AgentBrowserNetworkOutput
 } from './agent-browser-log-entries'
-import { touchEmulationParams } from '../guest-touch-emulation'
+import { touchEmulationParams } from '../cdp/input/guest-touch-emulation'
 
 export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridgeInteractionCommands {
   async cookieGet(
