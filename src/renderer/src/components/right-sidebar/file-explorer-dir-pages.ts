@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
-import type { DirCache } from './file-explorer-types'
+import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 import type { FileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
   fileExplorerEntriesToTreeNodes,
@@ -109,40 +109,56 @@ export async function loadMoreFileExplorerDir({
   if (!more || dirCache[dirPath]?.error !== undefined || loadingDirPaths.has(dirPath)) {
     return
   }
-  const loadToken = dirLoadTracker.begin(dirPath)
-  updateLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, [dirPath]))
-  try {
-    const page = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
-      paged: true,
-      after: more.after
-    })
-    if (!dirLoadTracker.isCurrent(loadToken)) {
-      return
+  const loadToken = dirLoadTracker.begin(dirPath, () => {
+    updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
+  })
+  loadToken.started = true
+  const execution = (async (): Promise<FileExplorerTreeRefreshOutcome> => {
+    try {
+      updateLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, [dirPath]))
+      const page = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
+        paged: true,
+        after: more.after
+      })
+      if (!dirLoadTracker.isCurrent(loadToken)) {
+        return 'superseded'
+      }
+      setDirCache((prev) =>
+        prev[dirPath]
+          ? {
+              ...prev,
+              [dirPath]: appendFileExplorerDirPage(
+                prev[dirPath],
+                page,
+                dirPath,
+                fileExplorerDirDepth(worktreePath, dirPath),
+                worktreePath
+              )
+            }
+          : prev
+      )
+      return 'refreshed'
+    } catch (error) {
+      if (!dirLoadTracker.isCurrent(loadToken)) {
+        return 'superseded'
+      }
+      // Why an error mark: it stops scrolling from retrying a failing host until the next refresh.
+      setDirCache((prev) =>
+        prev[dirPath]
+          ? {
+              ...prev,
+              [dirPath]: { ...prev[dirPath], error: describeFileExplorerReadError(error) }
+            }
+          : prev
+      )
+      return 'root-unreadable'
     }
-    setDirCache((prev) =>
-      prev[dirPath]
-        ? {
-            ...prev,
-            [dirPath]: appendFileExplorerDirPage(
-              prev[dirPath],
-              page,
-              dirPath,
-              fileExplorerDirDepth(worktreePath, dirPath),
-              worktreePath
-            )
-          }
-        : prev
+  })()
+  void execution
+    .then(
+      (outcome) => dirLoadTracker.finish(loadToken, outcome),
+      () => dirLoadTracker.retire(loadToken)
     )
-  } catch (error) {
-    if (!dirLoadTracker.isCurrent(loadToken)) {
-      return
-    }
-    // Why an error mark: it stops scrolling from retrying a failing host until the next refresh.
-    setDirCache((prev) =>
-      prev[dirPath]
-        ? { ...prev, [dirPath]: { ...prev[dirPath], error: describeFileExplorerReadError(error) } }
-        : prev
-    )
-  }
-  updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
+    .catch(() => dirLoadTracker.retire(loadToken))
+  await loadToken.promise
 }

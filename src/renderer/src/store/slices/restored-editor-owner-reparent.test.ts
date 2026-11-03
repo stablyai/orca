@@ -142,7 +142,12 @@ describe('restored editor owner reparent', () => {
         expiresAt: Date.now() + 1_000,
         token: 1
       },
-      pendingExplorerReveal: { worktreeId: SOURCE, filePath: FILE_PATH, requestId: 1 },
+      pendingExplorerReveal: {
+        worktreeId: SOURCE,
+        filePath: FILE_PATH,
+        requestId: 1,
+        origin: 'manual'
+      },
       openFiles: [
         ...current.openFiles,
         {
@@ -208,13 +213,18 @@ describe('restored editor owner reparent', () => {
       fileId: result.fileId,
       worktreeId: TARGET
     })
-    expect(next.pendingExplorerReveal?.worktreeId).toBe(TARGET)
+    expect(next.pendingExplorerReveal).toMatchObject({ worktreeId: TARGET, origin: 'manual' })
   })
 
   it('does not retarget an explorer reveal owned by another workspace', () => {
     const oldId = openRestoredSource()
     useAppStore.setState({
-      pendingExplorerReveal: { worktreeId: 'other-workspace', filePath: FILE_PATH, requestId: 1 }
+      pendingExplorerReveal: {
+        worktreeId: 'other-workspace',
+        filePath: FILE_PATH,
+        requestId: 1,
+        origin: 'manual'
+      }
     })
 
     expect(reparent(oldId).ok).toBe(true)

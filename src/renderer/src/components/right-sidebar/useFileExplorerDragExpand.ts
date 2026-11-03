@@ -5,6 +5,7 @@ type UseFileExplorerDragExpandParams = {
   activeWorktreeId: string | null
   expanded: Set<string>
   toggleDir: (worktreeId: string, dirPath: string) => void
+  requestDir?: (dirPath: string) => void
 }
 
 type UseFileExplorerDragExpandResult = {
@@ -15,7 +16,8 @@ type UseFileExplorerDragExpandResult = {
 export function useFileExplorerDragExpand({
   activeWorktreeId,
   expanded,
-  toggleDir
+  toggleDir,
+  requestDir
 }: UseFileExplorerDragExpandParams): UseFileExplorerDragExpandResult {
   const handleDragExpandDir = useCallback(
     (dirPath: string) => {
@@ -33,6 +35,7 @@ export function useFileExplorerDragExpand({
       if (!activeWorktreeId) {
         return
       }
+      const opening = !useAppStore.getState().expandedDirs[activeWorktreeId]?.has(dirPath)
       useAppStore.setState((state) => {
         const current = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
         if (current.has(dirPath)) {
@@ -42,8 +45,11 @@ export function useFileExplorerDragExpand({
         next.add(dirPath)
         return { expandedDirs: { ...state.expandedDirs, [activeWorktreeId]: next } }
       })
+      if (opening) {
+        requestDir?.(dirPath)
+      }
     },
-    [activeWorktreeId]
+    [activeWorktreeId, requestDir]
   )
 
   return { handleDragExpandDir, handleNativeDragExpandDir }

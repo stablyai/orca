@@ -17,6 +17,7 @@ type UseFileExplorerDragDropParams = {
   activeWorktreeId: string | null
   expanded: Set<string>
   toggleDir: (worktreeId: string, dirPath: string) => void
+  requestDir?: (dirPath: string) => void
   refreshDir: (dirPath: string) => Promise<void>
   scrollRef: RefObject<HTMLDivElement | null>
   getOperationOwnerForPath: (path: string) => FileExplorerOperationOwner | undefined
@@ -54,6 +55,7 @@ export function useFileExplorerDragDrop({
   activeWorktreeId,
   expanded,
   toggleDir,
+  requestDir,
   refreshDir,
   scrollRef,
   getOperationOwnerForPath
@@ -195,7 +197,8 @@ export function useFileExplorerDragDrop({
   const { handleDragExpandDir, handleNativeDragExpandDir } = useFileExplorerDragExpand({
     activeWorktreeId,
     expanded,
-    toggleDir
+    toggleDir,
+    requestDir
   })
   return {
     handleMoveDrop,

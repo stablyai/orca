@@ -41,14 +41,16 @@ it('reopening stale alias during its older read eventually reloads it', async ()
       const tree = useFileExplorerTree('/repo', expanded, 'wt-1')
       useFileExplorerTreeLoadEffects({
         workspaceKey: null,
+        activeWorktreeId: 'wt-1',
         visibleFilesWorktreePath: '/repo',
         expanded,
         dirCache: tree.dirCache,
         loadingDirPaths: tree.loadingDirPaths,
         rootError: tree.rootError,
-        isDirStale: tree.isDirStale,
-        loadDir: tree.loadDir,
-        refreshTree: tree.refreshTree,
+        invalidateTree: tree.invalidateTree,
+        retireView: tree.retireView,
+        reconcileView: tree.reconcileView,
+        loadRevision: tree.loadRevision,
         resetAndLoad: tree.resetAndLoad,
         resetSelection,
         setNameFilterQuery
@@ -174,4 +176,48 @@ it('keeps a manually opened folder link after parent and full-tree refreshes (#2
   })
   expect(hook.result.current.rootCache?.children[0].isDirectory).toBe(false)
   expect(hook.result.current.dirCache['/repo/link'].error).toBe('ENOTDIR')
+})
+
+it('preserves folder-link permissions through explicit, passive, and full-tree reads', async () => {
+  readDirectoryMock
+    .mockReset()
+    .mockImplementation(async (_id, _root, path) =>
+      path === '/repo'
+        ? listing({ name: 'link', isDirectory: false, isSymlink: true })
+        : { ...listing(entry('outside.txt')), outsideProject: true }
+    )
+  const hook = renderHook(() => useFileExplorerTree('/repo', new Set(['/repo/link']), 'wt-1'))
+  await act(async () => {
+    await hook.result.current.loadDir('/repo', -1)
+    await hook.result.current.loadDir('/repo/link', 0, { force: true, wakeWslDistro: true })
+    hook.result.current.markPathAsDirectory('/repo/link')
+  })
+  expect(hook.result.current.dirCache['/repo/link'].outsideProject).toBe(true)
+
+  await act(async () => {
+    await hook.result.current.refreshDir('/repo/link')
+  })
+  expect(hook.result.current.dirCache['/repo/link'].children[0].outsideProject).toBe(true)
+
+  await act(async () => {
+    await hook.result.current.refreshTree()
+  })
+  expect(
+    readDirectoryMock.mock.calls.map((call) => [
+      call[2],
+      call[3]?.followProjectFolderLink,
+      call[3]?.wakeWslDistro
+    ])
+  ).toEqual([
+    ['/repo', undefined, undefined],
+    ['/repo/link', true, true],
+    ['/repo/link', true, undefined],
+    ['/repo', undefined, undefined],
+    ['/repo/link', true, undefined]
+  ])
+  expect(hook.result.current.rootCache?.children[0].isDirectory).toBe(true)
+  expect(hook.result.current.dirCache['/repo/link'].children[0]).toMatchObject({
+    path: '/repo/link/outside.txt',
+    outsideProject: true
+  })
 })

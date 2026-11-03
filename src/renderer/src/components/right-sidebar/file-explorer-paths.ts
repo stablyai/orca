@@ -31,3 +31,17 @@ export function getRevealAncestorDirs(worktreePath: string, filePath: string): s
 
   return ancestorDirs
 }
+
+export function getDirectoryReadDepth(worktreePath: string, dirPath: string): number {
+  return dirPath === worktreePath
+    ? -1
+    : splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
+}
+
+export function getDirectoriesToRead(
+  dirs: ReadonlySet<string>,
+  worktreePath: string,
+  needsRead: (path: string) => boolean
+): string[] {
+  return Array.from(dirs).filter((path) => path !== worktreePath && needsRead(path))
+}
