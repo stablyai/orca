@@ -1,3 +1,5 @@
+import type * as MobileNativeChatSendModule from '../mobile-native-chat-send'
+import type { RpcClient } from '../../../transport/rpc-client'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,7 +8,8 @@ import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
 const typeCommandWithOutcome = vi.fn()
-vi.mock('../mobile-native-chat-send', () => ({
+vi.mock('../mobile-native-chat-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof MobileNativeChatSendModule>()),
   sendMobileNativeChatMessageWithOutcome: (...args: unknown[]) => sendWithOutcome(...args),
   typeMobileNativeChatCommandWithOutcome: (...args: unknown[]) => typeCommandWithOutcome(...args),
   clearMobileNativeChatInput: (...args: unknown[]) => clearInputWrite(...args),
@@ -44,9 +47,25 @@ describe('useMobileNativeChatMessageSend', () => {
     agent: string | null = 'claude'
   ): void => {
     agentRef.current = agent
+    const client: RpcClient = {
+      sendRequest: vi.fn<RpcClient['sendRequest']>(async () => ({
+        id: 'read',
+        ok: true,
+        result: { terminal: { draft: readSeededLaunchDraftSeed()?.text } },
+        _meta: { runtimeId: 'r' }
+      })),
+      subscribe: () => () => {},
+      updateTerminalSubscriptionViewport: () => {},
+      getState: () => 'connected',
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => 1,
+      onStateChange: () => () => {},
+      notifyForeground: () => {},
+      close: () => {}
+    }
     function Probe(): null {
       api = useMobileNativeChatMessageSend({
-        client: { sendRequest: vi.fn() } as never,
+        client,
         enabled: true,
         handleRef: { current: 'term' },
         deviceTokenRef: { current: 'device' },
@@ -136,12 +155,12 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
-  it('writes a single Ctrl+U separately when no launch draft is parked', async () => {
+  it('clears both sides of unseen desktop input when no launch draft is parked', async () => {
     mount(() => null)
     await act(async () => {
       await api!.send('hello')
     })
-    expect(clearArgs().clearInput).toBe('\x15')
+    expect(clearArgs().clearInput).toContain('\x0b')
     expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
   })
@@ -157,7 +176,7 @@ describe('useMobileNativeChatMessageSend', () => {
     )
   })
 
-  it('reads the draft at send time, so a retired seed stops widening the clear', async () => {
+  it('reads the live terminal draft at send time after a launch seed retires', async () => {
     let parked: { text: string; createdAt: number } | null = { text: DRAFT, createdAt: 1 }
     mount(() => parked)
     await act(async () => {
@@ -171,7 +190,9 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(clearInputWrite.mock.calls[0]![0]).toMatchObject({
       clearInput: buildAgentTuiClearInputForText(DRAFT)
     })
-    expect(clearInputWrite.mock.calls[1]![0]).toMatchObject({ clearInput: '\x15' })
+    expect(clearInputWrite.mock.calls[1]![0]).toMatchObject({
+      clearInput: buildAgentTuiClearInputForText(undefined)
+    })
   })
 
   it('does not clear an image send after the image was pasted', async () => {
@@ -242,6 +263,12 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send('/clear')
     })
     expect(holdUnconfirmedSend).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).toHaveBeenCalledWith(
+      captureSendOrigin.mock.results[0]!.value,
+      '/clear',
+      { preserveConversationCommands: true }
+    )
+    expect(onSendError).toHaveBeenCalledWith('Delivery unconfirmed — check chat before retrying')
     await act(async () => {
       await api!.send('hello')
     })
