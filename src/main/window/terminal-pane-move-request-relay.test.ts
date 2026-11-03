@@ -29,7 +29,10 @@ function createMainWindow() {
 }
 
 async function requestMove() {
-  const relay = await import('./terminal-pane-move-request-relay')
+  const relay = {
+    ...(await import('./terminal-pane-move-request-relay')),
+    ...(await import('./terminal-pane-move-commit-fence'))
+  }
   const { mainWindow, webContents } = createMainWindow()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the EventEmitter double implements the BrowserWindow members the relay uses.
   const pending = relay.requestTerminalPaneMoveFromRenderer(mainWindow as never, move)
@@ -43,11 +46,21 @@ async function requestMove() {
       { requestId: request.requestId, result }
     )
   }
-  return { relay, pending, sender, reply }
+  return { relay, pending, sender, webContents, reply }
+}
+
+function deferredCommit() {
+  let finish: (result: TerminalLeafMoveResult) => void = () => {}
+  const commit = (): Promise<TerminalLeafMoveResult> =>
+    new Promise((resolve) => {
+      finish = resolve
+    })
+  return { commit, finish: (result: TerminalLeafMoveResult) => finish(result) }
 }
 
 describe('requestTerminalPaneMoveFromRenderer', () => {
   beforeEach(() => {
+    vi.resetModules()
     vi.useFakeTimers()
     ipcEmitter.removeAllListeners()
   })
@@ -72,17 +85,10 @@ describe('requestTerminalPaneMoveFromRenderer', () => {
 
   it('answers moved once the window commits, even when its reply comes after the deadline', async () => {
     const { relay, pending, sender } = await requestMove()
-    let finishCommit: (result: TerminalLeafMoveResult) => void = () => {}
-    const committing = relay.commitRelayedPaneMove(
-      sender,
-      move.targetTabId,
-      () =>
-        new Promise((resolve) => {
-          finishCommit = resolve
-        })
-    )
+    const { commit, finish } = deferredCommit()
+    const committing = relay.commitRelayedPaneMove(sender, move.targetTabId, commit)
     await vi.advanceTimersByTimeAsync(10_000)
-    finishCommit({ status: 'moved', ptyId: 'pty-1' })
+    finish({ status: 'moved', ptyId: 'pty-1' })
 
     await expect(committing).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
     await expect(pending).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
@@ -100,5 +106,38 @@ describe('requestTerminalPaneMoveFromRenderer', () => {
       ptyId: null
     })
     expect(commit).toHaveBeenCalledOnce()
+  })
+
+  it('answers with the commit when the window goes away while it commits', async () => {
+    const { relay, pending, sender, webContents } = await requestMove()
+    const { commit, finish } = deferredCommit()
+    const committing = relay.commitRelayedPaneMove(sender, move.targetTabId, commit)
+    webContents.emit('render-process-gone')
+    finish({ status: 'moved', ptyId: 'pty-1' })
+
+    await expect(committing).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
+    await expect(pending).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
+  })
+
+  it('refuses a second move for a tab id a timed-out move still fences', async () => {
+    const first = await requestMove()
+    const timedOut = expect(first.pending).rejects.toThrow('terminal_pane_move_timeout')
+    await vi.advanceTimersByTimeAsync(10_000)
+    await timedOut
+
+    const second = first.relay.requestTerminalPaneMoveFromRenderer(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the EventEmitter double implements the BrowserWindow members the relay uses.
+      createMainWindow().mainWindow as never,
+      move
+    )
+    await expect(second).rejects.toThrow('terminal_pane_move_in_progress')
+    const commit = vi.fn(async (): Promise<TerminalLeafMoveResult> => ({
+      status: 'moved',
+      ptyId: 'pty-1'
+    }))
+    await expect(
+      first.relay.commitRelayedPaneMove(first.sender, move.targetTabId, commit)
+    ).resolves.toEqual({ status: 'refused', reason: 'pane_unavailable' })
+    expect(commit).not.toHaveBeenCalled()
   })
 })

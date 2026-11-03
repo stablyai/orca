@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { ipcMain } from 'electron'
-import type { BrowserWindow, WebContents } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type {
   TerminalLeafMoveResult,
   TerminalPaneMoveToNewTabReply,
@@ -9,20 +9,10 @@ import type {
 } from '../../shared/terminal-leaf-move'
 import { addFanoutListener } from '../event-listener-fanout'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
+import { holdRelayedPaneMove, type RelayedPaneMove } from './terminal-pane-move-commit-fence'
 
 // Why: under the client's 15s call timeout, so the client hears a refusal rather than losing the reply.
 const TERMINAL_PANE_MOVE_TIMEOUT_MS = 10_000
-
-type RelayedPaneMove = {
-  webContents: WebContents
-  timedOut: boolean
-  /** The window is committing, so the deadline can no longer turn the move into a refusal. */
-  claim: () => void
-  answer: (result: TerminalLeafMoveResult) => void
-}
-
-/** Client moves a window is still carrying out, by the new tab's id. */
-const relayedPaneMoves = new Map<string, RelayedPaneMove>()
 
 /** Asks the window to move a pane to a new tab; rejects when the window cannot answer. */
 export function requestTerminalPaneMoveFromRenderer(
@@ -55,22 +45,36 @@ export function requestTerminalPaneMoveFromRenderer(
         return
       }
       released = true
-      if (relayedPaneMoves.get(move.targetTabId) === relayed) {
-        relayedPaneMoves.delete(move.targetTabId)
-      }
       for (const releaseListener of releaseListeners) {
         releaseListener()
       }
     }
+    let committed: Promise<unknown> | null = null
     const relayed: RelayedPaneMove = {
-      webContents,
+      sender: webContents,
       timedOut: false,
-      claim: () => clearTimeout(timeout),
+      claim: (commit) => {
+        clearTimeout(timeout)
+        committed = commit
+      },
       answer: (result) => settle(null, result)
     }
+    const unfence = holdRelayedPaneMove(move.targetTabId, relayed)
+    if (!unfence) {
+      // Why: replacing a still-fenced move would let its late commit answer this one.
+      reject(new Error('terminal_pane_move_in_progress'))
+      return
+    }
+    releaseListeners.push(unfence)
     const onRendererUnavailable = (): void => {
-      settle(new Error('renderer_unavailable'))
       release()
+      // A claimed commit still lands in main, so a moved pane is answered by its commit.
+      const refuse = (): void => settle(new Error('renderer_unavailable'))
+      if (committed) {
+        void committed.then(refuse, refuse)
+      } else {
+        refuse()
+      }
     }
     // The client hears a refusal now; the move stays fenced until the window answers or goes away.
     const timeout = setTimeout(() => {
@@ -85,7 +89,6 @@ export function requestTerminalPaneMoveFromRenderer(
       settle(null, reply.result)
       release()
     }
-    relayedPaneMoves.set(move.targetTabId, relayed)
     const lifetime = abortWhenRendererGone(webContents)
     lifetime.signal.addEventListener('abort', onRendererUnavailable, { once: true })
     releaseListeners.push(
@@ -101,29 +104,4 @@ export function requestTerminalPaneMoveFromRenderer(
       onRendererUnavailable()
     }
   })
-}
-
-/**
- * Commits a window's pane move. A move a client asked for commits nothing once the client was told
- * it timed out, and a committed one answers the client at once, so the client never hears a refusal
- * for a pane the host moved.
- */
-export async function commitRelayedPaneMove(
-  sender: WebContents,
-  targetTabId: string,
-  commit: () => Promise<TerminalLeafMoveResult>
-): Promise<TerminalLeafMoveResult> {
-  const relayed = relayedPaneMoves.get(targetTabId)
-  if (!relayed || relayed.webContents !== sender) {
-    return commit()
-  }
-  if (relayed.timedOut) {
-    return { status: 'refused', reason: 'pane_unavailable' }
-  }
-  relayed.claim()
-  const result = await commit()
-  if (result.status === 'moved') {
-    relayed.answer(result)
-  }
-  return result
 }
