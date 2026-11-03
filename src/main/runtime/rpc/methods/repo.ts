@@ -1,6 +1,6 @@
 import { defineMethod } from '../core'
 import { resolveReplySnapshot } from '../content-snapshot-id'
-import { isGitHubParticipantOwner } from '../../github-participant-settings'
+import { isGitHubParticipantOwner } from '../../github-participant-execution'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import {

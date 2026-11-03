@@ -13,6 +13,7 @@ import {
   bindParticipantLaunch
 } from './github-participant-job-binding'
 import { runWithActiveRpcCaller } from './rpc/rpc-active-caller'
+import { runWithGitHubJobRequest } from './github-participant-execution'
 import type { Repo } from '../../shared/repo-types'
 const directories: string[] = []
 afterEach(() => {
@@ -62,7 +63,9 @@ describe('accepted GitHub job launch binding', () => {
     ).toThrow('github_participant_owner_mismatch')
     expect(() =>
       runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
-        bindParticipantLaunch(store, { repo, id: 'workspace' }, 'pane-forged', 'forged')
+        runWithGitHubJobRequest(true, () =>
+          bindParticipantLaunch(store, { repo, id: 'workspace' }, 'pane-forged', 'forged')
+        )
       )
     ).toThrow('github_participant_identity_required')
   })

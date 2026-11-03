@@ -12,7 +12,7 @@ import type { RpcCallerIdentity } from './rpc/rpc-caller-identity'
 import type { GitHubParticipantRegistry } from './github-participant-registry'
 import {
   getActiveGitHubExecutionIdentity,
-  isActiveGitHubJobRequest
+  isGitHubParticipantOwner
 } from './github-participant-execution'
 
 type Dependencies = {
@@ -24,14 +24,6 @@ type Dependencies = {
     account: GhAccountBinding
   ) => Promise<GhAccountBindingValidationResult>
   onChanged?: () => void
-}
-
-export function isGitHubParticipantOwner(caller: RpcCallerIdentity | undefined): boolean {
-  return (
-    !getActiveGitHubExecutionIdentity() &&
-    !isActiveGitHubJobRequest() &&
-    (caller?.kind === 'desktop' || caller?.kind === 'local-cli')
-  )
 }
 
 function requireOwner(caller: RpcCallerIdentity | undefined): void {

@@ -42,11 +42,12 @@ Orca Account sign-in is not required. The desktop profile's cloud user ID is not
 - Persist a resolved participant owner when accepting workspace/session/job creation. Queued work must not consult whichever client is currently focused.
 - Define background PR polling without a requesting participant explicitly. It must not select an arbitrary connected participant.
 - Capture the selected account when accepting an operation; retries must preserve that selection and revalidate its authorization before another external operation.
+- Enabling participant mode while a shared-account operation waits must reject a different resolved account before another external attempt. Direct and hosted-review operations use the same pinned-account check.
 - Revoking a device disconnects that device. Whether its already accepted background work continues under its participant is a separate lifecycle decision; it must not be inferred from a socket disconnect.
 - Lower GitHub reads already expose `githubReadExecutionScope`. Preserve account information through intermediate wrappers and partition refresh/coalescing keys and delivery by the resolved identity.
 - Account-specific results must not be written to a shared cache or broadcast as if they were valid for every participant.
 - Raw local CLI calls cannot claim a participant through an ID flag alone. Agent calls need existing server-verifiable session ownership; otherwise they have only local owner authority or must be refused where an owner is required.
-- A request carrying agent session or launch evidence is never promoted to owner because its member binding is absent. Normal owner shell commands without agent evidence remain the headless administration path.
+- A request carrying agent session or launch evidence is never promoted to owner because its member binding is absent, including deferred account resolution outside the original request. Normal owner shell commands without agent evidence remain the headless administration and workspace-creation path.
 - Member jobs reuse Orca's current terminal launch attestation or native structured-session writer proof. The accepted account is persisted privately and rechecked against current member grants. Old jobs with no accepted binding and unsupported cross-host proof are refused.
 - Shared persisted GitHub cache and automatic PR broadcasting are withheld while any repository on the runtime enables participant mode. Explicit project queries remain available under the authenticated member; this conservative policy avoids presenting unscoped legacy cache entries as account-specific results.
 

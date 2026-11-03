@@ -4,8 +4,10 @@ import {
   normalizeGhAccountBinding,
   type GhAccountBinding
 } from '../../../../shared/github/account-binding'
-import { isGitHubParticipantOwner } from '../../github-participant-settings'
-import { getActiveGitHubExecutionIdentity } from '../../github-participant-execution'
+import {
+  getActiveGitHubExecutionIdentity,
+  isGitHubParticipantOwner
+} from '../../github-participant-execution'
 import {
   BindableAccounts,
   ValidateAccountBinding

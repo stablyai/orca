@@ -2,7 +2,7 @@ import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   completeFakeSpawn,
   createFakeSpawnedChild
@@ -50,7 +50,7 @@ afterEach(() => {
   }
 })
 
-function fixture(route: 'direct' | 'hosted-review' | 'ssh-repository') {
+function fixture(route: 'direct' | 'hosted-review' | 'ssh-repository', enabled = true) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-member-gh-retry-'))
   directories.push(directory)
   const registry = new GitHubParticipantRegistry(directory, () => ({}))
@@ -59,9 +59,14 @@ function fixture(route: 'direct' | 'hosted-review' | 'ssh-repository') {
     deviceIds: ['alice-device'],
     allowedAccounts: [aliceAccount, bobAccount]
   })
-  const repo = storeRepo({ id: 'repo', path: directory })
+  const repo = storeRepo({
+    id: 'repo',
+    path: directory,
+    ghAccount: { host: 'github.com', user: 'server-owner' }
+  })
   registry.setRepoEnabled(repo.id, true)
   registry.selectAccount(repo.id, 'alice-device', aliceAccount)
+  registry.setRepoEnabled(repo.id, enabled)
   const store = partialRuntimeStore()
   const options = runWithActiveRpcCaller(
     { kind: 'paired-device', deviceId: 'alice-device' },
@@ -154,3 +159,33 @@ it('preserves an existing eligibility refusal while resolving hosted-review acco
   })
   expect(spawnMock).not.toHaveBeenCalled()
 })
+
+describe.each(['direct', 'hosted-review', 'ssh-repository'] as const)(
+  'shared-account requests when participant mode changes (%s)',
+  (route) => {
+    it.each(['backoff', 'credentials'] as const)(
+      'refuses the captured owner account after participant mode is enabled during %s',
+      async (wait) => {
+        const { registry, options } = fixture(route, false)
+        expect(options.ghAccount?.user).toBe('server-owner')
+        const credentials = Promise.withResolvers<NodeJS.ProcessEnv>()
+        if (wait === 'credentials') {
+          boundEnvMock.mockReturnValueOnce(credentials.promise)
+        }
+        transientThenSuccess()
+        const outcome = ghExecFileAsync(['api', 'user'], options).then(
+          () => 'unexpected success',
+          (error: unknown) => (error instanceof Error ? error.message : String(error))
+        )
+        await vi.advanceTimersByTimeAsync(0)
+        expect(spawnMock).toHaveBeenCalledTimes(wait === 'backoff' ? 1 : 0)
+        registry.setRepoEnabled('repo', true)
+        registry.selectAccount('repo', 'alice-device', aliceAccount)
+        credentials.resolve({ ORCA_TEST_GH_ACCOUNT: 'server-owner' })
+        await vi.advanceTimersByTimeAsync(250)
+        await expect(outcome).resolves.toBe('github_participant_account_changed')
+        expect(spawnMock).toHaveBeenCalledTimes(wait === 'backoff' ? 1 : 0)
+      }
+    )
+  }
+)

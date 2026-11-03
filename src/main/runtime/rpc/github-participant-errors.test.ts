@@ -5,6 +5,7 @@ describe('GitHub member error responses', () => {
   it.each([
     ['github_participant_identity_required', 'member'],
     ['github_participant_account_missing', 'Select'],
+    ['github_participant_account_changed', 'Retry'],
     ['github_participant_owner_required', 'server owner'],
     ['github_participant_registry_unavailable', 'storage']
   ])('returns an actionable stable error for %s', (code, hint) => {

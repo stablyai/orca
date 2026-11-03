@@ -1,7 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import { ghAccountBindingsEqual, type GhAccountBinding } from '../../shared/github/account-binding'
 import type { GitHubParticipantRegistry } from './github-participant-registry'
 import { getActiveRpcCaller, runWithActiveRpcCaller } from './rpc/rpc-active-caller'
+import type { RpcCallerIdentity } from './rpc/rpc-caller-identity'
 
 import type { GitHubExecutionIdentity } from '../../shared/github/execution-identity'
 export type { GitHubExecutionIdentity } from '../../shared/github/execution-identity'
@@ -19,6 +20,14 @@ export function runWithGitHubJobRequest<T>(isJob: boolean, run: () => T): T {
 
 export function getActiveGitHubExecutionIdentity(): GitHubExecutionIdentity | undefined {
   return executionIdentity.getStore()
+}
+
+export function isGitHubParticipantOwner(caller: RpcCallerIdentity | undefined): boolean {
+  return (
+    !getActiveGitHubExecutionIdentity() &&
+    !isActiveGitHubJobRequest() &&
+    (caller?.kind === 'desktop' || caller?.kind === 'local-cli')
+  )
 }
 
 export function runWithGitHubExecutionIdentity<T>(
@@ -58,7 +67,7 @@ export function captureGitHubExecutionIdentity(
     return undefined
   }
   const caller = getActiveRpcCaller()
-  if (caller?.kind === 'desktop') {
+  if (isGitHubParticipantOwner(caller)) {
     return undefined
   }
   if (caller?.kind !== 'paired-device') {
@@ -87,13 +96,21 @@ export function createGitHubExecutionAccountResolver(
   sharedAccount: GhAccountBinding | null | undefined
 ): () => GhAccountBinding | undefined {
   const caller = getActiveRpcCaller()
+  const isJob = isActiveGitHubJobRequest()
   const sharedSnapshot = sharedAccount ? Object.freeze({ ...sharedAccount }) : undefined
   try {
     const identity = captureGitHubExecutionIdentity(registry, repoId)
+    const expectedAccount = identity?.account ?? sharedSnapshot
     return () =>
       runWithActiveRpcCaller(caller, () =>
-        runWithGitHubExecutionIdentity(identity, () =>
-          resolveGitHubExecutionAccount(registry, repoId, sharedSnapshot)
+        runWithGitHubJobRequest(isJob, () =>
+          runWithGitHubExecutionIdentity(identity, () => {
+            const account = resolveGitHubExecutionAccount(registry, repoId, sharedSnapshot)
+            if (!ghAccountBindingsEqual(account, expectedAccount)) {
+              throw new Error('github_participant_account_changed')
+            }
+            return account
+          })
         )
       )
   } catch (error) {
@@ -104,7 +121,7 @@ export function createGitHubExecutionAccountResolver(
 }
 
 export function assertUnscopedGitHubAccess(registry: GitHubParticipantRegistry | undefined): void {
-  if (registry?.hasEnabledRepos() && getActiveRpcCaller()?.kind !== 'desktop') {
+  if (registry?.hasEnabledRepos() && !isGitHubParticipantOwner(getActiveRpcCaller())) {
     throw new Error('github_participant_repo_required')
   }
 }

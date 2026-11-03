@@ -6,6 +6,7 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { runWithActiveRpcCaller } from '../rpc/rpc-active-caller'
+import { runWithGitHubJobRequest } from '../github-participant-execution'
 import { store } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
@@ -145,10 +146,16 @@ describe('managed workspace GitHub ownership', () => {
       account
     })
     expect(result.worktree).not.toHaveProperty('githubExecutionIdentity')
+    const ownerResult = await runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      runtime.createManagedWorktree({ repoSelector: repo.id, name: 'owner-task', runHooks: false })
+    )
+    expect(metadata.get(ownerResult.worktree.id)?.githubExecutionIdentity).toBeUndefined()
     const previousCount = metadata.size
     await expect(
       runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
-        runtime.createManagedWorktree({ repoSelector: repo.id, name: 'unauthenticated' })
+        runWithGitHubJobRequest(true, () =>
+          runtime.createManagedWorktree({ repoSelector: repo.id, name: 'unauthenticated' })
+        )
       )
     ).rejects.toThrow('github_participant_identity_required')
     expect(metadata.size).toBe(previousCount)
