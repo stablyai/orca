@@ -156,6 +156,22 @@ describe('MobileNativeChatMessage status notices', () => {
     )
   })
 
+  it("keeps an older host's missing-conversation words as it wrote them", async () => {
+    await activateMobileUiLocale('fr')
+    const older =
+      "Claude couldn't find this chat's saved conversation. Start a new chat to continue."
+    const text = renderNotice(
+      {
+        kind: 'status',
+        tone: 'error',
+        text: older,
+        failure: agentSessionFailureFact('savedConversationMissing')
+      },
+      { hostName: null, agentName: 'Claude' }
+    )
+    expect(text.props.children).toBe(older)
+  })
+
   it.each(['without reset', 'with reset', 'from an old host'] as const)(
     'draws an OpenCode usage warning %s',
     (source) => {

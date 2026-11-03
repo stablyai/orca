@@ -4,8 +4,10 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/a
 import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   type StructuredAgentSessionAdapter,
+  AgentSessionAcquisitionRefusal,
   AgentSessionAcquisitionRootExitObservedError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import {
   closePiRpcAdapterFixtures,
@@ -155,6 +157,21 @@ describe('Pi RPC session ownership and delivery', () => {
       name: 'AgentSessionPreSpawnError',
       reason: 'launchPreparationFailed'
     })
+    expect(h.connections).toHaveLength(1)
+  })
+
+  it('fails a saved session whose file is gone without spawning, keeping the missing fact', async () => {
+    const h = await setup()
+    await h.adapter.closeSession(sessionId)
+    h.resolveLaunch.mockRejectedValueOnce(
+      new AgentSessionAcquisitionRefusal(
+        'Pi session file was not found',
+        'savedConversationMissing'
+      )
+    )
+    const failed = await h.adapter.acquire({ ...h.input, fence: 8 }).catch((error) => error)
+    expect(failed).toMatchObject({ name: 'AgentSessionPreSpawnError' })
+    expect(providerStartupFailureFact(failed)).toMatchObject({ kind: 'savedConversationMissing' })
     expect(h.connections).toHaveLength(1)
   })
 

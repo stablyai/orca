@@ -252,6 +252,27 @@ describe('Pi host launch resolution', () => {
     })
   })
 
+  it('keeps adopted, unreadable and malformed session files distinct from a missing one', async () => {
+    const h = await setup()
+    h.withPrior(h.prior(join(root, 'adopted-missing.jsonl'), 'adopted'))
+    await expect(h.resolver(identity)).rejects.toMatchObject({
+      refusal: {
+        code: 'agent_session_identity_required',
+        details: { reason: 'transcriptNotFound' }
+      }
+    })
+    const malformed = join(root, 'malformed.jsonl')
+    await writeFile(malformed, 'not a Pi session header')
+    h.withPrior(h.prior(malformed, 'resumed'))
+    const parse = await h.resolver(identity).catch((error) => error)
+    expect(parse).toBeInstanceOf(Error)
+    expect(parse).not.toMatchObject({ reason: 'savedConversationMissing' })
+    h.withPrior(h.prior(root, 'resumed'))
+    const unreadable = await h.resolver(identity).catch((error) => error)
+    expect(unreadable).toBeInstanceOf(Error)
+    expect(unreadable).not.toMatchObject({ reason: 'savedConversationMissing' })
+  })
+
   it('refuses a different execution host and a foreign account home before resolving paths', async () => {
     const h = await setup()
     const record = h.store.getRecord(identity.sessionId)

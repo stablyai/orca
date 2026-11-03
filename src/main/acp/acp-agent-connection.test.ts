@@ -12,6 +12,7 @@ import {
   type AcpAgentConnectionOptions
 } from './acp-agent-connection'
 import { AcpAuthRequiredError } from './acp-errors'
+import { isAcpSavedSessionMissing } from './acp-session-reopen-failure'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
@@ -127,6 +128,30 @@ describe('ACP process-owning connection', () => {
     expect(child.stdout.isPaused()).toBe(false)
     expect(await connection.close()).toBe(true)
     expect(connection.lastCloseResult).toEqual({ root: 'exited', tree: null })
+  })
+
+  it('marks only the addressed load reporting its saved session missing as missing', async () => {
+    const { connection, agent } = fixture()
+    agent.on('initialize', (frame) =>
+      agent.reply(frame, {
+        protocolVersion: 1,
+        agentCapabilities: { loadSession: true },
+        authMethods: [{ id: 'cached', name: 'Cached sign-in' }]
+      })
+    )
+    await connection.initialize()
+    agent.on('session/load', (frame) => agent.fail(frame, -32002, 'Resource not found'))
+    const missing = await connection.start({ ...start, sessionId: 'saved-1' }).catch((e) => e)
+    expect(isAcpSavedSessionMissing(missing, 'saved-1')).toBe(true)
+    expect(isAcpSavedSessionMissing(missing, 'saved-2')).toBe(false)
+
+    agent.on('session/load', (frame) => agent.fail(frame, -32000, 'Authentication required'))
+    agent.on('authenticate', (frame) => agent.fail(frame, -32002, 'Resource not found'))
+    const signIn = await connection
+      .start({ ...start, sessionId: 'saved-1', authMethodId: 'cached' })
+      .catch((e) => e)
+    expect(signIn).toMatchObject({ code: -32002, request: { method: 'authenticate' } })
+    expect(isAcpSavedSessionMissing(signIn, 'saved-1')).toBe(false)
   })
 
   it('settles prompts and permission signals on proven exit with stdout still open', async () => {

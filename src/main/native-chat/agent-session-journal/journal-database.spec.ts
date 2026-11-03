@@ -121,6 +121,118 @@ export function registerJournalDatabaseTests(): void {
       expect((await stat(`${dbPath}-wal`).catch(() => null))?.size ?? 0).toBe(0)
     })
 
+    it('creates schema 4 with no context transfer table', () => {
+      const db = openJournalDatabase(dbPath).db
+      try {
+        expect(JOURNAL_DB_SCHEMA_VERSION).toBe(4)
+        expect(journalPragmaNumber(db, 'user_version')).toBe(4)
+        expect(
+          db
+            .prepare(
+              "SELECT name FROM sqlite_master WHERE name LIKE 'agent_session_context_transfer%'"
+            )
+            .all()
+        ).toEqual([])
+      } finally {
+        db.close()
+      }
+    })
+
+    const transferRow = (id: string, kind: string, extra: Record<string, unknown>) => [
+      id,
+      'session-1',
+      'H',
+      kind,
+      1,
+      JSON.stringify({ kind, id, sessionId: 'session-1', handoffId: 'H', ...extra })
+    ]
+    const developmentLayouts: [string, number, (db: Database.Database) => void][] = [
+      [
+        'unreleased context transfers',
+        5,
+        (db) => {
+          db.exec(`CREATE TABLE agent_session_context_transfers (
+            id TEXT PRIMARY KEY, session_id TEXT NOT NULL, handoff_id TEXT NOT NULL,
+            kind TEXT NOT NULL, format INTEGER NOT NULL, record_json TEXT NOT NULL)`)
+          const insert = db.prepare(
+            'INSERT INTO agent_session_context_transfers VALUES (?, ?, ?, ?, ?, ?)'
+          )
+          for (const row of [
+            transferRow('H', 'handoff', { trigger: 'codex-no-rollout' }),
+            transferRow('T', 'target', { targetLink: null, firstInputId: null }),
+            transferRow('D', 'delivery', {
+              targetId: 'T',
+              mode: 'inline',
+              carrierInputId: 'P',
+              outcome: { kind: 'unknown' }
+            }),
+            transferRow('C', 'closure', { commandId: 'clear-1', cause: 'context-clear' })
+          ]) {
+            insert.run(...row)
+          }
+          db.prepare(
+            'INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)'
+          ).run(
+            'session-1',
+            JSON.stringify({
+              providerHandleChain: [
+                {
+                  linkId: 'L0',
+                  origin: 'created',
+                  handle: { transport: 'codex-app-server', nativeId: 't-1' }
+                },
+                {
+                  linkId: 'L1',
+                  origin: 'created',
+                  handle: { transport: 'codex-app-server', nativeId: 't-2' },
+                  replaces: { key: 'codex:t-1', reason: 'restore-failed', replacedAt: 1 }
+                }
+              ]
+            })
+          )
+        }
+      ],
+      [
+        'an unrelated text-piece layout',
+        5,
+        (db) =>
+          db.exec(
+            'CREATE TABLE journal_text_pieces (piece_id TEXT PRIMARY KEY, text TEXT NOT NULL)'
+          )
+      ],
+      ['a future layout', 6, () => {}]
+    ]
+
+    it.each(developmentLayouts)(
+      'keeps a database written at a newer version for %s read-only and byte-identical',
+      async (_label, version, seed) => {
+        const seeded = openJournalDatabase(dbPath).db
+        publishJournalSessionEpoch(seeded, SESSION, 'epoch-1')
+        insertJournalRow(seeded, 'session-1', epochRow(1))
+        seed(seeded)
+        seeded.pragma(`user_version = ${version}`)
+        seeded.close()
+        const before = await digest(dbPath)
+
+        const opened = openJournalDatabase(dbPath)
+        try {
+          expect(opened.readOnly).toBe(true)
+          expect(journalPragmaNumber(opened.db, 'user_version')).toBe(version)
+          expect(() => insertJournalRow(opened.db, 'session-1', epochRow(2))).toThrow(/readonly/i)
+          expect(
+            opened.db
+              .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'agent_session_context_transfer%'"
+              )
+              .all()
+          ).toEqual([])
+        } finally {
+          opened.db.close()
+        }
+        expect(await digest(dbPath)).toBe(before)
+      }
+    )
+
     it('closes the raw connection when schema setup throws', async () => {
       const failing = join(root, 'nested', 'agent-session-journal.db')
       expect(() => openJournalDatabase(failing)).toThrow()
