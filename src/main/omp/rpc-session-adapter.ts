@@ -13,9 +13,11 @@ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { OmpRpcRewind, rewindOmpSession, supportsOmpRewind } from './rpc-rewind'
 import { stopOmpSubagents, supportsOmpSubagentStop } from './rpc-subagent-stops'
 import { importOmpSubagentHistory } from './rpc-subagent-history'
+import { OmpRpcConversationCopies } from './rpc-conversation-copies'
 
 export class OmpRpcSessionAdapter extends PiRpcSessionAdapter {
   readonly atRestCommands: StructuredAgentSessionAdapter['atRestCommands']
+  private readonly copies: OmpRpcConversationCopies
 
   constructor(
     deps: PiRpcSessionAdapterDeps & Pick<StructuredAgentSessionAdapter, 'atRestCommands'>
@@ -82,6 +84,7 @@ export class OmpRpcSessionAdapter extends PiRpcSessionAdapter {
         }
       }
     })
+    this.copies = new OmpRpcConversationCopies(deps)
     this.atRestCommands = deps.atRestCommands
     this.backgroundTaskStops = (sessionId) => {
       const session = this.sessions.get(sessionId)
@@ -135,6 +138,13 @@ export class OmpRpcSessionAdapter extends PiRpcSessionAdapter {
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']>
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']>
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']>
+
+  copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) =>
+    this.copies.copy(input)
+
+  override async closeAll(): Promise<void> {
+    await Promise.all([super.closeAll(), this.copies.closeAll()])
+  }
 
   rewind: NonNullable<StructuredAgentSessionAdapter['rewind']> = (input) =>
     rewindOmpSession(this.session(input.sessionId, input.fence), input.beforeTurnId)
