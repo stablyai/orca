@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktree-listing'
 /** Desktop viewers suppress host resize, never input; mobile drivers retain priority and the final viewer releases its floor. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
@@ -6,6 +8,22 @@ import { createPtyWriteInput } from '../ipc/pty/ipc/write-input'
 import { ptyOwnership } from '../ipc/pty/provider/ownership-state'
 
 const { hostProviderWrite } = vi.hoisted(() => ({ hostProviderWrite: vi.fn(() => true) }))
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
 vi.mock('../ipc/pty/provider/registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   tryGetProviderForPty: () => ({ write: hostProviderWrite, hasPty: () => true })

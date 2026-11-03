@@ -16,7 +16,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { scheduleSave } from './write-scheduling'
 import {
   hasPersistedWorkspaceSession,

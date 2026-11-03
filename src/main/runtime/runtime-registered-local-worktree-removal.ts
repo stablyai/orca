@@ -10,7 +10,7 @@ import type { ArchiveHookOverride } from '../../shared/worktree/archive-hook-rem
 import { gateWorktreeRemovalOnArchiveHook } from '../workspaces/removal/worktree-archive-hook-gate'
 import type { Repo } from '../../shared/repo-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
-import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from '../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { runHook, getEffectiveHooks } from '../workspace-hooks/hooks'

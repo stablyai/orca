@@ -52,7 +52,7 @@ vi.mock('../text-generation/commit-message-agent-environment', () => ({
 }))
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.git }))
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectGitExecOptions: () => ({ cwd: '/repo', ...mocks.routing() }),
   getLocalProjectWorktreeGitOptions: mocks.routing,
   getWorktreeMirrorDistro: () => undefined

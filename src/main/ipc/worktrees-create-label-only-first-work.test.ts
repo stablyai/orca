@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 import {
   generatedNameCreateRequest,
   renameCreatedWorktreeOnFirstWork,
@@ -8,6 +9,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { describeCreatedWorktreeMock, gitExecFileAsyncMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
 
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   resolveTextGenerationParams: () => ({

@@ -15,7 +15,7 @@ import type {
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { adoptRuntimeTerminalOrphansFromInventory } from '../../runtime-terminal-orphan-adoption'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'

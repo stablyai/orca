@@ -7,11 +7,11 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 const mocks = vi.hoisted(() => ({ graph: vi.fn(), runtimes: vi.fn(), realpath: vi.fn() }))
 vi.mock('node:fs', () => ({ realpathSync: (path: string) => path }))
 vi.mock('node:fs/promises', () => ({ stat: vi.fn(async () => ({})), realpath: mocks.realpath }))
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreeGraph: mocks.graph,
   isRepoRoot: vi.fn(() => false)
 }))
-vi.mock('../../../local-project-runtime-resolution', () => ({
+vi.mock('../../../workspaces/execution-host/local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.runtimes
 }))
 import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../../filesystem/filesystem-auth'
