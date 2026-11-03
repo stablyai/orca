@@ -1,5 +1,6 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
+import type { EndpointAuthHeaders } from './endpoint-auth-headers'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
@@ -53,6 +54,7 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
 }
 
 export type ConnectOptions = {
+  edgeAuthHeaders?: EndpointAuthHeaders | null
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
 }

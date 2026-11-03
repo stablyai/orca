@@ -3,6 +3,7 @@ import {
   runtimeEnvironmentCallFailure
 } from './runtime-environment-call-failure'
 import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import type { RuntimeEdgeAuthHeader } from '../../../shared/runtime-edge-auth-types'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
@@ -95,7 +96,15 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
-    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
+    async (
+      _event,
+      args: {
+        name: string
+        pairingCode: string
+        allowLoopback?: boolean
+        edgeAuthHeaders?: RuntimeEdgeAuthHeader[]
+      }
+    ) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
         await publishVerifiedPairing(
@@ -103,6 +112,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           result,
           result.updatedExisting ? { invalidateTransport } : null
         )
+      }
+      if (!result.ok && result.savedEnvironmentId) {
+        await invalidateTransport(result.savedEnvironmentId)
       }
       return result
     }
@@ -116,7 +128,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { selector: string }
     ): RuntimeEnvironmentRemoval | Promise<RuntimeEnvironmentRemoval> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      const userDataPath = getUserDataPath()
+      const environment = resolveEnvironment(userDataPath, args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
           'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
@@ -132,13 +145,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           serverStop
         }))
       }
-      const removed = removeEnvironment(getUserDataPath(), args.selector)
-      void retireRemovedRuntimeEnvironment(
-        removed.id,
-        invalidateTransport,
-        store,
-        getUserDataPath()
-      )
+      const removed = removeEnvironment(userDataPath, args.selector)
+      void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport, store, userDataPath)
       closeLegacySelectorTransport(args.selector, removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }

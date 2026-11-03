@@ -1,3 +1,4 @@
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import { pairedRuntimeBrowserClientHostsPage } from '../../browser/paired-runtime-browser-client-host-runtime'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import {
@@ -136,7 +137,9 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         environmentId,
         PHONE_CALL_PREPARATION
       )
+      const { edgeAuth } = resolveRuntimeEnvironmentConnection(userDataPath, environment)
       return {
+        ...(edgeAuth ? { edgeAuth } : {}),
         environmentId,
         fence: relayHostFence(environment),
         pairing: getPreferredPairingOffer(environment)

@@ -1094,6 +1094,28 @@
       "keywordCooldown": "cooldown",
       "keywordSecurity": "security"
     },
+    "edgeAuth": {
+      "retry": "Save credentials",
+      "title": "Edge authentication (optional)",
+      "hint": "For a protected secure tunnel, enter its HTTP handshake headers. Values stay in protected storage and never enter pairing links. Redirects are refused.",
+      "name": "Header {{number}} name",
+      "namePlaceholder": "CF-Access-Client-Id",
+      "value": "Header {{number}} value",
+      "remove": "Remove header {{number}}",
+      "add": "Add header",
+      "invalid": "Enter valid header names and printable ASCII values.",
+      "readFailed": "Could not read edge authentication status.",
+      "saveFailed": "Could not change edge authentication. Check protected storage and reopen this form if the server pairing changed.",
+      "dialogTitle": "Edge authentication",
+      "unreadable": "Saved credentials are unreadable. Unlock protected storage, or clear them before entering new values.",
+      "configured": "Credentials are saved. Enter new values to replace them.",
+      "empty": "No edge credentials are saved.",
+      "clear": "Clear credentials",
+      "cancel": "Cancel",
+      "save": "Save credentials",
+      "menu": "Edge authentication…",
+      "browserLogin": "Use your browser login for this protected tunnel. Service-token headers are available only in the native app."
+    },
     "editorFormatOnSave": {
       "title": "Format on Save",
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",

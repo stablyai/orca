@@ -1,3 +1,4 @@
+import { resolveRuntimeEnvironmentConnection } from '../runtime/runtime-environment-edge-auth'
 import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../shared/browser-client-profile-switch-protocol'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
@@ -9,10 +10,7 @@ import {
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../shared/browser-client-file-channel-protocol'
 import type { BrowserClientHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
-import {
-  getPreferredPairedRuntimeConnection,
-  type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import { BrowserClientNetworkRouteRegistry } from './browser-client-network-route-registry'
 import {
   browserAuthorityExecutionHostStorageIdentity,
@@ -163,7 +161,10 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     throw new Error('paired_runtime_browser_client_host_profile_unavailable')
   }
   const pairingRevision = options.environment.pairingRevision ?? options.environment.createdAt
-  const connection = getPreferredPairedRuntimeConnection(options.environment)
+  const connection = resolveRuntimeEnvironmentConnection(
+    app.getPath('userData'),
+    options.environment
+  )
   const storageScope = deriveBrowserRoutePartitionStorageScope({
     orcaProfileId,
     environmentId: options.environment.id

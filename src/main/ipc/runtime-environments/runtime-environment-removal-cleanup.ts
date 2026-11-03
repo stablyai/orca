@@ -1,3 +1,4 @@
+import { clearRuntimeEdgeAuth } from '../../credentials/runtime-edge-auth-store'
 import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
 import { revokeRemoteFilePreviewGrants } from '../../media/media-preview-protocol'
 import { clearBrowserRoutePartitionStorageForEnvironment } from '../../browser/browser-route-partition-storage-runtime'
@@ -24,6 +25,11 @@ export function retireRemovedRuntimeEnvironment(
   userDataPath?: string
 ): Promise<void> {
   if (userDataPath) {
+    try {
+      clearRuntimeEdgeAuth(userDataPath, environmentId)
+    } catch {
+      console.warn('[runtime-environments] edge credential cleanup failed')
+    }
     void desktopChatCreationHistory(userDataPath).removeEnvironment(environmentId)
   }
   clearRuntimeEnvironmentCapabilityEvidence(environmentId)

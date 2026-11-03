@@ -87,6 +87,7 @@ export class DirectRpcClient implements RpcClient {
     })
     this.socketFactory = new RpcClientSocketFactory({
       endpoint,
+      edgeAuthHeaders: options.edgeAuthHeaders,
       deviceToken,
       serverPublicKeyB64,
       getCurrentSocket: () => this.socketSession?.socket ?? null,
@@ -216,10 +217,7 @@ export class DirectRpcClient implements RpcClient {
     this.reconnect.cancel()
     const session = this.socketSession
     session?.clearTimers()
-    if (this.livenessSession) {
-      this.liveness.stop(this.livenessSession)
-      this.livenessSession = null
-    }
+    this.stopLiveness()
     session?.close()
     this.socketSession = null
     session?.clearKey()

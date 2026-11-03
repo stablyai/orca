@@ -82,11 +82,8 @@ export class MobileDesktopRelay {
   }
 
   localRequestFor(request: RpcRequest, environmentId: string): RpcRequest | null {
-    return localHostedBrowserPageRequest(
-      request,
-      environmentId,
-      this.options.hosts.hostsBrowserPage
-    )
+    const { hostsBrowserPage } = this.options.hosts
+    return localHostedBrowserPageRequest(request, environmentId, hostsBrowserPage)
   }
 
   forward(
@@ -260,6 +257,7 @@ export class MobileDesktopRelay {
       const socket = await openRemoteRuntimePassthroughSocket(
         {
           ...pairedRuntimeConnectionFromOffer(host.pairing),
+          ...(host.edgeAuth ? { edgeAuth: host.edgeAuth } : {}),
           credential: { kind: 'token', deviceToken: grant.token },
           pairedDeviceId: grant.deviceId
         },

@@ -12,6 +12,9 @@ vi.mock('../transport/host-store', () => ({
   loadHostCatalog: hosts.catalog,
   loadHosts: hosts.profiles
 }))
+vi.mock('../transport/endpoint-auth-headers-store', () => ({
+  primeEndpointAuthHeaders: async () => null
+}))
 vi.mock('./host-reachability', async (importOriginal) => ({
   ...(await importOriginal<typeof HostReachability>()),
   testHostReachability: async () => true
