@@ -1,3 +1,4 @@
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../src/shared/agent-tui-input-clear'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -195,7 +196,10 @@ describe('useMobileDiffReviewSendActions', () => {
   })
 
   it('heals a marked terminal BEFORE submitting the notes', async () => {
-    const sendRequest = vi.fn().mockResolvedValue(sendResponse(true))
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(rpcReply({ terminal: {} }))
+      .mockResolvedValue(sendResponse(true))
     await mount({ sendRequest } as unknown as RpcClient)
     markMobileNativeChatInputStale('terminal-1')
 
@@ -203,21 +207,25 @@ describe('useMobileDiffReviewSendActions', () => {
       await actions?.sendPromptToTerminal('terminal-1', [COMMENT])
     })
 
-    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(sendRequest).toHaveBeenCalledTimes(3)
+    expect(sendRequest.mock.calls[0]?.[0]).toBe('terminal.read')
     // Clear before the Enter-carrying notes write so an orphaned paste cannot join the prompt.
-    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({
+    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({
       terminal: 'terminal-1',
-      text: '\x15',
+      text: AGENT_TUI_CLEAR_INPUT_MAX,
       enter: false
     })
-    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ terminal: 'terminal-1', enter: true })
-    expect(String(sendRequest.mock.calls[1]?.[1]?.text)).toContain('rename this')
+    expect(sendRequest.mock.calls[2]?.[1]).toMatchObject({ terminal: 'terminal-1', enter: true })
+    expect(String(sendRequest.mock.calls[2]?.[1]?.text)).toContain('rename this')
     expect(isMobileNativeChatInputStale('terminal-1')).toBe(false)
     expect(setActionError).toHaveBeenCalledWith('Review notes sent')
   })
 
   it('does not submit when the heal reports the line is not safe', async () => {
-    const sendRequest = vi.fn().mockResolvedValue(sendResponse(false))
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(rpcReply({ terminal: {} }))
+      .mockResolvedValue(sendResponse(false))
     await mount({ sendRequest } as unknown as RpcClient)
     markMobileNativeChatInputStale('terminal-1')
 
@@ -228,8 +236,11 @@ describe('useMobileDiffReviewSendActions', () => {
 
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).toBe('Failed to send notes')
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '\x15', enter: false })
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({
+      text: AGENT_TUI_CLEAR_INPUT_MAX,
+      enter: false
+    })
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
     expect(setActionError).not.toHaveBeenCalled()
     expect(sheets.closeSheet).not.toHaveBeenCalled()
@@ -237,7 +248,10 @@ describe('useMobileDiffReviewSendActions', () => {
   })
 
   it('keeps the marker and skips the notes when the clear throws', async () => {
-    const sendRequest = vi.fn().mockRejectedValue(new Error('offline'))
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(rpcReply({ terminal: {} }))
+      .mockRejectedValue(new Error('offline'))
     await mount({ sendRequest } as unknown as RpcClient)
     markMobileNativeChatInputStale('terminal-1')
 
@@ -247,7 +261,7 @@ describe('useMobileDiffReviewSendActions', () => {
     })
 
     expect((error as Error).message).toBe('Failed to send notes')
-    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).toHaveBeenCalledTimes(2)
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
     expect(isMobileNativeChatInputStale('terminal-1')).toBe(true)
   })
@@ -284,6 +298,7 @@ describe('useMobileDiffReviewSendActions', () => {
   it('still reports a rejected terminal.send after a successful heal', async () => {
     const sendRequest = vi
       .fn()
+      .mockResolvedValueOnce(rpcReply({ terminal: {} }))
       .mockResolvedValueOnce(sendResponse(true))
       .mockResolvedValueOnce(sendResponse(false))
     await mount({ sendRequest } as unknown as RpcClient)

@@ -1,3 +1,4 @@
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../src/shared/agent-tui-input-clear'
 import { createElement } from 'react'
 import { resetMobileNativeChatDraftInputsForTests } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -133,7 +134,11 @@ describe('useMobileSessionImageAttachments', () => {
     )
     if (leaseReady) {
       expect(sends).toEqual([
-        ['terminal.send', { terminal: 'term-1', text: '\x15', enter: false }, expect.any(Object)],
+        [
+          'terminal.send',
+          { terminal: 'term-1', text: AGENT_TUI_CLEAR_INPUT_MAX, enter: false },
+          expect.any(Object)
+        ],
         [
           'terminal.send',
           { terminal: 'term-1', text: '\x1b[200~/tmp/a.png\x1b[201~ ', enter: false },

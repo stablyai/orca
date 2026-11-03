@@ -17,7 +17,7 @@ function clientWithResponses(
   const calls: { method: string; params: Record<string, unknown> }[] = []
   return {
     calls,
-    sendRequest: vi.fn(async (method: string, params?: unknown) => {
+    sendRequest: vi.fn(async (method: string, params?: unknown): Promise<RpcResponse> => {
       if (method === 'terminal.read') {
         return { id: 'read', ok: true, result: { terminal: { draft } }, _meta: { runtimeId: 'r' } }
       }
