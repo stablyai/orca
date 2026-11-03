@@ -44,11 +44,11 @@ export function SessionLinkControl({
   }
   return (
     <>
-      <Button variant="pane-title" size="xs" className="max-w-64" onClick={() => setOpen(true)}>
+      <Button variant="ghost" size="xs" className="min-w-0 max-w-64" onClick={() => setOpen(true)}>
         <Link2 className="size-3" />
         <span className="truncate">
           {link
-            ? `${t('components.sessionLink.linked', 'Linked with')} ${partner?.agent ?? ''}${link.state === 'paused' ? ` · ${t('components.sessionLink.paused', 'Paused')}` : link.state === 'ended' ? ` · ${t('components.sessionLink.endedShort', 'Ended')}` : waiting ? ` · ${t('components.sessionLink.waitingShort', 'Waiting')}` : ''}`
+            ? `${t('components.sessionLink.linked', 'Linked with')} ${partner?.name ?? partner?.agent ?? ''}${link.state === 'paused' ? ` · ${t('components.sessionLink.paused', 'Paused')}` : link.state === 'ended' ? ` · ${t('components.sessionLink.endedShort', 'Ended')}` : waiting ? ` · ${t('components.sessionLink.waitingShort', 'Waiting')}` : ''}`
             : t('components.sessionLink.workTogether', 'Work together…')}
         </span>
       </Button>

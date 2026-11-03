@@ -91,7 +91,13 @@ async function openDialog(frame: HTMLElement) {
 }
 const render = () => (
   <div className="p-4">
-    <SessionLinkControl sessionId={source.sessionId} target={{ kind: 'local' }} />
+    <div className="relative h-6">
+      <div className="pane-title-bar" data-chromeless="">
+        <div className="pane-title-actions ml-auto flex items-center">
+          <SessionLinkControl sessionId={source.sessionId} target={{ kind: 'local' }} />
+        </div>
+      </div>
+    </div>
   </div>
 )
 export const create = defineFixture({

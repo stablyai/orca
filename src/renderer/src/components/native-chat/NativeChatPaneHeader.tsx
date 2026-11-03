@@ -58,7 +58,9 @@ export function NativeChatPaneHeader({
       style={HEADER_STYLE}
     >
       <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
-        {nativeChat.sessionId && target?.kind === 'local' ? (
+        {nativeChat.sessionId &&
+        (nativeChat.agent === 'claude' || nativeChat.agent === 'codex') &&
+        target?.kind === 'local' ? (
           <SessionLinkControl sessionId={nativeChat.sessionId} target={target} />
         ) : null}
         {handOff && focused ? (
