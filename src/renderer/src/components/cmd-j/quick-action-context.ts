@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import {
@@ -172,7 +172,11 @@ export function buildCmdJQuickActionContext(args: {
 }): CmdJQuickActionContext {
   const activeWorktreeId = args.state.activeWorktreeId
   const activeWorktree = activeWorktreeId
-    ? (findWorktreeById(selectWorktreesByRepo(args.state), activeWorktreeId) ?? null)
+    ? (findKnownWorktreeById(
+        args.state,
+        activeWorktreeId,
+        args.state.activeWorkspaceExecutionHostId ?? undefined
+      ) ?? null)
     : null
   const activeGroupId = resolveCmdJActiveGroupId(
     args.state,

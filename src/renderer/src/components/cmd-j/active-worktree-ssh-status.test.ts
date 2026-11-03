@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import { makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
-import { getActiveWorktreeSshStatus } from './quick-action-context'
+import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { buildCmdJQuickActionContext, getActiveWorktreeSshStatus } from './quick-action-context'
+import { getCmdJQuickActions } from './quick-actions'
 
 const connection = (status: SshConnectionState['status']): SshConnectionState => ({
   targetId: 'box',
@@ -50,5 +53,50 @@ describe('active workspace SSH status', () => {
 
   it('treats an SSH host with no known connection as disconnected', () => {
     expect(sshStatus({ executionHostId: 'ssh:box' }, {}, null)).toBe('disconnected')
+  })
+
+  it('hides Move to Status while the active folder workspace is on a disconnected SSH host', () => {
+    const folder = makeFolderWorkspace({ id: 'folder-1', executionHostId: 'ssh:box' })
+    const store = createTestStore()
+    store.setState({
+      activeView: 'terminal',
+      activeWorktreeId: folderWorkspaceKey(folder.id),
+      projectGroups: [
+        {
+          id: folder.projectGroupId,
+          name: 'Platform',
+          parentPath: '/work',
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1,
+          executionHostId: 'ssh:box'
+        }
+      ],
+      folderWorkspaces: [folder],
+      sshConnectionStates: new Map<string, SshConnectionState>(),
+      activeGroupIdByWorktree: { [folderWorkspaceKey(folder.id)]: 'group-1' }
+    })
+    const context = buildCmdJQuickActionContext({
+      state: store.getState(),
+      activeGroupSnapshot: null,
+      openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
+      openNewMarkdownFile: async () => {},
+      openNewTerminalTab: async () => {},
+      openCreateWorkspace: () => {},
+      deleteActiveWorkspace: () => {},
+      openAddQuickCommand: () => {},
+      openWorkspaceStatusPicker: () => {}
+    })
+    const moveToStatus = getCmdJQuickActions().find((action) => action.id === 'move-to-status')
+    expect(context.sshStatus).toBe('disconnected')
+    expect(moveToStatus?.isAvailable?.(context)).toEqual({
+      available: false,
+      reason: 'ssh-disconnected'
+    })
   })
 })
