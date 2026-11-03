@@ -171,8 +171,7 @@ export async function createTerminalTabOnHost({
     await refreshWebRuntimeSessionTabsSnapshot(host.environmentId, hostWorktreeId, {
       afterCurrentInFlight: true,
       acceptCurrentSnapshot: true,
-      expectedEnvironmentPairingRevision: owner.pairingRevision,
-      errorMode: 'throw'
+      expectedEnvironmentPairingRevision: owner.pairingRevision
     })
     if (!matchesWebSessionIntentOwner(owner)) {
       throw new Error('runtime_environment_pairing_changed')

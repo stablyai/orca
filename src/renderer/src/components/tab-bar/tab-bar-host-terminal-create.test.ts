@@ -148,23 +148,26 @@ it.each(['created', 'repaired', 'refresh-failed'])(
       }
     })
     if (outcome === 'refresh-failed') {
-      vi.mocked(refreshWebRuntimeSessionTabsSnapshot).mockRejectedValueOnce(
-        new Error('refresh failed')
+      vi.mocked(refreshWebRuntimeSessionTabsSnapshot).mockImplementationOnce(
+        async (_environmentId, _worktreeId, options) => {
+          if (options?.errorMode === 'throw') {
+            throw new Error('refresh failed')
+          }
+        }
       )
     }
     if (outcome !== 'created') {
-      await expect(createTerminalTabOnHost(REQUEST)).rejects.toThrow(
-        outcome === 'repaired' ? 'runtime_environment_pairing_changed' : 'refresh failed'
-      )
+      const creation = createTerminalTabOnHost(REQUEST)
+      await (outcome === 'refresh-failed'
+        ? expect(creation).resolves.toMatchObject({ hostWorktreeId: HOST, tabId: 'host-tab' })
+        : expect(creation).rejects.toThrow('runtime_environment_pairing_changed'))
       expect(store.getState().tabsByWorktree[LOCAL] ?? []).toHaveLength(
         outcome === 'refresh-failed' ? 1 : 0
       )
       expect(store.getState().unifiedTabsByWorktree[LOCAL] ?? []).toHaveLength(
         outcome === 'refresh-failed' ? 1 : 0
       )
-      expect(mocks.call.mock.calls.some((call) => call[1] === 'session.tabs.close')).toBe(
-        outcome === 'refresh-failed'
-      )
+      expect(mocks.call.mock.calls.some((call) => call[1] === 'session.tabs.close')).toBe(false)
       expect(
         mocks.call.mock.calls.every((call) => call[3]?.expectedEnvironmentPairingRevision === 1)
       ).toBe(true)
