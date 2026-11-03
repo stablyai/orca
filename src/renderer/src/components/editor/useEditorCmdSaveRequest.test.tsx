@@ -9,8 +9,10 @@ import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 
 const storeState = vi.hoisted(() => {
   const editorDrafts: Record<string, string> = {}
+  const openFiles: OpenFile[] = []
   return {
     editorDrafts,
+    openFiles,
     editorViewMode: {},
     markdownViewMode: {},
     settings: { editorInsertFinalNewline: false }
@@ -64,6 +66,7 @@ describe('useEditorCmdSaveRequest', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     storeState.editorDrafts = {}
+    storeState.openFiles = []
     storeState.markdownViewMode = {}
     storeState.settings.editorInsertFinalNewline = false
     container = document.body.appendChild(document.createElement('div'))
@@ -268,6 +271,36 @@ describe('useEditorCmdSaveRequest', () => {
     expect(save).toHaveBeenCalledExactlyOnceWith(draft)
   })
 
+  it('uses loaded text when the current file is dirty but has no serialized draft', () => {
+    const file: OpenFile = {
+      ...makeFile('clean'),
+      filePath: '/repo/clean.ts',
+      relativePath: 'clean.ts',
+      language: 'typescript',
+      isDirty: false
+    }
+    const save = vi.fn(async () => true)
+    storeState.settings.editorInsertFinalNewline = true
+    storeState.openFiles = [{ ...file, isDirty: true }]
+    act(() => {
+      root.render(
+        <SaveProbe
+          activeFile={file}
+          enabled
+          onSave={save}
+          fileContents={{ [file.id]: { content: 'original\n', isBinary: false } }}
+        />
+      )
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, { detail: { fileId: file.id } })
+      )
+    })
+
+    expect(save).toHaveBeenCalledExactlyOnceWith('original\n')
+  })
+
   it.each([
     { csvPreviewOnly: true, shouldSave: false },
     { csvPreviewOnly: false, shouldSave: true }
@@ -308,4 +341,35 @@ describe('useEditorCmdSaveRequest', () => {
       }
     }
   )
+
+  it('does not save a CSV preview marked read-only after the panel rendered', () => {
+    const file: OpenFile = {
+      ...makeFile('csv-preview'),
+      filePath: '/repo/large.csv',
+      relativePath: 'large.csv',
+      language: 'csv',
+      isDirty: false
+    }
+    const save = vi.fn(async () => true)
+    storeState.settings.editorInsertFinalNewline = true
+    storeState.markdownViewMode = { [file.id]: 'source' }
+    storeState.openFiles = [{ ...file, csvPreviewOnly: true }]
+    act(() => {
+      root.render(
+        <SaveProbe
+          activeFile={file}
+          enabled
+          onSave={save}
+          fileContents={{ [file.id]: { content: 'name\npartial', isBinary: false } }}
+        />
+      )
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, { detail: { fileId: file.id } })
+      )
+    })
+
+    expect(save).not.toHaveBeenCalled()
+  })
 })

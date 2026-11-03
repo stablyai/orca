@@ -37,12 +37,14 @@ export function useEditorCmdSaveRequest({
       ) {
         return
       }
-      const saveTargetFile = getEditorSaveTargetFile(activeFile, openFiles)
-      if (!saveTargetFile) {
+      const targetFile = getEditorSaveTargetFile(activeFile, openFiles)
+      if (!targetFile) {
         return
       }
       // Read-only Markdown previews still save their source record’s current draft.
       const state = useAppStore.getState()
+      const saveTargetFile =
+        state.openFiles.find((openFile) => openFile.id === targetFile.id) ?? targetFile
       const draft = state.editorDrafts[saveTargetFile.id]
       const loaded = fileContents[activeFile.id]
       const cleanCodeContent =
@@ -53,15 +55,15 @@ export function useEditorCmdSaveRequest({
         loaded &&
         !loaded.isBinary &&
         !loaded.loadError &&
-        !loaded.isStale &&
-        needsFinalNewline(loaded.content)
+        !loaded.isStale
           ? loaded.content
           : undefined
+      const needsCleanSave = cleanCodeContent !== undefined && needsFinalNewline(cleanCodeContent)
       if (
         draft === undefined &&
         !saveTargetFile.isUntitled &&
         !saveTargetFile.isDirty &&
-        cleanCodeContent === undefined
+        !needsCleanSave
       ) {
         return
       }
