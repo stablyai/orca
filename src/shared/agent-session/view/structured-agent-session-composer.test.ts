@@ -83,9 +83,16 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
     // Codex app-server has no slash parser: /status would land as prose and its
     // curated reply is terminal-only, so the chat surface drops it. A reported
     // name outside the curated catalog stays (the session advertised it).
-    expect(names('codex')).toEqual(['clear', 'compact', 'custom-tool'])
+    expect(names('codex')).toEqual(['model', 'effort', 'clear', 'compact', 'goal', 'custom-tool'])
     // Claude's harness expands slash commands from message text, so it keeps them.
-    expect(names('claude')).toEqual(['clear', 'compact', 'status', 'custom-tool'])
+    expect(names('claude')).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact',
+      'status',
+      'custom-tool'
+    ])
   })
 })
 
