@@ -735,6 +735,64 @@ describe('the represented Claude request on its execution host', () => {
     })
   })
 
+  it('keeps the request through a lifecycle refresh of the waiting lead, so its batch still clears it', async () => {
+    await withClaudePane(async (post, server) => {
+      const tool = { tool_name: 'Read', tool_input: { file_path: '/a' } }
+      await post(start)
+      await post(hook('UserPromptSubmit', { prompt: 'Read /a' }))
+      await post(pre('A', tool))
+      expect(await post(ask(tool))).toBe('waiting')
+      expect(
+        await post(hook('SubagentStart', { agent_id: 'child-c', agent_type: 'general-purpose' }))
+      ).toBe('waiting')
+      expect(await post(batch([['A', tool]]))).toBe('working')
+
+      // A child's own request survives another child's start the same way, and its batch restores the lead.
+      await post(hook('SubagentStart', child))
+      await post(pre('C', readAt(0), child))
+      expect(await post(ask(readAt(0), child))).toBe('waiting')
+      await post(hook('SubagentStart', { agent_id: 'child-d', agent_type: 'general-purpose' }))
+      expect(await post(batch([['C', readAt(0)]], child))).toBe('working')
+      expect(server.getStatusSnapshot()[0].mainAgent?.state).toBe('working')
+
+      // A real newer dialog still replaces the request: its batch then leaves the question alone.
+      const question = {
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Which?' }] }
+      }
+      await post(pre('B', tool))
+      await post(ask(tool))
+      await post(pre('Q', question))
+      expect(await post(ask(question))).toBe('waiting')
+      await post(batch([['B', tool]]))
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'waiting',
+        toolName: 'AskUserQuestion'
+      })
+    })
+  })
+
+  it('ends even a helper’s request when a new conversation starts, while compact and a parent Stop do not', async () => {
+    await withClaudePane(async (post) => {
+      const helper = { agent_id: 'hook-agent-1' }
+      await post(start)
+      await post(submit)
+      await post(pre('H', readAt(0), helper))
+      expect(await post(ask(readAt(0), helper))).toBe('waiting')
+      expect(await post(hook('PostCompact', { trigger: 'auto' }))).toBe('waiting')
+      expect(await post(hook('Stop'))).toBe('waiting')
+      // /clear: a genuinely new session, idle until its own first prompt.
+      const s2 = '22222222-2222-4222-8222-222222222222'
+      expect(await post({ ...start, session_id: s2, source: 'clear' })).toBe('done')
+      // The new conversation's own request still settles at its batch.
+      const next = { session_id: s2 }
+      await post({ ...submit, ...next })
+      await post({ ...pre('N', readAt(5)), ...next })
+      expect(await post({ ...ask(readAt(5)), ...next })).toBe('waiting')
+      expect(await post({ ...batch([['N', readAt(5)]]), ...next })).toBe('working')
+    })
+  })
+
   it('ends a child’s request at a complete inventory that ends that child, but not while it still runs', async () => {
     await withClaudePane(async (post) => {
       await post(start)

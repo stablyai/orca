@@ -648,4 +648,38 @@ describe('publishAgentHookEnvelope redelivery', () => {
       dispatcher.dispose()
     }
   })
+
+  it('fits a replayed held request whose roster and card exist only in the projection, keeping it answerable', () => {
+    const primary = makeBoundedClient(65536)
+    const dispatcher = new RelayDispatcher(primary.write, primary.options)
+    try {
+      const held = makeEnvelope({ interactivePrompt: 60_000, subagents: 600 })
+      const envelope: AgentHookRelayEnvelope = {
+        ...makeEnvelope({}),
+        isReplay: true,
+        claudePermission: {
+          version: 1,
+          held: true,
+          row: {
+            hookEventName: 'PermissionRequest',
+            payload: { ...held.payload, state: 'waiting' }
+          }
+        }
+      }
+      const original = JSON.stringify(envelope)
+      publishAgentHookEnvelope(dispatcher, envelope)
+
+      const [published] = decodeEnvelopes(primary)
+      const row = published?.claudePermission?.row
+      expect(row?.hookEventName).toBe('PermissionRequest')
+      expect(row?.payload.state).toBe('waiting')
+      expect(row?.payload.subagents).toBeUndefined()
+      expect(row?.payload.interactivePrompt?.length).toBeGreaterThan(0)
+      expect(published?.shedFields?.some((field) => field.startsWith('subagents'))).toBe(true)
+      // Fitting copies; the relay's cached envelope is untouched.
+      expect(JSON.stringify(envelope)).toBe(original)
+    } finally {
+      dispatcher.dispose()
+    }
+  })
 })

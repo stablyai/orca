@@ -1,12 +1,13 @@
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
+import type { ParsedAgentStatusPayload } from '../shared/agent-status-types'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { ClaudePermissionProjection } from '../shared/agent-hook-listener/claude-permission-facts'
 import {
   attachClaudePermissionToolUseId,
   claudeBatchSettlesRequest,
   resumeClaudeRequestLead,
-  shouldKeepClaudePermissionVisible,
-  withHeldChildWaitMainAgent
+  holdClaudeRequest,
+  shouldKeepClaudePermissionVisible
 } from '../shared/agent-hook-listener/claude-permission-transition'
 
 export type RelayClaudePermissionDecision =
@@ -71,7 +72,7 @@ export function decideRelayClaudePermission(
   }
   const attached = attachClaudePermissionToolUseId(represented ?? cached, event)
   if (represented && shouldKeepClaudePermissionVisible(represented, attached, state)) {
-    requests.set(event.paneKey, withHeldChildWaitMainAgent(represented, attached))
+    requests.set(event.paneKey, holdClaudeRequest(represented, attached, true))
     return { kind: 'publish', event: { ...event, claudePermission: { version: 1, held: true } } }
   }
   if (!known && !observesCurrentDialog(event)) {
@@ -104,7 +105,16 @@ export function relayClaudeReplayProjection(
       ...(toolUseId ? { toolUseId } : {}),
       ...(request.toolAgentId ? { toolAgentId: request.toolAgentId } : {}),
       ...(request.toolAgentType ? { toolAgentType: request.toolAgentType } : {}),
-      payload: request.payload
+      payload: currentRoster(request.payload, state.lastStatusByPaneKey.get(paneKey)?.payload)
     }
   }
+}
+
+/** The held request's own card with the pane's current roster, so both views name one roster. */
+function currentRoster(
+  request: ParsedAgentStatusPayload,
+  current: ParsedAgentStatusPayload | undefined
+): ParsedAgentStatusPayload {
+  const { subagents: _held, ...card } = request
+  return current?.subagents ? { ...card, subagents: current.subagents } : card
 }

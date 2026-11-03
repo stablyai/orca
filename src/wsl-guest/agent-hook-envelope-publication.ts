@@ -5,8 +5,8 @@ import {
   type AgentHookUnavailableEnvelope,
   type AgentHookRelayEnvelope
 } from '../shared/agent-hook-relay'
-import { fitInteractivePrompt } from '../shared/agent-status-field-normalization'
 import type { RelayDispatcher } from './dispatcher'
+import { carriesField, copyViews, fitWaitingCards, waitingCards } from './agent-hook-envelope-views'
 
 // Shed reconstructible fields first; keep state/paneKey and preserve interactivePrompt longest so waiting panes remain answerable.
 // Mark shed rosters on the wire so clients restore cached subagents instead of permitting hibernation.
@@ -44,29 +44,6 @@ function toNotificationParams(
   return shedFields.length === 0
     ? params
     : { ...params, [AGENT_HOOK_SHED_FIELDS_KEY]: [...shedFields] }
-}
-
-function fitWaitingInteractivePrompt(
-  dispatcher: RelayDispatcher,
-  envelope: AgentHookRelayEnvelope,
-  shedFields: readonly string[]
-): AgentHookRelayEnvelope | null {
-  const prompt = envelope.payload.interactivePrompt
-  if (!prompt) {
-    return null
-  }
-  const fitted = fitInteractivePrompt(prompt, (interactivePrompt) =>
-    fitsProducerFrame(
-      dispatcher,
-      toNotificationParams(
-        { ...envelope, payload: { ...envelope.payload, interactivePrompt } },
-        shedFields
-      )
-    )
-  )
-  return fitted === null
-    ? null
-    : { ...envelope, payload: { ...envelope.payload, interactivePrompt: fitted } }
 }
 
 /** Returns the ids of the clients that rejected the frame; a rejected client is never written to. */
@@ -137,7 +114,7 @@ export function publishAgentHookEnvelope(
   let step = 0
   for (;;) {
     const params = toNotificationParams(candidate, shedFields)
-    while (step < SHED_ORDER.length && candidate.payload[SHED_ORDER[step]] === undefined) {
+    while (step < SHED_ORDER.length && !carriesField(candidate, SHED_ORDER[step])) {
       step += 1
     }
     if (!measureBeforePublish || fitsProducerFrame(dispatcher, params)) {
@@ -168,8 +145,10 @@ export function publishAgentHookEnvelope(
     }
     const field = SHED_ORDER[step]
     step += 1
-    if (field === 'interactivePrompt' && candidate.payload.state === 'waiting') {
-      const fitted = fitWaitingInteractivePrompt(dispatcher, candidate, shedFields)
+    if (field === 'interactivePrompt' && waitingCards(candidate).length > 0) {
+      const fitted = fitWaitingCards(candidate, (probe) =>
+        fitsProducerFrame(dispatcher, toNotificationParams(probe, shedFields))
+      )
       if (fitted) {
         candidate = fitted
         continue
@@ -180,22 +159,9 @@ export function publishAgentHookEnvelope(
       return
     }
     // Copy before shedding: the server caches this envelope for reconnect replay.
-    const row = candidate.claudePermission?.row
-    candidate = {
-      ...candidate,
-      payload: { ...candidate.payload },
-      // A replayed held request rides in the projection; it sheds in step with the row it replaces.
-      ...(row && candidate.claudePermission
-        ? {
-            claudePermission: {
-              ...candidate.claudePermission,
-              row: { ...row, payload: { ...row.payload } }
-            }
-          }
-        : {})
-    }
-    const shedField =
-      field === 'subagents' ? createShedSubagentsField(candidate.payload.subagents ?? []) : field
+    candidate = copyViews(candidate)
+    const roster = candidate.payload.subagents ?? candidate.claudePermission?.row?.payload.subagents
+    const shedField = field === 'subagents' ? createShedSubagentsField(roster ?? []) : field
     delete candidate.payload[field]
     delete candidate.claudePermission?.row?.payload[field]
     shedFields.push(shedField)

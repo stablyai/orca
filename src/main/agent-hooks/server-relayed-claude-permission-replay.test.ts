@@ -439,21 +439,30 @@ async function startSinkPair() {
   running.push(relay)
   await relay.start({ publishEndpoint: false })
   let read = 0
-  const deliver = () => {
+  /** Decoded envelopes written since the last call, to the given desktops (all by default). */
+  const deliver = (to: AgentHookServer[] = [current, older]) => {
+    const envelopes: AgentHookRelayEnvelope[] = []
     for (const frame of frames.slice(read)) {
       const length = frame.readUInt32BE(9)
       const message =
         length > 0 ? JSON.parse(frame.subarray(13, 13 + length).toString('utf-8')) : null
       if (message?.method === 'agent.hook') {
-        current.ingestRemote(message.params, 'conn-1')
-        older.ingestRemote(olderDesktop(message.params), 'conn-1')
+        envelopes.push(message.params)
+        for (const desktop of to) {
+          desktop.ingestRemote(
+            desktop === older ? olderDesktop(message.params) : message.params,
+            'conn-1'
+          )
+        }
       }
     }
     read = frames.length
+    return envelopes
   }
   return {
     current,
     older,
+    relay,
     post: async (raw: Record<string, unknown>) => {
       const { port, token } = relay.getCoordinates()
       const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
@@ -529,11 +538,11 @@ describe('current-state delivery through the relay’s real sink', () => {
     const sink = await startSinkPair()
     await sink.post(start)
     await sink.post(submit)
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 600; i++) {
       await sink.post({
         ...root,
         hook_event_name: 'SubagentStart',
-        agent_id: `child-${i}-${'c'.repeat(80)}`,
+        agent_id: `child-${i}`,
         agent_type: 'general-purpose'
       })
     }
@@ -590,5 +599,98 @@ describe('current-state delivery through the relay’s real sink', () => {
     for (const desktop of [sink.current, sink.older]) {
       expect(row(desktop)).toMatchObject({ state: 'waiting', toolName: 'AskUserQuestion' })
     }
+  })
+})
+
+describe('the represented request across lifecycle refreshes, new conversations and large replays', () => {
+  const tool = { tool_name: 'Read', tool_input: { file_path: '/a' } }
+
+  it('keeps the request through a child start on the relay, replays it as itself, and clears at its batch', async () => {
+    const pair = await startPair()
+    await pair.post(start)
+    await pair.post({ ...root, hook_event_name: 'UserPromptSubmit', prompt: 'Read /a' })
+    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'A', ...tool })
+    await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })
+    expect(
+      await pair.post({
+        ...root,
+        hook_event_name: 'SubagentStart',
+        agent_id: 'child-c',
+        agent_type: 'general-purpose'
+      })
+    ).toBe('waiting')
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(pair.forwarded.at(-1)?.claudePermission).toMatchObject({
+      held: true,
+      row: { hookEventName: 'PermissionRequest', payload: { toolName: 'Read' } }
+    })
+    expect(
+      await pair.post({
+        ...root,
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [{ ...tool, tool_use_id: 'A' }]
+      })
+    ).toBe('working')
+  })
+
+  it('ends a helper’s request when a new conversation starts, with nothing of the old one left to replay', async () => {
+    const pair = await startPair()
+    const helper = { agent_id: 'hook-agent-1' }
+    await pair.post(start)
+    await pair.post(submit)
+    await pair.post({
+      ...root,
+      hook_event_name: 'PreToolUse',
+      tool_use_id: 'H',
+      ...tool,
+      ...helper
+    })
+    expect(
+      await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool, ...helper })
+    ).toBe('waiting')
+    expect(
+      await pair.post({
+        ...start,
+        session_id: '22222222-2222-4222-8222-222222222222',
+        source: 'clear'
+      })
+    ).toBe('done')
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(pair.forwarded.at(-1)?.claudePermission).toEqual({ version: 1 })
+    expect(row(pair.desktop).state).toBe('done')
+  })
+
+  it('replays a held request to a desktop that missed it after 600 children came and went, through the real sink', async () => {
+    const sink = await startSinkPair()
+    await sink.post(start)
+    await sink.post(submit)
+    for (let i = 0; i < 600; i++) {
+      await sink.post({
+        ...root,
+        hook_event_name: 'SubagentStart',
+        agent_id: `child-${i}`,
+        agent_type: 'general-purpose'
+      })
+    }
+    await sink.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'A', ...tool })
+    await sink.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })
+    await sink.post({
+      ...root,
+      hook_event_name: 'PreToolUse',
+      tool_use_id: 'U',
+      tool_name: 'Bash',
+      tool_input: { command: 'true' }
+    })
+    for (let i = 0; i < 600; i++) {
+      await sink.post({ ...root, hook_event_name: 'SubagentStop', agent_id: `child-${i}` })
+    }
+    sink.deliver()
+    const late = new AgentHookServer()
+    running.push(late)
+    sink.relay.replayCachedPayloadsForPanes()
+    const [replay] = sink.deliver([late])
+    // The held request carries the pane's current roster, not the 600 children that have since ended.
+    expect(replay?.claudePermission?.row?.payload.subagents ?? []).toEqual([])
+    expect(row(late)).toMatchObject({ state: 'waiting', toolName: 'Read' })
   })
 })

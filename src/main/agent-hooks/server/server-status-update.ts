@@ -19,7 +19,7 @@ import {
   pairedClaudeNonAgentWork,
   resumeClaudeRequestLead,
   shouldKeepClaudePermissionVisible,
-  withHeldChildWaitMainAgent
+  holdClaudeRequest
 } from '../../../shared/agent-hook-listener/claude-permission-transition'
 import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
@@ -232,7 +232,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         ? projection.held === true && !projection.row
         : shouldKeepClaudePermissionVisible(previous, effectivePayload, host))
     ) {
-      const held = withHeldChildWaitMainAgent(previous, effectivePayload)
+      const held = holdClaudeRequest(previous, effectivePayload, !!host || !!projection)
       // Child prompts preserve main-agent progress and its paired shell evidence; the main agent's own waits do not.
       if (previous.toolAgentId) {
         onAccepted?.()
