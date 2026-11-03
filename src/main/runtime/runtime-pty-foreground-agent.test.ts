@@ -49,4 +49,15 @@ describe('RuntimePtyForegroundAgent.identifyUnowned', () => {
     pty.launchAgent = 'codex'
     expect(agent.identifyUnowned('pty-1', () => true)).toBeNull()
   })
+
+  it('rereads once a kept late answer is older than a retry would be', async () => {
+    vi.useFakeTimers()
+    const { agent, reads } = setup()
+    void agent.identifyUnowned('pty-1', () => true)
+    await vi.advanceTimersByTimeAsync(TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS)
+    reads[0]!('claude')
+    await vi.advanceTimersByTimeAsync(TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS + 1)
+    void agent.identifyUnowned('pty-1', () => true)
+    expect(reads).toHaveLength(2)
+  })
 })

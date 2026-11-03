@@ -25,7 +25,7 @@ export class RuntimePtyForegroundAgent {
   private readonly delayedTitles = new Map<string, number>()
   private readonly identifies = new Map<
     string,
-    { settled: boolean; promise: Promise<TerminalAgent | null> }
+    { settledAt?: number; promise: Promise<TerminalAgent | null> }
   >()
   // A scan's recognized agent for a version name holds while that name stays in the foreground.
   private readonly confirmedByPtyId = new Map<
@@ -121,14 +121,20 @@ export class RuntimePtyForegroundAgent {
       return null
     }
     let entry = this.identifies.get(ptyId)
+    if (entry?.settledAt !== undefined) {
+      // An answer that outlasted its caller's timeout serves the retry once; a later dialog rereads.
+      this.identifies.delete(ptyId)
+      if (Date.now() - entry.settledAt > TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS) {
+        entry = undefined
+      }
+    }
     if (!entry) {
-      const fresh = { settled: false, promise: this.identifyForeground(ptyId) }
-      void fresh.promise.finally(() => (fresh.settled = true))
+      const fresh: { settledAt?: number; promise: Promise<TerminalAgent | null> } = {
+        promise: this.identifyForeground(ptyId)
+      }
+      void fresh.promise.finally(() => (fresh.settledAt = Date.now()))
       entry = fresh
       this.identifies.set(ptyId, entry)
-    } else if (entry.settled) {
-      // An answer that outlasted its caller's timeout serves the retry once instead of a fresh read.
-      this.identifies.delete(ptyId)
     }
     const current = entry
     return withTimeoutResult(current.promise, TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS).then(
