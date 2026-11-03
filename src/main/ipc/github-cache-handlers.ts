@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { getStoreGitHubParticipants } from '../runtime/github-participant-store'
 import { readSharedGitHubCache } from '../runtime/github-participant-shared-cache'

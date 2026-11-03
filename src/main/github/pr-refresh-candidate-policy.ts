@@ -37,9 +37,6 @@ export function hostedReviewOptionArgs(
     ...(candidate.localGitOptions?.wslDistro
       ? { wslDistro: candidate.localGitOptions.wslDistro }
       : {}),
-    ...(candidate.localGitOptions?.ghAccount
-      ? { ghAccount: candidate.localGitOptions.ghAccount }
-      : {}),
     admissionTier: admissionTierForRefreshReason(reason)
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
