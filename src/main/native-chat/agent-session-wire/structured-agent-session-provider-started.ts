@@ -219,13 +219,13 @@ export async function settleStructuredAgentSessionOptionsReported(
   if (context.sessions.get(event.sessionId)?.child !== child) {
     return
   }
-  context.publishStatus?.(event.sessionId)
   await noteStructuredAgentSessionReportedOptions(
     context,
     event.sessionId,
     event.fence,
     event.reportedOptions
   )
+  context.publishStatus?.(event.sessionId)
   if (event.catalogListing) {
     void saveStructuredAgentSessionStartReadbackListing(context, event, event.catalogListing)
   }

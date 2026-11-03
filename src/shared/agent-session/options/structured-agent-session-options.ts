@@ -64,6 +64,7 @@ export type StructuredAgentSessionOptionState = {
   permissionMode: string | null
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
+  reportedModel?: string
   reportedEffort?: string
   /** The host is still listing models; it only keeps a seed from settling to built-in, since controls follow their data. */
   listingInProgress?: boolean
@@ -187,6 +188,7 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     optionsAnswerPresent: true,
+    reportedModel: current.reportedModel,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
     catalog: keepCatalog
       ? state.catalog
@@ -228,12 +230,22 @@ function structuredAgentSessionControlsModelId(
 
 /** Runtime reports describe the process whose options answer carried them; a newer fence has none until it answers. */
 export function structuredAgentSessionReportsAtFence<
-  T extends Pick<StructuredAgentSessionOptionState, 'reportedPermissionMode' | 'reportedEffort'>
+  T extends Pick<
+    StructuredAgentSessionOptionState,
+    'reportedPermissionMode' | 'reportedModel' | 'reportedEffort'
+  >
 >(state: T, answeredFence: number | null | undefined, fence: number | null): T {
   return answeredFence === fence ||
-    (state.reportedPermissionMode === undefined && state.reportedEffort === undefined)
+    (state.reportedPermissionMode === undefined &&
+      state.reportedModel === undefined &&
+      state.reportedEffort === undefined)
     ? state
-    : { ...state, reportedPermissionMode: undefined, reportedEffort: undefined }
+    : {
+        ...state,
+        reportedPermissionMode: undefined,
+        reportedModel: undefined,
+        reportedEffort: undefined
+      }
 }
 
 export function commitStructuredAgentSessionOption(
@@ -242,6 +254,9 @@ export function commitStructuredAgentSessionOption(
   value: string,
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
+  if (id === 'model') {
+    state = { ...state, reportedModel: undefined }
+  }
   if (id === 'model' || id === 'effort') {
     state = { ...state, reportedEffort: undefined }
   }
