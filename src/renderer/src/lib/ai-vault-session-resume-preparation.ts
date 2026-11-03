@@ -22,7 +22,7 @@ import type { FilesystemPathFlavor } from '../../../shared/filesystem-entry-type
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { readIpcErrorMessage } from './ipc-error'
 import type { AiVaultResumeCommandSession } from './ai-vault-resume-command'
-import { agentForksThroughChat } from '../../../shared/agent-resume-argv'
+import { agentForksThroughChat } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import { translate } from '@/i18n/i18n'
 
 export function prepareAiVaultSessionForResume(session: AiVaultSession): Promise<AiVaultSession> {

@@ -11,7 +11,7 @@ import {
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
+import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import { resolveAgentPaneAuthorityKey } from '../agent-pane-authority'
 import {
   findAgentPaneWorktreeId,

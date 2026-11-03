@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { TUI_AGENT_CONFIG } from '../../../src/shared/tui-agent-config'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
-import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../src/shared/tui-agent-selection'
+import { TUI_AGENT_CONFIG } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../src/shared/agent-launch/catalog/tui-agent-selection'
 import { MOBILE_AGENT_CATALOG } from './mobile-agent-catalog'
 
 describe('mobile agent catalog', () => {

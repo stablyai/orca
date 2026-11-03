@@ -7,7 +7,7 @@ import {
   resolveAgentLaunchRuntime
 } from './agent-launch-scope-runtime'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
-import { agentLaunchQuotingShell } from '../../shared/agent-launch-runtime'
+import { agentLaunchQuotingShell } from '../../shared/agent-launch/startup/agent-launch-runtime'
 import { buildMobileTerminalChatFork } from './terminal/launch/mobile-terminal-chat-fork'
 
 const WIN = 'C:\\repo'

@@ -7,7 +7,7 @@ import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environ
 import type * as TerminalOperation from '@/runtime/web-runtime-terminal-create-operation'
 import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
-import type { AgentLaunchChoices } from '../../src/shared/agent-launch-choices'
+import type { AgentLaunchChoices } from '../../src/shared/agent-launch/choices/agent-launch-choices'
 import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
 

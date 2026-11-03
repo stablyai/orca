@@ -7,13 +7,13 @@ import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-cha
 import {
   resolveAgentLaunchCommand,
   terminalSessionOptionInputs
-} from '../../../../shared/tui-agent-launch-command'
-import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
-import * as choiceAnalysis from '../../../../shared/agent-choice-args'
-import * as choiceSettings from '../../../../shared/agent-choice-settings'
-import * as launchProfile from '../../../../shared/agent-launch-profile'
+} from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import * as choiceAnalysis from '../../../../shared/agent-launch/choices/agent-choice-args'
+import * as choiceSettings from '../../../../shared/agent-launch/choices/agent-choice-settings'
+import * as launchProfile from '../../../../shared/agent-launch/choices/agent-launch-profile'
 import * as optionScanner from '../../../../shared/command-option-occurrence'
-import * as pickerCatalog from '../../../../shared/agent-launch-picker-catalog'
+import * as pickerCatalog from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import {
   AgentLaunchSetupPanel,
   entry,
@@ -21,12 +21,12 @@ import {
   root,
   onUse
 } from './agent-launch-setup-panel-test-fixture'
-import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 import {
   agentPickerDraft,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 import { fetchCodexModelCatalogListing } from '../../lib/codex-model-catalog-reader-test-fixture'
 

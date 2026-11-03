@@ -1,4 +1,4 @@
-import { resolveAgentChoiceLayers } from '../../../../../shared/agent-choice-layers'
+import { resolveAgentChoiceLayers } from '../../../../../shared/agent-launch/choices/agent-choice-layers'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
@@ -13,17 +13,17 @@ import {
   agentPermissionArgs,
   agentPermissionChoices,
   resolveAgentPermission
-} from '../../../../../shared/tui-agent-permission-choice'
-import { agentArgsSetPermission } from '../../../../../shared/agent-permission-args'
+} from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { agentArgsSetPermission } from '../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { editActionArgumentChoices } from '../../../../../shared/source-control-action-argument-choices'
 import type { ActionArgumentChoices } from '../../../../../shared/source-control-action-argument-document'
 import type {
   AgentChoicePatch,
   AgentLaunchChoices
-} from '../../../../../shared/agent-launch-choices'
+} from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { SourceControlActionModelPicker } from './SourceControlActionModelPicker'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { AgentDefaultArgsInput } from '../../agent/launch-settings/AgentLaunchDefaultsEditor'

@@ -1,5 +1,5 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
 
 export type SyntheticAgentTitleProfile = {

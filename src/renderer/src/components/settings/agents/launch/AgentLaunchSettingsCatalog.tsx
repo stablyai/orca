@@ -1,16 +1,16 @@
 import { AgentLaunchChoiceEditor } from '../../../agent/launch-settings/AgentLaunchChoiceEditor'
-import { agentChatPermissionModes } from '../../../../../../shared/agent-chat-permission-support'
-import { savedChatPermissionMode } from '../../../../../../shared/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { toast } from 'sonner'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
-} from '../../../../../../shared/agent-launch-settings'
+} from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/tui-agent-permissions'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   agentPermissionArgs,
   agentPermissionEnv,
@@ -18,9 +18,9 @@ import {
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission,
   type AgentPermissionSettings
-} from '../../../../../../shared/tui-agent-permission-choice'
-import { agentArgsSetPermission } from '../../../../../../shared/agent-permission-args'
-import { liftAgentPermissionArgs } from '../../../../../../shared/tui-agent-permission-lift'
+} from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
+import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import {
   agentPermissionChoiceLabel,
   AllAgentsPermissionSetting,
@@ -36,8 +36,8 @@ import {
   getTuiAgentDefaultEnv,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
-} from '../../../../../../shared/tui-agent-launch-defaults'
-import { isTuiAgentEnabled } from '../../../../../../shared/tui-agent-selection'
+} from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   agentChoiceOpensAsChat,

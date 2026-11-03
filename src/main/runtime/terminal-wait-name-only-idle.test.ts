@@ -5,7 +5,7 @@ import { RuntimeTerminalWaiterRegistry } from './terminal/wait/terminal-waiter-r
 import { errorMessage, makeTuiIdlePty, makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { AgentStatus } from '../../shared/agent-detection'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { FirstPartyAgentStatus } from './tui-idle-evidence'
 import { registerBoundPty } from './bind-first-pane.test-fixture'

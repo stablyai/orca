@@ -8,7 +8,7 @@ import {
   sanitizeGeneratedConversationName
 } from '../../shared/conversation-name-generation'
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
-import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
 import { agentSessionCurrentContextRows } from '../../shared/agent-session/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'

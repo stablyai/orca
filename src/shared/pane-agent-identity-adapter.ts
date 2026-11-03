@@ -8,7 +8,7 @@ import type {
 } from './pane-agent-identity-resolver'
 import type { PaneAgentEvidenceSource } from './pane-agent-evidence-sources'
 import type { TerminalAgent } from './terminal-agent'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 /** All adapters delegate here so ranking, ambiguity and run eligibility cannot drift. */
 
