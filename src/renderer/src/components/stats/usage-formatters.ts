@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 export function formatTokens(value: number): string {
   if (value >= 1_000_000) {
@@ -7,7 +7,7 @@ export function formatTokens(value: number): string {
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(getIntlLocale())
 }
 
 export function formatCost(value: number | null): string {
@@ -22,7 +22,7 @@ export function formatUpdatedAt(timestamp: number | null): string {
     return translate('auto.components.stats.usageFormatters.notScannedYet', 'Not scanned yet')
   }
   return translate('auto.components.stats.usageFormatters.updatedAt', 'Updated {{time}}', {
-    time: new Date(timestamp).toLocaleString()
+    time: new Date(timestamp).toLocaleString(getIntlLocale())
   })
 }
 
@@ -31,7 +31,7 @@ export function formatSessionTime(timestamp: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return timestamp
   }
-  return parsed.toLocaleString(undefined, {
+  return parsed.toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

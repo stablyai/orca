@@ -1,7 +1,7 @@
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
-import { runWithGitReadCacheInvalidation } from './status'
+import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
 /** Reject empty and option-like names here too: relay callers can bypass RPC schema validation. */
 export function assertValidBranchName(branch: string): void {
@@ -28,7 +28,7 @@ export async function listLocalBranches(
   options: GitRuntimeOptions = {}
 ): Promise<{ current: string | null; branches: string[] }> {
   const { stdout } = await gitExecFileAsync(
-    ['for-each-ref', '--format=%(HEAD)%09%(refname:short)', 'refs/heads/'],
+    ['for-each-ref', '--format=%(HEAD)%09%(refname:lstrip=2)', 'refs/heads/'],
     gitOptionsForWorktree(worktreePath, options)
   )
   let current: string | null = null

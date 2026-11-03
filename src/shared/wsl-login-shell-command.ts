@@ -90,6 +90,21 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
     '    fi',
     '    ;;',
+    // Why ENV: dash has no rcfile flag or prompt hook; an interactive sh reads $ENV after ~/.profile.
+    // The shell expands ENV's value, so a root containing $, ` or \ is skipped, never mangled.
+    '  sh|dash|ash)',
+    '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/sh/env" ]; then',
+    '      case "$_orca_shell_ready_root" in',
+    "        *'$'*|*'`'*|*'\\'*) ;;",
+    '        *)',
+    // If ~/.profile replaces ENV, nothing of ours runs after it to unset this; it then holds only the
+    // user's own former ENV value.
+    '          if [ -n "${ENV+x}" ]; then export ORCA_WSL_USER_ENV="$ENV"; fi',
+    '          export ENV="${_orca_shell_ready_root}/sh/env"',
+    '          ;;',
+    '      esac',
+    '    fi',
+    '    ;;',
     'esac',
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')

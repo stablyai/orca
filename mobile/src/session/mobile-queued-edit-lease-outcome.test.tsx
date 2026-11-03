@@ -7,7 +7,7 @@ import {
 import { act } from 'react-test-renderer'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { QueuedEditHostFixtureModule } from '../../../src/shared/queued-edit-host.test-fixture'
-import type { AgentSessionQueuedMessageEditHoldResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionQueuedMessageEditHoldResult } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { mobileQueuedEditHarness, readOrHoldReply } from './mobile-queued-edit-hook.test-fixture'
 import {
@@ -17,6 +17,10 @@ import {
   queuedDraft,
   SESSION_ID
 } from './use-mobile-structured-agent-session-queued.test-fixture'
+import { insertDictationText } from '../dictation/mobile-dictation-text-insertion'
+
+// What the composer hands the editor for words said into a field that was never focused.
+const spoken = (text: string) => (draft: string) => insertDictationText(draft, text, null).text
 
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
@@ -109,7 +113,7 @@ describe('mobile current acquisition belongs to the Save outcome owner', () => {
       expect(decision.status).toBe(mode === 'unchanged' ? 'unchanged' : 'updated')
       if (mode === 'newer' || mode === 'fresh-loss' || mode === 'gone' || mode === 'depart') {
         act(() => {
-          state.hook!.queued.editor!.insertDictation!('C')
+          state.hook!.queued.editor!.insertDictation!(spoken('C'))
         })
       }
       if (mode === 'gone') {
@@ -249,7 +253,7 @@ describe('mobile current acquisition belongs to the Save outcome owner', () => {
       const scope = state.hook!.queued.editor!.scopeKey
       if (mode === 'rebase-loss') {
         act(() => {
-          state.hook!.queued.editor!.insertDictation!('C')
+          state.hook!.queued.editor!.insertDictation!(spoken('C'))
           updateMobileNativeChatDraftInputs(scope, (input) => ({
             ...input,
             skills: [{ name: 'review', path: '/C/SKILL.md' }],

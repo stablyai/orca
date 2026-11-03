@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { MobileSourceControlSettings } from '../transport/settings-read-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
 import { useFocusEffect } from 'expo-router'
@@ -168,7 +169,12 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             setScreenState({
               kind: 'error',
               message:
-                connState === 'connected' ? 'Connecting to desktop...' : 'Waiting for desktop...'
+                connState === 'connected'
+                  ? translate(
+                      'sourceControl.loaders.connectingToDesktop',
+                      'Connecting to desktop...'
+                    )
+                  : translate('sourceControl.loaders.waitingForDesktop', 'Waiting for desktop...')
             })
           }
           return false
@@ -179,6 +185,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
         try {
           for (let attempt = 0; attempt <= SELECTOR_RETRY_COUNT; attempt += 1) {
+            // Changes rows show each file's +/- counts, so ask the host for line stats.
             const reply = await gitStatusHostPayloadRead.request(client, {
               worktree: `id:${worktreeId}`
             })
@@ -204,7 +211,10 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             if (isMobileGitUnavailableReply(reply)) {
               setScreenState({
                 kind: 'unavailable',
-                message: 'Update Orca desktop to use Source Control on mobile.'
+                message: translate(
+                  'sourceControl.loaders.updateDesktop',
+                  'Update Orca desktop to use Source Control on mobile.'
+                )
               })
               return false
             }
@@ -218,13 +228,19 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
               }
               continue
             }
-            throw new Error(refusal.message || 'Unable to load source control')
+            throw new Error(
+              refusal.message ||
+                translate('sourceControl.loaders.loadFailed', 'Unable to load source control')
+            )
           }
         } catch (err) {
           if (!isCurrentLoad()) {
             return false
           }
-          const message = err instanceof Error ? err.message : 'Unable to load source control'
+          const message =
+            err instanceof Error
+              ? err.message
+              : translate('sourceControl.loaders.loadFailed', 'Unable to load source control')
           setScreenState((prev) => {
             // Mutations can succeed while refresh races an abort; retain the last good screen through transient read failure.
             if (options?.preserveReadyOnFailure && prev.kind === 'ready') {

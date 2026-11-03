@@ -7,8 +7,8 @@ import { setActiveSink } from '../observability/tracer'
 import type { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
-import type { WslGuestProcessRow } from '../wsl/wsl-guest-pane-processes'
-import type * as GuestProcessesModule from '../wsl/wsl-guest-pane-processes'
+import type { WslGuestProcessRow } from '../wsl/execution/wsl-guest-pane-processes'
+import type * as GuestProcessesModule from '../wsl/execution/wsl-guest-pane-processes'
 import * as startupCwdProbe from '../ipc/pty/host-env/startup-cwd-directory-exists'
 
 const readRows = vi.hoisted(() =>
@@ -20,7 +20,7 @@ const readRows = vi.hoisted(() =>
     ): Promise<WslGuestProcessRow[] | null> => null
   )
 )
-vi.mock('../wsl/wsl-guest-pane-processes', async (importOriginal) => ({
+vi.mock('../wsl/execution/wsl-guest-pane-processes', async (importOriginal) => ({
   ...(await importOriginal<typeof GuestProcessesModule>()),
   readWslGuestPaneProcesses: readRows
 }))
@@ -56,6 +56,7 @@ describe('a sleeping bridge WSL pane keeps its shell folder', () => {
     const harness = await startDaemonAdapterHarness((opts) => {
       spawnCwds.push(opts.cwd)
       if (opts.cwd && deletedCwds.has(opts.cwd)) {
+        opts.onCreationDisposition?.({ kind: 'no-fork' })
         throw new Error(`Working directory "${opts.cwd}" does not exist. It may have been deleted.`)
       }
       lastSubprocess = createMockSubprocess()

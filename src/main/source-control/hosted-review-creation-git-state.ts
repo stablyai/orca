@@ -6,12 +6,15 @@ import {
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import { gitExecFileAsync } from '../github/gh-utils'
-import { isShowRefNoMatchError, probeAnyExactRef } from '../git/exact-ref-probe'
+import { isShowRefNoMatchError, probeExactRefsViaForEachRef } from '../git/exact-ref-probe'
 import { gitOptionalLocksDisabledEnv } from '../git/runner'
-import { parsePorcelainV1Records, type PorcelainV1Record } from '../git/porcelain-v1-records'
+import {
+  parsePorcelainV1Records,
+  type PorcelainV1Record
+} from '../git/source-control/porcelain-v1-records'
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
-import { getUpstreamStatus } from '../git/upstream'
-import { findExistingWorktreeSymlinkPaths } from '../git/worktree-symlink-detection'
+import { getUpstreamStatus } from '../git/source-control/upstream'
+import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
@@ -176,10 +179,10 @@ export async function baseRefExistsOnRemote(
         candidateRefs.add(ref)
       }
     }
-    const exactResult = await probeAnyExactRef(run, [...candidateRefs], {
+    const exactResult = await probeExactRefsViaForEachRef(run, [...candidateRefs], {
       maxBuffer: MAX_REMOTE_REF_OUTPUT_BYTES
     })
-    if (exactResult.found || exactResult.unknown) {
+    if (exactResult.presentRefs.length > 0 || exactResult.unknownRefs.length > 0) {
       return true
     }
     // Preserve stale-remote suffix matching with a 10MiB bound after cheap exact probes.

@@ -1,14 +1,17 @@
 import { useCallback, useState } from 'react'
 
 export type WorktreeAgentExpansionState = {
-  collapsedLineageParents: ReadonlySet<string>
+  // Child lists start collapsed so spawning subagents cannot grow the card and shift the sidebar.
+  expandedLineageParents: ReadonlySet<string>
+  expandedIdleChildGroups: ReadonlySet<string>
   compactRootListExpanded: boolean
 }
 
-const EMPTY_COLLAPSED_PARENTS: ReadonlySet<string> = new Set()
+const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 
 const DEFAULT_EXPANSION_STATE: WorktreeAgentExpansionState = {
-  collapsedLineageParents: EMPTY_COLLAPSED_PARENTS,
+  expandedLineageParents: EMPTY_PANE_KEYS,
+  expandedIdleChildGroups: EMPTY_PANE_KEYS,
   compactRootListExpanded: false
 }
 
@@ -33,16 +36,30 @@ function readExpansionState(worktreeId: string): WorktreeAgentExpansionState {
 function persistExpansionState(worktreeId: string, state: WorktreeAgentExpansionState): void {
   // Refresh LRU order and retain only non-default disclosures.
   expansionByWorktreeId.delete(worktreeId)
-  if (state.compactRootListExpanded || state.collapsedLineageParents.size > 0) {
+  if (
+    state.compactRootListExpanded ||
+    state.expandedLineageParents.size > 0 ||
+    state.expandedIdleChildGroups.size > 0
+  ) {
     expansionByWorktreeId.set(worktreeId, state)
     trimPersistedExpansions()
   }
 }
 
+function toggleKey(keys: ReadonlySet<string>, key: string): ReadonlySet<string> {
+  const next = new Set(keys)
+  if (!next.delete(key)) {
+    next.add(key)
+  }
+  return next
+}
+
 export type WorktreeAgentExpansionControls = {
-  collapsedLineageParents: ReadonlySet<string>
+  expandedLineageParents: ReadonlySet<string>
+  expandedIdleChildGroups: ReadonlySet<string>
   compactRootListExpanded: boolean
   toggleLineageParent: (paneKey: string) => void
+  toggleIdleChildGroup: (parentPaneKey: string) => void
   toggleCompactRootList: () => void
 }
 
@@ -68,13 +85,18 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
   const toggleLineageParent = useCallback(
     (paneKey: string) => {
       const base = readExpansionState(worktreeId)
-      const nextParents = new Set(base.collapsedLineageParents)
-      if (nextParents.has(paneKey)) {
-        nextParents.delete(paneKey)
-      } else {
-        nextParents.add(paneKey)
-      }
-      commit({ ...base, collapsedLineageParents: nextParents })
+      commit({ ...base, expandedLineageParents: toggleKey(base.expandedLineageParents, paneKey) })
+    },
+    [commit, worktreeId]
+  )
+
+  const toggleIdleChildGroup = useCallback(
+    (parentPaneKey: string) => {
+      const base = readExpansionState(worktreeId)
+      commit({
+        ...base,
+        expandedIdleChildGroups: toggleKey(base.expandedIdleChildGroups, parentPaneKey)
+      })
     },
     [commit, worktreeId]
   )
@@ -85,9 +107,11 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
   }, [commit, worktreeId])
 
   return {
-    collapsedLineageParents: current.collapsedLineageParents,
+    expandedLineageParents: current.expandedLineageParents,
+    expandedIdleChildGroups: current.expandedIdleChildGroups,
     compactRootListExpanded: current.compactRootListExpanded,
     toggleLineageParent,
+    toggleIdleChildGroup,
     toggleCompactRootList
   }
 }

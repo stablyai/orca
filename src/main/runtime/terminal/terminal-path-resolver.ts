@@ -2,7 +2,7 @@ import type {
   RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
 } from '../../../shared/runtime-types'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { relativePathInsideRoot, resolveRuntimePath } from '../../../shared/cross-platform-path'
 import { homedir } from 'node:os'
 import { resolveTerminalAbsolutePath } from './terminal-file-path'
@@ -22,6 +22,7 @@ type RuntimeTerminalPathHost = Pick<
   | 'resolveKnownWorkspaceFileTarget'
   | 'resolveTerminalCwd'
   | 'resolveTerminalFileUriHostname'
+  | 'resolveNativeChatMediaPath'
 >
 type RuntimeTerminalArtifactAuthority = Pick<RuntimeTerminalArtifacts, 'resolveAbsoluteFileGrant'>
 
@@ -39,8 +40,7 @@ export class RuntimeTerminalPathResolver {
     clientId?: string,
     terminalHandle?: string | null,
     crossWorkspace?: boolean,
-    // Why: still sent by clients; any caller may open any host path, so the citing chat no longer matters.
-    _nativeChatContext?: RuntimeNativeChatFileContext | null
+    nativeChatContext?: RuntimeNativeChatFileContext | null
   ): Promise<RuntimeTerminalPathResolution> {
     // Why: an absent store fails as runtime_unavailable before target resolution.
     this.host.requireStore()
@@ -67,12 +67,30 @@ export class RuntimeTerminalPathResolver {
       isDirectory: false
     }
 
+    const media = nativeChatContext
+      ? await this.host.resolveNativeChatMediaPath?.({
+          worktreeId: worktree.id,
+          worktreePath: worktree.path,
+          executionHostId: target.executionHostId,
+          pathText,
+          context: nativeChatContext
+        })
+      : undefined
+    if (media?.kind === 'ambiguous') {
+      return empty
+    }
+
     // Never expand SSH/WSL home-relative grants using this machine's home.
     const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
     if (isTilde && (connectionId || parseWslPath(worktree.path))) {
       return empty
     }
-    const expanded = isTilde ? resolveRuntimePath(homedir(), pathText.slice(2)) : pathText
+    const expanded =
+      media?.kind === 'matched'
+        ? media.absolutePath
+        : isTilde
+          ? resolveRuntimePath(homedir(), pathText.slice(2))
+          : pathText
     const absolutePath = resolveTerminalAbsolutePath({
       base,
       expanded,

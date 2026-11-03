@@ -24,6 +24,7 @@ import {
 } from './tab-bar-windows-shell-launch-test-harness'
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 vi.mock('@dnd-kit/sortable', () => stubSortableContext())
@@ -57,6 +58,9 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -125,6 +129,9 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -194,6 +201,9 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(false),

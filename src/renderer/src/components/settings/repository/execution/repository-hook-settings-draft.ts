@@ -4,7 +4,7 @@ import type {
   RepoHookSettings
 } from '../../../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { DEFAULT_REPO_HOOK_SETTINGS } from '../../SettingsConstants'
+import { DEFAULT_REPO_HOOK_SETTINGS } from './repository-hook-defaults'
 import { translate } from '@/i18n/i18n'
 
 export type LocalHookName = 'setup' | 'archive'

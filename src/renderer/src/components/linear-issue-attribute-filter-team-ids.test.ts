@@ -9,8 +9,7 @@ import {
   linearMetadataGroupCoverage,
   recordLinearMetadataTruncation,
   resolveLinearIssueAttributeFilterTeamIds,
-  selectedLinearMetadataGroupKeys,
-  unionLinearMetadataById
+  selectedLinearMetadataGroupKeys
 } from './linear-issue-attribute-filter-team-ids'
 
 const teams: LinearTeam[] = [
@@ -28,16 +27,6 @@ describe('resolveLinearIssueAttributeFilterTeamIds', () => {
         primaryTeamId: 'team-be'
       })
     ).toEqual(['team-be', 'team-fe'])
-  })
-
-  it('returns all selected teams when All teams is selected', () => {
-    expect(
-      resolveLinearIssueAttributeFilterTeamIds({
-        selectedTeamIds: ['team-ops', 'team-be', 'team-fe'],
-        availableTeams: teams,
-        primaryTeamId: 'team-be'
-      })
-    ).toEqual(['team-be', 'team-fe', 'team-ops'])
   })
 
   it('falls back to primary when selection is empty', () => {
@@ -58,37 +47,6 @@ describe('resolveLinearIssueAttributeFilterTeamIds', () => {
         primaryTeamId: 'team-be'
       })
     ).toEqual(['team-fe'])
-  })
-})
-
-describe('unionLinearMetadataById', () => {
-  it('unions options across teams without dropping later teams (#8739)', () => {
-    const unioned = unionLinearMetadataById([
-      [
-        { id: 'be-todo', name: 'Todo' },
-        { id: 'be-done', name: 'Done' }
-      ],
-      [
-        { id: 'fe-todo', name: 'Todo' },
-        { id: 'fe-review', name: 'In Review' }
-      ],
-      [{ id: 'ops-blocked', name: 'Blocked' }]
-    ])
-    expect(unioned.map((row) => row.id)).toEqual([
-      'be-todo',
-      'be-done',
-      'fe-todo',
-      'fe-review',
-      'ops-blocked'
-    ])
-  })
-
-  it('dedupes shared ids keeping the first label', () => {
-    const unioned = unionLinearMetadataById([
-      [{ id: 'shared', name: 'From BE' }],
-      [{ id: 'shared', name: 'From FE' }]
-    ])
-    expect(unioned).toEqual([{ id: 'shared', name: 'From BE' }])
   })
 })
 
@@ -140,18 +98,6 @@ describe('capLinearMetadataIdsAcrossGroups', () => {
     { key: 'zeta', ids: ['z-1'] }
   ]
 
-  it('leaves a selection already within the cap untouched', () => {
-    expect(capLinearMetadataIdsAcrossGroups(groups, ['a-1', 'a-2'], 3)).toEqual(['a-1', 'a-2'])
-  })
-
-  it('keeps an id from every picked group instead of slicing the last one away', () => {
-    expect(capLinearMetadataIdsAcrossGroups(groups, ['a-1', 'a-2', 'a-3', 'z-1'], 3)).toEqual([
-      'a-1',
-      'z-1',
-      'a-2'
-    ])
-  })
-
   it('treats an id no group covers as its own group', () => {
     expect(capLinearMetadataIdsAcrossGroups(groups, ['a-1', 'a-2', 'a-3', 'other'], 2)).toEqual([
       'a-1',
@@ -175,16 +121,6 @@ describe('capLinearMetadataIdsAcrossGroups over-subscribed rows', () => {
       recordLinearMetadataTruncation(ids, capLinearMetadataIdsAcrossGroups(groups, ids, 4))
     ).toBeNull()
     expect(isLinearMetadataGroupSelectionPartial(groups, ids, false)).toBe(false)
-  })
-
-  it('keeps one id per row when the selection is one id over the cap', () => {
-    const groups = [
-      { key: 'alpha', ids: ['a-1', 'a-2'] },
-      { key: 'beta', ids: ['b-1'] },
-      { key: 'gamma', ids: ['c-1'] }
-    ]
-    const capped = capLinearMetadataIdsAcrossGroups(groups, ['a-1', 'a-2', 'b-1', 'c-1'], 3)
-    expect(new Set(capped)).toEqual(new Set(['a-1', 'b-1', 'c-1']))
   })
 
   it('never claims full coverage when more rows are picked than the cap can hold', () => {

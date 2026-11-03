@@ -33,46 +33,37 @@ export function formatWorkspaceCleanupScanNotice(
     .join(', ')
   const moreCount = visibleErrors.length - 3
   return moreCount > 0
-    ? visibleErrors.length === 1
-      ? translate(
-          'components.workspace.cleanup.scan.multipleErrorsWithMore_one',
-          'Could not check {{count}} repository ({{names}}, +{{moreCount}} more). Some workspaces may be missing. Refresh to try again.',
-          { count: visibleErrors.length, names: repoNames, moreCount }
-        )
-      : translate(
-          'components.workspace.cleanup.scan.multipleErrorsWithMore_other',
-          'Could not check {{count}} repositories ({{names}}, +{{moreCount}} more). Some workspaces may be missing. Refresh to try again.',
-          { count: visibleErrors.length, names: repoNames, moreCount }
-        )
-    : visibleErrors.length === 1
-      ? translate(
-          'components.workspace.cleanup.scan.multipleErrorsCount_one',
-          'Could not check {{count}} repository ({{names}}). Some workspaces may be missing. Refresh to try again.',
-          { count: visibleErrors.length, names: repoNames }
-        )
-      : translate(
-          'components.workspace.cleanup.scan.multipleErrorsCount_other',
-          'Could not check {{count}} repositories ({{names}}). Some workspaces may be missing. Refresh to try again.',
-          { count: visibleErrors.length, names: repoNames }
-        )
+    ? translate(
+        'components.workspace.cleanup.scan.multipleErrorsWithMore',
+        'Could not check {{count}} repositories ({{names}}, +{{moreCount}} more). Some workspaces may be missing. Refresh to try again.',
+        {
+          count: visibleErrors.length,
+          names: repoNames,
+          moreCount,
+          defaultValue_one:
+            'Could not check {{count}} repository ({{names}}, +{{moreCount}} more). Some workspaces may be missing. Refresh to try again.'
+        }
+      )
+    : translate(
+        'components.workspace.cleanup.scan.multipleErrorsCount',
+        'Could not check {{count}} repositories ({{names}}). Some workspaces may be missing. Refresh to try again.',
+        {
+          count: visibleErrors.length,
+          names: repoNames,
+          defaultValue_one:
+            'Could not check {{count}} repository ({{names}}). Some workspaces may be missing. Refresh to try again.'
+        }
+      )
 }
 
 export function formatWorkspaceCleanupReadyToast(workspaceCount: number): string {
   if (workspaceCount === 0) {
     return translate('components.workspace.cleanup.scan.noWorkspaces', 'No workspaces found.')
   }
-  if (workspaceCount === 1) {
-    return translate(
-      'components.workspace.cleanup.scan.readyCount_one',
-      '{{count}} workspace found.',
-      { count: workspaceCount }
-    )
-  }
-  return translate(
-    'components.workspace.cleanup.scan.readyCount_other',
-    '{{count}} workspaces found.',
-    { count: workspaceCount }
-  )
+  return translate('components.workspace.cleanup.scan.readyCount', '{{count}} workspaces found.', {
+    count: workspaceCount,
+    defaultValue_one: '{{count}} workspace found.'
+  })
 }
 
 function formatScanErrorRepoName(

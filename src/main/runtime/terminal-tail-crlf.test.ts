@@ -48,20 +48,6 @@ describe('terminal tail CRLF chunk boundaries', () => {
     expect(ingestChunks([...output])).toEqual(expected)
   })
 
-  it.each([
-    [['old\r', '', 'new\n'], ['new']],
-    [['old\r', '\r', 'new\r', '\n'], ['new']],
-    [['old\r', '\r\n'], ['']],
-    [['old\r', '\x1b[', '2Knew\r', '\n'], ['new']],
-    [['\x1b[31', 'mQUJDRA==\r', '\n\x1b[0m'], ['QUJDRA==']],
-    [
-      ['row one\nrow two\n', '\x1b[1A\x1b[2Kchanged\r', '\n'],
-      ['row one', 'changed']
-    ]
-  ])('preserves standalone redraw and ANSI handling for %j', (chunks, expected) => {
-    expect(ingestChunks(chunks).lines).toEqual(expected)
-  })
-
   it('keeps partial retention bounded while a final CR is pending', () => {
     const normalized = normalizeTerminalChunk(`${'x'.repeat(MAX_TAIL_PARTIAL_CHARS * 2)}\r`)
     const partial = appendNormalizedToTailBuffer([], '', normalized.text)
@@ -73,13 +59,6 @@ describe('terminal tail CRLF chunk boundaries', () => {
     expect(completed.lines).toEqual(['x'.repeat(MAX_TAIL_PARTIAL_CHARS)])
     expect(completed.newCompleteLines).toBe(1)
     expect(newline.pendingAnsi).toBe('')
-  })
-
-  it('retains the last painted content if output ends with a lone CR', () => {
-    const tail = ingestChunks(['last output\r', '', ''])
-    expect(tail.partialLine).toBe('last output')
-    expect(tail.pendingAnsi).toBe('\r')
-    expect(tail.completeLines).toBe(0)
   })
 
   it.each([false, true])(

@@ -31,8 +31,8 @@ export type LifecycleReconciliationResult =
   // Suppressed mail is already read and must not wake waiters; ignored mail still needs delivery.
   | { action: 'suppressed' }
   | LifecycleRejectionResult
-  | { action: 'completed'; taskId: string; dispatchId: string }
-  | { action: 'failed'; taskId: string; dispatchId: string }
+  | { action: 'completed'; taskId: string; dispatchId: string; autoReleaseAt?: string }
+  | { action: 'failed'; taskId: string; dispatchId: string; autoReleaseAt?: string }
   | { action: 'heartbeat_recorded'; dispatchId: string }
 
 export type LifecycleRejectionCode =
@@ -144,7 +144,6 @@ function reconcileHeartbeatMessage(
   const dispatch = db.getDispatchContextById(dispatchId)
   if (!dispatch || dispatch.status !== 'dispatched') {
     // Late heartbeats remain auditable but must not advertise obsolete liveness.
-    db.markAsReadAndDelivered([msg.id])
     onLog(`Heartbeat for inactive dispatch ${dispatchId} suppressed`)
     return { action: 'suppressed' }
   }
@@ -283,14 +282,14 @@ function reconcileWorkerDoneMessage(
   if (settlement.action === 'rejected') {
     return rejectLifecycleMessage(db, msg, settlement.code, settlement.reason, onLog)
   }
-  suppressEarlierHeartbeats(db, msg, dispatchId)
+  const autoReleaseAt = db.getLiveWorkerTerminalAutoReleaseAt(dispatchId) ?? undefined
 
   if (outcome === 'failed') {
     onLog(`Task ${taskId} failed by worker report`)
-    return { action: 'failed', taskId, dispatchId }
+    return { action: 'failed', taskId, dispatchId, autoReleaseAt }
   }
   onLog(`Task ${taskId} completed by worker report`)
-  return { action: 'completed', taskId, dispatchId }
+  return { action: 'completed', taskId, dispatchId, autoReleaseAt }
 }
 
 function rejectLifecycleMessage(
@@ -315,22 +314,4 @@ function buildLifecycleAuthorityRejectionReason(
     `pane ${dispatch.assignee_pane_key ?? '<legacy>'}; received handle ${msg.from_handle}, ` +
     `pane ${msg.sender_pane_key ?? '<missing>'}`
   )
-}
-
-function suppressEarlierHeartbeats(
-  db: OrchestrationDb,
-  workerDone: MessageRow,
-  dispatchId: string
-): void {
-  const heartbeatIds = db
-    .getUnreadMessages(workerDone.to_handle, ['heartbeat'])
-    .filter((message) => {
-      if (message.sequence >= workerDone.sequence) {
-        return false
-      }
-      const payload = parseObjectPayload(message, () => undefined)
-      return payload.dispatchId === dispatchId
-    })
-    .map((message) => message.id)
-  db.markAsReadAndDelivered(heartbeatIds)
 }

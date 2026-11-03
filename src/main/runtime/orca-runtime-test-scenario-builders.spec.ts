@@ -1,3 +1,5 @@
+import * as gitExecFile from '../git/command-runner/git-exec-file'
+import { CrewChanges } from './orchestration/crew/crew-changes'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import * as mocks from './orca-runtime-test-mocks.spec'
 import type { Mock } from 'vitest'
@@ -5,7 +7,7 @@ import type { Mock } from 'vitest'
 const { HEADLESS_RUNTIME_WINDOW_ID, OrcaRuntimeService, electronMocks } = mocks
 const { getBrowserHostLeaseRegistry, getDefaultWorkspaceSession, getRuntimeBrowserPageRegistry } =
   mocks
-const { gitRunner, vi } = mocks
+const { vi } = mocks
 
 import * as fixtures from './orca-runtime-test-fixtures.spec'
 
@@ -215,9 +217,11 @@ function makePostRevealWorkerRecoveryHarness(
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This recovery fixture reaches only the listed planner, terminal settlement and authority lookup methods.
   runtime.setOrchestrationDb({
+    crewChanges: new CrewChanges(),
     listSessionDispatchesForPresentation: () => [],
     reconcileMissingWorkerTerminal: vi.fn(),
     getActiveDispatchForTerminal: () => undefined,
+    findActiveRemoteAttachmentForPane: () => undefined,
     listLegacyWorkerTerminalRecoveryRows: () => [
       {
         dispatch_id: 'dispatch-post-reveal',
@@ -386,7 +390,7 @@ function mockReconcileGit(options: {
 }) {
   const { postFetchSha = 'new-base-sha', ancestor = true, baseRefMissing = false } = options
 
-  return vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+  return vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args, options) => {
     const command = args as string[]
     const cwd = (options as { cwd?: string } | undefined)?.cwd
     if (

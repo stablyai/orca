@@ -23,7 +23,7 @@ vi.mock('@/hooks/useResetCountdownClock', () => ({ useResetCountdownClock: () =>
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>
 }))
-vi.mock('@/components/settings/SettingsFormControls', () => ({
+vi.mock('@/components/settings/form-controls/SettingsFormControls', () => ({
   SettingsSegmentedControl: () => null
 }))
 

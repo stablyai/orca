@@ -74,18 +74,11 @@ export function getDiscardAreaConfirmationCopy(
   switch (area) {
     case 'untracked':
       return {
-        title:
-          count === 1
-            ? translate(
-                'sourceControl.discard.deleteUntrackedTitle_one',
-                'Delete {{count}} untracked file?',
-                { count }
-              )
-            : translate(
-                'sourceControl.discard.deleteUntrackedTitle_other',
-                'Delete {{count}} untracked files?',
-                { count }
-              ),
+        title: translate(
+          'sourceControl.discard.deleteUntrackedTitle',
+          'Delete {{count}} untracked files?',
+          { count, defaultValue_one: 'Delete {{count}} untracked file?' }
+        ),
         description:
           count === 1
             ? translate(
@@ -93,9 +86,13 @@ export function getDiscardAreaConfirmationCopy(
                 'This will permanently delete this untracked file. This cannot be undone.'
               )
             : translate(
-                'sourceControl.discard.deleteUntrackedFilesDescription_other',
+                'sourceControl.discard.deleteUntrackedFilesDescription',
                 'This will permanently delete these {{count}} untracked files. This cannot be undone.',
-                { count }
+                {
+                  count,
+                  defaultValue_one:
+                    'This will permanently delete {{count}} untracked file. This cannot be undone.'
+                }
               ),
         deleteAction: true,
         confirmLabel:
@@ -129,9 +126,13 @@ export function getDiscardAreaConfirmationCopy(
                 'This will revert unstaged changes and permanently delete any untracked files in this selection. This cannot be undone.'
               )
             : translate(
-                'sourceControl.discard.unstagedFilesIncludingUntrackedDescription_other',
+                'sourceControl.discard.unstagedFilesIncludingUntrackedDescription',
                 'This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone.',
-                { count }
+                {
+                  count,
+                  defaultValue_one:
+                    'This will revert unstaged changes and permanently delete any untracked files among {{count}} file. This cannot be undone.'
+                }
               ),
         deleteAction: false,
         confirmLabel: translate('sourceControl.discard.discardAll', 'Discard all')

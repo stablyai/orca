@@ -55,7 +55,9 @@ const LANGUAGE_ALIASES = new Map([
   ['glimmer-js', 'javascript'],
   ['glimmer-ts', 'typescript'],
   // lowlight has no dotenv grammar; ini covers KEY=value and # comments.
-  ['dotenv', 'ini']
+  ['dotenv', 'ini'],
+  // HCL assignments, strings and comments use the bundled ini grammar on mobile.
+  ['hcl', 'ini']
 ])
 
 export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?: string): string {

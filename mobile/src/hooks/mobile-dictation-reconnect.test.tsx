@@ -8,6 +8,7 @@ import {
   type SentRequest
 } from '../mobile-web-shell/bridge-host-test-fakes'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { rpcPayloadMember } from '../transport/rpc-reader-payload'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type {
@@ -179,5 +180,133 @@ describe('dictation through a reconnect', () => {
 
     expect(transcripts).toEqual(['hello'])
     expect(errors).toEqual(['Connection closed'])
+  })
+})
+
+async function startWith(rpc: FakeRpcClient, startResult: Record<string, unknown>) {
+  mount(rpc, [], [])
+  await act(async () => {
+    const started = dictation().start()
+    while (rpc.requests.length === 0) {
+      await Promise.resolve()
+    }
+    rpc.requests.splice(0)[0].resolve({ id: 'desktop', ok: true, result: startResult })
+    await started
+  })
+}
+
+function speak(): void {
+  for (const handler of seam.chunkHandlers) {
+    handler({ data: Uint8Array.from([1, 2]), droppedBytes: 0 })
+  }
+}
+
+describe('audio sent on a connection that died', () => {
+  async function dropMidChunk(
+    startResult: Record<string, unknown>,
+    { cancelOffline = false } = {}
+  ) {
+    let state: ConnectionState = 'connected'
+    const rpc = createFakeRpcClient({ getState: () => state })
+    const sent: SentRequest[] = []
+    await startWith(rpc, startResult)
+    await act(async () => {
+      speak()
+      speak()
+      const [answered, lost] = rpc.requests.splice(0)
+      sent.push(answered, lost)
+      answered.resolve({ id: 'desktop', ok: true, result: {} })
+      state = 'reconnecting'
+      lost.reject(markRpcDeliveryUnknown(new Error('Connection interrupted')))
+      await Promise.resolve()
+      speak()
+    })
+    if (cancelOffline) {
+      await act(async () => {
+        const cancelled = dictation().cancel()
+        await pump(rpc, sent, [])
+        await cancelled
+      })
+    }
+    await act(async () => {
+      state = 'connected'
+      rpc.pushState('connected')
+      await pump(rpc, sent, [])
+    })
+    return sent
+      .filter((request) => request.method === 'speech.dictation.chunk')
+      .map((request) => rpcPayloadMember(request.args[1], 'seq'))
+  }
+
+  it('goes again to a host that feeds each chunk once', async () => {
+    await expect(dropMidChunk({ dedupesResentChunks: true })).resolves.toEqual([0, 1, 2, 1])
+  })
+
+  it('is not resent once the recording was cancelled during the outage', async () => {
+    await expect(
+      dropMidChunk({ dedupesResentChunks: true }, { cancelOffline: true })
+    ).resolves.toEqual([0, 1, 2])
+  })
+
+  it('never goes twice to a host that would feed it twice', async () => {
+    await expect(dropMidChunk({})).resolves.toEqual([0, 1, 2])
+  })
+})
+
+describe('a chunk reply that stops coming', () => {
+  async function probesAround(startResult: Record<string, unknown>, overdueMs: number) {
+    vi.useFakeTimers()
+    try {
+      const rpc = createFakeRpcClient()
+      let probes = 0
+      rpc.probeLivenessNow = () => {
+        probes += 1
+      }
+      await startWith(rpc, startResult)
+      await act(async () => {
+        speak()
+        vi.advanceTimersByTime(overdueMs - 1)
+      })
+      const early = probes
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+      })
+      const overdue = probes
+      await act(async () => {
+        vi.advanceTimersByTime(overdueMs)
+      })
+      return [early, overdue, probes]
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  it('asks for a decisive probe every four seconds the reply is late', async () => {
+    await expect(probesAround({ dedupesResentChunks: true }, 4000)).resolves.toEqual([0, 1, 2])
+  })
+
+  // A false alarm would end a live connection, and an old host cannot take the lost audio again.
+  it('leaves an old host to the idle watchdog', async () => {
+    await expect(probesAround({}, 4000)).resolves.toEqual([0, 0, 0])
+  })
+})
+
+describe('the text so far', () => {
+  it('shows what the host heard while recording and clears it as the final text lands', async () => {
+    const rpc = createFakeRpcClient()
+    const sent: SentRequest[] = []
+    const transcripts: string[] = []
+    mount(rpc, transcripts, [])
+
+    await record(rpc, sent, [{ text: 'hello' }, {}, { text: 'hello wor' }])
+    expect(dictation().transcriptSoFar).toBe('hello wor')
+
+    await act(async () => {
+      const stopped = dictation().stop()
+      await pump(rpc, sent, [])
+      await stopped
+    })
+    expect(dictation().transcriptSoFar).toBe('')
+    expect(transcripts).toEqual(['hello world'])
   })
 })

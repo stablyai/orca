@@ -16,7 +16,7 @@ vi.mock('./relay-token-verifier.js', () => ({
 }))
 
 import { createRelayApp } from './app.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { CellReserveClient } from './cell-reserve-client.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 import { ReserveAssignment, type ReservePlacementMode } from './reserve-assignment.js'

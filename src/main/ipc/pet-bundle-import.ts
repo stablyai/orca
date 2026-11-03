@@ -1,4 +1,5 @@
 import { translateMain } from '../i18n/main-i18n'
+import { PET_BUNDLE_DEFAULT_LABEL, PetImportError } from '../../shared/pet-import-failure-copy'
 import { BrowserWindow, dialog } from 'electron'
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -34,7 +35,7 @@ export async function importPetBundle(
     const pickedStat = await stat(picked)
     bundleDir = pickedStat.isDirectory() ? picked : dirname(picked)
   } catch {
-    throw new Error('Could not read the selected path.')
+    throw new PetImportError('pathUnreadable')
   }
 
   const manifestPath = join(bundleDir, 'pet.json')
@@ -42,13 +43,13 @@ export async function importPetBundle(
   try {
     manifestStat = await stat(manifestPath)
   } catch {
-    throw new Error('Bundle is missing pet.json.')
+    throw new PetImportError('manifestMissing')
   }
   if (!manifestStat.isFile() || manifestStat.size > MAX_MANIFEST_BYTES) {
-    throw new Error('pet.json is invalid.')
+    throw new PetImportError('manifestInvalid')
   }
   if (await isSymlink(manifestPath)) {
-    throw new Error('pet.json must not be a symlink.')
+    throw new PetImportError('manifestSymlink')
   }
 
   let manifest: ResolvedPetManifest<PetManifest>
@@ -60,7 +61,11 @@ export async function importPetBundle(
     }
     manifest = applyCodexPetDefaults(PetManifestSchema.parse(JSON.parse(raw)))
   } catch (error) {
-    throw new Error(`Invalid pet.json: ${error instanceof Error ? error.message : 'parse error'}`)
+    throw new PetImportError(
+      'manifestParseFailed',
+      {},
+      error instanceof Error ? error.message : 'parse error'
+    )
   }
 
   const { sheetSrc, sheetClass } = await resolveBundleSpritesheetSource(manifest, bundleDir)
@@ -84,11 +89,11 @@ export async function importPetBundle(
     await rename(tmpDir, destDir)
   } catch {
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
-    throw new Error('Could not save the pet bundle.')
+    throw new PetImportError('bundleSaveFailed')
   }
 
   const rawLabel = (manifest.displayName ?? manifest.id ?? basename(bundleDir)).trim()
-  const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : 'Pet bundle'
+  const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : PET_BUNDLE_DEFAULT_LABEL
   return {
     id,
     label,

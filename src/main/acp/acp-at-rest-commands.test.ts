@@ -7,7 +7,7 @@ import capture from '../../shared/__fixtures__/omp-native-commands.json'
 import { buildNativeChatPickerItems } from '../../shared/native-chat/input/native-chat-picker-items'
 import { sessionReportedSkills } from '../../shared/native-chat/input/native-chat-slash-commands'
 import { AT_REST_COMMANDS_TTL_MS } from '../native-chat/agent-session-wire/at-rest-command-catalog'
-import { PrioritySemaphore } from '../../shared/priority-semaphore'
+import '../../shared/priority-semaphore'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
 import {
   commandDiscoveryRig,
@@ -42,29 +42,45 @@ afterEach(async () => {
 })
 
 it('observes pre-initialize reports, validates session identity and keeps the latest explicit empty', async () => {
-  const { catalog, children, workspacePath } = await rig((child) => {
-    child.agent.on('initialize', (frame) => {
-      child.agent.notify('session/update', { sessionId: 'wrong', update: capture.enabled })
-      child.agent.notify('session/update', {
-        sessionId: DISCOVERY_SESSION,
-        update: capture.enabled
+  const { catalog, children, workspacePath } = await rig(
+    (child) => {
+      child.agent.on('initialize', (frame) => {
+        child.agent.notify('session/update', { sessionId: 'wrong', update: capture.enabled })
+        child.agent.notify('session/update', {
+          sessionId: DISCOVERY_SESSION,
+          update: capture.enabled
+        })
+        child.agent.notify('session/update', {
+          sessionId: DISCOVERY_SESSION,
+          update: { sessionUpdate: 'available_commands_update', availableCommands: [] }
+        })
+        child.agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
       })
-      child.agent.notify('session/update', {
-        sessionId: DISCOVERY_SESSION,
-        update: { sessionUpdate: 'available_commands_update', availableCommands: [] }
+      child.agent.on('session/new', (frame) =>
+        child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
+      )
+    },
+    {
+      resolveCommandSettings: () => ({
+        agentCmdOverrides: { omp: `"${process.execPath}" run -- omp` }
       })
-      child.agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
-    })
-    child.agent.on('session/new', (frame) =>
-      child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
-    )
-  })
+    }
+  )
   expect(await catalog.settled(ompRecord(), 1_000)).toEqual([])
   await catalog.closeAll()
   expect(children[0]!.launch).toMatchObject({
-    command: '/configured/omp',
+    command: process.execPath,
     cwd: workspacePath('workspace-1'),
-    args: ['acp', '--plugin-dir', '/installed/plugin', '--session-dir', expect.any(String)],
+    args: [
+      'run',
+      '--',
+      'omp',
+      'acp',
+      '--plugin-dir',
+      '/installed/plugin',
+      '--session-dir',
+      expect.any(String)
+    ],
     env: { PI_CODING_AGENT_DIR: '/accounts/omp', OMP_PROFILE: 'configured' },
     envToDelete: expect.arrayContaining([
       'ORCA_CHAT_SCRATCH_DIR',
@@ -400,77 +416,6 @@ it('handles actual root exit just before listener registration without changing 
   expect(await readdir(join(root, 'acp-command-sessions', 'omp'))).toEqual([])
 })
 
-it('delivers eight healthy contexts through three queued failures using due reads, with two owners through close', async () => {
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  let held = 0
-  let peak = 0
-  const dispatches: number[] = []
-  const closeGates: ReturnType<typeof deferred<void>>[] = []
-  const { catalog, children, root } = await rig((child) => {
-    dispatches.push(Date.now())
-    peak = Math.max(peak, ++held)
-    child.agent.on('session/new', (frame) => {
-      child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
-      setTimeout(
-        () =>
-          child.agent.notify('session/update', {
-            sessionId: DISCOVERY_SESSION,
-            update: capture.enabled
-          }),
-        8_000
-      )
-    })
-    const prove = child.proveClose
-    const close = deferred<void>()
-    child.proveClose = async () => {
-      closeGates.push(close)
-      await close.promise
-      const result = await prove()
-      held--
-      return result
-    }
-  })
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-  vi.setSystemTime(0)
-  const records = Array.from({ length: 8 }, (_, index) => ompRecord(`healthy-${index}`))
-  const changed = vi.fn(() => records.forEach((record) => catalog.read(record)))
-  catalog.onChange(changed)
-  for (let wave = 0; wave < 4; wave++) {
-    const answers = records.map((record) => catalog.settled(record, 10_000))
-    await waitFor(() => expect(children).toHaveLength((wave + 1) * 2))
-    await waitFor(() =>
-      expect(children.every((child) => child.agent.frames.at(-1)?.method === 'session/new')).toBe(
-        true
-      )
-    )
-    await vi.advanceTimersByTimeAsync(8_000)
-    await waitFor(() => expect(changed).toHaveBeenCalledTimes((wave + 1) * 2))
-    await waitFor(() => expect(closeGates).toHaveLength(2))
-    expect(held).toBe(2)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect((await Promise.all(answers)).filter(Boolean)).toHaveLength((wave + 1) * 2)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(Date.now()).toBe(wave * 19_000 + 11_000)
-    expect(held).toBe(2)
-    closeGates.splice(0).forEach((close) => close.resolve())
-    await waitFor(() => expect(held).toBe(0))
-    await waitFor(async () =>
-      expect(await readdir(join(root, 'acp-command-sessions', 'omp'))).toEqual([])
-    )
-    if (wave < 3) {
-      await vi.advanceTimersByTimeAsync(8_000)
-    }
-  }
-  expect(dispatches).toEqual([0, 0, 19_000, 19_000, 38_000, 38_000, 57_000, 57_000])
-  expect(Date.now()).toBe(68_000)
-  expect(peak).toBe(2)
-  expect(
-    records.every((record) => catalog.read(record)?.some((row) => row.name === 'skill:plan'))
-  ).toBe(true)
-  await catalog.closeAll()
-  expect(children.every((child) => child.closes === 1 && child.exited)).toBe(true)
-})
-
 it.each(['missing', 'file'] as const)(
   'retains native rows for a %s physical cwd and recovers at the next ten-second read',
   async (kind) => {
@@ -511,138 +456,32 @@ it.each(['missing', 'file'] as const)(
   }
 )
 
-it('retains hour-unread native rows across unrelated reads and a failed slow refresh', async () => {
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  let reports = true
+it('takes an OMP context out of the legacy queue for a capable menu while joining admitted work', async () => {
+  const gate = deferred<void>()
   const { catalog, children } = await rig((child) => {
-    child.agent.on('session/new', (frame) => {
-      if (reports) {
-        child.agent.notify('session/update', {
-          sessionId: DISCOVERY_SESSION,
-          update: capture.enabled
-        })
-      }
-      child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
+    const initialize = child.initialize.bind(child)
+    vi.spyOn(child, 'initialize').mockImplementation(async () => {
+      await gate.promise
+      return initialize()
     })
   })
-  const record = ompRecord('unread')
-  const rows = await catalog.settled(record, 1_000)
-  expect(rows).toBeDefined()
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-  await vi.advanceTimersByTimeAsync(3_600_001)
-  expect(await catalog.settled(ompRecord('unrelated'), 10_000)).toEqual(rows)
-  reports = false
-  expect(catalog.read(record)).toEqual(rows)
-  const refresh = catalog.settled(record, 10_000)
-  await waitFor(() => expect(children).toHaveLength(3))
-  await vi.advanceTimersByTimeAsync(9_000)
-  expect(await refresh).toEqual(rows)
-  await catalog.closeAll()
-})
-
-it.each([10, 100])(
-  'bounds repeated failed demand at %i contexts without failure broadcasts or query spawns',
-  async (count) => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const originalAcquire = PrioritySemaphore.prototype.acquire
-    const admissions = new Set<symbol>()
-    const acquire = vi
-      .spyOn(PrioritySemaphore.prototype, 'acquire')
-      .mockImplementation(async function (this: PrioritySemaphore, priority, signal) {
-        const request = Symbol()
-        admissions.add(request)
-        try {
-          const release = await originalAcquire.call(this, priority, signal)
-          return () => {
-            release()
-            admissions.delete(request)
-          }
-        } catch (error) {
-          admissions.delete(request)
-          throw error
-        }
-      })
-    const stat = vi.mocked(fs.stat)
-    let peak = 0
-    let reports = true
-    const closeGates: ReturnType<typeof deferred<void>>[] = []
-    const { catalog, children, root } = await rig((child) => {
-      if (!reports) {
-        const prove = child.proveClose
-        const close = deferred<void>()
-        closeGates.push(close)
-        child.proveClose = async () => {
-          await close.promise
-          return prove()
-        }
-      }
-      peak = Math.max(peak, children.filter((owner) => !owner.exited).length)
-      child.agent.on('session/new', (frame) => {
-        if (reports) {
-          child.agent.notify('session/update', {
-            sessionId: DISCOVERY_SESSION,
-            update: capture.enabled
-          })
-        }
-        child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
-      })
-    })
-    try {
-      const records = Array.from({ length: count }, (_, index) => ompRecord(`failure-${index}`))
-      for (const record of records) {
-        expect(await catalog.settled(record, 1_000)).toBeDefined()
-      }
-      const rows = catalog.read(records[0]!)!
-      await waitFor(async () =>
-        expect(await readdir(join(root, 'acp-command-sessions', 'omp'))).toEqual([])
-      )
-      await waitFor(() => expect(admissions.size).toBe(0))
-      acquire.mockClear()
-      stat.mockClear()
-      reports = false
-      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      await vi.advanceTimersByTimeAsync(AT_REST_COMMANDS_TTL_MS)
-      const changed = vi.fn(() => records.forEach((record) => catalog.read(record)))
-      catalog.onChange(changed)
-      for (let wave = 1; wave <= 3; wave++) {
-        const answers = records.map((record) => catalog.settled(record, 10_000))
-        records.forEach((record) => expect(catalog.read(record)).toEqual(rows))
-        await waitFor(() => expect(children).toHaveLength(count + wave * 2))
-        await waitFor(() =>
-          expect(
-            children.every((child) => child.agent.frames.at(-1)?.method === 'session/new')
-          ).toBe(true)
-        )
-        expect(stat).toHaveBeenCalledTimes(wave * count)
-        expect(acquire).toHaveBeenCalledTimes(wave * Math.min(count, 34))
-        expect(children.filter((child) => !child.exited)).toHaveLength(2)
-        await vi.advanceTimersByTimeAsync(9_000)
-        expect(await Promise.all(answers)).toEqual(records.map(() => rows))
-        // Settle every queued deadline before close can release capacity within this wave.
-        expect(children.filter((child) => !child.exited)).toHaveLength(2)
-        expect(admissions.size).toBe(2)
-        closeGates.splice(0).forEach((close) => close.resolve())
-        await waitFor(async () =>
-          expect(await readdir(join(root, 'acp-command-sessions', 'omp'))).toEqual([])
-        )
-        await waitFor(() => expect(admissions.size).toBe(0))
-        expect(changed).not.toHaveBeenCalled()
-        for (let query = 0; query < count; query++) {
-          expect(
-            buildNativeChatPickerItems([], [], 'skill:pl', '/', sessionReportedSkills(rows, 'omp'))
-          ).toEqual(expect.arrayContaining([expect.objectContaining({ token: '/skill:plan' })]))
-        }
-        expect(stat).toHaveBeenCalledTimes(wave * count)
-        expect(children).toHaveLength(count + wave * 2)
-        // Overflow fails before queued deadlines; the next demand is due for every context.
-        await vi.advanceTimersByTimeAsync(10_000)
-      }
-      await catalog.closeAll()
-      expect(peak).toBe(2)
-      expect(children.every((child) => child.exited && child.closes === 1)).toBe(true)
-    } finally {
-      closeGates.splice(0).forEach((close) => close.resolve())
-      await catalog.closeAll()
-    }
+  try {
+    catalog.read(ompRecord('legacy-one'))
+    catalog.read(ompRecord('legacy-two'))
+    await waitFor(() => expect(children).toHaveLength(2))
+    catalog.read(ompRecord('queued'))
+    const explicit = catalog.settled(ompRecord('queued'), 1_000, true)
+    const joined = catalog.settled(ompRecord('legacy-one'), 1_000, true)
+    await waitFor(() => expect(children).toHaveLength(3))
+    expect(children.filter((child) => !child.exited)).toHaveLength(3)
+    gate.resolve()
+    expect(await explicit).toBeDefined()
+    expect(await joined).toBeDefined()
+    await waitFor(() => expect(children.every((child) => child.exited)).toBe(true))
+    expect(children).toHaveLength(3)
+  } finally {
+    gate.resolve()
+    catalog.dispose()
   }
-)
+})

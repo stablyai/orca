@@ -5,13 +5,13 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/terminal-startup-cwd'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
@@ -62,6 +62,8 @@ export type PtySpawnIpcArgs = {
   placement?: unknown
   // Accept declared restore intent only through isRestoreSpawnIntent.
   spawnIntent?: unknown
+  // Only `true` counts: a window restore no user act asked for.
+  wslPassiveRestore?: unknown
   // Validate untyped launch input through AgentLaunch.safeParse.
   agentLaunch?: unknown
   // Main validates renderer telemetry; retain unknown input types at the IPC boundary.
@@ -118,12 +120,15 @@ export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   assertWorkspaceAcceptsNewPty: (
     worktreeId: string | undefined,
     sessionId?: string,
-    cwd?: string
+    cwd?: string,
+    passiveWslRestore?: boolean,
+    connectionId?: string | null
   ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,
     cwd: string | undefined,
-    missingDirFallback?: TerminalStartupCwdMissingDirFallback
+    missingDirFallback?: TerminalStartupCwdMissingDirFallback,
+    connectionId?: string | null
   ) => string | undefined
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   trustedTerminalHandleEnv: Set<string>

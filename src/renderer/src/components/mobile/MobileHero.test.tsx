@@ -20,7 +20,7 @@ vi.mock('./NetworkInterfacePicker', () => ({
   NetworkInterfacePicker: () => null
 }))
 
-vi.mock('../settings/MobilePairingConnectionOptions', () => ({
+vi.mock('../settings/mobile/pairing/MobilePairingConnectionOptions', () => ({
   MobilePairingConnectionOptions: () => null
 }))
 
@@ -28,7 +28,7 @@ vi.mock('./WindowsFirewallNotice', () => ({
   WindowsFirewallNotice: () => null
 }))
 
-vi.mock('../settings/MachineNameField', () => ({
+vi.mock('../machine-identity/MachineNameField', () => ({
   MachineNameField: ({ id, className }: { id?: string; className?: string }) => (
     <div data-testid="machine-name-field" data-id={id} className={className} />
   )
@@ -76,8 +76,7 @@ describe('HeroFlow height', () => {
         platform="ios"
         onPlatformChange={vi.fn()}
         installQrUrl={null}
-        iosChannel="preview"
-        onIosChannelChange={vi.fn()}
+        installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
         onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
@@ -123,8 +122,7 @@ describe('HeroFlow height', () => {
         platform="ios"
         onPlatformChange={vi.fn()}
         installQrUrl={null}
-        iosChannel="preview"
-        onIosChannelChange={vi.fn()}
+        installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
         onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
@@ -165,6 +163,7 @@ describe('HeroFlow height', () => {
     const onOpenAndroidInstallGuide = vi.fn()
     renderFlow(0, {
       platform: 'android',
+      installCopy: { ctaLabel: 'Download APK', url: 'https://example.com/app-release.apk' },
       onOpenAndroidInstallGuide
     })
 

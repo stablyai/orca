@@ -1,3 +1,4 @@
+import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
@@ -27,7 +28,7 @@ import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
-import { declareWslHostClient } from '../../wsl/wsl-host-client-declaration'
+import { declareWslHostClient } from '../../wsl/host-lifecycle/wsl-host-client-declaration'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -98,6 +99,10 @@ export function resetRuntimeEnvironmentStatusOwners(): void {
   for (const id of statusOwners.keys()) {
     closeRemoteRuntimeRequestConnection(id)
   }
+}
+
+export function getRuntimeEnvironmentStatusSnapshot(environmentId: string) {
+  return statusOwners.get(environmentId)?.owner.read() ?? null
 }
 
 export function getRuntimeEnvironmentStatusSnapshots() {
@@ -314,12 +319,4 @@ function getSharedControlConnection(
     )
   }
   return cached.connection
-}
-
-function getPairingKey(pairedConnection: PairedRuntimeConnection): string {
-  return [
-    pairedConnection.endpoint,
-    pairedConnection.credential.deviceToken,
-    pairedConnection.hostPublicKeyB64
-  ].join('\0')
 }

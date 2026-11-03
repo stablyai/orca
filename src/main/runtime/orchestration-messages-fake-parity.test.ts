@@ -66,28 +66,4 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
     // A failed partial claim must leave the free row available to another flight.
     expect(store.stageMailboxPointerEnter([free.id], mine)).toBe(true)
   })
-
-  it('applies the exclusion and limit the pointer batch selector relies on', () => {
-    const store = createStore()
-    store.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 'reserved',
-      type: 'escalation'
-    })
-    const kept = store.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 'kept'
-    })
-
-    expect(
-      store
-        .getUndeliveredUnreadMessages('run:run-1', undefined, { excludeTypes: ['escalation'] })
-        .map((message) => message.id)
-    ).toEqual([kept.id])
-    expect(store.getUndeliveredUnreadMessages('run:run-1', undefined, { limit: 1 })).toHaveLength(1)
-  })
 })

@@ -14,6 +14,8 @@ export type MessageFormattingAuthority =
 export type MessageFormattingOptions = {
   authority?: MessageFormattingAuthority
   supportedActionHints?: readonly string[]
+  /** The CLI name the recipient runs; a chat's reply line must name the one it has. */
+  cliCommand?: OrchestrationCliCommand
 }
 
 function resolveAuthority(
@@ -91,7 +93,9 @@ export function formatMessageBanner(
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''
         : ` --from ${msg.to_handle}`
-    lines.push(`[Reply: orca orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`)
+    lines.push(
+      `[Reply: ${options.cliCommand ?? 'orca'} orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`
+    )
   }
   lines.push(SEPARATOR)
 
@@ -119,7 +123,7 @@ export function formatMessagePointer(
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
     : ''
   if (heldDeliveryId) {
-    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${runFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${runFlag} --ack ${heldDeliveryId}\`.\n`
+    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${runFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${runFlag} --ack ${heldDeliveryId}\`, then \`${cliCommand} orchestration check${runFlag}\` for the new mail.\n`
   }
   return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
 }

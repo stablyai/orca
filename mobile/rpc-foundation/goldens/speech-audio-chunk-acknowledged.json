@@ -8,12 +8,7 @@
       "failures": [],
       "pending": 0
     },
-    "12521d219054": {
-      "name": "speech.dictation.chunk#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.chunk\",\"params\":{\"dictationId\":\"dictation-1\",\"audioBase64\":\"ACVKb5S53gM=\",\"sampleRate\":16000}}"
-    },
-    "99956eef8fff": {
+    "5133fafc8626": {
       "name": "speech.dictation.chunk#1",
       "ordinal": 1,
       "args": [
@@ -26,7 +21,8 @@
           "value": {
             "audioBase64": "ACVKb5S53gM=",
             "dictationId": "dictation-1",
-            "sampleRate": 16000
+            "sampleRate": 16000,
+            "seq": 0
           }
         },
         {
@@ -49,6 +45,11 @@
         }
       }
     },
+    "70f6f0244686": {
+      "name": "speech.dictation.chunk#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.chunk\",\"params\":{\"dictationId\":\"dictation-1\",\"audioBase64\":\"ACVKb5S53gM=\",\"sampleRate\":16000,\"seq\":0}}"
+    },
     "bc459c132276": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -69,8 +70,8 @@
       {
         "id": "acknowledged",
         "observation": {
-          "sender": ["99956eef8fff"],
-          "payloads": ["12521d219054"],
+          "sender": ["5133fafc8626"],
+          "payloads": ["70f6f0244686"],
           "settlements": {
             "chunk": "bc459c132276"
           },

@@ -4,9 +4,14 @@ import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX,
+  type AgentSessionExpiredAttachment
+} from '../../../shared/agent-session/failures/agent-session-expired-attachments'
 import {
   AGENT_SESSION_ATTACHMENT_PART_FILE,
+  agentSessionAttachmentReferenceNames,
   agentSessionAttachmentReferences,
   agentSessionAttachmentStoreRoot
 } from './agent-session-attachment-references'
@@ -30,9 +35,12 @@ CREATE TABLE IF NOT EXISTS agent_session_attachment_sweeps (
 }
 
 export class AgentSessionAttachmentExpiredError extends Error {
-  constructor() {
+  readonly expired: readonly AgentSessionExpiredAttachment[]
+
+  constructor(expired: readonly AgentSessionExpiredAttachment[]) {
     super('A referenced chat attachment is no longer stored on this host.')
     this.name = 'AgentSessionAttachmentExpiredError'
+    this.expired = expired
   }
 }
 
@@ -65,13 +73,17 @@ function insertClaims(
   uploadIds: Iterable<string>,
   sessionId: string,
   now: number
-): void {
+): string[] {
+  const inserted: string[] = []
   const insert = db.prepare(
     'INSERT OR IGNORE INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
   )
   for (const uploadId of uploadIds) {
-    insert.run(uploadId, sessionId, now)
+    if (Number(insert.run(uploadId, sessionId, now).changes) > 0) {
+      inserted.push(uploadId)
+    }
   }
+  return inserted
 }
 
 export type AgentSessionAttachmentClaim = {
@@ -89,28 +101,38 @@ export type AgentSessionAttachmentClaim = {
 export function claimAgentSessionAttachmentsInTransaction(
   db: Database.Database,
   claim: AgentSessionAttachmentClaim
-): void {
+): { referenced: Set<string>; inserted: string[] } {
   const root = agentSessionAttachmentStoreRoot(claim.stateDirectory)
   const uploadIds = agentSessionAttachmentReferences(root, claim.body)
   if (uploadIds.size === 0) {
-    return
+    return { referenced: uploadIds, inserted: [] }
   }
   const kept = claim.previous
     ? agentSessionAttachmentReferences(root, claim.previous)
     : new Set<string>()
   const required = claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
-  if (required.some((uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId))) {
-    throw new AgentSessionAttachmentExpiredError()
+  const expired = required.filter(
+    (uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId)
+  )
+  if (expired.length > 0) {
+    throw new AgentSessionAttachmentExpiredError(
+      agentSessionAttachmentReferenceNames(
+        root,
+        claim.body,
+        expired.slice(0, AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX)
+      )
+    )
   }
-  insertClaims(db, required, claim.sessionId, claim.now)
+  const inserted = insertClaims(db, required, claim.sessionId, claim.now)
   const bestEffort = [...uploadIds].filter((id) => !required.includes(id))
   if (bestEffort.length === 0) {
-    return
+    return { referenced: uploadIds, inserted }
   }
   db.exec(`SAVEPOINT ${CLAIM_SAVEPOINT}`)
   try {
-    insertClaims(db, bestEffort, claim.sessionId, claim.now)
+    const acquired = insertClaims(db, bestEffort, claim.sessionId, claim.now)
     db.exec(`RELEASE ${CLAIM_SAVEPOINT}`)
+    inserted.push(...acquired)
   } catch (error) {
     db.exec(`ROLLBACK TO ${CLAIM_SAVEPOINT}`)
     db.exec(`RELEASE ${CLAIM_SAVEPOINT}`)
@@ -119,6 +141,7 @@ export function claimAgentSessionAttachmentsInTransaction(
       error: error instanceof Error ? error.message : String(error)
     })
   }
+  return { referenced: uploadIds, inserted }
 }
 
 /** Mark only unclaimed uploads; subsequent claims must refuse them. */

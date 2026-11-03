@@ -37,20 +37,40 @@ export class OrcadFeatureReadiness {
     this.pending.delete(feature)
   }
 
-  /** True once every feature is open; false if any is still closed after `timeoutMs`. */
-  async waitFor(features: readonly OrcadFeature[], timeoutMs: number): Promise<boolean> {
+  /**
+   * 'ready' once every feature is open; 'timeout' if any is still closed after `timeoutMs`;
+   * 'aborted' as soon as any signal aborts (the client went away).
+   */
+  async waitFor(
+    features: readonly OrcadFeature[],
+    timeoutMs: number,
+    signals: readonly (AbortSignal | undefined)[] = []
+  ): Promise<'ready' | 'timeout' | 'aborted'> {
+    const live = signals.filter((signal): signal is AbortSignal => signal !== undefined)
+    if (live.some((signal) => signal.aborted)) {
+      return 'aborted'
+    }
     const waits = features.flatMap((feature) => this.pending.get(feature)?.opened ?? [])
     if (waits.length === 0) {
-      return true
+      return 'ready'
     }
     let timer: ReturnType<typeof setTimeout> | undefined
-    const timedOut = new Promise<false>((resolve) => {
-      timer = setTimeout(() => resolve(false), timeoutMs)
+    const cleanups: (() => void)[] = []
+    const settled = new Promise<'timeout' | 'aborted'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), timeoutMs)
+      for (const signal of live) {
+        const onAbort = (): void => resolve('aborted')
+        signal.addEventListener('abort', onAbort, { once: true })
+        cleanups.push(() => signal.removeEventListener('abort', onAbort))
+      }
     })
     try {
-      return await Promise.race([Promise.all(waits).then(() => true), timedOut])
+      return await Promise.race([Promise.all(waits).then(() => 'ready' as const), settled])
     } finally {
       clearTimeout(timer)
+      for (const cleanup of cleanups) {
+        cleanup()
+      }
     }
   }
 }
@@ -72,31 +92,51 @@ export function _resetOrcadFeatureReadinessForTests(): void {
   current = new OrcadFeatureReadiness()
 }
 
+/** A method's startup needs: fixed, or read from its parsed params (an agent launch, not a shell). */
+export type OrcadFeatureRequirement<P = never> =
+  | readonly OrcadFeature[]
+  | ((params: P) => readonly OrcadFeature[])
+
+export function resolveOrcadFeatureRequirement<P>(
+  requires: OrcadFeatureRequirement<P> | undefined,
+  params: P
+): readonly OrcadFeature[] {
+  return typeof requires === 'function' ? requires(params) : (requires ?? [])
+}
+
 /**
  * The wait for a method's required features, or null when nothing is closed, so ungated dispatch
- * keeps its synchronous start. Refuses with the existing retryable `runtime_unavailable`.
+ * keeps its synchronous start. Refuses with the existing retryable `runtime_unavailable`, also when
+ * the request or its connection ends while waiting: the handler must never run for a caller that
+ * left (a streaming handler's close cleanup would never fire; a retried mutation would run twice).
  */
 export function rpcMethodFeatureWait(
-  requires: readonly OrcadFeature[] | undefined,
+  requires: readonly OrcadFeature[],
+  signals: readonly (AbortSignal | undefined)[] = [],
   timeoutMs = ORCAD_FEATURE_WAIT_MS
 ): Promise<void> | null {
-  if (!requires?.some((feature) => !current.isOpen(feature))) {
+  if (!requires.some((feature) => !current.isOpen(feature))) {
     return null
   }
-  return current.waitFor(requires, timeoutMs).then((ready) => {
-    if (!ready) {
+  return current.waitFor(requires, timeoutMs, signals).then((outcome) => {
+    if (outcome !== 'ready') {
       throw new Error('runtime_unavailable')
     }
   })
 }
 
-/** Declares `feature` on each method of a family, e.g. every `orchestration.*` method. */
-export function requiringOrcadFeature<M extends { readonly requires?: readonly OrcadFeature[] }>(
-  feature: OrcadFeature,
-  methods: readonly M[]
-): M[] {
-  return methods.map((method) => ({
-    ...method,
-    requires: [...(method.requires ?? []), feature]
-  }))
+/** Adds `feature` to each method of a family, e.g. every `orchestration.*` method. */
+export function requiringOrcadFeature<
+  M extends { readonly requires?: OrcadFeatureRequirement<never> }
+>(feature: OrcadFeature, methods: readonly M[]): M[] {
+  return methods.map((method) => {
+    const own = method.requires
+    return {
+      ...method,
+      requires:
+        typeof own === 'function'
+          ? (params: never) => [...own(params), feature]
+          : [...(own ?? []), feature]
+    }
+  })
 }

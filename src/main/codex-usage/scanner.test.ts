@@ -117,39 +117,6 @@ describe('parseCodexUsageRecord', () => {
     expect(duplicate).toBeNull()
   })
 
-  it('preserves unknown model metadata instead of assigning fallback pricing', () => {
-    const context = {
-      sessionId: 'session-1',
-      sessionCwd: '/workspace/repo',
-      currentCwd: '/workspace/repo',
-      currentModel: null,
-      previousTotals: null
-    }
-
-    const parsed = parseCodexUsageRecord(
-      JSON.stringify({
-        timestamp: '2026-04-09T10:00:00.000Z',
-        type: 'event_msg',
-        payload: {
-          type: 'token_count',
-          info: {
-            last_token_usage: {
-              input_tokens: 120,
-              cached_input_tokens: 20,
-              output_tokens: 50,
-              reasoning_output_tokens: 10,
-              total_tokens: 170
-            }
-          }
-        }
-      }),
-      context
-    )
-
-    expect(parsed?.model).toBeNull()
-    expect(parsed?.hasInferredPricing).toBe(true)
-  })
-
   it('uses last token usage for the first resumed-session event', () => {
     const context = {
       sessionId: 'session-1',

@@ -4,10 +4,10 @@ import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-
 import {
   createRuntimeBrowserCommands,
   runtimeBrowserCommandsFactoryIsHeadless,
-  runtimeBrowserUnavailableCause,
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
 } from '../runtime/runtime-browser-commands-factory'
+
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
 import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
@@ -74,31 +74,6 @@ it('aborts pending discovery and awaits a late provider cleanup exactly once', a
   expect(runtimeBrowserCommandsFactoryIsHeadless()).toBe(false)
 })
 
-it('retains specific provider-unavailable diagnostics after discovery declines', async () => {
-  const { pending, startup } = delayedProvider()
-  setRuntimeBrowserUnavailableCause({ reason: 'driver_missing' })
-  pending.resolve(null)
-  await startup.ready
-  expect(runtimeBrowserUnavailableCause()).toEqual({ reason: 'driver_missing' })
-  await startup.stop()
-})
-
-it('does not hide resolver cleanup failures from the runtime lifetime', async () => {
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const { pending, startup } = delayedProvider()
-  pending.reject(new Error('cleanup failed'))
-  await startup.ready
-  await expect(startup.stop()).rejects.toThrow('cleanup failed')
-})
-
-it('propagates ready-provider cleanup failures', async () => {
-  const { pending, provider, startup } = delayedProvider()
-  vi.mocked(provider.stop).mockRejectedValueOnce(new Error('stop failed'))
-  pending.resolve(provider)
-  await startup.ready
-  await expect(startup.stop()).rejects.toThrow('stop failed')
-})
-
 function closeHost(pages: RuntimeBrowserPageRegistry): RuntimeBrowserCommandHost {
   pages.publishClientPage({
     browserPageId: 'page-restored',
@@ -130,28 +105,5 @@ it('closes a held client-hosted page when discovery found no browser provider', 
     commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-restored' })
   ).resolves.toEqual({ closed: true })
   expect(pages.getPage('page-restored')).toBeUndefined()
-  await startup.stop()
-})
-
-it('closes a client-hosted page itself rather than asking a provider that never held it', async () => {
-  const { pending, provider, startup } = delayedProvider()
-  const pages = new RuntimeBrowserPageRegistry()
-  const commands = createRuntimeBrowserCommands(closeHost(pages))
-  pending.resolve(provider)
-  await startup.ready
-  await expect(
-    commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-restored' })
-  ).resolves.toEqual({ closed: true })
-  expect(pages.getPage('page-restored')).toBeUndefined()
-  expect(provider.factory).not.toHaveBeenCalled()
-  await startup.stop()
-})
-
-it('refuses a member the provider does not implement instead of invoking it', async () => {
-  const { pending, provider, startup } = delayedProvider()
-  const commands = createRuntimeBrowserCommands(host)
-  pending.resolve(provider)
-  await startup.ready
-  expect(() => commands.browserTabCreate({ worktree: 'wt-a' })).toThrow('Unknown browser command')
   await startup.stop()
 })

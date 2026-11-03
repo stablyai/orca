@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  fetchMarkPRReadyForReview,
   fetchMergePR,
   fetchRemovePRReviewers,
   fetchRequestPRReviewers,
@@ -10,6 +10,7 @@ import {
   fetchSetPRAutoMerge,
   fetchUpdatePRState
 } from './github-pr-mutations'
+import { fetchMarkPRDraft, fetchMarkPRReadyForReview } from './github-pr-draft-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { PrActionsEngine, type PrActionMutations, type PrActionBusyKey } from './pr-actions-engine'
@@ -33,6 +34,7 @@ function realMutations(client: RpcOperationSender, worktreeId: string): PrAction
     setPRAutoMerge: (args) => fetchSetPRAutoMerge(client, worktreeId, args),
     updatePRState: (args) => fetchUpdatePRState(client, worktreeId, args),
     markReadyForReview: (args) => fetchMarkPRReadyForReview(client, worktreeId, args),
+    markDraft: (args) => fetchMarkPRDraft(client, worktreeId, args),
     requestReviewers: (args) => fetchRequestPRReviewers(client, worktreeId, args),
     removeReviewers: (args) => fetchRemovePRReviewers(client, worktreeId, args),
     rerunChecks: (args) => fetchRerunPRChecks(client, worktreeId, args)
@@ -40,6 +42,7 @@ function realMutations(client: RpcOperationSender, worktreeId: string): PrAction
 }
 
 export function useMobilePrActions(input: PrActionsInput) {
+  useMobileTranslation()
   const { client, connState, worktreeId, prNumber, headSha, prRepo, refetch } = input
   const [, forceRender] = useReducer((n: number) => n + 1, 0)
 
@@ -77,11 +80,8 @@ export function useMobilePrActions(input: PrActionsInput) {
     clearError: useCallback(() => engine.clearError(), [engine]),
     clearBlocked: useCallback(() => engine.clearBlocked(), [engine]),
     merge: useCallback(
-      (method?: Parameters<PrActionsEngine['merge']>[0]) => {
-        if (ready) {
-          void engine.merge(method)
-        }
-      },
+      (method?: Parameters<PrActionsEngine['merge']>[0]): Promise<boolean> =>
+        ready ? engine.merge(method) : Promise.resolve(false),
       [engine, ready]
     ),
     setAutoMerge: useCallback(
@@ -102,7 +102,12 @@ export function useMobilePrActions(input: PrActionsInput) {
     ),
     markReadyForReview: useCallback(() => {
       if (ready) {
-        void engine.markReadyForReview()
+        void engine.setDraft(false)
+      }
+    }, [engine, ready]),
+    markDraft: useCallback(() => {
+      if (ready) {
+        void engine.setDraft(true)
       }
     }, [engine, ready]),
     requestReviewer: useCallback(
@@ -151,6 +156,7 @@ function noopMutations(): PrActionMutations {
     setPRAutoMerge: fail,
     updatePRState: fail,
     markReadyForReview: fail,
+    markDraft: fail,
     requestReviewers: fail,
     removeReviewers: fail,
     rerunChecks: fail

@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 import {
   createFakeSpawnedChild,
   fakeSpawnDispatch,
   fakeSpawnReturning
 } from '../../shared/__fixtures__/fake-spawned-child'
-import type * as WslModule from '../wsl'
+import type * as WslModule from '../wsl/discovery/distro-catalog'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
@@ -13,13 +14,19 @@ const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() =
   getDefaultWslDistroMock: vi.fn()
 }))
 
+// The default-distro fallback asks whether the distro runs before it may start it (E9).
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof BackgroundDistroGate>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
+
 vi.mock('child_process', () => ({
   execFile: vi.fn(),
   execFileSync: execFileSyncMock,
   spawn: spawnMock
 }))
 
-vi.mock('../wsl', async (importOriginal) => ({
+vi.mock('../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getDefaultWslDistro: getDefaultWslDistroMock
 }))

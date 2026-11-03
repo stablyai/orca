@@ -118,6 +118,7 @@ export function SkillsList({
       <SkillDetailDialog
         skill={detailSkill}
         agentByRootPath={agentByRootPath}
+        ownerHostId={ownerHostId}
         shareable={detailSkill ? isSkillShareEligible(detailSkill, local) : false}
         deletable={detailSkill ? deleteSupported && isSkillDeleteEligible(detailSkill) : false}
         deleteDisabledReason={detailSkill ? deleteReasonFor(detailSkill) : null}
@@ -147,6 +148,7 @@ export function SkillsList({
       <div
         ref={listRef}
         role="listbox"
+        data-focus-behavior="page"
         aria-multiselectable={selectionMode !== null || undefined}
         aria-label={translate('auto.components.skills.SkillsList.listLabel', 'Skills')}
         aria-orientation="vertical"
@@ -187,6 +189,7 @@ export function SkillsList({
               onShare={() => onShare(skill)}
               onDelete={() => onDelete(skill)}
               onReveal={() => void revealSkill(skill)}
+              ownerHostId={ownerHostId}
               onKeyDown={onListKeyDown}
             />
           )

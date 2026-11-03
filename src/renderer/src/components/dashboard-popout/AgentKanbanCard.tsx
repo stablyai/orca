@@ -46,9 +46,10 @@ function displayTimestamp(card: DashboardCard): number {
 }
 
 function formatSubagentCount(count: number): string {
-  return count === 1
-    ? translate('dashboardPopout.card.subagents_one', '{{count}} subagent', { count })
-    : translate('dashboardPopout.card.subagents_other', '{{count}} subagents', { count })
+  return translate('dashboardPopout.card.subagents', '{{count}} subagents', {
+    count,
+    defaultValue_one: '{{count}} subagent'
+  })
 }
 
 function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagents']): boolean {

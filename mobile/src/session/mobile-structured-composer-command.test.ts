@@ -125,11 +125,8 @@ describe('mobile structured conversation commands', () => {
     const { input, sendRequest } = setup()
     input.text = '/fast'
     input.controller.agent = 'omp'
-    await dispatchMobileStructuredCommand(input)
-    expect(input.onError).toHaveBeenCalledWith(
-      expect.stringContaining('/fast is not available'),
-      undefined
-    )
+    expect(await dispatchMobileStructuredCommand(input)).toBeNull()
+    expect(input.onError).not.toHaveBeenCalled()
     input.controller.sessionCommands = [{ name: 'fast', kind: 'command' }]
     expect(await dispatchMobileStructuredCommand(input)).toBeNull()
     expect(sendRequest).not.toHaveBeenCalled()
@@ -244,5 +241,22 @@ describe('mobile structured conversation commands', () => {
     const { input, sendRequest } = setup()
     expect(await dispatchMobileStructuredCommand({ ...input, text: 'hello' })).toBeNull()
     expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('sends /compact instructions where the host takes them and refuses them elsewhere', async () => {
+    const { input, sendRequest } = setup()
+    const text = '/compact keep the plan'
+    expect(await dispatchMobileStructuredCommand({ ...input, text })).toBe('rejected')
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(input.onError).toHaveBeenCalledWith('Use /compact without arguments.', undefined)
+
+    const taking = { ...input.controller, compactInstructions: true }
+    expect(await dispatchMobileStructuredCommand({ ...input, text, controller: taking })).toBe(
+      'accepted'
+    )
+    expect(requestFields(sendRequest.mock.calls[0])).toMatchObject({
+      command: 'compact',
+      instructions: 'keep the plan'
+    })
   })
 })

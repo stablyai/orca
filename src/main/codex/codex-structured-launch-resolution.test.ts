@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
@@ -65,7 +65,7 @@ function resolverFor(
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath,
-    resolveCommand: () => '/usr/local/bin/codex',
+    resolveCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
     resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? [])
   })
 }
@@ -143,7 +143,7 @@ describe('codex structured launch resolution', () => {
       },
       resolveLaunchArgs: () => [],
       resolveWorkspacePath: async () => '/floating/start-folder',
-      resolveCommand: () => '/usr/local/bin/codex'
+      resolveCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] })
     })
 
     await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
@@ -156,6 +156,7 @@ describe('codex structured launch resolution', () => {
     const launch = await resolverFor(record())({ identity: IDENTITY })
 
     expect(launch).toEqual({
+      prefixArgs: [],
       command: '/usr/local/bin/codex',
       args: ['app-server'],
       cwd: '/repos/workspace-1',
@@ -179,7 +180,7 @@ describe('codex structured launch resolution', () => {
         resolveLaunchArgs: () => [],
         store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
-        resolveCommand: () => command
+        resolveCommand: () => ({ command: command, prefixArgs: [] })
       })
 
       await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
@@ -196,7 +197,7 @@ describe('codex structured launch resolution', () => {
         resolveLaunchArgs: () => [],
         store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
-        resolveCommand: () => 'codex.exe'
+        resolveCommand: () => ({ command: 'codex.exe', prefixArgs: [] })
       })
 
       await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({

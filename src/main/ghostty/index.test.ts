@@ -1,10 +1,16 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { statMock, readFileMock } = vi.hoisted(() => ({
+const { statMock, readFileMock, showOpenDialogMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
-  readFileMock: vi.fn()
+  readFileMock: vi.fn(),
+  showOpenDialogMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  BrowserWindow: { fromWebContents: vi.fn(() => null) },
+  dialog: { showOpenDialog: showOpenDialogMock }
 }))
 
 vi.mock('fs/promises', () => ({
@@ -37,6 +43,29 @@ function createStore(settings: Record<string, unknown> = {}): Store {
 }
 
 describe('previewGhosttyImport', () => {
+  it('reads only the picked file and never a renderer-supplied path', async () => {
+    const pickedPath = '/Users/alice/dotfiles/ghostty/config'
+    statMock.mockResolvedValue({ isFile: () => true, size: 32 })
+    readFileMock.mockResolvedValue('font-size = 15\n')
+    showOpenDialogMock.mockResolvedValueOnce({ canceled: false, filePaths: [pickedPath] })
+
+    const picked = await previewGhosttyImport(createStore(), { kind: 'chooseFile' })
+    expect(picked.configPaths).toEqual([pickedPath])
+    expect(picked.diff.terminalFontSize).toBe(15)
+    expect(readFileMock).toHaveBeenCalledTimes(1)
+
+    const withPath = await previewGhosttyImport(createStore(), {
+      kind: 'chooseFile',
+      path: '/etc/passwd'
+    })
+    expect(withPath.error).toBe('Invalid Ghostty import source.')
+
+    showOpenDialogMock.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    const canceled = await previewGhosttyImport(createStore(), { kind: 'chooseFile' })
+    expect(canceled).toEqual({ found: false, canceled: true, diff: {}, unsupportedKeys: [] })
+    expect(readFileMock).toHaveBeenCalledTimes(1)
+  })
+
   it('returns found false when no config exists', async () => {
     statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     const result = await previewGhosttyImport(createStore())

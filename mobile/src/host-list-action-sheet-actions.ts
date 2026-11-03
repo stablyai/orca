@@ -27,6 +27,7 @@ export function getHostListActionSheetActions(args: {
 
   return [
     {
+      id: 'connect',
       label:
         args.hasEverConnected && isLive
           ? translate('hostScreen.hostListActionSheetActions.reconnect', 'Reconnect')
@@ -40,6 +41,7 @@ export function getHostListActionSheetActions(args: {
     ...(isLive
       ? [
           {
+            id: 'disconnect',
             label: translate('hostScreen.hostListActionSheetActions.disconnect', 'Disconnect'),
             icon: PowerOff,
             onPress: () => {
@@ -50,6 +52,7 @@ export function getHostListActionSheetActions(args: {
         ]
       : []),
     {
+      id: 'networkDiagnostics',
       label: translate(
         'hostScreen.hostListActionSheetActions.networkDiagnostics',
         'Network diagnostics'
@@ -61,6 +64,7 @@ export function getHostListActionSheetActions(args: {
       }
     },
     {
+      id: 'editHost',
       label: translate('hostScreen.hostListActionSheetActions.editHost', 'Edit host'),
       icon: Edit3,
       closeBeforePress: true,
@@ -70,6 +74,7 @@ export function getHostListActionSheetActions(args: {
       }
     },
     {
+      id: 'remove',
       label: translate('common.remove', 'Remove'),
       destructive: true,
       closeBeforePress: true,

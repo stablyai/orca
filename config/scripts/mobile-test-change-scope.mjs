@@ -11,6 +11,7 @@ const NON_TEST_FILES = new Set([
   'config/scripts/pr-package-test-paths.mjs',
   'config/scripts/pr-code-change-scope.test.mjs',
   'config/scripts/pr-layout-oracle-route.mjs',
+  'config/scripts/pr-shell-contract-prefixes.mjs',
   'config/scripts/mobile-release-check-scope.mjs',
   'config/scripts/mobile-release-check-scope.test.mjs'
 ])
@@ -22,6 +23,16 @@ const DESKTOP_SUITE_PREFIXES = [
   'src/main/runtime/rpc/',
   'src/main/runtime/runtime-rpc/',
   'src/main/runtime/agent-session-',
+  'src/main/runtime/agent-session/records/agent-session-',
+  'src/main/runtime/agent-session/agent-session-account-',
+  'src/main/runtime/agent-session/agent-session-acquisition-',
+  'src/main/runtime/agent-session/agent-session-conversation-',
+  'src/main/runtime/agent-session/agent-session-death-',
+  'src/main/runtime/agent-session/agent-session-launch-',
+  'src/main/runtime/agent-session/agent-session-operation-',
+  'src/main/runtime/agent-session/agent-session-rewind-',
+  'src/main/runtime/agent-session/agent-session-runtime-',
+  'src/main/runtime/agent-session/agent-session-unsaved-',
   'src/main/native-chat/agent-session-wire/'
 ]
 

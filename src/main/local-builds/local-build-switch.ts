@@ -6,7 +6,7 @@ import { assertLocalBuildCompatibility } from './local-build-compatibility'
 import { loadLocalBuildCandidate, type LocalBuildCandidate } from './local-build-candidate'
 
 export async function chooseLocalBuild(
-  window: BrowserWindow | null
+  getMainWindow: () => BrowserWindow | null
 ): Promise<LocalBuildCandidate | null> {
   const openDialogOptions: Electron.OpenDialogOptions = {
     title: translateMain('localBuild.chooseTitle', 'Choose a Local Orca Build'),
@@ -19,8 +19,9 @@ export async function chooseLocalBuild(
       }
     ]
   }
-  const selection = await (window
-    ? dialog.showOpenDialog(window, openDialogOptions)
+  const openParent = getMainWindow()
+  const selection = await (openParent && !openParent.isDestroyed()
+    ? dialog.showOpenDialog(openParent, openDialogOptions)
     : dialog.showOpenDialog(openDialogOptions))
   const manifestPath = selection.filePaths[0]
   if (selection.canceled || !manifestPath) {
@@ -40,17 +41,14 @@ export async function chooseLocalBuild(
     const terminalSummary =
       compatibility.liveTerminalCount === 0
         ? translateMain('localBuild.noLiveTerminals', 'No live terminals need to reconnect.')
-        : compatibility.liveTerminalCount === 1
-          ? translateMain(
-              'localBuild.liveTerminals_one',
-              '{{count}} live terminal will reconnect after restart.',
-              { count: compatibility.liveTerminalCount }
-            )
-          : translateMain(
-              'localBuild.liveTerminals_other',
-              '{{count}} live terminals will reconnect after restart.',
-              { count: compatibility.liveTerminalCount }
-            )
+        : translateMain(
+            'localBuild.liveTerminals',
+            '{{count}} live terminals will reconnect after restart.',
+            {
+              count: compatibility.liveTerminalCount,
+              defaultValue_one: '{{count}} live terminal will reconnect after restart.'
+            }
+          )
     const messageBoxOptions: Electron.MessageBoxOptions = {
       type: 'question',
       title: translateMain('localBuild.confirmTitle', 'Use Local Orca Build?'),
@@ -76,8 +74,9 @@ export async function chooseLocalBuild(
       cancelId: 1,
       noLink: true
     }
-    const confirmation = await (window
-      ? dialog.showMessageBox(window, messageBoxOptions)
+    const confirmationParent = getMainWindow()
+    const confirmation = await (confirmationParent && !confirmationParent.isDestroyed()
+      ? dialog.showMessageBox(confirmationParent, messageBoxOptions)
       : dialog.showMessageBox(messageBoxOptions))
     if (confirmation.response === 0) {
       return candidate

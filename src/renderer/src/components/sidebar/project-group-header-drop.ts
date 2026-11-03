@@ -54,7 +54,12 @@ export function getSidebarOrderedProjectGroupHeaderIdsByBucket(
 ): Map<ProjectGroupHeaderDragBucketKey, string[]> {
   const buckets = new Map<ProjectGroupHeaderDragBucketKey, string[]>()
   for (const row of rows) {
-    if (row.type !== 'header' || row.repo || !isConcreteProjectGroup(row.projectGroup)) {
+    if (
+      row.type !== 'header' ||
+      row.repo ||
+      row.repeated ||
+      !isConcreteProjectGroup(row.projectGroup)
+    ) {
       continue
     }
     const bucketKey = getProjectGroupHeaderDragBucketKey(row.projectGroup, projectGroupById)

@@ -1,5 +1,6 @@
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
+import { localizeStructuredComposerOutcome } from './structured-composer-command-error-text'
 import { useStructuredAgentAcceptsImages } from '@/runtime/use-host-structured-agent'
 import type {
   NativeChatOptionPickerRequest,
@@ -9,7 +10,7 @@ import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { translate } from '@/i18n/i18n'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
 function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: boolean): string {
   const label = structuredAgentLabel(agent)
@@ -88,18 +89,22 @@ export function useNativeChatStructuredComposerTransport(args: {
           setOption: controller.setStructuredOption,
           sessionCommands: controller.sessionCommands,
           conversationCommands: controller.conversationCommands,
+          compactInstructions: controller.compactInstructions,
           runConversationCommand: controller.runConversationCommand,
           ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
-        }),
+        }).then(localizeStructuredComposerOutcome),
       ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
       sendOut: controller.sendOut || starting,
+      sendFollowUp: controller.sendFollowUp,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
+      compactInstructions: controller.compactInstructions,
       optionSnapshot: controller.optionSnapshot,
       optionPickerRequest,
       sessionCommands: controller.sessionCommands,
       refreshCommands: controller.refreshCommands,
+      setCommandsMenuOpen: controller.setCommandsMenuOpen,
       acceptsImages,
       contextUsage: controller.contextUsage,
       worktreeId,

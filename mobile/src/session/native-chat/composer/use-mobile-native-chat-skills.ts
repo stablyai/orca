@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { z } from 'zod'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
-import { isNativeChatSkillForAgent } from '../../../../../src/shared/native-chat-skill-visibility'
+import { isNativeChatSkillForAgent } from '../../../../../src/shared/native-chat/input/native-chat-skill-visibility'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { nativeChatSkillDiscoveryRead } from '../../mobile-session-read-operations'
 import type { skillDiscoveryReplySchema } from '../../session-read-reply-schema'
@@ -20,12 +20,20 @@ export function useMobileNativeChatSkills(args: {
   supported: boolean
 }): { nativeChatSkills: NativeChatSkillDiscoverySnapshot; loadNativeChatSkills: () => void } {
   const { client, worktreeId, agent, supported } = args
-  const [scans, setScans] = useState<{ client: RpcClient | null; byKey: Map<string, Scan> }>({
+  const [scans, setScans] = useState<{
+    client: RpcClient | null
+    generation: number
+    byKey: Map<string, Scan>
+  }>({
     client: null,
+    generation: 0,
     byKey: new Map()
   })
-  const key = `${client?.getGeneration?.() ?? 0}\0${worktreeId}`
-  const scan = scans.client === client ? scans.byKey.get(key) : undefined
+  const generation = client?.getGeneration?.() ?? 0
+  const scan =
+    scans.client === client && scans.generation === generation
+      ? scans.byKey.get(worktreeId)
+      : undefined
   // Read through refs so a settled failure cannot recreate the loader and refire the menu's request.
   const scanRef = useRef(scan)
   const clientRef = useRef(client)
@@ -40,15 +48,19 @@ export function useMobileNativeChatSkills(args: {
     if (!client || !supported || (held && held.status !== 'error')) {
       return
     }
+    // Read at request time: a same-state migration need not re-render before the menu opens.
+    const generation = client.getGeneration?.() ?? 0
     const settle = (next: Scan): void => {
       // A reply from a replaced connection must not wipe the current one's scans.
-      if (clientRef.current !== client) {
+      if (clientRef.current !== client || (client.getGeneration?.() ?? 0) !== generation) {
         return
       }
       setScans((current) => {
-        const byKey = new Map(current.client === client ? current.byKey : [])
-        byKey.set(key, next)
-        return { client, byKey }
+        const byKey = new Map(
+          current.client === client && current.generation === generation ? current.byKey : []
+        )
+        byKey.set(worktreeId, next)
+        return { client, generation, byKey }
       })
     }
     settle({ status: 'loading' })
@@ -59,7 +71,7 @@ export function useMobileNativeChatSkills(args: {
         settle(accepted.accepted ? { status: 'ready', reply: accepted.value } : { status: 'error' })
       })
       .catch(() => settle({ status: 'error' }))
-  }, [client, key, supported, worktreeId])
+  }, [client, supported, worktreeId])
 
   const nativeChatSkills = useMemo<NativeChatSkillDiscoverySnapshot>(() => {
     if (!agent || !supported) {

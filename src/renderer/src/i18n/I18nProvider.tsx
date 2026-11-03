@@ -1,5 +1,4 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { I18nextProvider } from 'react-i18next'
 import { useAppStore } from '../store'
 import { i18n, setRendererPluginLanguagePacks, loadRendererUiLanguage } from './i18n'
 import { usePluginLanguagePacks } from '../store/plugin-language-packs'
@@ -62,5 +61,6 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
     }
   }, [uiLanguage, activePack, retryCount, systemLocale])
 
-  return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+  // initReactI18next already binds useTranslation to this instance.
+  return <>{children}</>
 }

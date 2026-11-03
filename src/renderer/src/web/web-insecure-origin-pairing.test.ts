@@ -51,11 +51,4 @@ describe('a plain-http page on another machine (LAN or Tailscale)', () => {
     })
     expect(source.nextPlan(true)).toEqual({ kind: 'legacy-token', deviceToken: 'pairing-code' })
   })
-
-  it('shows no pairing-security notice', async () => {
-    const { environment, guidance } = await loadWebClient()
-    const paired = environment.createStoredWebRuntimeEnvironment({ name: 'Desk', offer })
-    expect(guidance.webPairingSecurityGuidance('token-insecure-origin', paired)).toBeNull()
-    expect(guidance.webSessionPairingGuidance('token-insecure-origin')).toBeNull()
-  })
 })

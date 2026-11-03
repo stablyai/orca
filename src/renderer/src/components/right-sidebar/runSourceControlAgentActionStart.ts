@@ -1,4 +1,9 @@
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
+import {
+  sourceControlActionRecipeEntry,
+  type SelectedSourceControlActionRecipe
+} from '../../../../shared/source-control-action-selection'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -17,20 +22,19 @@ import {
   saveSourceControlActionRecipe,
   type SourceControlAiWriteTarget
 } from '../../../../shared/source-control-ai-recipe-save'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
-import { projectSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
+import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
 import { admitSourceControlRecovery } from './source-control-recovery-admission'
 
 export type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
   trimmedCommandInput: string
-  /** The picker's choice: a deliberate surface stays explicit, a saved replay requests terminal only. */
+  /** Deliberate surface operations remain distinct from saved route preferences. */
   launchChoice?: AgentLaunchChoice
-  recipe: SourceControlActionRecipe
+  recipe: SelectedSourceControlActionRecipe
   saveTargetValue: string
   actionId: SourceControlLaunchActionId
   repoId?: string | null
@@ -44,7 +48,11 @@ export type RunSourceControlAgentActionStartArgs = {
   launchSource: LaunchSource
   recoveryContext?: RuntimeGitContext | null
   signal?: AbortSignal
+  onCreateAccepted?: () => void
   onStart?: (args: {
+    signal?: AbortSignal
+    onCreateAccepted?: () => void
+    onFailureNotified?: () => void
     agentLaunchPreferences?: AgentLaunchPreferences
     agent: TuiAgent
     commandInput: string
@@ -52,9 +60,11 @@ export type RunSourceControlAgentActionStartArgs = {
     agentArgs?: string
     /** The action's saved choice, on either route. */
     sessionOptions?: Readonly<Record<string, string>>
+    chatSessionOptions?: Readonly<Record<string, string>>
+    preferredSurface?: 'chat'
     launchChoice?: AgentLaunchChoice
     sessionOptionsYieldToAgentArgs?: true
-  }) => boolean | Promise<boolean>
+  }) => DirectWorkItemLaunchResult | Promise<DirectWorkItemLaunchResult>
   onSaveAgentDefault?: (
     target: SourceControlAiWriteTarget,
     actionId: SourceControlLaunchActionId,
@@ -72,7 +82,7 @@ export async function runSourceControlAgentActionStart({
   selectedAgent,
   trimmedCommandInput,
   launchChoice,
-  recipe,
+  recipe: submittedRecipe,
   saveTargetValue,
   actionId,
   repoId,
@@ -86,6 +96,7 @@ export async function runSourceControlAgentActionStart({
   launchSource,
   recoveryContext,
   signal,
+  onCreateAccepted,
   onStart,
   onSaveAgentDefault,
   onLaunchAccepted,
@@ -93,6 +104,7 @@ export async function runSourceControlAgentActionStart({
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
+  const recipe = structuredClone(submittedRecipe)
   // Detection and delivery planning can outlive the state that opened the composer.
   if (signal?.aborted) {
     return false
@@ -107,14 +119,13 @@ export async function runSourceControlAgentActionStart({
   let launchFailureNotified = false
   let launchAcceptedNotified = false
   const saveTarget = resolveSourceControlAgentSaveTarget(saveTargetValue, repoId)
-  // The dialog edits agent, arguments and prompt; the model stays the saved one for that agent.
-  // Why: a recipe being saved launches as it will resolve once saved, so the next launch matches.
+  // Complete only the submitted selection; later parent changes cannot rewrite this launch.
   let launchRecipe = recipe
-  let recipeToSave = recipe
-  if (saveTarget && settings) {
+  let recipeToSave: SourceControlActionRecipe = recipe
+  if (saveTarget) {
     const saved = saveSourceControlActionRecipe({
       target: saveTarget,
-      settings,
+      settings: settings ?? {},
       repo,
       actionId,
       recipe
@@ -125,17 +136,9 @@ export async function runSourceControlAgentActionStart({
           ? saved.sourceControlAi.actions?.[actionId]
           : saved.update.sourceControlAi?.actionOverrides?.[actionId]
       ) ?? recipe
-    launchRecipe = resolveSourceControlActionRecipe({
-      settings:
-        'sourceControlAi' in saved
-          ? { ...settings, sourceControlAi: saved.sourceControlAi }
-          : settings,
-      repo:
-        'update' in saved ? { sourceControlAi: saved.update.sourceControlAi ?? undefined } : repo,
-      actionId
-    })
+    launchRecipe = sourceControlActionRecipeEntry(recipeToSave)
   }
-  const projection = projectSourceControlActionLaunch(
+  const projection = projectSelectedSourceControlActionLaunch(
     launchRecipe,
     selectedAgent,
     { renderedPrompt: trimmedCommandInput, settings },
@@ -154,7 +157,7 @@ export async function runSourceControlAgentActionStart({
     sourceControlActionRecipeSaveMatchesTarget({
       actionId,
       target: saveTarget,
-      recipe: recipeToSave,
+      recipe: launchRecipe,
       settings,
       repo
     })
@@ -184,7 +187,12 @@ export async function runSourceControlAgentActionStart({
     onLaunchAccepted?.()
   }
   if (onStart) {
-    launched = await onStart({
+    const result = await onStart({
+      signal,
+      onCreateAccepted,
+      onFailureNotified: () => {
+        launchFailureNotified = true
+      },
       agentLaunchPreferences,
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
@@ -192,6 +200,10 @@ export async function runSourceControlAgentActionStart({
       ...launchOptions,
       ...(launchChoice ? { launchChoice } : {})
     })
+    if (result === 'cancelled') {
+      return false
+    }
+    launched = result
     if (launched) {
       notifyLaunchAccepted()
     }

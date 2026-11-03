@@ -13,12 +13,16 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { ConflictReview } from './conflict-summary'
 import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import { CHECK_COLOR } from './check-presentation'
+import { getBrokenChecks, isBrokenCheck } from '../../../../../shared/pr-checks-fix-prompt'
 
 export function PRTriageStrip({
   review,
   pr,
   reviewKind = 'PR',
   checks,
+  pipelineCheck,
   isResolvingConflictsWithAI,
   onResolveConflictsWithAI,
   resolveConflictsDisabled,
@@ -32,6 +36,8 @@ export function PRTriageStrip({
   pr?: ConflictReview
   reviewKind?: 'PR' | 'MR'
   checks: PRCheckDetail[]
+  /** A GitLab parent pipeline; its own failure leads even when its returned jobs pass. */
+  pipelineCheck?: PRCheckDetail | null
   isResolvingConflictsWithAI: boolean
   onResolveConflictsWithAI: () => void
   resolveConflictsDisabled?: boolean
@@ -45,10 +51,12 @@ export function PRTriageStrip({
   // Share the pill's classifier so completed checks without conclusions remain unresolved rather than spinning.
   const summary = summarizeProviderChecks(checks)
   const failingCount = summary.failed
+  const brokenCheckCount = getBrokenChecks(checks).length
   const pendingCount = summary.pending
+  const pipelineFailed = pipelineCheck ? isBrokenCheck(pipelineCheck) : false
 
-  if (resolvedReview?.mergeable === 'CONFLICTING') {
-    return (
+  const conflictStrip =
+    resolvedReview?.mergeable === 'CONFLICTING' ? (
       <ConflictTriageStrip
         reviewKind={reviewKind}
         isResolvingConflictsWithAI={isResolvingConflictsWithAI}
@@ -56,73 +64,78 @@ export function PRTriageStrip({
         resolveConflictsDisabled={resolveConflictsDisabled}
         resolveConflictsDisabledReason={resolveConflictsDisabledReason}
       />
+    ) : null
+
+  if (brokenCheckCount > 0 || pipelineFailed) {
+    return (
+      <>
+        {conflictStrip}
+        <div className="border-b border-border px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <CircleX className="size-3.5 shrink-0 text-rose-500" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[11px] font-medium text-foreground">
+                {pipelineCheck && pipelineFailed
+                  ? translate(
+                      'auto.components.right.sidebar.checks.panel.content.pipelineFailed',
+                      '{{name}} failed',
+                      { name: pipelineCheck.name }
+                    )
+                  : translate(
+                      'auto.components.right.sidebar.checks.panel.content.failingChecks',
+                      '{{count}} failing checks',
+                      { count: failingCount, defaultValue_one: '{{count}} failing check' }
+                    )}
+              </div>
+              <div className="truncate text-[10px] text-muted-foreground">
+                {translate(
+                  'auto.components.right.sidebar.checks.panel.content.5d4ebf9391',
+                  'Inspect details or start an AI fix pass.'
+                )}
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={isFixingChecksWithAI || fixChecksDisabled}
+              title={fixChecksDisabled ? fixChecksDisabledReason : undefined}
+              onClick={onFixChecksWithAI}
+            >
+              {isFixingChecksWithAI ? (
+                <RefreshCw className="size-3 animate-spin" />
+              ) : (
+                <Sparkles className="size-3" />
+              )}
+              {translate('auto.components.right.sidebar.checks.panel.content.b45db92d0e', 'Fix')}
+            </Button>
+          </div>
+        </div>
+      </>
     )
   }
 
-  if (failingCount > 0) {
-    return (
-      <div className="border-b border-border px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <CircleX className="size-3.5 shrink-0 text-rose-500" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-medium text-foreground">
-              {failingCount === 1
-                ? translate(
-                    'auto.components.right.sidebar.checks.panel.content.failingChecks_one',
-                    '{{count}} failing check',
-                    { count: failingCount }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.checks.panel.content.failingChecks_other',
-                    '{{count}} failing checks',
-                    { count: failingCount }
-                  )}
-            </div>
-            <div className="truncate text-[10px] text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.5d4ebf9391',
-                'Inspect details or start an AI fix pass.'
-              )}
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            disabled={isFixingChecksWithAI || fixChecksDisabled}
-            title={fixChecksDisabled ? fixChecksDisabledReason : undefined}
-            onClick={onFixChecksWithAI}
-          >
-            {isFixingChecksWithAI ? (
-              <RefreshCw className="size-3 animate-spin" />
-            ) : (
-              <Sparkles className="size-3" />
-            )}
-            {translate('auto.components.right.sidebar.checks.panel.content.b45db92d0e', 'Fix')}
-          </Button>
-        </div>
-      </div>
-    )
+  if (conflictStrip) {
+    return conflictStrip
   }
 
   if (pendingCount > 0) {
     return (
       <div className="border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-amber-500" />
+          <LoaderCircle
+            className={cn(
+              'size-3.5 shrink-0 animate-spin motion-reduce:animate-none',
+              CHECK_COLOR.pending
+            )}
+          />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {pendingCount === 1
-                ? translate(
-                    'auto.components.right.sidebar.checks.panel.content.pendingChecks_one',
-                    '{{count}} check pending',
-                    { count: pendingCount }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.checks.panel.content.pendingChecks_other',
-                    '{{count}} checks pending',
-                    { count: pendingCount }
-                  )}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.pendingChecks',
+                '{{count}} checks pending',
+                { count: pendingCount, defaultValue_one: '{{count}} check pending' }
+              )}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
               {translate(
@@ -144,17 +157,11 @@ export function PRTriageStrip({
           <CircleDashed className="size-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {summary.neutral === 1
-                ? translate(
-                    'auto.components.right.sidebar.checks.panel.content.unresolvedChecks_one',
-                    '{{count}} check unresolved',
-                    { count: summary.neutral }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.checks.panel.content.unresolvedChecks_other',
-                    '{{count}} checks unresolved',
-                    { count: summary.neutral }
-                  )}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.unresolvedChecks',
+                '{{count}} checks unresolved',
+                { count: summary.neutral, defaultValue_one: '{{count}} check unresolved' }
+              )}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
               {translate(

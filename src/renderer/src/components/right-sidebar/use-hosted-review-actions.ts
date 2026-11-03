@@ -13,8 +13,10 @@ import {
   updateGitHubHostedReviewState
 } from './hosted-review-github-actions'
 import { translate } from '@/i18n/i18n'
+import { getHostedReviewStateChangeCopy } from './hosted-review-state-change-copy'
 import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 import { useReadyHostedReviewAction } from './use-ready-hosted-review-action'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -114,14 +116,13 @@ export function useHostedReviewActions({
               prRepo: githubPR?.prRepo ?? null
             })
         if (!result.ok) {
-          setActionError(result.error)
-        } else {
-          await onRefreshReview()
+          setActionError(codeHostErrorText(result))
         }
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Merge failed')
       } finally {
         setMerging(false)
+        await onRefreshReview().catch(() => {})
       }
     },
     [
@@ -154,16 +155,13 @@ export function useHostedReviewActions({
         prRepo: githubPR?.prRepo ?? null
       })
       if (!result.ok) {
-        setActionError(result.error)
-        // Refresh stale eligibility without replacing the provider's mutation error.
-        await onRefreshReview().catch(() => {})
-      } else {
-        await onRefreshReview()
+        setActionError(codeHostErrorText(result))
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Auto-merge update failed')
     } finally {
       setMerging(false)
+      await onRefreshReview().catch(() => {})
     }
   }, [
     githubPR?.prRepo,
@@ -181,21 +179,12 @@ export function useHostedReviewActions({
         return
       }
       const isClosing = nextState === 'closed'
-      const label = isClosing ? 'Close' : 'Reopen'
+      const reviewRef = `${shortLabel} ${isGitLab ? '!' : '#'}${review.number}`
+      const copy = getHostedReviewStateChangeCopy(isClosing, reviewRef, reviewLabel)
       const confirmed = await confirm({
-        title: `${label} ${shortLabel} ${isGitLab ? '!' : '#'}${review.number}?`,
-        description: isClosing
-          ? translate(
-              'auto.components.right.sidebar.HostedReviewActions.a3d572a4de',
-              'This will close the {{value0}}.',
-              { value0: reviewLabel }
-            )
-          : translate(
-              'auto.components.right.sidebar.HostedReviewActions.78f5ff294c',
-              'This will reopen the {{value0}}.',
-              { value0: reviewLabel }
-            ),
-        confirmLabel: label,
+        title: copy.title,
+        description: copy.description,
+        confirmLabel: copy.confirmLabel,
         confirmVariant: isClosing ? 'destructive' : 'default'
       })
       if (!confirmed) {
@@ -229,8 +218,9 @@ export function useHostedReviewActions({
               nextState
             })
         if (!result.ok) {
-          setActionError(result.error)
-          toast.error(result.error)
+          const message = codeHostErrorText(result)
+          setActionError(message)
+          toast.error(message)
         } else {
           toast.success(
             isClosing
@@ -245,15 +235,14 @@ export function useHostedReviewActions({
                   { value0: shortLabel }
                 )
           )
-          await onRefreshReview()
         }
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} ${reviewLabel}`
+        const message = err instanceof Error ? err.message : copy.failure
         setActionError(message)
         toast.error(message)
       } finally {
         setStateUpdating(null)
+        await onRefreshReview().catch(() => {})
       }
     },
     [

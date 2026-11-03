@@ -1,12 +1,20 @@
 import { useEffect } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { getCachedWorktrees } from '../cache/worktree-cache'
 import { loadPinnedIds } from '../storage/preferences'
-import { loadHosts, updateLastConnected } from '../transport/host-store'
+import { loadHosts, peekHosts, updateLastConnected } from '../transport/host-store'
+import type { HostProfile } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { Worktree } from '../worktree/workspace-list-sections'
 import type { HostScreenState } from './use-host-screen-state'
+import { storedHostDescriptor } from './host-stored-identity'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
+
+// The host as last read this launch, so the title's first frame shows its name, not "Host".
+export function peekStoredHost(hostId: string | undefined): HostProfile | null {
+  return hostId ? (peekHosts()?.find((host) => host.id === hostId) ?? null) : null
+}
 
 export function useHostScreenIdentity(args: {
   client: RpcClient | null
@@ -60,8 +68,9 @@ export function useHostScreenIdentity(args: {
   }, [client])
 
   useEffect(() => {
-    setHostName('')
-    setHostStoredDescriptor(null)
+    const seedHost = peekStoredHost(hostId)
+    setHostName(seedHost?.name ?? '')
+    setHostStoredDescriptor(seedHost ? storedHostDescriptor(seedHost) : null)
     setError('')
     setRepoHostIdByRepoId(new Map())
     // Another desktop's Workspace options must not stand in until this one's are read.
@@ -96,19 +105,11 @@ export function useHostScreenIdentity(args: {
       }
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
-        setError('Host not found')
+        setError(translate('hostScreen.identity.hostNotFound', 'Host not found'))
         return
       }
       setHostName(host.name)
-      setHostStoredDescriptor({
-        ...(host.personalName !== undefined ? { personalName: host.personalName } : {}),
-        ...(host.lastKnownMachineName !== undefined
-          ? { lastKnownMachineName: host.lastKnownMachineName }
-          : {}),
-        ...(host.lastKnownHostPlatform !== undefined
-          ? { lastKnownHostPlatform: host.lastKnownHostPlatform }
-          : {})
-      })
+      setHostStoredDescriptor(storedHostDescriptor(host))
       void updateLastConnected(host.id)
     })
     return () => {

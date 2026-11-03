@@ -26,6 +26,7 @@ import {
   rearmTerminalWebglAddonLoad,
   setTerminalWebglAddonLoadHandlers
 } from './terminal-webgl-addon-loader'
+import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
 
 export { primeTerminalWebglAddon } from './terminal-webgl-addon-loader'
 
@@ -243,6 +244,8 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     return
   }
   disposeWebgl(pane)
+  // Only WebGL atlases cache glyphs drawn before the face loads; DOM panes repaint on their own.
+  watchTerminalSymbolsFontLoad()
   const WebglAddonConstructor = getTerminalWebglAddonConstructor()
   if (!WebglAddonConstructor) {
     // Opening before lazy resolution parks here; the load continuation attaches, with the fit hook as backstop.

@@ -1,12 +1,13 @@
+import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
+import { canCheckoutExistingLocalBranch } from '../runtime/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
-import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
 import type {
@@ -26,17 +27,21 @@ import type {
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
 import { getPRForBranch } from '../github/client'
-import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
-import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
+import { addWorktree } from '../git/worktrees/creation/worktree-add'
+import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../git/worktrees/worktree-operation-options'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
-} from '../worktree-create-preparation'
+} from '../workspaces/creation/preparation/worktree-create-preparation'
 import { getBranchConflictKind, resolveDefaultBaseRefWithLocalGit } from '../git/repo'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../git/git-username'
-import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
-import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
+import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -47,13 +52,16 @@ import type {
   RemoteTrackingBase
 } from '../runtime/orca-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
-import { getEffectiveHooks, loadHooks } from '../hooks'
-import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import { getEffectiveHooks, loadHooks } from '../workspace-hooks/hooks'
+import {
+  createSetupRunnerScript,
+  resolveSetupRunnerShell
+} from '../workspace-hooks/worktree-runner-script'
 import {
   getDefaultTabsLaunch,
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
-} from '../effective-hook-config'
+} from '../workspace-hooks/effective-hook-config'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
 
@@ -76,7 +84,7 @@ import {
 import { computeValidatedBranchName } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
-import { notifyLineageRepos } from '../worktree-lineage-change-notification'
+import { notifyLineageRepos } from '../workspaces/catalog/worktree-lineage-change-notification'
 import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   getConnectionExecutionHostId,
@@ -103,20 +111,20 @@ import {
   buildNarrowForkFetchRefspec,
   ensureRemoteTracksBranchNarrowly,
   forkRemoteTrackingRefExists
-} from '../git/fork-remote-refspec'
+} from '../git/refs/fork-remotes/fork-remote-refspec'
 import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
 import {
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
 } from './worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
-import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
-import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import { resolveWorktreeIncludePaths } from '../git/worktrees/content-paths/worktree-include-file'
+import { resolveWorktreeSharedDirectories } from '../git/worktrees/content-paths/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { attributedSparsePresetId } from './sparse-preset-attribution'
 import {
@@ -128,30 +136,30 @@ import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
   type WorktreeCreateTimingRecorder
-} from '../worktree-create-timing'
+} from '../workspaces/creation/worktree-create-timing'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
-  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
-} from '../worktree-create-candidates'
+} from '../workspaces/creation/worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import {
   failedWorktreeCreationNeedsRetirement,
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
-} from '../worktree-name-retirement'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
 import {
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
-} from '../worktree-create-in-flight'
+} from '../workspaces/creation/worktree-create-in-flight'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   hostWorktreeTarget,
@@ -320,8 +328,11 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
+  /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
+  automationCreate: boolean
 }): Promise<StagedStartupResult> {
   const { runtime, worktree, startup, defaultTabs, createdWithAgent } = args
+  const userAct = args.automationCreate ? {} : { wslUserAct: true as const }
   let { setup } = args
   if (!startup || defaultTabs?.tabs.length) {
     return { didSpawnSetup: false }
@@ -367,7 +378,8 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
         // Submitting renderer owns activation; background completion must not yank users who moved on (#9944).
-        surfaceOwner: false
+        surfaceOwner: false,
+        ...userAct
       },
       worktree
     )
@@ -377,7 +389,9 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       surface: terminal.surface
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = readableWslDistroHoldText(
+      error instanceof Error ? error.message : String(error)
+    )
     warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
     console.warn(`[worktree-create] ${warning}`)
     return { didSpawnSetup: false, warning }
@@ -403,13 +417,16 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           command: setupCommand,
           env: setup.envVars,
           activate: false,
-          surfaceOwner: false
+          surfaceOwner: false,
+          ...userAct
         },
         worktree
       )
       didSpawnSetup = true
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = readableWslDistroHoldText(
+        error instanceof Error ? error.message : String(error)
+      )
       const nextWarning = `failed to create the setup terminal for ${worktree.path}: ${message}`
       warning = appendWorktreeCreateWarning(warning, nextWarning)
       console.warn(`[worktree-create] ${warning}`)
@@ -452,49 +469,6 @@ async function resolveCreateBranchName(
     ...gitOptions
   })
   return branchNameOverride
-}
-
-function normalizeLocalBranchName(branchName: string | undefined): string {
-  return branchName?.replace(/^refs\/heads\//, '') ?? ''
-}
-
-async function canCheckoutExistingLocalBranch(
-  repoPath: string,
-  branchName: string,
-  baseBranch: string,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<boolean> {
-  let localHead = ''
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
-      {
-        cwd: repoPath,
-        ...gitOptions
-      }
-    )
-    localHead = stdout.trim()
-  } catch {
-    return false
-  }
-  if (normalizeLocalBranchName(baseBranch) !== branchName) {
-    if (!localHead) {
-      return false
-    }
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--verify', '--quiet', `${baseBranch}^{commit}`],
-        { cwd: repoPath, ...gitOptions }
-      )
-      if (stdout.trim() !== localHead) {
-        return false
-      }
-    } catch {
-      return false
-    }
-  }
-  const worktrees = await listWorktrees(repoPath, gitOptions)
-  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
 }
 
 function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
@@ -1009,7 +983,6 @@ async function performLocalWorktreeCreate(
       : {})
   })
 
-  const branchSeed = selectWorktreeCreateBranchSeed(args, settings.autoRenameBranchFromWork)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
@@ -1155,7 +1128,7 @@ async function performLocalWorktreeCreate(
   let resolved = false
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
-  let selectedRemoteBranchName: string | null = null
+  let selectedReuseBranchName: string | null = null
   let lastBranchConflictKind: 'local' | 'remote' | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
   let lastExistingReviewNumber: number | null = null
@@ -1182,8 +1155,49 @@ async function performLocalWorktreeCreate(
       localWorktreeGitOptions
     )
     if (conflict === null) {
-      selectedRemoteBranchName = branchName
+      selectedReuseBranchName = branchName
     }
+  }
+  if (args.branchIntent === 'open-existing-v2') {
+    if (!args.branchNameOverride || args.pushTarget || getSelectedReviewBranch(args)) {
+      throw new Error(
+        'Reuse branch requires an explicit branch selection without a review push target.'
+      )
+    }
+    branchName = await resolveCreateBranchName(
+      repo.path,
+      args.branchNameOverride,
+      sanitizedName,
+      settings,
+      username,
+      localWorktreeGitOptions
+    )
+    checkoutExistingBranch = await canCheckoutExistingLocalBranch(
+      repo.path,
+      branchName,
+      baseBranch,
+      localWorktreeGitOptions,
+      true
+    )
+    if (!checkoutExistingBranch) {
+      if (remoteTrackingBase?.branch !== branchName) {
+        throw new Error(
+          `Branch "${branchName}" was not found locally. Select its remote branch again, or turn off Reuse branch.`
+        )
+      }
+      const conflict = await getBranchConflictKind(
+        repo.path,
+        branchName,
+        remoteTrackingBase.ref,
+        localWorktreeGitOptions
+      )
+      if (conflict) {
+        throw new WorktreeCreateCollisionError(
+          `Cannot reuse branch "${branchName}" because its name conflicts with an existing branch. Choose a different branch or turn off Reuse branch.`
+        )
+      }
+    }
+    selectedReuseBranchName = branchName
   }
   const pathIsAvailable = (): boolean => {
     worktreePath = ensurePathWithinWorkspace(
@@ -1224,7 +1238,7 @@ async function performLocalWorktreeCreate(
         continue
       }
       attempts += 1
-      if (selectedRemoteBranchName) {
+      if (selectedReuseBranchName) {
         if (pathIsAvailable()) {
           resolved = true
           break
@@ -1238,7 +1252,7 @@ async function performLocalWorktreeCreate(
         selectedExistingLocalBranchName
           ? selectedExistingLocalBranchName
           : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-        branchSeed ? getWorktreeCreateCandidate(branchSeed, suffix) : effectiveSanitizedName,
+        effectiveSanitizedName,
         settings,
         username,
         localWorktreeGitOptions
@@ -1256,15 +1270,17 @@ async function performLocalWorktreeCreate(
       const preferExistingBranch = Boolean(
         args.branchNameOverride || selectedExistingLocalBranchName
       )
-      checkoutExistingBranch = preferExistingBranch && (await tryExistingBranch())
+      const allowImplicitReuse = args.branchIntent !== 'create-new'
+      checkoutExistingBranch =
+        allowImplicitReuse && preferExistingBranch && (await tryExistingBranch())
       lastBranchConflictKind = checkoutExistingBranch
         ? null
         : await getBranchConflictKind(
             repo.path,
             branchName,
-            baseBranch,
+            allowImplicitReuse ? baseBranch : undefined,
             localWorktreeGitOptions,
-            preferExistingBranch ? undefined : tryExistingBranch
+            allowImplicitReuse && !preferExistingBranch ? tryExistingBranch : undefined
           )
       if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
         // Path retries must retain the adopted branch.
@@ -1404,6 +1420,9 @@ async function performLocalWorktreeCreate(
   const remoteTrackingBaseOption = remoteTrackingBase ? { remoteTrackingBase } : undefined
   const existingBranchOption = {
     checkoutExistingBranch,
+    ...(args.branchIntent === 'open-existing-v2' && !checkoutExistingBranch
+      ? { trackRemoteBranch: true }
+      : {}),
     ...remoteTrackingBaseOption,
     ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
   }
@@ -1412,11 +1431,19 @@ async function performLocalWorktreeCreate(
       ? { ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate }
       : remoteTrackingBaseOption
   )
+  const newBranchOptions =
+    args.branchIntent === 'open-existing-v2'
+      ? addProjectGitOptions(existingBranchOption)
+      : preparedWorktreeOptions
   let addResult: AddWorktreeResult
   try {
     addResult =
       (await timing.time('git_worktree_add', async () => {
-        if (sparseDirectories.length === 0 && !checkoutExistingBranch) {
+        if (
+          sparseDirectories.length === 0 &&
+          !checkoutExistingBranch &&
+          args.branchIntent !== 'open-existing-v2'
+        ) {
           const prepared = await consumePreparedWorktreeCreate({
             repoPath: repo.path,
             workspaceRoot,
@@ -1460,7 +1487,7 @@ async function performLocalWorktreeCreate(
             sparseDirectories,
             baseBranch,
             settings.refreshLocalBaseRefOnWorktreeCreate,
-            preparedWorktreeOptions
+            newBranchOptions
           )
         }
 
@@ -1482,7 +1509,7 @@ async function performLocalWorktreeCreate(
           baseBranch,
           settings.refreshLocalBaseRefOnWorktreeCreate,
           false,
-          preparedWorktreeOptions
+          newBranchOptions
         )
       })) ?? {}
   } catch (error) {
@@ -1545,7 +1572,9 @@ async function performLocalWorktreeCreate(
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     baseRef: metadataBaseRef,
-    ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
+    ...(checkoutExistingBranch || args.branchIntent === 'open-existing-v2'
+      ? { preserveBranchOnDelete: true }
+      : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...resolveWorktreeCreateDisplayNameMeta(
       requestedDisplayName,
@@ -1679,7 +1708,7 @@ async function performLocalWorktreeCreate(
     if (setupScript && shouldLaunchSetup) {
       try {
         // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
-        setup = createSetupRunnerScript(
+        setup = await createSetupRunnerScript(
           repo,
           worktreePath,
           setupScript,
@@ -1702,7 +1731,8 @@ async function performLocalWorktreeCreate(
       startup: args.startup,
       setup,
       defaultTabs,
-      createdWithAgent: args.createdWithAgent
+      createdWithAgent: args.createdWithAgent,
+      automationCreate: Boolean(args.automationProvenance)
     })
   )
 
@@ -1729,6 +1759,9 @@ async function performLocalWorktreeCreate(
     repo.id,
     worktreeLineage?.parentWorktreeId
   )
+  const createWarning = [includeCopyWarning, addResult.upstreamWarning, stagedStartup.warning]
+    .filter((warning): warning is string => Boolean(warning))
+    .reduce<string | undefined>(appendWorktreeCreateWarning, undefined)
   return {
     worktree: {
       ...worktree,
@@ -1757,11 +1790,7 @@ async function performLocalWorktreeCreate(
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
     ...(baseFallback ? { baseFallback } : {}),
-    ...(stagedStartup.warning
-      ? { warning: appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning) }
-      : includeCopyWarning
-        ? { warning: includeCopyWarning }
-        : {}),
+    ...(createWarning ? { warning: createWarning } : {}),
     timing: timing.finish()
   }
 }

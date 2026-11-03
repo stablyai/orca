@@ -26,9 +26,10 @@ import {
   type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup'
 import {
-  getWorkspaceCleanupGitLabel,
+  getWorkspaceCleanupGitState,
   type WorkspaceCleanupReviewInfo
 } from './workspace-cleanup-presentation'
+import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 import { CandidateRowDetails } from './workspace-cleanup-candidate-row-details'
 import {
   formatBranchSafetyDetails,
@@ -116,7 +117,7 @@ export const CandidateRow = React.memo(function CandidateRow({
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
   const factStatuses = getCandidateFactStatuses(candidate)
   const dirtyLabel = getDirtyGitLabel(candidate)
-  const gitLabel = getWorkspaceCleanupGitLabel(candidate)
+  const gitState = getWorkspaceCleanupGitState(candidate)
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
   const contextCount = getContextCount(candidate)
   const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
@@ -205,10 +206,11 @@ export const CandidateRow = React.memo(function CandidateRow({
             ) : null}
             <WorkspaceCleanupMetadataChip
               icon={Clock3}
-              label={`${translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
-                'Last active'
-              )} ${lastActivityLabel}`}
+              label={translate(
+                'components.workspace.cleanup.browse.lastActive',
+                'Last active {{value0}}',
+                { value0: lastActivityLabel }
+              )}
               value={formatCompactActivityLabel(lastActivityLabel)}
             />
             <WorkspaceCleanupMetadataChip
@@ -242,8 +244,8 @@ export const CandidateRow = React.memo(function CandidateRow({
               <WorkspaceCleanupMetadataChip
                 icon={GitBranch}
                 label={formatGitStatus(candidate)}
-                value={gitLabel}
-                tone={gitLabel === 'Clean' ? 'ready' : 'review'}
+                value={getWorkspaceCleanupGitChipLabel(gitState)}
+                tone={gitState === 'clean' ? 'ready' : 'review'}
               />
             ) : null}
             {contextDetails ? (

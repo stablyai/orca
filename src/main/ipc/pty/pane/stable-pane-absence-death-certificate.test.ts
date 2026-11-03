@@ -4,7 +4,7 @@ import { withDurableRuntimeStore } from '../../../runtime/runtime-durable-store-
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { SessionNotFoundError } from '../../../daemon/daemon-errors'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { adoptStablePane } from './adopt-stable'
@@ -110,7 +110,11 @@ describe('a stable pane whose reattach was refused', () => {
     // Typed SessionNotFound comes from the owning registry; lost endpoints raise TerminalHostGoneError.
     const { runtime } = await adoptAfterAttachRefusal(new SessionNotFoundError(PTY_ID))
 
-    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({ status: 'exited' })
+    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({
+      status: 'exited',
+      incarnationId: undefined,
+      cause: { kind: 'unknown', reason: 'stop_unverified' }
+    })
   })
 
   it('refuses to abandon the binding on an untyped "not found" string', async () => {

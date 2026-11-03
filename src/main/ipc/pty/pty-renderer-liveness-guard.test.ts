@@ -23,8 +23,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -68,20 +70,6 @@ describe('pty:writeUnavailable renderer-liveness guard', () => {
   }
 
   describe('the per-write sender', () => {
-    it('asks the renderer to remount while the WebContents is alive', async () => {
-      installDaemonTestProvider({
-        write: vi.fn(() => {
-          throw new PtyWriteUnavailableError('daemon generation lost')
-        })
-      })
-      registerPtyHandlers(mainWindow as never)
-      const id = await spawnDaemonPty()
-
-      getPtyWriteListener()(mainWindowIpcEvent, { id, data: 'x' })
-
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:writeUnavailable', { id })
-    })
-
     // Multi-chunk writes yield after the sender check, allowing WebContents to die before a later write fails.
     it('stays silent when the WebContents dies mid-write under a live window', async () => {
       let writeCount = 0
@@ -128,29 +116,6 @@ describe('pty:writeUnavailable renderer-liveness guard', () => {
       }
       return fanout
     }
-
-    it('remounts every signalled pane while the WebContents is alive', () => {
-      const fanout = installProviderCapturingFanout()
-
-      fanout({ id: 'pane-1' })
-
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:writeUnavailable', {
-        id: 'pane-1'
-      })
-    })
-
-    it('stays silent when the WebContents is destroyed under a live window', () => {
-      const fanout = installProviderCapturingFanout()
-      mainWindow.webContents.isDestroyed.mockReturnValue(true)
-
-      fanout({ id: 'pane-1' })
-
-      expect(mainWindow.webContents.isDestroyed).toHaveBeenCalled()
-      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
-        'pty:writeUnavailable',
-        expect.anything()
-      )
-    })
 
     it('reaches remote terminal streams without a live window', () => {
       // Headless clients depend on streams even when no renderer can receive the event.

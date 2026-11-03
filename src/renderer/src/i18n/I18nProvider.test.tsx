@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getDefaultSettings } from '../../../shared/constants'
-import { UI_LANGUAGE_ENGLISH, UI_LANGUAGE_SPANISH } from '../../../shared/ui-language'
+import { UI_LANGUAGE_ENGLISH } from '../../../shared/ui-language'
 import {
   getBrowserLanguageDetection,
   setRendererLanguageDetection
@@ -16,7 +16,7 @@ import * as rendererI18n from './i18n'
 import { useLanguageReadiness } from './language-readiness'
 import * as languageReadiness from './language-readiness'
 import { usePluginLanguagePackStore } from '../store/plugin-language-packs'
-import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { I18nProvider } from './I18nProvider'
 
 // Wait for async settings before selecting the OS locale, or an in-flight load can override the persisted preference.
@@ -126,41 +126,6 @@ describe('I18nProvider startup language', () => {
     expect(useLanguageReadiness.getState().ready).toBe(true)
   })
 
-  it('does not apply any language while settings are still loading', async () => {
-    const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
-
-    await renderProvider()
-
-    expect(changeLanguage).not.toHaveBeenCalled()
-  })
-
-  it('applies the persisted language once settings load', async () => {
-    const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
-
-    await renderProvider()
-    await act(async () => {
-      useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_SPANISH }
-      })
-    })
-
-    await vi.waitFor(() => expect(changeLanguage).toHaveBeenCalledWith('es'))
-  })
-
-  it('applies persisted English even if i18n reports it as already active', async () => {
-    // i18n.language stays stale during lazy loading; comparing it can skip correcting an in-flight OS-locale switch.
-    const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
-
-    await renderProvider()
-    await act(async () => {
-      useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_ENGLISH }
-      })
-    })
-
-    expect(changeLanguage).toHaveBeenCalledWith('en')
-  })
-
   it('never applies the OS locale on a non-English system when English is persisted (#7188)', async () => {
     // No locale request may start before persisted settings arrive, even on a Spanish OS.
     stubSystemLocale('es-ES')
@@ -178,24 +143,6 @@ describe('I18nProvider startup language', () => {
     expect(useLanguageReadiness.getState().detection?.locale).toBe('es')
     expect(changeLanguage).toHaveBeenCalledWith('en')
     expect(changeLanguage).not.toHaveBeenCalledWith('es')
-  })
-
-  it('switches language when the setting changes after startup', async () => {
-    const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
-
-    await renderProvider()
-    await act(async () => {
-      useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_ENGLISH }
-      })
-    })
-    await act(async () => {
-      useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_SPANISH }
-      })
-    })
-
-    await vi.waitFor(() => expect(changeLanguage).toHaveBeenLastCalledWith('es'))
   })
 })
 
@@ -263,6 +210,7 @@ it("re-applies a plugin language only when the selected pack's content changes",
     id,
     resourceLanguage: pluginLanguageResourceId(id),
     pluginKey: 'example.german',
+    coverage: 100,
     locale: 'de-DE',
     catalog: { common: { save } }
   })

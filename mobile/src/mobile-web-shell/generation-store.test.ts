@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   createFakeGenerationFileSystem as createFakeFileSystem,
@@ -572,23 +572,27 @@ describe('reusable assets for the next download', () => {
   const DOWNLOADED = new Map([['index.html', new Uint8Array(8).fill(9)]])
   const LEFT_TO_STAGE = { ...NEXT, assets: DOWNLOADED, reused: ['assets/app-2.js'] }
 
-  it('matches cached assets by content, and checks them without reading them', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    expect((await store.openReusableAssets(HOST)).has(SCRIPT!)).toBe(false)
-    await activate(store, HOST)
+  it.each([HOST, deriveHostCacheKey('second-host')])(
+    'matches cached assets by content for %s',
+    async (opened) => {
+      const fs = createFakeFileSystem()
+      const store = createGenerationStore({ fileSystem: fs })
+      expect((await store.openReusableAssets(HOST)).has(SCRIPT!)).toBe(false)
+      await activate(store, HOST)
 
-    const reusable = await store.openReusableAssets(HOST)
+      const reusable = await store.openReusableAssets(opened)
 
-    expect(reusable.has(SCRIPT!)).toBe(true)
-    expect(reusable.has(PAGE!)).toBe(false)
-    expect(await reusable.check(SCRIPT!)).toBe(true)
-    fs.seed(`${HOST}/generations/${BUILD}/assets/app.js`, {
-      kind: 'file',
-      bytes: new Uint8Array(1)
-    })
-    expect(await reusable.check(SCRIPT!)).toBe(false)
-  })
+      expect(reusable.has(SCRIPT!)).toBe(true)
+      expect(reusable.has(PAGE!)).toBe(false)
+      expect(reusable.has({ ...SCRIPT!, sha256: 'f'.repeat(64) })).toBe(false)
+      expect(await reusable.check(SCRIPT!)).toBe(true)
+      fs.seed(`${HOST}/generations/${BUILD}/assets/app.js`, {
+        kind: 'file',
+        bytes: new Uint8Array(1)
+      })
+      expect(await reusable.check(SCRIPT!)).toBe(false)
+    }
+  )
 
   it('copies the reused assets beside the downloaded ones and commits the whole build', async () => {
     const fs = createFakeFileSystem()

@@ -30,7 +30,7 @@ import {
 import { beginWslMoveUndoRun } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { runWslMoveHostAutomationsExclusive } from '../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
 import { listEnvironments } from '../../shared/runtime-environment-store'
-import { wasWslHostKeptForPeers } from '../wsl/wsl-host-kept-for-peers'
+import { wasWslHostKeptForPeers } from '../wsl/host-lifecycle/wsl-host-kept-for-peers'
 
 const COMMITTED_FROM = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
 
@@ -196,6 +196,17 @@ async function releaseOneMoveHere(
   move: WslMoveCutover,
   ports: WslMoveUndoPorts
 ): Promise<WslMoveUseLocallyResult> {
+  // A bring-back reads first and refuses before turning anything off, so nothing is toggled.
+  const preflight = await ports.preflightHostCopies?.(move)
+  if (preflight !== undefined && preflight !== 'stopped') {
+    if (preflight === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+      return keptForPeersRefusal()
+    }
+    return {
+      released: false,
+      reason: preflight === 'unreachable' ? 'host-unreachable' : 'host-still-running'
+    }
+  }
   // Automations first, as they undo cleanly: a refusal must leave the host's terminals running (X1).
   const automations = (await ports.stopHostAutomations?.(move)) ?? {
     outcome: 'stopped',

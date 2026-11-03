@@ -15,7 +15,7 @@ import {
   getNativeChatRestartOffer,
   getNativeChatRestartRun
 } from './native-chat-resume-on-restart-store'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 
 const rpc: Mock<RestartRpc> = vi.hoisted(() => vi.fn<RestartRpc>())
 const statusStream: ResumeStatusStream = vi.hoisted(() => ({

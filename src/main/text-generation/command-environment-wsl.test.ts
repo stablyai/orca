@@ -4,7 +4,10 @@ import { spawnSourceControlAgent } from './source-control-agent-launch'
 import { withPlatform } from './commit-message-text-generation-test-harness'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
 
-vi.mock('../git/runner', () => ({ wslAwareSpawn: vi.fn() }))
+vi.mock('../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  wslAwareSpawn: vi.fn()
+}))
 afterEach(() => vi.unstubAllEnvs())
 
 describe('command environment on WSL', () => {

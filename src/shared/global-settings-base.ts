@@ -4,10 +4,15 @@ import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
+import type { EditorTypographySettings } from './editor-typography-settings-types'
 import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
+import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
+import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update-policy'
+import type { PluginSystemSettings } from './plugins/plugin-system-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
-import type { OrchestrationHeartbeatSettings } from './orchestration-heartbeat'
+import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
+import type { WindowMaterialSettings } from './window-material'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
@@ -17,6 +22,11 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &
-  OrchestrationHeartbeatSettings &
   BrowserExtensionGlobalSettings &
-  PluginAppearanceSettings
+  PluginAppearanceSettings &
+  EditorTypographySettings &
+  PluginFileTypeSuggestionSettings &
+  PluginUpdatePolicySettings &
+  PluginSystemSettings &
+  TerminalColorOverrideGlobalSettings &
+  WindowMaterialSettings

@@ -11,7 +11,10 @@ const dependencyExports: [string, string[]][] = [
   ['../agent-hooks/server', ['agentHookServer']],
   ['../agent-hooks/wsl-hook-relay-manager', ['wslHookRelayManager']],
   ['../agent-hooks/managed-agent-hook-controls', ['removeManagedAgentHooksAsync']],
-  ['../runtime/structured-agent-session-runtime', ['stopStructuredAgentSessionRuntime']],
+  [
+    '../runtime/agent-session/structured-agent-session-runtime',
+    ['stopStructuredAgentSessionRuntime']
+  ],
   [
     '../runtime/agent-session/structured-agent-session-runtime-teardown',
     ['setStructuredAgentSessionTeardownTrigger']
@@ -28,21 +31,21 @@ const dependencyExports: [string, string[]][] = [
   ['../browser/browser-session-registry', ['browserSessionRegistry']],
   ['../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
   ['../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
-  ['../git/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],
+  ['../git/refs/maintenance/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],
   ['../worktree-background-removal', ['stopBackgroundWorktreeRemovals']],
-  ['../quit-teardown-deadline', ['settleTeardownWithinDeadline', 'settleWithinMs']],
-  ['../quit-teardown-start-gate', ['quitTeardownStartGate']],
+  ['./quit/quit-teardown-deadline', ['settleTeardownWithinDeadline', 'settleWithinMs']],
+  ['./quit/quit-teardown-start-gate', ['quitTeardownStartGate']],
   ['../dock/unread-badge', ['setUnreadDockBadgeCount']],
   ['../tray/system-tray', ['destroySystemTray']],
   ['../telemetry/client', ['shutdownTelemetry']],
   ['../observability', ['shutdownObservability']],
   ['../updater', ['isQuittingForUpdate']],
   ['../updater-lifecycle-diagnostics', ['recordUpdaterLifecycle']],
-  ['../macos-tcc-prompt-notice', ['stopTccPromptNotice']],
-  ['../terminal-history-gc', ['cancelHistoryGc']],
+  ['../macos-permissions/macos-tcc-prompt-notice', ['stopTccPromptNotice']],
+  ['../pty/history/terminal-history-gc', ['cancelHistoryGc']],
   ['./window-all-closed-quit-policy', ['shouldQuitWhenAllWindowsClosed']],
   ['./configure-process', ['isDevParentShutdownRequested']],
-  ['../persistence', ['getCanonicalUserDataPath']]
+  ['../persistence/loading-store/user-data-path', ['getCanonicalUserDataPath']]
 ]
 
 it('keeps startup services live when the updater has vetoed before-quit', async () => {

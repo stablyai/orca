@@ -1,5 +1,24 @@
 import { stripAnsiControlSequences } from '../../shared/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
+import {
+  textGenerationFailure,
+  type TextGenerationFailureFields
+} from '../../shared/text-generation-failure-copy'
+
+function emptyInputFailure(input: string): TextGenerationFailureFields | null {
+  switch (input) {
+    case 'Prompt':
+      return textGenerationFailure('kimiEmptyPrompt')
+    case 'Model':
+      return textGenerationFailure('kimiEmptyModel')
+    case 'Agent':
+      return textGenerationFailure('kimiEmptyAgent')
+    case 'Agent file path':
+      return textGenerationFailure('kimiEmptyAgentFilePath')
+    default:
+      return null
+  }
+}
 
 function isKimiOptionError(line: string): boolean {
   const prefix = "error: option '"
@@ -21,25 +40,26 @@ function isKimiOptionError(line: string): boolean {
 }
 
 export function formatKimiGenerationFailure(
-  declared: string | null,
+  declared: TextGenerationFailureFields | null,
   stderr: string,
   code: number | null,
   options: { includeLocalMacDnsHint?: boolean }
-): string {
+): TextGenerationFailureFields {
   if (declared) {
     return declared
   }
-  const message =
+  const failure =
     stderrDiagnosis(stripAnsiControlSequences(stderr)) ??
-    (code === null
-      ? 'Kimi was interrupted before it finished generating text. Try again.'
-      : "Kimi couldn't finish generating text. Open Kimi on the execution host to check the failure before retrying.")
-  return options.includeLocalMacDnsHint === false
-    ? message
-    : withMacTailscaleDnsHint(message, stderr)
+    textGenerationFailure(code === null ? 'kimiInterrupted' : 'kimiFailed')
+  if (options.includeLocalMacDnsHint === false) {
+    return failure
+  }
+  const hinted = withMacTailscaleDnsHint(failure.error, stderr)
+  // The appended DNS hint is English-only, so a hinted message stays uncoded.
+  return hinted === failure.error ? failure : { error: hinted }
 }
 
-function stderrDiagnosis(stderr: string): string | null {
+function stderrDiagnosis(stderr: string): TextGenerationFailureFields | null {
   // Only the CLI's terminal error lines select copy; hook narration is not a diagnosis.
   for (const line of stderr.split(/\r?\n/)) {
     if (
@@ -51,31 +71,31 @@ function stderrDiagnosis(stderr: string): string | null {
         line
       )
     ) {
-      return 'Kimi received conflicting or repeated agent options. Keep a single --agent or --agent-file option in the generation recipe or CLI arguments, then retry.'
+      return textGenerationFailure('kimiAgentOptionsConflict')
     }
     if (
       isKimiOptionError(line) ||
       /^error: unknown option '.+'$/.test(line) ||
       /^unknown command '.+'\. See 'kimi --help'\.$/.test(line)
     ) {
-      return 'Kimi rejected an option or argument. Correct the generation recipe or CLI arguments, then retry.'
+      return textGenerationFailure('kimiOptionRejected')
     }
     const terminal = /^error: (?:failed to run prompt: )?(.+)$/.exec(line)?.[1]
     if (!terminal) {
       continue
     }
     if (/^Session "[^"\r\n]*" not found\.$/.test(terminal) || terminal === 'Session not found') {
-      return "Kimi couldn't find the requested session. Use an existing session or start a new one."
+      return textGenerationFailure('kimiSessionNotFound')
     }
     if (/^Session "[^"\r\n]*" was created under a different directory\.$/.test(terminal)) {
-      return 'This Kimi session belongs to another directory. Resume it there or use a session created for this workspace.'
+      return textGenerationFailure('kimiSessionOtherDirectory')
     }
     if (
       /^Provider "[^"\r\n]*" declares api_key_env = "[^"\r\n]*" in config\.toml, but the environment variable is not set or is empty\.$/.test(
         terminal
       )
     ) {
-      return 'Kimi is missing a configured credential environment variable. Set it on the execution host before retrying.'
+      return textGenerationFailure('kimiCredentialVariableMissing')
     }
     if (
       terminal ===
@@ -83,7 +103,7 @@ function stderrDiagnosis(stderr: string): string | null {
       /^provider .+ has no credential configured$/.test(terminal) ||
       terminal === 'Login required'
     ) {
-      return 'Kimi needs provider credentials. Open Kimi on the execution host to configure a provider or sign in, then retry.'
+      return textGenerationFailure('kimiCredentialsRequired')
     }
     if (
       terminal === 'no default model configured' ||
@@ -92,20 +112,22 @@ function stderrDiagnosis(stderr: string): string | null {
       terminal === 'No model configured' ||
       terminal === 'Invalid model configuration'
     ) {
-      return 'Kimi has no usable model configured. Open Kimi on the execution host to configure or select a model, then retry.'
+      return textGenerationFailure('kimiModelMissing')
     }
     if (
       terminal === 'Prompt hook blocked the request.' ||
       terminal === 'Prompt turn could not be started'
     ) {
-      return "A Kimi prompt hook blocked the request or the turn couldn't start. Review Kimi hooks and configuration before retrying."
+      return textGenerationFailure('kimiPromptHookBlocked')
     }
     if (terminal === 'Prompt turn ended with reason: cancelled') {
-      return 'Kimi cancelled the request before it finished generating text. Try again.'
+      return textGenerationFailure('kimiCancelled')
     }
-    if (/^(?:Prompt|Model|Agent|Agent file path) cannot be empty\.$/.test(terminal)) {
-      const input = terminal.slice(0, terminal.indexOf(' cannot'))
-      return `Kimi received an empty ${input.toLowerCase()}. Correct that input in the generation recipe or CLI arguments, then retry.`
+    const emptyInput = emptyInputFailure(
+      /^(Prompt|Model|Agent|Agent file path) cannot be empty\.$/.exec(terminal)?.[1] ?? ''
+    )
+    if (emptyInput) {
+      return emptyInput
     }
     if (
       terminal === 'Output format is only supported in prompt mode.' ||
@@ -113,29 +135,35 @@ function stderrDiagnosis(stderr: string): string | null {
         terminal
       )
     ) {
-      return 'Kimi output format requires prompt mode and a supported text or stream-json value. Correct the generation recipe or CLI arguments before retrying.'
+      return textGenerationFailure('kimiOutputFormatInvalid')
     }
     if (terminal === 'Cannot use --session without an id in prompt mode.') {
-      return 'Kimi needs a session id to resume in prompt mode. Correct the generation recipe or CLI arguments, then retry.'
+      return textGenerationFailure('kimiSessionIdRequired')
+    }
+    if (terminal === 'Cannot combine --continue, --session.') {
+      return textGenerationFailure('kimiContinueSessionConflict')
     }
     const conflict =
-      /^Cannot combine (--prompt with --(?:yolo|auto|plan)|--continue, --session|--yolo with --auto)\.$/.exec(
+      /^Cannot combine (--prompt) with (--(?:yolo|auto|plan))\.$|^Cannot combine (--yolo) with (--auto)\.$/.exec(
         terminal
-      )?.[1]
+      )
     if (conflict) {
-      return `Kimi received conflicting options: ${conflict}. Correct the generation recipe or CLI arguments before retrying.`
+      return textGenerationFailure('kimiConflictingOptions', {
+        option: conflict[1] ?? conflict[3],
+        otherOption: conflict[2] ?? conflict[4]
+      })
     }
     if (
       terminal ===
       'Cannot combine --agent/--agent-file with --session/--continue: the agent is bound at session creation and the bound agent is restored automatically on resume.'
     ) {
-      return 'Kimi cannot change the agent when resuming a session. Remove the agent override or start a new session in the generation recipe or CLI arguments.'
+      return textGenerationFailure('kimiAgentChangeOnResume')
     }
     if (
       terminal === 'Provider safety policy blocked the response.' ||
       terminal === 'Provider filtered response'
     ) {
-      return 'Kimi could not return a response because it was blocked. Revise the prompt or model configuration before retrying.'
+      return textGenerationFailure('kimiResponseBlocked')
     }
     const category =
       /^(provider\.[a-z_]+|context\.overflow|config\.invalid):(?: |$)/.exec(terminal)?.[1] ??
@@ -143,20 +171,20 @@ function stderrDiagnosis(stderr: string): string | null {
     switch (category) {
       case 'provider.auth_error':
       case 'Provider authentication error':
-        return 'Kimi could not authenticate. Sign in or correct provider credentials on the execution host, then retry.'
+        return textGenerationFailure('kimiAuthFailed')
       case 'provider.connection_error':
       case 'Provider connection error':
-        return 'Kimi could not connect to its provider. Check the network on the execution host, then retry.'
+        return textGenerationFailure('kimiConnectionFailed')
       case 'provider.rate_limit':
       case 'provider.overloaded':
       case 'Provider rate limit':
-        return 'Kimi reached a provider limit or the provider is busy. Wait before retrying or reduce request frequency.'
+        return textGenerationFailure('kimiProviderLimited')
       case 'context.overflow':
       case 'Context window overflow':
-        return 'Kimi ran out of context. Shorten the prompt or start a new session, then retry.'
+        return textGenerationFailure('kimiContextOverflow')
       case 'config.invalid':
       case 'Invalid configuration':
-        return 'Kimi has invalid configuration. Check the model and provider configuration on the execution host before retrying.'
+        return textGenerationFailure('kimiConfigInvalid')
     }
   }
   return null

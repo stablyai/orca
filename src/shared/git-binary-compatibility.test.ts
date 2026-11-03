@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import * as gitRunner from '../main/git/runner'
+import * as gitRunner from '../main/git/command-runner/git-exec-file'
 import { getRemoteFileUrl } from '../main/git/repo'
 import {
   isUnsupportedMergeTreeMergeBaseError,
@@ -623,6 +623,26 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await expect(
       runGit(['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/compat-parent'])
     ).rejects.toMatchObject({ code: 1 })
+  })
+
+  it('lists exact and descendant refs from batched for-each-ref probes', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    const presentRef = 'refs/remotes/origin/compat-batch'
+    const nestedRef = 'refs/remotes/origin/compat-batch-parent/nested'
+    await runGit(['update-ref', presentRef, head])
+    await runGit(['update-ref', nestedRef, head])
+
+    // A miss still exits 0; callers keep only exact lines, so the parent stays absent.
+    await expect(
+      runGit([
+        'for-each-ref',
+        '--format=%(refname)',
+        '--',
+        presentRef,
+        'refs/remotes/origin/compat-batch-parent',
+        'refs/remotes/missing/compat-batch'
+      ])
+    ).resolves.toMatchObject({ stdout: `${presentRef}\n${nestedRef}\n` })
   })
 
   it('packs loose refs and reads the maintenance opt-out at the baseline', async () => {

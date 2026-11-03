@@ -1,6 +1,6 @@
 import { BrowserError } from '../browser/browser-error'
-import { agentBrowserSetMediaArguments } from '../browser/agent-browser-set-media-arguments'
-import { agentBrowserWaitArguments } from '../browser/agent-browser-wait-arguments'
+import { agentBrowserSetMediaArguments } from '../browser/agent-browser/agent-browser-set-media-arguments'
+import { agentBrowserWaitArguments } from '../browser/agent-browser/agent-browser-wait-arguments'
 const TARGET_OVERRIDE_FLAGS: Record<string, true> = {
   '--args': true,
   '--cdp': true,
@@ -123,12 +123,6 @@ export function externalChromiumCommandArguments(
       return ['click', text('element')]
     case 'browserDblclick':
       return ['dblclick', text('element')]
-    case 'browserFill':
-      return ['fill', text('element'), text('value')]
-    case 'browserType':
-      return ['keyboard', 'type', text('input')]
-    case 'browserSelect':
-      return ['select', text('element'), text('value')]
     case 'browserScroll':
       return ['scroll', text('direction'), ...optional('amount')]
     case 'browserHover':
@@ -141,8 +135,6 @@ export function externalChromiumCommandArguments(
       return [params.checked === false ? 'uncheck' : 'check', text('element')]
     case 'browserFocus':
       return ['focus', text('element')]
-    case 'browserClear':
-      return ['fill', text('element'), '']
     case 'browserKeypress':
       return ['press', text('key')]
     case 'browserScrollIntoView':
@@ -249,12 +241,6 @@ export function normalizeExternalChromiumCommandResult(
   switch (method) {
     case 'browserClick':
       return { clicked: String(params.element) }
-    case 'browserFill':
-      return { filled: String(params.element) }
-    case 'browserType':
-      return { typed: true }
-    case 'browserSelect':
-      return { selected: String(params.value) }
     case 'browserScroll':
       return { scrolled: params.direction }
     case 'browserHover':
@@ -267,10 +253,6 @@ export function normalizeExternalChromiumCommandResult(
       return { checked: params.checked !== false }
     case 'browserFocus':
       return { focused: String(params.element) }
-    case 'browserClear':
-      return { cleared: String(params.element) }
-    case 'browserSelectAll':
-      return { selected: String(params.element) }
     case 'browserKeypress':
       return { pressed: String(params.key) }
     case 'browserSetViewport':
