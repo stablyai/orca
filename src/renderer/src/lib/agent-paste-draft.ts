@@ -185,7 +185,7 @@ export type GeneratedPaste = {
 /** A capable host admits and writes in one transaction; only an older host gets the client adapter.
  *  A caller that reports failures has its notice kept by one runtime owner (see deliverKeepingNotice). */
 export async function deliverGeneratedPaste(paste: GeneratedPaste): Promise<GeneratedInputOutcome> {
-  const send: GeneratedSend = async (extra, onReply) => {
+  const send: GeneratedSend = async (extra, onReply, onRoute) => {
     const hosted = await sendGeneratedTerminalInput(
       paste.ptyId,
       {
@@ -199,14 +199,21 @@ export async function deliverGeneratedPaste(paste: GeneratedPaste): Promise<Gene
         ...extra
       },
       paste.signal,
-      onReply
+      onReply,
+      onRoute
     )
     return hosted !== null
       ? { outcome: hosted, hosted: true }
       : { outcome: await pasteThroughLegacyHost(paste), hosted: false }
   }
   if (!paste.onNoticeRetained) {
-    return (await send({}, () => {})).outcome
+    return (
+      await send(
+        {},
+        () => {},
+        () => {}
+      )
+    ).outcome
   }
   const { outcome, kept } = await deliverKeepingNotice(paste, send)
   if (kept) {

@@ -11,7 +11,14 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftToAgentPtyWhenReady: vi.fn()
 }))
 
-vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
+// The notice a producer reports; this window's runtime is absent here, so it shows directly.
+vi.mock('./launch-agent-paste-timeout-notice', () => {
+  const showGeneratedInputNotice = vi.fn()
+  return {
+    showGeneratedInputNotice,
+    noticeGeneratedInputFailure: (args: unknown) => showGeneratedInputNotice(args)
+  }
+})
 
 // Pip console-script agents expose python/python3 foreground comm rather than their agent name.
 const INTERPRETER_WRAPPED_AGENTS = [

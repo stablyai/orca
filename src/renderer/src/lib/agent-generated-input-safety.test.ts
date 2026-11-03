@@ -40,7 +40,11 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: f.write
 }))
-vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: f.notice }))
+// The notice a producer reports; this window's runtime is absent here, so it shows directly.
+vi.mock('./launch-agent-paste-timeout-notice', () => ({
+  showGeneratedInputNotice: f.notice,
+  noticeGeneratedInputFailure: (args: unknown) => f.notice(args)
+}))
 
 beforeEach(() => {
   vi.useFakeTimers()

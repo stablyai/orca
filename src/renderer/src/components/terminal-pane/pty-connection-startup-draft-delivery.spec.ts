@@ -137,6 +137,7 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
         }),
         // No takeover cancellation: a startup draft is not held keys. The host keeps a failure notice.
         undefined,
+        expect.any(Function),
         expect.any(Function)
       )
       expect(transport.sendInputAccepted).not.toHaveBeenCalled()
@@ -144,7 +145,10 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
       expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
 
       if (waitMs === 20_000) {
-        // Refused: the exact draft is offered back once, and nothing else is written.
+        // Refused: the exact draft is offered back once, and nothing else is written. This window's
+        // runtime is absent here, so the notice is shown directly once keeping it fails.
+        await vi.advanceTimersByTimeAsync(0)
+        await flushAsyncTicks(20)
         expect(ptyConnectionTestMocks.toastMessage).toHaveBeenCalledOnce()
         binding.dispose()
         expect(
@@ -230,6 +234,7 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
         'pty-codex',
         expect.objectContaining({ text: 'Linked Linear issue: STA-905', submit: false }),
         undefined,
+        expect.any(Function),
         expect.any(Function)
       )
       expect(transport.sendInputAccepted).not.toHaveBeenCalled()

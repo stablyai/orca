@@ -124,6 +124,7 @@ describe('an AI button whose agent is ready before the host answers', () => {
       expect.objectContaining({ text: 'resolve the conflicts', submit: true, intent: 'startup' }),
       // No takeover cancellation: a launch prompt is not held keys. The host keeps a failure notice.
       undefined,
+      expect.any(Function),
       expect.any(Function)
     )
     await expect(promptDeliveryResult).resolves.toEqual({ delivered: true, failureNotified: false })

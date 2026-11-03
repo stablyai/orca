@@ -11,6 +11,7 @@ import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { getRemoteRuntimePtyOwner } from './runtime-terminal-stream'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY } from '../../../shared/terminal-runtime-capabilities'
 
 type SendResult = {
   delivery?: { outcome: GeneratedInputOutcome; noticeRetained?: true }
@@ -20,6 +21,10 @@ type SendResult = {
 /** Called once the host answered (never for a lost reply), with whether it kept this request's
  *  failure notice in its runtime session. */
 export type HostReply = (reply: { noticeRetained: boolean }) => void
+
+/** Where the request is going, told before it is sent: the host, and whether that host keeps
+ *  notices by operation id (an older one is never asked to keep a second notice). */
+export type HostRoute = (route: { target: RuntimeClientTarget; keepsNotices: boolean }) => void
 
 // The host may wait up to the whole budget at a dialog; transport gets room beyond it.
 const TRANSPORT_MARGIN_MS = 15_000
@@ -33,12 +38,22 @@ export async function sendGeneratedTerminalInput(
   /** Cancels the host's operation (a person took the terminal over); a cancelled request's
    *  answer is lost, so it reads as unconfirmed. */
   signal?: AbortSignal,
-  onReply?: HostReply
+  onReply?: HostReply,
+  onRoute?: HostRoute
 ): Promise<GeneratedInputOutcome | null> {
   const owner = getRemoteRuntimePtyOwner(ptyId)
-  return owner
-    ? sendGeneratedTerminalInputToHandle(owner.target, owner.terminal, request, signal, onReply)
-    : sendToHost({ kind: 'local' }, { ptyId }, request, signal, onReply)
+  if (owner) {
+    return sendGeneratedTerminalInputToHandle(
+      owner.target,
+      owner.terminal,
+      request,
+      signal,
+      onReply,
+      onRoute
+    )
+  }
+  onRoute?.({ target: { kind: 'local' }, keepsNotices: request.retainNotice === true })
+  return sendToHost({ kind: 'local' }, { ptyId }, request, signal, onReply)
 }
 
 /** The same operation for a caller that names a runtime terminal handle (notes). */
@@ -47,16 +62,31 @@ export async function sendGeneratedTerminalInputToHandle(
   terminal: string,
   request: GeneratedInputRequest,
   signal?: AbortSignal,
-  onReply?: HostReply
+  onReply?: HostReply,
+  onRoute?: HostRoute
 ): Promise<GeneratedInputOutcome | null> {
-  if (
-    target.kind === 'environment' &&
-    !(await runtimeEnvironmentSupportsCapability(
-      target.environmentId,
-      GENERATED_INPUT_RUNTIME_CAPABILITY
-    ))
-  ) {
-    return null
+  if (target.kind === 'environment') {
+    if (
+      !(await runtimeEnvironmentSupportsCapability(
+        target.environmentId,
+        GENERATED_INPUT_RUNTIME_CAPABILITY
+      ))
+    ) {
+      return null
+    }
+    const keepsNotices =
+      request.retainNotice === true &&
+      (await runtimeEnvironmentSupportsCapability(
+        target.environmentId,
+        GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
+      ).catch(() => false))
+    if (!keepsNotices) {
+      const { retainNotice: _retain, operationId: _id, ...plain } = request
+      request = plain
+    }
+    onRoute?.({ target, keepsNotices })
+  } else {
+    onRoute?.({ target, keepsNotices: request.retainNotice === true })
   }
   return sendToHost(target, { terminal }, request, signal, onReply)
 }

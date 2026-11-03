@@ -4,10 +4,9 @@ import type {
   GeneratedInputOutcome,
   GeneratedInputRequest
 } from '../../../shared/generated-terminal-input'
-import { getRemoteRuntimePtyOwner } from '@/runtime/runtime-terminal-stream'
-import type { HostReply } from '@/runtime/generated-terminal-input-client'
+import type { HostReply, HostRoute } from '@/runtime/generated-terminal-input-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
-  generatedInputNoticeOwner,
   LOCAL_NOTICE_RUNTIME,
   registerGeneratedInputNotice,
   settleGeneratedInputNotice,
@@ -17,7 +16,8 @@ import {
 /** One send attempt: `hosted` is false when an older host left the write to this client. */
 export type GeneratedSend = (
   request: Pick<GeneratedInputRequest, 'retainNotice' | 'operationId'>,
-  onReply: HostReply
+  onReply: HostReply,
+  onRoute: HostRoute
 ) => Promise<{ outcome: GeneratedInputOutcome; hosted: boolean }>
 
 /**
@@ -37,8 +37,6 @@ export async function deliverKeepingNotice(
   send: GeneratedSend
 ): Promise<{ outcome: GeneratedInputOutcome; kept: boolean }> {
   const id = createBrowserUuid()
-  const remote = getRemoteRuntimePtyOwner(paste.ptyId)?.target ?? null
-  const owner = await generatedInputNoticeOwner(remote)
   const notice: GeneratedInputNoticeFields = {
     id,
     text: paste.content,
@@ -47,31 +45,32 @@ export async function deliverKeepingNotice(
     ptyId: paste.ptyId,
     ...(paste.submit ? {} : { submitted: false })
   }
-  const remoteOwner = owner.target.kind === 'environment' ? owner.target.environmentId : undefined
-  await registerGeneratedInputNotice(LOCAL_NOTICE_RUNTIME, notice, {
-    pending: true,
-    ...(remoteOwner ? { owner: remoteOwner } : {})
-  })
+  await registerGeneratedInputNotice(LOCAL_NOTICE_RUNTIME, notice, { pending: true })
   let reply: { noticeRetained: boolean } | null = null
+  let route: { target: RuntimeClientTarget; keepsNotices: boolean } | null = null
   const { outcome, hosted } = await send(
-    owner.hostKeeps ? { retainNotice: true, operationId: id } : {},
-    (answer) => (reply = answer)
+    // The client drops these for a host that keeps no notices by id.
+    { retainNotice: true, operationId: id },
+    (answer) => (reply = answer),
+    (where) => (route = where)
   )
   const answered: { noticeRetained: boolean } | null = reply
+  const routed: { target: RuntimeClientTarget; keepsNotices: boolean } | null = route
+  const remoteHost = routed?.target.kind === 'environment' ? routed.target : null
   if (outcome === 'delivered' || outcome === 'staged') {
     settleGeneratedInputNotice(id)
     return { outcome, kept: false }
   }
   if (answered?.noticeRetained) {
     // The host kept it under this id; this window's runtime is that host, or only projected it.
-    if (remoteOwner) {
+    if (remoteHost) {
       settleGeneratedInputNotice(id)
     }
     return { outcome, kept: true }
   }
   // A lost reply from a host that keeps notices: register the same id there, never resend.
-  if (hosted && !answered && remoteOwner && owner.hostKeeps) {
-    if (await registerGeneratedInputNotice(owner.target, notice)) {
+  if (hosted && !answered && remoteHost && routed?.keepsNotices) {
+    if (await registerGeneratedInputNotice(remoteHost, notice)) {
       settleGeneratedInputNotice(id)
       return { outcome, kept: true }
     }

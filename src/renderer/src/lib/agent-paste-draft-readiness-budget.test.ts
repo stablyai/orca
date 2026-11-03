@@ -55,7 +55,14 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: testState.sendInput
 }))
-vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
+// The notice a producer reports; this window's runtime is absent here, so it shows directly.
+vi.mock('./launch-agent-paste-timeout-notice', () => {
+  const showGeneratedInputNotice = vi.fn()
+  return {
+    showGeneratedInputNotice,
+    noticeGeneratedInputFailure: (args: unknown) => showGeneratedInputNotice(args)
+  }
+})
 
 const PASTE_MODE = '\x1b[?2004h'
 const CODEX_PROMPT = '\x1b[1m›\x1b[0m Ask Codex to do anything'

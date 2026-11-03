@@ -2,8 +2,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { splitGeneratedInputText } from '../../../shared/generated-terminal-input'
 import type { GeneratedAgentInputNotice } from '../../../shared/generated-agent-input-notice'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY } from '../../../shared/terminal-runtime-capabilities'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 
 const REGISTER = 'terminal.generatedInputNotices.register'
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
@@ -55,21 +54,6 @@ export function settleGeneratedInputNotice(id: string): void {
     agent: null,
     certainty: 'not-sent'
   }).catch(() => {})
-}
-
-/** Where a request's failure notice is kept: this window's runtime, or a host that keeps notices
- *  by operation id itself. An older host is never asked to keep a second one. */
-export async function generatedInputNoticeOwner(
-  remote: RuntimeClientTarget | null
-): Promise<{ target: RuntimeClientTarget; hostKeeps: boolean }> {
-  if (!remote || remote.kind === 'local') {
-    return { target: LOCAL, hostKeeps: true }
-  }
-  const hostKeeps = await runtimeEnvironmentSupportsCapability(
-    remote.environmentId,
-    GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY
-  ).catch(() => false)
-  return { target: remote, hostKeeps }
 }
 
 export { LOCAL as LOCAL_NOTICE_RUNTIME }

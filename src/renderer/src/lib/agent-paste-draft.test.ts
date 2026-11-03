@@ -80,7 +80,14 @@ vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({
   // A running agent's mounted xterm reports its current paste mode; no replayed byte is needed.
   readPtyBracketedPasteMode: () => true
 }))
-vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
+// The notice a producer reports; this window's runtime is absent here, so it shows directly.
+vi.mock('./launch-agent-paste-timeout-notice', () => {
+  const showGeneratedInputNotice = vi.fn()
+  return {
+    showGeneratedInputNotice,
+    noticeGeneratedInputFailure: (args: unknown) => showGeneratedInputNotice(args)
+  }
+})
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const SHOW_CURSOR = '\x1b[?25h'
