@@ -24,6 +24,17 @@ export function shouldSeedPreAttachPtySize(args: {
 }
 
 /** Attach does not resize the PTY; prefer proven provider/cached geometry over the pane request. */
+function resolveAttachedPtySize(args: {
+  result: Pick<PtySpawnResult, 'attachedGrid' | 'snapshotCols' | 'snapshotRows'>
+  cachedBeforeAttach: PtyGrid | undefined
+}): PtyGrid | undefined {
+  return (
+    positiveGrid(args.result.attachedGrid?.cols, args.result.attachedGrid?.rows) ??
+    positiveGrid(args.result.snapshotCols, args.result.snapshotRows) ??
+    positiveGrid(args.cachedBeforeAttach?.cols, args.cachedBeforeAttach?.rows)
+  )
+}
+
 export function resolveCommittedPtySize(args: {
   result: Pick<PtySpawnResult, 'isReattach' | 'attachedGrid' | 'snapshotCols' | 'snapshotRows'>
   requested: PtyGrid
@@ -32,12 +43,7 @@ export function resolveCommittedPtySize(args: {
   if (args.result.isReattach !== true) {
     return args.requested
   }
-  return (
-    positiveGrid(args.result.attachedGrid?.cols, args.result.attachedGrid?.rows) ??
-    positiveGrid(args.result.snapshotCols, args.result.snapshotRows) ??
-    positiveGrid(args.cachedBeforeAttach?.cols, args.cachedBeforeAttach?.rows) ??
-    args.requested
-  )
+  return resolveAttachedPtySize(args) ?? args.requested
 }
 
 type HeadlessReflow = ((ptyId: string, cols: number, rows: number) => void) | undefined
@@ -69,4 +75,20 @@ export function commitAttachedPtySize(args: {
   ptySizes.set(args.result.id, committedSize)
   reflowHeadlessTerminalToCommittedGrid({ ...args, committedSize })
   return committedSize
+}
+
+export function commitRuntimeAttachedPtySize(
+  result: PtySpawnResult,
+  reflowHeadlessTerminalToPtyGrid: HeadlessReflow
+): void {
+  const cachedBeforeAttach = ptySizes.get(result.id)
+  const size = resolveAttachedPtySize({ result, cachedBeforeAttach })
+  if (size) {
+    commitAttachedPtySize({
+      result,
+      requested: size,
+      cachedBeforeAttach,
+      reflowHeadlessTerminalToPtyGrid
+    })
+  }
 }
