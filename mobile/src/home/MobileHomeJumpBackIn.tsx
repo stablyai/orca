@@ -35,7 +35,7 @@ export function MobileHomeJumpBackIn(props: {
   if (props.rows.length === 0) {
     return null
   }
-  // One desktop needs no naming; the repo says more.
+  // One desktop needs no naming.
   const nameDesktops = props.hosts.length > 1
   return (
     <>
@@ -80,8 +80,10 @@ function JumpBackInRow(props: {
     : labelState
       ? agentStateLabel(labelState)
       : ''
-  const where = props.nameDesktop ? desktopName : row.worktree.repo
-  const showWhere = Boolean(where) && (row.actionable || !row.lastOpened)
+  // Branch names repeat across projects, so name the repo unless it is already the title.
+  const repo = row.worktree.repo !== name ? row.worktree.repo : null
+  const showDesktop = props.nameDesktop && (row.actionable || !row.lastOpened)
+  const where = [repo, showDesktop ? desktopName : null].filter(Boolean).join(' · ')
   const statusColor =
     !row.lastOpened && TINTED_STATUSES.has(row.worktree.dotStatus)
       ? agentStatusColors()[row.worktree.dotStatus]
@@ -94,7 +96,7 @@ function JumpBackInRow(props: {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={[name, status, showWhere ? where : null, time].filter(Boolean).join(', ')}
+      accessibilityLabel={[name, status, where, time].filter(Boolean).join(', ')}
       accessibilityState={{ disabled: !row.actionable }}
       disabled={!row.actionable}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -109,7 +111,7 @@ function JumpBackInRow(props: {
         </Text>
         <Text style={styles.subtitle} numberOfLines={1}>
           <Text style={{ color: statusColor }}>{status}</Text>
-          {showWhere ? ` · ${where}` : ''}
+          {where ? `${status ? ' · ' : ''}${where}` : ''}
         </Text>
       </View>
       <View style={styles.trailing}>
