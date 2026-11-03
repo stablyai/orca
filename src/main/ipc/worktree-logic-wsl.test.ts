@@ -7,9 +7,11 @@ const { getWslHomeMock, getWslHomeAsyncMock, parseWslPathMock } = vi.hoisted(() 
   parseWslPathMock: vi.fn()
 }))
 
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getWslHome: getWslHomeMock,
-  getWslHomeAsync: getWslHomeAsyncMock,
+  getWslHomeAsync: getWslHomeAsyncMock
+}))
+vi.mock('../wsl/filesystem/unc-path-access', () => ({
   parseWslPath: parseWslPathMock
 }))
 

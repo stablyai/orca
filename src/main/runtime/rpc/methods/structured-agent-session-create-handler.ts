@@ -20,6 +20,7 @@ import {
 } from './structured-agent-session-create'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { projectReceiptDeviceAttach } from './structured-agent-session-receipt-devices'
 import {
   structuredAgentSessionClosedBeforeCreate,
   structuredAgentSessionClosedBeforeCreateRefusal
@@ -52,7 +53,7 @@ export async function attachClientSuppliedLocation(
   ctx: RpcContext
 ): Promise<unknown> {
   const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
-  return host.attach(callerFor(ctx), attachParams)
+  return projectReceiptDeviceAttach(await host.attach(callerFor(ctx), attachParams), ctx)
 }
 
 export async function handleStructuredAgentSessionCreate(
@@ -111,15 +112,18 @@ export async function handleStructuredAgentSessionCreate(
   ) {
     return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
   }
-  return commitStructuredAgentSessionCreate({
-    runtime: ctx.runtime,
-    caller: callerFor(ctx),
-    prepared,
-    activate: true,
-    placedByWindow: ctx.caller?.kind === 'desktop',
-    ...(capture ? { capture } : {}),
-    ...('tabPlacement' in params && params.tabPlacement
-      ? { tabPlacement: params.tabPlacement }
-      : {})
-  })
+  return projectReceiptDeviceAttach(
+    await commitStructuredAgentSessionCreate({
+      runtime: ctx.runtime,
+      caller: callerFor(ctx),
+      prepared,
+      activate: true,
+      placedByWindow: ctx.caller?.kind === 'desktop',
+      ...(capture ? { capture } : {}),
+      ...('tabPlacement' in params && params.tabPlacement
+        ? { tabPlacement: params.tabPlacement }
+        : {})
+    }),
+    ctx
+  )
 }

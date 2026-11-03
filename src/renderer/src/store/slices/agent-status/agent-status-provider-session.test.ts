@@ -338,7 +338,7 @@ it('retains recorded Jcode session-start identity without a status row', () => {
   const store = createTestStore()
   seedStore(store, { tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] } })
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
-  // Jcode 0.87.1 captured input; agent-hook-listener-jcode.test.ts pins provenance.
+  // Jcode 0.87.1 captured input.
   const payload = {
     hook_event_name: 'session_start',
     event: 'session_start',

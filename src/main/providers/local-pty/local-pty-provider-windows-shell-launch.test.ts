@@ -1,6 +1,11 @@
-import type * as WslAvailabilityTypes from '../../wsl-availability'
+import type * as WslPathOwner from '../../../shared/wsl-paths'
+import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
+
+const { toLinuxPathMock } = vi.hoisted(() => ({
+  toLinuxPathMock: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/')
+}))
 
 const {
   existsSyncMock,
@@ -34,6 +39,13 @@ const {
   readWslDistroRunningStateMock: vi.fn()
 }))
 
+vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPathOwner>()),
+  toLinuxPath: toLinuxPathMock,
+  toWindowsWslPath: (path: string, distro: string) =>
+    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`
+}))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   statSync: statSyncMock,
@@ -61,7 +73,7 @@ vi.mock('../macos-tcc-login-shell', async (importOriginal) => ({
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
 }))
 
-vi.mock('../../pty-descendant-termination', () => ({
+vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
@@ -90,28 +102,24 @@ vi.mock('../windows-pty-job-membership', () => ({
   isWindowsPtyJobReadable: () => true
 }))
 
-vi.mock('../../wsl', async () => ({
-  // The real parser, so both UNC spellings (\\wsl.localhost and \\wsl$) reach the launch plan.
+vi.mock('../../wsl/filesystem/unc-path-access', async () => ({
   parseWslPath: (await import('../../../shared/wsl-paths')).parseWslUncPath,
-  toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
-  toWindowsWslPath: (path: string, distro: string) =>
-    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
-  getDefaultWslDistro: () => 'Ubuntu',
-  isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
+vi.mock('../../wsl/discovery/distro-catalog', async () => ({
+  getDefaultWslDistro: () => 'Ubuntu'
+}))
 
-vi.mock('../../wsl-availability', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-availability', async (importOriginal) => ({
   ...(await importOriginal<typeof WslAvailabilityTypes>()),
   isWslAvailableAsync: () => isWslAvailableAsyncMock()
 }))
 
-vi.mock('../../wsl-background-distro-gate', () => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', () => ({
   readWslDistroRunningState: (...args: unknown[]) => readWslDistroRunningStateMock(...args)
 }))
 
-vi.mock('../../shell-prompt-readiness-probe', () => ({
+vi.mock('../../pty/shell-startup/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
 
@@ -122,7 +130,7 @@ import {
   installLocalPtyProviderEnvSandbox,
   type LocalPtyMockProcess
 } from './local-pty-provider-test-harness'
-import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../../pty/powerlevel10k-wizard-env'
+import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../../pty/shell-startup/powerlevel10k-wizard-env'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 
 describe('LocalPtyProvider', () => {

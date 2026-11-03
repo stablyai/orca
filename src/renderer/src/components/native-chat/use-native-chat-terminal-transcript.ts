@@ -24,6 +24,7 @@ export function useNativeChatTerminalTranscript({
   agent,
   commandMarkers,
   delivery,
+  workingEpoch,
   previewText,
   working,
   previewIsToolOutput
@@ -33,6 +34,7 @@ export function useNativeChatTerminalTranscript({
   agent: AgentType
   commandMarkers: NativeChatCommandMarker[]
   delivery: ReturnType<typeof useNativeChatPendingDelivery>
+  workingEpoch?: number | null
 } & Omit<Parameters<typeof deriveNativeChatStreamingText>[0], 'messages'>) {
   const launchPromptMessage = useMemo(
     () => launchPromptAsMessage(launchPrompt, session.messages),
@@ -64,8 +66,13 @@ export function useNativeChatTerminalTranscript({
     [launchNotices, delivery.notices]
   )
   const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(delivery.pending, sessionAfterCommandBoundaries.messages),
-    [delivery.pending, sessionAfterCommandBoundaries.messages]
+    () =>
+      pendingSendsAsMessages(
+        delivery.pending,
+        sessionAfterCommandBoundaries.messages,
+        workingEpoch
+      ),
+    [delivery.pending, sessionAfterCommandBoundaries.messages, workingEpoch]
   )
   const streamingText = useMemo(
     () =>

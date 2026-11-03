@@ -25,6 +25,10 @@ export const FileWrite = FileMutationOpen.extend({
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
 })
 
+export const FileFormatText = FileMutationOpen.extend({
+  content: z.string().max(2 * 1024 * 1024)
+})
+
 // Why a separate method: a host too old to honor the precondition answers method_not_found
 // instead of silently dropping the field and writing over newer disk content.
 export const FileWriteDiskPreconditionParam = z.object({

@@ -9,7 +9,7 @@ import {
   structuredLaunchIntent,
   launchErrorMocks
 } from './launch-agent-structured-chat-test-fixture'
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import { useTabAgentMenuLaunch } from '@/components/tab-bar/QuickLaunchButton'
@@ -114,7 +114,7 @@ function editor(): HTMLElement {
   return document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
 }
 function button(name: string): HTMLButtonElement {
-  return [...document.querySelectorAll('button')].find((button) => button.textContent === name)!
+  return screen.getByRole('button', { name })
 }
 
 it.each(

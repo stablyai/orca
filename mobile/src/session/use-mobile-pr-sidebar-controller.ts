@@ -51,6 +51,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const [repoProbeLoaded, setRepoProbeLoaded] = useState(false)
   const [state, setState] = useState<PrSidebarState>({ kind: 'hidden' })
   const [showPRSidebar, setShowPRSidebar] = useState(false)
+  const repoProbeSeqRef = useRef(0)
   const loadSeqRef = useRef(0)
   // Give details their own sequence so chip refreshes and details fetches cannot cancel each other.
   const detailsSeqRef = useRef(0)
@@ -78,29 +79,36 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     setRepoProbeLoaded(false)
   }, [worktreeId])
 
-  useEffect(() => {
-    let cancelled = false
+  const refreshPRSidebarRepoProbe = useCallback(async () => {
     if (!probeReady || !client) {
-      return
+      return false
     }
-    void fetchGithubRepoSlug(client, worktreeId)
-      .then((outcome) => {
-        if (!cancelled) {
-          setIsGithubRepo(outcome.ok && outcome.result !== null)
-          setRepoProbeLoaded(true)
-        }
-      })
-      .catch(() => {
-        // Contain stray repo-probe rejection even during unmount.
-        if (!cancelled) {
-          setIsGithubRepo(false)
-          setRepoProbeLoaded(true)
-        }
-      })
-    return () => {
-      cancelled = true
+    const seq = ++repoProbeSeqRef.current
+    const outcome = await fetchGithubRepoSlug(client, worktreeId).catch(() => null)
+    if (seq !== repoProbeSeqRef.current) {
+      return false
     }
+    setRepoProbeLoaded(true)
+    if (!outcome?.ok) {
+      return false
+    }
+    const supported = outcome.result !== null
+    setIsGithubRepo(supported)
+    if (!supported) {
+      loadSeqRef.current += 1
+      detailsSeqRef.current += 1
+      stateIdentityRef.current = null
+      setState({ kind: 'hidden' })
+    }
+    return supported
   }, [probeReady, client, worktreeId])
+
+  useEffect(() => {
+    void refreshPRSidebarRepoProbe()
+    return () => {
+      repoProbeSeqRef.current += 1
+    }
+  }, [refreshPRSidebarRepoProbe])
 
   useEffect(() => {
     if (!identity) {
@@ -322,6 +330,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     prSidebarState: state,
     prSidebarIsGithubRepo: isGithubRepo,
     prSidebarRepoProbeLoaded: repoProbeLoaded,
+    refreshPRSidebarRepoProbe,
     showPRSidebar,
     setShowPRSidebar,
     openPRSidebar,

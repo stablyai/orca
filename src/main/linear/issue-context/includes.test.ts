@@ -177,6 +177,57 @@ describe('Linear issue context includes', () => {
     })
   })
 
+  it('skips children entirely when not included', async () => {
+    const { readOptionalIncludes } = await import('./includes')
+    const output = result()
+    const input = request()
+    input.include.children = false
+    input.depth = 0
+    await readOptionalIncludes(resolvedIssue(), input, output, [], output.meta.sections)
+    expect(output.children).toBeUndefined()
+    expect(output.meta.sections.children).toBeUndefined()
+    expect(rawRequest).not.toHaveBeenCalled()
+  })
+
+  it('keeps child assignment atomic when a continuation fails', async () => {
+    rawRequest
+      .mockResolvedValueOnce({
+        data: {
+          issue: {
+            children: {
+              nodes: [
+                {
+                  ...rawChild(1),
+                  children: {
+                    nodes: [rawChild(2)],
+                    pageInfo: { hasNextPage: true, endCursor: 'next' }
+                  }
+                }
+              ],
+              pageInfo: { hasNextPage: false }
+            }
+          }
+        }
+      })
+      .mockRejectedValueOnce(new Error('continuation failed'))
+    const { readOptionalIncludes } = await import('./includes')
+    const output = result()
+    await readOptionalIncludes(
+      resolvedIssue(),
+      request(),
+      output,
+      output.meta.includeErrors ?? [],
+      output.meta.sections
+    )
+    expect(output.children).toBeUndefined()
+    expect(output.meta.sections.children).toBeUndefined()
+    expect(output.meta.includeErrors).toEqual([
+      { include: 'children', code: 'linear_include_failed', message: 'continuation failed' }
+    ])
+    expect(plainRawRequest).not.toHaveBeenCalled()
+    expect(rawRequest).toHaveBeenCalledTimes(2)
+  })
+
   it('paginates comments up to the advertised include cap', async () => {
     for (let page = 0; page < 3; page += 1) {
       rawRequest.mockResolvedValueOnce({

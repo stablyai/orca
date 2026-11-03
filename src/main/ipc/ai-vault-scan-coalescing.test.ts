@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: mocks.ipcHandle, on: vi.fn() },
   BrowserWindow: { getAllWindows: () => [] }
 }))
-vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService: mocks.scanAiVaultSessionsInService,
   resolveAiVaultSessionTitlesInService: mocks.resolveAiVaultSessionTitlesInService
@@ -37,11 +37,11 @@ import { invalidateAiVaultSessionListCache } from '../ai-vault/cached-session-li
 import { registerRuntimeEnvironmentSubscriptionHandlers } from './runtime-environments/runtime-environment-subscription-handlers'
 import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environments/runtime-environment-transport-generation'
 import type { subscribeRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
   hasCachedWslDistros: vi.fn(() => false)
 }))
-vi.mock('../wsl-running-path-filter', () => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')

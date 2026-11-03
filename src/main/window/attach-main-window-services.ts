@@ -27,7 +27,7 @@ import type {
   PreQuitCleanupFailureMode,
   UpdateInstallMode
 } from '../updater/lifecycle/updater-state'
-import { scheduleHistoryGc } from '../terminal-history-gc'
+import { scheduleHistoryGc } from '../pty/history/terminal-history-gc'
 import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
 import { listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'

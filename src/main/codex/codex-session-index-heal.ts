@@ -3,7 +3,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
-import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import { resolveWslExecutablePath } from '../wsl/execution/wsl-executable-path'
 import { getCodexSessionBackfillStateDirPath } from './codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
 import {

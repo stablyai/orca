@@ -1093,6 +1093,23 @@
       "keywordDelay": "delay",
       "keywordCooldown": "cooldown",
       "keywordSecurity": "security"
+    },
+    "editorFormatOnSave": {
+      "title": "Format on Save",
+      "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
+      "keywords": "formatter format on save prettier biome gofmt"
+    },
+    "repositoryFormatter": {
+      "title": "Formatter Command",
+      "description": "Use this project’s formatter for Format on Save.",
+      "saveFailed": "Could not save formatter settings.",
+      "command": "Command",
+      "commandHelp": "Runs on the file’s host in the workspace root. Reads the buffer from stdin and must print only formatted text to stdout. Use ${file} or ${relativeFile} for the path. Arguments are passed directly, without a shell. Do not use --write. Leave empty to disable for this project.",
+      "include": "Include globs (one per line)",
+      "includeHelp": "Match paths relative to the workspace root. No matching glob means no formatting. * and ** skip dot-prefixed names; list them explicitly, e.g. .github/**/*.yml. Enable Format on Save in General > Editor to use this command.",
+      "saving": "Saving…",
+      "save": "Save formatter",
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
     }
   },
   "menu": {
@@ -8102,6 +8119,9 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -10314,6 +10334,14 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
+            },
+            "orchestrationPanel": {
+              "title": "Orchestration panel",
+              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
+              "orchestration": "orchestration",
+              "agents": "agents",
+              "workers": "workers",
+              "manager": "manager"
             }
           }
         },
@@ -13188,13 +13216,16 @@
           "browseThemes": "Browse themes",
           "moreThemes": "More themes",
           "moreThemesLoading": "Loading themes…",
-          "installingTheme": "Installing {{value0}}…"
+          "installingTheme": "Installing {{value0}}…",
+          "searchThemes": "Search themes…",
+          "noThemes": "No themes match your search."
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "Icon theme",
             "description": "File and folder icons from an enabled plugin.",
-            "builtIn": "Built-in"
+            "builtIn": "Built-in",
+            "search": "Search icon themes…"
           },
           "lightTheme": "Light theme",
           "darkTheme": "Dark theme",
@@ -13603,6 +13634,9 @@
           "kitty_title": "Import from Kitty",
           "kitty_description": "Review the settings that will be imported from your kitty.conf and the files it includes.",
           "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "No matches."
         }
       },
       "right": {
@@ -19617,7 +19651,10 @@
         "cancelled": "Cancelled",
         "resolved": "Resolved",
         "resolver": "Answered on {{device}}",
-        "cancelledBy": "Cancelled on {{device}}"
+        "cancelledBy": "Cancelled on {{device}}",
+        "thisComputer": "this computer",
+        "computer": "the computer",
+        "otherDevice": "another device"
       },
       "notices": {
         "contextCleared": "Context cleared",
@@ -20991,6 +21028,11 @@
     },
     "wslHostMark": {
       "runsOn": "Runs on WSL: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "Could not format {{file}}. Saving without formatting: {{reason}}"
+      }
     }
   },
   "dashboardPopout": {

@@ -46,9 +46,11 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   runProcess: mocks.runProcess
 }))
 
-vi.mock('../wsl/wsl-host-connector', () => ({ createWslHostConnector: mocks.createConnector }))
+vi.mock('../wsl/host-lifecycle/wsl-host-connector', () => ({
+  createWslHostConnector: mocks.createConnector
+}))
 
-vi.mock('../wsl/wsl-host-e2e-fake-connector', async (importOriginal) => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-e2e-fake-connector', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createFakeWslHostConnector: mocks.createFakeConnector
 }))
@@ -81,7 +83,10 @@ import {
 } from './runtime-environments/runtime-environments-ipc-test-harness'
 import { registerWslHostHandlers, WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handlers'
 import { resolveManagedRuntimeEnvironment } from './runtime-environments/runtime-environment-managed-tunnel'
-import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
+import {
+  getWslHostService,
+  setWslHostService
+} from '../wsl/host-lifecycle/wsl-host-service-instance'
 import { getSavedRuntimeAiVaultHostInfos } from '../ai-vault/runtime-session-scanner'
 
 const handler = channelHandlerLookup(mocks.handle)
