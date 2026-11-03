@@ -12,8 +12,8 @@ import {
   acpReopenTakeover,
   acpSessionNotRestoredRow
 } from './acp-session-reopen-failure'
-import { catchUpAcpHistory } from './acp-history-catch-up'
-import type { AcpLoadHistoryFrame } from './acp-history-replay'
+import { catchUpAcpHistory } from './history/acp-history-catch-up'
+import type { AcpLoadHistoryFrame } from './history/acp-history-replay'
 import { ACP_HANDLE_TRANSPORT, acpAgentName } from './acp-structured-agent-definitions'
 import { probeAcpChildStops } from './acp-structured-child-stop'
 import type { AcpStructuredConnection } from './acp-structured-connection'
@@ -61,6 +61,7 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   const initialized = await connection.initialize()
   assertStarting()
+  options.adoptInitialize(initialized)
   // Choose authentication using the execution host's launch environment.
   const authMethodId = spec.authMethod?.({
     advertised: (initialized.authMethods ?? []).map((method) => method.id),

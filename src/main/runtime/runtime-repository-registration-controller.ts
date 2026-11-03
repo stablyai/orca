@@ -24,6 +24,8 @@ import {
   type WslHostWindowsDriveRefusal
 } from '../../shared/wsl-host-windows-drive-refusal'
 import { describeWslUncAccessDenied } from '../wsl/wsl-unc-access-denied'
+import { getResolvedFolderWorkspacePathStatus } from '../project-groups/folder-workspace-path-status'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 import { repoCreateFailure, type RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 
 type RuntimeRepositoryRegistrationDependencies = {
@@ -47,6 +49,26 @@ export class RuntimeRepositoryRegistrationController {
       throw new Error('Project path must be an absolute path')
     }
     await refuseWslHostWindowsDrivePath(path)
+    if (kind === 'folder') {
+      await runAsWslUserAct(wslDistroForPath(path), async () => {
+        // This controller serves this filesystem even when a paired client names it runtime:.
+        const status = await getResolvedFolderWorkspacePathStatus(
+          { folderPath: path },
+          LOCAL_EXECUTION_HOST_ID
+        )
+        if (!status.exists) {
+          const accessDenied = await describeWslUncAccessDenied(path, store.getSettings())
+          throw new Error(
+            accessDenied ??
+              (status.reason === 'missing'
+                ? `Folder does not exist: ${path}. Choose an existing folder.`
+                : status.reason === 'not-directory'
+                  ? `Path is not a folder: ${path}. Choose a folder instead.`
+                  : `Cannot access folder: ${path}. Check its permissions and try again.`)
+          )
+        }
+      })
+    }
     if (kind === 'git') {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }

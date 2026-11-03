@@ -59,15 +59,56 @@ export function importUnitTimingReports(reports) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [directory, output] = process.argv.slice(2)
-  if (!directory || !output) {
-    throw new Error('Usage: ci-unit-timing-import.mjs ARTIFACT_DIRECTORY BASELINE_JSON')
+/** Averages complete runs per file; one run's per-file noise otherwise skews whole shards. */
+export function importUnitTimingRuns(runs) {
+  const imported = runs.map(importUnitTimingReports)
+  if (imported.length === 1) {
+    return imported[0]
   }
-  const reports = readdirSync(directory, { recursive: true })
-    .filter((file) => file.endsWith('unit-timings.json'))
-    .map((file) => JSON.parse(readFileSync(join(directory, file), 'utf8')))
+  const runtime = (run) => JSON.stringify([run.nodeVersion, run.bunVersion, run.metric])
+  if (
+    new Set(imported.map(runtime)).size !== 1 ||
+    new Set(imported.map((run) => run.runId)).size !== imported.length
+  ) {
+    throw new Error('Unit timing runs must be distinct runs on one runtime version')
+  }
+  const samples = {}
+  for (const run of imported) {
+    for (const [file, duration] of Object.entries(run.timings)) {
+      ;(samples[file] ??= []).push(duration)
+    }
+  }
+  const [first] = imported
+  return {
+    runIds: imported.map((run) => run.runId),
+    sourceShas: imported.map((run) => run.sourceSha),
+    nodeVersion: first.nodeVersion,
+    ...(first.bunVersion ? { bunVersion: first.bunVersion } : {}),
+    metric: first.metric,
+    overheadMs: 0,
+    timings: Object.fromEntries(
+      Object.entries(samples)
+        .sort(([a], [b]) => compareIds(a, b))
+        .map(([file, durations]) => [
+          file,
+          Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
+        ])
+    )
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const directories = process.argv.slice(2, -1)
+  const output = process.argv.at(-1)
+  if (!directories.length || !output) {
+    throw new Error('Usage: ci-unit-timing-import.mjs ARTIFACT_DIRECTORY... BASELINE_JSON')
+  }
+  const runs = directories.map((directory) =>
+    readdirSync(directory, { recursive: true })
+      .filter((file) => file.endsWith('unit-timings.json'))
+      .map((file) => JSON.parse(readFileSync(join(directory, file), 'utf8')))
+  )
   const baseline = JSON.parse(readFileSync(output, 'utf8'))
-  baseline.unit = importUnitTimingReports(reports)
+  baseline.unit = importUnitTimingRuns(runs)
   writeFileSync(output, `${JSON.stringify(baseline, null, 2)}\n`)
 }

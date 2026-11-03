@@ -51,7 +51,9 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   const item = controller.currentItem
   const github = controller.github
   const refetchPR = controller.refetchPRSidebar
-  const refetchThreads = useCallback(() => refetchPR({ includeDetails: true }), [refetchPR])
+  const refetchThreads = useCallback(async () => {
+    await refetchPR({ includeDetails: true })
+  }, [refetchPR])
   const threadCommentActions = useMobilePrCommentActions({
     client: controller.client,
     connState: controller.connState,
@@ -165,6 +167,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               state={controller.prSidebarState}
               onRetry={controller.retryPRSidebar}
               refetch={controller.refetchPRSidebar}
+              rereadAfterWrite={controller.rereadPRSidebarAfterWrite}
               client={controller.client}
               connState={controller.connState}
               worktreeId={controller.worktreeId}
@@ -187,6 +190,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             state={controller.prSidebarState}
             onRetry={controller.retryPRSidebar}
             refetch={controller.refetchPRSidebar}
+            rereadAfterWrite={controller.rereadPRSidebarAfterWrite}
             client={controller.client}
             connState={controller.connState}
             worktreeId={controller.worktreeId}

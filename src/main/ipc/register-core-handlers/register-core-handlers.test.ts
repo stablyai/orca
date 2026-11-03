@@ -174,7 +174,7 @@ vi.mock('../dashboard-popout', () => ({
   registerDashboardPopoutHandlers: registerDashboardPopoutHandlersMock
 }))
 
-vi.mock('../workspace-space-window', () => ({
+vi.mock('../workspace-space/workspace-space-window', () => ({
   registerWorkspaceSpaceWindowHandlers: registerWorkspaceSpaceWindowHandlersMock
 }))
 
@@ -250,7 +250,7 @@ vi.mock('../skill-delete/handlers', () => ({
   registerSkillDeleteIpcHandlers: registerSkillDeleteIpcHandlersMock
 }))
 
-vi.mock('../workspace-space', () => ({
+vi.mock('../workspace-space/workspace-space', () => ({
   registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock
 }))
 
@@ -303,6 +303,10 @@ vi.mock('../emulator-video-stream', () => ({
 
 vi.mock('../emulator-scrcpy-touch', () => ({
   registerEmulatorScrcpyTouchHandler: registerEmulatorScrcpyTouchHandlerMock
+}))
+
+vi.mock('../emulator-scrcpy-keyboard', () => ({
+  registerEmulatorScrcpyKeyboardHandler: vi.fn()
 }))
 
 vi.mock('../filesystem/filesystem', () => ({

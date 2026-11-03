@@ -1,3 +1,5 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
+import { OptionalGhAccountExpectation } from '../../shared/rpc-contract/github-repo-target-params'
 import { ipcMain } from 'electron'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
 import type { GitHubCreateIssueFields } from '../../shared/issue-mutation-types'
@@ -179,14 +181,30 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
 
   ipcMain.handle(
     'gh:workItemDetails',
-    (_event, args: WorkItemArgs & { ownerRepo?: GitHubOwnerRepo }) => {
+    (
+      _event,
+      args: WorkItemArgs & {
+        ownerRepo?: GitHubOwnerRepo
+        canonical?: boolean
+        expectedGhAccount?: GhAccountBinding | null
+      }
+    ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+      const expectedGhAccount = OptionalGhAccountExpectation.parse(args.expectedGhAccount)
       return dispatchWorkItem(
         args,
         repo,
-        args.ownerRepo
-          ? (...params) => getWorkItemDetails(...params, args.ownerRepo)
-          : getWorkItemDetails,
+        expectedGhAccount !== undefined
+          ? (...params) =>
+              getWorkItemDetails(
+                ...params,
+                args.ownerRepo,
+                args.ownerRepo ? args.canonical === true : false,
+                expectedGhAccount
+              )
+          : args.ownerRepo
+            ? (...params) => getWorkItemDetails(...params, args.ownerRepo, args.canonical === true)
+            : getWorkItemDetails,
         getGitHubLocalGitOptionArgs(store, repo)[0]
       )
     }

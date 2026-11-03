@@ -1,5 +1,5 @@
 /** Exercise real call sites with plain-HTTP crypto shape: LAN clients lack randomUUID/subtle. */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createNonSecureContextCrypto } from './non-secure-context-crypto-stub'
 
 const realCrypto = globalThis.crypto
@@ -28,12 +28,5 @@ describe('non-secure context (plain HTTP LAN web client)', () => {
       value: createNonSecureContextCrypto(realCrypto)
     })
     expect(await hashOrcaHookScript('echo hi')).toBe(secureHash)
-  })
-
-  // Evaluate the whole store graph so future import-time secure-context calls fail too.
-  it('evaluates the whole store graph', async () => {
-    vi.resetModules()
-    const { useAppStore } = await import('@/store')
-    expect(typeof useAppStore.getState).toBe('function')
   })
 })

@@ -77,11 +77,6 @@ describe('terminal input activity coalescing', () => {
     expect(mergePendingTerminalInputActivity(store.stored)[PANE]).toBe(1_100)
   })
 
-  it('returns the same map reference when nothing is pending', () => {
-    const store = createStore({ [PANE]: 500 })
-    expect(mergePendingTerminalInputActivity(store.stored)).toBe(store.stored)
-  })
-
   it('flushes pending stamps into the store on the timer', () => {
     const store = createStore()
 

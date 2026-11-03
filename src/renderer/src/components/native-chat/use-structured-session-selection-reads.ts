@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
 import type { structuredSessionSelectionAuthority } from '@/lib/structured-agent-session-selection-controller'
-import type { StructuredSessionSelectionController } from '../../../../shared/structured-agent-session-selection-operations'
+import type { StructuredSessionSelectionController } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 /** Revalidate the queried base when local operations finish or host authority moves. */

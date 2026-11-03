@@ -82,8 +82,7 @@ describe('post-operation review refresh ownership', () => {
       const twinEntry = { data: makePR({ number: 11 }), fetchedAt: Date.now() }
       store.setState({
         ...createGitRemotePushPull(store.setState, store.getState),
-        beginRemoteOperation: vi.fn(),
-        endRemoteOperation: vi.fn(),
+        beginRemoteOperation: vi.fn(() => vi.fn()),
         fetchUpstreamStatus: vi.fn().mockResolvedValue(undefined),
         repos: [direct, paired],
         worktreesByRepo: {
@@ -164,13 +163,12 @@ describe('post-operation review refresh ownership', () => {
         store.setState({
           ...createGitRemotePushPull(store.setState, store.getState),
           ...createGitRemoteSync(store.setState, store.getState),
-          beginRemoteOperation: vi.fn(),
-          endRemoteOperation: vi.fn(),
+          beginRemoteOperation: vi.fn(() => vi.fn()),
           fetchUpstreamStatus: vi.fn().mockResolvedValue(undefined),
           repos: [twin, owner],
           worktreesByRepo: { [repo.id]: [{ ...worktree, hostId: twinHost }, worktree] },
           activeWorktreeId: worktree.id,
-          activeWorkspaceExecutionHostId: worktree.hostId,
+          activeWorkspaceExecutionHostId: paired ? 'ssh:builder' : hostId,
           sshConnectionStates: new Map([
             [
               'builder',

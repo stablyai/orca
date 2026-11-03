@@ -25,7 +25,7 @@
         "sandboxed-ui",
         "trusted-worker"
       ],
-      "description": "Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.",
+      "description": "Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main`, events and hooks). Contributions beyond it fail validation.",
       "x-orca-since": "1.4.245",
       "examples": [
         "data"
@@ -170,7 +170,7 @@
       "x-orca-since": "1.4.160"
     },
     "main": {
-      "description": "Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+      "description": "Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
       "x-orca-since": "1.4.160",
       "examples": [
         "dist/main.mjs"
@@ -214,6 +214,16 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/EventContribution"
+          }
+        },
+        "hooks": {
+          "default": [],
+          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.",
+          "x-orca-since": "1.4.248",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HookContribution"
           }
         },
         "languagePacks": {
@@ -315,6 +325,16 @@
             "$ref": "#/$defs/SettingContribution"
           }
         },
+        "statusBarItems": {
+          "default": [],
+          "description": "Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.",
+          "x-orca-since": "1.4.248",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StatusBarItemContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -336,13 +356,6 @@
           "type": "array",
           "items": {}
         },
-        "hooks": {
-          "description": "Reserved for agent hooks; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
         "taskSources": {
           "description": "Reserved for task sources; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -352,13 +365,6 @@
         },
         "connections": {
           "description": "Reserved for account connections; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "statusBarItems": {
-          "description": "Reserved for status bar items; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -674,6 +680,34 @@
           "minLength": 1,
           "maxLength": 256,
           "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+        },
+        "replaces": {
+          "description": "Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. To also run Orca’s own, the command calls `commands.run` with the action (`workspace:write`); that never reaches a replacement. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "view.tasks"
+          ],
+          "enum": [
+            "worktree.history.back",
+            "worktree.history.forward",
+            "sidebar.left.toggle",
+            "sidebar.sleepingWorkspaces.toggle",
+            "floatingWorkspace.maximize",
+            "tab.rename",
+            "workspace.rename",
+            "workspace.openBoard",
+            "view.tasks",
+            "sidebar.right.toggle",
+            "sidebar.explorer.toggle",
+            "sidebar.search.toggle",
+            "sidebar.sourceControl.toggle",
+            "sidebar.checks.toggle",
+            "sidebar.ports.toggle"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
         }
       },
       "required": [
@@ -709,6 +743,50 @@
       ],
       "additionalProperties": false,
       "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events."
+    },
+    "HookContribution": {
+      "type": "object",
+      "properties": {
+        "event": {
+          "type": "string",
+          "enum": [
+            "terminal.send",
+            "workspace.create.before",
+            "workspace.create.after",
+            "agent.launch.before",
+            "agent.prompt.before",
+            "agent.tool.before",
+            "agent.tool.after",
+            "editor.save.before"
+          ],
+          "description": "Hook the worker handles with `orca.hooks.on`.",
+          "x-orca-since": "1.4.248",
+          "x-orca-enum-since": {
+            "terminal.send": "1.4.248",
+            "workspace.create.before": "1.4.248",
+            "workspace.create.after": "1.4.248",
+            "agent.launch.before": "1.4.248",
+            "agent.prompt.before": "1.4.248",
+            "agent.tool.before": "1.4.248",
+            "agent.tool.after": "1.4.248",
+            "editor.save.before": "1.4.248"
+          }
+        },
+        "onError": {
+          "description": "What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe.",
+          "x-orca-since": "1.4.248",
+          "type": "string",
+          "enum": [
+            "pass",
+            "deny"
+          ]
+        }
+      },
+      "required": [
+        "event"
+      ],
+      "additionalProperties": false,
+      "description": "A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile."
     },
     "LanguagePackContribution": {
       "type": "object",
@@ -1040,7 +1118,7 @@
           ]
         },
         "priority": {
-          "description": "`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`.",
+          "description": "`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`; a longer suffix such as `.sketch.json` is not one of them and opens by default.",
           "x-orca-since": "1.4.245",
           "examples": [
             "default"
@@ -1061,6 +1139,18 @@
           "enum": [
             "text",
             "bytes"
+          ]
+        },
+        "frame": {
+          "description": "`any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "isolated"
+          ],
+          "type": "string",
+          "enum": [
+            "any",
+            "isolated"
           ]
         }
       },
@@ -1260,6 +1350,132 @@
       "additionalProperties": false,
       "description": "A setting shown under the plugin in Settings. Requires the `settings:own` capability, which is also how code reads it."
     },
+    "StatusBarItemContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Item id, unique among this plugin's status bar items; `statusBar.update` names it.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "blocked-count"
+          ]
+        },
+        "text": {
+          "description": "Short label shown in the status bar.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "3 blocked"
+          ],
+          "type": "string",
+          "maxLength": 64
+        },
+        "icon": {
+          "description": "Icon shown before the text, from the panel icon set.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "bell"
+          ],
+          "type": "string",
+          "enum": [
+            "activity",
+            "bar-chart-3",
+            "bell",
+            "blocks",
+            "book",
+            "bot",
+            "bug",
+            "calendar",
+            "cloud",
+            "code",
+            "database",
+            "file-text",
+            "flag",
+            "folder",
+            "gauge",
+            "globe",
+            "hammer",
+            "layers",
+            "lightbulb",
+            "package",
+            "plug",
+            "puzzle",
+            "rocket",
+            "star",
+            "terminal",
+            "wrench",
+            "zap",
+            "add",
+            "remove",
+            "delete",
+            "edit",
+            "refresh",
+            "search",
+            "settings",
+            "check",
+            "close",
+            "info",
+            "warning",
+            "error",
+            "open-external",
+            "copy",
+            "download",
+            "upload",
+            "play",
+            "pause",
+            "stop",
+            "more",
+            "expand",
+            "collapse",
+            "next",
+            "filter",
+            "branch",
+            "file",
+            "agent",
+            "link"
+          ]
+        },
+        "tone": {
+          "description": "Colour of the item. Defaults to `neutral`.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "warning"
+          ],
+          "type": "string",
+          "enum": [
+            "neutral",
+            "accent",
+            "success",
+            "warning",
+            "danger"
+          ]
+        },
+        "tooltip": {
+          "description": "Shown on hover. Defaults to the plugin name.",
+          "x-orca-since": "1.4.248",
+          "type": "string",
+          "maxLength": 256
+        },
+        "command": {
+          "description": "Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "guard.showLog"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "description": "An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`."
+    },
     "Capability": {
       "type": "object",
       "properties": {
@@ -1267,8 +1483,11 @@
           "type": "string",
           "enum": [
             "workspace:read",
+            "workspace:write",
             "agent:read",
+            "agent:launch",
             "terminal:send",
+            "terminal:read",
             "notifications:show",
             "storage:own",
             "secrets:own",
@@ -1278,8 +1497,11 @@
           "x-orca-since": "1.4.160",
           "x-orca-enum-since": {
             "workspace:read": "1.4.160",
+            "workspace:write": "1.4.248",
             "agent:read": "1.4.245",
+            "agent:launch": "1.4.248",
             "terminal:send": "1.4.160",
+            "terminal:read": "1.4.248",
             "notifications:show": "1.4.160",
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",

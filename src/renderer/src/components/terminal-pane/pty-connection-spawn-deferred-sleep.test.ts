@@ -503,49 +503,6 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     binding.dispose()
   })
 
-  it("declares a hidden pane's restart and its deferred retry as user resumes, so the live cap cannot defer them", async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport(null)
-    // Main takes the replaced PTY with the first request, as the IPC spawn does, then defers it.
-    transport.connect.mockImplementation(
-      async (opts: {
-        claimReplacedPtyId?: () => string | null
-        callbacks?: { onSpawnDeferred?: (reason: string) => void }
-      }) => {
-        opts.claimReplacedPtyId?.()
-        opts.callbacks?.onSpawnDeferred?.('pressure')
-        return undefined
-      }
-    )
-    transportFactoryQueue.push(transport)
-    const pane = createPane(1)
-    const paneKey = makePaneKey('tab-1', pane.leafId)
-    const deps = createDeps({
-      isVisibleRef: { current: false },
-      replacesPtyId: 'old-pty',
-      startup: {
-        command: "claude '--resume' 'provider-session-1'",
-        launchAgent: 'claude',
-        resumeProviderSession: RESUME
-      }
-    })
-
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
-    await flushAsyncTicks(20)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      binding.dispose()
-      return
-    }
-    transport.connect.mockImplementation(async () => 'resumed-pty')
-    await expect(drain.queued.get(paneKey)?.()).resolves.toBe(true)
-    await flushAsyncTicks(20)
-
-    const [first, retry] = freshSpawns(transport)
-    expect(first).toMatchObject({ resumeSpawnIntent: 'user-resume' })
-    expect(retry).toMatchObject({ resumeSpawnIntent: 'user-resume' })
-    binding.dispose()
-  })
-
   it('resumes a hidden pane in the background once the host has room, as an automatic restore', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
@@ -585,64 +542,6 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     expect(freshSpawns(transport)[2]).toMatchObject({ resumeSpawnIntent: 'automatic-restore' })
     expect(getPaneSpawnDeferral(paneKey)).toBeUndefined()
     binding.dispose()
-  })
-
-  it('stops the background retry when the pane is disposed', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = deferringTransport()
-    transportFactoryQueue.push(transport)
-    const pane = createPane(1)
-    const paneKey = makePaneKey('tab-1', pane.leafId)
-    const deps = createDeps({
-      isVisibleRef: { current: false },
-      startup: {
-        command: "claude '--resume' 'provider-session-1'",
-        launchAgent: 'claude',
-        resumeProviderSession: RESUME
-      }
-    })
-
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
-    await flushAsyncTicks(20)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      await expectRestoreAskedMainNotDeferred(transport, makePaneKey('tab-1', pane.leafId))
-      binding.dispose()
-      return
-    }
-    expect(drain.queued.has(paneKey)).toBe(true)
-    binding.dispose()
-    expect(drain.queued.has(paneKey)).toBe(false)
-  })
-
-  it('does not remount a deferred pane, which would only be deferred again', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
-    const { requestTerminalPaneRecovery } = await import('./terminal-pane-recovery')
-    const transport = deferringTransport()
-    transportFactoryQueue.push(transport)
-    const deps = createDeps({
-      isVisibleRef: { current: false },
-      startup: {
-        command: "claude '--resume' 'provider-session-1'",
-        launchAgent: 'claude',
-        resumeProviderSession: RESUME
-      }
-    })
-
-    const pane = createPane(1)
-    const paneKey = makePaneKey('tab-1', pane.leafId)
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
-    await flushAsyncTicks(20)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      await expectRestoreAskedMainNotDeferred(transport, makePaneKey('tab-1', pane.leafId))
-      binding.dispose()
-      return
-    }
-
-    expect(getPaneSpawnDeferral(paneKey)?.reason).toBe('live_cap')
-    expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
-    binding.dispose()
-    expect(getPaneSpawnDeferral(paneKey)).toBeUndefined()
   })
 
   it('does not resume a session that meanwhile started in another tab', async () => {

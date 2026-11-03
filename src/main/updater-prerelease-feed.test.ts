@@ -13,11 +13,11 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock, request: netRequestMock }
 }))
 
-function buildAtomFeed(tags: string[]): string {
+function buildAtomFeed(tags: string[], updatedAt: Record<string, string> = {}): string {
   const entries = tags
     .map(
       (tag) =>
-        `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
+        `<entry>${updatedAt[tag] ? `<updated>${updatedAt[tag]}</updated>` : ''}<link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
     )
     .join('')
   return `<?xml version="1.0" encoding="UTF-8"?><feed>${entries}</feed>`
@@ -38,7 +38,8 @@ function respondWithAtom(
   tags: string[],
   missingManifestTags: string[] = [],
   missingAssetTags: string[] = [],
-  unavailableManifestTags: string[] = []
+  unavailableManifestTags: string[] = [],
+  updatedAt: Record<string, string> = {}
 ): void {
   const missingManifests = new Set(missingManifestTags)
   const missingAssets = new Set(missingAssetTags)
@@ -47,7 +48,7 @@ function respondWithAtom(
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
       return Promise.resolve({
         ok: true,
-        text: () => Promise.resolve(buildAtomFeed(tags))
+        text: () => Promise.resolve(buildAtomFeed(tags, updatedAt))
       })
     }
 
@@ -402,5 +403,71 @@ describe('fetchNewerReleaseTag', () => {
 
     await expect(result).resolves.toEqual([])
     expect(netFetchMock).toHaveBeenCalledTimes(7)
+  })
+})
+
+describe('fetchNewerReleaseTagsWithReadiness update delay', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const NOW = Date.parse('2026-11-02T12:00:00Z')
+  const daysAgo = (days: number): string => new Date(NOW - days * DAY_MS).toISOString()
+  const delay = { includePrerelease: false, minReleaseAgeMs: 7 * DAY_MS, now: NOW }
+
+  beforeEach(() => {
+    vi.resetModules()
+    netFetchMock.mockReset()
+    netRequestMock.mockReset()
+    installNetRequestFetchAdapter(netRequestMock, netFetchMock)
+  })
+
+  it('offers the newest release past the delay and reports the newer one it holds', async () => {
+    respondWithAtom(['v1.4.3', 'v1.4.2', 'v1.4.1'], [], [], [], {
+      'v1.4.3': daysAgo(1),
+      'v1.4.2': daysAgo(8),
+      'v1.4.1': daysAgo(20)
+    })
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const result = await fetchNewerReleaseTagsWithReadiness('1.4.1', 1, delay)
+    expect(result.tags).toEqual(['v1.4.2'])
+    expect(result.releaseDelay?.heldRelease).toEqual({
+      tag: 'v1.4.3',
+      version: '1.4.3',
+      releasedAt: NOW - DAY_MS
+    })
+  })
+
+  it('holds everything when every newer release is inside the delay', async () => {
+    respondWithAtom(['v1.4.3', 'v1.4.2'], [], [], [], {
+      'v1.4.3': daysAgo(1),
+      'v1.4.2': daysAgo(3)
+    })
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const result = await fetchNewerReleaseTagsWithReadiness('1.4.1', 1, delay)
+    expect(result).toMatchObject({ tags: [], state: 'no-newer' })
+    expect(result.releaseDelay?.heldRelease?.tag).toBe('v1.4.3')
+  })
+
+  it('fails closed for releases without a feed timestamp', async () => {
+    respondWithAtom(['v1.4.2'])
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const result = await fetchNewerReleaseTagsWithReadiness('1.4.1', 1, delay)
+    expect(result.tags).toEqual([])
+    expect(result.releaseDelay?.heldRelease).toEqual({
+      tag: 'v1.4.2',
+      version: '1.4.2',
+      releasedAt: null
+    })
+  })
+
+  it('requires a known old timestamp for a stable-fallback tag', async () => {
+    respondWithAtom(['v1.4.3'], [], [], [], { 'v1.4.3': daysAgo(9) })
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const aged = await fetchNewerReleaseTagsWithReadiness('1.4.3', 1, delay)
+    expect(aged.releaseDelay?.isTagOldEnough('v1.4.3')).toBe(true)
+    expect(aged.releaseDelay?.isTagOldEnough('v1.4.0')).toBe(false)
+    expect(aged.releaseDelay?.isTagOldEnough('v1.4.4')).toBe(false)
+
+    respondWithAtom(['v1.4.3'], [], [], [], { 'v1.4.3': daysAgo(2) })
+    const fresh = await fetchNewerReleaseTagsWithReadiness('1.4.3', 1, delay)
+    expect(fresh.releaseDelay?.isTagOldEnough('v1.4.3')).toBe(false)
   })
 })

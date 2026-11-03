@@ -155,7 +155,7 @@ describeRender(
       const opened = await openRoute(HUB_ROUTE, 'Source Control')
       const text = await opened.page.evaluate(() => document.body.innerText)
       // Require hub segment chips, beyond generic header text.
-      for (const chip of ['Changes', 'Pull Request', 'Commits']) {
+      for (const chip of ['Changes', 'Pull request']) {
         expect(text).toContain(chip)
       }
       expect(text).not.toContain(UNMATCHED)
@@ -169,7 +169,7 @@ describeRender(
       const text = await opened.page.evaluate(() => document.body.innerText)
       // The review body (loading, waiting or failed) distinguishes the diff screen from the hub, which shares the Changes title.
       expect(text).toMatch(/review/i)
-      expect(text).not.toContain('Pull Request')
+      expect(text).not.toContain('Pull request')
       expect(text).not.toContain(UNMATCHED)
       expect(opened.errors).toEqual([])
       expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
