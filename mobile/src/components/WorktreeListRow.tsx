@@ -80,6 +80,12 @@ function WorktreeListRowComponent({
     .join(', ')
   // Why: the desktop's compact card keeps an icon-only glyph for remote projects after the host badge goes.
   const showHostGlyph = !cardDetails.metaRow && isRemoteExecutionHostId(hostId)
+  const showHostBadge =
+    cardDetails.host && Boolean(item.hostContextLabel || item.hostContextHealthLabel)
+  // Why: like the desktop, skip a blank meta lane when every part of it is off.
+  const showMetaRow =
+    cardDetails.metaRow &&
+    (lineageDepth > 0 || showHostBadge || showRepoInMetaRow || cardDetails.identity)
   // Agent rows take their own taps, so they share the card's long-press menu.
   const openActions = onLongPress
     ? () => {
@@ -164,7 +170,7 @@ function WorktreeListRowComponent({
             <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
           ) : null}
         </View>
-        {cardDetails.metaRow && (
+        {showMetaRow && (
           <View style={styles.worktreeMetaRow}>
             {lineageDepth > 0 && (
               <View style={styles.childBadge}>
@@ -174,7 +180,7 @@ function WorktreeListRowComponent({
                 </Text>
               </View>
             )}
-            {cardDetails.host && (item.hostContextLabel || item.hostContextHealthLabel) ? (
+            {showHostBadge ? (
               <View
                 style={[styles.childBadge, styles.hostBadge]}
                 accessibilityLabel={hostAccessibilityLabel}
@@ -204,9 +210,11 @@ function WorktreeListRowComponent({
                 </Text>
               </>
             )}
-            <Text style={styles.branchName} numberOfLines={1}>
-              {metaText}
-            </Text>
+            {cardDetails.identity && (
+              <Text style={styles.branchName} numberOfLines={1}>
+                {metaText}
+              </Text>
+            )}
           </View>
         )}
         {/* Match desktop agent activity only; plain terminal shell-output tails stay hidden. */}

@@ -554,11 +554,27 @@ describe('memoized worktree rows', () => {
       expect(badgeTexts).toContain('#7')
     })
 
-    it('uses the chip under the new card style but keeps the branch line', async () => {
+    it('uses the chip under the new card style and shows branch or folder path only with Branch on', async () => {
+      const folder: TestItem = {
+        ...baseItem,
+        workspaceKind: 'folder-workspace',
+        path: '/Users/me/notes'
+      }
       await render({ cardDetails: NEW_CARD_STYLE })
       expect(repoChips()).toHaveLength(1)
       expect(texts()).not.toContain('orca')
+      expect(texts()).not.toContain('feature/mobile-list')
+      await render({ item: folder, cardDetails: NEW_CARD_STYLE })
+      expect(texts()).not.toContain('/Users/me/notes')
+
+      const withBranch = getWorktreeCardDetails([...DEFAULT_WORKTREE_CARD_PROPERTIES, 'branch'], {
+        compactWorktreeCards: false,
+        newCardStyle: true
+      })
+      await render({ cardDetails: withBranch })
       expect(texts()).toContain('feature/mobile-list')
+      await render({ item: folder, cardDetails: withBranch })
+      expect(texts()).toContain('/Users/me/notes')
     })
   })
 
