@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import Image from '@tiptap/extension-image'
 import { TableKit } from '@tiptap/extension-table'
 import { TextSelection, Plugin } from '@tiptap/pm/state'
 import { CellSelection, tableEditingKey } from '@tiptap/pm/tables'
@@ -23,15 +24,22 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-function surface(integrated = true) {
+function surface(
+  integrated = true,
+  content = '<h1>Heading stays</h1><p>lower target</p>' +
+    '<table><tr><td>alpha</td><td>beta</td></tr><tr><td>gamma</td><td>delta</td></tr></table>'
+) {
   const host = document.createElement('div')
   document.body.append(host)
   const editor = new Editor({
     element: host,
-    extensions: [StarterKit, TableKit, ...(integrated ? [DragSelectionGuard] : [])],
-    content:
-      '<h1>Heading stays</h1><p>lower target</p>' +
-      '<table><tr><td>alpha</td><td>beta</td></tr><tr><td>gamma</td><td>delta</td></tr></table>',
+    extensions: [
+      StarterKit,
+      TableKit,
+      Image.configure({ inline: true }),
+      ...(integrated ? [DragSelectionGuard] : [])
+    ],
+    content,
     editorProps: { handleDOMEvents: integrated ? richMarkdownSelectionCompletionEvents : {} }
   })
   editors.push(editor)
@@ -511,4 +519,151 @@ it('projects current navigation when a real NodeView changes the accepted model 
   vi.runAllTimers()
   expect(editor.state.selection.from).toBe(1)
   expect(editor.state.selection.to).toBe(8)
+})
+
+it.each(['up', 'outside', 'no-buttons', 'multiple-click'] as const)(
+  'publishes completed native pointer input before notification or consumption (%s)',
+  (terminal) => {
+    vi.useFakeTimers()
+    const editor = surface(
+      true,
+      '<p>Before atom</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></p><p>After atom</p>'
+    )
+    try {
+      editor.view.focus()
+      vi.advanceTimersByTime(400)
+      let imagePosition: number | undefined
+      editor.state.doc.descendants((node, position) => {
+        if (node.type.name === 'image') {
+          imagePosition = position
+        }
+      })
+      const paragraph = editor.view.dom.querySelector('p')
+      const text = paragraph?.firstChild
+      const native = document.getSelection()
+      if (imagePosition === undefined || !paragraph || !text || !native) {
+        throw new Error('Expected image and adjacent native text')
+      }
+      editor.commands.setNodeSelection(imagePosition)
+      const target = editor.view.posAtDOM(text, 6)
+      vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: target, inside: -1 })
+      const press = () =>
+        fireEvent.mouseDown(paragraph, { button: 0, buttons: 1, clientX: 20, clientY: 10 })
+      press()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Observe the actual pinned engine tracker without replacing its terminal handlers.
+      const engine = editor.view as Editor['view'] & {
+        input: { mouseDown: { allowDefault: boolean } | null }
+      }
+      expect(engine.input.mouseDown?.allowDefault).toBe(false)
+      if (terminal === 'multiple-click') {
+        native.setBaseAndExtent(text, 6, text, 6)
+        fireEvent.mouseUp(paragraph, { button: 0, clientX: 20, clientY: 10 })
+        fireEvent.click(paragraph, { button: 0, detail: 1 })
+        vi.advanceTimersByTime(20)
+        press()
+        expect(engine.input.mouseDown).toBeNull()
+      }
+      const anchor = terminal === 'multiple-click' ? 7 : 6
+      const head = terminal === 'multiple-click' ? 11 : 6
+      // Supply browser placement as input; no selectionchange task may rescue this terminal.
+      native.setBaseAndExtent(text, anchor, text, head)
+      const publications = vi.fn()
+      editor.on('selectionUpdate', publications)
+      const writes = vi.spyOn(native, 'setBaseAndExtent')
+      if (terminal === 'no-buttons') {
+        fireEvent.mouseMove(document, { buttons: 0, clientX: 80, clientY: 10 })
+      } else {
+        fireEvent.mouseUp(terminal === 'outside' ? document.body : paragraph, {
+          button: 0,
+          clientX: 20,
+          clientY: 10
+        })
+        if (terminal === 'multiple-click') {
+          fireEvent.click(paragraph, { button: 0, detail: 2 })
+        }
+      }
+      expect(editor.state.selection.toJSON()).toEqual({
+        type: 'text',
+        anchor: editor.view.posAtDOM(text, anchor),
+        head: editor.view.posAtDOM(text, head)
+      })
+      expect(engine.input.mouseDown).toBeNull()
+      expect(publications).toHaveBeenCalledOnce()
+      expect(writes).toHaveBeenCalledOnce()
+      if (terminal === 'up') {
+        fireEvent.click(paragraph, { button: 0, detail: 1 })
+      }
+      document.dispatchEvent(new Event('selectionchange'))
+      vi.runAllTimers()
+      expect(publications).toHaveBeenCalledOnce()
+      expect(writes).toHaveBeenCalledOnce()
+      expect(editor.view.dom.querySelectorAll('img')).toHaveLength(1)
+      const data = new DataTransfer()
+      fireEvent(
+        editor.view.dom,
+        new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: data })
+      )
+      expect(data.getData('text/plain')).toBe(terminal === 'multiple-click' ? 'atom' : '')
+      editor.commands.insertContent('xy')
+      expect(editor.view.dom.querySelector('p')?.textContent).toBe(
+        terminal === 'multiple-click' ? 'Before xy' : 'Beforexy atom'
+      )
+      expect(editor.view.dom.querySelectorAll('img')).toHaveLength(1)
+      expect(editor.view.dom.querySelector('p:last-child')?.textContent).toBe('After atom')
+    } finally {
+      editor.destroy()
+    }
+  }
+)
+
+it('keeps a handled rich click and a later foreign-owned release authoritative', () => {
+  vi.useFakeTimers()
+  const editor = surface(true, '<p>lower caret</p><hr><p>after</p>')
+  const input = document.createElement('input')
+  document.body.append(input)
+  try {
+    editor.view.focus()
+    vi.advanceTimersByTime(400)
+    const paragraph = editor.view.dom.querySelector('p')
+    const text = paragraph?.firstChild
+    const native = document.getSelection()
+    if (!paragraph || !text || !native) {
+      throw new Error('Expected native click text')
+    }
+    const rule = editor.state.doc.child(0).nodeSize
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 3, inside: -1 })
+    editor.view.setProps({
+      handleClick: () => {
+        editor.commands.setNodeSelection(rule)
+        return true
+      }
+    })
+    fireEvent.mouseDown(paragraph, { button: 0, buttons: 1, clientX: 20, clientY: 10 })
+    native.setBaseAndExtent(text, 2, text, 2)
+    const publications = vi.fn()
+    editor.on('selectionUpdate', publications)
+    fireEvent.mouseUp(paragraph, { button: 0, clientX: 20, clientY: 10 })
+    const accepted = editor.state.selection
+    expect(accepted.toJSON()).toEqual({ type: 'node', anchor: rule })
+    fireEvent.click(paragraph, { button: 0 })
+    expect(editor.state.selection.eq(accepted)).toBe(true)
+    expect(publications).toHaveBeenCalledOnce()
+    vi.runAllTimers()
+
+    fireEvent.mouseDown(paragraph, { button: 0, buttons: 1, clientX: 1000, clientY: 10 })
+    input.focus()
+    editor.commands.setTextSelection({ from: 7, to: 12 })
+    const current = editor.state.selection
+    native.setBaseAndExtent(text, 0, text, 1)
+    publications.mockClear()
+    fireEvent.mouseUp(document.body, { button: 0, clientX: 1000, clientY: 10 })
+    fireEvent.click(paragraph, { button: 0 })
+    vi.runAllTimers()
+    expect(editor.state.selection.eq(current)).toBe(true)
+    expect(document.activeElement).toBe(input)
+    expect(publications).not.toHaveBeenCalled()
+    expect(editor.getText()).toBe('lower caret\n\nafter')
+  } finally {
+    editor.destroy()
+  }
 })

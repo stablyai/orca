@@ -77,16 +77,17 @@ diff --git a/dist/index.cjs b/dist/index.cjs
      }
      if (sel.visible) {
        view.dom.classList.remove("ProseMirror-hideselection");
-@@ -2965,7 +2988,7 @@
+@@ -2965,7 +2988,8 @@
    var _loop2 = function _loop2() {
      var handler = handlers[event];
      view.dom.addEventListener(event, view.input.eventHandlers[event] = function (event) {
 -      if (eventBelongsToView(view, event) && !runCustomHandler(view, event) && (view.editable || !(event.type in editHandlers))) handler(view, event);
-+      if (eventBelongsToView(view, event)) runInputHandler(view, event, handler);
++      if (event.type == "click" && !view.someProp("nativeSelectionIntegration")) runCustomHandler(view, event);
++      else if (eventBelongsToView(view, event)) runInputHandler(view, event, handler);
      }, passiveHandlers[event] ? {
        passive: true
      } : undefined);
-@@ -2998,6 +3021,8 @@
+@@ -2998,6 +3022,8 @@
  }
  function runCustomHandler(view, event) {
    return view.someProp("handleDOMEvents", function (handlers) {
@@ -95,7 +96,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
      var handler = handlers[event.type];
      return handler ? handler(view, event) || event.defaultPrevented : false;
    });
-@@ -3008,9 +3033,23 @@
+@@ -3008,9 +3034,23 @@
    for (var node = event.target; node != view.dom; node = node.parentNode) if (!node || node.nodeType == 11 || node.pmViewDesc && node.pmViewDesc.stopEvent(event)) return false;
    return true;
  }
@@ -121,7 +122,56 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  editHandlers.keydown = function (view, _event) {
    var event = _event;
    view.input.shiftKey = event.keyCode == 16 || event.shiftKey;
-@@ -3668,7 +3707,14 @@
+@@ -3167,6 +3207,13 @@
+   return endComposition(view);
+ }
+ var selectNodeModifier = mac ? "metaKey" : "ctrlKey";
++function completePointerSelection(view, event, button = event.button) {
++  if (button == 0 && (event.type != "mouseup" || event.button == 0) && !event.defaultPrevented &&
++      !view.isDestroyed && view.someProp("nativeSelectionIntegration") && view.hasFocus())
++    view.completeNativeSelection()
++}
++handlers.click = function (view, event) { completePointerSelection(view, event); };
++
+ handlers.mousedown = function (view, _event) {
+   var event = _event;
+   view.input.shiftKey = event.shiftKey;
+@@ -3290,12 +3337,16 @@
+     key: "up",
+     value: function up(event) {
+       this.done();
+-      if (!this.view.dom.contains(event.target)) return;
++      if (!this.view.dom.contains(event.target)) {
++        completePointerSelection(this.view, event, this.event.button);
++        return;
++      }
+       var pos = this.pos;
+       if (this.view.state.doc != this.startDoc) pos = this.view.posAtCoords(eventCoords(event));
+       this.updateAllowDefault(event);
+       if (this.allowDefault || !pos) {
+         setSelectionOrigin(this.view, "pointer");
++        completePointerSelection(this.view, event, this.event.button);
+       } else if (handleSingleClick(this.view, pos.pos, pos.inside, event, this.selectNode)) {
+         event.preventDefault();
+       } else if (event.button == 0 && (this.flushed || safari && this.mightDrag && !this.mightDrag.node.isAtom || chrome && !this.view.state.selection.visible && Math.min(Math.abs(pos.pos - this.view.state.selection.from), Math.abs(pos.pos - this.view.state.selection.to)) <= 2)) {
+@@ -3303,11 +3354,16 @@
+         event.preventDefault();
+       } else {
+         setSelectionOrigin(this.view, "pointer");
++        completePointerSelection(this.view, event, this.event.button);
+       }
+     }
+   }, {
+     key: "move",
+     value: function move(event) {
++      if (event.buttons == 0 && !this.allowDefault) {
++        completePointerSelection(this.view, event, this.event.button);
++        if (this.view.isDestroyed || this.view.input.mouseDown != this) return;
++      }
+       this.updateAllowDefault(event);
+       setSelectionOrigin(this.view, "pointer");
+       _get(_getPrototypeOf(LeftMouseDown.prototype), "move", this).call(this, event);
+@@ -3668,7 +3724,14 @@
      view.domObserver.start();
      view.focused = true;
      setTimeout(function () {
@@ -137,7 +187,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
      }, 20);
    }
  };
-@@ -4326,6 +4372,112 @@
+@@ -4326,6 +4389,112 @@
    }]);
    return SelectionState;
  }();
@@ -250,7 +300,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  var DOMObserver = function () {
    function DOMObserver(view, handleDOMChange) {
      var _this12 = this;
-@@ -4433,6 +4585,7 @@
+@@ -4433,6 +4602,7 @@
    }, {
      key: "onSelectionChange",
      value: function onSelectionChange() {
@@ -258,7 +308,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
        if (!hasFocusAndSelection(this.view)) return;
        if (this.suppressingSelectionUpdates) return selectionToDOM(this.view);
        if (ie && ie_version <= 11 && !this.view.state.selection.empty) {
-@@ -4487,13 +4640,16 @@
+@@ -4487,13 +4657,16 @@
      }
    }, {
      key: "flush",
@@ -277,7 +327,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
        var from = -1,
          to = -1,
          typeOver = false,
-@@ -4560,12 +4716,20 @@
+@@ -4560,12 +4733,20 @@
            }
          }
        }
@@ -301,7 +351,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
        } else if (from > -1 || newSel) {
          if (from > -1) {
            view.docView.markDirty(from, to);
-@@ -4813,18 +4977,34 @@
+@@ -4813,18 +4994,34 @@
    var compositionID = view.input.compositionPendingChanges || (view.composing ? view.input.compositionID : 0);
    view.input.compositionPendingChanges = 0;
    if (from < 0) {
@@ -348,7 +398,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
    }
    var $before = view.state.doc.resolve(from);
    var shared = $before.sharedDepth(to);
-@@ -5195,11 +5375,11 @@
+@@ -5195,11 +5392,11 @@
      }
    }, {
      key: "scrollToSelection",
@@ -362,7 +412,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
        })) ;else if (this.state.selection instanceof prosemirrorState.NodeSelection) {
          var target = this.docView.domAfterPos(this.state.selection.from);
          if (target.nodeType == 1) scrollRectIntoView(this, target.getBoundingClientRect(), startDOM);
-@@ -5282,10 +5462,15 @@
+@@ -5282,10 +5479,15 @@
    }, {
      key: "focus",
      value: function focus() {
@@ -382,7 +432,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
      }
    }, {
      key: "root",
-@@ -5389,6 +5574,9 @@
+@@ -5389,6 +5591,9 @@
        return this.docView == null;
      }
    }, {
@@ -531,18 +581,19 @@ diff --git a/dist/index.js b/dist/index.js
              view.dom.classList.remove("ProseMirror-hideselection");
          }
          else {
-@@ -3132,9 +3157,7 @@
+@@ -3132,9 +3157,8 @@
      for (let event in handlers) {
          let handler = handlers[event];
          view.dom.addEventListener(event, view.input.eventHandlers[event] = (event) => {
 -            if (eventBelongsToView(view, event) && !runCustomHandler(view, event) &&
 -                (view.editable || !(event.type in editHandlers)))
 -                handler(view, event);
-+            if (eventBelongsToView(view, event)) runInputHandler(view, event, handler);
++            if (event.type == "click" && !view.someProp("nativeSelectionIntegration")) runCustomHandler(view, event);
++            else if (eventBelongsToView(view, event)) runInputHandler(view, event, handler);
          }, passiveHandlers[event] ? { passive: true } : undefined);
      }
      // On Safari, for reasons beyond my understanding, adding an input
-@@ -3166,6 +3189,8 @@
+@@ -3166,6 +3190,8 @@
  }
  function runCustomHandler(view, event) {
      return view.someProp("handleDOMEvents", handlers => {
@@ -551,7 +602,7 @@ diff --git a/dist/index.js b/dist/index.js
          let handler = handlers[event.type];
          return handler ? handler(view, event) || event.defaultPrevented : false;
      });
-@@ -3181,10 +3206,22 @@
+@@ -3181,10 +3207,22 @@
              return false;
      return true;
  }
@@ -577,7 +628,55 @@ diff --git a/dist/index.js b/dist/index.js
  }
  editHandlers.keydown = (view, _event) => {
      let event = _event;
-@@ -3909,8 +3946,14 @@
+@@ -3349,6 +3387,13 @@
+     return endComposition(view);
+ }
+ const selectNodeModifier = mac ? "metaKey" : "ctrlKey";
++function completePointerSelection(view, event, button = event.button) {
++  if (button == 0 && (event.type != "mouseup" || event.button == 0) && !event.defaultPrevented &&
++      !view.isDestroyed && view.someProp("nativeSelectionIntegration") && view.hasFocus())
++    view.completeNativeSelection()
++}
++handlers.click = (view, event) => completePointerSelection(view, event)
++
+ handlers.mousedown = (view, _event) => {
+     let event = _event;
+     view.input.shiftKey = event.shiftKey;
+@@ -3463,14 +3508,17 @@
+     }
+     up(event) {
+         this.done();
+-        if (!this.view.dom.contains(event.target))
++        if (!this.view.dom.contains(event.target)) {
++            completePointerSelection(this.view, event, this.event.button);
+             return;
++        }
+         let pos = this.pos;
+         if (this.view.state.doc != this.startDoc)
+             pos = this.view.posAtCoords(eventCoords(event));
+         this.updateAllowDefault(event);
+         if (this.allowDefault || !pos) {
+             setSelectionOrigin(this.view, "pointer");
++            completePointerSelection(this.view, event, this.event.button);
+         }
+         else if (handleSingleClick(this.view, pos.pos, pos.inside, event, this.selectNode)) {
+             event.preventDefault();
+@@ -3493,9 +3541,14 @@
+         }
+         else {
+             setSelectionOrigin(this.view, "pointer");
++            completePointerSelection(this.view, event, this.event.button);
+         }
+     }
+     move(event) {
++        if (event.buttons == 0 && !this.allowDefault) {
++            completePointerSelection(this.view, event, this.event.button);
++            if (this.view.isDestroyed || this.view.input.mouseDown != this) return;
++        }
+         this.updateAllowDefault(event);
+         setSelectionOrigin(this.view, "pointer");
+         super.move(event);
+@@ -3909,8 +3962,14 @@
          view.domObserver.start();
          view.focused = true;
          setTimeout(() => {
@@ -594,7 +693,7 @@ diff --git a/dist/index.js b/dist/index.js
          }, 20);
      }
  };
-@@ -4665,6 +4708,112 @@
+@@ -4665,6 +4724,112 @@
              sel.focusNode == this.focusNode && sel.focusOffset == this.focusOffset;
      }
  }
@@ -707,7 +806,7 @@ diff --git a/dist/index.js b/dist/index.js
  class DOMObserver {
      constructor(view, handleDOMChange) {
          this.view = view;
-@@ -4752,6 +4901,7 @@
+@@ -4752,6 +4917,7 @@
          setTimeout(() => this.suppressingSelectionUpdates = false, 50);
      }
      onSelectionChange() {
@@ -715,7 +814,7 @@ diff --git a/dist/index.js b/dist/index.js
          if (!hasFocusAndSelection(this.view))
              return;
          if (this.suppressingSelectionUpdates)
-@@ -4796,15 +4946,18 @@
+@@ -4796,15 +4962,18 @@
                  this.queue.push(mut);
          return this.queue;
      }
@@ -736,7 +835,7 @@ diff --git a/dist/index.js b/dist/index.js
          let from = -1, to = -1, typeOver = false, added = [];
          if (view.editable) {
              for (let i = 0; i < mutations.length; i++) {
-@@ -4853,18 +5006,20 @@
+@@ -4853,18 +5022,20 @@
                  }
              }
          }
@@ -766,7 +865,7 @@ diff --git a/dist/index.js b/dist/index.js
          }
          else if (from > -1 || newSel) {
              if (from > -1) {
-@@ -5108,13 +5263,28 @@
+@@ -5108,13 +5279,28 @@
      let compositionID = view.input.compositionPendingChanges || (view.composing ? view.input.compositionID : 0);
      view.input.compositionPendingChanges = 0;
      if (from < 0) {
@@ -796,7 +895,7 @@ diff --git a/dist/index.js b/dist/index.js
              let tr = view.state.tr.setSelection(newSel);
              if (origin == "pointer")
                  tr.setMeta("pointer", true);
-@@ -5126,6 +5296,7 @@
+@@ -5126,6 +5312,7 @@
          }
          return;
      }
@@ -804,7 +903,7 @@ diff --git a/dist/index.js b/dist/index.js
      let $before = view.state.doc.resolve(from);
      let shared = $before.sharedDepth(to);
      from = $before.before(shared + 1);
-@@ -5626,10 +5797,10 @@
+@@ -5626,10 +5813,10 @@
      /**
      @internal
      */
@@ -817,7 +916,7 @@ diff --git a/dist/index.js b/dist/index.js
          else if (this.state.selection instanceof NodeSelection) {
              let target = this.docView.domAfterPos(this.state.selection.from);
              if (target.nodeType == 1)
-@@ -5726,11 +5897,15 @@
+@@ -5726,11 +5913,15 @@
      Focus the editor.
      */
      focus() {
@@ -838,7 +937,7 @@ diff --git a/dist/index.js b/dist/index.js
      }
      /**
      Get the document root in which the editor exists. This will
-@@ -5890,6 +6065,7 @@
+@@ -5890,6 +6081,7 @@
      /**
      Used for testing.
      */
@@ -1170,18 +1269,19 @@ diff --git a/src/index.ts b/src/index.ts
 diff --git a/src/input.ts b/src/input.ts
 --- a/src/input.ts
 +++ b/src/input.ts
-@@ -47,9 +47,7 @@
+@@ -47,9 +47,8 @@
    for (let event in handlers) {
      let handler = handlers[event]
      view.dom.addEventListener(event, view.input.eventHandlers[event] = (event: Event) => {
 -      if (eventBelongsToView(view, event) && !runCustomHandler(view, event) &&
 -          (view.editable || !(event.type in editHandlers)))
 -        handler(view, event)
-+      if (eventBelongsToView(view, event)) runInputHandler(view, event, handler)
++      if (event.type == "click" && !view.someProp("nativeSelectionIntegration")) runCustomHandler(view, event)
++      else if (eventBelongsToView(view, event)) runInputHandler(view, event, handler)
      }, passiveHandlers[event] ? {passive: true} : undefined)
    }
    // On Safari, for reasons beyond my understanding, adding an input
-@@ -83,6 +81,8 @@
+@@ -83,6 +82,8 @@
  
  function runCustomHandler(view: EditorView, event: Event) {
    return view.someProp("handleDOMEvents", handlers => {
@@ -1190,7 +1290,7 @@ diff --git a/src/input.ts b/src/input.ts
      let handler = handlers[event.type]
      return handler ? handler(view, event) || event.defaultPrevented : false
    })
-@@ -98,10 +98,22 @@
+@@ -98,10 +99,22 @@
    return true
  }
  
@@ -1216,7 +1316,57 @@ diff --git a/src/input.ts b/src/input.ts
  }
  
  editHandlers.keydown = (view: EditorView, _event: Event) => {
-@@ -840,8 +852,14 @@
+@@ -277,6 +290,13 @@
+ 
+ const selectNodeModifier: keyof MouseEvent = browser.mac ? "metaKey" : "ctrlKey"
+ 
++function completePointerSelection(view: EditorView, event: MouseEvent, button = event.button) {
++  if (button == 0 && (event.type != "mouseup" || event.button == 0) && !event.defaultPrevented &&
++      !view.isDestroyed && view.someProp("nativeSelectionIntegration") && view.hasFocus())
++    view.completeNativeSelection()
++}
++handlers.click = (view, event) => completePointerSelection(view, event as MouseEvent)
++
+ handlers.mousedown = (view, _event) => {
+   let event = _event as MouseEvent
+   view.input.shiftKey = event.shiftKey
+@@ -401,8 +421,10 @@
+   up(event: MouseEvent) {
+     this.done()
+ 
+-    if (!this.view.dom.contains(event.target as HTMLElement))
++    if (!this.view.dom.contains(event.target as HTMLElement)) {
++      completePointerSelection(this.view, event, this.event.button)
+       return
++    }
+ 
+     let pos: {pos: number, inside: number} | null = this.pos
+     if (this.view.state.doc != this.startDoc) pos = this.view.posAtCoords(eventCoords(event))
+@@ -410,6 +432,7 @@
+     this.updateAllowDefault(event)
+     if (this.allowDefault || !pos) {
+       setSelectionOrigin(this.view, "pointer")
++      completePointerSelection(this.view, event, this.event.button)
+     } else if (handleSingleClick(this.view, pos.pos, pos.inside, event, this.selectNode)) {
+       event.preventDefault()
+     } else if (event.button == 0 &&
+@@ -430,10 +453,15 @@
+       event.preventDefault()
+     } else {
+       setSelectionOrigin(this.view, "pointer")
++      completePointerSelection(this.view, event, this.event.button)
+     }
+   }
+ 
+   move(event: MouseEvent) {
++    if (event.buttons == 0 && !this.allowDefault) {
++      completePointerSelection(this.view, event, this.event.button)
++      if (this.view.isDestroyed || this.view.input.mouseDown != this) return
++    }
+     this.updateAllowDefault(event)
+     setSelectionOrigin(this.view, "pointer")
+     super.move(event)
+@@ -840,8 +868,14 @@
      view.domObserver.start()
      view.focused = true
      setTimeout(() => {

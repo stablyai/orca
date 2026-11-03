@@ -794,11 +794,22 @@ describe('Find focus with editor-owned selection', () => {
     root.append(editor.view.dom, search)
     try {
       input.focus()
-      editor.view.dom
-        .querySelector('section')
-        ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
+      const completion = vi.spyOn(editor.view, 'completeNativeSelection')
+      const control = editor.view.dom.querySelector('section')
+      control?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
+      control?.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }))
       expect(handoff).not.toHaveBeenCalled()
+      expect(completion).not.toHaveBeenCalled()
       expect(document.activeElement).toBe(input)
+
+      editor.unregisterPlugin('dragSelectionGuard')
+      const customClick = vi.fn(() => false)
+      editor.view.setProps({ handleDOMEvents: { click: customClick } })
+      const unowned = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+      unowned.preventDefault()
+      control?.dispatchEvent(unowned)
+      expect(customClick).toHaveBeenCalledOnce()
+      expect(completion).not.toHaveBeenCalled()
     } finally {
       editor.destroy()
     }
