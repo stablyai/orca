@@ -369,17 +369,16 @@ export function NativeChatComposerField({
                   : undefined
               }
               placeholder={
-                launchPrompt
-                  ? launchPrompt.placeholder
-                  : editSession
-                    ? translate('components.native-chat.queuedMessages.editMessage', 'Edit message')
-                    : goalMode?.active
-                      ? translate(
-                          'components.native-chat.goal.placeholder',
-                          'Describe your goal, define measurable outcomes for best results'
-                        )
-                      : (unavailableHint ??
-                        nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
+                launchPrompt?.placeholder ??
+                (editSession
+                  ? translate('components.native-chat.queuedMessages.editMessage', 'Edit message')
+                  : goalMode?.active
+                    ? translate(
+                        'components.native-chat.goal.placeholder',
+                        'Describe your goal, define measurable outcomes for best results'
+                      )
+                    : (unavailableHint ??
+                      nativeChatComposerPlaceholder(hasPty, canSend, afterStop)))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.
               // An empty launch prompt also grows to fit a wrapping placeholder: a paragraph-wide float that keeps its height, with a zero-width margin box so the caret line stays put.
