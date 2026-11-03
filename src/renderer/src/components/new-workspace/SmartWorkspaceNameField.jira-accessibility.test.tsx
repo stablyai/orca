@@ -423,7 +423,7 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
 
     expect(
       await screen.findByRole('button', {
-        name: /ORCA-123.*Disambiguate Jira search.*Company Jira.*ada@example.com/
+        name: /ORCA-123.*Disambiguate Jira search.*Company Jira \(company\.atlassian\.net\).*ada@example.com/
       })
     ).not.toBeNull()
   })
@@ -470,7 +470,9 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
     })
     renderField()
 
-    const account = screen.getByRole('button', { name: /Company Jira.*ada@example.com/ })
+    const account = screen.getByRole('button', {
+      name: /Company Jira \(company\.atlassian\.net\).*ada@example.com/
+    })
     fireEvent.click(account)
     expect(jiraMock.selectAccount).toHaveBeenCalledWith('site-a')
   })

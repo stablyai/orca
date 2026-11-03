@@ -14,6 +14,7 @@ import {
   SelectItem
 } from '@/components/ui/select'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { getJiraSiteLabel } from '../../../../shared/jira/jira-site-label'
 export function TaskPageSourceBar({
   model
 }: {
@@ -218,7 +219,7 @@ export function TaskPageSourceBar({
                 </SelectItem>
                 {jiraSites.map((site) => (
                   <SelectItem key={site.id} value={site.id}>
-                    {site.displayName}
+                    {getJiraSiteLabel(site)}
                   </SelectItem>
                 ))}
               </SelectContent>

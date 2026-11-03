@@ -245,7 +245,7 @@ describe('Tasks source display', () => {
       taskSource: TaskProvider
       githubMode?: 'items' | 'project'
       selectedLinearWorkspace?: { id: string; organizationName: string }
-      selectedJiraSite?: { id: string; displayName: string }
+      selectedJiraSite?: { id: string; displayName: string; siteUrl: string }
     }) => {
       const fields = {
         githubMode: 'items',
@@ -284,9 +284,11 @@ describe('Tasks source display', () => {
       }).label
     ).toMatch(/^Linear · .+ · Acme$/)
     expect(
-      summary({ taskSource: 'jira', selectedJiraSite: { id: 'site', displayName: 'Acme Jira' } })
-        .label
-    ).toMatch(/^Jira · .+ · Acme Jira$/)
+      summary({
+        taskSource: 'jira',
+        selectedJiraSite: { id: 'site', displayName: 'Ada', siteUrl: 'https://acme.atlassian.net' }
+      }).label
+    ).toMatch(/^Jira · .+ · Ada \(acme\.atlassian\.net\)$/)
   })
 })
 
