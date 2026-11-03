@@ -93,3 +93,107 @@ it('preserves a stored equal surface on single-mode acceptance while keeping the
   })
   expect(f.result.current.agentArgsApply).toBe(true)
 })
+
+it.each(
+  (['claude', 'codex'] as const).flatMap((agent) =>
+    (['chat', 'terminal'] as const).map((surface) => ({ agent, surface }))
+  )
+)(
+  'dispatches the exact newly authored $agent $surface recipe through saved start against opposite Settings',
+  async ({ agent, surface }) => {
+    // Same stored tuple asserted by source-control-ai-settings-persistence.test.tsx's actual writers.
+    const recipe = {
+      agentId: agent,
+      surface,
+      agentArgs: '--add-dir "two words"',
+      commandInputTemplate: 'current {basePrompt}',
+      launchPreferences: {
+        agentId: agent,
+        modelSelection: {
+          base: 'default' as const,
+          model: { agentId: agent, value: agent === 'claude' ? 'sonnet' : 'gpt-5.5' },
+          options: { effort: { agentId: agent, value: 'high' } }
+        },
+        permissionMode: 'own' as const
+      }
+    }
+    const original = structuredClone(recipe)
+    const f = mountSourceDialog(recipe, recipe)
+    act(() =>
+      useAppStore.setState(({ settings }) => ({
+        settings: { ...settings!, nativeChatProviders: { [agent]: surface !== 'chat' } },
+        worktreesByRepo: { [f.repo.id]: [makeWorktree({ id: 'wt-writer', repoId: f.repo.id })] },
+        ensureDetectedAgents: async () => [agent]
+      }))
+    )
+    f.onStart.mockImplementation(async (launch) => {
+      expect(launch.agent).toBe(agent)
+      expect(launch.commandInput).toBe('current fix')
+      expect(launch.agentArgs).toBe('--add-dir "two words"')
+      expect(launch.sessionOptions).toEqual({
+        model: agent === 'claude' ? 'sonnet' : 'gpt-5.5',
+        effort: 'high',
+        permissionMode: 'own'
+      })
+      expect(launch.chatSessionOptions).toBeUndefined()
+      expect(launch.preferredSurface).toBe(surface === 'chat' ? 'chat' : undefined)
+      expect(launch.launchChoice?.requestedSurface).toBe(
+        surface === 'terminal' ? 'terminal' : undefined
+      )
+      expect(launch.launchChoice?.route).toBe(
+        surface === 'chat' ? 'structured-native-chat' : 'terminal-tui'
+      )
+      const plan = planAgentSessionLaunch(useAppStore.getState(), {
+        requestId: 'saved-writer',
+        agent: launch.agent,
+        workspace: { kind: 'git-worktree', worktreeId: 'wt-writer' },
+        prompt: launch.commandInput,
+        preferredSurface: launch.preferredSurface,
+        requestedSurface: launch.launchChoice?.requestedSurface,
+        launchOptions: launch.sessionOptions,
+        chatLaunchOptions: launch.chatSessionOptions
+      })
+      expect(plan.route).toBe(surface === 'chat' ? 'structured-native-chat' : 'terminal-tui')
+      expect(plan.prompt).toBe('current fix')
+      expect(plan.launchOptions).toEqual({
+        model: agent === 'claude' ? 'sonnet' : 'gpt-5.5',
+        effort: 'high',
+        permissionMode: 'own'
+      })
+      if (surface === 'chat') {
+        expect(plan).not.toHaveProperty('requestedSurface')
+      } else {
+        expect(plan.requestedSurface).toBe('terminal')
+      }
+      return true
+    })
+    const fallback = vi.fn()
+    const close = vi.fn()
+    const primary = renderHook(useSavedSourceControlActionStart)
+    await act(async () =>
+      primary.result.current.start({
+        selection: canonicalSourceControlActionSelection(recipe),
+        basePrompt: 'fix',
+        actionId: 'fixChecks',
+        repoId: f.repo.id,
+        repo: f.repo,
+        settings: useAppStore.getState().settings,
+        worktreeId: 'wt-writer',
+        connectionId: null,
+        promptDelivery: 'submit-after-ready',
+        launchPlatform: 'darwin',
+        launchSource: 'source_control_recovery',
+        onStart: f.onStart,
+        onClose: close,
+        onFallback: fallback
+      })
+    )
+    expect(f.onStart).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+    expect(fallback).not.toHaveBeenCalled()
+    expect(f.persist).not.toHaveBeenCalled()
+    expect(primary.result.current.isStarting).toBe(false)
+    expect(recipe).toEqual(original)
+    primary.unmount()
+  }
+)
