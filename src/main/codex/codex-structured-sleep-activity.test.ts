@@ -8,7 +8,7 @@ it('publishes the requested sleep duration and clears it before the next activit
   const threadId = sleepFrames[0]!.params.threadId
   const turnId = sleepFrames[0]!.params.turnId
   const translator = createCodexJournalTranslator({
-    sink: { appendItem: () => {}, publish: () => {}, setActivity },
+    sink: { appendItem: () => {}, appendTombstone: () => {}, publish: () => {}, setActivity },
     primaryThreadId: () => threadId
   })
   const notify = (method: string, params: unknown) =>

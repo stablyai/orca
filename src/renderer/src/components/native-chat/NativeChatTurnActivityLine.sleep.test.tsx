@@ -16,6 +16,7 @@ it.each(['en', 'fr'])('renders the sleep duration and clears it in %s', async (l
   const item = { type: 'sleep', id: 'sleep-1', durationMs: 600_000 }
   const line = (method: string) => ({
     thinking: false,
+    stopping: false,
     reasoning: null,
     reasoningExpanded: false,
     activityText: codexProviderFrameActivity(method, { item }) ?? null
