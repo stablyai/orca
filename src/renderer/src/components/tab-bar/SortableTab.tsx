@@ -293,7 +293,7 @@ export default function SortableTab({
       ) : (
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
-          <TabHostBadgeAndColor hostBadge={hostBadge} color={tab.color} hidden={false} />
+          <TabHostBadgeAndColor hostBadge={hostBadge} color={tab.color} />
         </div>
       )}
       {isExpanded && !isEditing && (

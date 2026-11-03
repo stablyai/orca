@@ -1,16 +1,12 @@
 import { Badge } from '@/components/ui/badge'
 
-type TabHostBadgeAndColorProps = { hostBadge: string | null; color: string | null; hidden: boolean }
+type TabHostBadgeAndColorProps = { hostBadge: string | null; color: string | null }
 
 /** Host badge and colour swatch beside a tab label; hidden while the tab is being renamed. */
 export function TabHostBadgeAndColor({
   hostBadge,
-  color,
-  hidden
+  color
 }: TabHostBadgeAndColorProps): React.JSX.Element | null {
-  if (hidden) {
-    return null
-  }
   return (
     <>
       {hostBadge ? (
