@@ -10,7 +10,12 @@ export function getFormatOnSaveSearchEntry() {
       'settings.editorFormatOnSave.description',
       'Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.'
     ),
-    keywords: ['formatter', 'format on save', 'prettier', 'biome', 'gofmt']
+    keywords: [
+      translate(
+        'settings.editorFormatOnSave.keywords',
+        'formatter format on save prettier biome gofmt'
+      )
+    ]
   }
 }
 

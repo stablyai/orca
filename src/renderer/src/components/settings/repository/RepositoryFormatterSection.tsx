@@ -19,7 +19,12 @@ export function getRepositoryFormatterSearchEntry() {
       'settings.repositoryFormatter.description',
       'Use this project’s formatter for Format on Save.'
     ),
-    keywords: ['formatter', 'format on save', 'prettier', 'biome', 'gofmt']
+    keywords: [
+      translate(
+        'settings.editorFormatOnSave.keywords',
+        'formatter format on save prettier biome gofmt'
+      )
+    ]
   }
 }
 
@@ -95,7 +100,10 @@ export function RepositoryFormatterSection({
               id={commandId}
               value={command}
               onChange={(event) => setCommand(event.target.value)}
-              placeholder='npx --no-install prettier --stdin-filepath "${file}"'
+              placeholder={translate(
+                'settings.repositoryFormatter.placeholder',
+                'npx --no-install prettier --stdin-filepath "${file}"'
+              )}
               variant="code"
               disabled={saving}
               aria-invalid={Boolean(error)}

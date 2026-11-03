@@ -1096,7 +1096,8 @@
     },
     "editorFormatOnSave": {
       "title": "Format on Save",
-      "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default."
+      "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
+      "keywords": "formatter format on save prettier biome gofmt"
     },
     "repositoryFormatter": {
       "title": "Formatter Command",
@@ -1107,7 +1108,8 @@
       "include": "Include globs (one per line)",
       "includeHelp": "Match paths relative to the workspace root. No matching glob means no formatting. Enable Format on Save in General > Editor to use this command.",
       "saving": "Saving…",
-      "save": "Save formatter"
+      "save": "Save formatter",
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
     }
   },
   "menu": {
