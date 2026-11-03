@@ -220,7 +220,8 @@ export async function prepareAutomationDispatchWorkspace(args: {
               dispatchToken,
               createRequestId: automationWorkspaceCreateRequestId
             },
-            clientAutomationProvenance: buildClientAutomationWorkspaceProvenance(automation, run)
+            clientAutomationProvenance: buildClientAutomationWorkspaceProvenance(automation, run),
+            ...(automation.setupTrustHash ? { approvedSetupHash: automation.setupTrustHash } : {})
           }
         )
       : null
