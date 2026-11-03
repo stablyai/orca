@@ -236,5 +236,19 @@
     "text": "This build does not support WebCodecs H.264 decoding.",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/card-identity-parts.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "sidebar",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/card-primitives.tsx",
+    "kind": "object-property:title",
+    "text": "text-[13px] leading-5",
+    "dynamic": false,
+    "count": 1
   }
 ]
