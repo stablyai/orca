@@ -86,6 +86,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'markdownTocPanelWidth',
   'combinedDiffFileTreeWidth',
   'groupBy',
+  'groupBySecondary',
   'sortBy',
   'projectOrderBy',
   'showActiveOnly',

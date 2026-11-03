@@ -149,6 +149,7 @@ export type WorkspaceViewOptionKey = WorkspaceViewOption['key']
 
 export type WorkspaceViewOptionContext = {
   groupBy: PersistedUIState['groupBy']
+  groupBySecondary?: PersistedUIState['groupBySecondary']
   hideSleepingWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
   newCardStyle: boolean
@@ -164,7 +165,9 @@ const SHOWN: Record<WorkspaceViewOptionKey, (context: WorkspaceViewOptionContext
   projects: (context) => context.projectCount > 1,
   groupBy: () => true,
   sortBy: () => true,
-  projectOrderBy: (context) => context.groupBy === 'repo',
+  projectOrderBy: (context) =>
+    context.groupBy === 'repo' ||
+    (context.groupBy !== 'none' && context.groupBySecondary === 'repo'),
   cardLayout: (context) => !context.newCardStyle,
   cardProperties: (context) => !context.newCardStyle,
   cardDisplay: (context) => context.newCardStyle,

@@ -32,13 +32,10 @@ import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { useWorktreeDragSourceChange } from './use-worktree-drag-source-change'
+import { WORKTREE_SIDEBAR_SCROLL_STYLE } from './worktree-sidebar-scroll-style'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
-
-const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
-  // Why: TanStack Virtual owns scroll correction; native overflow anchoring fights it and causes jumps.
-  overflowAnchor: 'none'
-}
 
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
@@ -47,6 +44,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const {
     rows,
     groupBy,
+    groupBySecondary,
     pinnedDisplayPolicy,
     activeWorktreeId,
     collapsedGroups,
@@ -57,7 +55,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     workspaceStatuses,
     projectGroups = EMPTY_PROJECT_GROUPS,
     scrollOffsetRef,
-    scrollAnchorRef
+    scrollAnchorRef,
+    onWorktreeDragSourceChange
   } = props
   const scrollRef = useRef<HTMLDivElement>(null)
   // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
@@ -134,6 +133,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     projectGroups,
     groupBy,
+    groupBySecondary,
     projectOrderBy: props.projectOrderBy,
     scrollRef,
     onReorderHostSections: props.onReorderHostSections,
@@ -142,7 +142,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     directScrollInputUntilRef: scrollSuppression.directScrollInputUntilRef
   })
 
-  const session = useWorktreeDragSession({ rows, scrollRef })
+  const session = useWorktreeDragSession({ rows, scrollRef, workspaceStatuses })
   const lineageDrop = useWorktreeLineageDropCommit({
     repoMap,
     worktreeMap,
@@ -154,6 +154,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     statusDropAnchorsRef: session.statusDropAnchorsRef,
     onWorkspaceBoardDragPreviewCancel: props.onWorkspaceBoardDragPreviewCancel
   })
+  useWorktreeDragSourceChange(runtime.worktreeDragState, onWorktreeDragSourceChange)
 
   const primaryActive = usePrimaryActiveWorktreeRow({
     rows,
@@ -201,6 +202,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     collapsedGroups,
     toggleGroup,
     groupBy,
+    groupBySecondary,
     pinnedDisplayPolicy,
     defaultHostId: props.defaultHostId,
     prCache: props.prCache,
@@ -260,6 +262,9 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     selectedWorktreeIds: props.selectedWorktreeIds,
     selectedWorktrees: props.selectedWorktrees,
     workspaceBoardOpen: props.workspaceBoardOpen,
+    // Empty secondary Status lanes appear in this sidebar during the drag, so
+    // opening the full board would duplicate the targets and shift the layout.
+    preferSidebarStatusDropTargetsOnDrag: groupBySecondary === 'workspace-status',
     onWorkspaceBoardDragPreviewStart: props.onWorkspaceBoardDragPreviewStart,
     onWorkspaceBoardDragPreviewCommit: props.onWorkspaceBoardDragPreviewCommit,
     onDropWorktreesOnWorkspaceBoard: props.onDropWorktreesOnWorkspaceBoard,

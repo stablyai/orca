@@ -46,7 +46,8 @@ import type {
   NewExternalWorktreesInboxCandidate,
   PinnedWorktreeDisplayPolicy,
   Row,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from './row-types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from './sidebar-row-plan'
@@ -54,10 +55,12 @@ import type { SortBy } from './smart-sort'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
 import { isIdleWorkspaceActivity } from './workspace-activity-facts'
 import { prGroupOfReviewFact } from './workspace-review-facts'
+import { getPairedDeviceIdsByEnvironment } from './sidebar-feed-paired-devices'
 
 /** The host's view settings a reader shows the list with; the host's own phone reads them off ui.get. */
 export type SidebarFeedView = {
   groupBy: WorktreeGroupBy
+  groupBySecondary?: WorktreeGroupBySecondary
   sortBy: SortBy
   projectOrderBy: ProjectOrderBy
   collapsedGroups: ReadonlySet<string>
@@ -93,6 +96,7 @@ export type SidebarFeedRows = {
 /** What only the desktop window adds over the inputs: transient reveals and its own cards. */
 export type SidebarFeedWindowExtras = {
   forcedVisibleWorktreeIds?: readonly string[]
+  emptySecondaryStatusSourceGroupKey?: string | null
   importedWorktreesByRepo?: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo?: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
 }
@@ -121,7 +125,7 @@ export function planSidebarFeedRows(
   extras: SidebarFeedWindowExtras = {}
 ): SidebarFeedPlan {
   const { repos, projectGroups } = catalog
-  const { defaultHostId, groupBy } = view
+  const { defaultHostId, groupBy, groupBySecondary = 'none' } = view
   const { workspaces, worktrees: allWorktrees, folderWorkspaces, repoMap } = index
   const byIdentity = new Map(workspaces.map((entry) => [entry.identity, entry]))
   const worktreeMap = new Map<string, Worktree>()
@@ -146,14 +150,7 @@ export function planSidebarFeedRows(
   const retained = new Set(domains.retention?.retainedIds)
   const rankByIdentity = new Map(rankedIdentities.map((identity, rank) => [identity, rank]))
   const factsOf = (worktree: Worktree) => byIdentity.get(getWorktreeHostIdentity(worktree))?.facts
-  const pairedDeviceIdsByEnvironment = new Map(
-    [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
-      const environmentId = parseExecutionHostId(hostId)
-      return environmentId?.kind === 'runtime' && host?.pairedDeviceId
-        ? [[environmentId.environmentId, host.pairedDeviceId] as const]
-        : []
-    })
-  )
+  const pairedDeviceIdsByEnvironment = getPairedDeviceIdsByEnvironment(domains)
 
   const visibleWorktrees = selectVisibleSidebarWorktrees({
     rows: allWorktrees,
@@ -248,7 +245,9 @@ export function planSidebarFeedRows(
     hostLabelById: new Map(hostOptions.map((host) => [host.id, host.label])),
     defaultHostId,
     pinnedDisplayPolicy: view.pinnedDisplayPolicy,
-    filterRepoIds: view.filters.filterRepoIds
+    filterRepoIds: view.filters.filterRepoIds,
+    groupBySecondary,
+    emptySecondaryStatusSourceGroupKey: extras.emptySecondaryStatusSourceGroupKey ?? null
   })
   return {
     visibleWorktrees,

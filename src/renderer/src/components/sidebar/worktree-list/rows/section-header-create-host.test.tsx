@@ -79,6 +79,7 @@ function headerContext(): SectionHeaderRowContext {
     projectGroups: [],
     highlightedRevealRowKey: null,
     dragOverStatus: null,
+    dragOverStatusGroupKey: null,
     pinDragOver: false,
     getCachedFolderWorkspacePathStatus: () => null,
     toggleGroupWithScrollAnchor: vi.fn(),
@@ -94,11 +95,11 @@ function headerContext(): SectionHeaderRowContext {
       projectGroupDrag: { state: INITIAL_PROJECT_GROUP_DRAG_STATE, onHandlePointerDown: vi.fn() },
       sidebarRepoHeaderIdsByBucket: new Map(),
       sidebarProjectGroupHeaderIdsByBucket: new Map(),
-      repoHeaderIndexByRepoId: new Map(),
-      repoHeaderBucketByRepoId: new Map(),
+      repoHeaderIndexByHeaderKey: new Map(),
+      repoHeaderBucketByHeaderKey: new Map(),
       projectGroupHeaderIndexByGroupId: new Map(),
       projectGroupHeaderBucketByGroupId: new Map(),
-      repoHeaderSectionEndByRepoId: new Map(),
+      repoHeaderSectionEndByHeaderKey: new Map(),
       projectGroupHeaderSectionEndByGroupId: new Map()
     },
     projectActions: {

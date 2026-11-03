@@ -294,19 +294,27 @@ export function useRepoHeaderDrag({
     }
   }, [state.draggingRepoId])
 
-  const onHandlePointerDown = useCallback((event: React.PointerEvent<HTMLElement>, repo: Repo) => {
-    const session = createProjectHeaderDragSession({
-      event,
-      repo,
-      sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
-      getScrollContainer: getContainerRef.current
-    })
-    if (!session) {
-      return
-    }
-    dragSessionRef.current = session
-    setSessionArmed(true)
-  }, [])
+  const onHandlePointerDown = useCallback(
+    (
+      event: React.PointerEvent<HTMLElement>,
+      repo: Repo,
+      bucketKey?: ProjectHeaderDragSession['bucketKey']
+    ) => {
+      const session = createProjectHeaderDragSession({
+        event,
+        repo,
+        bucketKey,
+        sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
+        getScrollContainer: getContainerRef.current
+      })
+      if (!session) {
+        return
+      }
+      dragSessionRef.current = session
+      setSessionArmed(true)
+    },
+    []
+  )
 
   return { state, onHandlePointerDown }
 }

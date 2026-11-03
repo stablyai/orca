@@ -1,6 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -68,6 +67,7 @@ import {
 } from './ui-slice-hydration-sanitizers'
 import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
+import { normalizeHydratedSidebarState } from './ui-slice-hydration-sidebar-state'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
@@ -98,6 +98,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
+        const { rightSidebarRoute, groupBy, groupBySecondary } = normalizeHydratedSidebarState(ui)
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
@@ -122,8 +123,10 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ),
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
-          ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
-          groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
+          rightSidebarTab: rightSidebarRoute.rightSidebarTab,
+          rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
+          groupBy,
+          groupBySecondary,
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,

@@ -198,8 +198,10 @@ export function renderWorktreeItemRow(
         onContextMenuSelect={ctx.onContextMenuSelect}
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}
-        hideRepoBadge={ctx.groupBy === 'repo' && !itemRow.showProjectName}
-        // Why: pinned worktrees mix repos; cross-repo children opt into the existing project-name badge.
+        hideRepoBadge={
+          (ctx.groupBy === 'repo' || itemRow.projectGrouped === true) && !itemRow.showProjectName
+        }
+        // Pinned worktrees mix repos; cross-repo children opt into the project-name badge.
         hostContextLabel={itemRow.hostContextLabel}
         showProjectName={itemRow.showProjectName}
         inPinnedSection={itemRow.sectionKey === PINNED_GROUP_KEY}

@@ -37,6 +37,7 @@ export function useWorktreePointerDrag(args: {
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   workspaceBoardOpen: boolean
+  preferSidebarStatusDropTargetsOnDrag: boolean
   onWorkspaceBoardDragPreviewStart: () => void
   onWorkspaceBoardDragPreviewCommit: () => void
   onDropWorktreesOnWorkspaceBoard: (dropArgs: WorktreeStatusDropAtIndexArgs) => void
@@ -51,6 +52,7 @@ export function useWorktreePointerDrag(args: {
     selectedWorktreeIds,
     selectedWorktrees,
     workspaceBoardOpen,
+    preferSidebarStatusDropTargetsOnDrag,
     onWorkspaceBoardDragPreviewStart,
     onWorkspaceBoardDragPreviewCommit,
     onDropWorktreesOnWorkspaceBoard,
@@ -61,6 +63,7 @@ export function useWorktreePointerDrag(args: {
     suppressWorktreeClickUntilRef,
     setWorktreeDragState,
     setDragOverStatus,
+    setDragOverStatusGroupKey,
     setPinDragOver
   } = runtime
 
@@ -73,18 +76,22 @@ export function useWorktreePointerDrag(args: {
       drag,
       ctx,
       workspaceBoardOpen,
+      preferSidebarStatusDropTargetsOnDrag,
       onWorkspaceBoardDragPreviewStart,
       onWorkspaceBoardDragPreviewCommit,
       shouldShowWorkspaceBoardDropIndicator,
       setWorktreeDragState,
       setDragOverStatus,
+      setDragOverStatusGroupKey,
       setPinDragOver
     })
   }, [
     ctx,
     onWorkspaceBoardDragPreviewCommit,
     onWorkspaceBoardDragPreviewStart,
+    preferSidebarStatusDropTargetsOnDrag,
     setDragOverStatus,
+    setDragOverStatusGroupKey,
     setPinDragOver,
     setWorktreeDragState,
     shouldShowWorkspaceBoardDropIndicator,
@@ -175,12 +182,14 @@ export function useWorktreePointerDrag(args: {
       }
       const rects = getWorktreeSidebarDragRectsForGroup(container, sourceGroupKey)
       const canPreviewWorkspaceBoardOnDrag =
+        !preferSidebarStatusDropTargetsOnDrag &&
         !workspaceBoardOpen &&
         onWorkspaceBoardDragPreviewStart !== NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
       if (
         rects.length <= 1 &&
         !hasWorkspaceKanbanSidebarDropBoard() &&
-        !canPreviewWorkspaceBoardOnDrag
+        !canPreviewWorkspaceBoardOnDrag &&
+        !preferSidebarStatusDropTargetsOnDrag
       ) {
         return
       }
@@ -226,6 +235,7 @@ export function useWorktreePointerDrag(args: {
     },
     [
       onWorkspaceBoardDragPreviewStart,
+      preferSidebarStatusDropTargetsOnDrag,
       scrollRef,
       selectedWorktreeIds,
       selectedWorktrees,

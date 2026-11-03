@@ -14,7 +14,8 @@ import type { ProjectGroupingModel } from '../../../../../../shared/project-sect
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type {
   PinnedWorktreeDisplayPolicy,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from '../../../../../../shared/sidebar-list/row-types'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
@@ -31,6 +32,7 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
   hostScopedGroups: boolean
   collapsedGroups: ReadonlySet<string>
   groupBy: WorktreeGroupBy
+  groupBySecondary?: WorktreeGroupBySecondary
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   prCache: AppState['prCache'] | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -46,6 +48,7 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
     args.occurrencePlan ??
     planSidebarRows({
       groupBy: args.groupBy,
+      groupBySecondary: args.groupBySecondary ?? 'none',
       worktrees: [...(args.visibleWorktrees ?? args.worktrees)],
       repoMap: args.repoMap,
       prGroupOf: createSidebarPRGroupReader(args.repoMap, args.prCache),
