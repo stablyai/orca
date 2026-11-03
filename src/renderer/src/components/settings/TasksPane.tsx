@@ -7,6 +7,7 @@ import {
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
+import { AzureDevOpsIcon } from '@/components/icons/AzureDevOpsIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
@@ -89,6 +90,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  'azure-devops': {
+    get label() {
+      return translate('auto.components.settings.TasksPane.azureDevOps.label', 'Azure DevOps')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.azureDevOpsDescription',
+        'Connect Azure DevOps Boards and show it in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <AzureDevOpsIcon className={className} />
   }
 }
 

@@ -232,15 +232,7 @@ export function buildWorkspaceRunContext(args: {
 }
 
 function normalizeTaskProvider(value: unknown): TaskProvider | null {
-  switch (value) {
-    case 'github':
-    case 'gitlab':
-    case 'linear':
-    case 'jira':
-      return value
-    default:
-      return null
-  }
+  return isTaskProvider(value) ? value : null
 }
 
 function normalizeNonEmptyString(value: unknown): string | null {

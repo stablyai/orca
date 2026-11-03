@@ -22,6 +22,7 @@ import { useTaskPageStoreBindings } from './use-task-page-store-bindings'
 import { useTaskPageRepoSelection } from './use-task-page-repo-selection'
 import { useTaskPageRuntimeHosts } from './use-task-page-runtime-hosts'
 import { useTaskPageSourceAvailability } from './use-task-page-source-availability'
+import { useTaskPageAzureDevOpsState } from '../use-task-page-azure-devops-state'
 import { useTaskPageProviderState } from './use-task-page-provider-state'
 import { useTaskPageGitHubListState } from './github/use-task-page-github-list-state'
 import { useTaskPageGitHubDetail } from './github/use-task-page-github-detail'
@@ -129,7 +130,9 @@ function useMountedSourceDisplay() {
   const store = useTaskPageStoreBindings()
   const selection = useTaskPageRepoSelection(store)
   const hosts = useTaskPageRuntimeHosts(selection)
-  const availability = useTaskPageSourceAvailability(hosts)
+  // Stage 4 in the app; with a GitHub source it only supplies the view props the chain carries.
+  const azureDevOps = useTaskPageAzureDevOpsState(hosts)
+  const availability = useTaskPageSourceAvailability(azureDevOps)
   const provider = useTaskPageProviderState(availability)
   const list = useTaskPageGitHubListState(provider)
   const detail = useTaskPageGitHubDetail(list)
@@ -360,6 +363,7 @@ describe('Tasks source display', () => {
         selectedLinearWorkspace: null,
         selectedJiraSite: null,
         activeGithubTaskKind: 'issues',
+        azureDevOpsViews: { projectLabel: null },
         ...args
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the source display reads only these model fields; the rest of the stage-20 model is unused by it.

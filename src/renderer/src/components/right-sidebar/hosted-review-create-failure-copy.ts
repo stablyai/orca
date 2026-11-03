@@ -14,7 +14,6 @@ import {
   type LocalizedHostedReviewCopy,
   type SupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-
 type FailedCreateResult =
   | Extract<CreateHostedReviewResult, { ok: false }>
   | Extract<CreateStackedHostedReviewResult, { ok: false }>

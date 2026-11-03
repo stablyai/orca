@@ -56,6 +56,8 @@ export function useTaskSourceProviderReadiness(
     reviewReadyForConnection &&
     preflightStatus?.glab?.installed === true &&
     preflightStatus.glab.authenticated === true
+  const azureDevOpsConnected =
+    reviewReadyForConnection && preflightStatus?.azureDevOps?.configured === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
   const linearChecking =
@@ -90,9 +92,16 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      'azure-devops': {
+        connected: azureDevOpsConnected,
+        checking: reviewChecking,
+        unavailable: reviewUnavailable,
+        visible: visible.has('azure-devops')
       }
     }
   }, [
+    azureDevOpsConnected,
     githubConnected,
     gitlabConnected,
     jiraChecking,
