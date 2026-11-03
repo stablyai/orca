@@ -14,19 +14,19 @@ import { waitForSessionReady } from './helpers/store'
 const NEW_FILE_PATH = 'src/brand-new.ts'
 const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 
+const ADDED_TINT_SELECTOR = ['.line-insert', '.char-insert', '.gutter-insert'].join(', ')
+
 const DIFF_TINT_SELECTOR = [
-  '.line-insert',
-  '.char-insert',
-  '.gutter-insert',
+  ADDED_TINT_SELECTOR,
   '.line-delete',
   '.char-delete',
   '.gutter-delete',
   '.inline-deleted-margin-view-zone'
 ].join(', ')
 
-function diffTintBackgrounds(diff: Locator): Promise<string[]> {
+function tintBackgrounds(diff: Locator, selector: string): Promise<string[]> {
   return diff
-    .locator(`:is(${DIFF_TINT_SELECTOR})`)
+    .locator(`:is(${selector})`)
     .evaluateAll((lines) => lines.map((line) => getComputedStyle(line).backgroundColor))
 }
 
@@ -34,10 +34,12 @@ async function expectAddedTint(diff: Locator, tinted: boolean): Promise<void> {
   await expect
     .poll(async () => await diff.locator('.modified-in-monaco-diff-editor .line-insert').count())
     .toBeGreaterThan(0)
-  const backgrounds = await diffTintBackgrounds(diff)
   if (tinted) {
+    // Only added decorations, so a surviving removed tint cannot mask a lost added tint.
+    const backgrounds = await tintBackgrounds(diff, ADDED_TINT_SELECTOR)
     expect(backgrounds.some((background) => background !== TRANSPARENT)).toBe(true)
   } else {
+    const backgrounds = await tintBackgrounds(diff, DIFF_TINT_SELECTOR)
     expect(backgrounds.every((background) => background === TRANSPARENT)).toBe(true)
   }
 }
