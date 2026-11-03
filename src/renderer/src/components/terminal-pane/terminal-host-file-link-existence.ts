@@ -33,6 +33,7 @@ export async function hostFileLinkTargetExists(
   try {
     exists =
       (await resolveHostWorkspaceFile(target.fileContext, target.absolutePath, {
+        existenceOnly: true,
         terminalHandle
       })) !== null
   } catch (error) {

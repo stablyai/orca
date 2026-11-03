@@ -263,7 +263,6 @@ describe('a link to this computer printed in a paired-server terminal', () => {
         params: {
           worktree: 'id:wt-feat',
           pathText: '/tmp/artifact.txt',
-          crossWorkspace: true,
           terminal: 'term-1'
         }
       })

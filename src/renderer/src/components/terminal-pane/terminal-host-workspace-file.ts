@@ -15,6 +15,9 @@ import {
 } from '../../../../shared/runtime-file-contracts'
 import { HostFileRefusal, hostAbsentRefusal } from './host-file-refusal'
 import { hostSavesGrantedFiles } from '@/runtime/runtime-terminal-artifact-grant'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import { useAppStore } from '@/store'
 
 export type HostWorkspaceFile = {
   kind: 'host'
@@ -91,11 +94,39 @@ async function statClientLocalFile(
   return { kind: 'client', isDirectory: stat.isDirectory }
 }
 
+/** Opens a file another workspace holds in the clicked one, through a grant; the user can already run anything on the host, so its workspace boundary guards nothing. Falls back to the holding workspace where no editable grant is possible. */
+async function resolveInClickedWorkspace(
+  resolveOnHost: (crossWorkspace: boolean) => Promise<RuntimeTerminalPathResolution>,
+  isInKnownWorkspace: () => boolean
+): Promise<RuntimeTerminalPathResolution> {
+  let inPlace: RuntimeTerminalPathResolution
+  try {
+    inPlace = await resolveOnHost(false)
+  } catch (error) {
+    // Why: only a host that answered it can't grant here (its own SSH workspaces) opens it where it
+    // lives; a timeout or lost connection would just wait twice.
+    if (isHostRefusal(error)) {
+      return resolveOnHost(true)
+    }
+    throw error
+  }
+  if (inPlace.relativePath !== null || inPlace.openTarget?.kind === 'absolute-file') {
+    return inPlace
+  }
+  // Why: hosts grant files, not folders, and a missing file a workspace holds must read as missing on
+  // its host, never as this computer's same-path file; the holding workspace answers both.
+  return inPlace.exists || isInKnownWorkspace() ? resolveOnHost(true) : inPlace
+}
+
+function isHostRefusal(error: unknown): boolean {
+  return error instanceof RuntimeRpcCallError && error.code === 'runtime_error'
+}
+
 /** For paired paths outside the source workspace, ask the server for an owning workspace or a file grant; only paths the host lacks fall to this computer. Null when inapplicable; rejects when neither can open. */
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  source: { terminalHandle?: string | null; hostFileOnly?: boolean } = {}
+  source: { terminalHandle?: string | null; hostFileOnly?: boolean; existenceOnly?: boolean } = {}
 ): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null> {
   const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
@@ -105,18 +136,33 @@ export async function resolveHostWorkspaceFile(
   ) {
     return null
   }
-  const resolved = await callHostRoute<RuntimeTerminalPathResolution>(
-    hostRouteForAuthority({ endpoint: { kind: 'environment', environmentId }, at: 'local' }),
-    'files.resolveTerminalPath',
-    {
-      worktree: toRuntimeWorktreeSelector(context.worktreeId),
-      pathText: absolutePath,
-      crossWorkspace: true,
-      // Why: older hosts grant a file outside their workspaces only to the terminal that printed it.
-      ...(source.terminalHandle ? { terminal: source.terminalHandle } : {})
-    },
-    { timeoutMs: 15_000 }
-  )
+  const worktree = toRuntimeWorktreeSelector(context.worktreeId)
+  const resolveOnHost = (crossWorkspace: boolean): Promise<RuntimeTerminalPathResolution> =>
+    callHostRoute<RuntimeTerminalPathResolution>(
+      hostRouteForAuthority({ endpoint: { kind: 'environment', environmentId }, at: 'local' }),
+      'files.resolveTerminalPath',
+      {
+        worktree,
+        pathText: absolutePath,
+        ...(crossWorkspace ? { crossWorkspace: true } : {}),
+        // Why: older hosts grant a file outside their workspaces only to the terminal that printed it.
+        ...(source.terminalHandle ? { terminal: source.terminalHandle } : {})
+      },
+      { timeoutMs: 15_000 }
+    )
+  // Why existence asks for the holder: a hover needs only a stat, and a grant hashes the file.
+  const resolved =
+    !source.existenceOnly && (await hostSavesGrantedFiles(environmentId))
+      ? await resolveInClickedWorkspace(
+          resolveOnHost,
+          () =>
+            findWorkspaceFileRoute(
+              useAppStore.getState(),
+              toRuntimeExecutionHostId(environmentId),
+              absolutePath
+            ) !== null
+        )
+      : await resolveOnHost(true)
   const relativePath = resolved.relativePath
   if (relativePath === null || !resolved.absolutePath) {
     const openTarget = resolved.openTarget
