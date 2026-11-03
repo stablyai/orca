@@ -1,10 +1,10 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
   getGitLabProjectRefForRemoteMock,
-  getGlabKnownHostsMock,
-  gitRunner
+  getGlabKnownHostsMock
 } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
 
@@ -24,7 +24,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync')
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     await expect(
@@ -61,7 +61,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (
         args[0] === 'fetch' &&
         args[2] === '+refs/heads/feature/fix:refs/remotes/origin/feature/fix'
@@ -118,7 +118,7 @@ describe('OrcaRuntimeService', () => {
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (
         args[0] === 'fetch' &&
         args[2] === '+refs/heads/feature/fix:refs/remotes/origin/feature/fix'

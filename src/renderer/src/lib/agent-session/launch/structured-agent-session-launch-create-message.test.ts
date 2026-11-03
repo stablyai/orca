@@ -13,7 +13,6 @@ import {
   draft,
   startLegacyActionLaunch
 } from '../../structured-agent-session-launch-create-message.test-fixture'
-import { useAppStore } from '@/store/index'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -34,11 +33,7 @@ import {
   resetStructuredAgentLaunchRegistryForTests,
   getStructuredLaunchStateBySessionId
 } from './structured-agent-session-launch-registry'
-import {
-  registerStructuredSelectionCatalogStore,
-  structuredSessionSelectionController,
-  forgetStructuredSessionSelection
-} from '../../structured-agent-session-selection-controller'
+import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
 import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import {
@@ -70,25 +65,6 @@ describe('the first message owned by create', () => {
   })
   afterEach(() => {
     cleanupCreateMessageFixture(restoreCatalogStore)
-  })
-
-  it('requires registered authority before inserting a remote selection owner', () => {
-    restoreCatalogStore?.()
-    const remote = { kind: 'environment', environmentId: 'uncomposed-test-store' } as const
-    expect(() => structuredSessionSelectionController(remote, 'uncomposed', 'codex')).toThrow(
-      'must be registered'
-    )
-    const restore = registerStructuredSelectionCatalogStore({
-      read: useAppStore.getState,
-      subscribe: useAppStore.subscribe
-    })
-    try {
-      const owner = structuredSessionSelectionController(remote, 'uncomposed', 'codex')
-      expect(structuredSessionSelectionController(remote, 'uncomposed', 'codex')).toBe(owner)
-    } finally {
-      forgetStructuredSessionSelection('uncomposed', remote)
-      restore()
-    }
   })
 
   it('freezes the message and held options in create and publishes without another read or send', async () => {

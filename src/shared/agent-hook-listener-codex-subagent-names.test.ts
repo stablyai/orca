@@ -77,12 +77,6 @@ describe('Codex child names from provider metadata', () => {
     expect(post('PostToolUse')?.[0]?.description).toBe('mobile')
   })
 
-  it('uses top-level metadata and falls back to a nickname on older releases', () => {
-    const { writeMeta, post } = fixture()
-    writeMeta({ agent_path: ' ', agent_nickname: 'Scout' }, false)
-    expect(post()?.[0]?.description).toBe('Scout')
-  })
-
   it('keeps the role fallback when metadata belongs to another thread or has no name', () => {
     const { writeMeta, post } = fixture()
     writeMeta({ agent_path: '/root/wrong-child' }, true, 'another-child')

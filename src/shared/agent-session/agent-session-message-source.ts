@@ -49,6 +49,16 @@ export type AgentMessageSource = Readonly<{
   orchestration: OrchestrationAgentMessage | null
 }>
 
+/** The mail a message notices, if it is orchestration mail; a person's message, a Task, or a kind this
+ *  build cannot read is not. */
+export function orchestrationMailNotice(
+  from: AgentMessageSource | undefined
+): OrchestrationMailNotice | null {
+  return from?.kind === 'agent' && from.orchestration?.message === 'mail-notice'
+    ? from.orchestration
+    : null
+}
+
 /** Persist only the source kind so restart/close retains human unsent cards; sender identities stay on the message body. */
 export type AgentSessionMessageSource = Readonly<{ kind: 'user' | 'agent' }>
 

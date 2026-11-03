@@ -183,7 +183,10 @@ export async function readRuntimeFilePreview(
       runtimeTarget,
       'agentSessionAttachment.read',
       { path: filePath },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
+      }
     )
   }
   if (!remoteArgs) {
@@ -191,7 +194,8 @@ export async function readRuntimeFilePreview(
       return readHostFilePreview({
         target: runtimeTarget,
         worktreeId,
-        absolutePath: filePath
+        absolutePath: filePath,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
       })
     }
     if (hasRemoteRuntimeOwner(context)) {
@@ -207,7 +211,8 @@ export async function readRuntimeFilePreview(
     {
       target: remoteArgs.target,
       worktree: remoteArgs.worktreeSelector,
-      relativePath: remoteArgs.relativePath
+      relativePath: remoteArgs.relativePath,
+      expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
     },
     { pageOversized: true }
   )

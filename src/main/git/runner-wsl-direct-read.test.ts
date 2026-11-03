@@ -33,9 +33,9 @@ import {
 } from './wsl-git-read-environment'
 import {
   prepareWslLinkedWorktreeGitRouting,
-  resetWslLinkedWorktreeGitRoutingForTests,
-  type WslLinkedWorktreeRoutingFileSystem
-} from './wsl-linked-worktree-git-routing'
+  resetWslLinkedWorktreeGitRoutingForTests
+} from './command-runner/wsl-linked-worktree-git-routing'
+import type { WslLinkedWorktreeRoutingFileSystem } from './command-runner/wsl-linked-worktree-git-route-probe'
 
 afterEach(() => _resetGitAdmissionForTests())
 

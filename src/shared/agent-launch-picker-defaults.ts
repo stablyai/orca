@@ -1,3 +1,4 @@
+import { isAgentPermissionChoice } from './tui-agent-permission-choice'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
 import { structuredLaunchSeedOptions } from './native-chat/input/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from './agent-chat-permission-mode'
@@ -32,4 +33,28 @@ export function agentPickerChoiceSeeds(
     },
     arguments: profile.args
   }
+}
+
+export function usableAgentPickerDefaultSettings(
+  value: unknown
+): value is AgentPickerDefaultSettings {
+  const record = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value)
+  const argsRecord = (value: unknown) =>
+    value === undefined ||
+    (record(value) && Object.values(value).every((v) => typeof v === 'string'))
+  const permissionsRecord = (value: unknown) =>
+    value === undefined || (record(value) && Object.values(value).every(isAgentPermissionChoice))
+  return (
+    record(value) &&
+    argsRecord(value.agentDefaultArgs) &&
+    permissionsRecord(value.agentPermissionOverrides) &&
+    (value.agentPermissionDefault === undefined ||
+      isAgentPermissionChoice(value.agentPermissionDefault)) &&
+    (value.agentPermission === undefined ||
+      (record(value.agentPermission) &&
+        isAgentPermissionChoice(value.agentPermission.default) &&
+        argsRecord(value.agentPermission.userArgs) &&
+        permissionsRecord(value.agentPermission.overrides)))
+  )
 }

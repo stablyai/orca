@@ -73,8 +73,8 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/pet/PetOverlay.tsx',
       'src/renderer/src/components/right-sidebar/ai-vault-view-options-persistence.ts',
       'src/renderer/src/components/right-sidebar/pr-comment-presentation.ts',
-      'src/renderer/src/components/settings/BrowserUsePane.tsx',
-      'src/renderer/src/components/settings/local-network-connection-history.ts',
+      'src/renderer/src/components/settings/browser/use/BrowserUsePane.tsx',
+      'src/renderer/src/components/settings/developer-permissions/local-network-connection-history.ts',
       'src/renderer/src/components/sidebar/linear-agent-skill-runtime.ts',
       'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx',
       'src/renderer/src/components/sidebar/mobile-sidebar-onboarding-badge.ts',
@@ -110,8 +110,8 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
   'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
   'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
-  'src/main/ai-vault/session-parse-cache-database.ts': 'ai-vault-parse-cache',
-  'src/main/ai-vault/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
+  'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
+  'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
   'src/main/browser/cookies/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
@@ -133,7 +133,8 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/runtime/orchestration/db/reset/removed-orchestration-work-store.ts': 'orchestration',
   'src/main/runtime/orchestration/mutation-receipt-capacity.ts': 'orchestration',
   // Test fixtures that mirror third-party agent and browser databases.
-  'src/main/ai-vault/session-scanner-opencode-sqlite-fixture.ts': 'test-fixture',
+  'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
+    'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
   'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
@@ -215,7 +216,8 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'question_threads',
         'remote_questions',
         'attempt_observation_facts',
-        'structured_pointer_operations'
+        'structured_pointer_operations',
+        'structured_mail_sends'
       ],
       notApplicableDisposition(53, 'Keyed by run, task, dispatch, message or handle ids.')
     ),

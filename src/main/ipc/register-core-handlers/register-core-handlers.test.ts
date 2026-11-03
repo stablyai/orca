@@ -174,7 +174,7 @@ vi.mock('../dashboard-popout', () => ({
   registerDashboardPopoutHandlers: registerDashboardPopoutHandlersMock
 }))
 
-vi.mock('../workspace-space-window', () => ({
+vi.mock('../workspace-space/workspace-space-window', () => ({
   registerWorkspaceSpaceWindowHandlers: registerWorkspaceSpaceWindowHandlersMock
 }))
 
@@ -250,7 +250,7 @@ vi.mock('../skill-delete/handlers', () => ({
   registerSkillDeleteIpcHandlers: registerSkillDeleteIpcHandlersMock
 }))
 
-vi.mock('../workspace-space', () => ({
+vi.mock('../workspace-space/workspace-space', () => ({
   registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock
 }))
 

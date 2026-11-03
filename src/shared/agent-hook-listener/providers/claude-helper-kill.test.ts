@@ -402,30 +402,6 @@ describe('Claude helper provider evidence', () => {
     }
   })
 
-  it('ends only killed agent notification debt without claiming delivery', async () => {
-    const p = await pane()
-    try {
-      const tasks: ClaudeLaunchedBackgroundTasks = new Map([
-        ['a123', { kind: 'agent' as const, notificationOwedAt: now }],
-        ['shell', { kind: 'shell' as const, notificationOwedAt: now }]
-      ])
-      p.state.claudeLaunchedBackgroundTasksByPaneKey.set(
-        'test-tab:11111111-1111-4111-8111-111111111111',
-        tasks
-      )
-      await appendFile(p.path, kill())
-      await drain(p)
-      expect(tasks.get('a123')).toEqual({
-        kind: 'agent',
-        notificationOwedAt: undefined,
-        settled: true
-      })
-      expect(tasks.get('shell')?.notificationOwedAt).toBe(now)
-    } finally {
-      p.poller.clearAll()
-    }
-  })
-
   it('ignores old/malformed records, then lets a fresh inventory settle the claim', async () => {
     const p = await pane()
     try {

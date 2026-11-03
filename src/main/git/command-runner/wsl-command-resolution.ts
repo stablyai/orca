@@ -1,5 +1,7 @@
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
-import { getDefaultWslDistro, parseWslPath, type WslPathInfo } from '../../wsl'
+import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import type { WslUncPathInfo as WslPathInfo } from '../../../shared/wsl-paths'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
@@ -14,8 +16,8 @@ import {
   type WslProcessGroupTermination
 } from '../wsl-process-group-termination'
 import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
-import { resolveWslInteropSpawnCwd } from '../../wsl-interop-spawn-directory'
-import { noteWslDistroLaunched } from '../../wsl-background-distro-gate'
+import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
+import { noteWslDistroLaunched } from '../../wsl/discovery/wsl-background-distro-gate'
 
 // Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)

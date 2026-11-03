@@ -1,12 +1,8 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
-import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
-import {
-  getTerminalQuickCommandScope,
-  isTerminalQuickCommandComplete
-} from '../../../../shared/terminal-quick-commands'
+import { useVisibleTerminalQuickCommandHosts } from '@/hooks/use-visible-terminal-quick-command-hosts'
 
 export function useTerminalPaneContextActions(controller: TerminalPaneCloseController) {
   const {
@@ -25,7 +21,6 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     paneTransportsRef,
     quickCommandGroupId,
     quickCommandRepoId,
-    projectHostSetupProjection,
     removePaneTitle,
     changePaneTitle,
     renameBlurCommitEnabledRef,
@@ -191,36 +186,10 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     remoteHostLoadFailed: quickCommandHostLoadFailed,
     remoteHostPending: quickCommandHostOwnershipPending
   } = useTerminalQuickCommandHosts(worktreeId, contextMenu.open)
-  const visibleQuickCommandHosts = useMemo(
-    () =>
-      quickCommandHosts.map((host) => {
-        const commands = host.commands.filter(isTerminalQuickCommandComplete)
-        return {
-          globalCommands: commands.filter(
-            (command) => getTerminalQuickCommandScope(command).type === 'global'
-          ),
-          hostId: host.hostId,
-          label: host.label,
-          repoCommands: commands.filter((command) => {
-            const scope = getTerminalQuickCommandScope(command)
-            return (
-              scope.type === 'repo' &&
-              terminalQuickCommandMatchesWorkspaceProject(command, {
-                commandHostId: host.hostId,
-                projectHostSetups: projectHostSetupProjection.setups,
-                targetHostId: quickCommandExecutionHostId,
-                targetRepoId: quickCommandRepoId
-              })
-            )
-          })
-        }
-      }),
-    [
-      projectHostSetupProjection.setups,
-      quickCommandExecutionHostId,
-      quickCommandHosts,
-      quickCommandRepoId
-    ]
+  const visibleQuickCommandHosts = useVisibleTerminalQuickCommandHosts(
+    quickCommandHosts,
+    quickCommandExecutionHostId,
+    quickCommandRepoId
   )
   useEffect(() => {
     if (contextMenu.open) {

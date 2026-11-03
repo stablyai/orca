@@ -8,20 +8,22 @@ const mocks = vi.hoisted(() => ({
   registerRoots: vi.fn(),
   running: vi.fn(async () => true)
 }))
-vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async () => ((await mocks.running()) ? 'running' : 'stopped')
 }))
 
-vi.mock('../../../repo-worktrees', () => ({ listRepoWorktreesForDetectedScan: mocks.list }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
+  listRepoWorktreesForDetectedScan: mocks.list
+}))
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.gitOptions
 }))
-vi.mock('../../registered-worktree-roots-cache', () => ({
+vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: mocks.registerRoots
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: vi.fn()
 }))
 
@@ -30,7 +32,7 @@ const {
   applyFreshDetectedWorktreeScanSideEffects,
   listDetectedGitWorktrees
 } = await import('./detected-worktree-scan-cache')
-const { WslDistroStoppedError } = await import('../../../wsl/wsl-unc-access-gate')
+const { WslDistroStoppedError } = await import('../../../wsl/filesystem/wsl-unc-access-gate')
 
 const repo: Repo = {
   id: 'repo-1',

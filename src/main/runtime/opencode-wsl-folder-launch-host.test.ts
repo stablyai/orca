@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { AGENT_SESSION_METHODS } from './rpc/methods/agent-session'
-import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl/discovery/distro-catalog'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../shared/project-runtime-repair-message'
 import {
   partialRuntimeStore,

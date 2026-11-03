@@ -72,8 +72,9 @@ export type AgentJournalMessageItem = {
    *  goal's objective, and the provider pursues it without a turn of its own. */
   sentAs?: AgentJournalMessageSendMode
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
-   *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
-  command?: { name: string }
+   *  user typed; this names the command and its instructions so no reader parses it. Open like
+   *  `sentAs`. */
+  command?: { name: string; instructions?: string }
   /** The skills the user picked from the menu for this message, by the file the agent selects
    *  each by. The text still carries each `$name`; agents that select by name ignore this. */
   skills?: AgentJournalSkillRef[]
@@ -127,6 +128,8 @@ export type AgentJournalResolution = {
   answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
+  /** Read-time device description; never written back into the journal. */
+  resolvedByDevice?: { kind: 'current' } | { kind: 'named'; name: string }
   resolvedAt: number | null
 }
 

@@ -15,6 +15,7 @@ import {
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
 
@@ -52,6 +53,8 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   note: string
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
+  sessionOptionsOverrideAgentArgs?: boolean
   agentEnv?: Record<string, string>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
@@ -61,6 +64,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
     agent: args.agent,
     settings: args.settings ?? { agentCmdOverrides: args.agentCmdOverrides },
     agentArgs: args.settings ? args.agentArgs : (args.agentArgs ?? null),
+    sessionOptions: args.sessionOptions,
     platform: args.platform,
     shell: args.shell,
     isRemote: args.isRemote

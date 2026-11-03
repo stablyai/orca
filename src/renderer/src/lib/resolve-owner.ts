@@ -32,6 +32,7 @@ import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRouteResultForHost,
   resolveWorktreeOperationRouteResult,
+  type WorktreeOperationRoute,
   type WorktreeOperationRouteResolution,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
@@ -102,8 +103,9 @@ export function resolveOwner(
 ): ExecutionHostOwnerMatch<HostAuthority> {
   const floatingOwner = floatingWorkspaceEnvironmentId(ref.workspaceId)
   if (floatingOwner) {
-    if (ref.hostId && ref.hostId !== toRuntimeExecutionHostId(floatingOwner))
+    if (ref.hostId && ref.hostId !== toRuntimeExecutionHostId(floatingOwner)) {
       return { kind: 'ambiguous' }
+    }
     return toOwnerMatch(resolveWorktreeOperationRouteResult(state, ref.workspaceId))
   }
   if (getFloatingWorkspaceOperationRoute(ref.workspaceId)) {
@@ -122,6 +124,21 @@ export function resolveOwner(
       : resolveWorktreeOperationRouteResult(state, ref.workspaceId)
   )
   return match.kind === 'resolved' ? withNestedPlace(state, ref, match.owner) : match
+}
+
+/** An exact route (a record's complete stamps) as an owner, with the nested place its server's rows or repo name. */
+export function resolveOwnerOfRoute(
+  state: WorktreeOperationRouteState,
+  workspaceId: string,
+  route: WorktreeOperationRoute
+): ExecutionHostOwnerMatch<HostAuthority> {
+  const match = toOwnerMatch({ kind: 'resolved', route })
+  const hostId =
+    route.executionHostId ??
+    (route.runtimeEnvironmentId ? toRuntimeExecutionHostId(route.runtimeEnvironmentId) : null)
+  return match.kind === 'resolved'
+    ? withNestedPlace(state, { workspaceId, ...(hostId ? { hostId } : {}) }, match.owner)
+    : match
 }
 
 /** Server routes omit nested SSH; resolve connectionId from the owning folder/repo row, matching resolveWorktreeExecutionHost. */

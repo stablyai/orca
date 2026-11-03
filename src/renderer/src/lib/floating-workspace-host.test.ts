@@ -31,6 +31,7 @@ describe('floating workspace host ownership', () => {
       runtimeEnvironmentId: 'host:/one'
     })
     expect(toRuntimeWorktreeSelector(remote)).toBe('id:global-floating-terminal')
+    expect(toRuntimeWorktreeSelector(` id:${remote} `)).toBe('id:global-floating-terminal')
   })
 
   it('switches only the selected namespace without retiring any tabs', () => {

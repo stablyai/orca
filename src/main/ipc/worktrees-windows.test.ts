@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 
@@ -61,6 +62,16 @@ const {
   deleteWorktreeHistoryDirMock: vi.fn()
 }))
 
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty,
+    listWorktreesSharedStrict: (await getWorktreeOwnerMocks()).listWorktreesSharedStrict
+  }
+})
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock,
@@ -68,19 +79,51 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: listWorktreesMock,
-  listWorktreesStrict: listWorktreesMock,
-  listWorktreesSharedStrict: listWorktreesMock,
-  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
-  describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
-  assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
-  addWorktree: addWorktreeMock,
-  removeWorktree: removeWorktreeMock
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (() => ({
+      listWorktrees: listWorktreesMock,
+      listWorktreesStrict: listWorktreesMock,
+      listWorktreesSharedStrict: listWorktreesMock,
+      listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
+      describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
+      assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
+      addWorktree: addWorktreeMock,
+      removeWorktree: removeWorktreeMock
+    }))()
+  }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
+})
+
+vi.mock('../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await getWorktreeOwnerMocks()).assertWorktreeCleanForRemoval
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+vi.mock('../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await getWorktreeOwnerMocks()).addWorktree
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await getWorktreeOwnerMocks()).removeWorktree
+}))
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesMock,
+  describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
+}))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileSync: vi.fn()
 }))
 
@@ -101,19 +144,19 @@ vi.mock('../github/client', () => ({
   createGitHubPullRequest: createGitHubPullRequestMock
 }))
 
-vi.mock('../hooks', () => ({
+vi.mock('../workspace-hooks/hooks', () => ({
   getEffectiveHooks: getEffectiveHooksMock,
   loadHooks: loadHooksMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock
 }))
 
-vi.mock('../worktree-runner-script', () => ({
+vi.mock('../workspace-hooks/worktree-runner-script', () => ({
   createSetupRunnerScript: createSetupRunnerScriptMock,
   resolveSetupRunnerShell: resolveSetupRunnerShellMock
 }))
 
-vi.mock('../effective-hook-config', () => ({
+vi.mock('../workspace-hooks/effective-hook-config', () => ({
   getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
   getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
@@ -128,7 +171,7 @@ vi.mock('./pty/provider/state-cleanup', () => ({
 }))
 vi.mock('./pty/provider/registry', () => ({ getLocalPtyProvider: getLocalPtyProviderMock }))
 
-vi.mock('../terminal-history-deletion', () => ({
+vi.mock('../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -142,7 +185,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
 })
 
 import { registerWorktreeHandlers } from './worktrees'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>

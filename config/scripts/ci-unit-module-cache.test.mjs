@@ -1,7 +1,9 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { runProcessSync } from '@orca/process-host'
 import {
   finishModuleCache,
   moduleCacheIdentity,
@@ -81,6 +83,39 @@ describe('persistent unit module cache boundary', () => {
       expect(() => readFileSync(join(identity.path, 'untrusted'))).toThrow()
     }
   )
+  it.each(['warm', 'cold'])(
+    'does not write unused transforms on a consumer miss but retains producer writes (%s)',
+    (mode) => {
+      const identity = moduleCacheIdentity(options())
+      mkdirSync(join(identity.root, 'ci-shards'))
+      writeFileSync(
+        join(identity.root, 'ci-shards/unit-module-cache-identity.json'),
+        JSON.stringify(identity)
+      )
+      const envFile = join(identity.root, 'github-env')
+      writeFileSync(envFile, '')
+      const result = runProcessSync({
+        program: process.execPath,
+        args: [fileURLToPath(new URL('./ci-unit-module-cache.mjs', import.meta.url)), 'prepare'],
+        cwd: identity.root,
+        env: {
+          ...process.env,
+          GITHUB_ENV: envFile,
+          ORCA_UNIT_CACHE_MODE: mode,
+          ORCA_UNIT_CACHE_RESTORE_HIT: 'false'
+        }
+      })
+      expect(result.code, result.stderr).toBe(0)
+      expect(readFileSync(envFile, 'utf8')).toBe(
+        mode === 'warm' ? 'ORCA_UNIT_MODULE_CACHE_PATH=\n' : ''
+      )
+      const report = JSON.parse(
+        readFileSync(join(identity.root, 'ci-shards/unit-module-cache.json'), 'utf8')
+      )
+      expect(report.available).toBe(false)
+    }
+  )
+
   it('restores a matching cache produced from an earlier source', async () => {
     const identity = moduleCacheIdentity(options())
     mkdirSync(identity.path)
