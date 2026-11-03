@@ -37,7 +37,7 @@ function fakeFile(byteLength: number): NativeMediaFile {
         set offset(next: number | null) {
           cursor = next ?? 0
         },
-        readBytes: (length: number) => {
+        readBytesSync: (length: number) => {
           const end = Math.min(cursor + length, byteLength)
           const bytes = new Uint8Array(end - cursor)
           for (let index = 0; index < bytes.length; index += 1) {

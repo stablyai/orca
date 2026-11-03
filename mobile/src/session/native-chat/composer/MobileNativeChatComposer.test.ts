@@ -1,6 +1,6 @@
 import { createElement, createRef, StrictMode, type ComponentProps, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { Keyboard, type TextInput } from 'react-native'
+import { Keyboard, type TextInputInstance } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   useMobileNativeChatDraft,
@@ -351,7 +351,7 @@ describe('MobileNativeChatComposer', () => {
 
   it('hands its owner the text field, so Edit can focus it', async () => {
     const focus = vi.fn()
-    const inputRef = createRef<TextInput>()
+    const inputRef = createRef<TextInputInstance>()
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatComposer, {

@@ -135,4 +135,4 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   )
 }
 
-const detailLayer = { ...StyleSheet.absoluteFillObject, zIndex: 1000 }
+const detailLayer = { ...StyleSheet.absoluteFill, zIndex: 1000 }

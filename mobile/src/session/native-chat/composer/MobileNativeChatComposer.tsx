@@ -11,7 +11,7 @@ import {
 } from './mobile-native-chat-draft-inputs'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
+import { ActivityIndicator, Keyboard, Pressable, View, type TextInputInstance } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -67,7 +67,7 @@ type Props = MobileNativeChatMicProps & {
   draftScopeKey?: string | null
   editSession?: { cancel: () => void; refuseCommand: (text: string) => boolean; locked: boolean }
   onPickSkill?: (skill: { name: string; path: string }) => void
-  inputRef?: React.RefObject<TextInput | null>
+  inputRef?: React.RefObject<TextInputInstance | null>
   // Terminal-backed chats keep curated commands and image-only attachment actions.
   structured?: MobileNativeChatStructuredComposer | null
   value: string
@@ -140,7 +140,7 @@ export function MobileNativeChatComposer({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const fallbackInputRef = useRef<TextInput>(null)
+  const fallbackInputRef = useRef<TextInputInstance>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const [focused, setFocused] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)

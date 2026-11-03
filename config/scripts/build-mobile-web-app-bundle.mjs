@@ -214,6 +214,8 @@ export function mobileWebAppBuildOptions(routes) {
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: {
       'react-native': 'react-native-web',
+      // react-native-svg's web build imports the registry RN 0.88 folded into react-native; on web it is RNW's.
+      '@react-native/assets-registry/registry': 'react-native-web/dist/modules/AssetRegistry',
       '@react-native-async-storage/async-storage': PAGE_ASYNC_STORAGE_MODULE,
       zod: MOBILE_ZOD_PACKAGE
     },

@@ -118,7 +118,7 @@ const styles = themedStyleSheet(() => ({
     flex: 1
   },
   pendingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgBase,

@@ -1,10 +1,10 @@
 import { useRef } from 'react'
-import type { LayoutChangeEvent, ScrollView, TextInput } from 'react-native'
+import type { LayoutChangeEvent, ScrollViewInstance, TextInputInstance } from 'react-native'
 
 // Keep a focused reply in view when its card shrinks above the keyboard.
 export function useMobileNativeChatReplyScroll() {
-  const scrollRef = useRef<ScrollView>(null)
-  const inputRef = useRef<TextInput>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
+  const inputRef = useRef<TextInputInstance>(null)
   const viewportHeight = useRef(0)
   const revealReply = (): void => {
     if (inputRef.current?.isFocused()) {

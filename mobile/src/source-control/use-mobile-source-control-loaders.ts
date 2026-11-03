@@ -3,7 +3,7 @@ import { translate } from '../i18n/mobile-i18n'
 import type { MobileSourceControlSettings } from '../transport/settings-read-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
 import { useFocusEffect } from 'expo-router'
-import { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   GenerationScopedRequestOwner,
@@ -51,7 +51,7 @@ export type MobileSourceControlLoaders = {
     next: MobileBranchCompareState | ((prev: MobileBranchCompareState) => MobileBranchCompareState)
   ) => void
   mountedRef: MutableRefObject<boolean>
-  setRootRef: (node: View | null) => void
+  setRootRef: (node: HostInstance | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
   settings: MobileSourceControlSettings
   // Desktop's rebase target; kept apart from the compare so a failed or unsupported compare keeps it.
@@ -89,7 +89,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   currentStatusIdentityRef.current = statusIdentityKey
 
   const setRootRef = useCallback(
-    (node: View | null): void => {
+    (node: HostInstance | null): void => {
       if (node !== null) {
         mountedRef.current = true
         return

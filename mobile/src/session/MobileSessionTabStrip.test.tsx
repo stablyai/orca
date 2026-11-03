@@ -49,7 +49,7 @@ const work = vi.hoisted((): StripWork => ({
 }))
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: work.removeAppState }) },
-  StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
   Platform: { OS: 'web', select: () => undefined },
   Easing: { out: () => () => 0, cubic: () => 0 },
   Animated: {

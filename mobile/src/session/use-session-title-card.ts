@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, type ComponentRef } from 'react'
-import type { Text, View } from 'react-native'
+import type { Text, HostInstance } from 'react-native'
 import {
   useAnchoredDetailCard,
   useDetailCardSource,
@@ -12,9 +12,9 @@ export function useSessionTitleCard(
   tabs: readonly { id: string }[] = [],
   titleVisible = true
 ) {
-  const barRef = useRef<View>(null)
+  const barRef = useRef<HostInstance>(null)
   const titleRef = useRef<ComponentRef<typeof Text>>(null)
-  const openerRef = useRef<View>(null)
+  const openerRef = useRef<HostInstance>(null)
   const card = useAnchoredDetailCard(String(besideTabs), obscured)
   const source = useMemo<DetailCardSource>(
     () => ({ key: 'title', anchorRef: titleRef, barRef, openerRef, geometry: 'dismiss' }),

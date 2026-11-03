@@ -12,6 +12,7 @@ import {
 } from '../terminal/terminal-foreground-recovery'
 import { loadCustomKeys, subscribeStoredCustomKeys } from '../terminal/terminal-custom-keys'
 import type { MobileSessionTabReconciliationModel } from './use-mobile-session-tab-reconciliation'
+import { currentAppStateStatus } from '../platform/app-state-status'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {
   const shellStorage = useShellStorage()
@@ -138,7 +139,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {
-    let previousAppState: AppStateStatus | null = AppState.currentState
+    let previousAppState: AppStateStatus | null = currentAppStateStatus()
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const shouldRecover = shouldRecoverTerminalOnAppStateChange(
         previousAppState,

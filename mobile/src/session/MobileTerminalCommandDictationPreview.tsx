@@ -37,7 +37,7 @@ export function MobileTerminalCommandDictationPreview({
 const styles = themedStyleSheet(() => ({
   // Matches the composer's text inset so the preview sits where the typed draft would.
   layer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     paddingHorizontal: 6,
     paddingTop: 2
   },

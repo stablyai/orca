@@ -1,5 +1,12 @@
 import { useRef, type ReactNode, type RefObject } from 'react'
-import { TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native'
+import {
+  TextInput,
+  View,
+  type StyleProp,
+  type TextInputProps,
+  type ViewStyle,
+  type TextInputInstance
+} from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useTextInputContentHeight } from '../../platform/text-input-content-height'
@@ -18,7 +25,7 @@ type MessageBoxProps = Omit<
 > & {
   value: string
   onChangeText: (text: string) => void
-  inputRef?: RefObject<TextInput | null>
+  inputRef?: RefObject<TextInputInstance | null>
   /** Shows the round Send button at the end of the action row. */
   onSend?: () => void
   canSend?: boolean
@@ -58,7 +65,7 @@ export function MessageBox({
   ...inputProps
 }: MessageBoxProps): React.JSX.Element {
   useMobileColorScheme()
-  const ownRef = useRef<TextInput>(null)
+  const ownRef = useRef<TextInputInstance>(null)
   const ref = inputRef ?? ownRef
   const contentHeight = useTextInputContentHeight(ref, value)
   const focus = useInputFocus({ onFocus, onBlur })

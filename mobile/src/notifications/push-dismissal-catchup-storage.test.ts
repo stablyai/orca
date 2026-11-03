@@ -65,6 +65,7 @@ function notification(index: number): Notifications.Notification {
         body: null,
         sound: null,
         categoryIdentifier: null,
+        threadIdentifier: null,
         data: payload(index)
       }
     }

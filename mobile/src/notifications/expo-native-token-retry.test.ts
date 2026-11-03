@@ -1,7 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => vi.fn())
-vi.mock('expo-modules-core', () => ({ Platform: { OS: 'ios' }, UnavailabilityError: Error }))
+// expo-notifications 58 imports these from `expo` rather than expo-modules-core.
+vi.mock('expo', () => ({ Platform: { OS: 'ios' }, UnavailabilityError: Error }))
 vi.mock('expo-notifications/build/PushTokenManager', () => ({
   default: { getDevicePushTokenAsync: native }
 }))

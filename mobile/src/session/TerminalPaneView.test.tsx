@@ -25,7 +25,7 @@ vi.mock('react-native', () => ({
   Animated: { View: hosts.View },
   StyleSheet: {
     create: <T,>(value: T) => value,
-    absoluteFillObject: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }
+    absoluteFill: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }
   }
 }))
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: hosts.TerminalWebView }))

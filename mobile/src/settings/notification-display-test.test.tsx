@@ -26,7 +26,7 @@ vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   Text: 'Text',
   View: 'View',
-  StyleSheet: { create: (value: unknown) => value, absoluteFillObject: {} }
+  StyleSheet: { create: (value: unknown) => value, absoluteFill: {} }
 }))
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: mocks.loadHosts }))
 vi.mock('../transport/use-all-host-clients', () => ({ useAllHostClients: () => mocks.clients }))

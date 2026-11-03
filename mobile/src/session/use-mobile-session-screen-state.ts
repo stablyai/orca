@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
 import { useTerminalSplitLayout } from './use-terminal-split-layout'
-import { Animated, type ScrollView } from 'react-native'
+import { Animated, type ScrollViewInstance } from 'react-native'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
 import {
@@ -65,7 +65,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const activeSessionTabIdRef = useRef<string | null>(null)
   // Preserve an explicit phone tab pick while a host snapshot is transiently incomplete.
   const selectedSessionTabIdRef = useRef<string | null>(null)
-  const tabStripRef = useRef<ScrollView>(null)
+  const tabStripRef = useRef<ScrollViewInstance>(null)
   const tabStripOffsetRef = useRef(0)
   const tabStripViewportWidthRef = useRef(0)
   const tabStripContentWidthRef = useRef(0)

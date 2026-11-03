@@ -13,7 +13,7 @@ vi.mock('react-native', () => ({
   Alert: { alert: vi.fn() },
   ActivityIndicator: 'ActivityIndicator',
   Animated: { View: 'View' },
-  StyleSheet: { create: <T,>(v: T) => v, absoluteFillObject: {} }
+  StyleSheet: { create: <T,>(v: T) => v, absoluteFill: {} }
 }))
 vi.mock('lucide-react-native', () => ({
   File: 'Icon',

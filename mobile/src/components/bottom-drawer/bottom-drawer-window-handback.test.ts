@@ -18,7 +18,7 @@ vi.mock('react-native', () => ({
   ScrollView: 'ScrollView',
   StyleSheet: {
     create: <T>(styles: T) => styles,
-    absoluteFillObject: {}
+    absoluteFill: {}
   },
   View: 'View',
   useWindowDimensions: () => ({ width: 440, height: 956 })

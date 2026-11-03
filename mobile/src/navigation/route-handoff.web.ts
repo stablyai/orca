@@ -18,9 +18,12 @@ function pathnameOf(href: string): string {
 type RouteHandoffOutcome = 'local' | 'handed-off' | 'refused'
 
 // Inspect parameter tuples: assignability alone treats no-arg back/dismissAll/reload as href-taking functions.
+// Require the first parameter to accept any href so string-literal options (setTransitionMode) do not count.
 type TakesHref<TMember> = TMember extends (...args: infer TArgs) => unknown
   ? TArgs extends [RouterHref, ...unknown[]]
-    ? true
+    ? RouterHref extends TArgs[0]
+      ? true
+      : false
     : false
   : false
 

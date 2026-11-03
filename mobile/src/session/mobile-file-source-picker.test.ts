@@ -30,7 +30,7 @@ function filesByUri(contents: Record<string, Uint8Array>, closed?: string[]) {
         let done = false
         return {
           size: bytes.byteLength,
-          readBytes: () => {
+          readBytesSync: () => {
             const chunk = done ? new Uint8Array() : bytes
             done = true
             return chunk

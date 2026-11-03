@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
+import { currentAppStateStatus } from '../platform/app-state-status'
 
 const appStateListeners = new Set<() => void>()
 // Read on first subscribe, so importing this module never touches AppState.
@@ -9,7 +10,7 @@ let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = 
 function subscribeToAppState(listener: () => void): () => void {
   appStateListeners.add(listener)
   if (!appStateSubscription) {
-    currentAppState = AppState.currentState
+    currentAppState = currentAppStateStatus()
     appStateSubscription = AppState.addEventListener('change', (nextState) => {
       currentAppState = nextState
       appStateListeners.forEach((notify) => notify())

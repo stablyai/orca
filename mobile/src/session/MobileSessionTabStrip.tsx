@@ -1,5 +1,11 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
-import { View, ScrollView, StyleSheet } from 'react-native'
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  type HostInstance,
+  type ScrollViewInstance
+} from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -63,12 +69,12 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     visibleTabs,
     terminals
   } = controller
-  const stripBarRef = useRef<View>(null)
+  const stripBarRef = useRef<HostInstance>(null)
   const tabBarRef = inTopBar ? details.barRef : stripBarRef
   const { dismiss, toggleSource, refreshSource } = details
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
   const attachTabBar = useCallback(
-    (view: View | null) => {
+    (view: HostInstance | null) => {
       stripBarRef.current = view
       tabBarKeepsKeyboard(view)
     },
@@ -175,7 +181,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     ]
   )
   const attachTabStrip = useCallback(
-    (view: ScrollView | null) => {
+    (view: ScrollViewInstance | null) => {
       if (view) {
         tabStripOffsetRef.current = 0
         tabStripViewportWidthRef.current = 0

@@ -12,7 +12,7 @@ vi.mock('./MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () =>
 vi.mock('react-native', () => ({
   Platform: platform,
   StyleSheet: {
-    absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+    absoluteFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     create: (styles: unknown) => styles
   },
   Text: 'Text',

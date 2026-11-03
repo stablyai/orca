@@ -23,7 +23,7 @@ vi.mock('expo-router', async () => {
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: vi.fn() }) },
   View: 'View',
-  StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
   Platform: { OS: 'ios' },
   Keyboard: { dismiss: vi.fn() },
   Easing: { bezier: () => 'toast-easing' },

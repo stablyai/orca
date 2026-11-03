@@ -73,7 +73,7 @@ vi.mock('react-native', () => ({
   View: hosts.View,
   Text: hosts.Text,
   Pressable: hosts.Pressable,
-  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFill: {} },
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios }
 }))
 vi.mock('./MobileSwitch', () => ({ MobileSwitch: hosts.View }))

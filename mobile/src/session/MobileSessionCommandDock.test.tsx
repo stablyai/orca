@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement, useLayoutEffect, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 import { useTerminalLiveInputFocus } from '../terminal/use-terminal-live-input-focus'
@@ -87,8 +87,8 @@ afterEach(() => {
 })
 
 function Harness({ handle, liveInputEnabled }: Selection) {
-  const liveInputRef = useRef<TextInput>(null)
-  const commandInputRef = useRef<TextInput>(null)
+  const liveInputRef = useRef<TextInputInstance>(null)
+  const commandInputRef = useRef<TextInputInstance>(null)
   const activeHandleRef = useRef(handle)
   useLayoutEffect(() => {
     activeHandleRef.current = handle
@@ -120,7 +120,7 @@ function Harness({ handle, liveInputEnabled }: Selection) {
     keyboardLift: 0,
     liveInputRef,
     commandInputRef,
-    bindLiveInputField: (field: TextInput | null) => {
+    bindLiveInputField: (field: TextInputInstance | null) => {
       liveInputRef.current = field
     }
   }

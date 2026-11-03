@@ -1,5 +1,5 @@
 import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import {
   MobileNativeChatQueuedMessages,
@@ -10,7 +10,7 @@ import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-c
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
-  composerInputRef?: RefObject<TextInput | null>
+  composerInputRef?: RefObject<TextInputInstance | null>
 }
 
 export type ComposerTrayProps = {
