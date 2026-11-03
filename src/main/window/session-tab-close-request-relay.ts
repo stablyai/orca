@@ -7,7 +7,7 @@ import type {
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
 import { SESSION_TAB_CLOSE_TIMEOUT_ERROR } from '../../shared/session-tab-close'
-import { addFanoutListener, addFanoutListeners } from '../event-listener-fanout'
+import { addFanoutListener, addFanoutListeners } from '../runtime/events/event-listener-fanout'
 
 const SESSION_TAB_CLOSE_CONFIRMATION_MS = 5 * 60_000
 const SESSION_TAB_CLOSE_RESPONSE_GRACE_MS = 5_000

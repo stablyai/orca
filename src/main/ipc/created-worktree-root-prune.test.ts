@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RepoWorktrees from '../repo-worktrees'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import {
   __resetCreatedWorktreeRootsForTests,
@@ -11,7 +11,7 @@ import {
   rebuildAuthorizedRootsCache,
   registerCreatedWorktreeRoot,
   resolveRegisteredWorktreePath
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 
 const { statMock } = vi.hoisted(() => ({ statMock: vi.fn() }))
 

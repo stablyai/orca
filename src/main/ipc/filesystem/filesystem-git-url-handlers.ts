@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../../git/repo'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { validateFullGitObjectId } from './filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'

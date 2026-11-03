@@ -4,7 +4,7 @@ import type {
   ForceDeleteWorktreeBranchResult
 } from '../../../../shared/worktree/create-types'
 import { parseWorktreeId } from '../../worktree-logic'
-import { resolveWorktreeRemovalRepoOwner } from '../../../worktree-removal-repo-owner'
+import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
@@ -12,7 +12,7 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
-import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
 import {
   notifyWorktreesChanged,

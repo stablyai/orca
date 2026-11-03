@@ -1,4 +1,5 @@
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
 import { commitLeafMoveAndRekey } from '../../../ipc/pty/ipc/leaf-move'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { MovedPanePlacement } from '../../session-tabs/headless-pane-move-to-new-tab'
@@ -22,29 +23,22 @@ export const SESSION_TAB_MUTATION_METHODS = [
     permission: 'workspace',
     params: ActivateTab,
     handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
+      const inventory = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+      const tabId = resolveChatTabActivation(inventory.tabs, params.tabId)
       if (clientKind) {
-        const visible = projectSessionTabsForClient(
-          await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
-          clientKind,
-          clientCapabilities
-        )
-        assertProjectedSessionTabVisible(visible, params.tabId)
+        const visible = projectSessionTabsForClient(inventory, clientKind, clientCapabilities)
+        assertProjectedSessionTabVisible(visible, tabId)
       }
-      const result = await runtime.activateMobileSessionTab(
-        params.worktree,
-        params.tabId,
-        params.leafId,
-        {
-          notifyClients: params.notifyClients !== false,
-          clientNavigationId: pairedDeviceId,
-          ...(params.intent ? { intent: params.intent } : {}),
-          navigation: resolveRuntimeNavigationTarget({
-            navigation: params.navigation,
-            notifyClients: params.notifyClients,
-            clientKind
-          })
-        }
-      )
+      const result = await runtime.activateMobileSessionTab(params.worktree, tabId, params.leafId, {
+        notifyClients: params.notifyClients !== false,
+        clientNavigationId: pairedDeviceId,
+        ...(params.intent ? { intent: params.intent } : {}),
+        navigation: resolveRuntimeNavigationTarget({
+          navigation: params.navigation,
+          notifyClients: params.notifyClients,
+          clientKind
+        })
+      })
       const projected = projectSessionTabsForMutationClient(result, clientKind, clientCapabilities)
       // One reply's answer, outside the projection: the fallback is never part of the tab snapshot.
       return result.startupCwdFallback

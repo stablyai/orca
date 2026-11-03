@@ -1,4 +1,4 @@
-import { readInjectedAgentSessionId } from '../../shared/agent-session-caller-env'
+import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import type {
   CliStatusCaller,
   OrchestrationCallerShowResult

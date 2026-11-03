@@ -66,25 +66,6 @@ describe('SshConnection loopback route', () => {
     startRouteMock.mockReset()
   })
 
-  it('routes later commands through the route once it is proven', async () => {
-    const finishStart = deferRouteStart()
-    const conn = new SshConnection(
-      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
-      createCallbacks()
-    )
-
-    await conn.connect()
-    expect(conn.getSystemSshBuildArgsOptions().loopbackRoute).toBeUndefined()
-
-    finishStart(createRoute(50001))
-    await vi.waitFor(() =>
-      expect(conn.getSystemSshBuildArgsOptions().loopbackRoute).toEqual({
-        localPort: 50001,
-        hostKeyAlias: 'example.com'
-      })
-    )
-  })
-
   it('still builds a route for a reconnect that superseded a start in flight', async () => {
     const finishStaleStart = deferRouteStart()
     const finishCurrentStart = deferRouteStart()

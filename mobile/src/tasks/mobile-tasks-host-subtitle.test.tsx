@@ -1,8 +1,9 @@
-import { createElement, Fragment } from 'react'
+import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const reactNative = vi.hoisted(() => ({
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   StyleSheet: { create: <Styles,>(styles: Styles) => styles, hairlineWidth: 1 },
   Text: 'Text',
@@ -15,7 +16,6 @@ vi.mock('./mobile-tasks-dependencies', async () => ({
   ...(await import('../theme/themed-styles')),
   ...(await import('../theme/use-mobile-color-scheme')),
   ChevronLeft: 'Icon',
-  Plus: 'Icon',
   RefreshCw: 'Icon',
   StatusDot: 'StatusDot'
 }))
@@ -25,7 +25,8 @@ vi.mock('./mobile-tasks-legacy-styles', async () => ({
 vi.mock('./mobile-tasks-provider-controls', () => ({
   renderMobileTasksProviderControls: () => null
 }))
-vi.mock('./mobile-tasks-search-control', () => ({ renderMobileTasksSearchControl: () => null }))
+vi.mock('./mobile-tasks-provider-pickers', () => ({ selectMobileTasksProvider: () => {} }))
+vi.mock('../components/MobileSegmentedControl', () => ({ MobileSegmentedControl: () => null }))
 const hostStore = vi.hoisted(() => {
   const hosts = [
     { id: 'studio', name: 'Studio Mac' },
@@ -46,7 +47,7 @@ const hostStore = vi.hoisted(() => {
 vi.mock('../transport/host-store', () => ({ loadHosts: () => hostStore.loadHosts() }))
 
 import { hostScreenStyles } from '../host-screen/host-screen-styles'
-import { renderMobileTasksStatusBar } from './mobile-tasks-screen-chrome'
+import { MobileTasksStatusBar } from './mobile-tasks-screen-chrome'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 
 let renderer: ReactTestRenderer | null = null
@@ -59,7 +60,7 @@ function StatusBar({ hostId }: { hostId: string }) {
     router: { back: () => {} },
     taskUiReady: true
   } as unknown as ConnectionPresentationModel
-  return createElement(Fragment, null, renderMobileTasksStatusBar(model))
+  return createElement(MobileTasksStatusBar, { model, accessory: null })
 }
 
 async function renderStatusBar(hostId: string): Promise<ReactTestRenderer> {
@@ -89,7 +90,7 @@ describe('Tasks header desktop subtitle', () => {
     expect(subtitle.props.children).toBe('Build Box')
     expect(subtitle.props.style).toContain(hostScreenStyles.hostPlatformText)
     expect(subtitle.props.numberOfLines).toBe(1)
-    expect(subtitle.parent!.parent!.findByProps({ children: 'Tasks' })).toBeTruthy()
+    expect(subtitle.parent!.parent!.parent!.findByProps({ children: 'Tasks' })).toBeTruthy()
   })
 
   it('reserves a blank line for a desktop that is not paired', async () => {

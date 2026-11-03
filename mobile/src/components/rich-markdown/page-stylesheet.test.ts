@@ -20,7 +20,7 @@ describe('the editor stylesheet on the page', () => {
     expect(scoped).toContain('--foreground:')
     const rootRules = scoped
       .split('}')
-      .filter((rule) => rule.includes('--foreground:') || rule.includes('overscroll-behavior:'))
+      .filter((rule) => rule.includes('--foreground:') || rule.includes('min-height: 100%'))
     expect(rootRules.length).toBeGreaterThan(0)
     for (const rule of rootRules) {
       expect(rule.trimStart().startsWith(PREFIX)).toBe(true)

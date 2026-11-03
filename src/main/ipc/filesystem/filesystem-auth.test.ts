@@ -18,7 +18,7 @@ import {
   rebuildAuthorizedRootsCache,
   registerCreatedWorktreeRoot,
   resolveRegisteredWorktreePath
-} from '../registered-worktree-roots-cache'
+} from '../worktrees/removal/registered-worktree-roots-cache'
 
 vi.mock('../../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../../repo-worktrees')

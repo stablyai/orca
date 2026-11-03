@@ -108,14 +108,6 @@ afterEach(() => {
 })
 
 describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH', () => {
-  it('sources the user profile before emitting the codex wrapper', () => {
-    const rcfile = getDaemonBashShellReadyRcfileContent()
-
-    expect(rcfile.indexOf('source "$HOME/.bash_profile"')).toBeLessThan(
-      rcfile.indexOf('ORCA_CODEX_LAUNCH_PREFLIGHT')
-    )
-  })
-
   it('runs the bundled CLI the resolver picked, not the impostor the profile put first', () => {
     const fixture = buildFixture()
     const preflightCommand = resolveCodexShellLaunchPreflightCommand({

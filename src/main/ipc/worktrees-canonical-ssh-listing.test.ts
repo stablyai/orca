@@ -24,7 +24,7 @@ vi.mock('../git/runner', async (original) => ({
   gitExecFileAsync: mocks.git
 }))
 vi.mock('../project-runtime-git-options', () => ({ getLocalProjectWorktreeGitOptions: () => ({}) }))
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: mocks.rootsRevision,
   registerWorktreeRootsForRepo: mocks.roots
 }))

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { enoent, resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
+import { resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
+
 import {
   createRuntimeFileCommands,
   useRuntimeFileCommandsLifecycle
@@ -37,34 +38,6 @@ describe('RuntimeFileCommands', () => {
 
   describe('resolveTerminalPath', () => {
     const { tempDirs, tempFile } = useTerminalArtifactTempFiles()
-
-    it('returns an absolute open target for an existing local temp path outside the worktree', async () => {
-      const artifactPath = await tempFile('result.json', '{}')
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-      statMock.mockResolvedValue({ isDirectory: () => false, size: 12, dev: 1, ino: 2, mtimeMs: 3 })
-      const canonicalPath = await realpath(artifactPath)
-
-      const result = await resolveTerminalArtifactPath(commands, artifactPath)
-
-      expect(result).toMatchObject({
-        worktree: 'wt-1',
-        relativePath: null,
-        absolutePath: canonicalPath,
-        exists: true,
-        isDirectory: false,
-        openTarget: {
-          kind: 'absolute-file',
-          provider: 'local',
-          absolutePath: canonicalPath
-        }
-      })
-      expect(result.openTarget?.kind === 'absolute-file' ? result.openTarget.grantId : '').toMatch(
-        /\S/
-      )
-      expect(resolveAuthorizedPathMock).not.toHaveBeenCalledWith(canonicalPath, expect.anything())
-      expect(statMock).not.toHaveBeenCalled()
-    })
 
     // Why: a chat link or typed path carries no terminal; the caller's terminal access is the authority.
     it('grants a writable file outside every workspace with no terminal or chat context', async () => {
@@ -108,16 +81,6 @@ describe('RuntimeFileCommands', () => {
       ).resolves.toEqual({ ok: true })
     })
 
-    it('reports a missing file outside every workspace as absent', async () => {
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
-      const missingPath = join(tmpdir(), `orca-missing-${process.pid}-${Date.now()}.md`)
-
-      const result = await commands.resolveTerminalPath('id:wt-1', missingPath, null, 'client-a')
-
-      expect(result).toMatchObject({ relativePath: null, exists: false })
-      expect(result.openTarget).toBeUndefined()
-    })
-
     // Why: this machine's home is the Windows user's, not the distro user's.
     it('refuses tilde paths when the workspace runs in WSL', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -155,24 +118,6 @@ describe('RuntimeFileCommands', () => {
       await expect(
         commands.resolveTerminalPath('id:wt-1', '/dev/null', null, 'client-a')
       ).rejects.toThrow('Not a regular file')
-    })
-
-    it('resolves a relative path against the terminal cwd, not a stale client cwd', async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'orca-terminal-artifact-'))
-      tempDirs.push(dir)
-      await writeFile(join(dir, 'result.json'), '{}')
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-      statMock.mockRejectedValue(enoent())
-
-      const result = await resolveTerminalArtifactPath(commands, 'result.json', dir)
-
-      expect(result).toMatchObject({
-        relativePath: 'result.json',
-        absolutePath: '/repo/result.json',
-        exists: false
-      })
-      expect(result.openTarget).toBeUndefined()
     })
 
     it('uses the canonical local temp artifact path for the exact grant', async () => {

@@ -67,11 +67,13 @@ describe('registerNotificationHandlers', () => {
   })
 
   it('formats blocked and interrupted agent snapshots distinctly', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only getSettings().notifications from the store.
     registerNotificationHandlers({
       getSettings: () => ({
         notifications: {
           enabled: true,
           agentTaskComplete: true,
+          agentNeedsInput: true,
           terminalBell: false,
           suppressWhenFocused: false
         }

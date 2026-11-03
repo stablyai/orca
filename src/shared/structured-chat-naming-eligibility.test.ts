@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem, AgentJournalSnapshot } from './agent-session-journal-types'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSnapshot
+} from './agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
 import { firstStructuredChatNamingPrompt } from './structured-chat-naming-eligibility'
 
 function message(

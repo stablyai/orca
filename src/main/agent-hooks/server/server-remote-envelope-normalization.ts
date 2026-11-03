@@ -1,4 +1,4 @@
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId

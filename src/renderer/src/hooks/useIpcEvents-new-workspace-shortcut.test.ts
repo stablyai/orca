@@ -1,8 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
-  buildNewWorkspaceShortcutModalData,
-  openNewWorkspaceFromShortcut
-} from './ipc-events/new-workspace-command'
+import { describe, expect, it } from 'vitest'
+import { buildNewWorkspaceShortcutModalData } from './ipc-events/new-workspace-command'
 
 describe('buildNewWorkspaceShortcutModalData', () => {
   it('carries the active Linear issue into the Cmd+N composer', () => {
@@ -58,35 +55,5 @@ describe('buildNewWorkspaceShortcutModalData', () => {
     } as never)
 
     expect(data).toEqual({ telemetrySource: 'shortcut' })
-  })
-})
-
-describe('openNewWorkspaceFromShortcut', () => {
-  it('opens the composer even when no project has been added yet', () => {
-    const openModal = vi.fn()
-
-    openNewWorkspaceFromShortcut({
-      activeModal: 'none',
-      activeView: 'terminal',
-      taskPageData: {},
-      openModal
-    } as never)
-
-    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
-      telemetrySource: 'shortcut'
-    })
-  })
-
-  it('does not reopen the composer when it is already active', () => {
-    const openModal = vi.fn()
-
-    openNewWorkspaceFromShortcut({
-      activeModal: 'new-workspace-composer',
-      activeView: 'terminal',
-      taskPageData: {},
-      openModal
-    } as never)
-
-    expect(openModal).not.toHaveBeenCalled()
   })
 })

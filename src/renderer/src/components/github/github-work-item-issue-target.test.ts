@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runIssueUpdate, runWorkItemBodyUpdate } from './github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { notifyWorkItemDetailsMutation } from './github-work-item-comment-mutations'
 import { runGHEditLabelToggle } from '../github-item-dialog/edit-item-fields/gh-edit-section-mutations'
 
-vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn(() => ({ repos: [] })) } }))
 vi.mock('@/components/github/github-work-item-comment-mutations', () => ({
   notifyWorkItemDetailsMutation: vi.fn()
 }))
@@ -41,6 +44,8 @@ const item: GitHubWorkItem = {
 
 describe('issue edits retain the displayed repository', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(callRuntimeRpc).mockResolvedValue({ ok: true })
     vi.stubGlobal('window', {
       api: {
         gh: { updateIssue: vi.fn().mockResolvedValue({ ok: true }), updateIssueBySlug: vi.fn() }
@@ -48,69 +53,71 @@ describe('issue edits retain the displayed repository', () => {
     })
   })
 
-  it('keeps body edits on the registered repo path and passes the opened issue target', async () => {
-    await runWorkItemBodyUpdate({
-      item,
-      repoPath: '/home/fixture/widgets',
-      projectOrigin: undefined,
-      body: 'Origin edit',
-      parsedSlug: ORIGIN
-    })
-
-    expect(window.api.gh.updateIssue).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      repoPath: '/home/fixture/widgets',
-      sourceContext: undefined,
-      number: 12,
-      updates: { body: 'Origin edit' },
-      ownerRepo: ORIGIN
-    })
-    expect(window.api.gh.updateIssueBySlug).not.toHaveBeenCalled()
-  })
-
-  it('saves a Project row body in its upstream repository instead of the fork workspace', async () => {
-    vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true })
-
-    await runWorkItemBodyUpdate({
-      item: { ...item, url: 'https://github.com/upstream-owner/widgets/issues/12' },
-      repoPath: '/home/fixture/fork-widgets',
-      sourceContext: localSource,
-      projectOrigin,
-      body: 'Project edit',
-      parsedSlug: UPSTREAM
-    })
-
-    expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledWith({
-      ...UPSTREAM,
-      number: 12,
-      updates: { body: 'Project edit' }
-    })
+  function expectProjectUpdate(
+    sourceContext: TaskSourceContext,
+    updates: Parameters<typeof runIssueUpdate>[0]['updates']
+  ) {
+    const payload = { ...UPSTREAM, number: 12, updates }
+    if (sourceContext.hostId === 'local') {
+      expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledExactlyOnceWith({
+        ...payload,
+        wakeWslDistro: true
+      })
+      expect(callRuntimeRpc).not.toHaveBeenCalled()
+    } else {
+      expect(callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
+        { kind: 'environment', environmentId: 'project-source' },
+        'github.project.updateIssueBySlug',
+        payload,
+        { timeoutMs: 30_000 }
+      )
+      expect(window.api.gh.updateIssueBySlug).not.toHaveBeenCalled()
+    }
     expect(window.api.gh.updateIssue).not.toHaveBeenCalled()
-  })
+    expect(notifyWorkItemDetailsMutation).toHaveBeenCalledExactlyOnceWith(
+      {
+        repoPath: '/home/fixture/fork-widgets',
+        repoId: item.repoId,
+        sourceContext,
+        type: 'issue',
+        number: 12
+      },
+      { local: sourceContext.hostId === 'local' }
+    )
+  }
 
-  it.each([
-    { state: 'closed' as const },
-    { addLabels: ['bug'] },
-    { addAssignees: ['upstream-assignee'] }
-  ])('keeps Project field edits in the row repository: %j', async (updates) => {
-    vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true })
-
-    await runIssueUpdate({
-      repoPath: '/home/fixture/fork-widgets',
-      repoId: item.repoId,
-      sourceContext: localSource,
-      projectOrigin,
-      issueRepo: UPSTREAM,
-      number: 12,
-      updates
+  describe.each(['local', 'runtime:project-source'] as const)('Project source %s', (hostId) => {
+    const sourceContext = { ...localSource, hostId }
+    it('saves the Project row body through the original exact slug actor', async () => {
+      vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true })
+      await runWorkItemBodyUpdate({
+        item: { ...item, url: 'https://github.com/upstream-owner/widgets/issues/12' },
+        repoPath: '/home/fixture/fork-widgets',
+        sourceContext,
+        projectOrigin,
+        body: 'Project edit',
+        parsedSlug: UPSTREAM
+      })
+      expectProjectUpdate(sourceContext, { body: 'Project edit' })
     })
 
-    expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledWith({
-      ...UPSTREAM,
-      number: 12,
-      updates
+    it.each([
+      { state: 'closed' as const },
+      { addLabels: ['bug'] },
+      { addAssignees: ['upstream-assignee'] }
+    ])('keeps the Project field edit on the same exact actor: %j', async (updates) => {
+      vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true })
+      await runIssueUpdate({
+        repoPath: '/home/fixture/fork-widgets',
+        repoId: item.repoId,
+        sourceContext,
+        projectOrigin,
+        issueRepo: UPSTREAM,
+        number: 12,
+        updates
+      })
+      expectProjectUpdate(sourceContext, updates)
     })
-    expect(window.api.gh.updateIssue).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -145,7 +152,7 @@ describe('issue edits retain the displayed repository', () => {
     async ({ localLabels, updates }) => {
       let mutation: Promise<unknown> = Promise.resolve()
       runGHEditLabelToggle({
-        itemId: item.id,
+        item,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath: 'C:\\workspace\\widgets',
@@ -158,7 +165,6 @@ describe('issue edits retain the displayed repository', () => {
           await mutation
         },
         onLabelsChange: vi.fn(),
-        patchWorkItem: vi.fn(),
         patchProjectRowIfNeeded: vi.fn(),
         onMutated: vi.fn()
       })

@@ -41,7 +41,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
         import('../local-builds/local-build-switch'),
         import('../local-builds/local-build-feed-server')
       ])
-      const candidate = await chooseLocalBuild(this.mainWindowRef)
+      const candidate = await chooseLocalBuild(this.getMainWindow)
       if (!candidate) {
         return
       }
@@ -60,6 +60,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       this.clearPrereleaseFallbackContext()
       this.clearPublishingWindowLastGoodCheck()
       this.clearAvailableUpdateContext()
+      this.delayedUpdate = null
       this.activeUpdateNudgeId = null
       this.userInitiatedCheck = true
       this.sendStatus({ state: 'checking', userInitiated: true })
@@ -145,6 +146,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       this.clearPrereleaseFallbackContext()
       this.clearPublishingWindowLastGoodCheck()
       this.clearAvailableUpdateContext()
+      this.delayedUpdate = null
       this.activeUpdateNudgeId = null
       this.userInitiatedCheck = true
       this.sendStatus({ state: 'checking', userInitiated: true })

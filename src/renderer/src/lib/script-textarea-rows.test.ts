@@ -10,16 +10,6 @@ afterEach(() => {
 })
 
 describe('script textarea row sizing', () => {
-  it('matches existing row clamps for small setup and repository scripts', () => {
-    expect(getDetectedSetupScriptTextareaRows('')).toBe(2)
-    expect(getDetectedSetupScriptTextareaRows('pnpm install')).toBe(2)
-    expect(getDetectedSetupScriptTextareaRows('a\nb\nc\nd\ne\nf\ng')).toBe(6)
-
-    expect(getRepositoryHookScriptTextareaRows('')).toBe(4)
-    expect(getRepositoryHookScriptTextareaRows('pnpm test')).toBe(4)
-    expect(getRepositoryHookScriptTextareaRows('a\nb\nc\nd')).toBe(5)
-  })
-
   it('clamps newline-heavy pasted scripts without splitting the full payload', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')

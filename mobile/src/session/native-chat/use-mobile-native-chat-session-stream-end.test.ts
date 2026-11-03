@@ -1,7 +1,7 @@
 import { createElement, Fragment, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { MobileRelayRpcStreams } from '../../transport/mobile-relay-rpc-streams'
 import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
@@ -9,7 +9,7 @@ import type { RpcResponse } from '../../transport/types'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
-} from '../use-mobile-native-chat-session'
+} from './use-mobile-native-chat-session'
 
 function message(id: string): NativeChatMessage {
   return {

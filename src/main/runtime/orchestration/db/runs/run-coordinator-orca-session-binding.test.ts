@@ -96,7 +96,7 @@ describe('Run binding by Orca session id', () => {
     expect(directMail(run.id, CHAT_X).to_handle).toBe(`run:${run.id}`)
   })
 
-  it("never unbinds another session's Run, and unbinds only the same session's other Runs", () => {
+  it("never unbinds another session's Run, and run-use unbinds only the same session's other Runs", () => {
     db = new OrchestrationDb(':memory:')
     const ptyRun = db.createRun({
       objective: 'pty',
@@ -117,6 +117,12 @@ describe('Run binding by Orca session id', () => {
     const generation = db.getRunRaw(xFirst.id)?.consumer_generation ?? 0
 
     const xSecond = createChatRun(CHAT_X_ID, 'x second')
+    db.bindRun({
+      runId: xSecond.id,
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: CHAT_X_ID
+    })
 
     expect(db.getCurrentRunForCoordinator(chat(CHAT_X_ID))?.id).toBe(xSecond.id)
     expect(db.getCurrentRunForCoordinator(chat(CHAT_Y_ID))?.id).toBe(yRun.id)
@@ -274,7 +280,7 @@ describe('Run binding by Orca session id', () => {
     }
   })
 
-  it("reroutes a worker's mailbox address when its next Run unbinds the last", () => {
+  it("reroutes a worker's mailbox address when run-use of its next Run unbinds the last", () => {
     db = new OrchestrationDb(':memory:')
     const worker = structuredWorker()
     const bind = {
@@ -285,7 +291,8 @@ describe('Run binding by Orca session id', () => {
     const last = db.createRun({ objective: 'last', ...bind })
     const stray = [strayMail(last.id, worker.terminalHandle)]
 
-    db.createRun({ objective: 'next', ...bind })
+    const next = db.createRun({ objective: 'next', ...bind })
+    db.bindRun({ runId: next.id, ...bind })
 
     for (const id of stray) {
       expect(db.getMessageById(id)?.to_handle).toBe(`run:${last.id}`)

@@ -2,6 +2,7 @@ import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as TaskDetailLoading from '../../../tasks/use-mobile-tasks-item-detail-loading'
 
 const REPO_ID = 'repo-1'
 
@@ -111,12 +112,15 @@ export function taskItemDetailMountAdapters(
     // Load on mount so this and task-mount-adapters cannot both apply a mutant to the same module.
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
-        useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-item-detail-loading')>(
+        useHook: (model: TaskDetailLoading.ItemDetailLoadingModel) => {
+          model.hydrateActionItem = model.setActionItem
+          return load<typeof TaskDetailLoading>(
             'use-mobile-tasks-item-detail-loading.tsx'
-          ).useMobileTasksItemDetailLoading(model),
+          ).useMobileTasksItemDetailLoading(model)
+        },
         fixture: {
           actionItem: item,
+          detailRequestItem: item,
           detailRefreshSeq: 0,
           tasksSupported: true,
           detailLoading: false,

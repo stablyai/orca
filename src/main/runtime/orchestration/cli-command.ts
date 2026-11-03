@@ -1,3 +1,6 @@
+import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
+import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
@@ -37,4 +40,37 @@ export function resolveTerminalOrchestrationCliCommand(args: {
 
   const worktreePath = splitWorktreeIdForFilesystem(args.worktreeId)?.worktreePath
   return worktreePath && isWslUncPath(worktreePath) ? 'orca-ide' : 'orca'
+}
+
+export function resolveRuntimeTerminalOrchestrationCliCommand(
+  handle: string,
+  source: {
+    resolvePtyId: (handle: string) => string | null | undefined
+    getPty: (ptyId: string) => RuntimePtyWorktreeRecord | undefined
+    getProjectRuntime: (
+      pty: RuntimePtyWorktreeRecord
+    ) => ProjectExecutionRuntimeResolution | undefined
+  }
+): OrchestrationCliCommand {
+  // A structured session runs in this process: it is told what the structured mail lane types.
+  if (isStructuredWorkerHandle(handle) || parseOrcaSessionAddress(handle)) {
+    return localOrchestrationCliCommand()
+  }
+  let pty: RuntimePtyWorktreeRecord | null = null
+  try {
+    const ptyId = source.resolvePtyId(handle)
+    pty = ptyId ? (source.getPty(ptyId) ?? null) : null
+  } catch {
+    return 'orca'
+  }
+  if (!pty) {
+    return 'orca'
+  }
+  return resolveTerminalOrchestrationCliCommand({
+    connectionId: pty.connectionId,
+    isWsl: pty.isWsl,
+    worktreeId: pty.worktreeId,
+    runtimeCliCommand: runtimeOrchestrationCliCommand(),
+    projectRuntime: source.getProjectRuntime(pty)
+  })
 }

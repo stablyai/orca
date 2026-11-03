@@ -114,9 +114,9 @@ async function updateAdmittedEnabledOnDisk(enabled: boolean): Promise<{
 }
 
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
-  const status = await client.getCliStatus()
-  if (!status.result.runtime.reachable) {
-    if (status.result.app.running) {
+  const status = await client.getOfflineRuntimeAdmission()
+  if (!status.reachable) {
+    if (status.legacyPidRunning) {
       throw new RuntimeClientError(
         'runtime_error',
         'Orca is running but unavailable. Retry when it responds, or stop Orca before changing agent hooks offline.'
@@ -142,10 +142,11 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   // The CLI and app panes may use different homes; identify the one this status describes.
   const statusSummary = result.statuses
-    .map(
-      (status) =>
-        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}`
-    )
+    .map((status) => {
+      const showDetail = status.detail && (status.state === 'partial' || status.state === 'error')
+      const path = status.configPath ? ` (${status.configPath})` : ''
+      return `${status.agent}: ${status.state}${path}${showDetail ? ` - ${status.detail}` : ''}`
+    })
     .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,

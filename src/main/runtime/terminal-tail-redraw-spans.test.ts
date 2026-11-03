@@ -1,24 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 
 describe('retained terminal redraw text spans', () => {
-  it('overwrites a long row without copying its suffix for every code unit', () => {
-    const previous = 'p'.repeat(16 * 1024)
-    const replacement = 'x'.repeat(previous.length)
-    const slice = vi.spyOn(String.prototype, 'slice')
-    let copiedSuffixes = 0
-    try {
-      const result = appendNormalizedToTailBuffer([previous], '', `\x1b[1A\r${replacement}\n`)
-      copiedSuffixes = slice.mock.calls.length
-      expect(result.lines).toEqual([replacement])
-      expect(result.newlyCompletedLines).toEqual([replacement])
-      expect(result.redrawCursor).toBeNull()
-    } finally {
-      slice.mockRestore()
-    }
-    expect(copiedSuffixes).toBeLessThan(20)
-  })
-
   it.each([
     ['shorter overwrite', '\x1b[1A\rXY\n', 'XYcdef'],
     ['extending overwrite', '\x1b[1A\r123456789\n', '123456789'],

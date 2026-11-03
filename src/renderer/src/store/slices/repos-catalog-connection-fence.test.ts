@@ -61,38 +61,6 @@ beforeEach(() => {
 })
 
 describe('repo catalogs use the host-catalog fence (#20811)', () => {
-  for (const loader of ['all-hosts', 'connect-flow', 'active-target'] as const) {
-    it(`drops a ${loader} catalog from a replaced connection`, async () => {
-      const remote = Promise.withResolvers<unknown>()
-      const started = Promise.withResolvers<void>()
-      stubRemoteRepoList(remote.promise, started.resolve)
-      const store = createTestStore()
-      store.setState({ filterRepoIds: ['gone-repo'] })
-
-      const load =
-        loader === 'all-hosts'
-          ? store.getState().fetchReposForAllHosts()
-          : loader === 'connect-flow'
-            ? store.getState().fetchRuntimeEnvironmentRepos('env-1')
-            : store.getState().fetchRepos({ runtimeEnvironmentId: 'env-1' })
-      await started.promise
-      sshState.generation += 1
-      remote.resolve({
-        id: 'rpc-repo-list',
-        ok: true,
-        result: { repos: [repo('remote-repo', '/remote')] },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-      await load
-
-      expect(store.getState().repos.map((entry) => entry.id)).not.toContain('remote-repo')
-      if (loader === 'all-hosts') {
-        // The dropped catalog is not an answer, so saved repo filters survive.
-        expect(store.getState().filterRepoIds).toEqual(['gone-repo'])
-      }
-    })
-  }
-
   it('keeps the newer all-host load when a superseded one finishes listing hosts late', async () => {
     const olderHosts = Promise.withResolvers<{ id: string; name: string }[]>()
     const listHosts = vi

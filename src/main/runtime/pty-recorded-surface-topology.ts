@@ -1,3 +1,4 @@
+import type { TerminalIdentitySource } from './terminal/identity/terminal-identity-source'
 /** Use graph-sequenced evidence: self-consistency cannot prove attachment, while pending spawns and lost graphs cannot prove detachment (#18191, #7587). */
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -18,7 +19,10 @@ export function spawnSurfaceClaimSequence(graphSequence: number): number {
 }
 
 /** Write pane and graph standing together; main-owned layouts store no duplicate claim. */
+type SurfaceWrites = Pick<TerminalIdentitySource, 'setRecordedSurface'>
+
 export function recordPtySurfaceClaim(
+  source: SurfaceWrites,
   pty: RecordedPtySurface,
   paneKey: string | null,
   graphSequence: number
@@ -27,17 +31,18 @@ export function recordPtySurfaceClaim(
     return
   }
   // Replaying a claim adds no evidence but must preserve its existing graph standing.
-  pty.surfaceRecordedAtGraphSequence =
+  const standing =
     paneKey === pty.paneKey
       ? Math.max(
           pty.surfaceRecordedAtGraphSequence ?? SURFACE_CLAIM_WITHOUT_STANDING,
           graphSequence
         )
       : graphSequence
-  pty.paneKey = paneKey
+  source.setRecordedSurface(pty, undefined, paneKey, standing)
 }
 
 export function recordPtySurface(
+  source: SurfaceWrites,
   pty: RecordedPtySurface,
   tabId: string,
   paneKey: string,
@@ -46,17 +51,22 @@ export function recordPtySurface(
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     return
   }
-  pty.tabId = tabId
-  recordPtySurfaceClaim(pty, paneKey, graphSequence)
+  const standing =
+    paneKey === pty.paneKey
+      ? Math.max(
+          pty.surfaceRecordedAtGraphSequence ?? SURFACE_CLAIM_WITHOUT_STANDING,
+          graphSequence
+        )
+      : graphSequence
+  source.setRecordedSurface(pty, tabId, paneKey, standing)
 }
 
 /** Drops a PTY's surface claim; layout-owner builds keep none. */
-export function forgetPtySurface(pty: RecordedPtySurface): void {
+export function forgetPtySurface(source: SurfaceWrites, pty: RecordedPtySurface): void {
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     return
   }
-  pty.tabId = null
-  pty.paneKey = null
+  source.setRecordedSurface(pty, null, null, undefined)
 }
 
 export type PtySurfaceTopology = {

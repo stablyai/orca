@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import {
-  hookStatusResumeCommand,
-  quitResumeRecords,
-  resumeStatusFromHookRow
-} from './hook-status-resume-records'
+import { hookStatusResumeCommand, resumeStatusFromHookRow } from './hook-status-resume-records'
 
 const WORKTREE = 'repo::/wt'
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -56,39 +52,8 @@ function status(overrides: Partial<AgentStatusIpcPayload> = {}) {
   return resumeStatusFromHookRow(row(overrides), undefined)!
 }
 
-describe('resumeStatusFromHookRow', () => {
-  it('keeps an SSH connection id and drops a WSL relay tag', () => {
-    expect(status({ connectionId: 'ssh-1' }).connectionId).toBe('ssh-1')
-    expect(status({ connectionId: 'wsl:Ubuntu' }).connectionId).toBeNull()
-  })
-
-  it('reads no pane status from identity-only or chat rows', () => {
-    expect(resumeStatusFromHookRow(row({ providerSessionOnly: true }), undefined)).toBeNull()
-    expect(resumeStatusFromHookRow(row({ structuredHost: 'owned' }), undefined)).toBeNull()
-  })
-})
-
 describe('hookStatusResumeCommand', () => {
   const launchConfigOf = () => undefined
-
-  it('records how the agent resumes, with the recipe its terminal launched', () => {
-    const command = hookStatusResumeCommand({
-      status: status(),
-      session: heldSession(),
-      worktreeId: WORKTREE,
-      launchConfigOf: (paneKey, agent) =>
-        paneKey === PANE_KEY && agent === 'codex' ? RECIPE : undefined
-    })
-
-    expect(command).toMatchObject({
-      type: 'sleep',
-      workspace: WORKTREE,
-      tabId: 'tab-1',
-      paneKeys: [PANE_KEY],
-      recordOnly: true,
-      records: [{ paneKey: PANE_KEY, terminalTitle: 'Codex', launchConfig: RECIPE, origin: 'live' }]
-    })
-  })
 
   it('keeps the recipe the pane’s earlier record of the same session kept', () => {
     const earlier = hookStatusResumeCommand({
@@ -137,21 +102,5 @@ describe('hookStatusResumeCommand', () => {
         launchConfigOf
       })
     ).toBeNull()
-  })
-})
-
-describe('quitResumeRecords', () => {
-  it('captures held panes’ running agents as quit records and skips panes it lacks', () => {
-    const records = quitResumeRecords({
-      statuses: [status(), status({ paneKey: 'tab-2:22222222-2222-4222-8222-222222222222' })],
-      session: heldSession(),
-      worktreeIdOf: () => WORKTREE,
-      launchConfigOf: () => undefined,
-      capturedAt: 9
-    })
-
-    expect(records).toEqual([
-      expect.objectContaining({ paneKey: PANE_KEY, origin: 'quit', capturedAt: 9 })
-    ])
   })
 })

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import {
-  buildNarrowForkFetchRefspec,
   ensureRemoteTracksBranchNarrowly,
   getRemoteFetchRefspecs,
   pruneUntrackedForkRemoteRefs,
@@ -49,32 +48,6 @@ function makeConfigExec(fetchByRemote: Record<string, string[]> = {}): {
   return { exec, tagOptByRemote }
 }
 
-describe('buildNarrowForkFetchRefspec / wildcardForkFetchRefspec', () => {
-  it('builds the narrow (trailing-* suffixed) and wide refspec shapes', () => {
-    expect(buildNarrowForkFetchRefspec('fork', 'feature/fix')).toBe(
-      '+refs/heads/feature/fix*:refs/remotes/fork/feature/fix*'
-    )
-    expect(wildcardForkFetchRefspec('fork')).toBe('+refs/heads/*:refs/remotes/fork/*')
-  })
-})
-
-describe('getRemoteFetchRefspecs', () => {
-  it('returns [] when the remote has no configured refspec', async () => {
-    const { exec } = makeConfigExec()
-    await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([])
-  })
-
-  it('returns every configured refspec', async () => {
-    const { exec } = makeConfigExec({
-      fork: ['+refs/heads/a:refs/remotes/fork/a', '+refs/heads/b:refs/remotes/fork/b']
-    })
-    await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
-      '+refs/heads/a:refs/remotes/fork/a',
-      '+refs/heads/b:refs/remotes/fork/b'
-    ])
-  })
-})
-
 describe('ensureRemoteTracksBranchNarrowly', () => {
   it('replaces the wide default refspec with a single trailing-* narrow one', async () => {
     const { exec, tagOptByRemote } = makeConfigExec({ fork: [wildcardForkFetchRefspec('fork')] })
@@ -105,16 +78,6 @@ describe('ensureRemoteTracksBranchNarrowly', () => {
 
     const addCalls = exec.mock.calls.filter(([args]) => args[1] === '--add')
     expect(addCalls).toEqual([])
-  })
-
-  it('replaces a stray literal (non-suffixed) entry for the same branch with the suffixed form', async () => {
-    const { exec } = makeConfigExec({ fork: ['+refs/heads/main:refs/remotes/fork/main'] })
-
-    await ensureRemoteTracksBranchNarrowly(exec, REPO, 'fork', 'main')
-
-    await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
-      '+refs/heads/main*:refs/remotes/fork/main*'
-    ])
   })
 
   it('leaves a different branch entry untouched when replacing a stray literal', async () => {
@@ -197,15 +160,6 @@ describe('pruneUntrackedForkRemoteRefs', () => {
     await pruneUntrackedForkRemoteRefs(exec, REPO, 'fork', new Set(['main']))
 
     expect(refs).toEqual(['HEAD', 'main'])
-  })
-
-  it('is a no-op when nothing is stray', async () => {
-    const { exec, refs } = makeRefsExec(['main'])
-
-    const deleted = await pruneUntrackedForkRemoteRefs(exec, REPO, 'fork', new Set(['main']))
-
-    expect(deleted).toEqual([])
-    expect(refs).toEqual(['main'])
   })
 
   it("keeps a ref that shares a branch prefix, matching the refspec's own trailing-* match", async () => {

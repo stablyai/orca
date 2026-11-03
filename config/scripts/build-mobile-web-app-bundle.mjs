@@ -100,24 +100,13 @@ export const MOBILE_WEB_APP_ROOT_RESET =
   '<style id="expo-reset">html,body{height:100%}body{overflow:hidden}' +
   '#root{display:flex;height:100%;flex:1}</style>'
 
-/**
- * Rules that make the page paint what the native app paints where the browser's defaults differ.
- * Native is the reference. Zero specificity (`:where`), so a component's own style still wins.
- *
- * Inputs and textareas: Chromium rings a focused one (`:focus-visible` matches every focused
- * text field); no native TextInput paints one, and the caret and the IME already mark focus.
- * Those only: a button reached by a hardware keyboard keeps the browser's ring.
- *
- * Textarea scrollbars: React Native Web renders multiline fields as HTML textareas; native mobile
- * TextInput never paints scrollbars or resize grippers.
- *
- * Text: native `Text` is unselectable unless `selectable`; react-native-web's is selectable. On
- * iOS a hold on it raises WebKit's selection over the page's own long press; on Android the
- * selection's `selectionchange` and `touchcancel` end a held press. `body`, not `#root`: modals
- * portal to `document.body`. Fields opt back in, callout too, since WebKit inherits it.
- */
+// Use zero-specificity native parity: remove text-field focus rings only; keyboard buttons keep browser rings.
+// Disable body text selection/callout to prevent WebKit/Android long-press interference, including portaled modals; fields opt back in.
+// Stop the WebView rubber-banding the whole page (headers included) when an inner list hits its end; inner scrollers keep their bounce.
+// Hide textarea/input scrollbars and resize grippers: RN-Web multiline fields are HTML textareas; native TextInput paints neither.
 export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
   '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
+  ':where(html){overscroll-behavior:none}' +
   ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
   ':where(input,textarea,[contenteditable]){-webkit-user-select:text;user-select:text;' +
   '-webkit-touch-callout:default}' +
@@ -466,7 +455,8 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
     ...(route.optionalGrants === undefined || route.optionalGrants.length === 0
       ? {}
       : { optionalGrants: [...route.optionalGrants] }),
-    ...(route.canOwnHostArea === true ? { canOwnHostArea: true } : {})
+    ...(route.canOwnHostArea === true ? { canOwnHostArea: true } : {}),
+    ...(route.canOwnHostAreaAcrossLayouts === true ? { canOwnHostAreaAcrossLayouts: true } : {})
   }))
 }
 
