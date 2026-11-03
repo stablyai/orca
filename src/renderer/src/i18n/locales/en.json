@@ -20046,6 +20046,12 @@
         "reason": "Reason",
         "needsAccess": "Needs access to",
         "needsNewerOrca": "This request needs a newer version of Orca.",
+        "folderTrust": {
+          "title": "Trust this folder?",
+          "hint": "The agent asks before it can read, edit and run files in this folder.",
+          "trust": "Trust folder",
+          "exit": "Exit"
+        },
         "plan": {
           "file": "Plan file",
           "reviewTitle": "Review proposed plan",

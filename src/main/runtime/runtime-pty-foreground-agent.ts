@@ -23,7 +23,10 @@ export class RuntimePtyForegroundAgent {
   private readonly refreshes = new Map<string, PtyForegroundAgentRefresh>()
   private readonly reads = new Map<string, PtyForegroundProcessReadEntry>()
   private readonly delayedTitles = new Map<string, number>()
-  private readonly identifies = new Map<string, Promise<TerminalAgent | null>>()
+  private readonly identifies = new Map<
+    string,
+    { settledAt?: number; promise: Promise<TerminalAgent | null> }
+  >()
   // A scan's recognized agent for a version name holds while that name stays in the foreground.
   private readonly confirmedByPtyId = new Map<
     string,
@@ -117,13 +120,33 @@ export class RuntimePtyForegroundAgent {
     ) {
       return null
     }
-    let pending = this.identifies.get(ptyId)
-    if (!pending) {
-      pending = this.identifyForeground(ptyId).finally(() => this.identifies.delete(ptyId))
-      this.identifies.set(ptyId, pending)
+    let entry = this.identifies.get(ptyId)
+    if (entry?.settledAt !== undefined) {
+      // An answer that outlasted its caller's timeout serves the retry once; a later dialog rereads.
+      this.identifies.delete(ptyId)
+      if (Date.now() - entry.settledAt > TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS) {
+        entry = undefined
+      }
     }
-    return withTimeoutResult(pending, TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS).then((result) =>
-      result.ok ? result.value : undefined
+    if (!entry) {
+      const fresh: { settledAt?: number; promise: Promise<TerminalAgent | null> } = {
+        promise: this.identifyForeground(ptyId)
+      }
+      void fresh.promise.finally(() => (fresh.settledAt = Date.now()))
+      entry = fresh
+      this.identifies.set(ptyId, entry)
+    }
+    const current = entry
+    return withTimeoutResult(current.promise, TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS).then(
+      (result) => {
+        if (!result.ok) {
+          return undefined
+        }
+        if (this.identifies.get(ptyId) === current) {
+          this.identifies.delete(ptyId)
+        }
+        return result.value
+      }
     )
   }
 
@@ -152,6 +175,7 @@ export class RuntimePtyForegroundAgent {
 
   forget(ptyId: string): void {
     this.delayedTitles.delete(ptyId)
+    this.identifies.delete(ptyId)
     this.confirmedByPtyId.delete(ptyId)
   }
 

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { parseInteractivePrompt } from '../../shared/native-chat/input/native-chat-interactive-prompt'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
@@ -13,10 +14,15 @@ function fixture(name: string): { recording: string; cols: number; rows: number 
 const CODEX_COMPOSER = '\x1b[2J\x1b[H\u203a Ask Codex to do anything\r\n  gpt-5 \u00b7 ~/repo\r\n'
 const SHELL_PROMPT = '\x1b[J\r\nuser@host repo $ '
 
-async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'claude') {
+async function createTrustDialogPane(
+  name: string,
+  launchAgent: TuiAgent = 'claude',
+  overrides: Partial<Parameters<typeof createTranscriptPane>[0]> = {}
+) {
   const { recording, cols, rows: gridRows } = fixture(name)
   const rows = new Map<string, AgentStatusIpcPayload>()
   const published: string[] = []
+  const prompts: (string | undefined)[] = []
   let receivedAt = 0
   const { runtime } = await createTranscriptPane(
     {
@@ -24,11 +30,13 @@ async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'clau
       foregroundProcess: '2.1.310',
       launchAgent,
       size: { cols, rows: gridRows },
-      data: ''
+      data: '',
+      ...overrides
     },
     {
       onTerminalAgentStatus: ({ paneKey, payload }) => {
         published.push(payload.state)
+        prompts.push(payload.interactivePrompt)
         receivedAt += 1
         rows.set(paneKey, {
           ...payload,
@@ -51,7 +59,7 @@ async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'clau
     }
     await vi.advanceTimersByTimeAsync(100)
   }
-  return { runtime, rows, published, recording, cols, gridRows, write }
+  return { runtime, rows, published, prompts, recording, cols, gridRows, write }
 }
 
 describe('TrustDialogStatusObserver', () => {
@@ -63,9 +71,13 @@ describe('TrustDialogStatusObserver', () => {
     vi.useRealTimers()
   })
 
-  async function pane(name: string, launchAgent?: TuiAgent) {
+  async function pane(
+    name: string,
+    launchAgent?: TuiAgent,
+    overrides?: Partial<Parameters<typeof createTranscriptPane>[0]>
+  ) {
     vi.useFakeTimers()
-    const created = await createTrustDialogPane(name, launchAgent)
+    const created = await createTrustDialogPane(name, launchAgent, overrides)
     cleanups.push(async () => {
       await created.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
     })
@@ -83,6 +95,137 @@ describe('TrustDialogStatusObserver', () => {
     await write(recording, size)
     await vi.advanceTimersByTimeAsync(2_000)
     expect(published).toEqual(expected)
+  })
+
+  // Native Claude typed into a shell: its foreground name is its version until a scan reads its argv.
+  it('publishes the trust card for hand-typed native Claude without storing its identity', async () => {
+    const { runtime, published, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      {
+        launchAgent: undefined,
+        confirmedForegroundProcess: 'claude'
+      }
+    )
+    await write(recording)
+    // The agentless hold, then the identified card.
+    expect(published).toEqual(['waiting', 'waiting'])
+    expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).not.toBe('claude')
+  })
+
+  it('retries hand-typed Claude identification after the probe times out', async () => {
+    const { runtime, published, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
+    )
+    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
+      Promise.resolve(undefined)
+    )
+    await write(recording)
+    await vi.advanceTimersByTimeAsync(2_000)
+    // The agentless hold, then the identified card.
+    expect(published).toEqual(['waiting', 'waiting'])
+  })
+
+  it('still publishes when the shared probe answers after every retry window', async () => {
+    const { runtime, published, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
+    )
+    const probe = vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned')
+    for (let i = 0; i < 6; i++) {
+      probe.mockReturnValueOnce(Promise.resolve(undefined))
+    }
+    await write(recording)
+    await vi.advanceTimersByTimeAsync(5_000)
+    // The agentless hold, then the identified card.
+    expect(published).toEqual(['waiting', 'waiting'])
+  })
+
+  // Why: Send is otherwise unlocked while the probe runs, and a chat message would type into the dialog.
+  it('holds the composer with the card while a hand-typed agent is still being identified', async () => {
+    const { runtime, rows, published, prompts, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
+    )
+    let answer: (agent: 'claude' | null) => void = () => {}
+    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
+      new Promise((resolve) => (answer = resolve))
+    )
+    await write(recording)
+    const card = parseInteractivePrompt(prompts[0])
+    expect(published).toEqual(['waiting'])
+    expect(card?.kind === 'approval' && card.approval.holdsComposer).toBe(true)
+
+    answer('claude')
+    await vi.advanceTimersByTimeAsync(0)
+    expect([...rows.values()].at(-1)?.agentType).toBe('claude')
+  })
+
+  it('releases the held composer when the dialog belongs to no Claude or Codex', async () => {
+    const { runtime, published, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      { launchAgent: undefined, confirmedForegroundProcess: null }
+    )
+    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
+      Promise.resolve(null)
+    )
+    await write(recording)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(published).toEqual(['waiting', 'done'])
+  })
+
+  // Keys verified against Claude Code 2.1.316: digits do nothing, Down+Enter trusts, Enter alone exits.
+  it.each([
+    ['claude-dialog-trust-workspace', 'claude', '\x1b[B\r'],
+    ['claude-dialog-trust-workspace-narrow', 'claude', '\x1b[B\r'],
+    ['codex-0-158-0-trustprompt', 'codex', '\r']
+  ] as const)(
+    'offers %s (%s) a trust card that picks the trust choice',
+    async (name, agent, keys) => {
+      const { prompts, recording, write } = await pane(name, agent)
+      await write(recording, 1)
+      const card = parseInteractivePrompt(prompts[0], undefined, agent)
+      expect(card?.kind === 'approval' && card.approval.options).toEqual([
+        { label: 'Trust folder', send: keys },
+        { label: 'Exit', send: '\x1b' }
+      ])
+    }
+  )
+
+  it('re-aims the trust card when the cursor moves in the terminal', async () => {
+    const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
+    await write(recording)
+    // Down in the terminal: Codex repaints its choices with the cursor on "2. Quit".
+    await write('\x1b[9;1H\x1b[2K  1. Trust and continue\x1b[10;1H\x1b[2K› 2. Quit')
+    await vi.advanceTimersByTimeAsync(1_000)
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'codex')
+    expect(card?.kind === 'approval' && card.approval.options[0]?.send).toBe('\x1b[A\r')
+  })
+
+  it('drops the trust choice when a repaint hides the highlight', async () => {
+    const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
+    await write(recording)
+    await write('\x1b[9;1H\x1b[2K  1. Trust and continue')
+    await vi.advanceTimersByTimeAsync(1_000)
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'codex')
+    expect(card?.kind === 'approval' && card.approval.options).toEqual([
+      { label: 'Exit', send: '\x1b' }
+    ])
+  })
+
+  // A send would still hit the highlighted choice, so the card keeps Exit and locks terminal sends.
+  it('offers only Exit when no highlighted choice is visible', async () => {
+    const { prompts, recording, write } = await pane('codex-0-158-0-trustprompt', 'codex')
+    await write(recording.replaceAll('\u203a 1. Trust', '  1. Trust'))
+    const card = parseInteractivePrompt(prompts[0], undefined, 'codex')
+    expect(card?.kind === 'approval' && card.approval.options).toEqual([
+      { label: 'Exit', send: '\x1b' }
+    ])
   })
 
   it('ignores the dialog wording quoted in ordinary output', async () => {
@@ -160,10 +303,11 @@ describe('TrustDialogStatusObserver', () => {
     // The shell prompt lands inside the stale frame, so the screen still shows the dialog.
     await write('user@host repo $ ')
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting'])
+    // The prompt pushes the choices apart, so the card falls back to Exit-only but stays waiting.
+    expect(published).toEqual(['waiting', 'waiting'])
     foreground.mockResolvedValue('shell')
     await write(' ')
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(published).toEqual(['waiting', 'done'])
+    expect(published).toEqual(['waiting', 'waiting', 'done'])
   })
 })

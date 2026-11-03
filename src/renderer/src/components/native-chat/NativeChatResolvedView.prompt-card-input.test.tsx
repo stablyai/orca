@@ -226,6 +226,17 @@ describe('NativeChatResolvedView prompt cards own the input region', () => {
     expect(ptyInput.verified).toHaveBeenCalledOnce()
   })
 
+  // A freed composer's Return would answer the trust dialog, so this card can't step aside.
+  it('offers no Collapse on a folder-trust card', () => {
+    setStatus({
+      state: 'waiting',
+      interactivePrompt: JSON.stringify({ folderTrust: { trustSend: '\x1b[B\r' } })
+    })
+    renderPane()
+    expect(screen.getByRole('button', { name: 'Trust folder' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Collapse' })).toBeNull()
+  })
+
   it('collapses to a strip that frees the composer, and expanding gives the card the input back', () => {
     setStatus({ state: 'waiting', interactivePrompt: APPROVAL })
     renderPane()
