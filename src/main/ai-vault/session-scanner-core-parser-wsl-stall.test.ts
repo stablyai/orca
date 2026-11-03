@@ -24,10 +24,8 @@ vi.mock('node:path', async (importOriginal) => {
   return { ...actual.win32, default: actual.win32 }
 })
 
-import {
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from './session-scanner-parse-cache'
+import { parseAgentSessionFileCached } from './parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import {
   resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,

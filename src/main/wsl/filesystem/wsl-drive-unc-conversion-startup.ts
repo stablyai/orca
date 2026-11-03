@@ -23,7 +23,7 @@ import {
   wslDriveUncConversionStores,
   type WslDriveUncConversionStore
 } from './wsl-drive-unc-conversion-stores'
-import { wslHostsGateOpen } from '../wsl-host-gate'
+import { wslHostsGateOpen } from '../host-lifecycle/wsl-host-gate'
 import { isWslDriveUncConversionComplete } from './wsl-drive-unc-conversion-renderer'
 import { getHistoryRoot, listWslHistoryRoots } from '../../pty/history/terminal-history-paths'
 import { orchestrationDbFile } from '../../runtime/orchestration/db/orchestration-db-file'

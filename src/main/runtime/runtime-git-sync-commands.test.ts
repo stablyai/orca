@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type * as GitRemoteModule from '../git/remote'
-import type * as GitStatusModule from '../git/status'
+
 import type * as GitForkSyncModule from '../git/fork-sync'
 import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
 import { RuntimeGitSyncCommands } from './runtime-git-sync-commands'
@@ -23,10 +23,14 @@ vi.mock('../git/fork-sync', async () => ({
   gitSyncForkDefaultBranch: mocks.gitSyncForkDefaultBranch
 }))
 
-vi.mock('../git/status', async () => ({
-  ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
+vi.mock('../git/source-control/git-conflict-operation', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   abortMerge: mocks.abortMerge,
-  abortRebase: mocks.abortRebase,
+  abortRebase: mocks.abortRebase
+}))
+
+vi.mock('../git/source-control/commit-changes', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   commitChanges: mocks.commitChanges
 }))
 

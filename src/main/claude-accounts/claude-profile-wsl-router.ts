@@ -10,7 +10,7 @@ import {
 import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../shared/remote-bundle-artifacts'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { getWslHomeAsync, listRunningWslDistrosAsync } from '../wsl/discovery/distro-catalog'
-import { ensureWslPinnedRuntime } from '../wsl/wsl-pinned-runtime'
+import { ensureWslPinnedRuntime } from '../wsl/execution/wsl-pinned-runtime'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
 import { runWslProcess, type WslSpec } from '../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../wsl/execution/wsl-process-failure'

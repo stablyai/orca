@@ -14,7 +14,7 @@ import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data
 import { getAppEnvironment } from '../../shared/app-environment'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/wsl-move-startup'
-import { startWslHostsPolicyLiveUpdates } from '../wsl/wsl-hosts-policy-live-update'
+import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
 import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'

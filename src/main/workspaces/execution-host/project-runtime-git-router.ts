@@ -26,7 +26,7 @@ import {
   onWslHostsNewWorkChanged,
   wslHostsGateOpen,
   wslHostsOptedIn
-} from '../../wsl/wsl-host-gate'
+} from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
   followWslAutomountRoots,
   knownWslAutomountRoots,

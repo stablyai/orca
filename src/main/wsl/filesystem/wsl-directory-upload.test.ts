@@ -19,7 +19,7 @@ import { uploadDirectoryIntoWsl, wslGuestSourcePath } from './wsl-directory-uplo
 import {
   createWslOrcadHostTransport,
   type WslOrcadHostTransport
-} from '../wsl-orcad-host-transport'
+} from '../orcad/wsl-orcad-host-transport'
 
 function hasSha256sum(): boolean {
   try {

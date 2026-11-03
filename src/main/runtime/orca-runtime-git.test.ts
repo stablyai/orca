@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type * as GitStatusModule from '../git/status'
+
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type * as PullRequestContextModule from '../text-generation/pull-request-context'
 import {
@@ -28,10 +28,18 @@ const mocks = vi.hoisted(() => ({
   getStatus: vi.fn()
 }))
 
-vi.mock('../git/status', async () => ({
-  ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
-  discardChanges: mocks.discardChanges,
-  getStagedCommitContext: mocks.getStagedCommitContext,
+vi.mock('../git/source-control/discard-changes', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  discardChanges: mocks.discardChanges
+}))
+
+vi.mock('../git/source-control/staged-commit-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getStagedCommitContext: mocks.getStagedCommitContext
+}))
+
+vi.mock('../git/source-control/status-read', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getStatus: mocks.getStatus
 }))
 
