@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { getVisibleBrowserClientPagePartition } from '../browser-client-page-renderer-installation'
 import { webviewRegistry } from '../host-guest/webview-registry'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
 
 export function ClearBrowsingDataForm({
@@ -27,6 +28,7 @@ export function ClearBrowsingDataForm({
   const [history, setHistory] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(false)
+  const optionIdPrefix = useId()
   const clear = async (): Promise<void> => {
     setBusy(true)
     setError(false)
@@ -56,7 +58,7 @@ export function ClearBrowsingDataForm({
   }
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent surface="security" scrollable showCloseButton={!busy} className="sm:max-w-md">
+      <DialogContent size="compact" scrollable showCloseButton={false}>
         <DialogHeader>
           <DialogTitle size="compact">
             {translate('browser.clearData.title', 'Clear browsing data')}
@@ -68,9 +70,10 @@ export function ClearBrowsingDataForm({
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="divide-y divide-border rounded-md border border-border">
+        <div className="space-y-1 text-xs">
           {[
             {
+              id: 'cookies',
               checked: cookies,
               set: setCookies,
               label: translate('browser.clearData.cookies', 'Cookies and site data'),
@@ -80,32 +83,51 @@ export function ClearBrowsingDataForm({
               )
             },
             {
+              id: 'cache',
               checked: cache,
               set: setCache,
               label: translate('browser.clearData.cache', 'Cached images and files')
             },
             {
+              id: 'history',
               checked: history,
               set: setHistory,
               label: translate('browser.clearData.history', 'Browsing history')
             }
-          ].map((option) => (
-            <label key={option.label} className="flex cursor-pointer items-start gap-3 px-3 py-3">
-              <Checkbox
-                className="mt-0.5"
-                checked={option.checked}
-                disabled={busy}
-                onCheckedChange={(value) => option.set(value === true)}
-                aria-label={option.label}
-              />
-              <span className="space-y-1">
-                <span className="block text-sm font-medium">{option.label}</span>
-                {option.description && (
-                  <span className="block text-xs text-muted-foreground">{option.description}</span>
-                )}
-              </span>
-            </label>
-          ))}
+          ].map((option) => {
+            const optionId = `${optionIdPrefix}-${option.id}`
+            return (
+              <div
+                key={option.id}
+                className="flex w-full items-start gap-2 rounded-sm px-1 py-1 text-foreground/85"
+              >
+                <Checkbox
+                  id={optionId}
+                  className="mt-0.5"
+                  checked={option.checked}
+                  disabled={busy}
+                  onCheckedChange={(value) => option.set(value === true)}
+                  aria-describedby={option.description ? `${optionId}-description` : undefined}
+                />
+                <span className="min-w-0 flex-1">
+                  <Label
+                    htmlFor={optionId}
+                    className="block cursor-pointer text-xs leading-4 font-medium"
+                  >
+                    {option.label}
+                  </Label>
+                  {option.description && (
+                    <span
+                      id={`${optionId}-description`}
+                      className="mt-0.5 block text-muted-foreground"
+                    >
+                      {option.description}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )
+          })}
         </div>
         {history && (
           <p className="text-xs text-muted-foreground">
@@ -124,13 +146,13 @@ export function ClearBrowsingDataForm({
           </p>
         )}
         <DialogFooter>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={onClose}>
+          <Button variant="outline" size="sm" className="text-xs" disabled={busy} onClick={onClose}>
             {translate('common.cancel', 'Cancel')}
           </Button>
           <Button
             variant="destructive"
             size="sm"
-            className="w-24"
+            className="w-24 text-xs"
             disabled={busy || (!cookies && !cache && !history)}
             onClick={() => void clear()}
           >
