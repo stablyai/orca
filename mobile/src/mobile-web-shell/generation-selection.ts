@@ -59,11 +59,16 @@ export async function appendGenerationSelection(
   const record = SelectionSchema.parse({ ...selection, version: 1, revision: log.nextRevision })
   const path = joinUri(directory(root), filename(record.revision))
   const text = JSON.stringify(record)
-  await fs.writeText(path, text)
-  if ((await fs.readText(path)) !== text) {
-    throw new Error('generation selection did not publish completely')
+  try {
+    await fs.writeText(path, text)
+    if ((await fs.readText(path)) !== text) {
+      throw new Error('generation selection did not publish completely')
+    }
+    return record
+  } catch (error) {
+    await fs.delete(path).catch(() => undefined)
+    throw error
   }
-  return record
 }
 
 export async function compactGenerationSelections(

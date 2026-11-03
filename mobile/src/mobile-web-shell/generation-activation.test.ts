@@ -472,4 +472,39 @@ describe('generation activation recovery', () => {
     await store.rejectGeneration(retired)
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(current.generation.buildId)
   })
+  it.each(['write', 'readback'] as const)(
+    'can retry publication after a rejected %s of a complete pending record',
+    async (failure) => {
+      const fileSystem = createFakeGenerationFileSystem()
+      const store = createGenerationStore({ fileSystem })
+      const old = await confirmed(store, 4)
+      store.releaseGeneration(old)
+      const pendingId = bundle(8).manifest.buildId
+      const write = fileSystem.writeText
+      const read = fileSystem.readText
+      let rejectRead = false
+      fileSystem.writeText = async (uri, text) => {
+        await write(uri, text)
+        if (uri.includes('/activation/') && JSON.parse(text).pending === pendingId) {
+          if (failure === 'write') {
+            throw new Error('publication write rejected after completing')
+          }
+          rejectRead = true
+        }
+      }
+      fileSystem.readText = async (uri) => {
+        if (rejectRead && uri.includes('/activation/')) {
+          rejectRead = false
+          throw new Error('publication readback rejected')
+        }
+        return read(uri)
+      }
+      await expect(install(store, 8)).rejects.toThrow('publication')
+      fileSystem.writeText = write
+      fileSystem.readText = read
+      expect((await store.readActiveGeneration(HOST))?.buildId).toBe(old.generation.buildId)
+      const retry = await confirmed(store, 8)
+      expect((await store.readActiveGeneration(HOST))?.buildId).toBe(retry.generation.buildId)
+    }
+  )
 })
