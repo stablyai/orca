@@ -3,6 +3,7 @@ import type { AgentJournalItemBody } from '../../shared/agent-session/journal/ag
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { codexFileChangeApprovalDetail } from './codex-file-change-approval-detail'
 import { CODEX_FILE_CHANGE_APPROVAL_METHOD } from './codex-structured-prompt-replies'
+import { chatApprovalFromJournal } from '../../shared/native-chat/input/native-chat-interactive-prompt'
 
 // Recorded Codex app-server 0.156.1 frames; only the workspace path is sanitized.
 const started = {
@@ -104,10 +105,17 @@ describe('Codex file-change approval context', () => {
       { ...requested, reason: 'This writes outside the sandbox.', grantRoot: '/workspace' },
       'full-announcement'
     )
-    expect(rows.findLast((row) => row.kind === 'approval')).toMatchObject({
+    const approval = rows.findLast((row) => row.kind === 'approval')!
+    expect(approval).toMatchObject({
       detail: expect.stringContaining('codex app-server approval fixture.\n'),
       decisionReason: 'This writes outside the sandbox.',
       description: 'Write access: /workspace'
+    })
+    expect(chatApprovalFromJournal(approval)).toMatchObject({
+      detail: expect.stringContaining('codex app-server approval fixture.\n'),
+      decisionReason: 'This writes outside the sandbox.',
+      description: 'Write access: /workspace',
+      options: expect.arrayContaining([{ send: 'accept', label: 'Allow' }])
     })
     translator.dispose()
   })

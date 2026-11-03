@@ -4,25 +4,23 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
-import { codexApprovalItem } from '../../../../main/codex/codex-structured-prompt-items'
+import type { AgentJournalApprovalItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 afterEach(cleanup)
 
 describe('NativeChatApprovalCard', () => {
   it('shows Codex file details, reason and the whole write scope before approving', () => {
     const onChoose = vi.fn()
-    render(
-      <NativeChatApprovalCard
-        approval={chatApprovalFromJournal(
-          codexApprovalItem({
-            method: 'item/fileChange/requestApproval',
-            params: { reason: 'Write outside the sandbox.', grantRoot: '/repo' },
-            detail: 'update /repo/src/app.ts\n\n@@ -1 +1 @@\n-old\n+new'
-          })
-        )}
-        onChoose={onChoose}
-      />
-    )
+    const body: AgentJournalApprovalItem = {
+      kind: 'approval',
+      title: 'Apply file changes?',
+      decisionReason: 'Write outside the sandbox.',
+      description: 'Write access: /repo',
+      detail: 'update /repo/src/app.ts\n\n@@ -1 +1 @@\n-old\n+new',
+      options: [{ id: 'accept', label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    }
+    render(<NativeChatApprovalCard approval={chatApprovalFromJournal(body)} onChoose={onChoose} />)
     expect(screen.getByText('Write access: /repo')).toBeTruthy()
     expect(screen.getByText('Write outside the sandbox.')).toBeTruthy()
     expect(document.querySelector('[data-native-chat-approval-detail]')?.textContent).toBe(
