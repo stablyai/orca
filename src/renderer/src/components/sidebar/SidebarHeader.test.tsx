@@ -140,7 +140,7 @@ beforeEach(() => {
     folderWorkspaces: [],
     projectGroups: [],
     createFolderWorkspace: mocks.createFolderWorkspace,
-    runtimeStatusByEnvironmentId: new Map(),
+    runtimeStatusByEnvironmentId: new Map<string, never>(),
     groupBy: 'repo',
     sidebarBody: 'workspaces',
     sidebarWidth: 280,
