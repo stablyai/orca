@@ -2,6 +2,7 @@ import { agentSenderPublicationPatch } from '../agent-sender-associations'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import {
   getTerminalHostAliasesFor,
+  hasIndependentWorkspacePresence,
   reconcileTerminalHostAliases
 } from '../terminal-host-alias-snapshot'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -56,21 +57,10 @@ export function applyWebSessionTabsSnapshotWithContext(
       )
     : {}
   const worktreeId = rawSnapshot.worktree
-  const rows = state.tabsByWorktree[worktreeId]
-  const entries = state.unifiedTabsByWorktree[worktreeId]
-  const hasOrdinaryWorkspace =
-    (rows !== undefined && (!rows.length || rows.some((row) => !row.hostTerminalAlias))) ||
-    (entries !== undefined &&
-      (!entries.length ||
-        entries.some(
-          (entry) =>
-            entry.contentType !== 'terminal' ||
-            !rows?.find((row) => row.id === entry.entityId)?.hostTerminalAlias
-        ))) ||
-    state.browserTabsByWorktree[worktreeId] !== undefined ||
-    state.openFiles.some((file) => file.worktreeId === worktreeId) ||
-    isFrameDrawnServerWorkspace(environmentId, worktreeId)
-  if (!hasOrdinaryWorkspace && getTerminalHostAliasesFor(state, environmentId, worktreeId).length) {
+  if (
+    !hasIndependentWorkspacePresence(state, environmentId, worktreeId) &&
+    getTerminalHostAliasesFor(state, environmentId, worktreeId).length
+  ) {
     const patch = reconcileTerminalHostAliases(state, state, rawSnapshot, environmentId)
     return identityPatch.agentSenderPublicationsByHost ? { ...patch, ...identityPatch } : patch
   }

@@ -3,6 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { buildMirroredTerminalTabs } from './web-session-tabs-sync/terminal-build'
 import { indexMirroredTerminalSurfaces } from './web-session-tabs-sync/mirrored-terminal-handle-index'
+import { isFrameDrawnServerWorkspace } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 
 export function getTerminalHostAliasesFor(
   state: WebSessionTabsSyncState,
@@ -20,6 +21,29 @@ export function getTerminalHostAliasesFor(
         alias?.worktreeId === worktreeId
       )
     })
+}
+
+// Why: an independently mirrored workspace must keep receiving ordinary snapshots beside its aliases.
+export function hasIndependentWorkspacePresence(
+  state: WebSessionTabsSyncState,
+  environmentId: string,
+  worktreeId: string
+): boolean {
+  const rows = state.tabsByWorktree[worktreeId]
+  const entries = state.unifiedTabsByWorktree[worktreeId]
+  return (
+    (rows !== undefined && (!rows.length || rows.some((row) => !row.hostTerminalAlias))) ||
+    (entries !== undefined &&
+      (!entries.length ||
+        entries.some(
+          (entry) =>
+            entry.contentType !== 'terminal' ||
+            !rows?.find((row) => row.id === entry.entityId)?.hostTerminalAlias
+        ))) ||
+    state.browserTabsByWorktree[worktreeId] !== undefined ||
+    state.openFiles.some((file) => file.worktreeId === worktreeId) ||
+    isFrameDrawnServerWorkspace(environmentId, worktreeId)
+  )
 }
 
 export function reconcileTerminalHostAliases(
