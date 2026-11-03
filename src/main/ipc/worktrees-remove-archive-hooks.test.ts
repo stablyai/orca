@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   removeWorktreeLinkedPathsMock,
@@ -19,6 +20,15 @@ import {
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { RemoveWorktreeArgs } from './worktrees/ipc-context-schemas'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()

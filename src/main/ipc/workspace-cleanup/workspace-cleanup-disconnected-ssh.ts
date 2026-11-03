@@ -17,7 +17,7 @@ import {
 import {
   getRepoOwnedWorktreeMeta,
   isWorktreeMetaOwnedByRepo
-} from '../../worktree-metadata-ownership'
+} from '../../workspaces/catalog/worktree-metadata-ownership'
 import {
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost

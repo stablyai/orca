@@ -8,17 +8,17 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
   app: { getPath: () => '/tmp/orca-test' }
 }))
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: vi.fn()
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: vi.fn()
 }))
 vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
@@ -31,7 +31,7 @@ const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provid
 const { __resetDetectedWorktreeScanCacheForTests, invalidateDetectedWorktreeScanCache } =
   await import('./detected-worktree-scan-cache')
 const { getLocalWorktreeCatalogVersion, getLocalWorktreeScanGeneration } =
-  await import('../../../local-worktree-scan-generation')
+  await import('../../../workspaces/catalog/local-worktree-scan-generation')
 
 const localRepo: Repo = {
   id: 'repo-local',

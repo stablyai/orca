@@ -30,7 +30,7 @@ vi.mock('../../git/repo', () => ({
   getRemoteCount: mocks.getRemoteCount,
   searchBaseRefDetails: vi.fn(async () => [])
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getProjectRuntimeReadGitOptions: () => mocks.state.gitOptions
 }))
 vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({

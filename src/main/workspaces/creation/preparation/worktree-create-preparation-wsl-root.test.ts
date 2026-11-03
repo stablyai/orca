@@ -33,7 +33,7 @@ vi.mock('../../../git/worktree-create-preparation', () => ({
 vi.mock('../../../git/worktree-base-ref-probe', () => ({
   resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
   getWorktreeMirrorDistro: mocks.getMirrorDistro
 }))
@@ -48,7 +48,7 @@ import {
   computeWorktreePath,
   getWorktreePathSettings
 } from '../../../ipc/worktree-logic'
-import { getWorktreeMirrorDistro } from '../../../project-runtime-git-options'
+import { getWorktreeMirrorDistro } from '../../execution-host/project-runtime-git-options'
 import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,

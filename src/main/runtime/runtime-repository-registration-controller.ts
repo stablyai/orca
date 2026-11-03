@@ -12,7 +12,7 @@ import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/ru
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
 import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
-import { findProjectAtSameRealPath } from '../project-realpath-identity'
+import { findProjectAtSameRealPath } from '../workspaces/catalog/project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'

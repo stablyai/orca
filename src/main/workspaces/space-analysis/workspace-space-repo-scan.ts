@@ -12,14 +12,14 @@ import type {
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
-import { getRepoOwnedWorktreeMeta } from '../../worktree-metadata-ownership'
+import { getRepoOwnedWorktreeMeta } from '../catalog/worktree-metadata-ownership'
 import {
   resolveFilesystemRouteForHost,
   resolveGitRouteForHost
 } from '../../providers/execution-host-provider-dispatch'
-import { createFolderWorktree, listRepoWorktrees } from '../../repo-worktrees'
+import { createFolderWorktree, listRepoWorktrees } from '../catalog/repo-worktrees'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../execution-host/project-runtime-git-options'
 import {
   WorkspaceSpaceScanCancelledError,
   classifyWorkspaceSpaceError,

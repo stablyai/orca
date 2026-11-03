@@ -13,7 +13,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../../git/repo'
-import { getProjectRuntimeReadGitOptions } from '../../project-runtime-git-options'
+import { getProjectRuntimeReadGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
 import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
 
