@@ -1,5 +1,5 @@
 import {
-  structuredAgentSessionChildRan,
+  structuredAgentSessionRuntimeModel,
   structuredAgentSessionRuntimePermission
 } from './structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
@@ -83,8 +83,8 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
-    ...(session.child
-      ? { reportedModel: structuredAgentSessionChildRan(session.child)?.model }
+    ...(session.params.provider === 'claude' && session.child
+      ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
       : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(effort ? { effort } : {}),
@@ -152,6 +152,7 @@ export function releasedStructuredStatusSummary(
     hostExecutionPhase: _hostExecutionPhase,
     stopping: _stopping,
     restartResume: _restartResume,
+    reportedModel: _reportedModel,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }

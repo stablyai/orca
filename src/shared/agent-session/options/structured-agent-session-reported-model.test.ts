@@ -3,9 +3,9 @@ import { CLAUDE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-cl
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
-  commitStructuredAgentSessionOption,
-  structuredAgentSessionReportsAtFence
+  commitStructuredAgentSessionOption
 } from './structured-agent-session-options'
+import { structuredAgentSessionReportsAtFence } from './structured-agent-session-runtime-reports'
 import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
 import { structuredAgentSessionMessageSelection } from './structured-agent-session-option-view'
 import {

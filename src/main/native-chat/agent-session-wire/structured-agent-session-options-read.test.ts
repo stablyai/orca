@@ -121,7 +121,7 @@ describe('a chat at rest, read by the host', () => {
     const saved = { model: 'claude-opus-5-5', effort: 'high' }
     const answer = await readAtRest({ provider: 'claude', options: saved }, [], false, null, true, {
       models: [],
-      current: { model: 'claude-opus-4-8', confirmed: ['model'] }
+      current: { model: 'claude-opus-5-5', reportedModel: 'claude-opus-4-8', confirmed: ['model'] }
     })
     expect(answer.current).toMatchObject({
       model: saved.model,

@@ -167,6 +167,7 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: {
+    reportedModel?: string
     model?: string
     effort?: string
     fastMode?: boolean

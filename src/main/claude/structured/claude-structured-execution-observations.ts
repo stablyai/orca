@@ -1,4 +1,5 @@
 import { claudeRecord, claudeText } from './journal/claude-structured-item-translation'
+import { claudeMatchingInitModel } from '../claude-context-usage'
 import { isRootClaudeFrame } from '../claude-turn-opening'
 import { MAX_CONTEXT_MODEL_ID_CHARS } from '../../../shared/agent-session/agent-session-context-usage'
 import type { ClaudeSession } from './claude-structured-session-state'
@@ -22,6 +23,7 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
   const sequence = session.optionMutationSequence
   if (key === 'model') {
     delete session.appliedOptions
+    delete session.reportedOptions.reportedModel
   } else {
     if (session.reportedModelMutation === previous) {
       session.reportedModelMutation = sequence
@@ -34,19 +36,21 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
   return sequence
 }
 
-/** Init and response metadata name execution; a control answer only acknowledges its input. */
+/** An init names execution; a control answer only acknowledges its input. */
 export function observeClaudeExecutionModel(session: ClaudeSession, model: string): boolean {
   const previous = claudeExecutionObservations(session).model
+  const previousResponse = session.reportedOptions.reportedModel
+  session.reportedOptions.reportedModel = model
   if (previous !== model) {
     delete session.appliedOptions
   }
   session.reportedOptions.model = model
   session.reportedModelMutation = session.optionMutationSequence
-  return previous !== model
+  return previous !== model || previousResponse !== model
 }
 
 /** Main-thread response metadata names the model that answered, including provider fallback. */
-export function readClaudeResponseModel(frame: Record<string, unknown>): string | null {
+function readClaudeResponseModel(frame: Record<string, unknown>): string | null {
   if (!isRootClaudeFrame(frame)) {
     return null
   }
@@ -63,11 +67,43 @@ export function readClaudeResponseModel(frame: Record<string, unknown>): string 
     : null
 }
 
-export function observeClaudeFrameExecutionModel(
+function observeClaudeResponseModel(
+  session: ClaudeSession,
+  frame: Record<string, unknown>
+): boolean {
+  const response = readClaudeResponseModel(frame)
+  if (!response) {
+    return false
+  }
+  const model =
+    claudeMatchingInitModel({
+      initModel:
+        session.reportedModelMutation === session.optionMutationSequence
+          ? (session.reportedOptions.model ?? null)
+          : null,
+      responseModel: response
+    }) ?? response
+  if (model === session.reportedOptions.reportedModel) {
+    return false
+  }
+  session.reportedOptions.reportedModel = model
+  return true
+}
+
+export function observeClaudeFrameModels(
   session: ClaudeSession | null,
   frame: Record<string, unknown>,
   initModel: string | null | undefined
-): string | null {
-  const model = readClaudeResponseModel(frame) ?? initModel
-  return session && model && observeClaudeExecutionModel(session, model) ? model : null
+): Partial<ClaudeSession['reportedOptions']> | null {
+  if (!session) {
+    return null
+  }
+  const initChanged = initModel ? observeClaudeExecutionModel(session, initModel) : false
+  const responseChanged = observeClaudeResponseModel(session, frame)
+  return initChanged || responseChanged
+    ? {
+        ...(initChanged && initModel ? { model: initModel } : {}),
+        reportedModel: session.reportedOptions.reportedModel
+      }
+    : null
 }

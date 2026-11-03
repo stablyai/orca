@@ -13,7 +13,7 @@ import {
 } from './structured-agent-session-start-listing'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 import {
-  noteStructuredAgentSessionRuntimePermission,
+  noteStructuredAgentSessionRuntimeOptions,
   noteStructuredAgentSessionReportedOptions
 } from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
@@ -151,7 +151,7 @@ function settleReady(
       )
       const sourceChild = current.child
       context.runtimeState.startupAttempts.ready(event.sessionId, child)
-      noteStructuredAgentSessionRuntimePermission(current.child, event.reportedOptions, true)
+      noteStructuredAgentSessionRuntimeOptions(current.child, event.reportedOptions, true)
       context.publishStatus?.(event.sessionId)
       await noteStructuredAgentSessionReportedOptions(
         context,
@@ -206,7 +206,7 @@ export async function settleStructuredAgentSessionOptionsReported(
   ) {
     return
   }
-  noteStructuredAgentSessionRuntimePermission(child, event.reportedOptions)
+  noteStructuredAgentSessionRuntimeOptions(child, event.reportedOptions)
   if (child.phase === 'starting') {
     const readiness = context.runtimeState.startupAttempts.readiness(event.sessionId, {
       generation: event.acquisitionGeneration,
@@ -219,13 +219,13 @@ export async function settleStructuredAgentSessionOptionsReported(
   if (context.sessions.get(event.sessionId)?.child !== child) {
     return
   }
+  context.publishStatus?.(event.sessionId)
   await noteStructuredAgentSessionReportedOptions(
     context,
     event.sessionId,
     event.fence,
     event.reportedOptions
   )
-  context.publishStatus?.(event.sessionId)
   if (event.catalogListing) {
     void saveStructuredAgentSessionStartReadbackListing(context, event, event.catalogListing)
   }

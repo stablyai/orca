@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 import { agentSessionOperationKey } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { agentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
@@ -136,67 +137,94 @@ describe('installed catalog through Codex delivery and report settlement', () =>
   }, 10_000)
 
   // Real host setup, delayed report settlement and bounded resource drains share this budget.
-  it('fulfills owed model evidence from a matching delayed lifecycle report outside the delivery lock', async () => {
-    const f = await createCatalogMutationFixture(stateDirectory, 'codex')
-    try {
-      f.rig.host.deps.adapter.open = async () => ({
-        reportedOptions: { model: '', effort: 'high' }
-      })
-      f.rig.adapter.dispatch.mockResolvedValue({
-        state: 'admitted',
-        ranOptions: { effort: 'high' }
-      })
-      expect(
-        await settled(
-          f.rig.host.send(
-            CALLER,
-            restTestSend(
-              'model arrives after admission',
-              f.rig.store.requireWritableRecord(SESSION).lease.runtimeFence
-            )
-          ),
-          'model-less send acceptance'
-        )
-      ).toMatchObject({ ok: true })
-      const { conversationDelivery, sessions } = f.rig.host.collaboratorsForTests()
-      await settled(conversationDelivery.loop.wake(SESSION), 'model-less admitted delivery')
-      const child = sessions.get(SESSION)?.child
-      if (!child?.generation) {
-        throw new Error('production startup did not publish a child generation')
+  it.each(['claude', 'codex'] as const)(
+    'fulfills only input model evidence from a delayed %s report outside the delivery lock',
+    async (agent) => {
+      const f = await createCatalogMutationFixture(stateDirectory, agent)
+      const model = agent === 'claude' ? CLAUDE_MODEL : CODEX_MODEL
+      if (agent === 'claude') {
+        const acquire = f.rig.adapter.acquire.getMockImplementation()!
+        f.rig.adapter.acquire.mockImplementation(async (...args) => {
+          const result = await acquire(...args)
+          return {
+            ...result,
+            link: { ...result.link, handle: claudeProviderHandle('claude-provider', null) }
+          }
+        })
       }
-      expect(child.phase).toBe('ready')
-      expect(child.accountHome).toBeUndefined()
-      expect(f.rig.store.requireWritableRecord(SESSION).options).toBeUndefined()
-      const lifecycle = createStructuredAgentSessionLifecycleDelivery({
-        handle: f.rig.host.handleAdapterEvent,
-        logger: f.rig.host.deps.logger,
-        drainObservedExits: async () => {}
-      })
-      lifecycle.deliver({
-        type: 'options-reported',
-        sessionId: SESSION,
-        fence: child.fence,
-        acquisitionGeneration: child.generation,
-        reportedOptions: { model: CODEX_MODEL, effort: 'low' }
-      })
-      await settled(lifecycle.drain(), 'delayed lifecycle report')
-      expect((await f.persisted()).records[SESSION]?.options).toEqual({
-        model: CODEX_MODEL,
-        effort: 'high'
-      })
-      await settled(conversationDelivery.loop.wake(SESSION), 'post-report delivery park')
-      expect(conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-      expect(f.rig.adapter.dispatch).toHaveBeenCalledOnce()
-      expect(
-        await settled(
-          f.rig.host.history({ sessionId: SESSION, direction: 'tail' }),
-          'post-report ordinary history'
-        )
-      ).toMatchObject({ ok: true })
-      expect(f.rig.store.requireWritableRecord(SESSION).accountHome).toEqual(f.home)
-      expect(f.probe).not.toHaveBeenCalled()
-    } finally {
-      await f.dispose()
-    }
-  }, 10_000)
+      try {
+        f.rig.host.deps.adapter.open = async () => ({
+          reportedOptions: { model: '', effort: 'high' }
+        })
+        f.rig.adapter.dispatch.mockResolvedValue({
+          state: 'admitted',
+          ranOptions: { effort: 'high' }
+        })
+        expect(
+          await settled(
+            f.rig.host.send(
+              CALLER,
+              restTestSend(
+                'model arrives after admission',
+                f.rig.store.requireWritableRecord(SESSION).lease.runtimeFence
+              )
+            ),
+            'model-less send acceptance'
+          )
+        ).toMatchObject({ ok: true })
+        const { conversationDelivery, sessions } = f.rig.host.collaboratorsForTests()
+        await settled(conversationDelivery.loop.wake(SESSION), 'model-less admitted delivery')
+        const child = sessions.get(SESSION)?.child
+        if (!child?.generation) {
+          throw new Error('production startup did not publish a child generation')
+        }
+        expect(child.phase).toBe('ready')
+        expect(child.accountHome).toBeUndefined()
+        expect(f.rig.store.requireWritableRecord(SESSION).options).toBeUndefined()
+        const lifecycle = createStructuredAgentSessionLifecycleDelivery({
+          handle: f.rig.host.handleAdapterEvent,
+          logger: f.rig.host.deps.logger,
+          drainObservedExits: async () => {}
+        })
+        if (agent === 'claude') {
+          lifecycle.deliver({
+            type: 'options-reported',
+            sessionId: SESSION,
+            fence: child.fence,
+            acquisitionGeneration: child.generation,
+            reportedOptions: { reportedModel: 'claude-opus-4-8' }
+          })
+          await settled(lifecycle.drain(), 'response model observation')
+          expect(f.rig.host.readStatusSummary(SESSION)?.reportedModel).toBe('claude-opus-4-8')
+          expect((await f.persisted()).records[SESSION]?.options).toBeUndefined()
+        }
+        lifecycle.deliver({
+          type: 'options-reported',
+          sessionId: SESSION,
+          fence: child.fence,
+          acquisitionGeneration: child.generation,
+          reportedOptions: { model, effort: 'low' }
+        })
+        await settled(lifecycle.drain(), 'delayed lifecycle report')
+        expect((await f.persisted()).records[SESSION]?.options).toEqual({
+          model,
+          effort: 'high'
+        })
+        await settled(conversationDelivery.loop.wake(SESSION), 'post-report delivery park')
+        expect(conversationDelivery.loop.isRunning(SESSION)).toBe(false)
+        expect(f.rig.adapter.dispatch).toHaveBeenCalledOnce()
+        expect(
+          await settled(
+            f.rig.host.history({ sessionId: SESSION, direction: 'tail' }),
+            'post-report ordinary history'
+          )
+        ).toMatchObject({ ok: true })
+        expect(f.rig.store.requireWritableRecord(SESSION).accountHome).toEqual(f.home)
+        expect(f.probe).not.toHaveBeenCalled()
+      } finally {
+        await f.dispose()
+      }
+    },
+    10_000
+  )
 })
