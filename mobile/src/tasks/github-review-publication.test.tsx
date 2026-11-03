@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
 import { githubTaskKey, useMobileTasksSelection } from './github-task-identity'
 import { item } from './github-task-identity.test-fixture'
-import type { DetailPayload } from './mobile-tasks-provider-detail-types'
+import type { DetailPayload, GitHubDetailFile } from './mobile-tasks-provider-detail-types'
 import { useMobileTasksGithubCheckFileActions } from './use-mobile-tasks-github-check-file-actions'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import { buildGitHubCheckSummary } from './github-check-summary'
@@ -35,7 +35,7 @@ async function mount(loadDetails = false) {
     deletions: 0,
     status: 'modified',
     viewerViewedState: 'UNVIEWED' as const
-  }
+  } satisfies GitHubDetailFile
   const details: Extract<DetailPayload, { provider: 'github' }> = {
     provider: 'github',
     targetKey: githubTaskKey(selected.source),
@@ -117,8 +117,12 @@ it('retires old thread feedback before a queued detail revision commits and comp
     })
     await act(async () => {
       f.read().setDetailPayload({ ...f.details, headSha: 'new-head' })
-      f.read().setDetailPayload((value) => value && { ...value, body: value.body + 'first' })
-      f.read().setDetailPayload((value) => value && { ...value, body: value.body + '+second' })
+      f.read().setDetailPayload((value) =>
+        value?.provider === 'github' ? { ...value, body: value.body + 'first' } : value
+      )
+      f.read().setDetailPayload((value) =>
+        value?.provider === 'github' ? { ...value, body: value.body + '+second' } : value
+      )
       f.client.requests[0].resolve(rpcSuccess('old', true))
       await pending
       expect(f.commits.at(-1)).toMatchObject({ headSha: 'old-head' })
