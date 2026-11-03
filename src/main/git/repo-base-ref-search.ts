@@ -9,7 +9,7 @@ import {
 } from '../../shared/repo-search-limits'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import { isRemoteHeadRef } from '../../shared/hosted-review-refs'
-import { getLocalGitCapabilityCache } from './git-capability-state'
+import { getLocalGitCapabilityCache } from './command-runner/git-capability-state'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './runner'
 import { isQualifiedBaseRef, resolveBaseRefSearchSelector } from './base-ref-search-selector'

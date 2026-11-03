@@ -117,7 +117,10 @@ describe('the Codex history-sharing opt-out (#24511)', () => {
     vi.doMock('../codex/wsl-codex-session-bridge', () => ({
       startWslCodexSessionBridgeInBackground: bridges.wsl
     }))
-    vi.doMock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu', getWslHome: () => wslHome }))
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
     const accountsRoot = join(wslHome, '.local', 'share', 'orca', 'codex-accounts')
     const wslAccount = (id: string) => ({
       id,
@@ -152,7 +155,7 @@ describe('the Codex history-sharing opt-out (#24511)', () => {
       expect(bridges.wsl).not.toHaveBeenCalled()
     } finally {
       vi.doUnmock('../codex/wsl-codex-session-bridge')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }

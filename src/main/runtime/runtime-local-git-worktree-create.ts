@@ -5,12 +5,12 @@ import type { Repo } from '../../shared/repo-types'
 import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import { configureCreatedWorktreePushTarget } from '../ipc/worktree-remote'
-import {
-  addSparseWorktree,
-  addWorktree,
-  type AddWorktreeOptions,
-  type AddWorktreeResult
-} from '../git/worktree'
+import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../git/worktrees/creation/worktree-add'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../git/worktrees/worktree-operation-options'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
@@ -23,7 +23,7 @@ import {
 import {
   failedWorktreeCreationNeedsRetirement,
   retireGeneratedWorktreeName
-} from '../worktree-name-retirement'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
 import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
 
 export type RuntimeLocalBaseRefRefresh = {

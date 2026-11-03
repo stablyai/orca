@@ -26,20 +26,25 @@ import {
   REVIEW_HEAD_FETCH_TIMEOUT_MS
 } from '../../../shared/review-head-tracking-ref'
 import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from '../../../shared/agent-detection'
+import { addSparseWorktree } from '../../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import {
-  addSparseWorktree,
-  addWorktree,
-  assertWorktreeCleanForRemoval,
   describeCreatedWorktree,
+  listWorktreesStrict
+} from '../../git/worktrees/catalog/worktree-listing'
+import {
   listWorktrees,
-  listWorktreesSharedStrict,
-  listWorktreesStrict,
-  removeWorktree
-} from '../../git/worktree'
-import * as gitRunner from '../../git/runner'
+  listWorktreesSharedStrict
+} from '../../git/worktrees/catalog/worktree-scan-cache'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+
 import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../worktree-teardown'
 import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../worktree-teardown-deadline'
-import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../../git/status'
+import {
+  clearSubmodulePathsCacheForTests,
+  listSubmodulePaths
+} from '../../git/source-control/submodule-paths'
 import { getEffectiveHooks, hasHooksFile, loadHooks, runHook } from '../../workspace-hooks/hooks'
 import { parseOrcaYaml } from '../../../shared/orca-yaml'
 import {
@@ -94,8 +99,8 @@ import {
   unregisterPty as unregisterLocalPtyMemoryRow
 } from '../../memory/pty-registry'
 import { inspectPtyProviderProcess } from '../../providers/pty-process-inspection'
-import * as worktreePathComparison from '../../worktree-path-comparison-key'
-import * as localWorktreeFilesystem from '../../local-worktree-filesystem'
+import * as worktreePathComparison from '../../workspaces/catalog/worktree-path-comparison-key'
+import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -115,7 +120,7 @@ import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
 } from '../terminal-view-attribute-store'
-import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktree-shared-directories'
+import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
@@ -187,7 +192,7 @@ export const exportedGetEffectiveHooks = getEffectiveHooks
 export const exportedGetEffectiveHooksFromConfig = getEffectiveHooksFromConfig
 export const exportedGetRuntimeBrowserPageRegistry = getRuntimeBrowserPageRegistry
 export const exportedGetTerminalPasteIngestMs = getTerminalPasteIngestMs
-export const exportedGitRunner = gitRunner
+
 export const exportedHasHooksFile = hasHooksFile
 export const exportedHeadlessBrowserTabsUnchanged = headlessBrowserTabsUnchanged
 export const exportedHomedir = homedir

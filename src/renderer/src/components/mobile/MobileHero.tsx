@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
 import { cn } from '../../lib/utils'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
 import type { InstallCopy } from './mobile-platform-copy'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'

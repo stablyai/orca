@@ -1,5 +1,5 @@
 import SyncDatabase from '../sqlite/sync-database'
-import type { TranscriptMessage } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptMessage } from '../ai-vault/transcripts/session-transcript-consumers'
 import { ownRetainedString } from '../../shared/own-retained-string'
 
 /** Anonymous reads stay private until commit; large reads spill to a disposable SQLite file. */

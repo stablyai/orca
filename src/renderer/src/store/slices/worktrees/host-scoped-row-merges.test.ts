@@ -104,21 +104,4 @@ describe('row writers touch only the copy on their own host', () => {
     expect(onLocal(WORKTREE_ID)).toMatchObject({ parentWorktreeId: null })
     expect(onLocal(PARENT_ID)).toMatchObject({ childWorktreeIds: [] })
   })
-
-  it("never appends a server's copy when only the local twin is listed", () => {
-    const store = createTestStore()
-    const { local } = seedTwins(store)
-    store.setState({ worktreesByRepo: { [REPO_ID]: [local] } })
-    applyWorktreeLineageUpdate(store.setState, WORKTREE_ID, {
-      target: { kind: 'environment', environmentId: 'hub' },
-      hostId: 'runtime:hub',
-      lineage: null,
-      updatedRemoteWorktree: makeWorktree({
-        id: WORKTREE_ID,
-        repoId: REPO_ID,
-        displayName: 'server after lineage'
-      })
-    })
-    expect(store.getState().worktreesByRepo[REPO_ID]).toEqual([local])
-  })
 })

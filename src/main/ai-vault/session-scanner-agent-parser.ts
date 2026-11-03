@@ -1,18 +1,21 @@
-import { parseQoderSessionFile } from './session-scanner-qoder-parser'
-import { parseCodebuddySessionFile } from './session-scanner-codebuddy-parser'
+import { parseQoderSessionFile } from './scanners/qoder/session-scanner-qoder-parser'
+import { parseCodebuddySessionFile } from './scanners/codebuddy/session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
-import { parseDevinSessionFile } from './session-scanner-devin-parser'
-import { parseAntigravitySessionFile } from './session-scanner-antigravity-parser'
-import { parseDroidSessionFile } from './session-scanner-droid-parser'
-import { parseClineSessionFile } from './session-scanner-cline-parser'
-import { parseGrokSessionFile } from './session-scanner-grok-parser'
-import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
-import { parseKimiSessionFile } from './session-scanner-kimi-parser'
-import { parseMuseSessionFile } from './session-scanner-muse-parser'
-import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
-import { parseJcodeSessionFile } from './session-scanner-jcode-parser'
-import { parseKiroSessionFile } from './session-scanner-kiro-parser'
+import { parseDevinSessionFile } from './scanners/devin/session-scanner-devin-parser'
+import { parseAntigravitySessionFile } from './scanners/antigravity/session-scanner-antigravity-parser'
+import { parseDroidSessionFile } from './scanners/droid/session-scanner-droid-parser'
+import { parseClineSessionFile } from './scanners/cline/session-scanner-cline-parser'
+import { parseGrokSessionFile } from './scanners/grok/session-scanner-grok-parser'
+import {
+  parseMessageGraphSessionFile,
+  parseRovoSessionFile
+} from './scanners/session-scanner-graph-parsers'
+import { parseKimiSessionFile } from './scanners/kimi/session-scanner-kimi-parser'
+import { parseMuseSessionFile } from './scanners/muse/session-scanner-muse-parser'
+import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
+import { parseJcodeSessionFile } from './scanners/jcode/session-scanner-jcode-parser'
+import { parseKiroSessionFile } from './scanners/kiro/session-scanner-kiro-parser'
 import {
   captureOpenCodeSqliteSessionViaWorker,
   captureOpenCode2SqliteSessionViaWorker,
@@ -20,16 +23,17 @@ import {
   parseOpenCode2SqliteSessionViaWorker,
   parseOpenCodeSqliteSessionViaWorker,
   parseZcodeSqliteSessionViaWorker
-} from './session-scanner-opencode-sqlite-worker-spawn'
-import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
-import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
-import { parseCodexSessionFile } from './session-scanner-codex-parser'
-import { parseCopilotSessionFile } from './session-scanner-copilot-parser'
-import { parseCursorSessionFile } from './session-scanner-cursor-parser'
-import { parseHermesSessionFile } from './session-scanner-hermes-parser'
-import { parseOpenCodeSessionFile } from './session-scanner-opencode-parser'
+} from './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
+import { parseClaudeSessionFile } from './scanners/claude/session-scanner-primary-parsers'
+import { parseGeminiSessionFile } from './scanners/gemini/session-scanner-gemini-parsers'
+import { parseCodexSessionFile } from './scanners/codex/session-scanner-codex-parser'
+import { parseCopilotSessionFile } from './scanners/copilot/session-scanner-copilot-parser'
+import { parseCursorSessionFile } from './scanners/cursor/session-scanner-cursor-parser'
+import { parseHermesSessionFile } from './scanners/hermes/session-scanner-hermes-parser'
+import { parseOpenCodeSessionFile } from './scanners/opencode/session-scanner-opencode-parser'
 import type { SessionFileCandidate } from './session-scanner-types'
-import type { TranscriptMessageSink } from './session-transcript-consumers'
+import type { TranscriptMessageSink } from './transcripts/session-transcript-consumers'
+import type { SkippedTranscriptRecord } from './transcripts/session-transcript-record-budget'
 
 /** Listing needs only a preview; active message sinks require the full transcript. */
 async function readOpenCodeSqliteCandidate(
@@ -71,7 +75,8 @@ export async function parseAgentSessionFile(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
   messages?: TranscriptMessageSink,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void
 ): Promise<AiVaultSession | null> {
   switch (candidate.agent) {
     case 'qoder':
@@ -144,6 +149,6 @@ export async function parseAgentSessionFile(
     case 'jcode':
       return parseJcodeSessionFile(candidate.file, platform, messages)
     case 'kiro':
-      return parseKiroSessionFile(candidate.file, platform, messages)
+      return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords)
   }
 }

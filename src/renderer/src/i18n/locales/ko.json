@@ -9223,7 +9223,7 @@
               "terminal": "터미널",
               "chat": "채팅",
               "click": "클릭",
-              "actions": "행위",
+              "actions": "작업",
               "popover": "팝오버",
               "menu": "메뉴",
               "disable": "비활성화"
@@ -13776,7 +13776,7 @@
                       "a1b2c3d4e5": "코드 분석",
                       "b2c3d4e5f6": "코드 라인",
                       "7f3e1a9c24": "{{value0}} — 생성됨: {{value1}}줄 추가, {{value2}}줄 삭제",
-                      "c8d5b21e07": "원천",
+                      "c8d5b21e07": "소스 코드",
                       "7a04c6f8b3": "생성됨"
                     }
                   }
@@ -17853,7 +17853,7 @@
           "size": "크기",
           "updated": "업데이트됨",
           "expires": "만료",
-          "actions": "행위"
+          "actions": "작업"
         },
         "ArtifactsPageSkeleton": {
           "loading": "아티팩트 로드 중"
@@ -19433,7 +19433,7 @@
           "reviewPresence": "PR / 씨",
           "reviewProvider": "공급자",
           "ticketPresence": "연계티켓",
-          "host": "주인",
+          "host": "호스트",
           "repo": "저장소",
           "pathPrefix": "경로는 다음으로 시작됩니다.",
           "blockerMode": "블로커 매치",
@@ -19473,7 +19473,7 @@
             "name": "워크스페이스",
             "repo": "저장소",
             "path": "길",
-            "host": "주인",
+            "host": "호스트",
             "workspaceStatus": "상태",
             "agent": "에이전트",
             "git": "Git",
@@ -19494,7 +19494,7 @@
           "agent": {
             "working": "작업 중",
             "permission": "당신을 기다리고 있습니다",
-            "idle": "게으른"
+            "idle": "유휴 상태"
           },
           "review": {
             "open": "열림",
@@ -22307,6 +22307,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택을 유지하거나 인수를 사용할 수 있습니다.",
+    "catalogFailed": "{{agent}} 모델을 불러오지 못했습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogSignIn": "{{agent}}에 로그인하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogInstall": "이 호스트에 {{agent}}를 설치하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogUnresolved": "{{agent}} 모델이 로드되지 않았습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogEmpty": "{{agent}}에 사용 가능한 모델이 없습니다.",
     "search": "에이전트 및 설정 검색…",
     "configure": "{{agent}} 설정",
     "arguments": "인수",
@@ -22321,6 +22327,7 @@
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
     "legacyModelCount": "모델 {{total}}개",
+    "select": "에이전트 선택",
     "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",
     "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @"
   },

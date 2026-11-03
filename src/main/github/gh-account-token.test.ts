@@ -5,7 +5,8 @@ const { ghExecFileAsyncMock, getGhMultiAccountCapabilityMock } = vi.hoisted(() =
   getGhMultiAccountCapabilityMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 

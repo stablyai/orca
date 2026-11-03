@@ -92,11 +92,29 @@ export class AcpStructuredTurns {
     return this.withdrawSteers()
   }
 
-  whenIdle(): Promise<void> {
-    if (!this.active) {
+  /** Earlier admitted steers retain their native queue and settlement while the host holds new input. */
+  interruptForPermissionTransition(): void {
+    if (this.active) {
+      this.cancelForSteer()
+    } else if (this.deps.lane.openTurnId !== null) {
+      this.deps.withdrawRequests()
+      void this.deps.connection.cancel().catch(() => undefined)
+    }
+  }
+
+  whenIdle(signal?: AbortSignal): Promise<void> {
+    if (!this.active || signal?.aborted) {
       return Promise.resolve()
     }
-    return new Promise((resolve) => this.idleWaiters.add(resolve))
+    return new Promise((resolve) => {
+      const wake = (): void => {
+        this.idleWaiters.delete(wake)
+        signal?.removeEventListener('abort', wake)
+        resolve()
+      }
+      this.idleWaiters.add(wake)
+      signal?.addEventListener('abort', wake, { once: true })
+    })
   }
 
   dispatch(send: Send): void {

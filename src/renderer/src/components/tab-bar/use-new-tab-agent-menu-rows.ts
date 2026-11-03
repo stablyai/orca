@@ -39,7 +39,7 @@ import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-invent
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/host-chat-program'
 import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
-import { useHostAgentMenuSettings } from '@/components/settings/use-host-agent-launch-preferences'
+import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 
@@ -254,6 +254,7 @@ export function useAgentMenuObservation(
         defaultTuiAgent: settings?.defaultTuiAgent,
         pickerContext: {
           workspace,
+          launchCwd,
           executionHostId: facts.executionHostId,
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,
@@ -268,7 +269,11 @@ export function useAgentMenuObservation(
     preferencesPending,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
-    selectionFor: (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {
+    selectionFor: (
+      agent: TuiAgent | null,
+      surface?: AgentLaunchSurface,
+      preferredSurface?: 'chat'
+    ) => {
       // A chat row can open through a host-run chat program; a terminal still needs the CLI.
       const chatRow = rows.some((row) => row.kind === 'chat' && row.agent === agent)
       const cliMissing =
@@ -276,6 +281,7 @@ export function useAgentMenuObservation(
       return resolveAgentMenuSelection({
         agent,
         surface,
+        preferredSurface,
         settings,
         executionHostId,
         inventoryReady:

@@ -2,15 +2,10 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  gitExecFileAsync,
-  gitExecFileAsyncBuffer,
-  gitStreamStdout,
-  toLinuxPath,
-  toWindowsWslPath
-} from './runner'
-import { listWorktrees } from './worktree'
-import { resetWslLinkedWorktreeGitRoutingForTests } from './wsl-linked-worktree-git-routing'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitStreamStdout } from './runner'
+import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
+import { listWorktrees } from './worktrees/catalog/worktree-scan-cache'
+import { resetWslLinkedWorktreeGitRoutingForTests } from './command-runner/wsl-linked-worktree-git-routing'
 
 const distro = process.env.ORCA_TEST_WSL_DISTRO?.trim()
 const fixtureRoots: string[] = []

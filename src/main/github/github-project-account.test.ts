@@ -1,7 +1,7 @@
 import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtils from './gh-utils'
-import type * as GitRunner from '../git/runner'
+import type * as GitRunner from '../git/command-runner/git-exec-file'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,7 +32,7 @@ vi.mock('./gh-utils', async (original) => ({
   ...(await original<typeof GhUtils>()),
   ghExecFileAsync: exec
 }))
-vi.mock('../git/runner', async (original) => {
+vi.mock('../git/command-runner/git-exec-file', async (original) => {
   const actual = await original<typeof GitRunner>()
   return {
     ...actual,

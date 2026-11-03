@@ -1,8 +1,8 @@
 import { rm } from 'node:fs/promises'
 import { getAiVaultWslHomeDirs, invalidateAiVaultSessionListCache } from './cached-session-list'
 import { deleteAiVaultSessionFile, type AiVaultSessionPathRemover } from './session-delete'
-import { invalidateSessionParseCacheEntry } from './session-scanner-parse-cache'
-import { invalidateAiVaultBackgroundCache } from './session-scanner-background'
+import { invalidateSessionParseCacheEntry } from './parse-cache/session-parse-cache-store'
+import { invalidateAiVaultBackgroundCache } from './scan-service/session-scanner-background'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {

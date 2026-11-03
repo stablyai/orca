@@ -5,7 +5,7 @@ import {
 } from '../../shared/opencode-cli-version'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { probeOpenCodeCliVersion } from './opencode-cli-version'
 import {
   getAgentLaunchCommandToken,

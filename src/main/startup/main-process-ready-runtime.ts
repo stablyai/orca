@@ -10,6 +10,7 @@ import { configureBrowserClientPageAutomationRuntime } from '../browser/browser-
 import { BrowserExpectedUrlMismatch } from '../../shared/browser-expected-url'
 import { BrowserClientPageCommandError } from '../browser/browser-client-page-command-failure'
 import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagnostics'
+import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-realtime-scheduling-guard'
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
@@ -28,7 +29,10 @@ import {
 } from './main-process-runtime-service'
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
-import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
+import {
+  collectWorktreeTrashSweepRoots,
+  sweepStaleWorktreeTrash
+} from '../workspaces/removal/worktree-trash'
 import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
@@ -47,6 +51,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   if (!store) {
     throw new Error('Store must be initialized before ready services')
   }
+  // Renderers fork from zygotes that exist already, so this must land before the first window.
+  await refuseRealtimeSchedulingUnderZeroRtTime()
   // Load interrupted deletion records before listings so first paint shows Deleting.
   await loadWorktreeRemovalRecordsForStore(store)
   initializeMainProcessObservers()

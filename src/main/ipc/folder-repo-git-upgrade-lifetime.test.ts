@@ -1,3 +1,4 @@
+import type * as RepoDetectionModule from '../git/repo-detection'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,13 +15,22 @@ const fake = vi.hoisted(() => ({
   worktreesChanged: vi.fn(),
   unsubscribe: vi.fn()
 }))
+vi.mock('../git/repo-detection', async (importOriginal) => {
+  const facade = await vi.importMock<typeof RepoDetectionModule>('../git/repo')
+  return {
+    ...(await importOriginal<typeof RepoDetectionModule>()),
+    isGitRepoAsync: facade.isGitRepoAsync,
+    getGitRepoRootAsync: facade.getGitRepoRootAsync
+  }
+})
+
 vi.mock('node:fs/promises', () => ({ stat: fake.stat }))
 vi.mock('node:fs', () => ({ realpathSync: (path: string) => path }))
 vi.mock('../git/repo', () => ({ isGitRepoAsync: fake.git, getGitRepoRootAsync: fake.root }))
 vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: fake.prepare
 }))
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: fake.invalidate
 }))
 vi.mock('./repos/repos-changed-notification', () => ({ notifyReposChanged: fake.reposChanged }))

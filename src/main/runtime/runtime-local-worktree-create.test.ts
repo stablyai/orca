@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { basename } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
-import type { AddWorktreeOptions } from '../git/worktree'
+import type { AddWorktreeOptions } from '../git/worktrees/worktree-operation-options'
 import {
   acquireGitAdmission,
   GitAdmissionScheduler,
@@ -28,8 +28,11 @@ vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: async () => ({ ok: true })
 }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.git }))
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: mocks.git
+}))
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectGitExecOptions: () => ({ cwd: '/repo', ...mocks.routing() }),
   getLocalProjectWorktreeGitOptions: mocks.routing,
   getWorktreeMirrorDistro: () => undefined
@@ -41,7 +44,9 @@ vi.mock('../git/repo', () => ({
 }))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: async () => '' }))
 vi.mock('../workspace-hooks/hooks', () => ({ getEffectiveHooks: mocks.effectiveHooks }))
-vi.mock('../git/worktree-base-ref-probe', () => ({ hasLocalWorktreeBaseRef: mocks.hasBase }))
+vi.mock('../git/worktrees/creation/worktree-base-ref-probe', () => ({
+  hasLocalWorktreeBaseRef: mocks.hasBase
+}))
 vi.mock('./runtime-worktree-create-git', () => ({
   resolveCreateBranchName: mocks.branchName,
   canCheckoutExistingLocalBranch: mocks.canCheckout,
@@ -52,17 +57,23 @@ vi.mock('./runtime-worktree-filesystem', () => ({ runtimePathExists: mocks.pathE
 vi.mock('../workspaces/creation/preparation/worktree-create-preparation', () => ({
   consumePreparedWorktreeCreate: mocks.consume
 }))
-vi.mock('../git/worktree', () => ({ addWorktree: mocks.add, addSparseWorktree: mocks.addSparse }))
+vi.mock('../git/worktrees/creation/worktree-add', () => ({
+  addWorktree: mocks.add
+}))
+
+vi.mock('../git/worktrees/creation/worktree-sparse-add', () => ({
+  addSparseWorktree: mocks.addSparse
+}))
 vi.mock('../ipc/worktree-remote', () => ({ configureCreatedWorktreePushTarget: mocks.pushTarget }))
 vi.mock('../ipc/created-worktree-reconciliation', () => ({ resolveCreatedWorktree: mocks.listing }))
-vi.mock('../worktree-name-retirement', () => ({
+vi.mock('../workspaces/removal/retirement/worktree-name-retirement', () => ({
   failedWorktreeCreationNeedsRetirement: vi.fn(),
   retireGeneratedWorktreeName: vi.fn()
 }))
-vi.mock('../git/worktree-shared-directories', () => ({
+vi.mock('../git/worktrees/content-paths/worktree-shared-directories', () => ({
   resolveWorktreeSharedDirectories: mocks.resolveShared
 }))
-vi.mock('../git/worktree-include-file', () => ({
+vi.mock('../git/worktrees/content-paths/worktree-include-file', () => ({
   resolveWorktreeIncludePaths: mocks.resolveInclude
 }))
 vi.mock('../ipc/worktree-symlinks', () => ({

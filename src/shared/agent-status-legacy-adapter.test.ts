@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import {
   AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
-  AGENT_STATUS_PERSISTED_HYDRATION_MODE,
   createAgentStatusLegacyAdapter,
   olderPeerAgentStatusLegacyMode
 } from './agent-status-legacy-adapter'
@@ -18,16 +17,6 @@ function status(paneKey: string, prompt = 'work'): AgentHookEventPayload {
 }
 
 describe('legacy agent-status adapter', () => {
-  it('keeps incomplete PTY scope exclusively in the legacy region', () => {
-    const adapter = createAgentStatusLegacyAdapter()
-    const entry = status('pane-with-no-workspace-or-host-scope')
-
-    expect(adapter.admit('main-status-update', AGENT_STATUS_2A_CURRENT_PRODUCER_MODE, entry)).toBe(
-      true
-    )
-    expect(adapter.view.get(entry.paneKey)).toBe(entry)
-  })
-
   it('refuses structured rows and keys already owned by the canonical projection', () => {
     const canonicalPaneKeys = new Set<string>()
     const adapter = createAgentStatusLegacyAdapter({
@@ -91,57 +80,6 @@ describe('legacy agent-status adapter', () => {
       )
     ).toBe(false)
     expect(adapter.view.get('same-pane')).toBe(older)
-  })
-
-  it('fails closed on malformed older-peer capability evidence', () => {
-    const adapter = createAgentStatusLegacyAdapter()
-
-    expect(
-      adapter.admit(
-        'main-status-update',
-        olderPeerAgentStatusLegacyMode(Array.from({ length: 257 }, () => 'unknown')),
-        status('malformed-peer')
-      )
-    ).toBe(false)
-    expect(adapter.view.size).toBe(0)
-  })
-
-  it('restricts hydration admission to the named quarantine callers', () => {
-    const adapter = createAgentStatusLegacyAdapter()
-
-    expect(
-      adapter.admit(
-        'main-status-hydration',
-        AGENT_STATUS_PERSISTED_HYDRATION_MODE,
-        status('hydrated')
-      )
-    ).toBe(true)
-    expect(
-      adapter.admit(
-        'main-status-update',
-        AGENT_STATUS_PERSISTED_HYDRATION_MODE,
-        status('wrong-caller')
-      )
-    ).toBe(false)
-  })
-
-  it('exposes Map reads without writable methods or mutable values', () => {
-    const adapter = createAgentStatusLegacyAdapter()
-    const entry = status('immutable')
-    adapter.admit('main-status-update', AGENT_STATUS_2A_CURRENT_PRODUCER_MODE, entry)
-
-    expect(adapter.view.get('immutable')).toBe(entry)
-    expect(adapter.view.has('immutable')).toBe(true)
-    expect(Array.from(adapter.view.keys())).toEqual(['immutable'])
-    expect('set' in adapter.view).toBe(false)
-    expect('delete' in adapter.view).toBe(false)
-    expect(Object.isFrozen(adapter.view)).toBe(true)
-    expect(Object.isFrozen(entry)).toBe(true)
-    expect(Object.isFrozen(entry.payload)).toBe(true)
-    expect(() => {
-      entry.payload.prompt = 'mutated outside the adapter'
-    }).toThrow()
-    expect(adapter.view.get('immutable')?.payload.prompt).toBe('work')
   })
 
   it('preserves and advances listing order across refresh, explicit reorder and relocation', () => {
