@@ -85,10 +85,14 @@ export type UsageRateLimitMetadata = {
   ownerNotSetUp?: OwnerNotSetUpPlaceholder
 }
 
-/** Ollama's own usage data (30d request/USD totals); not a quota window, so renderer renders labels, not percent bars. */
+/** Ollama's own usage data: 30-day totals plus the purchased balance kept distinct from included credits. */
 export type OllamaUsageTotals = {
   spentUsd: number | null
   requestCount: number | null
+  inputTokens: number | null
+  cachedInputTokens: number | null
+  outputTokens: number | null
+  purchasedBalanceUsd: number | null
 }
 
 export type ProviderRateLimits = {

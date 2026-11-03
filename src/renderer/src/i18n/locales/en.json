@@ -13793,7 +13793,9 @@
           "includedWithLimit": "Included credits: {{value0}} of {{value1}}",
           "included": "Included credits: {{value0}}",
           "monthSpend": "30-day cloud spend: ${{value0}} across {{value1}} requests",
-          "planLevel": "Plan: {{value0}}"
+          "planLevel": "Plan: {{value0}}",
+          "purchasedCredits": "Purchased credits: ${{value0}}",
+          "monthTokens": "30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out"
         }
       },
       "right": {

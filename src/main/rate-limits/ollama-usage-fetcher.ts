@@ -4,7 +4,8 @@ import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import type {
   ExtraUsageBalance,
   ProviderRateLimits,
-  RateLimitWindow
+  RateLimitWindow,
+  OllamaUsageTotals
 } from '../../shared/rate-limit-types'
 import { OLLAMA_CLOUD_BASE_URL } from '../../shared/ollama-cloud'
 
@@ -58,21 +59,26 @@ function parseDateMs(value: string): number | null {
 export type OllamaBalanceWindows = {
   session: RateLimitWindow | null
   weekly: RateLimitWindow | null
+  /** Included allowance balance (modern plans); the status-bar currency meter. */
   extraUsage: ExtraUsageBalance | null
+  /** Separately purchased credits, kept distinct from the included allowance (both plans). */
+  purchasedBalanceUsd: number | null
 }
 
 /** Modern plans spend down a USD allowance; legacy plans expose session/weekly percents. */
 export function parseOllamaBalanceResponse(payload: unknown): OllamaBalanceWindows {
   const parsed = BalanceResponseSchema.safeParse(payload)
   if (!parsed.success) {
-    return { session: null, weekly: null, extraUsage: null }
+    return { session: null, weekly: null, extraUsage: null, purchasedBalanceUsd: null }
   }
   const { included, purchased } = parsed.data
+  const purchasedBalanceUsd = purchased.balance_usd
   if ('balance_usd' in included) {
     const spent = included.allowance_usd - included.balance_usd
     return {
       session: null,
       weekly: null,
+      purchasedBalanceUsd,
       extraUsage: {
         unit: 'currency',
         balance: included.balance_usd,
@@ -104,6 +110,7 @@ export function parseOllamaBalanceResponse(payload: unknown): OllamaBalanceWindo
       resetsAt: weeklyResetsAt,
       resetDescription: null
     },
+    purchasedBalanceUsd,
     extraUsage: {
       unit: 'currency',
       balance: purchased.balance_usd,
@@ -118,14 +125,6 @@ export function parseOllamaBalanceResponse(payload: unknown): OllamaBalanceWindo
   }
 }
 
-export type OllamaUsageTotals = {
-  spentUsd: number | null
-  requestCount: number | null
-  inputTokens: number | null
-  cachedInputTokens: number | null
-  outputTokens: number | null
-}
-
 export function parseOllamaUsageResponse(payload: unknown): OllamaUsageTotals {
   const parsed = UsageResponseSchema.safeParse(payload)
   if (!parsed.success) {
@@ -134,7 +133,8 @@ export function parseOllamaUsageResponse(payload: unknown): OllamaUsageTotals {
       requestCount: null,
       inputTokens: null,
       cachedInputTokens: null,
-      outputTokens: null
+      outputTokens: null,
+      purchasedBalanceUsd: null
     }
   }
   return {
@@ -142,7 +142,8 @@ export function parseOllamaUsageResponse(payload: unknown): OllamaUsageTotals {
     requestCount: parsed.data.totals.request_count,
     inputTokens: parsed.data.totals.input_tokens ?? null,
     cachedInputTokens: parsed.data.totals.cached_input_tokens ?? null,
-    outputTokens: parsed.data.totals.output_tokens ?? null
+    outputTokens: parsed.data.totals.output_tokens ?? null,
+    purchasedBalanceUsd: null
   }
 }
 
@@ -216,7 +217,7 @@ export async function fetchOllamaCloudRateLimits(options: {
       weekly: balance.weekly,
       extraUsage: balance.extraUsage,
       // 30d spend is totals data, not a quota window; renderer reads ollamaUsageTotals.
-      ollamaUsageTotals: usage,
+      ollamaUsageTotals: { ...usage, purchasedBalanceUsd: balance.purchasedBalanceUsd },
       updatedAt,
       error: null,
       status: 'ok',
