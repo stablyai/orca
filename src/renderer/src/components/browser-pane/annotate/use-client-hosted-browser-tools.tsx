@@ -42,7 +42,7 @@ export function useClientHostedBrowserTools({
   const tools = useBrowserGuestTools({
     browserPageId,
     worktreeId,
-    guestId: placement ? String(pageHostGeneration) : null,
+    guestAttached: placement !== null,
     webviewRef,
     containerRef,
     toolsReady: !disabled && !isBlankBrowserUrl(currentUrl),

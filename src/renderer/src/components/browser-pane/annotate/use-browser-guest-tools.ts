@@ -14,7 +14,7 @@ import type { BrowserChromeElementTools } from '@/components/browser-pane/assemb
 export function useBrowserGuestTools({
   browserPageId,
   worktreeId,
-  guestId,
+  guestAttached,
   webviewRef,
   containerRef,
   toolsReady,
@@ -25,7 +25,8 @@ export function useBrowserGuestTools({
 }: {
   browserPageId: string
   worktreeId: string
-  guestId: string | null
+  /** False until main can resolve a guest for this page: no document exists to pick from. */
+  guestAttached: boolean
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   containerRef: MutableRefObject<HTMLDivElement | null>
   toolsReady: boolean
@@ -43,8 +44,7 @@ export function useBrowserGuestTools({
   resetBrowserOverlayViewport: () => void
   elementTools: BrowserChromeElementTools
 } {
-  // Wait for a guest before arming its tools.
-  const toolTargetId = guestId === null ? '' : browserPageId
+  const toolTargetId = guestAttached ? browserPageId : ''
   const annotationViewportBridgeTokenRef = useRef<string>(undefined!)
   annotationViewportBridgeTokenRef.current ??= createBrowserUuid().replaceAll('-', '')
   const [browserOverlayViewport, setBrowserOverlayViewport] = useState<BrowserOverlayViewport>({

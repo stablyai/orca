@@ -7,7 +7,7 @@ import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-type
 import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
 import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
 import { getBrowserOverlayAnchor } from '../describe-page/browser-annotation-geometry'
-import { attachDocPreviewWebview } from './doc-preview-webview-attach'
+import { attachDocPreviewWebview } from '../workspace-doc/doc-preview-webview-attach'
 
 type GuestToolCalls = {
   annotationSend: { browserTabId: string }[]
@@ -65,7 +65,7 @@ vi.mock('@/components/browser-pane/annotate/guest-annotation-viewport-bridge', (
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'G' }))
 
-import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
+import { useBrowserGuestTools } from './use-browser-guest-tools'
 
 const PREVIEW_ID = 'browser-page-9f2c'
 const FIRST_GRANT = 'a'.repeat(32)
@@ -73,10 +73,10 @@ const FIRST_GRANT = 'a'.repeat(32)
 function Harness({ grantId }: { grantId: string | null }): null {
   const webviewRef = useRef(null)
   const containerRef = useRef(null)
-  latestTools = useDocPreviewGuestTools({
-    previewId: PREVIEW_ID,
+  latestTools = useBrowserGuestTools({
+    browserPageId: PREVIEW_ID,
     worktreeId: 'wt-1',
-    grantId,
+    guestAttached: grantId !== null,
     webviewRef: webviewRef as never,
     containerRef: containerRef as never,
     toolsReady: true
@@ -86,9 +86,9 @@ function Harness({ grantId }: { grantId: string | null }): null {
 
 let container: HTMLDivElement
 let root: Root
-let latestTools: ReturnType<typeof useDocPreviewGuestTools> | null = null
+let latestTools: ReturnType<typeof useBrowserGuestTools> | null = null
 
-function currentTools(): ReturnType<typeof useDocPreviewGuestTools> {
+function currentTools(): ReturnType<typeof useBrowserGuestTools> {
   if (!latestTools) {
     throw new Error('preview tools not rendered')
   }
@@ -120,7 +120,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('useDocPreviewGuestTools ids', () => {
+describe('useBrowserGuestTools ids', () => {
   it('moves the pending card from a live report after inner scroll and removes the listener on detach', () => {
     const selected = makeAnnotation(PREVIEW_ID).payload
     selected.page.viewportWidth = 900
