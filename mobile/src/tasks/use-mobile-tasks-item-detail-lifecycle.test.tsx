@@ -152,16 +152,28 @@ describe('other detail providers', () => {
     const initial = gitlabItem()
     const fixture = await mount(initial)
     const old = fixture.transport.pending()
-    await fixture.select({
+    const github: ActionableTaskItem = {
       ...initial,
       key: 'github:repo:pr:12',
       provider: 'github',
-      source: { ...initial.source, type: 'pr', state: 'open' }
-    })
+      source: {
+        ...initial.source,
+        type: 'pr',
+        state: 'open',
+        url: 'https://github.com/owner/repo/pull/12',
+        prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' }
+      }
+    }
+    await fixture.select(github)
     await fixture.transport.answer(success({ ...GITLAB_DETAILS, body: 'Old GitLab' }), old)
     expect(fixture.state().payload).toBeNull()
-    await fixture.transport.answer(success({ body: 'GitHub body' }))
-    expect(fixture.transport.requests).toHaveLength(2)
+    await fixture.transport.answer(success({ capabilities: [] }))
+    await fixture.transport.answer(success({ body: 'GitHub body', item: github.source }))
+    expect(fixture.transport.requests.map((request) => request.method)).toEqual([
+      'gitlab.workItemDetails',
+      'status.get',
+      'github.workItemDetails'
+    ])
     expect(fixture.state()).toMatchObject({
       loading: false,
       payload: { provider: 'github', body: 'GitHub body' }
