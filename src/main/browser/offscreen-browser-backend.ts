@@ -53,6 +53,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       webPreferences: {
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
+        // Why: hidden windows alone do not reliably paint for headless CDP capture.
+        offscreen: true,
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false
