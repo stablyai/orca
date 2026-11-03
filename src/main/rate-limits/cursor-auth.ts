@@ -14,6 +14,7 @@ import {
   parseCursorSessionToken,
   type CursorSessionToken
 } from './cursor-session-token'
+import { readCursorDesktopToken } from './cursor-safe-storage-token'
 
 // cursor-agent 2026.06+ stores tokens in Keychain instead of auth.json.
 const KEYCHAIN_SERVICE = 'cursor-access-token'
@@ -184,9 +185,14 @@ export async function readCursorAuthSession(
   // Busy IDE databases are transient; reporting their lock would leave unrelated IDE users with a permanent alert.
   const desktopRead = await readCursorDesktopProfile(desktopDbPath)
   if (desktopRead.status === 'ok' && desktopRead.profile.accessToken) {
-    const session = takeLive(
-      sessionFrom(desktopRead.profile.accessToken, 'desktop', desktopIdentity(desktopRead.profile))
-    )
+    const desktopToken = await readCursorDesktopToken(desktopRead.profile.accessToken)
+    if (desktopToken.status === 'error') {
+      errors.push(desktopToken.error)
+    }
+    const session =
+      desktopToken.status === 'ok'
+        ? takeLive(sessionFrom(desktopToken.token, 'desktop', desktopIdentity(desktopRead.profile)))
+        : null
     if (session) {
       return { status: 'ok', session }
     }
