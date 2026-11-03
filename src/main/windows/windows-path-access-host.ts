@@ -1,5 +1,5 @@
 import { windowsPathAccess, type WindowsPathAccess } from '../../shared/windows-path-access'
-import { getWslHostService } from '../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../wsl/host-lifecycle/wsl-host-service-instance'
 
 export function resolveWindowsPathAccess(
   ownerHostId: unknown,

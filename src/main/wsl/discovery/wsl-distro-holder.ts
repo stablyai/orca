@@ -5,7 +5,7 @@ import {
   listConfirmedRunningWslDistros,
   noteWslDistroMayHaveStopped
 } from './wsl-background-distro-gate'
-import { WslDistroNotRunningError } from '../wsl-orcad-connection-errors'
+import { WslDistroNotRunningError } from '../orcad/wsl-orcad-connection-errors'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
 import { buildWslDistroHolderArgs } from './wsl-distro-holder-command'
 import {

@@ -23,7 +23,7 @@ import {
   noteWslDistrosRunning,
   WSL_STOP_SETTLE_MS
 } from '../discovery/wsl-background-distro-gate'
-import { EXIT_SETTLE_MS } from '../wsl-orcad-liveness-evidence'
+import { EXIT_SETTLE_MS } from '../orcad/wsl-orcad-liveness-evidence'
 import { isWslUserActFor } from '../discovery/wsl-user-act-scope'
 import { isWslDistroNotRunningRefusal } from '../../../shared/wsl-distro-not-running-refusal'
 import {

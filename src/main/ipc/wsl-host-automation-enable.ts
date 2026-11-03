@@ -4,7 +4,7 @@ import { encodePairingOffer, parsePairingCode } from '../../shared/pairing'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { sendSupportedMigrationRequest } from '../ssh/orcad-migration-catalog-client'
-import { getWslHostService } from '../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../wsl/host-lifecycle/wsl-host-service-instance'
 import type { WslMoveMovedAutomation } from '../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
 
 // The host's automation service message for an id it does not hold.

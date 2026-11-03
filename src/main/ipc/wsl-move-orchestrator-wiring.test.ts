@@ -55,7 +55,7 @@ vi.mock('../../shared/wsl-host-deployment-store', () => ({
 vi.mock('../wsl/discovery/wsl-distro-registry-id', () => ({
   readWslDistroRegistrations: async () => null
 }))
-vi.mock('../wsl/wsl-orcad-deploy', () => ({
+vi.mock('../wsl/orcad/wsl-orcad-deploy', () => ({
   defaultWslOrcadEnvironmentId: (distro: string) => `wsl:${distro}`
 }))
 vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({
@@ -69,7 +69,7 @@ vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({
   noteWslDistrosRunning: vi.fn(),
   readWslDistroRunningState: vi.fn(async () => 'running')
 }))
-vi.mock('../wsl/wsl-host-service-instance', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () => ({
     getStatuses: () => host.statuses,
     onStatusesChanged: (listener: () => void) => {
@@ -125,7 +125,7 @@ vi.mock('../persistence/moving-wsl-projects/wsl-move-orchestrator-store', () => 
 const hostActions = vi.hoisted(() => ({
   listeners: new Array<(action: { kind: 'added' | 'removed'; distro: string }) => void>()
 }))
-vi.mock('../wsl/wsl-host-user-actions', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-user-actions', () => ({
   onWslHostUserAction: (
     listener: (action: { kind: 'added' | 'removed'; distro: string }) => void
   ) => {
@@ -240,7 +240,7 @@ describe('WSL move orchestrator wiring', () => {
       { distro: 'Ubuntu', state: 'connecting', environmentId: 'wsl:Ubuntu', detail: null }
     ]
     await register()
-    const { noteWslHostsLivePolicyBlock } = await import('../wsl/wsl-host-gate')
+    const { noteWslHostsLivePolicyBlock } = await import('../wsl/host-lifecycle/wsl-host-gate')
     noteWslHostsLivePolicyBlock()
     host.statuses = [
       { distro: 'Ubuntu', state: 'ready', environmentId: 'wsl:Ubuntu', detail: null }
@@ -268,7 +268,7 @@ describe('WSL move orchestrator wiring', () => {
   it('adds no host when a live policy block lands while the step reads the running distros', async () => {
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
     await register()
-    const { noteWslHostsLivePolicyBlock } = await import('../wsl/wsl-host-gate')
+    const { noteWslHostsLivePolicyBlock } = await import('../wsl/host-lifecycle/wsl-host-gate')
     runningRead.hook = noteWslHostsLivePolicyBlock
     await handlers.get('wslMoveOrchestrator:projectOpened')?.(
       { sender: { id: MAIN_WINDOW_ID } },

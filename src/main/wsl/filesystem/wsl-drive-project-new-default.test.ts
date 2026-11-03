@@ -11,7 +11,7 @@ import {
 } from './wsl-drive-project-new-default'
 
 const gate = vi.hoisted(() => ({ open: true }))
-vi.mock('../wsl-host-gate', () => ({
+vi.mock('../host-lifecycle/wsl-host-gate', () => ({
   wslHostsGateOpen: () => gate.open,
   wslHostsOptedIn: (settings: { experimentalWslHosts?: boolean } | undefined) =>
     gate.open && settings?.experimentalWslHosts === true

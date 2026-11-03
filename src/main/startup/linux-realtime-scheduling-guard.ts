@@ -6,7 +6,7 @@ import {
   readZeroRtTimeLimit,
   setStartupRtPrioOutcome,
   type RtPrioOutcome
-} from '../linux-rttime-limit'
+} from './linux-rttime-limit'
 
 // Why: complete=false when a live thread's children list is unreadable (e.g. a kernel without
 // CONFIG_PROC_CHILDREN), so the breadcrumb never claims zygotes were lowered that were never seen.

@@ -23,7 +23,7 @@ import {
   lastWslDriveUncConversionOutcomes,
   type WslDriveUncConversionOutcome
 } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
-import { wslHostsGateOpen, wslHostsOptedIn } from '../wsl/wsl-host-gate'
+import { wslHostsGateOpen, wslHostsOptedIn } from '../wsl/host-lifecycle/wsl-host-gate'
 import { createWslMoveDriverDeps } from './wsl-move-driver-wiring'
 import { getTrustedUIRendererWebContents } from './ui'
 import {

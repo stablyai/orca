@@ -5,7 +5,7 @@
  */
 import { readdir } from 'node:fs/promises'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
-import { wslHostsOptedIn } from '../wsl-host-gate'
+import { wslHostsOptedIn } from '../host-lifecycle/wsl-host-gate'
 
 /** The message to show instead of "not a git repository"; null when access wasn't the problem. */
 export async function describeWslUncAccessDenied(

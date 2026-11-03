@@ -6,7 +6,7 @@ import {
 import { runProcess } from '@orca/process-host'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
-import { getWslGuestEnvironment, type WslGuestEnvironment } from '../wsl-guest-environment'
+import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 
 /** Shared WSL argv/environment/payload rules; see docs/reference/wsl-command-execution.md. */
