@@ -18,6 +18,10 @@ function makeFallbackId(index: number): string {
   return `open-in-${index + 1}`
 }
 
+export function normalizeOpenInApplicationId(value: unknown): string | null {
+  return normalizeToken(value) || null
+}
+
 export function normalizeOpenInApplications(
   value: unknown,
   options: NormalizeOpenInApplicationsOptions = {}

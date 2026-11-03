@@ -631,6 +631,20 @@ describe('Store', () => {
     ])
   })
 
+  it('updateSettings trims the File Explorer Open In app id and defaults to the Orca editor', async () => {
+    const store = await createStore()
+    expect(store.getSettings().fileExplorerOpenInApplicationId).toBeNull()
+
+    expect(
+      store.updateSettings({ fileExplorerOpenInApplicationId: ' zed ' })
+        .fileExplorerOpenInApplicationId
+    ).toBe('zed')
+    expect(
+      store.updateSettings({ fileExplorerOpenInApplicationId: '  ' })
+        .fileExplorerOpenInApplicationId
+    ).toBeNull()
+  })
+
   it('updateSettings deep-merges and clamps notification custom sound volume', async () => {
     const store = await createStore()
     store.updateSettings({

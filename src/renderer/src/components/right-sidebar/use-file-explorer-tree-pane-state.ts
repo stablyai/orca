@@ -15,6 +15,7 @@ import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { useFileExplorerNodeCommands } from './use-file-explorer-node-commands'
+import { useFileExplorerOpenInApp } from './use-file-explorer-open-in-app'
 import { useFileExplorerRowScrolling } from './use-file-explorer-row-scrolling'
 import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
@@ -256,11 +257,13 @@ export function useFileExplorerTreePaneState({
     loadMoreDir
   })
 
+  const openFileInChosenApp = useFileExplorerOpenInApp(activeWorktreeId, pathOwner)
   const handlers = useFileExplorerHandlers({
     activeWorktreeId,
     runtimeEnvironmentId: ownerRuntimeEnvironmentId,
     openFile,
     makePreviewFilePermanent,
+    openFileInChosenApp,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     loadDir,
     statPath,

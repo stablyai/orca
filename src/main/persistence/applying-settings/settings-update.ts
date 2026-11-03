@@ -20,7 +20,10 @@ import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cu
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
 import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-minimum-contrast-settings'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
-import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
+import {
+  normalizeOpenInApplicationId,
+  normalizeOpenInApplications
+} from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
@@ -181,6 +184,11 @@ export function updateSettings(
   stampDefaultOnMigrationGuards(updates, sanitizedUpdates)
   if ('openInApplications' in updates) {
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
+  }
+  if ('fileExplorerOpenInApplicationId' in updates) {
+    sanitizedUpdates.fileExplorerOpenInApplicationId = normalizeOpenInApplicationId(
+      updates.fileExplorerOpenInApplicationId
+    )
   }
   if ('terminalShortcutPolicy' in updates) {
     sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
