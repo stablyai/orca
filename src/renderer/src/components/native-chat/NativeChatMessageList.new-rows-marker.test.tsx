@@ -157,6 +157,34 @@ describe('the "New" marker in the transcript', () => {
       expect(scrollTop(container)).toBe(readingAt)
     })
 
+    it.each([false, true])(
+      'preserves the parked reader through passive catch-up when pane returned = %s',
+      async (returned) => {
+        const { container, rerender } = render(chat(200, true))
+        paneShown = !returned
+        rerender(chat(200, paneShown, { readCurrent: false }))
+        paneShown = true
+        rerender(chat(400, true, { readCurrent: false }))
+        const scroller = container.querySelector<HTMLElement>('[data-native-chat-scroll]')
+        if (!scroller) {
+          throw new Error('Missing production transcript scroller')
+        }
+        fireEvent.wheel(scroller, { deltaY: -600 })
+        scrollTranscript(container, scroller.scrollHeight - scroller.clientHeight - 600)
+        const readingAt = scroller.scrollTop
+        expect(readingAt).toBeGreaterThan(200 * ROW_PITCH_PX)
+        rerender(chat(400, true))
+        act(() => void deliverResizes())
+        await act(async () => {
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          )
+        })
+
+        expect(Math.abs(scroller.scrollTop - readingAt)).toBeLessThanOrEqual(2)
+      }
+    )
+
     it.each(['wheel', 'touch'] as const)(
       'keeps recent context when %s precedes foreground history catch-up',
       async (gesture) => {
