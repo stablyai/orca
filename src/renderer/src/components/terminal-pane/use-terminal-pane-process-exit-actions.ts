@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useReducer } from 'react'
+import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
@@ -231,16 +231,15 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const queuedRestartPtyIds = useAppStore(
     useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
   )
-  const [paneBoundWake, wakeOnPaneBound] = useReducer((count: number) => count + 1, 0)
-  useEffect(() => onQueuedRestartPaneBound(tabId, wakeOnPaneBound), [tabId])
-  useEffect(() => {
+  const runQueuedAccountRestarts = useCallback(() => {
     const manager = managerRef.current
-    if (!manager || queuedRestartPtyIds.length === 0) {
+    const ready = selectReadyAccountRestartPtyIds(useAppStore.getState(), tabId)
+    if (!manager || ready.length === 0) {
       return
     }
     for (const pane of manager.getPanes()) {
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (!ptyId || !queuedRestartPtyIds.includes(ptyId)) {
+      if (!ptyId || !ready.includes(ptyId)) {
         continue
       }
       const agent = consumePendingPaneAccountRestart(ptyId)
@@ -254,12 +253,18 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     buildAccountRestartStartup,
     consumePendingPaneAccountRestart,
     handleRestartPane,
-    panePtyLayoutBindings,
-    queuedRestartPtyIds,
     managerRef,
-    paneBoundWake,
-    paneTransportsRef
+    paneTransportsRef,
+    tabId
   ])
+  useEffect(() => {
+    runQueuedAccountRestarts()
+  }, [panePtyLayoutBindings, queuedRestartPtyIds, runQueuedAccountRestarts])
+  // Why a microtask: the bind fires inside the connection handler, which must finish before a restart replaces it.
+  useEffect(
+    () => onQueuedRestartPaneBound(tabId, () => queueMicrotask(runQueuedAccountRestarts)),
+    [runQueuedAccountRestarts, tabId]
+  )
 
   return { handleRestartExitedPane, handleCloseExitedPane }
 }

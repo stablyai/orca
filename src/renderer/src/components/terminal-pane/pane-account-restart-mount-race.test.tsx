@@ -38,7 +38,7 @@ import { connectPanePty } from './pty-connection'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 afterEach(cleanup)
-it('restarts a working Claude queued before its unchanged PTY reattach finishes', () => {
+it('restarts a working Claude queued before its unchanged PTY reattach finishes', async () => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   const layout = {
     root: { type: 'leaf' as const, leafId: LEAF },
@@ -118,7 +118,7 @@ it('restarts a working Claude queued before its unchanged PTY reattach finishes'
   act(() => useAppStore.getState().queuePaneAccountRestarts(['pty-old'], 'claude'))
   expect(connectPanePty).not.toHaveBeenCalled()
   // Same-ID reattach goes through the leaf bind the connection prefers and leaves the layout identical.
-  act(() => {
+  await act(async () => {
     attachedPtyId = 'pty-old'
     bindings.result.current.syncPanePtyLayoutBindingForLeaf(LEAF, 'pty-old', 1)
   })
