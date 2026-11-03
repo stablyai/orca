@@ -207,6 +207,25 @@ describe('renderer launch-failed recovery', () => {
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
   })
 
+  it('still prompts on Windows once a persistent CreateProcess refusal spends the schedule', async () => {
+    const SANDBOX_REFUSED = { reason: 'launch-failed', exitCode: 18 } as const
+    const { load } = createSpawnRefusingWindow('win32', SANDBOX_REFUSED)
+    const { onRendererRecoveryExhausted } = open()
+    await vi.advanceTimersByTimeAsync(BACKOFF_TOTAL_MS - 1)
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(251)
+    expect(load).toHaveBeenCalledTimes(1 + RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS.length)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: SANDBOX_REFUSED,
+        cause: 'launch-failed',
+        recentRecoveryCount: RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS.length
+      })
+    )
+  })
+
   it('keeps the crash-loop breaker for renderers that actually crash', async () => {
     const { handlers, load, spawn } = createSpawnRefusingWindow()
     spawn.refused = false
