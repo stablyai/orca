@@ -8,7 +8,7 @@ import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/rec
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
-import { setOptionPlan } from './structured-agent-session-mutation-plans'
+import { setOptionPlan } from './structured-agent-session-option-plan'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER as CALLER,

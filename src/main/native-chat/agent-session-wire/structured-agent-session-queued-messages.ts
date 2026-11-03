@@ -41,14 +41,6 @@ import {
   structuredInputExecutionWorking
 } from './structured-agent-session-input-selection'
 
-/** Preserve order and holds; only automatic drain stops at edit leases, which still count as admission backlog. */
-function oldestActionableQueuedMessage(
-  journal: Pick<AgentSessionJournal, 'queuedMessages'>,
-  automatic: boolean
-): QueuedMessageRow | null {
-  return journal.queuedMessages.nextInputCard(automatic)
-}
-
 /** Host-local gate shared by admission, drain and Send-now; only Send-now overrides working. */
 export type StructuredQueueHold = 'blocked' | 'working' | 'prompt'
 
@@ -113,7 +105,8 @@ export function shouldQueueStructuredAgentSessionSend(
       return true
     }
   }
-  return oldestActionableQueuedMessage(input.journal, false) !== null
+  // A person's fresh send ignores edit leases. Automatic drain is what stops on them.
+  return input.journal.queuedMessages.nextInputCard(false) !== null
 }
 
 /** Queue eligible fresh sends; return null for immediate delivery or existing submission replay. */

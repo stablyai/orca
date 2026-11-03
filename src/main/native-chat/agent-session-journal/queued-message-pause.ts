@@ -213,6 +213,28 @@ function reopenPause(input: {
   return { reason: 'restarted', since: { epoch, sequence } }
 }
 
+/** Stop and restart boundaries the card index caches. Failure and clear apply beside these. */
+export function boundaryQueuePauses(input: {
+  epoch: string
+  stop: { sequence: number } | null
+  reopened: number
+}): DerivedQueuePause[] {
+  const pauses: DerivedQueuePause[] = []
+  if (input.stop) {
+    pauses.push({
+      reason: 'stopped',
+      since: { epoch: input.epoch, sequence: input.stop.sequence }
+    })
+  }
+  if (input.reopened > 0) {
+    pauses.push({
+      reason: 'restarted',
+      since: { epoch: input.epoch, sequence: input.reopened }
+    })
+  }
+  return pauses
+}
+
 function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
   if (pause.reason === 'failed') {
     return true

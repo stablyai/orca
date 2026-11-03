@@ -6,6 +6,7 @@ import { journalInputOrder } from './journal-input-order'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { JournalInputPlace } from './journal-input-order-state'
 import {
+  boundaryQueuePauses,
   queuePauseHolding,
   journalQueueStopHolds,
   failedQueueTurnSequence,
@@ -192,39 +193,26 @@ export class JournalInputCardIndex {
       marks.reopenedSequence,
       floor?.epoch === state.epoch ? floor.sequence : 0
     )
-    const pauseInputs = [
-      journalQueueStopHolds(marks) ? marks.latestStop : null,
-      reopened > lifted ? reopened : 0,
+    const stop = journalQueueStopHolds(marks) ? marks.latestStop : null
+    const reopenHold = reopened > lifted ? reopened : 0
+    const clearedHold =
       marks.cleared && !marks.cleared.lifted && marks.cleared.sequence > lifted
         ? marks.cleared
         : null
-    ]
+    const pauseInputs = [stop, reopenHold, clearedHold]
     if (!this.index || pauseInputs.some((value, i) => value !== this.pauseKey[i])) {
       this.pauseKey = pauseInputs
-      this.cleared = new Set(pauseInputs[2] ? marks.cleared?.messageIds : [])
+      this.cleared = new Set(clearedHold ? marks.cleared?.messageIds : [])
       this.index = new JournalInputPlaceIndex('introduction')
       this.currentCoordinates = new JournalInputPlaceIndex(state.epoch)
       this.domains = undefined
       this.indexed.clear()
       this.candidates.clear()
-      this.pauses = [
-        ...(pauseInputs[0] && marks.latestStop
-          ? [
-              {
-                reason: 'stopped' as const,
-                since: { epoch: state.epoch, sequence: marks.latestStop.sequence }
-              }
-            ]
-          : []),
-        ...(pauseInputs[1]
-          ? [
-              {
-                reason: 'restarted' as const,
-                since: { epoch: state.epoch, sequence: reopened }
-              }
-            ]
-          : [])
-      ]
+      this.pauses = boundaryQueuePauses({
+        epoch: state.epoch,
+        stop,
+        reopened: reopenHold
+      })
       for (const card of this.overlays.values()) {
         if (!state.queue.cards.has(card.messageId)) {
           this.indexCard(state, card)
