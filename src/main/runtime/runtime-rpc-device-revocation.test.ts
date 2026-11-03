@@ -403,7 +403,7 @@ describe('OrcaRuntimeRpcServer', () => {
           registry.setPushRegistration(fork.deviceId, {
             registrationId: 'fork-push',
             filter: {},
-            expiresAt: Date.now() + 60_000
+            expiresAt: 4_000_000_000_000
           })
         }
         const { ws, peer } = await authenticateKeyedWs(
