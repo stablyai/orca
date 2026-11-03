@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { CardTemplate } from '../../../../../shared/workspace-cards/card-template-schema'
+import {
+  CARD_TEMPLATE_LIMITS,
+  type CardTemplate,
+  type CardTemplateNode
+} from '../../../../../shared/workspace-cards/card-template-schema'
 import { CARD_PRIMITIVES } from './card-primitives'
 import {
   cardElement,
@@ -70,16 +74,65 @@ describe('card template compiler', () => {
     expect(renderToStaticMarkup(<>{content}</>)).toContain('margin-left:-4px')
   })
 
-  it('collects the fact domains a template reads', () => {
-    const t = template(
-      {
-        el: 'Row',
-        when: 'place.isActive',
-        children: [{ el: 'Echo', props: { text: '=review.title' } }]
-      },
-      { vars: { x: 'ws.name' } }
+  it('passes frame attributes through a def used as the root, and honours its when', () => {
+    const t = template({ el: 'Body', when: 'ws.show' }, { defs: { Body: { el: 'Row' } } })
+    const compiled = compileCardTemplate(t, registry)
+    const attrs = (): Record<string, unknown> => ({ style: { marginLeft: '-4px' } })
+    const shown = compiled.render({ ws: { show: true } }, '', attrs).content
+    expect(renderToStaticMarkup(<>{shown}</>)).toContain('margin-left:-4px')
+    expect(compiled.render({ ws: { show: false } }, '', attrs).content).toBeNull()
+  })
+
+  it('bounds the tree defs expand to', () => {
+    // Each def holds `width` copies of the next: tiny as written, width^levels once inlined.
+    const fanOut = (levels: number, width: number): CardTemplate => {
+      const defs: Record<string, CardTemplateNode> = {}
+      for (let i = 0; i < levels; i++) {
+        defs[`D${i}`] = {
+          el: 'Row',
+          children: Array.from({ length: width }, () => ({ el: `D${i + 1}` }))
+        }
+      }
+      defs[`D${levels}`] = { el: 'Echo', props: { text: 'x' } }
+      return template({ el: 'D0' }, { defs })
+    }
+    expect(() => compileCardTemplate(fanOut(3, 2), registry)).not.toThrow()
+    expect(() => compileCardTemplate(fanOut(7, 20), registry)).toThrow(/more than .* elements/)
+
+    const chain = (levels: number): CardTemplate => {
+      const defs: Record<string, CardTemplateNode> = {}
+      for (let i = 0; i < levels; i++) {
+        defs[`D${i}`] = { el: 'Row', children: [{ el: `D${i + 1}` }] }
+      }
+      defs[`D${levels}`] = { el: 'Row' }
+      return template({ el: 'D0' }, { defs })
+    }
+    expect(() =>
+      compileCardTemplate(chain(CARD_TEMPLATE_LIMITS.maxDefDepth - 1), registry)
+    ).not.toThrow()
+    expect(() => compileCardTemplate(chain(CARD_TEMPLATE_LIMITS.maxDefDepth), registry)).toThrow(
+      /defs nested deeper/
     )
-    expect([...compileCardTemplate(t, registry).roots].sort()).toEqual(['place', 'review', 'ws'])
+
+    // Each def is shallow, but inlined they nest past maxDepth.
+    const deep: Record<string, CardTemplateNode> = {}
+    let leaf: CardTemplateNode = { el: 'Row' }
+    for (let i = 0; i < 20; i++) {
+      leaf = { el: 'Row', children: [leaf] }
+    }
+    deep.Inner = leaf
+    deep.Outer = {
+      el: 'Row',
+      children: [
+        {
+          el: 'Row',
+          children: [{ el: 'Row', children: [{ el: 'Row', children: [{ el: 'Inner' }] }] }]
+        }
+      ]
+    }
+    expect(() => compileCardTemplate(template({ el: 'Outer' }, { defs: deep }), registry)).toThrow(
+      /nested deeper than/
+    )
   })
 
   it('refuses unknown elements and props, recursive defs and bad expressions', () => {
@@ -87,6 +140,12 @@ describe('card template compiler', () => {
       template({ el: 'Script' }),
       template({ el: 'Echo', props: { onClick: 'x' } }),
       template({ el: 'Loop' }, { defs: { Loop: { el: 'Row', children: [{ el: 'Loop' }] } } }),
+      template(
+        { el: 'A' },
+        { defs: { A: { el: 'Row', children: [{ el: 'B' }] }, B: { el: 'A' } } }
+      ),
+      template({ el: 'Label', props: { text: 'x' } }, { defs: { Label: { el: 'Echo' } } }),
+      template({ el: 'Label', children: [{ el: 'Row' }] }, { defs: { Label: { el: 'Row' } } }),
       template({ el: 'Echo', props: { text: '=ws.name(' } })
     ]
     for (const bad of cases) {

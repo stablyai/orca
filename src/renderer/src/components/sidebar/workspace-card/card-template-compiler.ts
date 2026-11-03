@@ -5,6 +5,7 @@ import {
   type CardExpressionValue
 } from '../../../../../shared/workspace-cards/card-expression'
 import {
+  CARD_TEMPLATE_LIMITS,
   isCardExpression,
   type CardPropValue,
   type CardTemplate,
@@ -22,7 +23,8 @@ export type CardHostElement = {
 }
 
 /** An element drawn by a function, not a component, so a part adds no layer of its own.
- *  Template values arrive unchecked, so `render` coerces every prop it reads. */
+ *  Template values arrive unchecked, so `render` coerces every prop it reads.
+ *  `render` must not call hooks: `when` toggles it, so anything stateful must be a component element. */
 export type CardInlineElement<Context> = {
   kind: 'inline'
   props: readonly string[]
@@ -53,8 +55,6 @@ export type CompiledCardTemplate<Context> = {
     context: Context,
     rootAttrs?: (frame: CardFrame) => Readonly<Record<string, unknown>> | undefined
   ) => { content: React.ReactNode; frame: CardFrame }
-  /** Fact domains the template reads, so a card can skip subscriptions it does not need. */
-  roots: ReadonlySet<string>
 }
 
 export class CardTemplateCompileError extends Error {
@@ -72,8 +72,8 @@ type CompiledNode<Context> = (
 ) => React.ReactNode
 
 class Compiler<Context> {
-  readonly roots = new Set<string>()
   private readonly expanding = new Set<string>()
+  private expandedNodes = 0
 
   constructor(
     private readonly registry: CardElementRegistry<Context>,
@@ -89,11 +89,7 @@ class Compiler<Context> {
 
   expression(source: string, path: string): CardExpressionValue {
     try {
-      const compiled = compileCardExpression(source)
-      for (const root of compiled.roots) {
-        this.roots.add(root)
-      }
-      return compiled.evaluate
+      return compileCardExpression(source).evaluate
     } catch (error) {
       throw new CardTemplateCompileError(
         error instanceof Error ? error.message : String(error),
@@ -102,17 +98,47 @@ class Compiler<Context> {
     }
   }
 
-  node(node: CardTemplateNode, path: string): CompiledNode<Context> {
+  /** `depth` is the node's depth in the expanded tree, since each def reference inlines a copy. */
+  node(node: CardTemplateNode, path: string, depth = 1): CompiledNode<Context> {
     const when = node.when === undefined ? null : this.expression(node.when, `${path}.when`)
-    const def = this.defs[node.el]
+    const def = Object.hasOwn(this.defs, node.el) ? this.defs[node.el] : undefined
     if (def) {
+      if (node.props !== undefined || node.children !== undefined) {
+        throw new CardTemplateCompileError(
+          `${node.el} is a def and takes no props or children`,
+          path
+        )
+      }
       if (this.expanding.has(node.el)) {
         throw new CardTemplateCompileError(`${node.el} uses itself`, path)
       }
+      if (this.expanding.size >= CARD_TEMPLATE_LIMITS.maxDefDepth) {
+        throw new CardTemplateCompileError(
+          `defs nested deeper than ${CARD_TEMPLATE_LIMITS.maxDefDepth}`,
+          path
+        )
+      }
       this.expanding.add(node.el)
-      const inner = this.node(def, `defs.${node.el}`)
+      const inner = this.node(def, `defs.${node.el}`, depth)
       this.expanding.delete(node.el)
-      return (scope, key, rootAttrs) => (when && !when(scope) ? null : inner(scope, key, rootAttrs))
+      if (!when) {
+        return inner
+      }
+      return (scope, context, key, rootAttrs) =>
+        when(scope) ? inner(scope, context, key, rootAttrs) : null
+    }
+    // Why count expanded nodes: defs reused at each level multiply, so the schema's own count is no bound.
+    if (++this.expandedNodes > CARD_TEMPLATE_LIMITS.maxExpandedNodes) {
+      throw new CardTemplateCompileError(
+        `expands to more than ${CARD_TEMPLATE_LIMITS.maxExpandedNodes} elements`,
+        path
+      )
+    }
+    if (depth > CARD_TEMPLATE_LIMITS.maxDepth) {
+      throw new CardTemplateCompileError(
+        `nested deeper than ${CARD_TEMPLATE_LIMITS.maxDepth}`,
+        path
+      )
     }
     const element = Object.hasOwn(this.registry, node.el) ? this.registry[node.el] : undefined
     if (!element) {
@@ -128,7 +154,7 @@ class Compiler<Context> {
       ([name, value]) => [name, this.value(value, `${path}.props.${name}`)] as const
     )
     const children = (node.children ?? []).map((child, index) =>
-      this.node(child, `${path}.children[${index}]`)
+      this.node(child, `${path}.children[${index}]`, depth + 1)
     )
     const renderChildren = (scope: CardExpressionScope, context: Context): React.ReactNode[] =>
       children.map((child, index) => child(scope, context, index))
@@ -187,10 +213,7 @@ export function compileCardTemplate<Context>(
   const singleLine = frameFlag(compiler, template.frame?.singleLine, 'frame.singleLine')
   const statusLane = frameFlag(compiler, template.frame?.statusLane, 'frame.statusLane')
   const root = compiler.node(template.root, 'root')
-  // `vars` is the template's own namespace, not a fact domain.
-  compiler.roots.delete('vars')
   return {
-    roots: compiler.roots,
     render: (facts, context, rootAttrs) => {
       const values: Record<string, unknown> = {}
       const scope: CardExpressionScope = { ...facts, vars: values }

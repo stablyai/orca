@@ -134,16 +134,30 @@ class Parser {
     this.pos++
   }
 
+  private nested<T>(parse: () => T): T {
+    if (++this.depth > CARD_EXPRESSION_LIMITS.maxDepth) {
+      throw new CardExpressionError('Expression nested too deeply', this.source)
+    }
+    try {
+      return parse()
+    } finally {
+      this.depth--
+    }
+  }
+
   private ternary(): CardExpressionValue {
     const condition = this.binary(1)
     if (!this.peekOp('?')) {
       return condition
     }
     this.pos++
-    const whenTrue = this.ternary()
-    this.expectOp(':')
-    const whenFalse = this.ternary()
-    return (s) => (condition(s) ? whenTrue(s) : whenFalse(s))
+    // Why nested: a chained ternary recurses here without passing through unary.
+    return this.nested(() => {
+      const whenTrue = this.ternary()
+      this.expectOp(':')
+      const whenFalse = this.ternary()
+      return (s: CardExpressionScope) => (condition(s) ? whenTrue(s) : whenFalse(s))
+    })
   }
 
   private binary(minPrecedence: number): CardExpressionValue {
@@ -163,24 +177,19 @@ class Parser {
   }
 
   private unary(): CardExpressionValue {
-    if (++this.depth > CARD_EXPRESSION_LIMITS.maxDepth) {
-      throw new CardExpressionError('Expression nested too deeply', this.source)
-    }
-    try {
+    return this.nested(() => {
       if (this.peekOp('!')) {
         this.pos++
         const operand = this.unary()
-        return (s) => !operand(s)
+        return (s: CardExpressionScope) => !operand(s)
       }
       if (this.peekOp('-')) {
         this.pos++
         const operand = this.unary()
-        return (s) => -Number(operand(s))
+        return (s: CardExpressionScope) => -Number(operand(s))
       }
       return this.primary()
-    } finally {
-      this.depth--
-    }
+    })
   }
 
   private primary(): CardExpressionValue {
@@ -219,9 +228,12 @@ class Parser {
     }
     this.pos++
     const args: CardExpressionValue[] = []
-    while (!this.peekOp(')')) {
-      args.push(this.ternary())
-      if (!this.peekOp(')')) {
+    if (!this.peekOp(')')) {
+      for (;;) {
+        args.push(this.ternary())
+        if (this.peekOp(')')) {
+          break
+        }
         this.expectOp(',')
       }
     }

@@ -72,5 +72,17 @@ describe('card expressions', () => {
     expect(() => compileCardExpression(`${'('.repeat(40)}1${')'.repeat(40)}`)).toThrow(/deeply/)
     expect(() => compileCardExpression(`${'!'.repeat(40)}x`)).toThrow(/deeply/)
     expect(() => compileCardExpression(`${'1+'.repeat(2000)}1`)).toThrow(/too long/)
+    expect(() => compileCardExpression(`${'a ? '.repeat(40)}1${' : 0'.repeat(40)}`)).toThrow(
+      /deeply/
+    )
+    expect(() => compileCardExpression(`a ? 1 : ${'b ? 2 : '.repeat(40)}0`)).toThrow(/deeply/)
+    expect(compileCardExpression('a ? 1 : b ? 2 : c ? 3 : 0').evaluate({ c: true })).toBe(3)
+  })
+
+  it('rejects malformed call arguments', () => {
+    for (const source of ['len(x,)', 'len(,)', 'len(x', 'contains(x,,y)']) {
+      expect(() => compileCardExpression(source), source).toThrow(CardExpressionError)
+    }
+    expect(compileCardExpression("contains(x, 'a')").evaluate({ x: 'abc' })).toBe(true)
   })
 })

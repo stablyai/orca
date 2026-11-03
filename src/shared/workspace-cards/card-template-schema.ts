@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { WORKSPACE_CARD_FACTS_VERSION } from './workspace-card-facts'
 
 /** Template format major; additive changes keep 1. */
 export const CARD_TEMPLATE_VERSION = 1
@@ -6,7 +7,11 @@ export const CARD_TEMPLATE_VERSION = 1
 export const CARD_TEMPLATE_LIMITS = {
   maxBytes: 64 * 1024,
   maxNodes: 400,
+  /** Elements after every def reference is inlined; reuse multiplies, so this bounds render work. */
+  maxExpandedNodes: 2000,
   maxDepth: 24,
+  /** Defs referenced inside defs, counted along one expansion chain. */
+  maxDefDepth: 8,
   maxVars: 100,
   maxPropsPerNode: 32,
   maxStringLength: 1024
@@ -57,7 +62,7 @@ export const cardTemplateSchema = z
   .object({
     version: z.literal(CARD_TEMPLATE_VERSION),
     /** Fact model major the template reads. */
-    facts: z.literal(1),
+    facts: z.literal(WORKSPACE_CARD_FACTS_VERSION),
     /** Named expressions, evaluated in order; each may read earlier ones as `vars.<name>`. */
     vars: z
       .record(identifier, expression)
