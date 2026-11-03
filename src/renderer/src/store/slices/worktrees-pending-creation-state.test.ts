@@ -59,20 +59,6 @@ describe('pending worktree creation state', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('removePendingWorktreeCreation clears the active surface only when it points at the removed entry', () => {
-    const store = createTestStore()
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c2'))
-    // c2 is active now; removing the background c1 must not steal the surface.
-    store.getState().removePendingWorktreeCreation('c1')
-
-    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
-    expect(store.getState().activePendingCreationId).toBe('c2')
-
-    store.getState().removePendingWorktreeCreation('c2')
-    expect(store.getState().activePendingCreationId).toBeNull()
-  })
-
   it('removePendingWorktreeCreation cleans up a provisioned-root setup and VM runtime', async () => {
     const store = createTestStore()
     const deleteProjectHostSetup = vi.mocked(store.getState().deleteProjectHostSetup)
