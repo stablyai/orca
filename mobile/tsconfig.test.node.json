@@ -31,6 +31,7 @@
   "files": [
     "src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx",
     "src/test-support/rpc-recording/recorded-request-params.test.ts",
+    "src/worktree/workspace-row-desktop-contract.test.ts",
     "../src/types/build-constants.d.ts"
   ],
   "include": [],
