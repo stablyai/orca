@@ -21414,7 +21414,6 @@
     "newWorkspace": {
       "agentOptional": "Agente [Opcional]",
       "createDescription": "Escolha o projeto e o nome do espaço de trabalho. Selecione um agente se quiser iniciar um.",
-      "setupOnly": "Apenas configuração",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",

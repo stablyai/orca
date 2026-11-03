@@ -19750,7 +19750,6 @@
     "newWorkspace": {
       "agentOptional": "Agent [オプション]",
       "createDescription": "プロジェクトとワークスペース名を選択します。開始する場合は Agent を選択してください。",
-      "setupOnly": "セットアップのみ",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",

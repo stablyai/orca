@@ -20789,7 +20789,6 @@
     "newWorkspace": {
       "agentOptional": "Agent [Optional]",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
-      "setupOnly": "Setup only",
       "setupCheckFailed": "Could not check setup configuration. Try again.",
       "directSetup": {
         "run": "Run setup",

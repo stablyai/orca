@@ -19751,7 +19751,6 @@
     "newWorkspace": {
       "agentOptional": "智能体 [可选]",
       "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。",
-      "setupOnly": "仅设置",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",

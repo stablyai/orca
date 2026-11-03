@@ -121,7 +121,6 @@ vi.mock('@/components/NewWorkspaceComposerCard', () => ({
         Accept setup
       </button>
       <button onClick={() => p.onQuickAgentChange(null)}>Blank</button>
-      <button onClick={p.onQuickSetupOnlySelect}>Setup only</button>
       <button onClick={() => p.onQuickAgentChange('claude', 'terminal')}>Choose CLI</button>
       <button onClick={() => p.onQuickAgentChange('claude', 'chat')}>Choose chat</button>
     </div>
@@ -178,12 +177,6 @@ it.each(['chat', 'terminal'] as const)(
     expect(mocks.submit).not.toHaveBeenCalled()
     act(() => setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES))
     fireEvent.click(screen.getByText('Blank'))
-    await submit()
-    expect(mocks.submit).toHaveBeenLastCalledWith(
-      null,
-      expect.objectContaining({ setupOnly: false })
-    )
-    fireEvent.click(screen.getByText('Setup only'))
     await submit()
     expect(mocks.submit).toHaveBeenLastCalledWith(
       null,

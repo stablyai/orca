@@ -17,8 +17,6 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   | 'agentSetupDisabled'
   | 'onQuickAgentChange'
   | 'agentRows'
-  | 'quickSetupOnly'
-  | 'onQuickSetupOnlySelect'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'onCreate'
@@ -39,8 +37,6 @@ export function NewWorkspaceComposerAgentSection({
   agentPickerDraft,
   agentSetupDisabled,
   onQuickAgentChange,
-  quickSetupOnly = false,
-  onQuickSetupOnlySelect,
   onOpenAgentSettings,
   createDisabled,
   onCreate,
@@ -79,27 +75,18 @@ export function NewWorkspaceComposerAgentSection({
         </div>
         <AgentLaunchPicker
           model={agentSurfaceRows?.model ?? { state: 'loading', placeholderCount: 2 }}
-          agent={quickSetupOnly ? null : quickAgent}
+          agent={quickAgent}
           value={agentPickerDraft}
           cli={agentSurfaceRows?.selection.cli === true}
           setupDisabled={agentSetupDisabled}
           onTriggerEnter={createDisabled ? undefined : onCreate}
-          emptyLabel={
-            quickSetupOnly
-              ? translate('components.newWorkspace.setupOnly', 'Setup only')
-              : translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
-          }
+          emptyLabel={translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
         >
           <DropdownMenuItem onSelect={() => onQuickAgentChange(null)}>
             <Terminal className="size-3.5" />
             {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           </DropdownMenuItem>
-          {onQuickSetupOnlySelect ? (
-            <DropdownMenuItem onSelect={onQuickSetupOnlySelect}>
-              {translate('components.newWorkspace.setupOnly', 'Setup only')}
-            </DropdownMenuItem>
-          ) : null}
           <DropdownMenuSeparator />
         </AgentLaunchPicker>
       </div>

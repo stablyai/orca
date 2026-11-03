@@ -20428,7 +20428,6 @@
     "newWorkspace": {
       "agentOptional": "Ajan [İsteğe bağlı]",
       "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
-      "setupOnly": "Yalnızca kurulum",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",
