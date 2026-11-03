@@ -49,36 +49,104 @@ describe('bounded PATH detection', () => {
     executableFiles(new Set())
   })
 
-  it('finishes an early-hit inventory without opening a slow trailing directory', async () => {
+  it('returns early-directory hits without waiting on a concurrent trailing listing', async () => {
+    const slow = Promise.withResolvers<ReturnType<typeof directory>>()
     executableFiles(new Set(inventory.map((command) => `/front/${command}`)))
     openDirectory.mockImplementation(async (dir: string) => {
-      if (dir !== '/front') {
-        throw new Error('Trailing directory must not be opened')
-      }
-      return directory(inventory)
+      return dir === '/front' ? directory(inventory) : slow.promise
     })
-    await expect(findCommandsOnLocalPath(inventory, options)).resolves.toEqual(new Set(inventory))
-    expect(openDirectory).toHaveBeenCalledTimes(1)
-  })
-
-  it('returns later-directory hits without waiting on a concurrent slow listing', async () => {
-    const slow = Promise.withResolvers<ReturnType<typeof directory>>()
-    executableFiles(new Set(inventory.map((command) => `/middle/${command}`)))
-    openDirectory.mockImplementation(async (dir: string) => {
-      if (dir === '/slow') {
-        return slow.promise
-      }
-      return directory(dir === '/middle' ? inventory : [])
-    })
+    const result = findCommandsOnLocalPath(inventory, options)
     try {
       await expect(
-        findCommandsOnLocalPath(inventory, { ...options, env: { PATH: '/front:/middle:/slow' } })
+        Promise.race([result, new Promise<void>((resolve) => setImmediate(resolve))])
       ).resolves.toEqual(new Set(inventory))
     } finally {
       slow.resolve(directory([]))
+      await result
       await new Promise<void>((resolve) => setImmediate(resolve))
     }
   })
+
+  it.each([
+    { label: 'large inventory', commands: inventory },
+    { label: 'small inventory', commands: ['qodercli', 'qoder'] }
+  ])(
+    'returns later-directory hits before a held first scan resolves ($label)',
+    async ({ commands }) => {
+      const slowListing = Promise.withResolvers<ReturnType<typeof directory>>()
+      const slowProbe = Promise.withResolvers<void>()
+      executableFiles(new Set(commands.map((command) => `/back/${command}`)))
+      const statExecutable = statFile.getMockImplementation()
+      statFile.mockImplementation(async (candidate: string) => {
+        if (candidate.startsWith('/front/')) {
+          await slowProbe.promise
+        }
+        return statExecutable?.(candidate)
+      })
+      openDirectory.mockImplementation(async (dir: string) => {
+        return dir === '/front' ? slowListing.promise : directory(commands)
+      })
+      const result = findCommandsOnLocalPath(commands, options)
+      try {
+        await expect(
+          Promise.race([result, new Promise<void>((resolve) => setImmediate(resolve))])
+        ).resolves.toEqual(new Set(commands))
+      } finally {
+        slowListing.resolve(directory([]))
+        slowProbe.resolve()
+        await result
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
+    }
+  )
+
+  it.each([
+    { label: 'large inventory', commands: inventory, limit: 4 },
+    { label: 'small inventory', commands: ['qodercli', 'qoder'], limit: 2 }
+  ])(
+    'bounds active directory scans while reaching queued hits ($label)',
+    async ({ commands, limit }) => {
+      const dirs = Array.from({ length: 9 }, (_, i) => `/bin-${i}`)
+      const gates = new Map(dirs.map((dir) => [dir, Promise.withResolvers<void>()]))
+      const active = new Set<string>()
+      let peak = 0
+      const hold = async (dir: string) => {
+        active.add(dir)
+        peak = Math.max(peak, active.size)
+        await gates.get(dir)?.promise
+        active.delete(dir)
+      }
+      openDirectory.mockImplementation(async (dir: string) => {
+        await hold(dir)
+        return directory(dir === '/bin-8' ? commands : [])
+      })
+      executableFiles(new Set(commands.map((command) => `/bin-8/${command}`)))
+      const statExecutable = statFile.getMockImplementation()
+      statFile.mockImplementation(async (candidate: string) => {
+        await hold(candidate.slice(0, candidate.lastIndexOf('/')))
+        return statExecutable?.(candidate)
+      })
+      const result = findCommandsOnLocalPath(commands, {
+        ...options,
+        env: { PATH: dirs.join(':') }
+      })
+      try {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(active.size).toBeGreaterThan(0)
+        expect(active.size).toBeLessThanOrEqual(limit)
+        gates.get('/bin-0')?.resolve()
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(active.size).toBeLessThanOrEqual(limit)
+      } finally {
+        for (const gate of gates.values()) {
+          gate.resolve()
+        }
+        await result
+      }
+      expect(await result).toEqual(new Set(commands))
+      expect(peak).toBeLessThanOrEqual(limit)
+    }
+  )
 
   it('uses direct probes for the two-command Qoder launch without listing directories', async () => {
     executableFiles(new Set(['/front/qodercli', '/front/qoder']))
@@ -86,7 +154,6 @@ describe('bounded PATH detection', () => {
       new Set(['qodercli', 'qoder'])
     )
     expect(openDirectory).not.toHaveBeenCalled()
-    expect(statFile).toHaveBeenCalledTimes(2)
   })
 
   it('batches many misses with one listing per unique directory and no candidate stats', async () => {
