@@ -22,18 +22,9 @@ export async function loadRelayBackgroundExtended(): Promise<boolean> {
 
 export function saveRelayBackgroundExtended(value: boolean): Promise<void> {
   revision += 1
-  const writeRevision = revision
-  const previous = extended
-  extended = value
   const write = pendingWrite.then(async () => {
-    try {
-      await persistMirrored(KEY, String(value))
-    } catch (error) {
-      if (revision === writeRevision) {
-        extended = previous
-      }
-      throw error
-    }
+    await persistMirrored(KEY, String(value))
+    extended = value
   })
   pendingWrite = write.catch(() => undefined)
   return write

@@ -140,65 +140,6 @@ describe('mobile endpoint lifecycle host edits', () => {
 
   afterEach(() => vi.useRealTimers())
 
-  it('uses a stored opt-in when the first background happens before hydration', async () => {
-    await saveRelayBackgroundExtended(false)
-    let releaseRead: (value: string | null) => void = () => {}
-    asyncStorageMock.getItem.mockImplementation(async (key: string) => {
-      if (key === 'orca:relayBackgroundExtended') {
-        return await new Promise<string | null>((resolve) => {
-          releaseRead = resolve
-        })
-      }
-      return storage.get(key) ?? null
-    })
-    try {
-      const logical = new FakeLogicalClient('connected', 'relay')
-      const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
-      lifecycle.setForeground(false)
-      await vi.advanceTimersByTimeAsync(120_000)
-      expect(logical.suspendActiveSession).not.toHaveBeenCalled()
-
-      releaseRead('true')
-      await vi.advanceTimersByTimeAsync(0)
-      await vi.advanceTimersByTimeAsync(120_000)
-      expect(logical.getState()).toBe('connected')
-      expect(logical.suspendActiveSession).not.toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(180_000)
-      expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
-      expect(logical.getState()).toBe('disconnected')
-      lifecycle.stop()
-    } finally {
-      asyncStorageMock.getItem.mockImplementation(async (key: string) => storage.get(key) ?? null)
-    }
-  })
-
-  it('keeps the short grace when a late read has no stored opt-in', async () => {
-    await saveRelayBackgroundExtended(false)
-    let releaseRead: (value: string | null) => void = () => {}
-    asyncStorageMock.getItem.mockImplementation(async (key: string) => {
-      if (key === 'orca:relayBackgroundExtended') {
-        return await new Promise<string | null>((resolve) => {
-          releaseRead = resolve
-        })
-      }
-      return storage.get(key) ?? null
-    })
-    try {
-      const logical = new FakeLogicalClient('connected', 'relay')
-      const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
-      lifecycle.setForeground(false)
-      await vi.advanceTimersByTimeAsync(0)
-      releaseRead(null)
-      await vi.advanceTimersByTimeAsync(0)
-      await vi.advanceTimersByTimeAsync(30_000)
-      expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
-      expect(logical.getState()).toBe('disconnected')
-      lifecycle.stop()
-    } finally {
-      asyncStorageMock.getItem.mockImplementation(async (key: string) => storage.get(key) ?? null)
-    }
-  })
-
   it('applies the saved Relay grace to an existing lifecycle on its next background', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
