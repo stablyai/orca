@@ -216,20 +216,21 @@
     },
     "pairConfirm": {
       "connectTimedOut": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-      "pairingFailed": "Pairing failed: {{error}}",
       "title": "Pair with this desktop?",
       "description": "You opened a pairing link from your desktop. Confirm to add it to your hosts.",
       "pairButton": "Pair",
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
-      "backToHome": "Back to home"
+      "backToHome": "Back to home",
+      "edgeCredentialsFailed": "The host was paired, but its edge credentials could not be saved. Retry saving, or enter them later in Edit Host.",
+      "edgePairingFailed": "Could not finish pairing or save credentials. Check the connection and protected storage, then retry.",
+      "retryCredentials": "Retry saving credentials"
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
       "downloadQrCode": "That's the download code. Scan the pairing code in step 2 on your desktop.",
       "invalidPairingCode": "Not a valid pairing code — copy it from your computer and paste again",
       "connectTimedOut": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-      "pairingFailed": "Pairing failed: {{error}}",
       "title": "Pair with desktop",
       "cameraDisabledTitle": "Camera Access Disabled",
       "cameraPermissionDescription": "Scan the QR code from Orca on your desktop, or paste the pairing code instead.",
@@ -245,7 +246,8 @@
       "pastePairingCode": "Or paste pairing code",
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
-      "tryAgain": "Try Again"
+      "tryAgain": "Try Again",
+      "secureFailure": "Pairing failed. Check that Orca is reachable and the pairing link is current."
     },
     "pair": {
       "missingCode": "Missing pairing code",
@@ -4528,5 +4530,27 @@
         }
       }
     }
+  },
+  "edgeAuth": {
+    "title": "Edge authentication",
+    "hint": "Optional headers sent on the connection handshake, for tunnels protected by edge authentication (for example Cloudflare Access service tokens). Stored in this phone's keychain, never in pairing links. Pair over LAN or Relay before configuring these headers. If the secure host or port changes, save the address, then reopen this form to enter credentials for it. Leave all rows blank for none.",
+    "saved_one": "{{count}} header saved.",
+    "saved_other": "{{count}} headers saved.",
+    "name": "Header {{index}} name",
+    "namePlaceholder": "CF-Access-Client-Id",
+    "value": "Header {{index}} value",
+    "valuePlaceholder": "Secret value",
+    "remove": "Remove header {{index}}",
+    "add": "Add header",
+    "secureAddressRequired": "Edge authentication needs a wss:// address — headers are never sent over ws://.",
+    "listRequired": "Headers must be a list.",
+    "pairRequired": "Each header must be a name/value pair.",
+    "invalidName": "Invalid header name: \"{{name}}\".",
+    "invalidValue": "Invalid value for header \"{{name}}\".",
+    "tooMany": "At most {{limit}} headers are supported.",
+    "pairingHint": "Optional headers for this secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link.",
+    "saving": "Saving credentials…",
+    "configure": "Configure edge authentication",
+    "saveFailed": "Could not save edge authentication."
   }
 }

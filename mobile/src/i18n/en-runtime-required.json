@@ -162,6 +162,10 @@
       "sessionLost": "Dictation lost its connection to the computer. Try again."
     }
   },
+  "edgeAuth": {
+    "saved_one": "{{count}} header saved.",
+    "saved_other": "{{count}} headers saved."
+  },
   "hostScreen": {
     "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
@@ -280,10 +284,6 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
-    },
-    "structuredOpen": {
-      "worktreeDeleted": "The worktree was deleted.",
-      "folderWorkspaceRemoved": "The folder workspace was removed."
     }
   },
   "settings": {

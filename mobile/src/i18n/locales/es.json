@@ -84,7 +84,6 @@
       "connecting": "Conectando…",
       "description": "Has abierto un enlace de emparejamiento desde tu escritorio. Confirma para añadirlo a tus hosts.",
       "pairButton": "Emparejar",
-      "pairingFailed": "Error de emparejamiento: {{error}}",
       "pairingLog": "Registro de emparejamiento",
       "title": "¿Emparejar con este escritorio?"
     },
@@ -100,7 +99,6 @@
       "openDesktopStep": "Abre Orca en tu ordenador",
       "openMobileSettingsStep": "Ve a Ajustes → Móvil",
       "openSettings": "Abrir Ajustes",
-      "pairingFailed": "Error de emparejamiento: {{error}}",
       "pairingLog": "Registro de emparejamiento",
       "pasteCodeMessage": "Copia el código que aparece debajo del QR en tu ordenador.",
       "pasteCodePlaceholder": "orca://pair?code=... o pega el código",

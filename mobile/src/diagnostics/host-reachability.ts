@@ -1,13 +1,22 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
+import {
+  createEndpointAuthSocket,
+  edgeAuthHeadersForEndpoint,
+  type EndpointAuthHeaders
+} from '../transport/endpoint-auth-headers'
 
 const HOST_REACHABILITY_TIMEOUT_MS = 4000
 
 // Probe reachability without completing the encrypted runtime handshake.
-export async function testHostReachability(endpoint: string): Promise<boolean> {
+export async function testHostReachability(
+  endpoint: string,
+  endpointAuthHeaders: EndpointAuthHeaders | null = null
+): Promise<boolean> {
   return new Promise((resolve) => {
     let ws: WebSocket
     try {
-      ws = new WebSocket(endpoint)
+      const headers = edgeAuthHeadersForEndpoint(endpoint, endpointAuthHeaders)
+      ws = headers ? createEndpointAuthSocket(endpoint, headers) : new WebSocket(endpoint)
     } catch {
       resolve(false)
       return

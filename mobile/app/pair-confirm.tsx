@@ -1,5 +1,13 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, Pressable, BackHandler } from 'react-native'
+import {
+  View,
+  Text,
+  Pressable,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -8,169 +16,191 @@ import {
   type PairConfirmRouteState
 } from '../src/transport/pair-confirm-state'
 import {
-  startPreProfilePairing,
-  type PreProfilePairingAttempt
-} from '../src/transport/pre-profile-pairing-coordinator'
+  startPairingWithEdgeAuth,
+  type PairingEdgeAuthAttempt
+} from '../src/transport/pairing-edge-auth-attempt'
 import type { ConnectionLogEntry } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'
-import { colors, spacing, radii, typography, pressedStyle } from '../src/theme/mobile-theme'
-import { themedStyleSheet } from '../src/theme/themed-styles'
+import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { ConnectionLog } from '../src/components/ConnectionLog'
-import {
-  loadMobileOnboardingSteps,
-  mobileOnboardingDestination
-} from '../src/onboarding/mobile-onboarding-plan'
 import {
   PAIRING_SUCCESS_HOLD_MS,
   PairingProgress,
   waitForBeat
 } from '../src/pairing/pairing-visuals'
 import { triggerSuccess } from '../src/platform/haptics'
+import { ConnectionLog } from '../src/components/ConnectionLog'
+import {
+  EdgeAuthHeadersSection,
+  useEdgeAuthHeaders,
+  type EdgeAuthScrollTarget
+} from '../src/components/edge-auth-headers-section'
+import {
+  loadMobileOnboardingSteps,
+  mobileOnboardingDestination
+} from '../src/onboarding/mobile-onboarding-plan'
+import { pairConfirmStyles as styles } from '../src/pair-confirm-styles'
 
-type Status = 'awaiting-confirm' | 'connecting' | 'error'
-
-// Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
+type VerifiedHost = { hostId: string; credentialsSaved: boolean }
 export default function PairConfirmScreen() {
   useMobileTranslation()
   const params = useLocalSearchParams<{ code?: string | string[] }>()
   return (
-    <PairConfirmContent
+    <PairConfirmAttemptScreen
       key={typeof params.code === 'string' ? params.code : undefined}
       routeState={resolvePairConfirmRouteState(params.code)}
     />
   )
 }
 
-function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState }) {
+function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRouteState }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
-  const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [paired, setPaired] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
-  const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
-  // Ref keeps RPC callback logs current and batches bursty state updates.
-  const logsRef = useRef<ConnectionLogEntry[]>([])
-  const mountedRef = useRef(true)
-  const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
-
   const offer = routeState.offer
-  const resolvedStatus =
-    status === 'awaiting-confirm' && routeState.kind === 'error' ? 'error' : status
-  const resolvedErrorMessage =
-    status === 'awaiting-confirm' && routeState.kind === 'error'
-      ? routeState.errorMessage
-      : errorMessage
-
+  const edgeAuth = useEdgeAuthHeaders()
+  const scrollTarget = useRef<EdgeAuthScrollTarget | null>(null)
+  const secure = Platform.OS !== 'web' && offer?.endpoint.toLowerCase().startsWith('wss://')
+  const [status, setStatus] = useState<'awaiting-confirm' | 'connecting' | 'error'>(
+    'awaiting-confirm'
+  )
+  const [errorMessage, setErrorMessage] = useState('')
+  const [verifiedHost, setVerifiedHost] = useState<VerifiedHost | null>(null)
+  const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
+  const mounted = useRef(true)
+  const generation = useRef(0)
+  const busy = useRef(false)
+  const activeAttempt = useRef<PairingEdgeAuthAttempt | null>(null)
+  const invalidate = useCallback(() => {
+    generation.current += 1
+    activeAttempt.current?.dispose()
+    activeAttempt.current = null
+  }, [])
   const cancel = useCallback(() => {
-    mountedRef.current = false
-    activePairingAttemptRef.current?.dispose()
-    activePairingAttemptRef.current = null
+    mounted.current = false
+    invalidate()
     router.replace('/')
-  }, [router])
-
+  }, [invalidate, router])
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
         cancel()
         return true
       })
-      return () => subscription.remove()
-    }, [cancel])
+      return () => {
+        subscription.remove()
+        invalidate()
+      }
+    }, [cancel, invalidate])
+  )
+  const rootRef = useCallback(
+    (node: View | null) => {
+      mounted.current = node !== null
+      if (!node) {
+        invalidate()
+      }
+    },
+    [invalidate]
   )
 
-  const setPairConfirmRootRef = useCallback((node: View | null): void => {
-    if (node !== null) {
-      mountedRef.current = true
-      return
-    }
-    // Dispose pairing on route detach: attempts can outlive the visible screen, before passive cleanup.
-    mountedRef.current = false
-    activePairingAttemptRef.current?.dispose()
-    activePairingAttemptRef.current = null
-  }, [])
-
   async function confirm() {
-    if (!offer) {
+    if (!offer || busy.current || (secure && !verifiedHost && !edgeAuth.authNormalized.ok)) {
       return
     }
+    busy.current = true
     setStatus('connecting')
-    logsRef.current = []
-    setLogs([])
-    activePairingAttemptRef.current?.dispose()
-
-    const attempt = startPreProfilePairing({
-      offer,
-      timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
-      connectOptions: {
-        onLog: (entry) => {
-          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
-            return
-          }
-          logsRef.current = [...logsRef.current, entry]
-          setLogs(logsRef.current)
-        }
-      }
-    })
-    activePairingAttemptRef.current = attempt
+    setErrorMessage('')
+    const submission = verifiedHost ? generation.current : ++generation.current
+    const isCurrent = () => mounted.current && generation.current === submission
     try {
-      const { hostId } = await attempt.result
-      const attemptIsCurrent = activePairingAttemptRef.current === attempt
-      attempt.dispose()
-      if (activePairingAttemptRef.current === attempt) {
-        activePairingAttemptRef.current = null
+      let verified = verifiedHost
+      if (!verified) {
+        setLogs([])
+        activeAttempt.current?.dispose()
+        const attempt = startPairingWithEdgeAuth({
+          offer,
+          timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+          headers: secure && edgeAuth.authNormalized.ok ? edgeAuth.authNormalized.headers : null,
+          isCurrent,
+          connectOptions: {
+            onLog: (entry) => {
+              if (isCurrent()) {
+                setLogs((previous) => [...previous, entry])
+              }
+            }
+          }
+        })
+        activeAttempt.current = attempt
+        verified = await attempt.result
+        if (!isCurrent()) {
+          return
+        }
+        setVerifiedHost(verified)
+      } else if (!verified.credentialsSaved) {
+        const attempt = activeAttempt.current
+        if (!attempt) {
+          throw new Error('Pairing no longer active')
+        }
+        await attempt.retryCredentialSave()
+        verified = { ...verified, credentialsSaved: true }
+        if (!isCurrent()) {
+          return
+        }
+        setVerifiedHost(verified)
       }
-      if (!mountedRef.current || !attemptIsCurrent) {
+      if (!verified.credentialsSaved) {
+        setStatus('error')
+        setErrorMessage(
+          t(
+            'app.pairConfirm.edgeCredentialsFailed',
+            'The host was paired, but its edge credentials could not be saved. Retry saving, or enter them later in Edit Host.'
+          )
+        )
         return
       }
-      // Re-pair reuses host id; close cached client so it reloads the persisted endpoint/relay (STA-1840).
-      refreshHostClient(hostId)
+      refreshHostClient(verified.hostId)
       setPaired(true)
       triggerSuccess()
-      const [onboardingSteps] = await Promise.all([
+      const [steps] = await Promise.all([
         loadMobileOnboardingSteps(),
         waitForBeat(PAIRING_SUCCESS_HOLD_MS)
       ])
-      if (!mountedRef.current) {
+      if (!isCurrent()) {
         return
       }
-      router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
-    } catch (err) {
-      const timedOut = attempt.timedOut
-      const attemptIsCurrent = activePairingAttemptRef.current === attempt
-      attempt.dispose()
-      if (activePairingAttemptRef.current === attempt) {
-        activePairingAttemptRef.current = null
+      activeAttempt.current?.dispose()
+      activeAttempt.current = null
+      router.replace(mobileOnboardingDestination(steps, verified.hostId))
+    } catch {
+      if (isCurrent()) {
+        setStatus('error')
+        setErrorMessage(
+          activeAttempt.current?.timedOut
+            ? t(
+                'app.pairConfirm.connectTimedOut',
+                "Couldn't connect within {{seconds}}s — see log below for where it stalled",
+                { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
+              )
+            : t(
+                'app.pairConfirm.edgePairingFailed',
+                'Could not finish pairing or save credentials. Check the connection and protected storage, then retry.'
+              )
+        )
       }
-      if (!mountedRef.current || !attemptIsCurrent) {
-        return
-      }
-      console.warn('[pair-confirm] connect failed', err)
-      setStatus('error')
-      setErrorMessage(
-        timedOut
-          ? t(
-              'app.pairConfirm.connectTimedOut',
-              "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-              { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
-            )
-          : t('app.pairConfirm.pairingFailed', 'Pairing failed: {{error}}', {
-              error: err instanceof Error ? err.message : String(err)
-            })
-      )
+    } finally {
+      busy.current = false
     }
   }
-
-  const containerPadding = { paddingTop: insets.top + spacing.sm }
-
+  const error = routeState.kind === 'error' ? routeState.errorMessage : errorMessage
+  const showForm = offer && status !== 'connecting' && !verifiedHost
   return (
-    <View ref={setPairConfirmRootRef} style={[styles.container, containerPadding]}>
+    <View ref={rootRef} style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <Pressable
         style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
         onPress={cancel}
@@ -180,166 +210,122 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
       >
         <ChevronLeft size={22} color={colors.textSecondary} />
       </Pressable>
-
-      <View style={styles.content}>
-        {offer && resolvedStatus === 'awaiting-confirm' && (
-          <>
-            <Text style={styles.title}>
-              {t('app.pairConfirm.title', 'Pair with this desktop?')}
+      <KeyboardAvoidingView
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          ref={(node) => {
+            scrollTarget.current = node
+          }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
+        >
+          {error ? (
+            <Text style={styles.errorText} accessibilityRole="alert">
+              {error}
             </Text>
-            <Text style={styles.subtitle}>
-              {t(
-                'app.pairConfirm.description',
-                'You opened a pairing link from your desktop. Confirm to add it to your hosts.'
-              )}
-            </Text>
-            <View style={styles.actionStack}>
-              <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
-                onPress={() => void confirm()}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {t('app.pairConfirm.pairButton', 'Pair')}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
-                onPress={cancel}
-              >
-                <Text style={styles.secondaryButtonText}>{t('common.cancel', 'Cancel')}</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-
-        {resolvedStatus === 'connecting' && (
-          <>
+          ) : null}
+          {showForm ? (
+            <>
+              <Text style={styles.title}>
+                {t('app.pairConfirm.title', 'Pair with this desktop?')}
+              </Text>
+              <Text style={styles.subtitle}>
+                {t(
+                  'app.pairConfirm.description',
+                  'You opened a pairing link from your desktop. Confirm to add it to your hosts.'
+                )}
+              </Text>
+              {secure ? (
+                <EdgeAuthHeadersSection
+                  rows={edgeAuth.authRows}
+                  storedCount={0}
+                  error={edgeAuth.authNormalized.ok ? null : edgeAuth.authNormalized.error}
+                  onRowsChange={edgeAuth.setAuthRows}
+                  scrollViewRef={scrollTarget}
+                  hint={t(
+                    'edgeAuth.pairingHint',
+                    "Optional headers for this secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link."
+                  )}
+                />
+              ) : null}
+              <View style={styles.actionStack}>
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('app.pairConfirm.pairButton', 'Pair')}
+                  disabled={Boolean(secure && !edgeAuth.authNormalized.ok)}
+                  onPress={confirm}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {t('app.pairConfirm.pairButton', 'Pair')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.cancel', 'Cancel')}
+                  onPress={cancel}
+                >
+                  <Text style={styles.secondaryButtonText}>{t('common.cancel', 'Cancel')}</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
+          {status === 'connecting' ? (
             <PairingProgress
               succeeded={paired}
-              connectingLabel={t('app.pairConfirm.connecting', 'Connecting…')}
+              connectingLabel={
+                verifiedHost
+                  ? t('edgeAuth.saving', 'Saving credentials…')
+                  : t('app.pairConfirm.connecting', 'Connecting…')
+              }
               labelStyle={styles.connectingText}
             />
+          ) : null}
+          {logs.length > 0 ? (
             <View style={styles.logSlot}>
               <ConnectionLog
                 entries={logs}
                 title={t('app.pairConfirm.pairingLog', 'Pairing log')}
               />
             </View>
-          </>
-        )}
-
-        {resolvedStatus === 'error' && (
-          <>
-            <Text style={styles.errorText}>{resolvedErrorMessage}</Text>
-            {logs.length > 0 && (
-              <View style={styles.logSlot}>
-                <ConnectionLog
-                  entries={logs}
-                  title={t('app.pairConfirm.pairingLog', 'Pairing log')}
-                />
-              </View>
-            )}
+          ) : null}
+          {(verifiedHost || !offer) && status !== 'connecting' ? (
             <View style={styles.actionStack}>
+              {verifiedHost ? (
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    verifiedHost.credentialsSaved
+                      ? t('common.continue', 'Continue')
+                      : t('app.pairConfirm.retryCredentials', 'Retry saving credentials')
+                  }
+                  onPress={confirm}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {verifiedHost.credentialsSaved
+                      ? t('common.continue', 'Continue')
+                      : t('app.pairConfirm.retryCredentials', 'Retry saving credentials')}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+                style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
+                accessibilityRole="button"
+                accessibilityLabel={t('app.pairConfirm.backToHome', 'Back to home')}
                 onPress={cancel}
               >
-                <Text style={styles.primaryButtonText}>
+                <Text style={styles.secondaryButtonText}>
                   {t('app.pairConfirm.backToHome', 'Back to home')}
                 </Text>
               </Pressable>
             </View>
-          </>
-        )}
-      </View>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    // Offset above geometric center to balance home-indicator/nav-bar space.
-    paddingBottom: spacing.xl * 2
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-    textAlign: 'center'
-  },
-  subtitle: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.xl,
-    textAlign: 'center',
-    maxWidth: 520,
-    alignSelf: 'center'
-  },
-  actionStack: {
-    width: '100%',
-    maxWidth: 360,
-    alignSelf: 'center'
-  },
-  primaryButton: {
-    width: '100%',
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    marginBottom: spacing.sm
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  secondaryButton: {
-    width: '100%',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.control,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  connectingText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    marginTop: spacing.lg,
-    textAlign: 'center'
-  },
-  logSlot: {
-    width: '100%',
-    marginTop: spacing.lg,
-    marginBottom: spacing.md
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 20
-  }
-}))

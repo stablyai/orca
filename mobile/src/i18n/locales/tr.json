@@ -82,7 +82,6 @@
       "connecting": "Bağlanılıyor…",
       "description": "Masaüstünüzden bir eşleştirme bağlantısı açtınız. Bu masaüstünü sunucu listenize eklemek için onaylayın.",
       "pairButton": "Eşleştir",
-      "pairingFailed": "Eşleştirme yapılamadı: {{error}}",
       "pairingLog": "Eşleştirme günlüğü",
       "title": "Bu masaüstüyle eşleştirilsin mi?"
     },
@@ -98,7 +97,6 @@
       "openDesktopStep": "Bilgisayarınızda Orca'yı açın",
       "openMobileSettingsStep": "Ayarlar → Mobil bölümüne gidin",
       "openSettings": "Ayarları Aç",
-      "pairingFailed": "Eşleştirme yapılamadı: {{error}}",
       "pairingLog": "Eşleştirme günlüğü",
       "pasteCodeMessage": "Bilgisayarınızda QR kodunun altında gösterilen kodu kopyalayın.",
       "pasteCodePlaceholder": "orca://pair?code=... veya kodu yapıştırın",

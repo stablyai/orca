@@ -84,7 +84,6 @@
       "connecting": "Connexion…",
       "description": "Vous avez ouvert un lien d'appairage depuis votre ordinateur. Confirmez pour l'ajouter à vos hôtes.",
       "pairButton": "Appairer",
-      "pairingFailed": "Échec de l'appairage : {{error}}",
       "pairingLog": "Journal d'appairage",
       "title": "Appairer cet ordinateur ?"
     },
@@ -100,7 +99,6 @@
       "openDesktopStep": "Ouvrez Orca sur votre ordinateur",
       "openMobileSettingsStep": "Allez dans Paramètres → Mobile",
       "openSettings": "Ouvrir les paramètres",
-      "pairingFailed": "Échec de l'appairage : {{error}}",
       "pairingLog": "Journal d'appairage",
       "pasteCodeMessage": "Copiez le code affiché sous le QR code sur votre ordinateur.",
       "pasteCodePlaceholder": "orca://pair?code=... ou collez le code",
