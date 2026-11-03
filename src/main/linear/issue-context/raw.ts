@@ -109,7 +109,7 @@ export type RawRelationsResponse = {
   } | null
 }
 
-export const ISSUE_FIELDS = `
+const ISSUE_CORE_FIELDS = `
   id
   identifier
   title
@@ -119,20 +119,38 @@ export const ISSUE_FIELDS = `
   estimate
   dueDate
   branchName
-  createdAt
   updatedAt
-  state { id name type color }
-  team { id name key color }
+  state { name type color }
+  team { id name key }
   project { id name color }
-  cycle { id name }
   assignee { id displayName avatarUrl }
-  labels(first: 50) { nodes { id name color } pageInfo { hasNextPage } }
+  labels(first: 50) { nodes { id name } }
+`
+
+const ISSUE_AGENT_FIELDS = `
+  createdAt
+  state { id }
+  team { color }
+  cycle { id name }
+  labels(first: 50) { nodes { color } pageInfo { hasNextPage } }
+`
+
+export const ISSUE_FIELDS = `
+  ${ISSUE_CORE_FIELDS}
+  ${ISSUE_AGENT_FIELDS}
 `
 
 export const ISSUE_QUERY = `
-  query OrcaAgentLinearIssue($id: String!) {
+  query OrcaAgentLinearIssue($id: String!, $includeDrawerFields: Boolean = false) {
     issue(id: $id) {
-      ${ISSUE_FIELDS}
+      ${ISSUE_CORE_FIELDS}
+      ... @skip(if: $includeDrawerFields) {
+        ${ISSUE_AGENT_FIELDS}
+      }
+      project @include(if: $includeDrawerFields) { url }
+      children(first: 25) @include(if: $includeDrawerFields) {
+        nodes { id identifier title url }
+      }
     }
   }
 `
