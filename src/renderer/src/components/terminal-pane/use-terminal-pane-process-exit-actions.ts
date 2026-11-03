@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
+import { selectReadyAccountRestartPtyIds } from './pane-account-restart-readiness'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { connectPanePty } from './pty-connection'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -223,9 +224,9 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     }
   }, [managerRef, panePtyLayoutBindings, paneTransportsRef, tabId])
 
-  // Why primitive ids: unrelated store writes stay shallow-equal and skip this pane.
+  // Why primitive ids: another tab's queued restart stays shallow-equal and skips this pane.
   const queuedRestartPtyIds = useAppStore(
-    useShallow((state) => Object.keys(state.pendingPaneAccountRestarts))
+    useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
   )
   useEffect(() => {
     const manager = managerRef.current

@@ -140,7 +140,7 @@ export function buildPaneAccountRestartStartup(
 ): AgentAccountRestartStartup | null {
   const resume = resolveAgentAccountRestartResumeStartup(agent, args)
   const sessionId = resume?.resumeProviderSession?.id
-  // Why here: a queued restart runs at idle, and another pane may have resumed the session since.
+  // Why here: another pane may have resumed the session since the restart was queued.
   if (
     agent === 'claude' &&
     sessionId &&
