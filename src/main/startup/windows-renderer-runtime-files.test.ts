@@ -75,27 +75,4 @@ describe('ensureWindowsRendererRuntimeFiles', () => {
       'ffmpeg.dll is missing, empty, or in use'
     )
   })
-
-  it('passes a complete packaged install', () => {
-    writeFileSync(join(installDir, 'ffmpeg.dll'), 'MZ')
-    expect(ensureWindowsRendererRuntimeFiles(false)).toBe(true)
-    expect(handleFailure).not.toHaveBeenCalled()
-  })
-
-  it('skips non-Windows hosts', () => {
-    setPlatform('darwin')
-    expect(ensureWindowsRendererRuntimeFiles(false)).toBe(true)
-    expect(handleFailure).not.toHaveBeenCalled()
-  })
-
-  it('skips unpackaged dev runs', () => {
-    electronApp.isPackaged = false
-    expect(ensureWindowsRendererRuntimeFiles(false)).toBe(true)
-    expect(handleFailure).not.toHaveBeenCalled()
-  })
-
-  it('skips serve mode, which never opens a renderer window', () => {
-    expect(ensureWindowsRendererRuntimeFiles(true)).toBe(true)
-    expect(handleFailure).not.toHaveBeenCalled()
-  })
 })

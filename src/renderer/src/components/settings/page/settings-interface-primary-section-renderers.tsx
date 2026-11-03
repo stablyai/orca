@@ -1,6 +1,6 @@
 import { BrowserPane } from '../browser/BrowserPane'
 import { FloatingWorkspacePane } from '../floating-workspaces/FloatingWorkspacePane'
-import { MobileEmulatorSettingsPane } from '../MobileEmulatorSettingsPane'
+import { MobileEmulatorSettingsPane } from '../mobile/emulator/MobileEmulatorSettingsPane'
 import { QuickCommandsPane } from '../quick-commands/QuickCommandsPane'
 import { TerminalPane } from '../terminal/TerminalPane'
 import { SettingsSection } from '../section-layout/SettingsSection'

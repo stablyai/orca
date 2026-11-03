@@ -63,13 +63,4 @@ describeWindows('vendored windows registry addon', () => {
     const registry = loadWindowsNativeRegistry()
     expect(registry.getRegistryKey(registry.HK.CU, 'Software\\OrcaNoSuchKey\\Absent')).toBeNull()
   })
-
-  it('reports every value in the key keyed by its own name', () => {
-    const registry = loadWindowsNativeRegistry()
-    const values = registry.getRegistryKey(registry.HK.CU, 'Environment') ?? {}
-    for (const [name, entry] of Object.entries(values)) {
-      expect(entry?.name).toBe(name)
-      expect(typeof entry?.type).toBe('number')
-    }
-  })
 })

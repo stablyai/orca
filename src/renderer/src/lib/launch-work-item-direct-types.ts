@@ -1,5 +1,5 @@
 import type { AgentLaunchInputViews } from '../../../shared/agent-launch-choices'
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import type { TaskProvider } from '../../../shared/task-providers'
 import type { TuiAgent } from '../../../shared/tui-agent'

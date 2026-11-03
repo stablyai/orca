@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => {
     markFeatureTipsSeen: vi.fn()
   }
 })
-vi.mock('../use-runtime-environment-catalog', () => ({
+vi.mock('../runtime-environments/catalog/use-runtime-environment-catalog', () => ({
   useRuntimeEnvironmentCatalog: () => ({
     environments: mocks.environments,
     isLoading: false,

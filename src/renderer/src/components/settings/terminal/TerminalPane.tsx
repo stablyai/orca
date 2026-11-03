@@ -1,4 +1,4 @@
-import type { SettingsHostScope } from '../settings-host-scope'
+import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'

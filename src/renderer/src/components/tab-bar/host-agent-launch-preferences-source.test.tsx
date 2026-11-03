@@ -22,11 +22,11 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
+import { mutateHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree
-} from '../settings/use-host-agent-launch-preferences'
+} from '../../runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   useAgentLaunchPickerInventorySource,
   useAgentPickerInventoryEntries

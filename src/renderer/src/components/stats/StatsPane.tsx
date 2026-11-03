@@ -8,8 +8,8 @@ import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
-import type { SettingsHostScope } from '../settings/settings-host-scope'
-import { SettingsHostScopeUnavailableNotice } from '../settings/SettingsHostScopePicker'
+import type { SettingsHostScope } from '../settings/host-scope/settings-host-scope'
+import { SettingsHostScopeUnavailableNotice } from '../settings/host-scope/SettingsHostScopePicker'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getUsageOwnerHostScope,

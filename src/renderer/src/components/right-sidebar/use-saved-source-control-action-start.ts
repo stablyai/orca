@@ -7,7 +7,7 @@ import {
   acquireAgentLaunchChoices
 } from '@/lib/host-chat-program-acquisition'
 import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
-import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId

@@ -1,4 +1,3 @@
-import type { AgentPickerRetainedSetup as RetainedSetup } from '../../../../shared/agent-launch-picker-authority'
 import {
   useCallback,
   useEffect,
@@ -8,7 +7,7 @@ import {
   useRef,
   useSyncExternalStore
 } from 'react'
-import { sameSourceControlSetupSelection } from '../settings/source-control-agent-launch-picker'
+import { sameSourceControlSetupSelection } from '../../lib/source-control-agent-launch-picker'
 import { shallow } from 'zustand/shallow'
 import {
   agentPickerDraft,
@@ -17,7 +16,10 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 
-import { currentAgentPickerDraft } from '../../../../shared/agent-launch-picker-authority'
+import {
+  type AgentPickerRetainedSetup as RetainedSetup,
+  currentAgentPickerDraft
+} from '../../../../shared/agent-launch-picker-authority'
 import { retireAgentPickerSetups } from './agent-launch-picker-retirement'
 import {
   launchDraftSource,

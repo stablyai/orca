@@ -175,7 +175,7 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-attribute:title",
     "text": "Claude",
     "dynamic": false,
@@ -183,7 +183,7 @@
     "reason": "Canonical agent brand in the approved Claude CLI still; preserve the exact brand."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "Claude Code",
     "dynamic": false,
@@ -191,7 +191,7 @@
     "reason": "Canonical CLI product name in the approved terminal still; preserve the exact brand."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "· ~/projects/acme-web",
     "dynamic": false,
@@ -199,7 +199,7 @@
     "reason": "Literal sample workspace path and CLI separator in the terminal still; paths are not translated."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "&gt;",
     "dynamic": false,
@@ -207,7 +207,7 @@
     "reason": "Literal Claude CLI prompt marker in the terminal still; preserve command-line syntax."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "Read",
     "dynamic": false,
@@ -215,7 +215,7 @@
     "reason": "Actual Claude CLI tool label in the terminal still; preserve the external interface text."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "(src/",
     "dynamic": false,
@@ -223,7 +223,7 @@
     "reason": "Literal tool-argument path prefix in the terminal still; preserve path and CLI syntax."
   },
   {
-    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "filePath": "src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
     "text": "⎿ Read 84 lines",
     "dynamic": false,
