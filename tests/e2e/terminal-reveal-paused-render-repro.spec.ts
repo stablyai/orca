@@ -291,7 +291,7 @@ async function installSynchronizedRevealProbe(page: Page, tabId: string): Promis
 async function callSynchronizedRevealProbe(
   page: Page,
   action: 'forceRendererPresent' | 'paintFrame' | 'writeSpinnerFrame',
-  frame?: { marker: string; background: number; release: boolean }
+  frame?: { marker: string; background?: number; release: boolean }
 ): Promise<void> {
   await page.evaluate(
     async ({ action, frame }) => {
@@ -303,7 +303,7 @@ async function callSynchronizedRevealProbe(
         if (!frame) {
           throw new Error('Synchronized frame missing')
         }
-        await probe.paintFrame(frame.marker, frame.background, frame.release)
+        await probe.paintFrame(frame.marker, frame.background ?? 0, frame.release)
         return
       }
       if (action === 'writeSpinnerFrame') {
@@ -335,11 +335,11 @@ async function captureFirstRevealedFrame(page: Page, tabId: string): Promise<Buf
 // Codex-like idle output: ~30 Hz spinner frames; the last stays open so a renderer swap lands mid-frame deterministically.
 async function runSpinnerFramesEndingOpen(page: Page): Promise<void> {
   const glyphs = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834']
+  // ast-grep-ignore: test-no-polling-loop -- models Codex's ~30 Hz spinner cadence; nothing is polled
   for (let i = 0; i < 12; i++) {
     const marker = glyphs[i % glyphs.length]
     await callSynchronizedRevealProbe(page, 'writeSpinnerFrame', {
       marker,
-      background: 0,
       release: true
     })
     // ast-grep-ignore: test-no-real-time-wait -- models Codex's ~30 Hz spinner cadence
@@ -347,7 +347,6 @@ async function runSpinnerFramesEndingOpen(page: Page): Promise<void> {
   }
   await callSynchronizedRevealProbe(page, 'writeSpinnerFrame', {
     marker: glyphs[0],
-    background: 0,
     release: false
   })
 }
