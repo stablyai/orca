@@ -10,10 +10,12 @@ import {
   Palette,
   PanelBottom,
   PanelRight,
+  PanelLeft,
   PenTool,
   Server,
   SquareTerminal
 } from 'lucide-react'
+import { PluginSidebarCardUseButton } from './PluginSidebarCardUseButton'
 import type {
   PluginHostListEntry,
   PluginMarketplaceHostInstallPreview
@@ -45,9 +47,9 @@ import {
 } from './plugin-contribution-action-availability'
 import { shadowedKeybindingTitles } from '../presentation/plugin-keybinding-conflicts'
 import type { PluginContributionSummaryItem } from '../../../../../shared/plugins/contributions/plugin-contribution-summary'
+import { summaryContributionSource } from '../presentation/plugin-summary-contribution-source'
 import {
   describePluginContributions,
-  summaryContributionSource,
   EMPTY_CONTRIBUTION_SOURCE,
   manifestContributionSource,
   uncoveredCatalogTypes,
@@ -101,6 +103,7 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   themes: <Palette />,
   terminalThemes: <SquareTerminal />,
   iconThemes: <Blocks />,
+  sidebarCards: <PanelLeft />,
   syntaxes: <Highlighter />,
   languagePacks: <Languages />,
   panels: <PanelRight />,
@@ -251,6 +254,8 @@ function useContributionRowActions(
           </Button>
         ) : null
       }
+      case 'sidebarCards':
+        return <PluginSidebarCardUseButton cardId={id} />
       case 'themes':
       case 'terminalThemes':
       case 'customEditors':

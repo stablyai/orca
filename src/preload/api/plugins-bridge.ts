@@ -30,6 +30,7 @@ export const pluginsApi = {
   listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
   listThemes: () => ipcRenderer.invoke('plugins:listThemes'),
   listTerminalThemes: () => ipcRenderer.invoke('plugins:listTerminalThemes'),
+  listSidebarCards: () => ipcRenderer.invoke('plugins:listSidebarCards'),
   listIconThemes: () => ipcRenderer.invoke('plugins:listIconThemes'),
   loadIconTheme: (id) => ipcRenderer.invoke('plugins:loadIconTheme', id),
   listSyntaxes: () => ipcRenderer.invoke('plugins:listSyntaxes'),

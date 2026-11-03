@@ -1,6 +1,5 @@
 import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import { PLUGIN_LANGUAGE_PACK_MIN_COVERAGE } from '../../../../../shared/plugins/languages/plugin-language-pack-coverage'
-import type { PluginContributionSummaryItem } from '../../../../../shared/plugins/contributions/plugin-contribution-summary'
 import {
   PLUGIN_CONTRIBUTION_POINT_POLICY,
   type PluginContributionPoint
@@ -36,6 +35,7 @@ export type PluginContributionSource = {
   themes: readonly { id: string; label: string; base?: 'light' | 'dark' }[]
   terminalThemes: readonly { id: string; label: string; mode?: 'light' | 'dark' | 'unknown' }[]
   iconThemes: readonly { id: string; label: string }[]
+  sidebarCards: readonly { id: string; label: string }[]
   syntaxes: readonly {
     id: string
     label: string
@@ -62,6 +62,7 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   themes: [],
   terminalThemes: [],
   iconThemes: [],
+  sidebarCards: [],
   syntaxes: [],
   languagePacks: [],
   panels: [],
@@ -100,6 +101,7 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     themes: contributes.themes.map(titled),
     terminalThemes: contributes.terminalThemes.map(titled),
     iconThemes: contributes.iconThemes.map(titled),
+    sidebarCards: contributes.sidebarCards.map(titled),
     syntaxes: contributes.syntaxes.map(titled),
     languagePacks: contributes.languagePacks,
     panels: contributes.panels.map((panel) => panel.title),
@@ -111,45 +113,6 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles,
     statusBarItems: statusBarItemTitles(contributes.statusBarItems)
-  }
-}
-
-/** What a catalog summary names, in the same shape; theme modes come from its preview palettes. */
-export function summaryContributionSource(
-  summary: readonly PluginContributionSummaryItem[],
-  themePreview: readonly { label: string; base: 'light' | 'dark' }[] = []
-): PluginContributionSource {
-  const of = (kind: PluginContributionSummaryItem['kind']) =>
-    summary.filter((item) => item.kind === kind)
-  const base = (label: string) => themePreview.find((theme) => theme.label === label)?.base
-  return {
-    themes: of('themes').map((item) => ({
-      id: item.name,
-      label: item.name,
-      base: base(item.name)
-    })),
-    terminalThemes: of('terminalThemes').map((item) => ({
-      id: item.name,
-      label: item.name,
-      mode: base(item.name)
-    })),
-    iconThemes: of('iconThemes').map((item) => ({ id: item.name, label: item.name })),
-    syntaxes: of('syntaxes').map((item) => ({
-      id: item.name,
-      label: item.name,
-      extensions: item.detail ? item.detail.split(', ') : [],
-      filenames: []
-    })),
-    languagePacks: of('languagePacks').map((item) => ({ locale: item.name })),
-    panels: of('panels').map((item) => item.name),
-    customEditors: of('customEditors').map((item) => ({
-      title: item.name,
-      extensions: item.detail ? item.detail.split(', ') : [],
-      filenames: []
-    })),
-    vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
-    newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
-    statusBarItems: of('statusBarItems').map((item) => item.name)
   }
 }
 
@@ -221,6 +184,18 @@ export function describePluginContributions(
       detail: translate(
         'auto.components.settings.PluginDetailSections.typeIconTheme',
         'File icon theme'
+      ),
+      tone: 'default'
+    })
+  }
+  for (const card of source.sidebarCards) {
+    rows.push({
+      key: `sidebarCards:${card.id}`,
+      kind: 'sidebarCards',
+      title: card.label,
+      detail: translate(
+        'auto.components.settings.PluginDetailSections.typeSidebarCard',
+        'Workspace card'
       ),
       tone: 'default'
     })

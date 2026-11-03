@@ -10,6 +10,7 @@ import {
   parsePluginGrammarArtifact,
   parsePluginLanguageConfiguration
 } from '../artifacts/plugin-syntax-artifact'
+import { parsePluginSidebarCardArtifact } from '../artifacts/plugin-sidebar-card-artifact'
 import { parsePluginTerminalThemeArtifact } from '../artifacts/plugin-terminal-theme-artifact'
 import { parsePluginAppThemeArtifact } from '../artifacts/plugin-theme-artifact'
 import type { PluginManifest } from '../manifest/plugin-manifest'
@@ -140,5 +141,16 @@ export function strictPluginArtifactErrors(
       (error) => `contributes.themes "${theme.id}" (${theme.path}): ${error}`
     )
   )
-  return [...themeErrors, ...svgErrors, ...backgroundErrors, ...packErrors, ...syntaxErrors]
+  const cardErrors = c.sidebarCards.flatMap((card) => {
+    const error = check(read, card.template, parsePluginSidebarCardArtifact)
+    return error ? [`contributes.sidebarCards "${card.id}" (${card.template}): ${error}`] : []
+  })
+  return [
+    ...themeErrors,
+    ...svgErrors,
+    ...backgroundErrors,
+    ...packErrors,
+    ...syntaxErrors,
+    ...cardErrors
+  ]
 }

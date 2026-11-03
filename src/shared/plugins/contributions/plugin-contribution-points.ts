@@ -34,6 +34,11 @@ import {
 } from './plugin-new-file-contribution'
 import { PLUGIN_PANEL_LIMIT, pluginPanelContributionSchema } from './plugin-panel-contribution'
 import {
+  PLUGIN_SIDEBAR_CARD_LIMIT,
+  PLUGIN_SIDEBAR_CARDS_SINCE,
+  pluginSidebarCardContributionSchema
+} from './plugin-sidebar-card-contribution'
+import {
   pluginFieldDoc,
   PLUGIN_HOOKS_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
@@ -66,7 +71,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'customEditors',
   'newFiles',
   'settings',
-  'statusBarItems'
+  'statusBarItems',
+  'sidebarCards'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -80,8 +86,7 @@ export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
   skills: 'agent skills',
   mcpServers: 'MCP server definitions',
   taskSources: 'task sources',
-  connections: 'account connections',
-  sidebarCards: 'sidebar cards'
+  connections: 'account connections'
 } as const
 
 export type PluginReservedContributionPoint = keyof typeof PLUGIN_RESERVED_CONTRIBUTION_POINTS
@@ -96,7 +101,6 @@ export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
     'Account providers with a host-run sign-in, so a plugin never handles credentials itself.',
   agentHarnesses:
     'New coding-agent harnesses described as data: how to launch them and read their status.',
-  sidebarCards: 'Declarative left-sidebar cards with fixed layouts whose values a worker updates.',
   mcpServers: 'MCP server definitions that Orca offers to the agents it launches.',
   skills: 'Agent skills shipped as files that Orca installs for the agents it launches.'
 }
@@ -222,6 +226,12 @@ export const pluginContributesFields = {
     PLUGIN_STATUS_BAR_ITEM_LIMIT,
     'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
     PLUGIN_STATUS_BAR_SINCE
+  ),
+  sidebarCards: contributionList(
+    pluginSidebarCardContributionSchema,
+    PLUGIN_SIDEBAR_CARD_LIMIT,
+    "Workspace cards for the left sidebar, each a template Orca draws; people pick one on the plugin's page.",
+    PLUGIN_SIDEBAR_CARDS_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -230,8 +240,7 @@ export const pluginReservedContributesFields = {
   skills: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.skills),
   mcpServers: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.mcpServers),
   taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
-  connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
-  sidebarCards: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.sidebarCards)
+  connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections)
 } satisfies Record<PluginReservedContributionPoint, z.ZodType>
 
 type ContributionPointPolicy = {
@@ -269,5 +278,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   // Why sandboxed-ui: only code reads a setting, and panels are the least code there is.
   settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false },
   // Why declarative: a static item only names its own command; updating it needs a worker.
-  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false }
+  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
+  // Why data: Orca draws the template from facts the person already sees; it runs no code.
+  sidebarCards: { execution: 'data', catalogType: null, bindsContent: false }
 }

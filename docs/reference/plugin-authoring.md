@@ -695,6 +695,11 @@ already granted, the same way an editor's extensions update. Turn the setting of
 update. An update that needs approval is not installed: the current version keeps running and the
 plugin shows **Update needs review**.
 
+## Workspace cards
+
+`contributes.sidebarCards` redraws the workspace cards in the left sidebar from a JSON template
+(`data` profile, no approval). See [plugin-sidebar-cards.md](plugin-sidebar-cards.md).
+
 ## Planned contribution points
 
 These `contributes` keys are reserved: a manifest may list them only as empty arrays until
@@ -704,7 +709,6 @@ arbitrary plugin UI:
 - `taskSources`: issue and task providers such as Asana, Linear or Jira, filled by a worker.
 - `connections`: account providers with a host-run sign-in.
 - `agentHarnesses`: new coding-agent harnesses described as data.
-- `sidebarCards`: declarative left-sidebar cards whose values a worker updates.
 - `mcpServers`: MCP server definitions offered to the agents Orca launches.
 - `skills`: agent skills shipped as files.
 - `hooks`: agent lifecycle hooks for the agents Orca launches.

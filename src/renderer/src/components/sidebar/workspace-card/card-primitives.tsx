@@ -3,6 +3,7 @@ import { PluginDeclarativeBadge } from '@/components/plugins/declarative/PluginD
 import { PluginDeclarativeIconGlyph } from '@/components/plugins/declarative/plugin-declarative-icons'
 import type { PluginDeclarativeTone } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { cn } from '@/lib/utils'
+import { CARD_ELEMENT_PROPS } from '../../../../../shared/workspace-cards/card-element-catalog'
 import { cardElement, type CardHostElement } from './card-template-compiler'
 
 const GAP: Readonly<Record<string, string>> = {
@@ -31,20 +32,6 @@ const MARKERS: Readonly<Record<string, string>> = {
   'meta-row': 'data-worktree-card-meta-row',
   'hover-trigger': 'data-worktree-card-hover-trigger'
 }
-
-const BOX_PROPS = [
-  'gap',
-  'align',
-  'justify',
-  'fill',
-  'grow',
-  'keep',
-  'push',
-  'inset',
-  'overflow',
-  'hoverGroup',
-  'marker'
-] as const
 
 function pick(map: Readonly<Record<string, string>>, value: unknown): string | undefined {
   return typeof value === 'string' && Object.hasOwn(map, value) ? map[value] : undefined
@@ -78,13 +65,13 @@ function boxAttrs(
 
 export const Row: CardHostElement = {
   kind: 'host',
-  props: BOX_PROPS,
+  props: CARD_ELEMENT_PROPS.Row,
   resolve: (props) => ({ tag: 'div', attrs: boxAttrs(props, false) })
 }
 
 export const Stack: CardHostElement = {
   kind: 'host',
-  props: BOX_PROPS,
+  props: CARD_ELEMENT_PROPS.Stack,
   resolve: (props) => ({ tag: 'div', attrs: boxAttrs(props, true) })
 }
 
@@ -152,7 +139,7 @@ function icon(props: Props): React.ReactNode {
 export const CARD_PRIMITIVES = {
   Row,
   Stack,
-  Text: cardElement<unknown>(['text', 'size', 'tone', 'muted', 'weight', 'mono', 'truncate'], text),
-  Badge: cardElement<unknown>(['text', 'tone'], badge),
-  Icon: cardElement<unknown>(['name', 'tone'], icon)
+  Text: cardElement<unknown>(CARD_ELEMENT_PROPS.Text, text),
+  Badge: cardElement<unknown>(CARD_ELEMENT_PROPS.Badge, badge),
+  Icon: cardElement<unknown>(CARD_ELEMENT_PROPS.Icon, icon)
 }

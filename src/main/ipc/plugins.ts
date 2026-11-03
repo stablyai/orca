@@ -121,6 +121,7 @@ export function registerPluginHandlers(
   handleContentPacks('plugins:listLanguagePacks', () => contentPacks.languagePacks.list())
   handleContentPacks('plugins:listThemes', () => contentPacks.themes.list())
   handleContentPacks('plugins:listTerminalThemes', () => contentPacks.terminalThemes.list())
+  handleContentPacks('plugins:listSidebarCards', () => contentPacks.sidebarCards.list())
   handleContentPacks('plugins:listIconThemes', () => contentPacks.iconThemes.list())
   handleContentPacks('plugins:loadIconTheme', (id) =>
     typeof id === 'string' ? contentPacks.iconThemes.load(id) : null

@@ -17,7 +17,7 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['dir'],
     notes: [
       'Writes into a new or empty folder (a .git folder is allowed) and never overwrites; it runs no Git, package install or plugin code.',
-      'theme, terminal-theme, icon-theme, syntax and language-pack are content only: loading them never needs approval.',
+      'theme, terminal-theme, icon-theme, syntax, language-pack and card are content only: loading them never needs approval.',
       'editor and panel run code in a sandboxed frame: loading them prints the access they ask for and needs --approve.',
       'components is a panel written in TSX with Orca components and no build step; it also writes the editor typings to .orca/types (see `orca plugin types`).',
       'worker-panel is a components panel plus its own TypeScript worker (`main`): requests, posts and storage typed by one src/protocol.ts, with panel and worker tests for `orca plugin test`. It needs --approve to load.',

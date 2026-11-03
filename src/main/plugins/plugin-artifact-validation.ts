@@ -9,6 +9,7 @@ import { parsePluginVmRecipeArtifact } from '../../shared/plugins/artifacts/plug
 import { PLUGIN_IMAGE_RULES } from '../../shared/plugins/images/plugin-image-fields'
 import { PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES } from '../../shared/plugins/contributions/plugin-new-file-contribution'
 import { validatePluginImageArtifacts } from './plugin-image-artifact-validation'
+import { PLUGIN_SIDEBAR_CARD_MAX_BYTES } from '../../shared/plugins/artifacts/plugin-sidebar-card-artifact'
 import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../shared/plugins/frames/plugin-frame-entry-limits'
 import {
   PLUGIN_WORKER_ENTRY_MAX_BYTES,
@@ -96,6 +97,9 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
     ),
     ...c.iconThemes.flatMap((theme) =>
       declaredFile(`icon theme "${theme.id}"`, theme.path, PLUGIN_ICON_THEME_MAX_BYTES)
+    ),
+    ...c.sidebarCards.flatMap((card) =>
+      declaredFile(`sidebar card "${card.id}"`, card.template, PLUGIN_SIDEBAR_CARD_MAX_BYTES)
     ),
     ...c.syntaxes.flatMap((syntax) => [
       ...declaredFile(

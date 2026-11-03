@@ -23,6 +23,7 @@ import { shouldBeginWorktreeRename } from '../worktree-card-model'
 import { WorktreeCardSshHostControl } from '../WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../WorktreeHostContextBadge'
 import { WorktreeTitleInlineRename } from '../WorktreeTitleInlineRename'
+import { CARD_ELEMENT_PROPS } from '../../../../../shared/workspace-cards/card-element-catalog'
 import { cardElement } from './card-template-compiler'
 
 type Card = WorktreeCardController
@@ -90,61 +91,71 @@ function sidebarLabel(text: string, tooltip: unknown): React.ReactNode {
 }
 
 export const CARD_IDENTITY_PARTS = {
-  Title: part(['dimWhenRead', 'tooltip'], (props, _children, card) => title(props, card)),
-  RepoChip: part([], (_props, _children, { repo }) =>
+  Title: part(CARD_ELEMENT_PROPS.Title, (props, _children, card) => title(props, card)),
+  RepoChip: part(CARD_ELEMENT_PROPS.RepoChip, (_props, _children, { repo }) =>
     repo ? <WorktreeCardRepoChip repo={repo} /> : null
   ),
-  SshControl: part(['iconOnly'], (props, _children, card) => sshControl(props, card)),
-  RuntimeHostMark: part([], (_props, _children, card) => (
+  SshControl: part(CARD_ELEMENT_PROPS.SshControl, (props, _children, card) =>
+    sshControl(props, card)
+  ),
+  RuntimeHostMark: part(CARD_ELEMENT_PROPS.RuntimeHostMark, (_props, _children, card) => (
     <WorktreeCardRuntimeHostMark
       disconnected={card.isRuntimeDisconnected}
       hostLabel={card.runtimeHostLabel}
     />
   )),
-  RenameError: part([], (_props, _children, card) => (
+  RenameError: part(CARD_ELEMENT_PROPS.RenameError, (_props, _children, card) => (
     <WorktreeCardRenameErrorButton
       onPointerDown={card.stopQuickActionPointerPropagation}
       onOpen={card.handleOpenRenameErrorDialog}
     />
   )),
-  PrimaryBadge: part([], () => <WorktreeCardPrimaryBadge />),
-  PrimaryStar: part([], () => <WorktreeCardPrimaryStar />),
-  SparseBadge: part([], (_props, _children, { worktree }) => (
+  PrimaryBadge: part(CARD_ELEMENT_PROPS.PrimaryBadge, () => <WorktreeCardPrimaryBadge />),
+  PrimaryStar: part(CARD_ELEMENT_PROPS.PrimaryStar, () => <WorktreeCardPrimaryStar />),
+  SparseBadge: part(CARD_ELEMENT_PROPS.SparseBadge, (_props, _children, { worktree }) => (
     <WorktreeCardSparseBadge directories={worktree.sparseDirectories} />
   )),
-  DeleteQuickAction: part([], (_props, _children, card) => (
+  DeleteQuickAction: part(CARD_ELEMENT_PROPS.DeleteQuickAction, (_props, _children, card) => (
     <WorktreeCardDeleteQuickAction
       onPointerDown={card.stopQuickActionPointerPropagation}
       onClick={card.handleWorkspaceQuickAction}
     />
   )),
-  MetaRepoBadge: part([], (_props, _children, { repo }) =>
+  MetaRepoBadge: part(CARD_ELEMENT_PROPS.MetaRepoBadge, (_props, _children, { repo }) =>
     repo ? <WorktreeCardMetaRepoBadge repo={repo} /> : null
   ),
-  HostBadge: part(['label'], (props, _children, card) => (
+  HostBadge: part(CARD_ELEMENT_PROPS.HostBadge, (props, _children, card) => (
     <CardHostBadge card={card} label={typeof props.label === 'string' ? props.label : ''} />
   )),
-  Branch: part(['tooltip'], (props, _children, card) => sidebarLabel(card.branch, props.tooltip)),
-  IdentityLabel: part(['tooltip'], (props, _children, card) =>
+  Branch: part(CARD_ELEMENT_PROPS.Branch, (props, _children, card) =>
+    sidebarLabel(card.branch, props.tooltip)
+  ),
+  IdentityLabel: part(CARD_ELEMENT_PROPS.IdentityLabel, (props, _children, card) =>
     card.identityDisplay ? sidebarLabel(card.identityDisplay, props.tooltip) : null
   ),
-  FolderPath: part([], (_props, _children, { worktree }) => (
+  FolderPath: part(CARD_ELEMENT_PROPS.FolderPath, (_props, _children, { worktree }) => (
     <WorktreeCardFolderPath path={worktree.path} />
   )),
-  DetachedHead: part([], (_props, _children, { detachedHeadDisplay }) =>
-    detachedHeadDisplay ? (
-      <DetachedHeadBadge
-        display={detachedHeadDisplay}
-        label="sidebar"
-        side="right"
-        className="h-[16px]"
-      />
-    ) : null
+  DetachedHead: part(
+    CARD_ELEMENT_PROPS.DetachedHead,
+    (_props, _children, { detachedHeadDisplay }) =>
+      detachedHeadDisplay ? (
+        <DetachedHeadBadge
+          display={detachedHeadDisplay}
+          label="sidebar"
+          side="right"
+          className="h-[16px]"
+        />
+      ) : null
   ),
-  ConflictBadge: part([], (_props, _children, { conflictOperation }) =>
-    conflictOperation ? <WorktreeCardConflictBadge operation={conflictOperation} /> : null
+  ConflictBadge: part(
+    CARD_ELEMENT_PROPS.ConflictBadge,
+    (_props, _children, { conflictOperation }) =>
+      conflictOperation ? <WorktreeCardConflictBadge operation={conflictOperation} /> : null
   ),
-  CacheTimer: part([], (_props, _children, { cacheStartedAt, cacheTtlMs }) =>
-    cacheStartedAt != null ? <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} /> : null
+  CacheTimer: part(
+    CARD_ELEMENT_PROPS.CacheTimer,
+    (_props, _children, { cacheStartedAt, cacheTtlMs }) =>
+      cacheStartedAt != null ? <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} /> : null
   )
 }

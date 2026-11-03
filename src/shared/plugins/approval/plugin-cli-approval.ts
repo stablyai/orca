@@ -87,7 +87,7 @@ type ApprovalSubject = {
 }
 
 const EXECUTION_DESCRIPTIONS: Record<PluginExecutionProfile, string> = {
-  data: 'Content only (themes, icons, syntaxes, translations); nothing runs.',
+  data: 'Content only (themes, icons, syntaxes, translations, workspace cards); nothing runs.',
   declarative:
     'Runs Orca actions you could run yourself through the commands, shortcuts or VM recipes it declares.',
   'sandboxed-ui':

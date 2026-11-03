@@ -46,8 +46,8 @@ Use the lowest `execution` profile that covers the request; it decides what the 
 | A virtual machine environment recipe                                                | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
 | A status bar item (a worker can update it)                                          | `declarative`; `contributes.statusBarItems`                         | `references/recipes.md`                          |
 
-Examples are in `examples/plugins/` of github.com/stablyai/orca. Sidebar cards, task sources,
-connections, MCP servers and skills are reserved and not buildable yet: say so instead of faking
+Examples are in `examples/plugins/` of github.com/stablyai/orca. Task sources, connections, MCP
+servers and skills are reserved and not buildable yet: say so instead of faking
 them. A panel cannot type into a terminal; only a worker
 with `terminal:send` can.
 

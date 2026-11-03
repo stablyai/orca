@@ -335,6 +335,16 @@
             "$ref": "#/$defs/StatusBarItemContribution"
           }
         },
+        "sidebarCards": {
+          "default": [],
+          "description": "Workspace cards for the left sidebar, each a template Orca draws; people pick one on the plugin's page. At most 16.",
+          "x-orca-since": "1.4.249",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SidebarCardContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -365,13 +375,6 @@
         },
         "connections": {
           "description": "Reserved for account connections; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "sidebarCards": {
-          "description": "Reserved for sidebar cards; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -1475,6 +1478,55 @@
       ],
       "additionalProperties": false,
       "description": "An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`."
+    },
+    "SidebarCardContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Card id, unique among this plugin's cards.",
+          "x-orca-since": "1.4.249",
+          "examples": [
+            "review-first"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Name shown where people pick a card.",
+          "x-orca-since": "1.4.249",
+          "examples": [
+            "Review first"
+          ]
+        },
+        "description": {
+          "description": "One line on what the card emphasizes.",
+          "x-orca-since": "1.4.249",
+          "type": "string",
+          "maxLength": 512
+        },
+        "template": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "JSON card template, at most 64 KiB. See the workspace card reference. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.249",
+          "examples": [
+            "cards/review-first.json"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "template"
+      ],
+      "additionalProperties": false,
+      "description": "A workspace card for the left sidebar, drawn by Orca from a template; it runs no code."
     },
     "Capability": {
       "type": "object",

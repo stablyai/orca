@@ -13,6 +13,7 @@ import {
 } from '../worktree-card-meta-items'
 import { WorktreeCardStatusLane } from '../worktree-card-status-lane'
 import { WorktreeLineageToggle } from '../WorktreeLineageToggle'
+import { CARD_ELEMENT_PROPS } from '../../../../../shared/workspace-cards/card-element-catalog'
 import { cardElement } from './card-template-compiler'
 
 type Card = WorktreeCardController
@@ -44,10 +45,10 @@ function detailsHover(
 }
 
 export const CARD_ACTIVITY_PARTS = {
-  StatusLane: part(['unreadAction'], (props, _children, card) => (
+  StatusLane: part(CARD_ELEMENT_PROPS.StatusLane, (props, _children, card) => (
     <WorktreeCardStatusLane card={card} showUnreadAction={props.unreadAction === true} />
   )),
-  Agents: part(['tight'], (props, _children, card) => (
+  Agents: part(CARD_ELEMENT_PROPS.Agents, (props, _children, card) => (
     <WorktreeCardAgents
       worktreeId={card.worktree.id}
       agents={card.agentActivityDisplayMode === 'compact' ? card.compactInlineAgentRows : undefined}
@@ -55,26 +56,31 @@ export const CARD_ACTIVITY_PARTS = {
       className={props.tight === true ? '-mt-1' : 'mt-0'}
     />
   )),
-  RemoteBranchConflict: part([], (_props, _children, { remoteBranchConflict }) =>
-    remoteBranchConflict ? (
-      <WorktreeCardRemoteBranchConflict
-        remote={remoteBranchConflict.remote}
-        branchName={remoteBranchConflict.branchName}
-      />
-    ) : null
+  RemoteBranchConflict: part(
+    CARD_ELEMENT_PROPS.RemoteBranchConflict,
+    (_props, _children, { remoteBranchConflict }) =>
+      remoteBranchConflict ? (
+        <WorktreeCardRemoteBranchConflict
+          remote={remoteBranchConflict.remote}
+          branchName={remoteBranchConflict.branchName}
+        />
+      ) : null
   ),
-  DeleteFailed: part([], (_props, _children, { worktree }) =>
+  DeleteFailed: part(CARD_ELEMENT_PROPS.DeleteFailed, (_props, _children, { worktree }) =>
     worktree.removalError ? <WorktreeCardDeleteFailed error={worktree.removalError} /> : null
   ),
-  LinearSetupPrompt: part([], (_props, _children, { repo, settings }) => (
-    <LinearAgentSkillSetupPrompt
-      linked
-      remote={Boolean(repo?.connectionId || settings?.activeRuntimeEnvironmentId?.trim())}
-      surface="modal"
-      settings={settings}
-    />
-  )),
-  ChildToggle: part([], (_props, _children, card) => (
+  LinearSetupPrompt: part(
+    CARD_ELEMENT_PROPS.LinearSetupPrompt,
+    (_props, _children, { repo, settings }) => (
+      <LinearAgentSkillSetupPrompt
+        linked
+        remote={Boolean(repo?.connectionId || settings?.activeRuntimeEnvironmentId?.trim())}
+        surface="modal"
+        settings={settings}
+      />
+    )
+  ),
+  ChildToggle: part(CARD_ELEMENT_PROPS.ChildToggle, (_props, _children, card) => (
     <WorktreeLineageToggle
       childWorktreeIds={card.lineageChildWorktreeIds}
       collapsed={card.lineageCollapsed}
@@ -84,7 +90,7 @@ export const CARD_ACTIVITY_PARTS = {
       onToggle={card.onLineageToggle}
     />
   )),
-  Indicators: part(['hover'], (props, _children, card) => {
+  Indicators: part(CARD_ELEMENT_PROPS.Indicators, (props, _children, card) => {
     const content = renderWorktreeCardIndicators(card)
     return content && props.hover === 'meta' ? (
       <WorktreeCardMetaDetailsHover card={card}>{content}</WorktreeCardMetaDetailsHover>
@@ -92,5 +98,5 @@ export const CARD_ACTIVITY_PARTS = {
       content
     )
   }),
-  DetailsHover: part(['branchName', 'workspaceTitle'], detailsHover)
+  DetailsHover: part(CARD_ELEMENT_PROPS.DetailsHover, detailsHover)
 }

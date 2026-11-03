@@ -6,6 +6,7 @@ import { editor } from './plugin-editor-template'
 import { components } from './plugin-components-template'
 import { workerPanel } from './plugin-worker-panel-template'
 import { hook } from './plugin-hook-template'
+import { card } from './plugin-card-template'
 import type { PluginTemplate, PluginTemplateInput } from './plugin-template-files'
 import type { PluginTemplateName } from './plugin-template-names'
 
@@ -15,6 +16,7 @@ const TEMPLATES: Record<PluginTemplateName, (input: PluginTemplateInput) => Plug
   'icon-theme': iconTheme,
   syntax,
   'language-pack': languagePack,
+  card,
   editor,
   panel,
   components,

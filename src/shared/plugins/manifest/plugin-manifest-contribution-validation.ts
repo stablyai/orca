@@ -27,6 +27,7 @@ type ContributionValidationManifest = {
     vmRecipes: PathContribution[]
     themes: IdentifiedContribution[]
     terminalThemes: IdentifiedContribution[]
+    sidebarCards: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
     customEditors: (IdentifiedContribution & PluginFileMatch)[]
@@ -70,7 +71,8 @@ export function validatePluginManifestContributions(
     'iconThemes',
     'syntaxes',
     'customEditors',
-    'newFiles'
+    'newFiles',
+    'sidebarCards'
   ] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],

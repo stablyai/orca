@@ -1,3 +1,4 @@
+import { createPluginSidebarCardRegistry } from './plugin-sidebar-card-registry'
 import type { PluginContentVerifier } from '../plugin-content-integrity'
 import {
   isInvalidDiscoveredPlugin,
@@ -28,6 +29,7 @@ export class PluginContentPackRegistry {
   readonly languagePacks: PluginLanguagePackRegistry
   readonly themes: ReturnType<typeof createPluginThemeRegistry>
   readonly terminalThemes: ReturnType<typeof createPluginTerminalThemeRegistry>
+  readonly sidebarCards: ReturnType<typeof createPluginSidebarCardRegistry>
   readonly iconThemes: PluginIconThemeRegistry
   readonly syntaxes: PluginSyntaxRegistry
   readonly vmRecipes: PluginVmRecipeRegistry
@@ -42,6 +44,7 @@ export class PluginContentPackRegistry {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
     this.themes = createPluginThemeRegistry(contentVerifier)
     this.terminalThemes = createPluginTerminalThemeRegistry(contentVerifier)
+    this.sidebarCards = createPluginSidebarCardRegistry(contentVerifier)
     this.iconThemes = new PluginIconThemeRegistry(contentVerifier)
     this.syntaxes = new PluginSyntaxRegistry(contentVerifier)
     this.vmRecipes = new PluginVmRecipeRegistry()
@@ -129,6 +132,7 @@ export class PluginContentPackRegistry {
       this.themes,
       this.terminalThemes,
       this.iconThemes,
+      this.sidebarCards,
       this.syntaxes,
       this.vmRecipes,
       {

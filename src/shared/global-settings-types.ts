@@ -468,6 +468,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
   experimentalNewWorktreeCardStyle?: boolean
+  /** The plugin card (`plugin:<pluginKey>/<cardId>`) drawn for workspaces; unset is Orca's card. */
+  workspaceCardId?: string
   /** Plugin frames as isolated guests (default on); main-only kill switch, see plugin-frame-isolation.ts. */
   experimentalPluginIsolatedFrames?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
