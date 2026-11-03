@@ -775,6 +775,49 @@ describe('account CLI handlers', () => {
     expect(logSpy).not.toHaveBeenCalled()
   })
 
+  it.each(['claude', 'codex'])(
+    'rejects OpenCode login flags for %s before login',
+    async (agent) => {
+      await expect(
+        ACCOUNT_HANDLERS['account add']({
+          ...context(agent),
+          flags: new Map([
+            ['agent', agent],
+            ['method', 'device']
+          ])
+        })
+      ).rejects.toThrow('only supported with --agent opencode')
+      expect(callMock).not.toHaveBeenCalled()
+      expect(spawnMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps OpenCode form answer values out of the login failure message', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+    resolveCliCommandMock.mockImplementation((command: string) => `/tools/${command}`)
+    spawnProcessMock.mockImplementation(() => helpChild('--standalone'))
+    spawnMock.mockImplementation(() => {
+      const child = new EventEmitter()
+      queueMicrotask(() => child.emit('exit', 1))
+      return child
+    })
+    const failure = ACCOUNT_HANDLERS['account add']({
+      ...context('opencode'),
+      flags: new Map([
+        ['agent', 'opencode'],
+        ['answer', 'token=secret-value']
+      ])
+    })
+    await expect(failure).rejects.toThrow('--answer token=<redacted> --standalone')
+    await expect(failure).rejects.not.toThrow('secret-value')
+    expect(spawnMock.mock.calls[0][1]).toContain('token=secret-value')
+  })
+
   it('rejects `--agent` with no value instead of defaulting to Claude', async () => {
     await expect(
       ACCOUNT_HANDLERS['account add']({ ...context('claude'), flags: new Map([['agent', true]]) })

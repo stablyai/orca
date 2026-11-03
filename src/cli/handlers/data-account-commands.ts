@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { HandlerContext } from '../dispatch'
-import { getRepeatedStringFlag } from '../flags'
+import { REPEATED_FLAG_SEPARATOR } from '../args'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
@@ -112,33 +112,43 @@ export async function addDataAccount(
   printResult(result, ctx.json, (state) => formatDataAccounts(provider, state))
 }
 
-function readOpenCodeLoginOptions(
-  ctx: HandlerContext,
-  provider: ManagedDataAccountProvider
-): string[] {
-  const method = ctx.flags.get('method')
-  const answers = ctx.flags.has('answer') ? getRepeatedStringFlag(ctx.flags, 'answer') : []
-  if (provider !== 'opencode' && (method !== undefined || ctx.flags.has('answer'))) {
+// Form answers can hold secrets, so failure messages show only their keys.
+export function redactLoginAnswers(args: string[]): string[] {
+  return args.map((arg, index) =>
+    args[index - 1] === '--answer' ? `${arg.slice(0, arg.indexOf('=') + 1)}<redacted>` : arg
+  )
+}
+
+export function rejectOpenCodeLoginFlagsForAgent(ctx: HandlerContext, agent: string): void {
+  if (agent !== 'opencode' && (ctx.flags.has('method') || ctx.flags.has('answer'))) {
     throw new RuntimeClientError(
       'invalid_argument',
       '--method and --answer are only supported with --agent opencode.'
     )
   }
+}
+
+function readOpenCodeLoginOptions(
+  ctx: HandlerContext,
+  provider: ManagedDataAccountProvider
+): string[] {
+  rejectOpenCodeLoginFlagsForAgent(ctx, provider)
+  const method = ctx.flags.get('method')
   if (method !== undefined && (typeof method !== 'string' || !method.trim())) {
     throw new RuntimeClientError(
       'invalid_argument',
       '--method requires an OpenCode login method ID.'
     )
   }
-  if (
-    ctx.flags.has('answer') &&
-    (answers.length === 0 || answers.some((a) => !/^[^=\s]+=/.test(a)))
-  ) {
+  const answer = ctx.flags.get('answer')
+  // Split without dropping empty entries so `--answer=` is rejected instead of skipped.
+  const answers = typeof answer === 'string' ? answer.split(REPEATED_FLAG_SEPARATOR) : []
+  if (answer !== undefined && (answers.length === 0 || answers.some((a) => !/^[^=\s]+=/.test(a)))) {
     throw new RuntimeClientError('invalid_argument', '--answer must be written as key=value.')
   }
   return [
     ...(typeof method === 'string' ? ['--method', method.trim()] : []),
-    ...answers.flatMap((answer) => ['--answer', answer])
+    ...answers.flatMap((value) => ['--answer', value])
   ]
 }
 

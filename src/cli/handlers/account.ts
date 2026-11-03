@@ -38,7 +38,13 @@ import {
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
 import { getWslAccountTarget } from './account-wsl-location'
-import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
+import {
+  addDataAccount,
+  listDataAccounts,
+  mutateDataAccount,
+  redactLoginAnswers,
+  rejectOpenCodeLoginFlagsForAgent
+} from './data-account-commands'
 import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
 import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
 
@@ -140,7 +146,7 @@ async function runAgentLoginInTerminal(
       rejectPromise(
         new RuntimeClientError(
           'internal',
-          `\`${command} ${args.join(' ')}\` exited with code ${code ?? 'null'}.`
+          `\`${[command, ...redactLoginAnswers(args)].join(' ')}\` exited with code ${code ?? 'null'}.`
         )
       )
     })
@@ -268,6 +274,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
+    rejectOpenCodeLoginFlagsForAgent(ctx, agent)
     if (agent === 'opencode' || agent === 'devin') {
       await addDataAccount(ctx, agent, runAgentLoginInTerminal)
       return

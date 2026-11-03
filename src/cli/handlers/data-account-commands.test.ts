@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { REPEATED_FLAG_SEPARATOR } from '../args'
+import { parseArgs, REPEATED_FLAG_SEPARATOR, specPaths } from '../args'
+import { ACCOUNT_COMMAND_SPECS } from '../specs/account'
 import { RuntimeClient } from '../runtime-client'
 import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import { addDataAccount, listDataAccounts } from './data-account-commands'
@@ -122,7 +123,16 @@ describe('managed data account enrollment', () => {
     ['devin', new Map([['method', 'device']]), 'only supported with --agent opencode'],
     ['opencode', new Map([['method', ' ']]), '--method requires'],
     ['opencode', new Map([['answer', 'deployment']]), 'key=value'],
-    ['opencode', new Map([['answer', '=github.com']]), 'key=value']
+    ['opencode', new Map([['answer', '=github.com']]), 'key=value'],
+    [
+      'opencode',
+      parseArgs(
+        ['account', 'add', '--answer=', '--answer', 'deployment=github.com'],
+        ACCOUNT_COMMAND_SPECS.flatMap(specPaths),
+        ACCOUNT_COMMAND_SPECS
+      ).flags,
+      'key=value'
+    ]
   ] as const)('refuses invalid %s login options before login', async (provider, flags, message) => {
     vi.spyOn(client, 'call').mockResolvedValue({
       id: 'test',
