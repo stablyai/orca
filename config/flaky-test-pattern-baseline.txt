@@ -17,7 +17,7 @@
 8 test-no-in-test-import-actual:src/main/daemon/daemon-endpoint-publish.test.ts
 2 test-no-in-test-import-actual:src/main/daemon/terminal-history-permissions.test.ts
 1 test-no-in-test-import-actual:src/main/git/command-runner/spawned-command-tree-kill.test.ts
-2 test-no-in-test-import-actual:src/main/hooks-runner.test.ts
+2 test-no-in-test-import-actual:src/main/workspace-hooks/hooks-runner.test.ts
 1 test-no-in-test-import-actual:src/main/ipc/filesystem/filesystem-auth.test.ts
 1 test-no-in-test-import-actual:src/main/ipc/filesystem/filesystem-content-search-cancellation.test.ts
 1 test-no-in-test-import-actual:src/main/ipc/notebook.test.ts
@@ -814,8 +814,8 @@
 18 test-no-wall-clock:src/main/github/pr-refresh-coordinator-visible-follow-up.test.ts
 6 test-no-wall-clock:src/main/github/pr-refresh-queue-growth-bound.test.ts
 2 test-no-wall-clock:src/main/grok/grok-hook-stdin-no-eof.test.ts
-2 test-no-wall-clock:src/main/hook-archive-timeout-observation.test.ts
-1 test-no-wall-clock:src/main/hooks-runner.test.ts
+2 test-no-wall-clock:src/main/workspace-hooks/hook-archive-timeout-observation.test.ts
+1 test-no-wall-clock:src/main/workspace-hooks/hooks-runner.test.ts
 1 test-no-wall-clock:src/main/ipc/ai-vault.test.ts
 3 test-no-wall-clock:src/main/ipc/folder-repo-git-upgrade.test.ts
 2 test-no-wall-clock:src/main/ipc/native-chat-subscribe-lifecycle.test.ts
@@ -1192,8 +1192,8 @@
 1 test-timeout-needs-reason:src/main/git/worktree-removal-large-tree.bench.test.ts
 1 test-timeout-needs-reason:src/main/git/worktree-removal-real-git.test.ts
 1 test-timeout-needs-reason:src/main/hermes/hook-service.test.ts
-2 test-timeout-needs-reason:src/main/hook-archive-timeout-observation.test.ts
-2 test-timeout-needs-reason:src/main/hook-termination-real-process.test.ts
+2 test-timeout-needs-reason:src/main/workspace-hooks/hook-archive-timeout-observation.test.ts
+2 test-timeout-needs-reason:src/main/workspace-hooks/hook-termination-real-process.test.ts
 2 test-timeout-needs-reason:src/main/ipc/filesystem/filesystem-quick-open-options.integration.test.ts
 1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
 1 test-timeout-needs-reason:src/main/ipc/runtime-environments/runtime-environment-federated-read-transport.bench.test.ts
