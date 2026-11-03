@@ -1,4 +1,4 @@
-import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 import type {
   TerminalAgentQuickCommand,
   TerminalCommandQuickCommand,

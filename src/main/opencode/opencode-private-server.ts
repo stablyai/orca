@@ -8,7 +8,7 @@ import { findOpenCodeRunCommand } from '../../shared/opencode-headless-command'
 import {
   tokenizeStartupCommand,
   type AgentStartupShell
-} from '../../shared/tui-agent-startup-shell'
+} from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { managedAccountLaunchEnvironment } from '../managed-data-accounts/launch-environment'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 

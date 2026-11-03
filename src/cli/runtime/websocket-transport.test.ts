@@ -1,5 +1,5 @@
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../shared/skill-install-capability'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { createServer, type Server } from 'node:http'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'

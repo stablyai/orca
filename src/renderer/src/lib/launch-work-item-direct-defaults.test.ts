@@ -14,7 +14,7 @@ import { useAppStore } from '@/store'
 
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { runSourceControlAgentActionStart } from '../components/right-sidebar/runSourceControlAgentActionStart'
 import { startFixChecksFromDialog } from '../components/pull-request-page/checks/fix-launch'
 import { sourceControlActionRecipeEntry } from '../../../shared/source-control-action-selection'

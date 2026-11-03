@@ -14,7 +14,7 @@ import {
 } from './text-generation-failure-copy'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { mergeLegacyCommitMessageAiIntoSourceControlAi as mergeLegacySettings } from './source-control-ai-legacy-reconciliation'
 import { projectSourceControlAiToLegacyCommitMessageAi as projectLegacySettings } from './source-control-ai-legacy-projection'
 import {

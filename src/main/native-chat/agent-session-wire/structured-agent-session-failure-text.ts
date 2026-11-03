@@ -29,7 +29,7 @@ import { providerRequestTimeoutOf } from '../../provider-process/provider-reques
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
-import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
+import { agentCliInstallationFacts } from '../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 const TYPED_START_REFUSALS = [
   'savedConversationMissing',

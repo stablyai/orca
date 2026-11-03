@@ -20,7 +20,7 @@ import {
 import {
   AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
   typeAgentTuiCommand
-} from '../../../../shared/agent-tui-command-typing'
+} from '../../../../shared/agent-launch/startup/agent-tui-command-typing'
 import {
   cancelNativeChatPtySends,
   enqueueNativeChatPtySend,

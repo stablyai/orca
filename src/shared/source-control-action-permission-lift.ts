@@ -1,4 +1,4 @@
-import { isTuiAgent } from './tui-agent-config'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
 import {
   normalizeActionArgumentDocument,
   reconcileActionArgumentDocument

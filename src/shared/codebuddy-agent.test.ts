@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
 import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
-import { getAgentResumeArgv } from './agent-resume-argv'
+import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 
 describe('CodeBuddy harness', () => {
   it('replays the live question lifecycle without settling at late SessionStart', () => {

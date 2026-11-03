@@ -2,14 +2,14 @@ import { hostSupportsLaunchChoices } from '@/runtime/agent-launch-settings/agent
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   agentLaunchNeedsPreparedCommand,
   toAgentLaunchPreferences
-} from '../../../shared/agent-launch-preferences'
+} from '../../../shared/agent-launch/choices/agent-launch-preferences'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId

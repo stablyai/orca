@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { vi } from 'vitest'
 import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import {

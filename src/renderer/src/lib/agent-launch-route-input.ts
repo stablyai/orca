@@ -7,7 +7,7 @@ import {
 import type { AppState } from '@/store/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../shared/terminal-startup-cwd'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
 import type { AgentLaunchRoutingInput } from '@/lib/agent-launch-routing'
 // Import the resolver directly: the connection-context facade reaches the store root and creates a launch-graph cycle.

@@ -28,14 +28,16 @@ import {
   observeAgentPickerAcquisition,
   type AgentPickerInventorySource
 } from './agent-launch-picker-acquisition'
-import { usableAgentPickerDefaultSettings as usable } from '../../../../shared/agent-launch-picker-defaults'
-import { isAgentChatPermissionChoice } from '../../../../shared/agent-chat-permission-mode'
+import {
+  usableAgentPickerDefaultSettings as usable,
+  agentPickerChoiceSeeds,
+  type AgentPickerDefaultSettings
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
+import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   agentPickerEntriesFromRows,
-  agentPickerChoiceSeeds,
-  type AgentPickerDefaultSettings,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export { useAgentPickerInventoryEntries, type AgentPickerInventorySource }
 

@@ -1,5 +1,5 @@
 import type { Tab } from '../tab-types'
-import type { TuiAgent } from '../tui-agent'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { AgentType } from '../agent-status-types'
 import {
   isNativeChatSupportedAgent,

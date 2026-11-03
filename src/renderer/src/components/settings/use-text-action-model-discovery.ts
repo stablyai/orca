@@ -12,7 +12,7 @@ import {
   withDiscoveredModels
 } from '../../../../shared/source-control-ai-model-selection'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 // One listing per host and agent at a time, however many cards open their picker.
 const pending = new Map<string, Promise<void>>()

@@ -7,7 +7,7 @@ import {
 import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 import { quotePowerShellNativeArgument } from '../shared/powershell-native-argument'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
-import type { AgentStartupShell } from '../shared/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export function orchestrationMutationRecoveryError(
   error: unknown,

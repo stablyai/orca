@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { hostOs } from '../platform/host-os'
 import { ComposerSendButton } from '../components/composer-input/ComposerSendButton'
 import { MessageBox } from '../components/composer-input/MessageBox'
