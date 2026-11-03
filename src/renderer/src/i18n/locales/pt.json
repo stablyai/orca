@@ -8235,8 +8235,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Modelo de comando",
-          "2b2f38652b": "Comando personalizado",
-          "0ffb081b3a": "Usar agente padrão",
           "f4310cf63f": "Agente",
           "1cd88d470a": "Personalizar",
           "403876bb48": "Usar global",
@@ -22989,6 +22987,7 @@
     "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
     "searchAgentModels": "Pesquisar modelos de {{agent}}…",
     "legacyModelCount": "{{total}} modelos",
+    "use": "Usar",
     "select": "Selecionar agente",
     "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
     "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos"
