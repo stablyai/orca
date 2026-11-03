@@ -3608,7 +3608,7 @@
             "copyLinkFailed": "링크를 복사하지 못했습니다.",
             "downloadOpenWithDefaultApp": "기본 앱 다운로드 및 열기",
             "downloadOpenFailed": "'{{value0}}'을(를) 다운로드하지 못했습니다.",
-            "openInThisGroup": "이 그룹에서 열기",
+            "openInNewTab": "새 탭에서 열기",
             "openInThisGroupRefused": "이 그룹에서 {{value0}}을(를) 열 수 없습니다"
           },
           "TerminalQuickCommandsSubmenu": {

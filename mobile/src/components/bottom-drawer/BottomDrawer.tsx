@@ -86,7 +86,10 @@ export function useOptionPager<Key extends string>() {
     })
   }, [reducedMotion, slide])
 
-  const forget = useCallback(() => setPage(null), [])
+  const forget = useCallback(() => {
+    slide.value = 1
+    setPage(null)
+  }, [slide])
 
   return { page, open, close, forget, slide, reducedMotion }
 }

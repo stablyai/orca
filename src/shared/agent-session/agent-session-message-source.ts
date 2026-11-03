@@ -19,7 +19,19 @@ export type AgentMessageSender = Readonly<{
 }>
 
 /** One orchestration message a notice points at: its record, and its sender's `senders` address. */
-export type OrchestrationMailMessage = Readonly<{ messageId: string; runId: string; from: string }>
+export type OrchestrationMailContent = Readonly<{
+  subject: readonly [number, number]
+  body?: readonly [number, number]
+  payload?: readonly [number, number]
+}>
+
+export type OrchestrationMailMessage = Readonly<{
+  messageId: string
+  runId: string
+  from: string
+  /** Exact field ranges in the canonical text; avoids duplicating large messages in bounded frames. */
+  content?: OrchestrationMailContent
+}>
 
 /** "You have N orchestration messages": the pointer a terminal agent is typed, for a mailbox's
  *  unread mail, which the agent reads with `check`. */
@@ -75,11 +87,25 @@ const orcaSessionIdSchema = z.custom<OrcaSessionId>(
   (value) => typeof value === 'string' && isOrcaSessionId(value)
 )
 
+const contentRangeSchema = z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()])
+const mailContentSchema = z.object({
+  subject: contentRangeSchema,
+  body: contentRangeSchema.optional(),
+  payload: contentRangeSchema.optional()
+})
+
 const mailNoticeSchema = z.object({
   message: z.literal('mail-notice'),
   mailbox: z.string(),
   dispatchId: z.string().nullable(),
-  messages: z.array(z.object({ messageId: z.string(), runId: z.string(), from: z.string() }))
+  messages: z.array(
+    z.object({
+      messageId: z.string(),
+      runId: z.string(),
+      from: z.string(),
+      content: salvagedOptional('content', mailContentSchema)
+    })
+  )
 })
 
 const taskSchema = z.object({
