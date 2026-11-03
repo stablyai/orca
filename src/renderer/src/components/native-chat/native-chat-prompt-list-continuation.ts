@@ -25,8 +25,8 @@ export function nativeChatListContinuation(
   if (!match) {
     return null
   }
-  if (lineBefore.length === match[0].length && lineAfter.trim() === '') {
-    return { exit: match[0].length }
+  if (lineBefore.slice(match[0].length).trim() === '' && lineAfter.trim() === '') {
+    return { exit: lineBefore.length }
   }
   return { insert: `${match[1]}${match[2] ? `${Number(match[2]) + 1}. ` : '- '}` }
 }

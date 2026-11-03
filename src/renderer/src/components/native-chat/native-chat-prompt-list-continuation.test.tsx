@@ -38,6 +38,8 @@ describe('native chat prompt list continuation', () => {
     ['notes\n9. ninth', 'notes\n9. ninth\n10. '],
     ['- done\n- ', '- done\n'],
     ['1. done\n2. ', '1. done\n'],
+    ['- done\n-   ', '- done\n'],
+    ['1. done\n2.  ', '1. done\n'],
     ['plain', 'plain\n'],
     ['-not a bullet', '-not a bullet\n']
   ])('Shift+Enter after %j gives %j', (value, expected) => {
