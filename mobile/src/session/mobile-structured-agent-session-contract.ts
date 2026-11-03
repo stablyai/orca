@@ -25,6 +25,7 @@ import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-ba
 
 export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
+    submissions: readonly import('../../../src/shared/agent-session/journal/agent-session-journal-types').AgentJournalSubmission[]
     session: MobileNativeChatSession
     asyncQuestionSourceScope: string
     isWorking: boolean

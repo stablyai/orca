@@ -79,6 +79,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
   it('keeps the selected answer mounted through echo, recording, handover and retry until delivery', () => {
     let settle = (_outcome: 'recorded' | 'returned' | 'unconfirmed') => {}
     const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      request?.onCreated?.('answer')
       settle = (outcome) => request?.onSettled?.(outcome)
       return true
     })

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import recordedQuestion from './fixtures/codex-weekend-question.json'
+import { projectStructuredAgentSessionMessages } from '../../agent-session/view/structured-agent-session-message-projection'
+import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
@@ -478,26 +481,104 @@ describe('async questions', () => {
     expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
   })
 
-  it('does not make an earlier pending answer disable or hide a later question', () => {
-    const recordedCall = {
-      type: 'tool-call',
-      name: 'request_user_input_async',
-      callId: 'first-call',
-      input: recordedQuestion
-    } satisfies NativeChatBlock
-    const asked = message('first', [recordedCall])
-    const waiting = userRow('pending-answer', {
+  it.each([false, true])(
+    'does not let a host-held answer affect a later repeated question (queued: %s)',
+    (queued) => {
+      const question: AgentJournalRenderItem = {
+        itemId: 'first',
+        sequence: 1,
+        revision: 0,
+        observedAt: 1,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'request_user_input_async',
+              callId: 'first-call',
+              input: recordedQuestion
+            }
+          ]
+        }
+      }
+      const answer: AgentJournalRenderItem = {
+        itemId: agentJournalSubmissionKey('answer'),
+        sequence: 2,
+        revision: 0,
+        observedAt: 1,
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [
+            { type: 'text', text: `> ${recordedQuestion.questions[0].title}\n\nGet outside` }
+          ]
+        }
+      }
+      const later: AgentJournalRenderItem = {
+        ...question,
+        itemId: 'later',
+        sequence: 3,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'request_user_input_async',
+              callId: 'later-call',
+              input: recordedQuestion
+            }
+          ]
+        }
+      }
+      const rows = projectStructuredAgentSessionMessages(
+        [question, answer, later],
+        [],
+        [
+          {
+            clientMessageId: 'answer',
+            fence: 1,
+            payloadFingerprint: 'answer',
+            dispatchState: 'pending',
+            providerItemId: null,
+            reason: null,
+            submittedAt: 1,
+            resolvedAt: null,
+            handoverRecorded: true,
+            ...(queued ? { queuedMessageId: 'queue-answer' } : {})
+          }
+        ]
+      )
+      const scan = scanPendingAsks(rows)
+      expect(scan.contributors.map((contributor) => contributor.sourceRowId)).toEqual(
+        queued ? ['later'] : ['first', 'later']
+      )
+      expect(scan.answerPending).toBeUndefined()
+    }
+  )
+
+  it('leaves questions available for positionless composer previews, including revised existing rows', () => {
+    const first = {
+      ...message('first', [asyncCall('first', 'A?')]),
+      journalPosition: { sequence: 1, index: 0 }
+    }
+    const revised = {
+      ...message('revised', [asyncCall('revised', 'A?')]),
+      journalPosition: { sequence: 2, index: 0 }
+    }
+    const preview = userRow('preview', {
       deliveryState: 'pending',
-      queuedMessageId: 'queue-answer',
-      blocks: [{ type: 'text', text: `> ${recordedQuestion.questions[0].title}\n\nGet outside` }]
+      queuedMessageId: 'queue',
+      blocks: [{ type: 'text', text: '> A?\n\nYes' }]
     })
-    const later = message('later', [{ ...recordedCall, callId: 'later-call' }])
-    const scan = scanPendingAsks([asked, waiting, later])
-    expect(scan.contributors.map((contributor) => contributor.sourceRowId)).toEqual(['later'])
+    const scan = scanPendingAsks([first, revised, preview])
+    expect(scan.contributors.map((row) => row.sourceRowId)).toEqual(['first', 'revised'])
     expect(scan.answerPending).toBeUndefined()
-    expect(scanPendingAsks([asked, { ...waiting, queuedMessageId: undefined }]).answerPending).toBe(
-      true
-    )
+    expect(
+      scanPendingAsks([first, revised, { ...preview, journalPosition: { sequence: 3, index: 0 } }])
+        .contributors
+    ).toEqual([])
   })
 
   it('keeps async controls across agent notices and replay until human input or interruption', () => {

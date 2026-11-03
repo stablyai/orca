@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import type { NativeChatAnswerSource } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat/input/native-chat-question-auto-advance'
 import { encodeAgentSessionQuestionAnswers } from '../../../../../src/shared/agent-session/agent-session-question-answer'
@@ -75,6 +77,81 @@ afterEach(() => {
 })
 
 describe('MobileNativeChatAsk single-select auto-advance', () => {
+  it('owns the RPC-first echo and releases canonical uncertainty before an old reply can clear a retry', async () => {
+    const prompt = { questions: [indent], replyAsMessage: true }
+    let source: NativeChatAnswerSource = { messages: [], submissions: [] }
+    const replies: (() => void)[] = []
+    const onAnswer = vi.fn((_selections, onCreated?: (id: string) => void) => {
+      onCreated?.(['answer', 'retry', 'newer'][replies.length]!)
+      return new Promise<boolean>((resolve) => replies.push(() => resolve(true)))
+    })
+    vi.useFakeTimers()
+    const update = () =>
+      act(() =>
+        tree.update(
+          createElement(MobileNativeChatAsk, { prompt, onAnswer, answerSendSource: source })
+        )
+      )
+    act(() => {
+      tree = create(
+        createElement(MobileNativeChatAsk, { prompt, onAnswer, answerSendSource: source })
+      )
+    })
+    press('Spaces')
+    await passAutoAdvanceBeat()
+    const button = () =>
+      tree.root.find(
+        (node) =>
+          isHost(node, 'Pressable') && node.findAll((n) => n.props.children === 'Submit').length > 0
+      )
+    expect(button().props.disabled).toBe(true)
+    source = {
+      messages: [
+        {
+          id: agentJournalSubmissionKey('answer'),
+          role: 'user',
+          blocks: [],
+          timestamp: 2,
+          deliveryState: 'pending'
+        }
+      ],
+      submissions: []
+    }
+    update()
+    await act(async () => replies[0]!())
+    expect(button().props.disabled).toBe(true)
+    source = { messages: [], submissions: [] }
+    update()
+    expect(button().props.disabled).toBe(false)
+    act(() => button().props.onPress())
+    source = {
+      messages: [],
+      submissions: [
+        {
+          clientMessageId: 'retry',
+          fence: 1,
+          payloadFingerprint: 'retry',
+          dispatchState: 'unknown',
+          providerItemId: null,
+          reason: null,
+          submittedAt: 1,
+          resolvedAt: null
+        }
+      ]
+    }
+    update()
+    expect(button().props.disabled).toBe(false)
+    act(() => button().props.onPress())
+    expect(onAnswer).toHaveBeenCalledTimes(3)
+    await act(async () => replies[1]!())
+    // The third action has a distinct operation id on the actual sender; use it here too.
+    source = { messages: [], submissions: [] }
+    update()
+    expect(button().props.disabled).toBe(true)
+    expect(tree.root.find((node) => node.props.label === 'Spaces').props.selected).toBe(true)
+    await act(async () => replies[2]!())
+  })
+
   it('keeps the picked answer disabled after admission and retryable when delivery is unconfirmed', async () => {
     const prompt = { questions: [indent], replyAsMessage: true }
     const onAnswer = render(prompt)
@@ -99,7 +176,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     )
     await submit()
     expect(onAnswer).toHaveBeenCalledTimes(2)
-    expect(onAnswer).toHaveBeenLastCalledWith([{ indices: [1] }])
+    expect(onAnswer).toHaveBeenLastCalledWith([{ indices: [1] }], expect.any(Function))
   })
 
   it.each([false, true])(

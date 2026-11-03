@@ -29,6 +29,7 @@ import { MobileNativeChatPromptStrip } from './MobileNativeChatPromptStrip'
 export function MobileNativeChatPromptCard({
   ask,
   askPending,
+  askSendSource,
   answering = false,
   askKey,
   onDismissAsk,
@@ -46,12 +47,17 @@ export function MobileNativeChatPromptCard({
   onAnswerQuestion
 }: {
   ask?: AskPrompt | null
+  askSendSource?: import('../../../../../src/shared/native-chat/input/native-chat-ask-answer').NativeChatAnswerSource
   askPending?: boolean
   // The keyboard is up for this card's reply, so it may take the whole conversation area.
   answering?: boolean
   askKey?: string | null
   onDismissAsk?: () => void
-  onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  onAnswerAsk?: (
+    prompt: AskPrompt,
+    selections: AskAnswerSelection[],
+    onCreated?: (id: string) => void
+  ) => Promise<boolean>
   requiresTerminal?: boolean
   onAnswerInTerminal?: () => void
   onCancelAsk?: () => Promise<boolean>
@@ -90,8 +96,9 @@ export function MobileNativeChatPromptCard({
         key={askKey ?? 'ask'}
         prompt={ask}
         answerPending={askPending}
-        onAnswer={async (selections) => {
-          const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
+        answerSendSource={askSendSource}
+        onAnswer={async (selections, onCreated) => {
+          const accepted = (await onAnswerAsk?.(ask, selections, onCreated)) ?? false
           if (accepted && !ask.replyAsMessage) {
             onDismissAsk?.()
           }

@@ -1,3 +1,4 @@
+import { nativeChatAskScanOrder } from './native-chat-ask-order'
 import type {
   AskOption,
   AskPrompt,
@@ -224,7 +225,7 @@ export type PendingAskScan = {
 
 export function scanPendingAsks(messages: readonly NativeChatMessage[]): PendingAskScan {
   const scanner = createPendingAskScanner()
-  for (const message of messages) {
+  for (const message of nativeChatAskScanOrder(messages)) {
     scanner.append(message)
   }
   return scanner.current()

@@ -68,12 +68,14 @@ export type MobileNativeChatController = {
   nativeChatQuestion: MobileChatQuestion | null
   // Keep dismissal above chat-view unmounts so toggling views cannot resurrect an answered ask.
   nativeChatAsk: AskPrompt | null
+  nativeChatAskSendSource?: import('../../../../src/shared/native-chat/input/native-chat-ask-answer').NativeChatAnswerSource
   nativeChatAskPending?: boolean
   nativeChatAskKey: string | null
   dismissNativeChatAsk: () => void
   handleNativeChatAnswerAsk: (
     prompt: AskPrompt,
-    selections: AskAnswerSelection[]
+    selections: AskAnswerSelection[],
+    onCreated?: (id: string) => void
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
   // Collapse writes nothing to the terminal and frees Send.

@@ -1,5 +1,7 @@
 // Deliver answers as pasted messages or Claude/Codex selector keystrokes.
 
+import type { AgentJournalSubmission } from '../../agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
 import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
 import type { NativeChatMessage } from '../native-chat-types'
 import type { AsyncQuestionContributor } from './native-chat-ask'
@@ -23,6 +25,7 @@ export function isDeliveredNativeChatUserMessage(message: NativeChatMessage): bo
 export function isPendingNativeChatUserMessage(message: NativeChatMessage): boolean {
   return (
     isHumanSend(message) &&
+    (message.journalPosition !== undefined || (!message.deliveryState && !message.pendingSend)) &&
     (message.deliveryState === 'pending' ||
       message.pendingSend !== undefined ||
       message.queued === true)
@@ -213,4 +216,32 @@ export function buildCodexAskAnswerKeys(
 /** Whether any question in `selections` carries an answer worth submitting. */
 export function hasAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): boolean {
   return prompt.questions.some((_, i) => isAnswered(selections[i]))
+}
+
+export type NativeChatAnswerOperation = { clientMessageId?: string; inFlight: boolean }
+
+/** Canonical evidence supersedes the form's local operation, even before its RPC returns. */
+export function nativeChatAnswerOperationPending(
+  operation: NativeChatAnswerOperation | null,
+  messages: readonly NativeChatMessage[],
+  submissions: readonly AgentJournalSubmission[] = []
+): boolean {
+  if (!operation) {
+    return false
+  }
+  const id = operation.clientMessageId
+  if (!id) {
+    return operation.inFlight
+  }
+  const key = agentJournalSubmissionKey(id)
+  const message = messages.find((row) => row.id === key)
+  if (message?.journalPosition || submissions.some((row) => row.clientMessageId === id)) {
+    return false
+  }
+  return (message?.deliveryState === 'pending' && !message.journalPosition) || operation.inFlight
+}
+
+export type NativeChatAnswerSource = {
+  messages: readonly NativeChatMessage[]
+  submissions: readonly AgentJournalSubmission[]
 }
