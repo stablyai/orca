@@ -704,7 +704,9 @@ describe('useMobileNativeChatController terminal turn', () => {
     captureSendOrigin.mockReturnValue(ORIGIN)
     clientStub.sendRequest.mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
     sendWithOutcome.mockResolvedValueOnce('accepted')
-    await act(async () => controller?.handleNativeChatSend('Then docs'))
+    await act(async () => {
+      await controller?.handleNativeChatSend('Then docs')
+    })
     expect(acceptSend).toHaveBeenLastCalledWith(
       expect.objectContaining({ queuedDuringWorkingEpoch: null }),
       'Then docs',

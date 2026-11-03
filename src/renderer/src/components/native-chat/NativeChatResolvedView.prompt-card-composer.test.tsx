@@ -200,7 +200,9 @@ describe('queued follow-ups through transcript recovery', () => {
         readPhase: 'error'
       }
       renderPane()
-      await act(async () => fireEvent.click(screen.getByTestId('composer-send')))
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('composer-send'))
+      })
       act(() => {
         retained.session = {
           ...retained.session!,
