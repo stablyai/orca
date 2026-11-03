@@ -298,6 +298,30 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['environment', 'm4air'],
+    ['pairing-code', 'orca://pair?code=x']
+  ])(
+    'rejects `host rm --%s` instead of removing the target on this machine',
+    async (flag, value) => {
+      pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
+      queueSshTargetLookups(1)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        ['host', 'rm', '--host', `ssh:${SSH_TARGET.id}`, `--${flag}`, value, '--json'],
+        '/tmp/repo'
+      )
+
+      const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+      expect(printed.ok).toBe(false)
+      expect(printed.error.code).toBe('invalid_argument')
+      expect(printed.error.message).toContain(`\`--${flag}\` does not retarget \`orca host rm\``)
+      expect(process.exitCode).toBe(1)
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+
   it('keeps `host list` local when ORCA_ENVIRONMENT is set ambiently', async () => {
     process.env.ORCA_ENVIRONMENT = 'm4air'
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
