@@ -8,7 +8,7 @@ import {
 
 const MAX_REPLACEMENT_REASON_LENGTH = 64
 
-/** A fresh native conversation replaces history the provider could not restore. */
+/** A fresh conversation continues without the history the provider could not restore. */
 export type AgentSessionProviderHandleReplacement = {
   /** Key of the conversation that was lost: the head this creation followed. */
   key: string
@@ -33,7 +33,7 @@ export function isAgentSessionProviderHandleReplacement(
   }
   const { key, reason, replacedAt } = value
   return (
-    // Codex recovery retains this lineage; the older-reader restriction still applies to Claude.
+    // Unreleased builds saved Codex replacements; reading them keeps those chats decodable. Claude stays refused.
     (handle.transport === 'codex-app-server' ||
       !isAgentSessionProviderHandleReadByOlderBuilds(handle)) &&
     isAgentSessionProviderHandleKeyFor(handle, key) &&
