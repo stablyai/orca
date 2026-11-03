@@ -16,6 +16,7 @@ import {
 import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault-types'
 import { redactForTransport } from '../../../src/shared/ai-vault-search-transport'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import { checkoutDiagnostic } from './release-checkout-diagnostic'
 
 const PRE_QODER_HOSTS = ['v1.4.211', 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c']
 const QODER_HOST = 'f97ca2a49d9c711dab54a656a7f8a47ae6c6749c'
@@ -171,9 +172,12 @@ test.each(['codebuddy', 'zcode'] as const)(
 )
 
 test('the shipped Qoder capability proves its historical trio while withholding later Jcode', async () => {
+  checkoutDiagnostic('qoder-test-start', QODER_HOST)
   const baseline = await releaseSearchSchemas(QODER_HOST)
+  checkoutDiagnostic('qoder-schema-ready', QODER_HOST)
   const requestParser = releaseParser(baseline.AiVaultSearchRequestSchema)
   const responseParser = releaseParser(baseline.AiVaultSearchResponseSchema)
+  checkoutDiagnostic('qoder-first-contract', QODER_HOST)
   const request = requestParser.parse({ query: 'proof', supportsQoderHistory: true })
   const hits = [
     searchHit(),

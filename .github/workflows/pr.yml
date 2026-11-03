@@ -1014,7 +1014,20 @@ jobs:
 
       # Run the entire directory; zero matches fail so new contracts cannot be omitted silently.
       - name: Old/new client and server compatibility journeys
-        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
+        env:
+          ORCA_RELEASE_CHECKOUT_DIAGNOSTIC: '1'
+        run: |
+          vmstat -t 5 120 > "$RUNNER_TEMP/orca-release-vmstat.log" &
+          sampler_pid=$!
+          stop_sampler() {
+            if [[ "$(ps -p "$sampler_pid" -o comm=)" == vmstat ]] && [[ "$(ps -p "$sampler_pid" -o ppid= | tr -d ' ')" == "$$" ]]; then
+              kill "$sampler_pid" 2>/dev/null || true
+              wait "$sampler_pid" 2>/dev/null || true
+            fi
+            cat "$RUNNER_TEMP/orca-release-vmstat.log"
+          }
+          trap stop_sampler EXIT
+          pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
 
   managed_hook_node18:
     name: managed hooks on Node 18
