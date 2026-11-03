@@ -305,13 +305,18 @@ async function measureCatchUp(
   return counts
 }
 
-// Instrumented 20/200 journal settlement and disk reopens need extra CI time.
-it('bounds composed fresh/held content and old dividers at 20 and 200', async () => {
+// 4x separates linear (4x) from quadratic (16x) growth; 10x only lengthened the run.
+const SMALL = 20
+const SCALE = 4
+const LARGE = SMALL * SCALE
+
+// Instrumented journal settlement and disk reopens need extra CI time.
+it('bounds composed fresh/held content and old dividers at 20 and 80', async () => {
   const populations: {
     first: Awaited<ReturnType<typeof measureCatchUp>>
     unchanged: Awaited<ReturnType<typeof measureCatchUp>>
   }[] = []
-  for (const n of [20, 200]) {
+  for (const n of [SMALL, LARGE]) {
     const rig = await openProviderTimelineRig()
     for (let i = 0; i < n; i++) {
       await native(rig, `native-${i}`, `native-${i}`)
@@ -373,21 +378,21 @@ it('bounds composed fresh/held content and old dividers at 20 and 200', async ()
       const small = populations[0]![phase][operation]
       expect(small).toBeGreaterThan(0)
       // V8 coverage ranges vary after warmup; indexed source/composition counts are exact.
-      const factor = operation === 'catchUp' ? 12 : 11
+      const factor = SCALE * (operation === 'catchUp' ? 1.2 : 1.1)
       expect(populations[1]![phase][operation]).toBeLessThanOrEqual(small * factor)
     }
   }
 }, 120000)
 
-// Real journal I/O across the 20/200 population matrix needs the extended timeout on CI.
-it('bounds actual first/reopened search and repeated source activation at 20 and 200', async () => {
+// Real journal I/O across the population matrix needs the extended timeout on CI.
+it('bounds actual first/reopened search and repeated source activation at 20 and 80', async () => {
   const populations: {
     n: number
     k: number
     first: Awaited<ReturnType<typeof measureCatchUp>>
     unchanged: Awaited<ReturnType<typeof measureCatchUp>>
   }[] = []
-  for (const n of [20, 200]) {
+  for (const n of [SMALL, LARGE]) {
     for (const k of [0, 2 * n]) {
       const rig = await openProviderTimelineRig()
       for (let i = 0; i < k; i++) {
@@ -441,12 +446,14 @@ it('bounds actual first/reopened search and repeated source activation at 20 and
     expect(count.tree).toBeLessThan(64 * n * Math.ceil(Math.log2(n + 1)))
     populations.push({ n, k: -1, first: count, unchanged: count })
   }
-  for (const small of populations.filter((entry) => entry.n === 20)) {
+  for (const small of populations.filter((entry) => entry.n === SMALL)) {
     const large = populations.find(
-      (entry) => entry.n === 200 && (small.k === -1 ? entry.k === -1 : entry.k === small.k * 10)
+      (entry) =>
+        entry.n === LARGE && (small.k === -1 ? entry.k === -1 : entry.k === small.k * SCALE)
     )!
-    expect(large.first.matching).toBeLessThan(small.first.matching * 20)
-    expect(large.unchanged.matching).toBeLessThan(small.unchanged.matching * 20)
+    // n log n stays under 2x the scale; quadratic matching would reach SCALE squared.
+    expect(large.first.matching).toBeLessThan(small.first.matching * 2 * SCALE)
+    expect(large.unchanged.matching).toBeLessThan(small.unchanged.matching * 2 * SCALE)
   }
 }, 120000)
 

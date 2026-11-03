@@ -52,7 +52,9 @@ vi.mock('./native-chat-shortcut', () => ({
   isMacPlatform: () => true,
   matchesNativeChatToggleShortcut: () => true
 }))
-vi.mock('../../../../shared/native-chat-availability', () => ({ canToggleNativeChat: () => true }))
+vi.mock('../../../../shared/native-chat/native-chat-availability', () => ({
+  canToggleNativeChat: () => true
+}))
 vi.mock('../../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))

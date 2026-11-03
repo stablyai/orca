@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, type MockInstance } from 'vitest'
 import { readFile } from 'node:fs/promises'
-import { _settlePendingWorktreeRemovalsForTests } from '../../worktree-background-removal'
+import { _settlePendingWorktreeRemovalsForTests } from '../../workspaces/removal/worktree-background-removal'
 
 import {
   assertWorktreeCleanForRemoval,

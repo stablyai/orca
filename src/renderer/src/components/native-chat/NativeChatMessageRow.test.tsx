@@ -31,6 +31,9 @@ import {
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
 
 const confirm = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
@@ -255,6 +258,71 @@ describe('MessageRow send mode', () => {
 })
 
 describe('what a user message says about its delivery', () => {
+  function RecordedMessage({ submission }: { submission: AgentJournalSubmission }) {
+    const notices = useStructuredAgentSessionDeliveryNotices({
+      pending: [],
+      submissions: [submission],
+      journalItems: [],
+      agentName: 'Codex',
+      startFailures: []
+    })
+    const id = agentJournalSubmissionKey(submission.clientMessageId)
+    return (
+      <MessageRow
+        message={{
+          id,
+          role: 'user',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Ignore failures outside this branch.' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+        deliveryNotice={notices.get(id)}
+      />
+    )
+  }
+
+  it.each(['accepted', 'rejected', 'unknown'] as const)(
+    'keeps a recorded steer Sending through handoff until it becomes %s',
+    (dispatchState) => {
+      const held: AgentJournalSubmission = {
+        clientMessageId: 'steer',
+        fence: 1,
+        payloadFingerprint: 'steer',
+        dispatchState: 'pending',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null,
+        handoverRecorded: true
+      }
+      const { rerender } = render(<RecordedMessage submission={held} />)
+      expect(screen.getByText('Sending…')).toBeInTheDocument()
+      expect(screen.queryByRole('time')).toBeNull()
+
+      const handedOver = { ...held, handedOverAt: 2 }
+      rerender(<RecordedMessage submission={handedOver} />)
+      expect(screen.getByText('Sending…')).toBeInTheDocument()
+
+      rerender(
+        <RecordedMessage
+          submission={{
+            ...handedOver,
+            dispatchState,
+            resolvedAt: 3,
+            reason: dispatchState === 'rejected' ? 'Codex refused the message.' : null
+          }}
+        />
+      )
+      expect(screen.queryByText('Sending…')).toBeNull()
+      expect(screen.getByRole('time')).toBeInTheDocument()
+      if (dispatchState === 'rejected') {
+        expect(screen.getByText('Codex refused the message.')).toBeInTheDocument()
+      }
+    }
+  )
+
   function renderUser(deliveryNotice?: NativeChatDeliveryNotice) {
     return render(
       <MessageRow

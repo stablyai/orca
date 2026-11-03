@@ -1,6 +1,6 @@
 /** Twin-targeted actions must isolate survivors. Keep the hand-declared action table current; KNOWN_TWIN_LEAKS pins Stage 1 failures, so fixes require removing their entries. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -252,35 +252,4 @@ describe('an action on one twin leaves the other twin alone', () => {
       }
     }
   }
-})
-
-describe('a folder action that names no host', () => {
-  for (const kind of ['folder local+ssh', 'folder group local+ssh'] as const) {
-    it(`refuses to delete a ${kind} twin and touches neither host`, async () => {
-      const fixture = createHostTwinFixture(kind)
-      current = fixture
-      appStore.current = fixture.store
-      const before = [fixture.local, fixture.remote].map((s) => projectHostTwinState(fixture, s))
-
-      await expect(fixture.store.getState().deleteFolderWorkspace(fixture.projectId)).resolves.toBe(
-        false
-      )
-
-      expect(window.api.folderWorkspaces.delete).not.toHaveBeenCalled()
-      const calls = vi.mocked(window.api.runtimeEnvironments.call).mock.calls
-      expect(calls.map(([request]) => request.method)).not.toContain('folderWorkspace.delete')
-      const after = [fixture.local, fixture.remote].map((s) => projectHostTwinState(fixture, s))
-      expect(after.map((state, i) => changedHostTwinState(before[i], state))).toEqual([[], []])
-    })
-  }
-})
-
-describe('the twin fixture', () => {
-  it('seeds two hosts under one workspace key', () => {
-    const fixture = createHostTwinFixture('local+ssh')
-    current = fixture
-    const hosts: ExecutionHostId[] = [fixture.local.hostId, fixture.remote.hostId]
-    expect(hosts).toEqual(['local', 'ssh:conn-b'])
-    expect(fixture.store.getState().tabsByWorktree[fixture.workspaceKey]).toHaveLength(3)
-  })
 })

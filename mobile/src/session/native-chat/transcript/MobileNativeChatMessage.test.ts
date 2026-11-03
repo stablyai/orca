@@ -116,6 +116,7 @@ describe('MobileNativeChatMessage', () => {
     function Transcript() {
       const structured = useMobileStructuredAgentSession({
         client,
+        pairedHostClient: client,
         sessionId: 'session-1',
         agent: 'claude',
         enabled: true,

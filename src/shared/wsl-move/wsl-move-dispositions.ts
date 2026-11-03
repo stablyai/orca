@@ -77,6 +77,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     item: 47,
     note: "Rebuilt from the host's first tab stream; the seeded workspaceSessionsByHostId gives first paint."
   },
+  hostRepoCatalogSnapshots: {
+    disposition: 'rederive',
+    item: 47,
+    note: "Rebuilt from the host's next project list; it caches only that answer."
+  },
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
   deletedSshConfigAliases: notApplicableDisposition(62),

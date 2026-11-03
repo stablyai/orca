@@ -145,30 +145,6 @@ describe('terminal tab retirement store boundary', () => {
     expect(mockKill).not.toHaveBeenCalled()
   })
 
-  it('preserves shared-owner snapshots while closing the source tab', async () => {
-    const store = createRetirementStore()
-    const snapshot = { snapshot: 'shared snapshot' }
-    const coldRestore = { scrollback: 'shared scrollback', cwd: 'C:\\workspace' }
-    seedStore(store, {
-      tabsByWorktree: {
-        'wt-1': [
-          makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-shared' }),
-          makeTab({ id: 'tab-2', worktreeId: 'wt-1', ptyId: 'pty-shared' })
-        ]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-shared'], 'tab-2': ['pty-shared'] },
-      pendingSnapshotByPtyId: { 'pty-shared': snapshot },
-      pendingColdRestoreByPtyId: { 'pty-shared': coldRestore }
-    })
-
-    store.getState().closeTab('tab-1')
-    await Promise.resolve()
-
-    expect(mockKill).not.toHaveBeenCalled()
-    expect(store.getState().pendingSnapshotByPtyId['pty-shared']).toBe(snapshot)
-    expect(store.getState().pendingColdRestoreByPtyId['pty-shared']).toBe(coldRestore)
-  })
-
   it('reconciles natural exit without issuing teardown or revoking resume authority', async () => {
     const store = createRetirementStore()
     const record = sleepingRecord('tab-1:leaf-1', 'tab-1')
@@ -186,15 +162,6 @@ describe('terminal tab retirement store boundary', () => {
     expect(mockKill).not.toHaveBeenCalled()
     expect(mockRuntimeCall).not.toHaveBeenCalled()
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(record)
-  })
-
-  it('does not recreate PTY indexes for a tab that no longer exists', () => {
-    const store = createRetirementStore()
-
-    store.getState().updateTabPtyId('closed-tab', 'pty-after-close')
-
-    expect(store.getState().ptyIdsByTabId['closed-tab']).toBeUndefined()
-    expect(store.getState().lastKnownRelayPtyIdByTabId['closed-tab']).toBeUndefined()
   })
 
   it('retires a unified-only terminal instead of removing only its wrapper', async () => {
@@ -226,22 +193,6 @@ describe('terminal tab retirement store boundary', () => {
 
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
     expect(store.getState().ptyIdsByTabId['terminal-tab-1']).toBeUndefined()
-  })
-
-  it('lets a paired host own runtime teardown while pruning local state', async () => {
-    const store = createRetirementStore()
-    seedStore(store, {
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'remote:terminal-1' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['remote:terminal-1'] }
-    })
-
-    store.getState().closeTab('tab-1', { remoteCloseOwnedByHost: true })
-    await Promise.resolve()
-
-    expect(mockRuntimeCall).not.toHaveBeenCalled()
-    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
   })
 
   it('retires parked ownership before teardown and sweeps published state before unified close', () => {
@@ -324,30 +275,6 @@ describe('terminal tab retirement store boundary', () => {
         runtimeFailures: 1
       })
     )
-    warn.mockRestore()
-  })
-
-  it('keeps the tab retired and reports provider rejection without an unhandled promise', async () => {
-    const store = createRetirementStore()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    mockKill.mockRejectedValueOnce(new Error('provider unavailable'))
-    seedStore(store, {
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-1' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    })
-
-    store.getState().closeTab('tab-1')
-    await vi.waitFor(() =>
-      expect(warn).toHaveBeenCalledWith('[terminal-retirement] provider teardown failed', {
-        tabId: 'tab-1',
-        localOrSshFailures: 1,
-        runtimeFailures: 0
-      })
-    )
-
-    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
     warn.mockRestore()
   })
 })

@@ -27,7 +27,7 @@ type CommandReceiptIdentity = {
   operationCallerKey: string
   fingerprint: string
   envelope: AgentSessionMutationEnvelope
-  plan: { method: string; operationIdScope?: 'global' }
+  plan: Pick<MutationPlan<unknown>, 'method' | 'operationIdScope' | 'acceptanceRecord'>
   context: AgentSessionTurnContext
 }
 
@@ -153,6 +153,9 @@ function acceptanceReceipt(
       callerKey: operationCallerKey,
       operationId: envelope.clientOperationId,
       fingerprint,
+      ...(plan.acceptanceRecord
+        ? { record: { sessionId: envelope.sessionId, update: plan.acceptanceRecord } }
+        : {}),
       now: context.now(),
       ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {}),
       outcome: { status: 'succeeded', sessionId: envelope.sessionId }

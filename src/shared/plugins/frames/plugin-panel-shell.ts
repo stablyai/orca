@@ -3,6 +3,7 @@ import { PLUGIN_ERROR_CODES, PLUGIN_PROTOCOL_VERSION } from './plugin-protocol'
 import { PLUGIN_DECLARATIVE_POST_GLOBAL, PLUGIN_FRAME_TRANSPORT_GLOBAL } from './plugin-frame-guest'
 import { PLUGIN_HOST_API_MAJOR } from '../workers/plugin-host-api-major'
 import { PLUGIN_FRAME_FACADES_SCRIPT } from './plugin-panel-shell-facades'
+import { PLUGIN_FRAME_DOCUMENT_SCRIPT } from './plugin-panel-shell-document'
 import {
   PLUGIN_FRAME_USER_METHODS,
   pluginFrameMethodsFor,
@@ -71,7 +72,10 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
   var listeners = new Map()
   var api = Object.freeze(C.api)
   var methods = C.methods.slice()
-  var latest = null, waiting = []
+  var latest = null
+  var waiting = []
+  var helloSeen = false
+  var starting = []
   var locale = null
   var send = null
   if (C.transportGlobal) {
@@ -168,6 +172,8 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
       if (Array.isArray(m.payload.methods)) methods = m.payload.methods.slice()
       if (typeof m.payload.locale === 'string') locale = m.payload.locale.slice(0, 64)
       applyTheme(m.payload.theme)
+      helloSeen = true
+      start()
     } else if (m.kind === 'evt' && m.event === E.theme) {
       applyTheme(m.payload)
     } else if (m.kind === 'evt' && m.event === E.push) {
@@ -175,6 +181,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
     } else if (m.kind === 'evt' && m.event === E.editorDocument && C.surface === 'editor') {
       latest = Object.freeze(m.payload)
       waiting.splice(0).forEach(function (resolve) { resolve(latest) })
+      start()
       emit(E.editorDocument, latest)
     } else if (m.kind === 'evt') {
       emit(m.event, m.payload)
@@ -216,33 +223,7 @@ ${PLUGIN_FRAME_FACADES_SCRIPT}  if (C.user) {
   Object.defineProperty(orca, 'locale', {
     get: function () { return locale || navigator.language }, enumerable: true
   })
-  if (C.surface === 'editor') {
-    orca.document = Object.freeze({
-      get: function () {
-        return latest ? Promise.resolve(latest) : new Promise(function (resolve) { waiting.push(resolve) })
-      },
-      // Why replay: editors often subscribe after their bundle loads, when the first document is in.
-      onDidChange: function (fn) {
-        var subscription = on(E.editorDocument, fn)
-        var current = latest
-        var live = true
-        if (current) Promise.resolve().then(function () { if (live && latest === current) fn(current) })
-        return Object.freeze({ dispose: function () { live = false; subscription.dispose() } })
-      },
-      applyEdit: function (edit) {
-        var base = edit && edit.baseVersion
-        var content = edit && edit.content ? Object.assign({}, edit.content) : null
-        // Copied: the caller may reuse its buffer, and get() must keep what Orca accepted.
-        if (content && content.bytes instanceof ArrayBuffer) content.bytes = content.bytes.slice(0)
-        return call(C.editor.applyEdit, edit).then(function (result) {
-          // Accepted edits keep their version, so get() takes the content without a new version.
-          if (latest && content && latest.version === base) {
-            latest = Object.freeze(Object.assign({}, latest, { content: Object.freeze(content) }))
-          }
-          return result
-        })
-      }
-    })
+${PLUGIN_FRAME_DOCUMENT_SCRIPT}  if (C.surface === 'editor') {
     window.addEventListener('keydown', function (event) {
       if (event.repeat || !(event.metaKey || event.ctrlKey)) return
       post({ kind: 'evt', event: E.editorKeydown, payload: {
