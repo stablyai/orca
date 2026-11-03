@@ -23,14 +23,14 @@ const eventSchema = z.object({
   dataHomeExists: z.boolean()
 })
 
-async function accountFixture() {
+async function accountFixture(toolDirectory = 'bin') {
   const manifest = createRequire(resolve('package.json')).resolve('bun/package.json')
   const { bin } = z
     .object({ bin: z.object({ bun: z.string() }) })
     .parse(JSON.parse(readFileSync(manifest, 'utf8')))
   const program = join(dirname(manifest), bin.bun)
   const root = mkdtempSync(join(tmpdir(), 'orca-account-process-'))
-  const tools = join(root, 'bin')
+  const tools = join(root, toolDirectory)
   mkdirSync(tools)
   const eventsPath = join(root, 'events.jsonl')
   const modePath = join(root, 'mode.json')
@@ -199,6 +199,60 @@ if (probe && name === 'opencode2' && mode.lifecycle) {
     }
   }
 }
+
+it('real CLI rejects every missing repeated answer before runtime lookup without disclosing values', async () => {
+  const fixture = await accountFixture()
+  try {
+    for (const options of [
+      ['--answer', '--answer', 'a=fixture-private'],
+      ['--answer', 'a=fixture-private', '--answer', '--answer', 'b=2'],
+      ['--answer', 'a=fixture-private', '--answer']
+    ]) {
+      fixture.mode({ supported: 'opencode2' })
+      const result = await runProcess({ ...fixture.spec, args: [...fixture.spec.args, ...options] })
+      expect(result.code).toBe(1)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument', message: 'Flag --answer requires a value.' }
+      })
+      expect(result.stdout + result.stderr).not.toContain('fixture-private')
+      expect(fixture.requests).toEqual([])
+      expect(fixture.events()).toEqual([])
+    }
+  } finally {
+    await fixture.close()
+  }
+}, 60_000)
+
+it('real CLI forwards form text through a spaced launcher path and imports only after success', async () => {
+  const fixture = await accountFixture('bin tools & 100%')
+  const answers = ['instance URL=https://example.test/a%20b?x="quoted"&y=a=b!', 'note=']
+  try {
+    fixture.mode({ supported: 'opencode2' })
+    const result = await runProcess({
+      ...fixture.spec,
+      args: [...fixture.spec.args, '--method', 'pkce', ...answers.flatMap((a) => ['--answer', a])]
+    })
+    expect(result.code, result.stdout + result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: true })
+    expect(fixture.events().find(({ kind }) => kind === 'login')?.args).toEqual([
+      'auth',
+      'login',
+      'opencode-go',
+      '--method',
+      'pkce',
+      ...answers.flatMap((a) => ['--answer', a]),
+      '--standalone'
+    ])
+    expect(fixture.requests.map(({ method }) => method)).toEqual([
+      'status.get',
+      'accounts.addDataFromHome'
+    ])
+    expect(fixture.events().every(({ dataHome }) => !existsSync(dirname(dataHome)))).toBe(true)
+  } finally {
+    await fixture.close()
+  }
+}, 20_000)
 
 // Four serial real CLI subprocesses each have a 15-second deadline.
 it('real account-add CLI probes, selects, logs in, hands off capture and cleans up; failures never enroll', async () => {

@@ -152,7 +152,7 @@ function readOpenCodeLoginOptions(
   const answers = typeof answer === 'string' ? answer.split(REPEATED_FLAG_SEPARATOR) : []
   if (
     answer !== undefined &&
-    (answers.length === 0 || answers.some((a) => !/^[^-=\s][^=\s]*=/.test(a)))
+    (answers.length === 0 || answers.some((a) => a.indexOf('=') < 1 || a.startsWith('-')))
   ) {
     throw new RuntimeClientError('invalid_argument', '--answer must be written as key=value.')
   }

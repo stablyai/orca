@@ -102,16 +102,16 @@ describe('managed data account enrollment', () => {
         '--method',
         ' device ',
         '--answer',
-        'deployment=github.com',
+        'deploymentType=github.com',
         '--answer',
-        'note=a=b',
+        'note name=a=b',
         '--standalone'
       ])
     })
     const flags = new Map<string, string | boolean>([
       ['integration', 'github-copilot'],
       ['method', ' device '],
-      ['answer', ['deployment=github.com', 'note=a=b'].join(REPEATED_FLAG_SEPARATOR)]
+      ['answer', ['deploymentType=github.com', 'note name=a=b'].join(REPEATED_FLAG_SEPARATOR)]
     ])
     await expect(addDataAccount({ ...context, flags }, 'opencode', login)).rejects.toThrow(
       'capture failed'
@@ -135,7 +135,7 @@ describe('managed data account enrollment', () => {
     [
       'opencode',
       parseArgs(
-        ['account', 'add', '--answer=', '--answer', 'deployment=github.com'],
+        ['account', 'add', '--answer=', '--answer', 'deploymentType=github.com'],
         ACCOUNT_COMMAND_SPECS.flatMap(specPaths),
         ACCOUNT_COMMAND_SPECS
       ).flags,
