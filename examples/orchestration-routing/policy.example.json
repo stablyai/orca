@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "description": "Example user-selected profiles only; not an Orca global default or model-capability ranking.",
+  "max_live_workers": 3,
+  "max_snapshot_age_minutes": 60,
+  "recent_dispatch_window_days": 7,
+  "near_reset_tiebreak_minutes": 30,
+  "quota_schema_version": 1,
+  "providers": {
+    "codex": {
+      "orca_agent": "codex",
+      "pool": "codex-subscription",
+      "denied_model_patterns": [],
+      "profiles": {
+        "simple": { "model": "gpt-6-luna" },
+        "complex": { "model": "gpt-6.1-sol", "effort": "max" }
+      }
+    },
+    "claude": {
+      "orca_agent": "claude",
+      "pool": "claude-subscription",
+      "denied_model_patterns": [],
+      "profiles": {
+        "simple": { "model": "claude-haiku-5-5" },
+        "complex": { "model": "claude-opus-5-5", "effort": "max" }
+      }
+    },
+    "agy": {
+      "orca_agent": "antigravity",
+      "pool": "agy-argon",
+      "verify_with_agy_cli": true,
+      "denied_model_patterns": ["(?i)flash"],
+      "profiles": {
+        "simple": { "model": "gemini-4-argon-medium" },
+        "complex": { "model": "gemini-4-argon-high" }
+      }
+    }
+  },
+  "quota_pools": {
+    "codex-subscription": {
+      "provider": "codex",
+      "fields": {
+        "provider": "string",
+        "reported_group": "string",
+        "observed_at": "timestamp",
+        "source": "nonempty_string",
+        "five_hour_used_pct": "percentage",
+        "weekly_used_pct": "percentage",
+        "five_hour_resets_at": "timestamp",
+        "weekly_resets_at": "timestamp",
+        "cooldown_until": "timestamp"
+      },
+      "provenance_required_for": ["five_hour_used_pct", "weekly_used_pct", "cooldown_until"],
+      "provenance_fields": ["observed_at", "source"]
+    },
+    "claude-subscription": {
+      "provider": "claude",
+      "fields": {
+        "provider": "string",
+        "reported_group": "string",
+        "observed_at": "timestamp",
+        "source": "nonempty_string",
+        "five_hour_used_pct": "percentage",
+        "weekly_used_pct": "percentage",
+        "five_hour_resets_at": "timestamp",
+        "weekly_resets_at": "timestamp",
+        "cooldown_until": "timestamp"
+      },
+      "provenance_required_for": ["five_hour_used_pct", "weekly_used_pct", "cooldown_until"],
+      "provenance_fields": ["observed_at", "source"]
+    },
+    "agy-argon": {
+      "provider": "agy",
+      "fields": {
+        "provider": "string",
+        "reported_group": "string",
+        "observed_at": "timestamp",
+        "source": "nonempty_string",
+        "five_hour_used_pct": "percentage",
+        "weekly_used_pct": "percentage",
+        "five_hour_resets_at": "timestamp",
+        "weekly_resets_at": "timestamp",
+        "cooldown_until": "timestamp"
+      },
+      "provenance_required_for": ["five_hour_used_pct", "weekly_used_pct", "cooldown_until"],
+      "provenance_fields": ["observed_at", "source"]
+    }
+  }
+}
