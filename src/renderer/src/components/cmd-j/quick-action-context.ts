@@ -4,9 +4,14 @@ import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import {
+  getRepoExecutionHostId,
   getRepoRoutingConnectionId,
   getSshTargetIdForExecutionHost
 } from '../../../../shared/execution-host'
+import {
+  selectRuntimeAwareSshStatus,
+  type RuntimeAwareSshStatusState
+} from '@/store/slices/runtime-environment-ssh-selectors'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import {
   canRunNativeChatSplitTarget,
@@ -96,13 +101,17 @@ export function captureCmdJActiveGroupSnapshot(
 }
 
 export function getActiveWorktreeSshStatus(
-  state: Pick<AppState, 'repos' | 'sshConnectionStates' | 'worktreesByRepo'>,
+  state: RuntimeAwareSshStatusState & Pick<AppState, 'repos' | 'worktreesByRepo'>,
   activeWorktree: Worktree | null
 ): SshConnectionStatus | null {
   if (!activeWorktree) {
     return null
   }
-  const repo = state.repos.find((entry) => entry.id === activeWorktree.repoId)
+  // Why: repo ids repeat across hosts, so prefer the repo on the workspace's own host.
+  const sameIdRepos = state.repos.filter((entry) => entry.id === activeWorktree.repoId)
+  const repo =
+    sameIdRepos.find((entry) => getRepoExecutionHostId(entry) === activeWorktree.hostId) ??
+    sameIdRepos[0]
   // Why: folder workspaces have no repo row, and SSH-only repos have no connectionId; the host id covers both.
   const connectionId =
     getSshTargetIdForExecutionHost(activeWorktree.hostId) ??
@@ -110,7 +119,12 @@ export function getActiveWorktreeSshStatus(
   if (!connectionId) {
     return null
   }
-  return state.sshConnectionStates.get(connectionId)?.status ?? 'disconnected'
+  // Why: a paired server owns its workspaces' SSH state, and unknown state must not hide the action.
+  return selectRuntimeAwareSshStatus(
+    state,
+    activeWorktree.runtimeOwnerEnvironmentId ?? null,
+    connectionId
+  )
 }
 
 export function getWorkspaceScopedActionAvailability(

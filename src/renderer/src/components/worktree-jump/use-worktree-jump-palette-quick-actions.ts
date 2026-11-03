@@ -54,6 +54,7 @@ export function useWorktreeJumpPaletteQuickActions({
   worktreesByRepo,
   repos,
   sshConnectionStates,
+  sshStateByEnvironment,
   activeGroupIdByWorktree,
   groupsByWorktree,
   unifiedTabsByWorktree,
@@ -148,6 +149,7 @@ export function useWorktreeJumpPaletteQuickActions({
     void worktreesByRepo
     void repos
     void sshConnectionStates
+    void sshStateByEnvironment
     void activeGroupIdByWorktree
     void groupsByWorktree
     void unifiedTabsByWorktree
@@ -167,6 +169,7 @@ export function useWorktreeJumpPaletteQuickActions({
     worktreesByRepo,
     repos,
     sshConnectionStates,
+    sshStateByEnvironment,
     activeGroupIdByWorktree,
     groupsByWorktree,
     unifiedTabsByWorktree,

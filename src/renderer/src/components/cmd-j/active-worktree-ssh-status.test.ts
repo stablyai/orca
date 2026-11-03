@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { Repo } from '../../../../shared/repo-types'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { RuntimeEnvironmentSshBucket } from '@/store/slices/runtime-environment-ssh'
 import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -25,6 +28,7 @@ function sshStatus(
     {
       repos: [{ ...TEST_REPO, ...repo }],
       sshConnectionStates: new Map(status ? [['box', connection(status)]] : []),
+      sshStateByEnvironment: new Map(),
       worktreesByRepo: {}
     },
     makeWorktree({ id: 'wt', repoId: TEST_REPO.id, ...worktree })
@@ -53,6 +57,82 @@ describe('active workspace SSH status', () => {
 
   it('treats an SSH host with no known connection as disconnected', () => {
     expect(sshStatus({ executionHostId: 'ssh:box' }, {}, null)).toBe('disconnected')
+  })
+
+  it('uses the repo on the workspace host when repo ids repeat across hosts', () => {
+    const repos: Repo[] = [
+      { ...TEST_REPO, executionHostId: 'ssh:box' },
+      { ...TEST_REPO, executionHostId: 'local' }
+    ]
+    const status = getActiveWorktreeSshStatus(
+      {
+        repos,
+        sshConnectionStates: new Map([['box', connection('disconnected')]]),
+        sshStateByEnvironment: new Map(),
+        worktreesByRepo: {}
+      },
+      makeWorktree({ id: 'wt', repoId: TEST_REPO.id, hostId: 'local' })
+    )
+    expect(status).toBeNull()
+  })
+
+  describe('a workspace owned by a paired server', () => {
+    const worktree = makeWorktree({
+      id: 'wt',
+      repoId: TEST_REPO.id,
+      hostId: 'ssh:box',
+      runtimeOwnerEnvironmentId: 'hub-1'
+    })
+    function pairedStatus(
+      local: SshConnectionState['status'] | null,
+      hub: SshConnectionState['status'] | null
+    ) {
+      const environments = new Map<string, RuntimeEnvironmentSshBucket>()
+      if (hub) {
+        environments.set('hub-1', {
+          connectionStates: new Map([['box', connection(hub)]]),
+          targetLabels: new Map(),
+          targetGenerations: new Map(),
+          removedTargetLabels: new Map(),
+          targetsHydrated: true
+        })
+      }
+      const reachable = new Map<string, RuntimeEnvironmentStatus>([
+        [
+          'hub-1',
+          {
+            status: {
+              runtimeId: 'hub-runtime',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 0,
+              liveLeafCount: 0
+            },
+            checkedAt: 0
+          }
+        ]
+      ])
+      return getActiveWorktreeSshStatus(
+        {
+          repos: [TEST_REPO],
+          sshConnectionStates: new Map(local ? [['box', connection(local)]] : []),
+          sshStateByEnvironment: environments,
+          runtimeStatusByEnvironmentId: reachable,
+          worktreesByRepo: {}
+        },
+        worktree
+      )
+    }
+
+    it("reads the server's SSH state, not this client's map", () => {
+      expect(pairedStatus(null, 'connected')).toBe('connected')
+      expect(pairedStatus('connected', 'disconnected')).toBe('disconnected')
+    })
+
+    it('stays available while the server has not reported its SSH state', () => {
+      expect(pairedStatus(null, null)).toBeNull()
+    })
   })
 
   it('hides Move to Status while the active folder workspace is on a disconnected SSH host', () => {
