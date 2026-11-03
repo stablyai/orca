@@ -21,8 +21,8 @@ import { getRepoName } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
-import { resolveClonedFolderConversion } from '../folder-repo-git-conversion'
-import { findExtraFolderWorkspaceIds } from '../folder-workspace-meta-presence'
+import { resolveClonedFolderConversion } from '../workspaces/catalog/folder-repo-git-conversion'
+import { findExtraFolderWorkspaceIds } from '../workspaces/catalog/folder-workspace-meta-presence'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null

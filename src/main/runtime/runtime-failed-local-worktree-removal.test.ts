@@ -37,7 +37,7 @@ import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import type { RuntimeStore } from './runtime-store-contract'
 
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('../filesystem/host-tree-removal', async (importOriginal) => {

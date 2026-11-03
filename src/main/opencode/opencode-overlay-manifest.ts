@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { safeRemoveOverlay } from '../pty/overlay-mirror'
+import { safeRemoveOverlay } from '../pty/scrollback/overlay-mirror'
 
 export const OPENCODE_OVERLAY_MANIFEST_FILE = '.orca-opencode-overlay-manifest.json'
 export type OpenCodeOverlayManifest = {

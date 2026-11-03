@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WslResult, WslSpec } from '../wsl/wsl-runner'
+import type { WslResult, WslSpec } from '../wsl/execution/wsl-runner'
 import type {
   createCodexAccountStateDb,
   healPendingCodexAccountThreads
@@ -16,8 +16,10 @@ vi.mock('./app-server/codex-app-server-session', () => ({
 }))
 
 // The E9 running check has its own cases; these cover the chain once the distro runs.
-vi.mock('../wsl/wsl-unc-access-gate', () => ({ assertWslUncPathRunning: async () => {} }))
-vi.mock('../wsl/wsl-runner', () => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({
+  assertWslUncPathRunning: async () => {}
+}))
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: runWslProcessMock
 }))
 
@@ -26,7 +28,7 @@ vi.mock('./codex-account-session-bridge', () => ({
 }))
 
 import { _internals, startWslCodexSessionBridgeInBackground } from './wsl-codex-session-bridge'
-import { noteWslDistroMayHaveStopped } from '../wsl-background-distro-gate'
+import { noteWslDistroMayHaveStopped } from '../wsl/discovery/wsl-background-distro-gate'
 
 const MANAGED_HOME =
   '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-accounts\\a1\\home'

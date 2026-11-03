@@ -1,9 +1,19 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 import { basename } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { creatureNameTier } from '../../shared/worktree/retired-name-registry'
 import type * as WorktreeLogic from './worktree-logic'
 import { addWorktreeMock, describeCreatedWorktreeMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers } from './worktrees-test-harness'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -69,7 +79,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
     computeWorkspaceRootAsync: vi.fn(actual.computeWorkspaceRootAsync)
   }
 })
-vi.mock('../terminal-history-deletion', async () =>
+vi.mock('../pty/history/terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
 vi.mock('../ports/advertised-url-watcher', async () =>

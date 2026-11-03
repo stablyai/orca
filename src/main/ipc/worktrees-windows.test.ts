@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 
@@ -60,6 +61,15 @@ const {
   getLocalPtyProviderMock: vi.fn(),
   deleteWorktreeHistoryDirMock: vi.fn()
 }))
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -133,7 +143,7 @@ vi.mock('./pty/provider/state-cleanup', () => ({
 }))
 vi.mock('./pty/provider/registry', () => ({ getLocalPtyProvider: getLocalPtyProviderMock }))
 
-vi.mock('../terminal-history-deletion', () => ({
+vi.mock('../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 

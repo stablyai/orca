@@ -16,7 +16,7 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../shared/worktree/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
-import { commitProvenRepoKindChange } from '../../folder-repo-git-conversion'
+import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -40,6 +40,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'repoIcon'
             | 'upstream'
             | 'hookSettings'
+            | 'editorFormatter'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'
             | 'kind'

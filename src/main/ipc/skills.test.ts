@@ -1,5 +1,6 @@
+import type * as WslPaths from '../../shared/wsl-paths'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WslUncAccessGateModule from '../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGateModule from '../wsl/filesystem/wsl-unc-access-gate'
 
 const {
   registerSkillCloudIpcHandlersMock,
@@ -43,7 +44,7 @@ vi.mock('../skills/skill-discovery-wsl', () => ({
   discoverSkillObservationInWsl: discoverSkillObservationInWslMock
 }))
 
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGateModule>()),
   assertWslUncPathRunning: assertWslUncPathRunningMock
 }))
@@ -52,25 +53,35 @@ vi.mock('./skill-cloud-ipc-handlers', () => ({
   registerSkillCloudIpcHandlers: registerSkillCloudIpcHandlersMock
 }))
 
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getDefaultWslDistro: getDefaultWslDistroMock,
   getWslHome: getWslHomeMock,
-  getWslHomeAsync: async (distro: string) => getWslHomeMock(distro),
-  parseWslPath: parseWslPathMock,
-  toLinuxPath: (pathValue: string) => {
-    if (pathValue === '\\\\wsl.localhost\\Ubuntu\\home\\alice') {
-      return '/home/alice'
+  getWslHomeAsync: async (distro: string) => getWslHomeMock(distro)
+}))
+vi.mock('../wsl/filesystem/unc-path-access', () => ({
+  parseWslPath: parseWslPathMock
+}))
+vi.mock('../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPaths>()),
+  ...(await (() => ({
+    toLinuxPath: (pathValue: string) => {
+      if (pathValue === '\\\\wsl.localhost\\Ubuntu\\home\\alice') {
+        return '/home/alice'
+      }
+      if (pathValue === 'C:\\repo\\worktree') {
+        return '/mnt/c/repo/worktree'
+      }
+      return pathValue
     }
-    if (pathValue === 'C:\\repo\\worktree') {
-      return '/mnt/c/repo/worktree'
-    }
-    return pathValue
-  }
+  }))())
 }))
 
 import { registerSkillsHandlers } from './skills'
 import { clearSkillDiscoveryCaches } from '../skills/skill-discovery-target'
-import { WslDistroStoppedError, WslDistroUnverifiableError } from '../wsl/wsl-unc-access-gate'
+import {
+  WslDistroStoppedError,
+  WslDistroUnverifiableError
+} from '../wsl/filesystem/wsl-unc-access-gate'
 
 describe('registerSkillsHandlers', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')

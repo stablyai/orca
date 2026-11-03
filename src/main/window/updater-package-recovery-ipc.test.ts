@@ -47,7 +47,7 @@ vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
   releasePendingTccPromptNotice: vi.fn()
 }))
 
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   checkForUpdates: vi.fn(),
   checkForUpdatesFromMenu: vi.fn(),
   downloadUpdate: vi.fn(),

@@ -32,6 +32,10 @@ import { RepositoryWorktreeDefaultsSection } from './execution/RepositoryWorktre
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
+import {
+  RepositoryFormatterSection,
+  getRepositoryFormatterSearchEntry
+} from './RepositoryFormatterSection'
 
 type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
@@ -361,6 +365,15 @@ export function RepositoryPane({
       </section>
     ) : null,
     hooksSection,
+    forceFullPaneForRepoMatch ||
+    matchesSettingsSearch(searchQuery, [getRepositoryFormatterSearchEntry()]) ? (
+      <RepositoryFormatterSection
+        key={`formatter-${repo.id}-${selectedHostId}`}
+        repo={repo}
+        updateRepo={updateSelectedRepo}
+        forceVisible={forceFullPaneForRepoMatch}
+      />
+    ) : null,
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection

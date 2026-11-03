@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
@@ -12,7 +13,7 @@ import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-
 import { mockSelectedWslProjectRuntime } from './worktrees-test-fixtures'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import { listDetectedWorktreesForCapturedRepo } from './worktrees/listing/detected-provider-listing'
-import { getLocalWorktreeScanGeneration } from '../local-worktree-scan-generation'
+import { getLocalWorktreeScanGeneration } from '../workspaces/catalog/local-worktree-scan-generation'
 import { agentHookServer } from '../agent-hooks/server'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import {
@@ -23,7 +24,16 @@ import {
 const localWorktreePathPresenceMock = vi.hoisted(() => vi.fn())
 
 // The WSL distros these fixtures route through count as running, so the boot gate lets Git run.
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
+
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async () => 'running'
 }))
@@ -89,7 +99,7 @@ vi.mock('./worktree-logic', async (importOriginal) =>
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../terminal-history-deletion', async () =>
+vi.mock('../pty/history/terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
 vi.mock('../ports/advertised-url-watcher', async () =>
@@ -104,7 +114,7 @@ vi.mock('../workspaces/space-analysis/workspace-space-analysis-snapshot', async 
 vi.mock('../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
-vi.mock('../local-worktree-path-presence', async (importOriginal) => ({
+vi.mock('../workspaces/catalog/local-worktree-path-presence', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   localWorktreePathsExistOrAreUnverifiable: localWorktreePathPresenceMock
 }))

@@ -152,7 +152,10 @@ import {
 } from './dashboard-popout-window'
 import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { hasWslHostsServeOnlyArgument } from '../../shared/wsl-host-internal-gate'
-import { configureWslHostsGate, resetWslHostsGateForTests } from '../wsl/wsl-host-gate'
+import {
+  configureWslHostsGate,
+  resetWslHostsGateForTests
+} from '../wsl/host-lifecycle/wsl-host-gate'
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 

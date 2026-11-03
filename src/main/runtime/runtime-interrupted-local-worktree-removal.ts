@@ -17,7 +17,7 @@ import {
 } from '../git/worktree-removal'
 import { getErrorCode } from '../git/worktree-operation-options'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { findRegisteredDeletableWorktree } from '../workspaces/removal/worktree-removal-safety'
 import {
   assertUnregisteredCheckoutGone,

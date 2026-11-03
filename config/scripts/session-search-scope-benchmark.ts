@@ -2,10 +2,10 @@ import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   createSessionParseStats,
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from '../../src/main/ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../../src/main/ai-vault/session-transcript-consumers'
+  parseAgentSessionFileCached
+} from '../../src/main/ai-vault/parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../../src/main/ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../../src/main/ai-vault/transcripts/session-transcript-consumers'
 import { SessionSearchEngine } from '../../src/main/ai-vault-search/session-search-engine'
 import type {
   SessionSearchRequest,

@@ -7,6 +7,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
+import { SettingsSearchableSelect } from './SettingsSearchableSelect'
 import { useAppStore } from '../../store'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutHintList } from './AppearanceShortcutHintList'
@@ -214,7 +215,8 @@ export function AppearanceInterfaceSection({
           <SettingsRow
             label={iconThemeTitle}
             control={
-              <Select
+              <SettingsSearchableSelect
+                ariaLabel={iconThemeTitle}
                 value={
                   pluginIconThemes.find((theme) => theme.id === settings.pluginIconTheme)?.id ??
                   'built-in'
@@ -225,24 +227,26 @@ export function AppearanceInterfaceSection({
                       pluginIconThemes.find((theme) => theme.id === value)?.id ?? null
                   })
                 }
-              >
-                <SelectTrigger size="sm" className="min-w-[220px]" aria-label={iconThemeTitle}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="built-in">
-                    {translate(
-                      'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
-                      'Built-in'
-                    )}
-                  </SelectItem>
-                  {pluginIconThemes.map((theme) => (
-                    <SelectItem key={theme.id} value={theme.id}>
-                      {theme.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                searchPlaceholder={translate(
+                  'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.search',
+                  'Search icon themes…'
+                )}
+                groups={[
+                  {
+                    key: 'icon-themes',
+                    options: [
+                      {
+                        value: 'built-in',
+                        label: translate(
+                          'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
+                          'Built-in'
+                        )
+                      },
+                      ...pluginIconThemes.map((theme) => ({ value: theme.id, label: theme.label }))
+                    ]
+                  }
+                ]}
+              />
             }
           />
         </SearchableSetting>

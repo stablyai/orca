@@ -10,7 +10,7 @@ import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from './startup/wo
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { notifyLineageRepos } from '../../worktree-lineage-change-notification'
+import { notifyLineageRepos } from '../../workspaces/catalog/worktree-lineage-change-notification'
 import { resolveWorktreeCreateRoute } from '../../workspaces/creation/worktree-create-execution-host-route'
 import { ExecutionHostNotDispatchableError } from '../../providers/execution-host-provider-dispatch'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'

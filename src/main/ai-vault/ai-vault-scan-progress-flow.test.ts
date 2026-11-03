@@ -10,34 +10,40 @@ import {
   resetLocalAiVaultScanProgressForTests,
   startLocalAiVaultScanProgress
 } from './ai-vault-local-scan-progress'
-import * as parseCache from './session-scanner-parse-cache'
+import * as parseCache from './parse-cache/session-scanner-parse-cache'
 import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
 import { AiVaultScanTally } from './ai-vault-scan-tally'
 import { aiVaultScanWork, trackAiVaultScanProgress } from './ai-vault-scan-progress'
-import { writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
+import { writeOpenCodeSqliteDatabase } from './scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import { scanAiVaultSessions } from './session-scanner'
-import { resetSessionParseCacheForTests } from './session-scanner-parse-cache'
-import { AiVaultScannerServiceClient } from './session-scanner-service-client'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
+import { AiVaultScannerServiceClient } from './scan-service/session-scanner-service-client'
 import {
   AiVaultServiceTestChild,
   aiVaultServiceRequestId,
   readyAiVaultServiceChild
-} from './session-scanner-service-test-child'
+} from './scan-service/session-scanner-service-test-child'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
 // Source fixtures exercise the real SQLite readers without a packaged worker bundle.
-vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
-  const { listOpenCodeSqliteSessions } = await import('./session-scanner-opencode-sqlite-list')
-  const { listOpenCode2SqliteSessions } = await import('./session-scanner-opencode2-sqlite-list')
-  const { parseOpenCodeSqliteSession } = await import('./session-scanner-opencode-sqlite')
-  return {
-    listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
-    listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
-    listZcodeSqliteSessionsViaWorker: (args: Parameters<typeof listOpenCodeSqliteSessions>[0]) =>
-      listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
-    parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
+vi.mock(
+  './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async () => {
+    const { listOpenCodeSqliteSessions } =
+      await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite-list')
+    const { listOpenCode2SqliteSessions } =
+      await import('./scanners/opencode2/session-scanner-opencode2-sqlite-list')
+    const { parseOpenCodeSqliteSession } =
+      await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite')
+    return {
+      listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
+      listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
+      listZcodeSqliteSessionsViaWorker: (args: Parameters<typeof listOpenCodeSqliteSessions>[0]) =>
+        listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
+      parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
+    }
   }
-})
+)
 
 let tempRoot: string | null = null
 

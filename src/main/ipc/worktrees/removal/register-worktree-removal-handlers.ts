@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
+import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { withWorktreeSpan } from '../../../observability/instrumentation'

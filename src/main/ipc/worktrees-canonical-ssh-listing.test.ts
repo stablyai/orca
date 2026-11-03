@@ -23,12 +23,14 @@ vi.mock('../git/runner', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   gitExecFileAsync: mocks.git
 }))
-vi.mock('../project-runtime-git-options', () => ({ getLocalProjectWorktreeGitOptions: () => ({}) }))
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: () => ({})
+}))
 vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: mocks.rootsRevision,
   registerWorktreeRootsForRepo: mocks.roots
 }))
-vi.mock('../worktree-lineage-pruning', () => ({
+vi.mock('../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: mocks.pruneLineage
 }))
 vi.mock('./worktrees/listing/authoritative-local-worktree-metadata-pruning', () => ({

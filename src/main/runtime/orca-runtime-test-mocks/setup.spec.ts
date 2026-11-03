@@ -1,8 +1,9 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
 import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
-import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
@@ -15,6 +16,14 @@ import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 type TestMock = Mock
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
 vi.mock('../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({
     reconcile: reconcileClaudeAgentViewMock,
@@ -301,7 +310,7 @@ vi.mock('../repo-worktree-resolution-scan', () => ({
 }))
 
 // Fake-win32 runtime tests have no wsl.exe: treat every distro as running unless a test says otherwise.
-vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => {
   const actual = await importOriginal<typeof WslUncAccessGateModule>()
   const blockedWslDistroForPath = vi.fn<typeof actual.blockedWslDistroForPath>(async () => null)
   return {
@@ -327,7 +336,7 @@ vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
   }
 })
 
-vi.mock('../../terminal-history-deletion', () => ({
+vi.mock('../../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 

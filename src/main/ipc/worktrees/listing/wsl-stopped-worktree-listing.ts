@@ -9,12 +9,15 @@ import { areWorktreePathsEqual } from '../../../git/worktree-path-comparison'
 import {
   deferUntilWslDistroRunning,
   onWslDistroGateNote
-} from '../../../wsl-background-distro-gate'
-import { WslDistroStoppedError, WslDistroUnverifiableError } from '../../../wsl/wsl-unc-access-gate'
+} from '../../../wsl/discovery/wsl-background-distro-gate'
+import {
+  WslDistroStoppedError,
+  WslDistroUnverifiableError
+} from '../../../wsl/filesystem/wsl-unc-access-gate'
 import {
   holdWslStoppedWorktreeRescan,
   releaseWslStoppedWorktreeRescan
-} from '../../../wsl-stopped-worktree-rescan-registry'
+} from '../../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
 import { mergeWorktree } from '../../worktree-metadata-merge'
 import { buildDisconnectedDetectedWorktrees } from './folder-workspace-catalog'
 import {

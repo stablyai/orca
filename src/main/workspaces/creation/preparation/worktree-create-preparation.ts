@@ -1,7 +1,7 @@
 import { worktreePreparationGit } from '../../../git/worktree-create-git-executor'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import type { ProjectRuntimeResolutionStore } from '../../../local-project-runtime-resolution'
+import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
@@ -36,7 +36,7 @@ import {
 import {
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
-} from '../../../project-runtime-git-options'
+} from '../../execution-host/project-runtime-git-options'
 import { computeWorkspaceRootAsync, getWorktreePathSettings } from '../../../ipc/worktree-logic'
 import {
   recordPreparationConsume,

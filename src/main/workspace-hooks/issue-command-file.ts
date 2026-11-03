@@ -8,7 +8,7 @@ import {
   guardWslUncPathAccess,
   WslDistroStoppedError,
   WslDistroUnverifiableError
-} from '../wsl/wsl-unc-access-gate'
+} from '../wsl/filesystem/wsl-unc-access-gate'
 
 type IssueCommandGitOptions = GitRuntimeOptions | (() => GitRuntimeOptions)
 
