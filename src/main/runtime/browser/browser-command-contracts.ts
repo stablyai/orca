@@ -12,6 +12,7 @@ import type { BrowserTabBarEntry } from './browser-tab-listing'
 export type BrowserCommandTargetParams = {
   worktree?: string
   page?: string
+  expectUrl?: string
 }
 
 export type ResolvedBrowserCommandTarget = {

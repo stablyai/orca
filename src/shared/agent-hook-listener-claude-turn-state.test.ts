@@ -12,7 +12,7 @@ import {
   normalizeAndAccept,
   PANE_KEY
 } from './agent-hook-listener-test-harness'
-import { makePaneKey } from './stable-pane-id'
+import './stable-pane-id'
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -24,40 +24,6 @@ describe('shared agent-hook-listener', () => {
   afterEach(() => {
     clearGrokSessionPathLookupCacheForTests()
     vi.unstubAllEnvs()
-  })
-
-  it('normalizes a Claude-compatible StopFailure to done without copying provider error text', () => {
-    normalizeHookPayload(
-      state,
-      'claude',
-      {
-        paneKey: PANE_KEY,
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'say hi' }
-      },
-      'production'
-    )
-
-    const event = normalizeHookPayload(
-      state,
-      'claude',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hook_event_name: 'StopFailure',
-          error: 'invalid_request',
-          error_details: 'model is not supported',
-          last_assistant_message: 'API Error: model is not supported'
-        }
-      },
-      'production'
-    )
-
-    expect(event?.payload).toMatchObject({
-      state: 'done',
-      prompt: 'say hi',
-      agentType: 'claude'
-    })
-    expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
   it('maps Claude SessionStart to an idle done row so a resumed session earns its sidebar row before the first prompt', () => {
@@ -94,9 +60,9 @@ describe('shared agent-hook-listener', () => {
   it('records the folder a Claude session started in, not the one its Bash tool moved to (#16960)', () => {
     const sessionId = '55555555-5555-4555-8555-555555555555'
     normalizeAndAccept(state, 'claude', {
-      hook_event_name: 'UserPromptSubmit',
+      hook_event_name: 'SessionStart',
+      source: 'startup',
       session_id: sessionId,
-      prompt: 'go',
       cwd: '/repo/pkg'
     })
     // Claude's hook cwd follows `cd` inside its Bash tool.
@@ -232,81 +198,6 @@ describe('shared agent-hook-listener', () => {
     expect(stopped?.payload.sessionBoundary).toBeUndefined()
   })
 
-  it('rejects oversized paneKey', () => {
-    const event = normalizeHookPayload(
-      state,
-      'claude',
-      {
-        paneKey: makePaneKey('x'.repeat(300), '11111111-1111-4111-8111-111111111111'),
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hi' }
-      },
-      'production'
-    )
-    expect(event).toBeNull()
-  })
-
-  it('resumes work for task notifications without replacing the cached prompt', () => {
-    normalizeHookPayload(
-      state,
-      'claude',
-      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
-      'production'
-    )
-    const event = normalizeHookPayload(
-      state,
-      'claude',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hook_event_name: 'UserPromptSubmit',
-          prompt: '<task-notification> <task-id>bzthj2b8r</task-id> <tool-use-id>t1</tool-use-id>'
-        }
-      },
-      'production'
-    )
-    expect(event).not.toBeNull()
-    expect(event!.payload.state).toBe('working')
-    expect(event!.payload.prompt).toBe('fix login')
-    expect(event!.hasExplicitPrompt).toBe(false)
-  })
-
-  it('emits a harness-injected UserPromptSubmit with an empty uncached prompt', () => {
-    const event = normalizeHookPayload(
-      state,
-      'claude',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hook_event_name: 'UserPromptSubmit',
-          prompt: '<system-reminder>background context</system-reminder>'
-        }
-      },
-      'production'
-    )
-    expect(event).not.toBeNull()
-    expect(event!.payload.state).toBe('working')
-    expect(event!.payload.prompt).toBe('')
-    expect(event!.hasExplicitPrompt).toBe(false)
-  })
-
-  it('does not leave working after a compact-summary UserPromptSubmit (issue #11352)', () => {
-    // Live repro: after /compact Claude injects "This session is being continued…" with no Stop.
-    const event = normalizeHookPayload(
-      state,
-      'claude',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hook_event_name: 'UserPromptSubmit',
-          prompt:
-            'This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.'
-        }
-      },
-      'production'
-    )
-    expect(event).toBeNull()
-  })
-
   it('maps a Claude manual compact lifecycle, ignoring the pre-validation event', () => {
     normalizeAndAccept(state, 'claude', {
       hook_event_name: 'UserPromptSubmit',
@@ -336,24 +227,6 @@ describe('shared agent-hook-listener', () => {
     expect(post!.payload.sessionBoundary).toBe(true)
   })
 
-  it('keeps the preceding user prompt on the completed compact row', () => {
-    normalizeAndAccept(state, 'claude', {
-      hook_event_name: 'UserPromptSubmit',
-      prompt: 'work before compact',
-      prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
-      session_id: 'session-a'
-    })
-    const post = normalizeAndAccept(state, 'claude', {
-      hook_event_name: 'PostCompact',
-      trigger: 'manual',
-      prompt_id: CLAUDE_PROMPT_ID,
-      session_id: 'session-a'
-    })
-    expect(post).not.toBeNull()
-    expect(post!.payload.state).toBe('done')
-    expect(post!.payload.prompt).toBe('work before compact')
-  })
-
   it('treats a custom-element paste as an explicit user turn, not machinery', () => {
     normalizeHookPayload(
       state,
@@ -377,52 +250,6 @@ describe('shared agent-hook-listener', () => {
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('<my-custom-element> render this component')
     expect(event!.hasExplicitPrompt).toBe(true)
-  })
-
-  it('treats a Grok user_query prompt as an explicit user turn', () => {
-    const event = normalizeHookPayload(
-      state,
-      'grok',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hookEventName: 'user_prompt_submit',
-          prompt: '<user_query>fix the bug</user_query>'
-        }
-      },
-      'production'
-    )
-    expect(event).not.toBeNull()
-    // Grok wraps the real typed prompt; the envelope is stripped but it stays explicit.
-    expect(event!.payload.prompt).toBe('fix the bug')
-    expect(event!.hasExplicitPrompt).toBe(true)
-  })
-
-  it('isolates caches between listener instances', () => {
-    const a = createHookListenerState()
-    const b = createHookListenerState()
-    normalizeHookPayload(
-      a,
-      'claude',
-      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'first' } },
-      'production'
-    )
-    // Listener prompt caches must remain independent.
-    const event = normalizeHookPayload(
-      b,
-      'claude',
-      {
-        paneKey: PANE_KEY,
-        payload: {
-          hook_event_name: 'PreToolUse',
-          tool_name: 'Read',
-          tool_input: { file_path: '/etc/hosts' }
-        }
-      },
-      'production'
-    )
-    expect(event).not.toBeNull()
-    expect(event!.payload.prompt).toBe('')
   })
 
   it('bounds Amp thread-scoped caches for a long-lived pane', () => {

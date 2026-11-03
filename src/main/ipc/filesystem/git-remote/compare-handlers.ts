@@ -4,14 +4,14 @@ import type {
   GitCommitCompareResult
 } from '../../../../shared/git-diff-compare-types'
 import { getBranchCompare, getCommitCompare } from '../../../git/status'
-import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
 import { validateFullGitObjectId } from '../filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
-import { assertWslUncPathRunning } from '../../../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerGitRemoteCompareHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

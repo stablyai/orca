@@ -52,3 +52,12 @@ test('draws the content tab without warnings', async () => {
   assert.deepEqual(panel.warnings, [])
   assert.deepEqual(panel.errors, [])
 })
+
+test('lays out the layout tab with Box', async () => {
+  panel = await mount(gallery, { persisted: { plugin: { 'gallery.tab': 'layout' } } })
+  const card = panel.find({ type: 'Box', text: /^billing/ })
+  assert.equal(card?.props.background, 'danger')
+  assert.ok(panel.find({ role: 'heading', text: 'Services' }))
+  assert.deepEqual(panel.warnings, [])
+  assert.deepEqual(panel.errors, [])
+})

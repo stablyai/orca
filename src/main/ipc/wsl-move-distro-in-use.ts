@@ -7,7 +7,7 @@ import {
   isLocalWslMoveRow,
   wslMoveHostDistro
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
+import { defaultWslOrcadEnvironmentId } from '../wsl/orcad/wsl-orcad-deploy'
 
 /**
  * A bridge project of the distro (local, on its UNC path, not moved) or its WSL host record. A

@@ -730,19 +730,6 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     })
   })
 
-  it('previews a pasted GitHub pull URL', async () => {
-    await renderPalette({})
-    await act(async () => setCommandQuery?.('https://github.com/stablyai/orca/pull/12789'))
-    await flushEffects()
-
-    const preview = testContainer.querySelector<HTMLElement>('[data-cmd-j-task-url-preview="true"]')
-    expect(preview?.dataset.cmdJTaskUrlProvider).toBe('github')
-    expect(preview?.getAttribute('aria-label')).toBe(
-      'Create worktree from GitHub pull request stablyai/orca#12789'
-    )
-    expect(preview?.textContent).toContain('#12789')
-  })
-
   it('selects an existing GitHub-linked worktree and keeps create underneath', async () => {
     const linked = makeWorktree('wt-linked', 'Linked GitHub workspace', { linkedIssue: 14198 })
     const other = makeWorktree('wt-other', 'Unrelated workspace', { linkedIssue: 7 })

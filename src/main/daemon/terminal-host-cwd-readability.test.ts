@@ -14,7 +14,9 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   stat: statMock
 }))
 
-vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
+  killWithDescendantSweep: vi.fn()
+}))
 
 const close = vi.fn(async () => {})
 const spawnSubprocess = vi.fn(() => createMockSubprocess())

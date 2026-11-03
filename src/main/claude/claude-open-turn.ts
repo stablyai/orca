@@ -80,6 +80,10 @@ export class ClaudeOpenTurn {
     return this.current?.startedAt ?? null
   }
 
+  get userItemId(): string | null {
+    return this.current?.userItemId ?? null
+  }
+
   get isOpen(): boolean {
     return this.current !== null
   }

@@ -6,16 +6,16 @@ import {
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
 } from './session-scanner-background'
-import { getCachedWslDistros, hasCachedWslDistros } from '../wsl'
+import { getCachedWslDistros, hasCachedWslDistros } from '../wsl/discovery/distro-catalog'
 import {
   listLastKnownRunningWslHomeDirs,
   readRunningWslHomeDirsUnlessStopped
-} from '../wsl/wsl-home-unless-stopped'
+} from '../wsl/discovery/wsl-home-unless-stopped'
 import {
   carryOverUnconfirmedWslSessions,
   resetAiVaultWslSessionCarryover
 } from './ai-vault-wsl-session-carryover'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl/filesystem/wsl-running-path-filter'
 import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,

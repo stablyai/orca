@@ -19,8 +19,8 @@ import { beginWatcherInstall } from '../../ipc/watcher-removal-gate'
 import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
 import { resolveFloatingWorkspacePath } from '../../persistence/restoring-sessions/floating-workspace-normalization'
 import { getAppEnvironment } from '../../../shared/app-environment'
-import { resolveLocalProjectRuntimeForRepo } from '../../local-project-runtime-resolution'
-import { localWorktreePathPresence } from '../../local-worktree-path-presence'
+import { resolveLocalProjectRuntimeForRepo } from '../../workspaces/execution-host/local-project-runtime-resolution'
+import { localWorktreePathPresence } from '../../workspaces/catalog/local-worktree-path-presence'
 import {
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost

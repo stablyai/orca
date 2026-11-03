@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktree-listing'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,6 +17,20 @@ const mocks = vi.hoisted(() => ({
   generateCommitMessageFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn()
 }))
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: mocks.listWorktrees
+  }
+})
+
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: mocks.listWorktrees
+  }
+})
 
 vi.mock('../git/worktree', async () => ({
   ...(await vi.importActual<typeof WorktreeModule>('../git/worktree')),

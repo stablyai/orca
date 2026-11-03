@@ -32,7 +32,11 @@ vi.mock('../settings/agent-launch-settings-transport', () => ({
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (select: (state: unknown) => unknown) =>
-      select({ settings: { agentDefaultArgs: { codex: '--desktop-only' } } }),
+      // The setup panel's prompt composer reads its pane's agent status.
+      select({
+        settings: { agentDefaultArgs: { codex: '--desktop-only' } },
+        agentStatusByPaneKey: {}
+      }),
     { getState: () => ({}) }
   )
 }))
@@ -644,7 +648,7 @@ it('updates a mounted setup from current host rows without making ordinary actio
     expect(document.querySelector('textarea')).toHaveProperty('disabled', true)
     expect(
       [...document.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Launch terminal'
+        (button) => button.getAttribute('aria-label') === 'Launch terminal'
       )
     ).toHaveProperty('disabled', false)
   }

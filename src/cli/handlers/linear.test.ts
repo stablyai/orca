@@ -77,6 +77,23 @@ describe('orca linear CLI handlers', () => {
     )
   })
 
+  it.each([
+    { flags: [], depth: 0, children: false },
+    { flags: ['--children'], depth: 2, children: true },
+    { flags: ['--children', '--depth', '0'], depth: 0, children: true }
+  ])('routes child depth from CLI flags: $flags', async ({ flags, depth, children }) => {
+    queueFixtures(callMock, okFixture('req_linear', issueResult()))
+    await main(['linear', 'issue', 'ENG-123', ...flags, '--json'], '/tmp/repo')
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueContext',
+      expect.objectContaining({ depth, include: expect.objectContaining({ children }) }),
+      { timeoutMs: undefined }
+    )
+    expect(JSON.parse(String(vi.mocked(console.log).mock.calls[0][0])).result).toEqual(
+      issueResult()
+    )
+  })
+
   it('maps MCP-compatible list-issues filters and cursor pagination', async () => {
     queueFixtures(callMock, okFixture('req_list', issueResult()))
 

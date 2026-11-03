@@ -11,7 +11,7 @@ import {
 } from '../../shared/pi-agent-kind'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { wslHookRelayManager, type WslHookRelayManager } from './wsl-hook-relay-manager'
-import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
+import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
 
 export async function awaitExplicitAgentPluginGuestReadiness(args: {
   isWsl: boolean

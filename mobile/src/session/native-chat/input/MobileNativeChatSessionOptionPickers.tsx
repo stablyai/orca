@@ -28,7 +28,7 @@ import {
   nativeChatOptionValuesLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 import {

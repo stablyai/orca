@@ -2,7 +2,7 @@ import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-inst
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
-import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
+import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/shell-startup/codex-home-wsl-env'
 import { resolveOmpSessionsDir } from './omp-session-root'
 
 /** Where each transcript agent's session tree sits under a home dir (host or WSL guest). */

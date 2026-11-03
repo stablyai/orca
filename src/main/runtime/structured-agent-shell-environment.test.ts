@@ -8,9 +8,9 @@ import type * as runProcessModule from '@orca/process-host'
 import {
   __resetPersistedWindowsPathCacheForTests,
   readPersistedWindowsPathSegmentsAsync
-} from '../pty/windows-environment-path'
+} from '../pty/environment/windows-environment-path'
 import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
-import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
+import { __setWindowsPathRegistryLoaderForTests } from '../pty/environment/windows-path-registry-reader'
 import {
   createStructuredAgentEnvironmentResolvers,
   structuredAgentBaseEnvironment

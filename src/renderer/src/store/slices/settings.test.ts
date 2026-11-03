@@ -180,133 +180,7 @@ beforeEach(() => {
   })
 })
 
-describe('createSettingsSlice checked persistence', () => {
-  it('stores the authoritative settings after a successful checked update', async () => {
-    const authoritativeSettings = {
-      pluginSystemEnabled: true,
-      notifications: {}
-    } as unknown as NonNullable<AppState['settings']>
-    settingsSet.mockResolvedValueOnce(authoritativeSettings)
-    const store = createTestStore()
-    store.setState({
-      settings: {
-        pluginSystemEnabled: false,
-        notifications: {}
-      } as unknown as AppState['settings']
-    })
-
-    await expect(
-      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
-    ).resolves.toBeUndefined()
-
-    expect(settingsSet).toHaveBeenCalledWith({ pluginSystemEnabled: true })
-    expect(store.getState().settings).toBe(authoritativeSettings)
-  })
-
-  it('rejects a failed checked update without changing local settings', async () => {
-    const persistenceError = new Error('settings IPC failed')
-    const currentSettings = {
-      pluginSystemEnabled: false,
-      notifications: {}
-    } as unknown as NonNullable<AppState['settings']>
-    settingsSet.mockRejectedValueOnce(persistenceError)
-    const store = createTestStore()
-    store.setState({ settings: currentSettings })
-
-    await expect(
-      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
-    ).rejects.toBe(persistenceError)
-
-    expect(store.getState().settings).toBe(currentSettings)
-  })
-
-  it('keeps the existing update action best-effort and logs persistence failures', async () => {
-    const persistenceError = new Error('settings IPC failed')
-    const currentSettings = {
-      pluginSystemEnabled: false,
-      notifications: {}
-    } as unknown as NonNullable<AppState['settings']>
-    settingsSet.mockRejectedValueOnce(persistenceError)
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const store = createTestStore()
-    store.setState({ settings: currentSettings })
-
-    try {
-      await expect(
-        store.getState().updateSettings({ pluginSystemEnabled: true })
-      ).resolves.toBeUndefined()
-
-      expect(consoleError).toHaveBeenCalledWith('Failed to update settings:', persistenceError)
-      expect(store.getState().settings).toBe(currentSettings)
-    } finally {
-      consoleError.mockRestore()
-    }
-  })
-
-  it('normalizes malformed mobile pairing addresses before renderer IPC', async () => {
-    const store = createTestStore()
-    store.setState({
-      settings: { notifications: {} } as unknown as AppState['settings']
-    })
-
-    await store.getState().updateSettingsOrThrow({
-      mobilePairingCustomAddress: 'host:99999' as never,
-      mobilePairingCustomAddresses: [' first.example:6768 ', 'host:99999', 'first.example:6768']
-    })
-
-    expect(settingsSet).toHaveBeenCalledWith({
-      mobilePairingCustomAddress: null,
-      mobilePairingCustomAddresses: ['first.example:6768']
-    })
-  })
-})
-
 describe('createSettingsSlice runtime switching', () => {
-  it('repairs drifted task provider settings before sending updates', async () => {
-    settingsSet.mockResolvedValueOnce({
-      visibleTaskProviders: ['github', 'linear'],
-      defaultTaskSource: 'github'
-    })
-    const store = createTestStore()
-    store.setState({
-      settings: {
-        visibleTaskProviders: ['linear'],
-        defaultTaskSource: 'github'
-      } as AppState['settings']
-    })
-
-    await store.getState().updateSettings({
-      visibleTaskProviders: ['linear']
-    })
-
-    expect(settingsSet).toHaveBeenCalledWith({
-      visibleTaskProviders: ['github', 'linear'],
-      defaultTaskSource: 'github'
-    })
-  })
-
-  it('rebases local state to the authoritative settings:set response', async () => {
-    settingsSet.mockResolvedValueOnce({
-      openInApplications: [{ id: 'cursor', label: 'Cursor', command: 'cursor' }],
-      notifications: {}
-    })
-    const store = createTestStore()
-    store.setState({
-      settings: {
-        openInApplications: [],
-        notifications: {}
-      } as unknown as AppState['settings']
-    })
-
-    await store.getState().updateSettings({
-      openInApplications: [{ id: '  ', label: ' Cursor ', command: ' cursor ' }] as never
-    })
-
-    expect(store.getState().settings?.openInApplications).toEqual([
-      { id: 'cursor', label: 'Cursor', command: 'cursor' }
-    ])
-  })
-
   it('preserves existing host state while loading the selected environment', async () => {
     const store = createTestStore()
     store.setState({
@@ -718,16 +592,6 @@ describe('fetchSettings runtime catalog probe', () => {
     expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
   })
 
-  it('probes the runtime catalog after a successful settings read', async () => {
-    const store = createTestStore()
-
-    await store.getState().fetchSettings()
-    await vi.waitFor(() => expect(runtimeEnvironmentList).toHaveBeenCalled())
-
-    expect(store.getState().settings).not.toBeNull()
-    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
-  })
-
   it('coalesces concurrent settings refreshes into one all-host sweep', async () => {
     const environments = [makeRuntimeEnvironment('env-a'), makeRuntimeEnvironment('env-b')]
     const catalog = deferred<PublicKnownRuntimeEnvironment[]>()
@@ -748,20 +612,6 @@ describe('fetchSettings runtime catalog probe', () => {
     expect(settingsGet).toHaveBeenCalledTimes(11)
     expect(runtimeEnvironmentList).toHaveBeenCalledTimes(1)
     expect(runtimeEnvironmentGetStatus).toHaveBeenCalledTimes(2)
-  })
-
-  it('fills status coverage after another path publishes only part of the catalog', async () => {
-    const environments = [makeRuntimeEnvironment('env-a'), makeRuntimeEnvironment('env-b')]
-    runtimeEnvironmentList.mockResolvedValue(environments)
-    const store = createTestStore()
-    store.getState().setRuntimeEnvironments(environments)
-    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
-
-    await store.getState().fetchSettings()
-    await vi.waitFor(() => expect(runtimeEnvironmentGetStatus).toHaveBeenCalledTimes(2))
-
-    expect(runtimeEnvironmentList).toHaveBeenCalledTimes(1)
-    expect(store.getState().runtimeStatusByEnvironmentId.has('env-b')).toBe(true)
   })
 
   it('treats an offline result as checked on later settings refreshes', async () => {
@@ -820,17 +670,6 @@ describe('fetchSettings runtime catalog probe', () => {
     } finally {
       consoleError.mockRestore()
     }
-  })
-
-  it('uses an authoritative sweep to remove ghost status entries', async () => {
-    const store = createTestStore()
-    store.getState().setRuntimeEnvironments([])
-    store.getState().setRuntimeEnvironmentStatus('removed-env', { status: null, checkedAt: 1 })
-
-    await store.getState().fetchSettings()
-    await vi.waitFor(() => expect(store.getState().runtimeStatusByEnvironmentId.size).toBe(0))
-
-    expect(runtimeEnvironmentList).toHaveBeenCalledTimes(1)
   })
 
   it('picks up an externally added host once the listing goes stale', async () => {

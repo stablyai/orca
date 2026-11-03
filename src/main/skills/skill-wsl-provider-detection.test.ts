@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { SKILL_INSTALL_PROVIDERS } from '../../shared/skill-install-providers'
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'

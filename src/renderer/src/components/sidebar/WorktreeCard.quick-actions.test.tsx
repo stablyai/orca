@@ -402,7 +402,8 @@ describe('WorktreeCard quick actions', () => {
         worktree={makeWorktree({
           displayName: 'main',
           branch: 'main',
-          isMainWorktree: true
+          isMainWorktree: true,
+          isSparse: true
         })}
         repo={makeRepo()}
         isActive={false}
@@ -411,7 +412,9 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('primary')
+    expect(markup).toContain('>sparse<')
     expect(markup).not.toContain('aria-label="Primary worktree"')
+    expect(markup).not.toContain('aria-label="Sparse checkout"')
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
@@ -435,6 +438,50 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('aria-label="Primary worktree"')
     expect(markup).not.toContain('>primary<')
     expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  })
+
+  it.each([
+    [true, true],
+    [true, false],
+    [false, true],
+    [false, false]
+  ])('shows applicable new-style identity icons (primary: %s, sparse: %s)', (primary, sparse) => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          isMainWorktree: primary,
+          isSparse: sparse,
+          sparseDirectories: ['src/renderer']
+        })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup.includes('aria-label="Primary worktree"')).toBe(primary)
+    expect(markup.includes('aria-label="Sparse checkout"')).toBe(sparse)
+    expect(markup.includes('lucide-house')).toBe(primary)
+    expect(markup.includes('lucide-folder-minus')).toBe(sparse)
+    expect(markup).not.toContain('>primary<')
+    expect(markup).not.toContain('>sparse<')
+    if (sparse) {
+      expect(markup).toContain('src/renderer')
+    }
+  })
+
+  it('does not show the primary icon for a folder workspace', () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ isMainWorktree: true })}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('aria-label="Primary worktree"')
   })
 
   it('hides delete by default for an inactive workspace', () => {

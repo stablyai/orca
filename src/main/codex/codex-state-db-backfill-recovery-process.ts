@@ -11,7 +11,7 @@ import {
 import type { CodexAppServerSpawn } from './app-server/codex-app-server-process-tree-kill'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
 import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { resolveWslInteropSpawnCwd } from '../wsl/execution/wsl-interop-spawn-directory'
 
 const BACKFILL_RECOVERY_KILL_SITE = 'codex-state-db-backfill-recovery'
 // Keep owner-death and explicit shutdown on the same stdin-drain policy.

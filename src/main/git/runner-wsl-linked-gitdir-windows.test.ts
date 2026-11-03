@@ -2,13 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  gitExecFileAsync,
-  gitExecFileAsyncBuffer,
-  gitStreamStdout,
-  toLinuxPath,
-  toWindowsWslPath
-} from './runner'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitStreamStdout } from './runner'
+import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { listWorktrees } from './worktree'
 import { resetWslLinkedWorktreeGitRoutingForTests } from './wsl-linked-worktree-git-routing'
 

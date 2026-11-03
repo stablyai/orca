@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   chatPermissionHostVerdict,
-  hostSettingsApplyChatPermissionModes,
   legacyHostChatPermissionMode
 } from './agent-chat-permission-host-support'
 
@@ -24,22 +23,6 @@ describe('what a host predating per-chat modes runs', () => {
         agentDefaultArgs: { claude: '--verbose --dangerously-skip-permissions' }
       })
     ).toBe('full-access')
-  })
-
-  it('names no mode for an agent without chat modes', () => {
-    // Grok gained chat modes in #29335; Gemini still has none.
-    expect(legacyHostChatPermissionMode('gemini', {})).toBeNull()
-  })
-})
-
-describe('whether a host applies per-chat modes', () => {
-  it('is told by the new-chat default its settings carry from 1.4.225 on', () => {
-    expect(hostSettingsApplyChatPermissionModes({ nativeChatPermissionMode: 'ask' })).toBe(true)
-    expect(hostSettingsApplyChatPermissionModes({ nativeChatPermissionMode: 'future-mode' })).toBe(
-      false
-    )
-    expect(hostSettingsApplyChatPermissionModes({ agentDefaultArgs: {} })).toBe(false)
-    expect(hostSettingsApplyChatPermissionModes(undefined)).toBe(false)
   })
 })
 

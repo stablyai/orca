@@ -11,7 +11,7 @@ import {
   listWorktrees
 } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
-import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { getLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 describe('OrcaRuntimeService', () => {
   it('creates a same-repo PR branch override from a resolved head SHA and matching push target', async () => {
