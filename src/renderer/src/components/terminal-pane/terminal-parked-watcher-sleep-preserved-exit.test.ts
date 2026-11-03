@@ -49,6 +49,7 @@ type MockStoreState = {
   updateTabTitle: ReturnType<typeof vi.fn>
   isPtyShutdownPending: ReturnType<typeof vi.fn>
   suppressedPtyExitIds: Record<string, true>
+  unifiedTabsByWorktree: Record<string, { entityId: string }[]>
 }
 let mockStoreState: MockStoreState
 vi.mock('@/store', () => ({
@@ -98,7 +99,8 @@ describe('sleep-preserved parked exits (sole-owner sidecar)', () => {
       setTabLayout: vi.fn(),
       updateTabTitle: vi.fn(),
       isPtyShutdownPending: vi.fn(() => false),
-      suppressedPtyExitIds: {}
+      suppressedPtyExitIds: {},
+      unifiedTabsByWorktree: {}
     }
   })
 

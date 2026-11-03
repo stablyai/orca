@@ -4,6 +4,7 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
+import { LastTabAutoDeleteSettings } from './LastTabAutoDeleteSettings'
 import { translate } from '@/i18n/i18n'
 import { GlobalWorktreeVisibilitySourcesSetting } from './GlobalWorktreeVisibilitySourcesSetting'
 import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
@@ -132,6 +133,8 @@ export function GeneralWorkspaceSettingsSection({
           />
         </SearchableSetting>
       </div>
+
+      <LastTabAutoDeleteSettings settings={settings} updateSettings={updateSettings} />
 
       <div id="general-skip-delete-automation-confirm" className="scroll-mt-6">
         <SearchableSetting
