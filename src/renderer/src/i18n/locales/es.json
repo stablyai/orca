@@ -13141,7 +13141,8 @@
             "revealInFinder": "Revelar en Finder",
             "openContainingFolder": "Abrir carpeta contenedora",
             "revealInFileExplorer": "Revelar en el Explorador de archivos",
-            "clipboardStagingUnavailable": "No se pudo copiar el archivo porque el almacenamiento temporal de Orca no está disponible"
+            "clipboardStagingUnavailable": "No se pudo copiar el archivo porque el almacenamiento temporal de Orca no está disponible",
+            "compareSelectedFiles": "Compare Selected Files"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados por Git",

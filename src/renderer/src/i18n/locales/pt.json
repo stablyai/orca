@@ -10588,7 +10588,8 @@
             "clipboardStagingUnavailable": "Não foi possível copiar o arquivo porque o armazenamento temporário do Orca não está disponível",
             "revealInFinder": "Mostrar no Finder",
             "openContainingFolder": "Abrir Pasta Contendo o Arquivo",
-            "revealInFileExplorer": "Mostrar no Explorador de Arquivos"
+            "revealInFileExplorer": "Mostrar no Explorador de Arquivos",
+            "compareSelectedFiles": "Compare Selected Files"
           },
           "AiVaultPanel": {
             "resumeCommandCopied": "Comando para retomar copiado",

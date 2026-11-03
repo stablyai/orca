@@ -13828,7 +13828,8 @@
             "clipboardStagingUnavailable": "Не удалось скопировать файл: временное хранилище Orca недоступно",
             "revealInFinder": "Показать в Finder",
             "openContainingFolder": "Открыть содержащую папку",
-            "revealInFileExplorer": "Показать в проводнике"
+            "revealInFileExplorer": "Показать в проводнике",
+            "compareSelectedFiles": "Compare Selected Files"
           },
           "FileExplorerToolbar": {
             "d238264654": "Показывать файлы, игнорируемые Git",

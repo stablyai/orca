@@ -13446,7 +13446,8 @@
             "clipboardStagingUnavailable": "Orca'nın geçici depolaması kullanılamadığı için dosya kopyalanamadı",
             "revealInFinder": "Finder'da Göster",
             "openContainingFolder": "İçeren Klasörü Aç",
-            "revealInFileExplorer": "Dosya Gezgini'nde Göster"
+            "revealInFileExplorer": "Dosya Gezgini'nde Göster",
+            "compareSelectedFiles": "Compare Selected Files"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git Tarafından Yok Sayılan Dosyaları Göster",
