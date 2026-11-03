@@ -43,7 +43,7 @@ export function ChatAgentLaunchSettings({
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader title={entry.title} description={entry.description} />
-      <Card className="py-1">
+      <Card size="list">
         <CardContent>
           <div className="divide-y divide-border">
             {getAgentCatalog().map((agent) => {
