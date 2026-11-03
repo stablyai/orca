@@ -121,14 +121,12 @@ const liveFieldRef = liveField as unknown as RefObject<never>['current']
 function LiveHarness({ session }: { readonly session: Session }): null {
   const current = buildScope(session)
   const refs = useRef(current).current
-  const liveHandles = useRef(new Set<string>())
   const sender = useRef<TerminalLiveInputSender>(async () => false)
   const handle = session.activeHandle
   refs.activeHandleRef.current = handle
   refs.activeSessionTabTypeRef.current = 'terminal'
   refs.connStateRef.current = session.canSend ? 'connected' : 'disconnected'
   refs.clientRef.current = current.client
-  liveHandles.current = new Set(handle ? [handle] : [])
   const commit = useTerminalLiveInputCommit({
     activeHandle: handle,
     activeHandleRef: refs.activeHandleRef,
@@ -136,8 +134,6 @@ function LiveHarness({ session }: { readonly session: Session }): null {
     activeSessionTabTypeRef: refs.activeSessionTabTypeRef,
     connected: session.canSend,
     liveInputRef: refs.liveInputRef,
-    liveInputTerminalHandles: liveHandles.current,
-    liveInputTerminalHandlesRef: liveHandles,
     sendLiveTerminalInputRef: sender,
     setLiveInputCapture: () => {}
   })

@@ -43,7 +43,6 @@ export function useMobileSessionNativeChatDictation(
     connState,
     agentSessionHostSupport,
     setInput,
-    liveInputTerminalHandles,
     activeHandle,
     activeSessionTabId,
     diffComments,
@@ -196,11 +195,7 @@ export function useMobileSessionNativeChatDictation(
       setShowDictationSetup(true)
       return
     }
-    const routeContext = dictationRouteContextFor(
-      activeHandle,
-      liveInputTerminalHandles,
-      commandFieldAnchorRef.current
-    )
+    const routeContext = dictationRouteContextFor(activeHandle, commandFieldAnchorRef.current)
     dictationRouteContextRef.current = routeContext
     destination.captureDestination(showNativeChat, routeContext)
     void dictation.start().catch((err) => {
@@ -214,7 +209,6 @@ export function useMobileSessionNativeChatDictation(
     destination.captureDestination,
     dictation,
     dictationCanStart,
-    liveInputTerminalHandles,
     reportDictationFailure,
     setShowDictationSetup,
     showNativeChat

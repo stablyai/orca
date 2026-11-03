@@ -1689,15 +1689,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Tastatur ausblenden",
       "sendKey": "{{label}} senden",
-      "modifierHint": "Gilt für die nächste Taste. Doppeltippen zum Beibehalten.",
       "typeCharacter": "{{character}} eingeben",
       "interrupt": "Terminal unterbrechen",
       "keysModeLabel": "Tastenmodus: Eingaben gehen direkt an das Terminal. Zum Nachrichtenmodus wechseln",
       "messageModeLabel": "Nachrichtenmodus: Schreiben, dann senden. Zum Tastenmodus wechseln",
-      "keysMode": "Tasten",
-      "messageMode": "Nachricht",
       "moreKeys": "Weitere Tasten und Aktionen",
-      "showKeyboard": "Tastatur anzeigen"
+      "showKeyboard": "Tastatur anzeigen",
+      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt die aktuelle Terminal-Sitzung geöffnet.",
+      "switchToDesktopMode": "In den Desktop-Modus wechseln",
+      "switchToPhoneMode": "In den Smartphone-Modus wechseln",
+      "pasteFromClipboard": "Aus der Zwischenablage einfügen",
+      "paste": "Einfügen",
+      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -1808,11 +1811,7 @@
     },
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
-      "liveInputLabel": "Live-Eingabe im Terminal",
-      "sendCommand": "Befehl senden",
-      "messageAgentPlaceholder": "Nachricht an {{agent}}",
-      "writeCommandPlaceholder": "Befehl schreiben und dann senden",
-      "theAgent": "dem Agenten"
+      "liveInputLabel": "Live-Eingabe im Terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Warnung zur Erstellung des Arbeitsbereichs ausblenden"
@@ -2494,14 +2493,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Layout konnte nicht gespeichert werden",
       "saveFailedMessage": "Dieses Layout gilt vorerst. Wähle es erneut aus, um das Speichern zu wiederholen."
-    },
-    "terminalArrowPad": {
-      "label": "Pfeiltasten",
-      "hint": "Eine Seite antippen für einen Tastendruck oder gedrückt halten und ziehen zum Wiederholen",
-      "up": "Nach oben",
-      "down": "Nach unten",
-      "left": "Nach links",
-      "right": "Nach rechts"
     },
     "terminalMoreKeys": {
       "sendKey": "{{label}} senden",

@@ -153,6 +153,18 @@ export const composerInputStyles = themedStyleSheet(() => ({
     includeFontPadding: false,
     textAlignVertical: 'center'
   },
+  labelledText: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs
+  },
+  fieldLabel: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   mono: {
     fontFamily: typography.monoFamily
   },

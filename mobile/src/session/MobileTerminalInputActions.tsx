@@ -54,7 +54,7 @@ export function MobileTerminalInputActions(props: MobileTerminalInputActionsProp
   )
 }
 
-export function MobileTerminalAttachButton({
+function MobileTerminalAttachButton({
   canSend,
   isAttaching,
   buttonStyle,
@@ -96,7 +96,7 @@ export function MobileTerminalAttachButton({
   )
 }
 
-export function MobileTerminalDictationButton({
+function MobileTerminalDictationButton({
   canSend,
   dictation,
   dictationMode,

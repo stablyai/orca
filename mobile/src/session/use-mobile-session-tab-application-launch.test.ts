@@ -89,7 +89,6 @@ function scope(pending: PendingSessionSelection | null) {
       closedTabTombstonesRef: { current: new Map() },
       reconcileBufferedDraftsRef: { current: vi.fn() },
       setTerminalsLoaded: vi.fn(),
-      defaultTerminalHandlesToLiveInput: vi.fn(),
       setActiveHandle: vi.fn(),
       setActiveSessionTabId: vi.fn(),
       activeSessionTabIdRef: mutableRef<string | null>('tab-old'),

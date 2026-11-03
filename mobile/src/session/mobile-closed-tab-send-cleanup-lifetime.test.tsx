@@ -113,7 +113,6 @@ async function mount(structured: boolean) {
       sessionTabsRef: { current: [] },
       reconcileBufferedDraftsRef: { current: vi.fn() },
       closedTabTombstonesRef: { current: new Map() },
-      clearTerminalLiveInputDefault: vi.fn(),
       setActiveHandle: vi.fn(),
       setActiveSessionTabId: setTab,
       activeSessionTabIdRef: activeTabRef,
