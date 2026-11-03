@@ -8541,7 +8541,9 @@
           "048aac8a64": "ターミナルのタイポグラフィー",
           "4415beb958": "無効",
           "4e7d41a9f0": "有効",
-          "dimUnfocusedPanes": "フォーカスされていないペインを暗くします。"
+          "dimUnfocusedPanes": "フォーカスされていないペインを暗くします。",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "ピクセル",
@@ -10517,6 +10519,12 @@
             "process": "プロセス",
             "prompt": "プロンプト",
             "stop": "停止",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "色のコントラスト",
               "description": "テキストの読みやすさを向上させるか、ターミナルプログラムによって選択された色を保持します。",

@@ -9540,7 +9540,9 @@
           "048aac8a64": "Типографика терминала",
           "4415beb958": "выключены",
           "4e7d41a9f0": "включены",
-          "dimUnfocusedPanes": "Затемнять неактивные панели."
+          "dimUnfocusedPanes": "Затемнять неактивные панели.",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Насыщенность жирного шрифта",
@@ -11516,6 +11518,12 @@
             "process": "процесс",
             "prompt": "запрос",
             "stop": "остановить",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "Контрастность цветов",
               "description": "Улучшайте читаемость текста или сохраняйте цвета, выбранные программами терминала.",

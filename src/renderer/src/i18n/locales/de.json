@@ -9182,7 +9182,9 @@
           "048aac8a64": "Terminaltypografie",
           "4415beb958": "deaktiviert",
           "4e7d41a9f0": "aktiviert",
-          "dimUnfocusedPanes": "Bereiche ohne Fokus abdunkeln."
+          "dimUnfocusedPanes": "Bereiche ohne Fokus abdunkeln.",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Schriftstärke für Fettschrift",
@@ -11158,6 +11160,12 @@
             "process": "Prozess",
             "prompt": "Prompt",
             "stop": "Stoppen",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "Farbkontrast",
               "description": "Die Lesbarkeit von Text verbessern oder die von Terminal-Programmen gewählten Farben beibehalten.",

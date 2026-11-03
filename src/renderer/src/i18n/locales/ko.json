@@ -8493,7 +8493,9 @@
           "048aac8a64": "터미널 타이포그래피",
           "4415beb958": "비활성",
           "4e7d41a9f0": "활성화됨",
-          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다."
+          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다.",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -10469,6 +10471,12 @@
             "process": "프로세스",
             "prompt": "프롬프트",
             "stop": "멈추다",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "색상 대비",
               "description": "텍스트 가독성을 높이거나 터미널 프로그램에서 선택한 색상을 유지합니다.",

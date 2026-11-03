@@ -9054,7 +9054,9 @@
           "048aac8a64": "Typographie du terminal",
           "4415beb958": "désactivé",
           "4e7d41a9f0": "activé",
-          "dimUnfocusedPanes": "Assombrir les volets sans focus."
+          "dimUnfocusedPanes": "Assombrir les volets sans focus.",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Graisse de la police en gras",
@@ -11030,6 +11032,12 @@
             "process": "processus",
             "prompt": "prompt",
             "stop": "arrêt",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "Contraste des couleurs",
               "description": "Améliorez la lisibilité du texte ou préservez les couleurs choisies par les programmes du terminal.",

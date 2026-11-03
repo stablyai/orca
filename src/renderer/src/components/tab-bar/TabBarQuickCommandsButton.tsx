@@ -38,6 +38,9 @@ export function TabBarQuickCommandsButton({
   groupId,
   isFocused
 }: TabBarQuickCommandsButtonProps): React.JSX.Element | null {
+  const showQuickCommandsButton = useAppStore(
+    (s) => s.settings?.showTerminalQuickCommandsButton !== false
+  )
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
   const repos = useAppStore((s) => s.repos)
   const projectHostSetupProjection = useProjectHostSetupProjection()
@@ -156,6 +159,11 @@ export function TabBarQuickCommandsButton({
   const editorRepos = editor?.hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)
     : repos
+
+  // The visibility setting can change on an already mounted button. Return only after every hook.
+  if (!showQuickCommandsButton) {
+    return null
+  }
 
   // Hide without a repo run target, including folder workspaces and floating terminals.
   if (!repoId) {

@@ -3793,6 +3793,12 @@
             "process": "processo",
             "prompt": "prompt",
             "stop": "parar",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "Contraste de Cor",
               "description": "Melhore a legibilidade do texto ou preserve as cores escolhidas pelos programas do terminal.",
@@ -5793,7 +5799,9 @@
           "048aac8a64": "Tipografia do Terminal",
           "4415beb958": "desativado",
           "4e7d41a9f0": "ativado",
-          "dimUnfocusedPanes": "Escurece painéis sem foco."
+          "dimUnfocusedPanes": "Escurece painéis sem foco.",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "CommitMessageAiPane": {
           "ad66ff886d": "Padrões da IA de Controle de Versão",
