@@ -24,6 +24,7 @@ const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
   'PreToolUse',
   'PostToolUse',
   'PostToolUseFailure',
+  'PostToolBatch',
   'PermissionRequest',
   'Elicitation',
   'ElicitationResult'

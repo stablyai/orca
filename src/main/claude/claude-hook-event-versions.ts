@@ -19,7 +19,8 @@ export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
   Elicitation: '2.1.63',
   ElicitationResult: '2.1.63',
   PostCompact: '2.1.76',
-  StopFailure: '2.1.78'
+  StopFailure: '2.1.78',
+  PostToolBatch: '2.1.118'
 } as const
 
 // Older CLIs reject the whole settings file on an unknown top-level key.

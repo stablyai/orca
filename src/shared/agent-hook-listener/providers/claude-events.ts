@@ -133,6 +133,7 @@ export function normalizeClaudeEvent(
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
     eventName === 'PostToolUseFailure' ||
+    eventName === 'PostToolBatch' ||
     (eventName === 'PreToolUse' && !isAskUserQuestion)
       ? 'working'
       : eventName === 'PermissionRequest' || eventName === 'Elicitation' || isAskUserQuestion
@@ -178,7 +179,8 @@ export function normalizeClaudeEvent(
     !isWaitingInducing &&
     (eventName === 'PreToolUse' ||
       eventName === 'PostToolUse' ||
-      eventName === 'PostToolUseFailure')
+      eventName === 'PostToolUseFailure' ||
+      eventName === 'PostToolBatch')
       ? eventAgentId
       : undefined
   // Why: `"type": "agent"` hook runs emit tool hooks (agent_type only if inherited) but never SubagentStop, so their row would stay working forever; real children may be untyped and start-less.

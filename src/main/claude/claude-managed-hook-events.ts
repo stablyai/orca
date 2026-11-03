@@ -54,6 +54,11 @@ export const CLAUDE_EVENTS = [
     eventName: 'PermissionRequest',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
   },
+  // A resolved batch proves its permission prompt ended, even when Claude denied it without PostToolUse.
+  {
+    eventName: 'PostToolBatch',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
   // Manual /compact may omit Stop; PostCompact clears the pane after completion.
   // PreCompact can fire on abort, so treating it as working would leave the pane stuck.
   {

@@ -76,6 +76,9 @@ export function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionOwningChildEnding(previous, next)) {
     return false
   }
+  if (isClaudePermissionOwnersBatchResolved(previous, next)) {
+    return false
+  }
   if (isClaudePermissionSettledByReplay(previous, next)) {
     return false
   }
@@ -87,6 +90,17 @@ export function shouldKeepClaudePermissionVisible(
     return false
   }
   return true
+}
+
+// A batch resolves only after each call's prompt ends, including denials that emit no PostToolUse.
+function isClaudePermissionOwnersBatchResolved(
+  previous: EnrichedAgentHookEventPayload,
+  next: AgentHookEventPayload
+): boolean {
+  return (
+    next.hookEventName === 'PostToolBatch' &&
+    (previous.toolAgentId?.trim() || undefined) === (next.toolAgentId?.trim() || undefined)
+  )
 }
 
 function isClaudePermissionOwningChildEnding(
