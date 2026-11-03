@@ -1374,7 +1374,9 @@
         "cb4d287238": "Server name",
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
         "e3bcd082ac": "Connect to Orca",
-        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
+        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.",
+        "replaceSavedServer": "This link connects to a different server than \"{{name}}\" ({{endpoint}}). Connect only if you trust the endpoint below.",
+        "keepSavedServer": "Keep saved server"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host.",
