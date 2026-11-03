@@ -230,9 +230,13 @@ describe('ACP model catalog probes', () => {
     }
   })
 
-  it.each([undefined, 'opencode/beam-free'])(
-    'discovers actual model-owned menus before deleting its session (target %s)',
-    async (selectedModel) => {
+  it.each([
+    { selectedModels: undefined },
+    { selectedModels: ['opencode/beam-free'] },
+    { selectedModels: ['opencode/beam-free', 'google/gemini-3.8-flash'] }
+  ])(
+    'discovers actual model-owned menus before deleting its session ($selectedModels)',
+    async ({ selectedModels }) => {
       const { agent, deps, closed } = scriptedOpenCode2(true)
       agent.on('session/new', (frame) =>
         agent.reply(frame, { sessionId: 'probe-session', ...recordedEfforts.new })
@@ -250,7 +254,10 @@ describe('ACP model catalog probes', () => {
       })
       const result = await createAcpModelCatalogProbe(OPENCODE, deps)(
         { kind: 'opencode', locator: { kind: 'unmanaged' } },
-        { workspacePath: '/work/project', selectedModel }
+        {
+          workspacePath: '/work/project',
+          ...(selectedModels ? { selectedModels } : {})
+        }
       )
       expect(
         result.models.find((row) => row.id === 'opencode/crouton-alpha-free')?.efforts
@@ -258,11 +265,14 @@ describe('ACP model catalog probes', () => {
       expect(result.models.find((row) => row.id === 'opencode/beam-free')?.efforts).toHaveLength(6)
       expect(
         result.models.find((row) => row.id === 'google/gemini-3.8-flash')?.efforts
-      ).toHaveLength(selectedModel ? 0 : 4)
+      ).toHaveLength(!selectedModels || selectedModels.includes('google/gemini-3.8-flash') ? 4 : 0)
       expect(agent.frames.at(-1)?.method).toBe('session/delete')
       expect(
         agent.frames.filter((frame) => frame.method === 'session/set_config_option')
-      ).toHaveLength(selectedModel ? 1 : 2)
+      ).toHaveLength(selectedModels?.length ?? 2)
+      expect(result.attemptedModels?.toSorted()).toEqual(
+        (selectedModels ?? ['opencode/beam-free', 'google/gemini-3.8-flash']).toSorted()
+      )
       expect(closed()).toBe(1)
     }
   )
@@ -275,7 +285,7 @@ describe('ACP model catalog probes', () => {
     const probe = () =>
       createAcpModelCatalogProbe(OPENCODE, deps)(
         { kind: 'opencode', locator: { kind: 'unmanaged' } },
-        { workspacePath: '/work/project', selectedModel: 'opencode/beam-free' }
+        { workspacePath: '/work/project', selectedModels: ['opencode/beam-free'] }
       )
     expect((await probe()).models.find((row) => row.id === 'opencode/beam-free')).toMatchObject({
       effortsKnown: false,

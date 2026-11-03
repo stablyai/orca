@@ -111,6 +111,7 @@ export function createAcpModelCatalogProbe(
     }
     const run = { label: spec.agent, signal: options?.signal }
     let models: AgentSessionModelOption[]
+    let attemptedModels: string[] | undefined
     if (listing.kind === 'command') {
       const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
         {
@@ -136,7 +137,7 @@ export function createAcpModelCatalogProbe(
         assertStructuredAgentResolutionCurrent(operation)
         const args =
           folderArgs && folder ? [...launch.args, ...folderArgs(folder.path)] : launch.args
-        models = await runAgentModelCatalogSession(
+        const result = await runAgentModelCatalogSession(
           () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
           (connection, ready) =>
             readSessionModels(
@@ -145,11 +146,13 @@ export function createAcpModelCatalogProbe(
               connection,
               workspace,
               operation,
-              options?.selectedModel,
+              options?.selectedModels,
               spec.dialect.effortChangesModel ? ready : undefined
             ),
           run
         )
+        models = result.models
+        attemptedModels = result.attemptedModels
       } finally {
         await folder?.remove()
       }
@@ -167,7 +170,7 @@ export function createAcpModelCatalogProbe(
     if (models.length === 0) {
       throw new Error(`${spec.agent} listed no models`)
     }
-    return { models, origin: 'probe' }
+    return { models, origin: 'probe', ...(attemptedModels ? { attemptedModels } : {}) }
   }
   return async (home, options) => {
     try {
@@ -204,9 +207,9 @@ async function readSessionModels(
   connection: AcpModelCatalogSessionConnection,
   workspace: string,
   operation?: StructuredAgentResolutionOperation,
-  selectedModel?: string,
+  selectedModels?: readonly string[],
   ready?: (cleanup: () => Promise<unknown>) => void
-): Promise<AgentSessionModelOption[]> {
+): Promise<{ models: AgentSessionModelOption[]; attemptedModels: string[] }> {
   const initialized = await connection.initialize()
   assertStructuredAgentResolutionCurrent(operation)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
@@ -228,9 +231,11 @@ async function readSessionModels(
   const options = new AcpStructuredOptions(spec.dialect)
   options.adoptSession(started.response, 'new')
   let models = options.read().models
+  const attemptedModels: string[] = []
   try {
     if (spec.dialect.effortChangesModel) {
-      const targets = selectedModel ? models.filter((row) => row.id === selectedModel) : models
+      const byId = new Map(models.map((model) => [model.id, model]))
+      const targets = selectedModels ? selectedModels.flatMap((id) => byId.get(id) ?? []) : models
       const sweep = async () => {
         for (const model of targets) {
           if (stopped) {
@@ -240,6 +245,7 @@ async function readSessionModels(
           if (model.effortsKnown !== false) {
             continue
           }
+          attemptedModels.push(model.id)
           try {
             for (let attempt = 0; attempt < 2 && !stopped; attempt++) {
               const write = options.write('model', model.id)
@@ -270,7 +276,7 @@ async function readSessionModels(
       await withTimeout(sweep(), 5_000, undefined)
     }
     assertStructuredAgentResolutionCurrent(operation)
-    return models
+    return { models, attemptedModels }
   } finally {
     if (!ready) {
       await cleanup()

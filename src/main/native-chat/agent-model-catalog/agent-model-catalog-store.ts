@@ -260,7 +260,7 @@ export class AgentModelCatalogStore {
   refresh(
     fingerprint: string,
     agent: string,
-    listModels: (selectedModel?: string) => Promise<AgentModelCatalogSuccess>,
+    listModels: (selectedModels?: readonly string[]) => Promise<AgentModelCatalogSuccess>,
     current?: () => boolean,
     signal?: AbortSignal,
     selectedModel?: string

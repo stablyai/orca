@@ -54,7 +54,7 @@ it.each([1, 10])(
     const gate = Promise.withResolvers<void>()
     const targets: (string | undefined)[] = []
     const probe: AgentModelCatalogProbe = async (_home, options) => {
-      const target = options?.selectedModel
+      const target = options?.selectedModels?.[0]
       targets.push(target)
       if (target === B) {
         await gate.promise
@@ -104,3 +104,73 @@ it('backs off a successful partial target, keeps saved-only reads passive, and r
   await service.read({ ...params, waitForListing: true })
   expect(probe).toHaveBeenCalledTimes(2)
 })
+
+it.each([
+  { n: 1, partial: false },
+  { n: 10, partial: false },
+  { n: 2, partial: true }
+])(
+  'batches $n distinct waiting models into one startup (partial=$partial)',
+  async ({ n, partial }) => {
+    const gate = Promise.withResolvers<void>()
+    const ids = Array.from({ length: n }, (_, i) => `${C}-${i}`)
+    const rows = [
+      ...menu('new').filter((row) => row.id !== C),
+      ...ids.map((id) => ({
+        id,
+        label: id,
+        isDefault: false,
+        effortsKnown: false as const,
+        efforts: []
+      }))
+    ]
+    const efforts = menu(B).find((row) => row.id === B)!.efforts
+    const batches: string[][] = []
+    const probe: AgentModelCatalogProbe = async (_home, options) => {
+      const targets = [...(options?.selectedModels ?? [])]
+      batches.push(targets)
+      if (targets.includes(B)) {
+        await gate.promise
+      }
+      const attempted = partial && targets.length > 1 ? targets.slice(0, 1) : targets
+      return {
+        origin: 'probe',
+        attemptedModels: attempted,
+        models: rows.map((row) => {
+          if (!attempted.includes(row.id)) {
+            return row
+          }
+          const { effortsKnown: _unknown, ...known } = row
+          return { ...known, efforts }
+        })
+      }
+    }
+    const { service } = setup(probe)
+    const params = { agent: 'opencode2', sessionId: 'session-a' }
+    await service.read({ ...params, waitForListing: true })
+    const first = service.demand({ ...params, selectedModel: B })
+    await vi.waitFor(() => expect(batches).toEqual([[A], [B]]))
+    const waiting = ids.map((selectedModel, i) => ({
+      ...params,
+      sessionId: `waiting-${i}`,
+      selectedModel
+    }))
+    const demands = waiting.map((request) => service.demand(request))
+    await vi.waitFor(() => {
+      for (const request of waiting) {
+        expect(service.snapshot(request).listingInProgress).toBe(true)
+      }
+    })
+    gate.resolve()
+    await Promise.all([first, ...demands])
+    expect(batches).toEqual(partial ? [[A], [B], ids, ids.slice(1)] : [[A], [B], ids])
+    const result = service.snapshot(params)
+    expect(result.origin).not.toBe('unknown')
+    if (result.origin === 'unknown') {
+      throw new Error('expected discovered catalog')
+    }
+    expect(result.models.filter((row) => ids.includes(row.id)).map((row) => row.efforts)).toEqual(
+      ids.map(() => efforts)
+    )
+  }
+)

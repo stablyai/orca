@@ -16,7 +16,7 @@ export type AgentModelCatalogProbe = ((
     signal?: AbortSignal
     workspacePath?: string
     cwd?: string
-    selectedModel?: string
+    selectedModels?: readonly string[]
     operation?: StructuredAgentResolutionOperation
   }
 ) => Promise<AgentModelCatalogSuccess>) & {

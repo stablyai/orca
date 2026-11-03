@@ -63,7 +63,7 @@ export function retireAgentModelCatalogListing(
 export function refreshAgentModelCatalogListing(input: {
   fingerprint: string
   agent: string
-  listModels: (selectedModel?: string) => Promise<AgentModelCatalogSuccess>
+  listModels: (selectedModels?: readonly string[]) => Promise<AgentModelCatalogSuccess>
   selectedModel?: string
   maxTargets: number
   targetDue: (model: string) => boolean
@@ -111,23 +111,26 @@ export function refreshAgentModelCatalogListing(input: {
         span.end()
         return
       }
-      let target = input.selectedModel
+      let targets = input.selectedModel ? [input.selectedModel] : undefined
       let entry: AgentModelCatalogEntry | null = null
       do {
-        if (target) {
-          flight.targets.delete(target)
-        }
-        const success = await listModels(target)
+        const success = await listModels(targets)
         if (!current()) {
           return
         }
         span.setAttribute('models', success.models.length)
         entry = input.writeSuccess(fingerprint, agent, success, 'discovery')
-        if (target) {
-          input.targetAttempted(target)
+        const attempted = new Set(targets ? (success.attemptedModels ?? targets) : [])
+        for (const target of targets ?? []) {
+          if (attempted.has(target)) {
+            input.targetAttempted(target)
+          }
+          if (attempted.has(target) || !input.targetDue(target)) {
+            flight.targets.delete(target)
+          }
         }
-        target = [...flight.targets].find(input.targetDue)
-      } while (target && current())
+        targets = [...flight.targets].filter(input.targetDue)
+      } while (targets.length > 0 && current())
       if (current()) {
         flight.finish(entry)
       }
@@ -154,9 +157,9 @@ export function scopedAgentModelCatalogLister(input: {
   probe: AgentModelCatalogProbe | undefined
   probeHome: AgentSessionAccountHome | null
   workspacePath: string | undefined
-}): (selectedModel?: string) => Promise<AgentModelCatalogSuccess> {
+}): (selectedModels?: readonly string[]) => Promise<AgentModelCatalogSuccess> {
   const { legacy, admission, signal, resolved, probe, probeHome, workspacePath } = input
-  return async (selectedModel) => {
+  return async (selectedModels) => {
     const release = legacy ? () => {} : await admission.acquire(0, signal)
     const deadline = new AbortController()
     // Share the retry budget and await bounded provider teardown before settling.
@@ -175,7 +178,7 @@ export function scopedAgentModelCatalogLister(input: {
       return await probe(probeHome, {
         signal: attemptSignal,
         workspacePath,
-        ...(selectedModel ? { selectedModel } : {}),
+        ...(selectedModels ? { selectedModels } : {}),
         operation: input.operation
       })
     } catch (error) {

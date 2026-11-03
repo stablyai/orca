@@ -17,6 +17,8 @@ export type AgentModelCatalogSource = 'discovery' | 'live'
 
 export type AgentModelCatalogSuccess = {
   models: AgentSessionModelOption[]
+  /** Transient probe progress; unvisited demands remain eligible for the next batch. */
+  attemptedModels?: readonly string[]
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
   complete?: boolean
