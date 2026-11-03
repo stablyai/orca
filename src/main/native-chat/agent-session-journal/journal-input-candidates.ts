@@ -1,3 +1,4 @@
+import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageRow } from './queued-message-table'
 
 /** Queue order: position, then id, so two cards never compare equal. */
@@ -72,6 +73,7 @@ export type JournalPastHead = { first: QueuedMessageRow | null; person: QueuedMe
 export class JournalInputCandidates {
   private readonly byId = new Map<string, QueuedMessageRow>()
   private root: Node | undefined
+  private mailCount = 0
   /** Changes with any candidate, so a walk's answer is reused only while none has. */
   private revision = 0
   /** The first ready card, and the person card behind mail that cannot be decided, stay cached together. */
@@ -83,10 +85,12 @@ export class JournalInputCandidates {
       return
     }
     if (prior) {
+      this.mailCount -= orchestrationMailNotice(prior.body.from) ? 1 : 0
       this.root = put(this.root, prior, true)
       this.byId.delete(card.messageId)
     }
     if (candidate) {
+      this.mailCount += orchestrationMailNotice(card.body.from) ? 1 : 0
       this.root = put(this.root, card, false)
       this.byId.set(card.messageId, card)
     }
@@ -96,7 +100,12 @@ export class JournalInputCandidates {
   clear(): void {
     this.byId.clear()
     this.root = undefined
+    this.mailCount = 0
     this.revision += 1
+  }
+
+  hasMail(): boolean {
+    return this.mailCount > 0
   }
 
   /** Candidates behind `card` in queue order, one at a time: a walk stops at the first it needs. */
@@ -133,7 +142,7 @@ export class JournalInputCandidates {
       return hit.next
     }
     const next = walk()
-    this.walked = [...this.walked, { head, key, next }].slice(-2)
+    this.walked = [...this.walked, { head, key, next }].slice(-3)
     return next
   }
 }

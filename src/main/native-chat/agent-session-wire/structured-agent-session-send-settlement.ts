@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
@@ -192,5 +193,18 @@ export class StructuredAgentSessionSendSettlement {
     if (session?.size === 0) {
       this.waiters.delete(sessionId)
     }
+  }
+}
+
+/** Released unanswered sends end acknowledgement waits as uncertain. */
+export function structuredAgentSessionSettlementReading(
+  journal: AgentSessionJournal,
+  work: () => StructuredAgentSessionCurrentWork
+): SendSettlementJournal {
+  return {
+    submissions: () => journal.submissions().map(work().publishedSubmission),
+    cursor: () => journal.cursor(),
+    activeTurnId: () => work().activeTurnId(),
+    behindCommand: (id) => journal.inputOrder.forced(id)
   }
 }

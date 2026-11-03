@@ -1,3 +1,4 @@
+import { structuredAgentSessionSettlementReading } from './structured-agent-session-send-settlement'
 import { StructuredAgentSessionJournalObservers } from './structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
@@ -58,7 +59,7 @@ export class StructuredAgentSessionClientDelivery {
     private readonly deps: () => StructuredAgentSessionHostDeps,
     /** Wake queue on every publish; only journal activity renews idle time, not generation end. */
     private readonly queue: {
-      onJournalActivity: (sessionId: string, activity?: boolean) => void
+      onJournalActivity: (sessionId: string, activity?: boolean, inputChanged?: boolean) => void
     },
     onAgentStarted: (sessionId: string) => void,
     onChildWorkChanged: (sessionId: string) => void,
@@ -216,6 +217,7 @@ export class StructuredAgentSessionClientDelivery {
     const journal = this.sessions.get(sessionId)?.journal
     if (journal) {
       this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
+      this.queue.onJournalActivity(sessionId, false)
     }
   }
 
@@ -305,12 +307,17 @@ export class StructuredAgentSessionClientDelivery {
     this.journalObservers.clear()
   }
 
-  private publishJournal(sessionId: string, journal: AgentSessionJournal, activity = true): void {
+  publishJournal(
+    sessionId: string,
+    journal: AgentSessionJournal,
+    activity = true,
+    inputChanged = true
+  ): void {
     this.statusFeed.publish(sessionId, journal)
     this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
     // Observe completion after status projection updates, even without subscribers for background chats.
     this.turnCompletionFeed.observe(sessionId, journal)
-    this.queue.onJournalActivity(sessionId, activity)
+    this.queue.onJournalActivity(sessionId, activity, inputChanged)
     this.journalObservers.publish(sessionId, journal)
   }
 
@@ -320,14 +327,9 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {
-    return {
-      // Released unanswered sends must end acknowledgement waits as uncertain.
-      submissions: () =>
-        journal.submissions().map(this.currentWork(sessionId, journal).publishedSubmission),
-      cursor: () => journal.cursor(),
-      activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId(),
-      behindCommand: (id: string) => journal.inputOrder.forced(id)
-    }
+    return structuredAgentSessionSettlementReading(journal, () =>
+      this.currentWork(sessionId, journal)
+    )
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

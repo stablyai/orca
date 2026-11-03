@@ -15,7 +15,7 @@ import {
   beginSubmissionHandover,
   type StructuredAgentSessionPendingHandover
 } from './structured-agent-session-handover'
-import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
+import { structuredAgentSessionChildAcceptsInput } from './structured-agent-session-input-readiness'
 import {
   providerStartupFailureFact,
   structuredAgentSessionStartFailure
@@ -48,15 +48,16 @@ export function beginStructuredAgentSessionInputHandover(
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
   const isCurrent = () => isBound() && !binding.close
   const validate = (signal?: AbortSignal) => {
-    const work = deps.currentWork(sessionId)
     if (
       signal?.aborted ||
       isDisposed() ||
-      !isCurrent() ||
-      binding.phase !== 'ready' ||
-      deps.stopping(sessionId) ||
       !ownsInput() ||
-      (work && structuredAgentSessionCommandRunning(work))
+      !structuredAgentSessionChildAcceptsInput({
+        child: binding,
+        current: isBound(),
+        stopping: deps.stopping(sessionId),
+        work: deps.currentWork(sessionId)
+      })
     ) {
       const ended = session.lastEndedChild
       throw new StructuredAgentSessionInputNotAdmitted({
