@@ -69,8 +69,8 @@ describe('codex approval items', () => {
         method: CODEX_FILE_CHANGE_APPROVAL_METHOD,
         params: { grantRoot: '/outside' },
         detail: null
-      }).detail
-    ).toBe('"/outside"')
+      })
+    ).toMatchObject({ detail: null, description: 'Write access: /outside' })
   })
 
   it('bounds large approval details before they can enter lifecycle settlement', () => {

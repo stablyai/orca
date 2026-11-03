@@ -40,6 +40,7 @@ import {
   type JournalReasoningLifecycle
 } from '../native-chat/agent-session-journal/journal-reasoning-row'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
+import { codexFileChangeApprovalDetail } from './codex-file-change-approval-detail'
 
 export class CodexJournalItems {
   readonly ordinals = new CodexTurnOrdinals()
@@ -69,7 +70,11 @@ export class CodexJournalItems {
   }
 
   detailFor(threadId: string, itemId: string): string | null {
-    return this.details.get(codexStructuredItemKey(threadId, itemId)) ?? null
+    const key = codexStructuredItemKey(threadId, itemId)
+    const item = this.activeItems.get(key)?.item
+    return item?.type === 'fileChange'
+      ? codexFileChangeApprovalDetail(item.changes)
+      : (this.details.get(key) ?? null)
   }
 
   handle(
