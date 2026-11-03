@@ -10,6 +10,11 @@
       "pluginKey": "stablyai.orca-vscode-default-themes",
       "path": "stablyai.orca-vscode-default-themes",
       "contentHash": "ce11b29f4c21bedeaa3613e7ce9c4a6863f800e6945754ad1e36d04e24991139"
+    },
+    {
+      "pluginKey": "stablyai.orca-workspace-cards",
+      "path": "stablyai.orca-workspace-cards",
+      "contentHash": "9c4f3f2473336cca4d051fa20a8e9638461b3ca1f3850521f92ef687461a3908"
     }
   ]
 }

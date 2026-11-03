@@ -1,0 +1,41 @@
+{
+  "manifestVersion": 2,
+  "id": "orca-workspace-cards",
+  "publisher": "stablyai",
+  "name": "Workspace Cards",
+  "version": "1.0.0",
+  "execution": "data",
+  "description": "Three workspace cards from Orca: Minimal, Agent first and Review first.",
+  "license": "MIT",
+  "engines": { "orca": ">=1.4.249" },
+  "contributes": {
+    "sidebarCards": [
+      {
+        "id": "minimal",
+        "title": "Minimal",
+        "description": "One line per workspace: status, name and the review result.",
+        "template": "cards/minimal.json"
+      },
+      {
+        "id": "agent-first",
+        "title": "Agent first",
+        "description": "Agents lead; the branch and review follow.",
+        "template": "cards/agent-first.json",
+        "options": [
+          {
+            "key": "showBranch",
+            "title": "Show branch",
+            "type": "boolean",
+            "default": true
+          }
+        ]
+      },
+      {
+        "id": "review-first",
+        "title": "Review first",
+        "description": "The pull request leads, with its checks and conflicts.",
+        "template": "cards/review-first.json"
+      }
+    ]
+  }
+}

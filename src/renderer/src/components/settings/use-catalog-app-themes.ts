@@ -10,7 +10,7 @@ import { applyPluginAppThemeToSlot } from '../plugins/state/plugin-theme-apply'
 import { createPluginPagePreviewCache } from '../plugins/state/use-plugin-catalog'
 import { usePluginInstallAction } from '../plugins/state/use-plugin-install-action'
 
-type CatalogSnapshot = {
+export type CatalogSnapshot = {
   installed: readonly PluginHostListEntry[]
   listings: readonly PluginMarketplaceHostListing[]
   orcaVersion: string
@@ -69,7 +69,7 @@ export function catalogAppThemes(
  * The cached catalog, read when a theme picker opens rather than at startup. Null until read,
  * and stays null where the host has no plugin catalog (the web client) or the read fails.
  */
-function useCatalogSnapshot(): {
+export function useCatalogSnapshot(): {
   snapshot: CatalogSnapshot | null
   loading: boolean
   load: () => void

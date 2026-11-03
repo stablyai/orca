@@ -98,8 +98,19 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   return translate('workspace.reviewStatus.open', '{{review}}: Open', values)
 }
 
-export function WorktreeCardStatusSlot({
-  worktreeId,
+/** Reads the workspace's live activity and sleep state, then draws the lane. */
+export function WorktreeCardStatusSlot(
+  props: WorktreeCardStatusSlotProps
+): React.JSX.Element | null {
+  const status = useWorktreeActivityStatus(props.worktreeId)
+  const isSleeping = useIsSleepingWorktree(props.worktreeId)
+  return <WorktreeCardStatusSlotView {...props} status={status} isSleeping={isSleeping} />
+}
+
+/** The status lane from given state, with no store reads, so previews draw it too. */
+export function WorktreeCardStatusSlotView({
+  status,
+  isSleeping,
   showStatus,
   showUnreadAction,
   isUnread,
@@ -113,10 +124,11 @@ export function WorktreeCardStatusSlot({
   branchIdentityLabel,
   reviewStale = false,
   className
-}: WorktreeCardStatusSlotProps): React.JSX.Element | null {
+}: Omit<WorktreeCardStatusSlotProps, 'worktreeId'> & {
+  status: WorktreeStatus
+  isSleeping: boolean
+}): React.JSX.Element | null {
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
-  const status = useWorktreeActivityStatus(worktreeId)
-  const isSleeping = useIsSleepingWorktree(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
   // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
   const canShowSleepingStatus =

@@ -223,7 +223,7 @@
           ],
           "uniqueItems": true,
           "minItems": 1,
-          "maxItems": 9,
+          "maxItems": 10,
           "type": "array",
           "items": {
             "type": "string",
@@ -232,6 +232,7 @@
               "app-theme",
               "terminal-theme",
               "icon-theme",
+              "card",
               "syntax",
               "instructions",
               "panel",
@@ -330,6 +331,15 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/CatalogThemePreview"
+          }
+        },
+        "cardPreview": {
+          "description": "Up to 4 workspace cards to preview before install. Orca draws them from made-up workspaces; the installed files decide the real cards.",
+          "x-orca-since": "1.4.249",
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogCardPreview"
           }
         },
         "contributes": {
@@ -547,6 +557,161 @@
       ],
       "additionalProperties": false,
       "description": "Colors to draw a theme card before install."
+    },
+    "CatalogCardPreview": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Card name.",
+          "x-orca-since": "1.4.249",
+          "examples": [
+            "Review first"
+          ]
+        },
+        "template": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number",
+              "const": 1
+            },
+            "facts": {
+              "type": "number",
+              "const": 1
+            },
+            "vars": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              }
+            },
+            "defs": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]{0,63}$"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              }
+            },
+            "frame": {
+              "type": "object",
+              "properties": {
+                "singleLine": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "statusLane": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "root": {
+              "$ref": "#/$defs/__schema0"
+            }
+          },
+          "required": [
+            "version",
+            "facts",
+            "root"
+          ],
+          "additionalProperties": false,
+          "description": "The card's template, the same file the plugin ships, so Orca can preview it before install.",
+          "x-orca-since": "1.4.249"
+        }
+      },
+      "required": [
+        "label",
+        "template"
+      ],
+      "additionalProperties": false,
+      "description": "A workspace card to draw before install."
+    },
+    "__schema0": {
+      "type": "object",
+      "properties": {
+        "el": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]{0,63}$"
+        },
+        "when": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "props": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      },
+      "required": [
+        "el"
+      ],
+      "additionalProperties": false
     },
     "CatalogContribution": {
       "type": "object",

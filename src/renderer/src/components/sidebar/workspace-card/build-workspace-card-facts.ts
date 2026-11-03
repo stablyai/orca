@@ -35,6 +35,20 @@ function showOptions(cardProps: readonly WorktreeCardProperty[]): WorkspaceCardS
   return show
 }
 
+/** The person's card settings as facts; shared by live cards and previews. */
+export function workspaceCardOptionFacts(input: {
+  newCardStyle: boolean
+  compactCards: boolean
+  cardProps: readonly WorktreeCardProperty[]
+  agentActivityDisplayMode: string | undefined
+}): WorkspaceCardFacts['options'] {
+  return {
+    style: input.newCardStyle ? 'new' : input.compactCards ? 'compact' : 'classic',
+    show: showOptions(input.cardProps),
+    agentRows: input.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'
+  }
+}
+
 /** Projects the card controller into the documented fact model a template reads. */
 const NO_CARD_OPTIONS: WorkspaceCardFacts['cardOptions'] = {}
 
@@ -122,11 +136,7 @@ export function buildWorkspaceCardFacts(
       affiliateList: card.affiliateListMode,
       deleteQuickAction: card.showDeleteQuickAction
     },
-    options: {
-      style: card.newCardStyle ? 'new' : card.compactCards ? 'compact' : 'classic',
-      show: showOptions(card.cardProps),
-      agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'
-    },
+    options: workspaceCardOptionFacts(card),
     env: { projectGroups: card.projectGroups.length > 0 },
     cardOptions
   }

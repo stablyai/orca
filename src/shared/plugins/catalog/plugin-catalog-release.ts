@@ -1,3 +1,4 @@
+import { pluginCatalogCardPreviewField } from './plugin-catalog-card-preview'
 import { z } from 'zod'
 import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import {
@@ -137,6 +138,7 @@ export const pluginCatalogReleaseSchema = z
           NEXT
         )
       ),
+    cardPreview: pluginCatalogCardPreviewField,
     contributes: pluginContributionSummarySchema
       .optional()
       .catch(undefined)

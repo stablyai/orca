@@ -78,6 +78,11 @@ function catalogTypeLabel(type: PluginCatalogType): string {
         'auto.components.settings.PluginDetailSections.typeIconTheme',
         'File icon theme'
       )
+    case 'card':
+      return translate(
+        'auto.components.settings.PluginDetailSections.typeSidebarCard',
+        'Workspace card'
+      )
     case 'syntax':
       return translate(
         'auto.components.settings.PluginDetailSections.typeSyntax',

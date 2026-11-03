@@ -29,6 +29,18 @@ choose **Customize** to open the Card Studio, then pick the card. The plugin's p
 **Use for workspaces**, and **Use Orca's card** goes back. If a card fails to
 load or draw, Orca draws its own card for that workspace and logs why.
 
+## Previews and the catalog
+
+The Card Studio's **States** tab draws a card on made-up workspaces: agent working, needs input or
+done, pull request open, failing or merged, merge conflicts, a folder, SSH disconnected, compact
+layout, long names and detached HEAD. These previews read nothing from your workspaces and run no
+plugin code, so a card can be previewed before it is installed.
+
+A catalog release lists its cards in `cardPreview` (up to 4, each `{ "label", "template" }`, the
+same template the plugin ships), and the Studio's **More cards** offers them with **Preview** and
+**Install**. List the plugin under the `card` type. Orca's own cards ship as the bundled
+**Workspace Cards** plugin: Minimal, Agent first and Review first.
+
 ## Options
 
 A card can declare `options` in the same format as `contributes.settings`. The Card Studio shows

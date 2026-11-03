@@ -56,7 +56,7 @@ export type WorkspaceCardFacts = {
     runtimeDisconnected: boolean
   }
   git: {
-    /** `merge`, `rebase`, `cherry-pick`, `revert` or `unknown` while one is in progress. */
+    /** `merge`, `rebase`, `cherry-pick` or `unknown` while one is in progress. */
     conflictOperation: string | null
     remoteBranchConflict: { remote: string; branch: string } | null
     cacheTimerActive: boolean
