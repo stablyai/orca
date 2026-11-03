@@ -15,7 +15,10 @@ import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat/n
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSkillRef,
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   MobileNativeChatCommandRefusalCauses,
   MobileNativeChatSendErrorReporter
@@ -25,7 +28,7 @@ import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-ba
 
 export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
-    submissions: readonly import('../../../src/shared/agent-session/journal/agent-session-journal-types').AgentJournalSubmission[]
+    submissions: readonly AgentJournalSubmission[]
     session: MobileNativeChatSession
     asyncQuestionSourceScope: string
     isWorking: boolean

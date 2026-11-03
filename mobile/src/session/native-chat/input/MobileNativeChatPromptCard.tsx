@@ -15,7 +15,10 @@ import { colors, pressedStyle, radii, spacing, typography } from '../../../theme
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { AskAnswerSelection } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
+import type {
+  AskAnswerSelection,
+  NativeChatAnswerSource
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
@@ -47,7 +50,7 @@ export function MobileNativeChatPromptCard({
   onAnswerQuestion
 }: {
   ask?: AskPrompt | null
-  askSendSource?: import('../../../../../src/shared/native-chat/input/native-chat-ask-answer').NativeChatAnswerSource
+  askSendSource?: NativeChatAnswerSource
   askPending?: boolean
   // The keyboard is up for this card's reply, so it may take the whole conversation area.
   answering?: boolean
