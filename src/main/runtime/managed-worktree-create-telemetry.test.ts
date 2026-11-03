@@ -43,13 +43,13 @@ vi.mock('../ipc/registered-worktree-roots-scoped-invalidation', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
-import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
+import type { PreparationRearmHolder } from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   _resetWorktreeCreateConcurrencyForTests,
   beginPreparationWork,
   type PreparationWork
-} from '../worktree-create-concurrency'
+} from '../workspaces/creation/worktree-create-concurrency'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const gitRepo = {

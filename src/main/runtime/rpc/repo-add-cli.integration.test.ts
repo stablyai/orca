@@ -18,7 +18,7 @@ import { UnixSocketTransport } from './unix-socket-transport'
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
 }))
-vi.mock('../../worktree-root-preparation', () => ({
+vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
 }))
 

@@ -2,7 +2,7 @@ import {
   generatedNameCreateRequest,
   renameCreatedWorktreeOnFirstWork,
   typedLabelCreateRequests
-} from '../worktree-create-first-work-test-harness'
+} from '../workspaces/creation/worktree-create-first-work-test-harness'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { describeCreatedWorktreeMock, gitExecFileAsyncMock } from './worktrees-test-module-mocks'

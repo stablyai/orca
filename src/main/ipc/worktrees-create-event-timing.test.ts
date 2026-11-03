@@ -6,7 +6,7 @@ import {
   setPlatform
 } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
-import { beginPreparationWork } from '../worktree-create-concurrency'
+import { beginPreparationWork } from '../workspaces/creation/worktree-create-concurrency'
 import { addWorktree } from '../git/worktree'
 
 const { trackMock, probeHookMock, telemetryEnabledMock } = vi.hoisted(() => ({

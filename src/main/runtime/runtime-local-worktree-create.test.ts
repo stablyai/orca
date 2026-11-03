@@ -49,7 +49,9 @@ vi.mock('./runtime-worktree-create-git', () => ({
   getSelectedHostedReviewForBranch: vi.fn()
 }))
 vi.mock('./runtime-worktree-filesystem', () => ({ runtimePathExists: mocks.pathExists }))
-vi.mock('../worktree-create-preparation', () => ({ consumePreparedWorktreeCreate: mocks.consume }))
+vi.mock('../workspaces/creation/preparation/worktree-create-preparation', () => ({
+  consumePreparedWorktreeCreate: mocks.consume
+}))
 vi.mock('../git/worktree', () => ({ addWorktree: mocks.add, addSparseWorktree: mocks.addSparse }))
 vi.mock('../ipc/worktree-remote', () => ({ configureCreatedWorktreePushTarget: mocks.pushTarget }))
 vi.mock('../ipc/created-worktree-reconciliation', () => ({ resolveCreatedWorktree: mocks.listing }))
@@ -70,9 +72,9 @@ vi.mock('../ipc/worktree-symlinks', () => ({
 }))
 
 import { WorktreeCreateSetupChoiceRefusedError } from './worktree-create-setup-choice-refusal'
-import type { PreparationRearmHolder } from '../worktree-create-preparation'
-import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
-import { withoutInFlightWorktreeCreates } from '../worktree-create-in-flight'
+import type { PreparationRearmHolder } from '../workspaces/creation/preparation/worktree-create-preparation'
+import { createWorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
+import { withoutInFlightWorktreeCreates } from '../workspaces/creation/worktree-create-in-flight'
 
 beforeEach(resetRuntimeCreateMocks)
 

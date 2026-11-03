@@ -21,7 +21,7 @@ vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
 vi.mock('./registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
-vi.mock('../worktree-root-preparation', () =>
+vi.mock('../workspaces/creation/worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
 

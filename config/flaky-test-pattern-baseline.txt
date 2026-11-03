@@ -91,7 +91,7 @@
 1 test-no-polling-loop:src/main/ipc/folder-repo-git-upgrade.test.ts
 1 test-no-polling-loop:src/main/ipc/native-chat.test.ts
 1 test-no-polling-loop:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
-1 test-no-polling-loop:src/main/ipc/worktree-base-directory-poller-marker-fanout.test.ts
+1 test-no-polling-loop:src/main/ipc/worktrees/creation/worktree-base-directory-poller-marker-fanout.test.ts
 2 test-no-polling-loop:src/main/ipc/worktree-git-status-attribution-real-git.test.ts
 1 test-no-polling-loop:src/main/local-worktree-removal-recovery-live.test.ts
 1 test-no-polling-loop:src/main/managed-server/install/orcad-remote-launch-file-modes.test.ts
@@ -326,8 +326,8 @@
 3 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-preference.test.ts
 5 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 2 test-no-real-time-wait:src/main/ipc/workspace-cleanup/workspace-cleanup-snapshot-ipc.test.ts
-1 test-no-real-time-wait:src/main/ipc/worktree-base-directory-poller-marker-fanout.test.ts
-14 test-no-real-time-wait:src/main/ipc/worktree-base-directory-poller.test.ts
+1 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller-marker-fanout.test.ts
+14 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts
 6 test-no-real-time-wait:src/main/ipc/worktree-git-common-polling.test.ts
 6 test-no-real-time-wait:src/main/ipc/worktree-git-common-watch.test.ts
 2 test-no-real-time-wait:src/main/ipc/worktree-git-status-attribution-real-git.test.ts
@@ -446,8 +446,8 @@
 1 test-no-real-time-wait:src/main/windows/windows-process-tree-command-line-patch.test.ts
 6 test-no-real-time-wait:src/main/windows/windows-pty-job.win32.test.ts
 1 test-no-real-time-wait:src/main/worker-thread-child-process/worker-thread-child-process.test.ts
-1 test-no-real-time-wait:src/main/worktree-create-preparation-cancellation.test.ts
-1 test-no-real-time-wait:src/main/worktree-preparation-discard-retry.test.ts
+1 test-no-real-time-wait:src/main/workspaces/creation/preparation/worktree-create-preparation-cancellation.test.ts
+1 test-no-real-time-wait:src/main/workspaces/creation/preparation/worktree-preparation-discard-retry.test.ts
 3 test-no-real-time-wait:src/main/wsl/wsl-command-loop.test.ts
 1 test-no-real-time-wait:src/main/wsl/wsl-orcad-connection.test.ts
 2 test-no-real-time-wait:src/main/wsl/wsl-orcad-real-distro-lane.test.ts
@@ -825,7 +825,7 @@
 3 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts
 1 test-no-wall-clock:src/main/ipc/terminal-render-desync-evidence.test.ts
-3 test-no-wall-clock:src/main/ipc/worktree-base-directory-poller.test.ts
+3 test-no-wall-clock:src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts
 2 test-no-wall-clock:src/main/ipc/worktree-git-status-attribution-real-git.test.ts
 5 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
 2 test-no-wall-clock:src/main/local-worktree-removal-recovery-live.test.ts

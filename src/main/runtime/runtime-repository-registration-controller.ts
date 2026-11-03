@@ -14,7 +14,7 @@ import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
