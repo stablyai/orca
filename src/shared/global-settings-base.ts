@@ -11,7 +11,7 @@ import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update
 import type { PluginSystemSettings } from './plugins/plugin-system-settings'
 import type { TerminalScrollSettings } from './terminal-scroll-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
-import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
+import type { AgentPermissionGlobalSettings } from './agent-launch/permissions/tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
 import type { WindowMaterialSettings } from './window-material'
 import type { EditorSaveSettings } from './editor-save-settings'

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import type { AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { createWorkspaceFromComposerSource } from './source-workspace-create'
 import type { MobileComposerCreateSelection } from './mobile-composer-source-types'
 import { WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS } from './worktree-create-idempotency-policy'

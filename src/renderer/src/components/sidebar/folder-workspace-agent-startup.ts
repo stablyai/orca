@@ -1,7 +1,7 @@
 import {
   resolveAgentStartupPlanInputs,
   type AgentStartupSettings
-} from '../../../../shared/agent-startup-plan-inputs'
+} from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import {
   resolveRepoExecutionHostPlatform,
@@ -13,11 +13,11 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
-} from '@/lib/tui-agent-startup'
+} from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 /** OS of the host that owns a folder group; its agents are quoted for that host's shell. */
 export function getFolderWorkspaceAgentLaunchFact(

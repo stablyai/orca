@@ -1,4 +1,4 @@
-import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'

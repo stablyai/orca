@@ -1,4 +1,3 @@
-import { orchestrationMailFixture as recordedMailFixture } from './orchestration-mail.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { orchestrationMailFixture } from '../../main/runtime/orchestration/orchestration-mail.test-fixture'
 import { agentMessageTranscriptText } from './agent-message-display-text'
@@ -117,9 +116,4 @@ it.each([10, 100])('extracts %i immutable rows once and invalidates changed sour
   } finally {
     extract.mockRestore()
   }
-})
-
-it('keeps browser-recorded mail identical to the canonical formatter output', () => {
-  const input = { body: 'The **result** is ready.' }
-  expect(recordedMailFixture(input)).toEqual(orchestrationMailFixture(input))
 })

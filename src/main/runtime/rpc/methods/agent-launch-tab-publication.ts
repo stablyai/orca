@@ -6,12 +6,12 @@ import { randomUUID } from 'node:crypto'
 import type {
   AgentLaunchPlacementReceipt,
   AgentLaunchResult
-} from '../../../../shared/agent-launch-intent'
-import { AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+} from '../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule
-} from '../../../../shared/agent-launch-tab-publication'
+} from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
@@ -19,7 +19,7 @@ import {
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import { trackRunningAgentLaunchPane } from '../../../agent-launch/agent-launch-pane-attachment'
-import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
+import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import {
   decideAgentLaunchMode,
   readAgentLaunchModeSettings

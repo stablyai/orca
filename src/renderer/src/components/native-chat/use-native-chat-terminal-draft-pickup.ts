@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
-import { PASTED_CONTENT_PLACEHOLDER } from '../../../../shared/agent-prompt-injection'
+import { PASTED_CONTENT_PLACEHOLDER } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { IMAGE_PROMPT_MARKER } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { canMirrorLaunchDraftToNativeChat } from '../../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
 

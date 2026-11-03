@@ -3,7 +3,7 @@ import { createTestStore } from '@/store/slices/store-test-helpers'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { Repo } from '../../../shared/repo-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   ensureDetectedAgentsForWorktree,
   readDetectedAgentsForWorktree

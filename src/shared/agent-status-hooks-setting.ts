@@ -1,6 +1,6 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { TuiAgent } from './tui-agent'
-import { isTuiAgentEnabled } from './tui-agent-selection'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { isTuiAgentEnabled } from './agent-launch/catalog/tui-agent-selection'
 
 export type AgentStatusHooksSettings =
   | Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>>

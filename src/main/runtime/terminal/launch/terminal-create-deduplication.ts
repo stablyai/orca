@@ -17,7 +17,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {

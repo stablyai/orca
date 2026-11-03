@@ -8,8 +8,8 @@ import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewp
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type {
   SavedResumeStartupSource,
@@ -19,7 +19,7 @@ import type {
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export type PtyPaneStartup = {
   command: string

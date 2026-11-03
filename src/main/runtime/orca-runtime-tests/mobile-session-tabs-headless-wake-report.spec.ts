@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  electronMocks,
-  getDefaultWorkspaceSession
-} from '../orca-runtime-test-mocks.spec'
+import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   TEST_REPO_ID,

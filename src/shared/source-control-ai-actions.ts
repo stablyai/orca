@@ -5,9 +5,9 @@ import {
   type ActionArgumentChoices
 } from './source-control-action-argument-choices'
 import { isCustomAgentId, type CustomAgentId } from './commit-message-agent-spec'
-import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
-import type { AgentPermissionChoice } from './tui-agent-permission-choice'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import type { AgentPermissionChoice } from './agent-launch/permissions/tui-agent-permission-choice'
 import {
   isRecord,
   normalizeSourceControlActionLaunchPreferences,

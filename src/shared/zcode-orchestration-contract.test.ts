@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { buildAgentStartupPlan } from './agent-launch/startup/tui-agent-startup'
 
 describe('ZCode orchestration and send-to-agent contract', () => {
   it('keeps the prompt out of the launch command and hands it back as a follow-up', () => {

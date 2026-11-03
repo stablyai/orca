@@ -2,7 +2,7 @@ import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/hos
 import { checkSourceControlAgentActionLaunch } from '@/lib/source-control-agent-action-launch-check'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
 

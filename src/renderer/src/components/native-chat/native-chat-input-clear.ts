@@ -1,5 +1,5 @@
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 
 export const NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT = AGENT_TUI_CLEAR_INPUT_MAX
 
