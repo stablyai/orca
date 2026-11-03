@@ -171,6 +171,7 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.invoke('pty:reportRendererSerializerReady', { ptyId }),
   management: {
     asyncIoHealth: () => ipcRenderer.invoke('pty:management:asyncIoHealth'),
+    startupFallback: () => ipcRenderer.invoke('pty:management:startupFallback'),
     listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
     killAll: () => ipcRenderer.invoke('pty:management:killAll'),
     killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),

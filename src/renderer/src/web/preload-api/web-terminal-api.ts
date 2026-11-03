@@ -108,6 +108,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     reportRendererSerializerReady: () => Promise.resolve(),
     management: {
       asyncIoHealth: () => Promise.resolve({ state: 'unsupported' as const }),
+      // Why: the host's terminal startup state is not reachable from a web client.
+      startupFallback: () => Promise.resolve({ freshTerminalsInProcess: false }),
       listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
