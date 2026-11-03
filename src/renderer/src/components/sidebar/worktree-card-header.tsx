@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertCircle, Server, ServerOff, Star, Trash2 } from 'lucide-react'
+import { AlertCircle, FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Badge } from '@/components/ui/badge'
@@ -50,6 +50,131 @@ function RepoIdentityChip({
   )
 }
 
+export function WorktreeCardIdentityBadges({
+  card,
+  hasHoverDetails
+}: {
+  card: Pick<
+    WorktreeCardController,
+    'worktree' | 'compactCards' | 'newCardStyle' | 'isFolder' | 'detailsHoverControl'
+  >
+  hasHoverDetails: boolean
+}): React.JSX.Element {
+  const { worktree, compactCards, newCardStyle, isFolder, detailsHoverControl } = card
+  const hideIndicatorTooltip = newCardStyle && hasHoverDetails && detailsHoverControl.hoverOpen
+  const closeDetailsForIndicator = (): void => detailsHoverControl.handleHoverOpenChange(false)
+  const resumeDetailsAfterIndicator = (event: React.PointerEvent<HTMLSpanElement>): void => {
+    const root = event.currentTarget.closest('[data-worktree-card-hover-trigger]')
+    const next = event.relatedTarget
+    if (
+      hasHoverDetails &&
+      root &&
+      next instanceof Element &&
+      root.contains(next) &&
+      !next.closest('[data-worktree-card-identity-indicator]') &&
+      !root.querySelector('[data-worktree-card-identity-indicator]:focus')
+    ) {
+      detailsHoverControl.handleHoverOpenChange(true)
+    }
+  }
+
+  return (
+    <>
+      {!compactCards && worktree.isMainWorktree && !isFolder && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {newCardStyle ? (
+              <span
+                role="img"
+                aria-label={translate(
+                  'auto.components.sidebar.WorktreeCard.0d224eff10',
+                  'Primary worktree'
+                )}
+                tabIndex={0}
+                data-worktree-card-identity-indicator=""
+                onPointerEnter={closeDetailsForIndicator}
+                onPointerLeave={resumeDetailsAfterIndicator}
+                onFocus={closeDetailsForIndicator}
+                className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <House className="size-3" aria-hidden="true" />
+              </span>
+            ) : (
+              <Badge
+                variant="outline"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
+              >
+                {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
+              </Badge>
+            )}
+          </TooltipTrigger>
+          <TooltipContent
+            side="right"
+            sideOffset={8}
+            className={cn(hideIndicatorTooltip && 'hidden')}
+          >
+            {translate(
+              'auto.components.sidebar.WorktreeCard.0777de5970',
+              'Primary worktree (original clone directory)'
+            )}
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {worktree.isSparse && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {newCardStyle ? (
+              <span
+                role="img"
+                aria-label={translate('fileExplorer.root.sparseStatus', 'Sparse checkout')}
+                tabIndex={0}
+                data-worktree-card-identity-indicator=""
+                onPointerEnter={closeDetailsForIndicator}
+                onPointerLeave={resumeDetailsAfterIndicator}
+                onFocus={closeDetailsForIndicator}
+                className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <FolderMinus className="size-3.5" aria-hidden="true" />
+              </span>
+            ) : (
+              <Badge
+                variant="outline"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
+              >
+                {translate('auto.components.sidebar.WorktreeCard.4f964d5e8c', 'sparse')}
+              </Badge>
+            )}
+          </TooltipTrigger>
+          <TooltipContent
+            side="right"
+            sideOffset={8}
+            className={cn('max-w-72', hideIndicatorTooltip && 'hidden')}
+          >
+            <div className="space-y-1">
+              {newCardStyle && (
+                <div>{translate('fileExplorer.root.sparseStatus', 'Sparse checkout')}</div>
+              )}
+              <div>
+                {translate(
+                  'auto.components.sidebar.WorktreeCard.0f33af979b',
+                  'Partial checkout. Files outside these paths are not on disk.'
+                )}
+              </div>
+              {worktree.sparseDirectories && worktree.sparseDirectories.length > 0 ? (
+                <div
+                  className={cn('font-mono opacity-80', newCardStyle ? 'text-2xs' : 'text-[11px]')}
+                >
+                  {formatSparseDirectoryPreview(worktree.sparseDirectories)}
+                </div>
+              ) : null}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </>
+  )
+}
+
 export function WorktreeCardHeader({
   card,
   presentation
@@ -81,7 +206,6 @@ export function WorktreeCardHeader({
     setRenamingWorktreeId,
     titleRenaming,
     handleOpenRenameErrorDialog,
-    isFolder,
     handleWorkspaceQuickAction
   } = card
   const {
@@ -217,52 +341,10 @@ export function WorktreeCardHeader({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        {!compactCards && worktree.isMainWorktree && !isFolder && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge
-                variant="outline"
-                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
-              >
-                {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              {translate(
-                'auto.components.sidebar.WorktreeCard.0777de5970',
-                'Primary worktree (original clone directory)'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {worktree.isSparse && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge
-                variant="outline"
-                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
-              >
-                {translate('auto.components.sidebar.WorktreeCard.4f964d5e8c', 'sparse')}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8} className="max-w-72">
-              <div className="space-y-1">
-                <div>
-                  {translate(
-                    'auto.components.sidebar.WorktreeCard.0f33af979b',
-                    'Partial checkout. Files outside these paths are not on disk.'
-                  )}
-                </div>
-                {worktree.sparseDirectories && worktree.sparseDirectories.length > 0 ? (
-                  <div className="font-mono text-[11px] opacity-80">
-                    {formatSparseDirectoryPreview(worktree.sparseDirectories)}
-                  </div>
-                ) : null}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <WorktreeCardIdentityBadges
+          card={card}
+          hasHoverDetails={presentation.hasHoverDetails && !titleRenaming}
+        />
 
         {showTitleRowIndicators && titleRowIndicators}
       </div>

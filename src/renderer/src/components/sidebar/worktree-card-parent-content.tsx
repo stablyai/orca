@@ -69,9 +69,11 @@ export function WorktreeCardParentContent({
     hoverWorkspaceTitle
   } = presentation
   const reviewStale = useWslHostOffForRepo(repo)
+  const identityContentRef = React.useRef<HTMLDivElement>(null)
 
   const identityContent = (
     <div
+      ref={identityContentRef}
       className="group/worktree-card flex w-full min-w-0 flex-col gap-1.5"
       data-worktree-card-hover-trigger=""
     >
@@ -100,7 +102,19 @@ export function WorktreeCardParentContent({
           workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
         }
         openDelay={100}
-        hoverControl={detailsHoverControl}
+        hoverControl={{
+          ...detailsHoverControl,
+          handleHoverOpenChange: (open) => {
+            if (
+              !open ||
+              !identityContentRef.current?.querySelector(
+                '[data-worktree-card-identity-indicator]:hover, [data-worktree-card-identity-indicator]:focus'
+              )
+            ) {
+              detailsHoverControl.handleHoverOpenChange(open)
+            }
+          }
+        }}
         onRenameWorkspaceTitle={affiliateListMode ? undefined : handleRenameTitle}
         onEditIssue={affiliateListMode ? undefined : handleEditIssue}
         onEditComment={affiliateListMode ? undefined : handleEditComment}
