@@ -22071,6 +22071,7 @@
       "chatFind": "在聊天中查找",
       "terminalToggleNativeChat": "在聊天界面和终端之间切换",
       "sidebarChildWorkspacesToggle": "切换子工作区",
+      "sidebarProjectsToggleCollapseAll": "折叠 / 展开所有项目",
       "terminalClearPaneTitle": "清除窗格标题",
       "terminalClosePane": "关闭当前窗格",
       "terminalSplitRight": "向右拆分终端",

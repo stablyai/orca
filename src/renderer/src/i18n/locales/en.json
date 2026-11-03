@@ -22908,6 +22908,7 @@
       "chatFind": "Find in chat",
       "terminalToggleNativeChat": "Switch between Chat UI and terminal",
       "sidebarChildWorkspacesToggle": "Toggle Child Workspaces",
+      "sidebarProjectsToggleCollapseAll": "Collapse / Expand All Projects",
       "terminalClearPaneTitle": "Clear Pane Title",
       "terminalClosePane": "Close active pane",
       "terminalSplitRight": "Split terminal right",

@@ -22017,6 +22017,7 @@
       "chatFind": "채팅에서 찾기",
       "terminalToggleNativeChat": "채팅 UI와 터미널 간 전환",
       "sidebarChildWorkspacesToggle": "하위 워크스페이스 전환",
+      "sidebarProjectsToggleCollapseAll": "모든 프로젝트 접기 / 펼치기",
       "terminalClearPaneTitle": "창 제목 지우기",
       "terminalClosePane": "활성 창 닫기",
       "terminalSplitRight": "터미널 오른쪽으로 분할",

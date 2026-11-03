@@ -22696,6 +22696,7 @@
       "chatFind": "Rechercher dans le chat",
       "terminalToggleNativeChat": "Basculer entre l'interface de chat et le terminal",
       "sidebarChildWorkspacesToggle": "Afficher/masquer les espaces de travail enfants",
+      "sidebarProjectsToggleCollapseAll": "Réduire / développer tous les projets",
       "terminalClearPaneTitle": "Effacer le titre du volet",
       "terminalClosePane": "Fermer le volet actif",
       "terminalSplitRight": "Scinder le terminal vers la droite",

@@ -22335,6 +22335,7 @@
       "chatFind": "Sohbette bul",
       "terminalToggleNativeChat": "Sohbet arayüzü ile terminal arasında geçiş yap",
       "sidebarChildWorkspacesToggle": "Alt çalışma alanlarını göster/gizle",
+      "sidebarProjectsToggleCollapseAll": "Tüm projeleri daralt / genişlet",
       "terminalClearPaneTitle": "Bölme başlığını temizle",
       "terminalClosePane": "Etkin bölmeyi kapat",
       "terminalSplitRight": "Terminali sağa böl",

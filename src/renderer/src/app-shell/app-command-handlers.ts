@@ -1,16 +1,10 @@
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
-import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
-import {
-  getRenderedLineageChipKeys,
-  resolveChildWorkspacesToggleGroupKey
-} from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
   deleteHoveredWorkspaceImmediately,
@@ -22,6 +16,10 @@ import { isGitRepoKind } from '../../../shared/repo-kind'
 import { openPluginsSettings } from '@/lib/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
+import {
+  createChildWorkspacesShortcutHandler,
+  createProjectCollapseAllShortcutHandler
+} from './sidebar-group-collapse-shortcuts'
 import type {
   KeybindingActionId,
   KeybindingContext,
@@ -160,33 +158,15 @@ export function createAppCommandHandlers(
     ],
     [
       'sidebar.childWorkspaces.toggle',
-      () => {
-        const store = useAppStore.getState()
-        // Locally controlled dialogs do not set activeModal.
-        if (
-          store.activeModal !== 'none' ||
-          floatingWorkspaceFocused ||
-          hasVisibleOverlay({ ignoreMatches: '[role="listbox"], [role="menu"]' })
-        ) {
-          return false
-        }
-        const groupKey = resolveChildWorkspacesToggleGroupKey(
-          store,
-          getRenderedLineageChipKeys(store)
-        )
-        if (!groupKey) {
-          return false
-        }
-        return claim('sidebar.childWorkspaces.toggle', () => {
-          const expanding = store.collapsedGroups.has(groupKey)
-          // Match chip-click scroll anchoring to avoid viewport jumps.
-          requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
-          store.toggleCollapsedGroup(groupKey)
-          if (expanding) {
-            store.setSidebarOpen(true)
-          }
-        })
-      }
+      createChildWorkspacesShortcutHandler(floatingWorkspaceFocused, (run) =>
+        claim('sidebar.childWorkspaces.toggle', run)
+      )
+    ],
+    [
+      'sidebar.projects.toggleCollapseAll',
+      createProjectCollapseAllShortcutHandler(floatingWorkspaceFocused, (run) =>
+        claim('sidebar.projects.toggleCollapseAll', run)
+      )
     ],
     [
       'floatingWorkspace.maximize',

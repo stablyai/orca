@@ -22669,6 +22669,7 @@
       "chatFind": "Localizar no chat",
       "terminalToggleNativeChat": "Alternar entre a interface de chat e o terminal",
       "sidebarChildWorkspacesToggle": "Alternar Espaços de Trabalho Filhos",
+      "sidebarProjectsToggleCollapseAll": "Recolher / Expandir Todos os Projetos",
       "terminalClearPaneTitle": "Limpar Título do Painel",
       "terminalClosePane": "Fechar painel ativo",
       "terminalSplitRight": "Dividir terminal para a direita",

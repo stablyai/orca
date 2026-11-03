@@ -22509,6 +22509,7 @@
       "chatFind": "Im Chat suchen",
       "terminalToggleNativeChat": "Zwischen Chat-Oberfläche und Terminal wechseln",
       "sidebarChildWorkspacesToggle": "Untergeordnete Arbeitsbereiche ein-/ausblenden",
+      "sidebarProjectsToggleCollapseAll": "Alle Projekte ein-/ausklappen",
       "terminalClearPaneTitle": "Bereichstitel leeren",
       "terminalClosePane": "Aktiven Bereich schließen",
       "terminalSplitRight": "Terminal nach rechts teilen",

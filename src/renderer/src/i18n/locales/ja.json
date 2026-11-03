@@ -22017,6 +22017,7 @@
       "chatFind": "チャット内を検索",
       "terminalToggleNativeChat": "チャット UI とターミナルを切り替え",
       "sidebarChildWorkspacesToggle": "子ワークスペースの切り替え",
+      "sidebarProjectsToggleCollapseAll": "すべてのプロジェクトを折りたたむ / 展開",
       "terminalClearPaneTitle": "ペインのタイトルをクリア",
       "terminalClosePane": "アクティブなペインを閉じる",
       "terminalSplitRight": "ターミナルを右に分割",

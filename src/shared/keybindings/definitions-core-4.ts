@@ -52,6 +52,14 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'sidebar.projects.toggleCollapseAll',
+    title: 'Collapse / Expand All Projects',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sidebar', 'projects', 'groups', 'collapse', 'expand', 'all'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',
