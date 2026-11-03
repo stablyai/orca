@@ -8,7 +8,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
 import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
 import {
@@ -29,7 +29,7 @@ import {
 import {
   getLocalWorktreeCatalogVersion,
   localWorktreeCatalogVersionAt
-} from '../../../local-worktree-scan-generation'
+} from '../../../workspaces/catalog/local-worktree-scan-generation'
 import {
   describeWorktreeScanFailure,
   loggedWorktreeListFailures,

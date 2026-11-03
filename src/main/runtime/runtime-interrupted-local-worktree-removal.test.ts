@@ -30,7 +30,7 @@ import type { WorktreeIpcContext } from '../ipc/worktrees/worktree-ipc-context'
 import * as backgroundRemoval from '../workspaces/removal/worktree-background-removal'
 import * as worktreeGit from '../git/worktree-listing'
 import * as worktreeRemote from '../ipc/worktree-remote'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import * as removalTable from '../workspaces/removal/worktree-removal-table'
 import { listWorktreesStrict } from '../git/worktree'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
@@ -60,7 +60,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...(await importOriginal<typeof diskFs>()) }
 })
 
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: vi.fn(() => ({}))
 }))
 vi.mock('../filesystem/host-tree-removal', async (importOriginal) => {

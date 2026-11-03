@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/cross-platform-path'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { getWorktreeMirrorDistro } from '../../../project-runtime-git-options'
+import { getWorktreeMirrorDistro } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   computeWorkspaceRoot,
   getWorktreePathSettings,

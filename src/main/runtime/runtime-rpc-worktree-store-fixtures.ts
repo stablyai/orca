@@ -1,3 +1,4 @@
+import { vi } from 'vitest'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 export const makeStore = (overrides?: { isUnread?: boolean }) => ({
   getRepo: (id: string) =>
@@ -50,3 +51,19 @@ export const makeStore = (overrides?: { isUnread?: boolean }) => ({
     branchPrefixCustom: ''
   })
 })
+
+export function createWorktreeListingMocks() {
+  const worktrees = [
+    {
+      path: '/tmp/worktree-a',
+      head: 'abc',
+      branch: 'feature/foo',
+      isBare: false,
+      isMainWorktree: false
+    }
+  ]
+  return {
+    listWorktrees: vi.fn().mockResolvedValue(worktrees),
+    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+  }
+}

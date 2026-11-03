@@ -1,3 +1,6 @@
+import { mobilePresenceStore as store } from './orca-runtime-test-mocks/mobile-presence-store'
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktree-listing'
 import * as inputAdmission from './terminal-input-admission'
 import './mobile-subscribe-integration.spec'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
@@ -5,6 +8,22 @@ import { listWorktrees } from '../git/worktree'
 import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -36,36 +55,6 @@ vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
-
-const store = {
-  getRepo: () => ({
-    id: 'repo-1',
-    path: '/tmp/repo',
-    displayName: 'repo',
-    badgeColor: 'blue',
-    addedAt: 1
-  }),
-  getRepos: () => [store.getRepo()],
-  addRepo: () => {},
-  updateRepo: () => undefined as never,
-  getAllWorktreeMeta: () => ({}),
-  getWorktreeMeta: () => undefined,
-  getGitHubCache: () => ({ pr: {}, issue: {} }),
-  setWorktreeMeta: () => undefined as never,
-  removeWorktreeMeta: () => {},
-  getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
-  addRetiredWorktreeName: () => {},
-  mergeRetiredWorktreeNames: () => false,
-  getSettings: () => ({
-    workspaceDir: '/tmp/workspaces',
-    nestWorkspaces: false,
-    refreshLocalBaseRefOnWorktreeCreate: false,
-    branchPrefix: 'none',
-    branchPrefixCustom: '',
-    // Legacy restore tests need a finite 5s; production defaults to indefinite hold.
-    mobileAutoRestoreFitMs: 5_000
-  })
-}
 
 // #7588 held-modal cases need per-test indefinite hold without mutating the shared default.
 function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
