@@ -80,14 +80,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   uiLanguagePortugueseMigrationApplied?: boolean
   appIcon: AppIconId
   appFontFamily: string
-  editorAutoSave: boolean
   editorFormatOnSave?: boolean
   /** Days a release must be public before Orca offers it; absent/0 offers releases immediately. */
   updateDelayDays?: number
-  editorAutoSaveDelayMs: number
-  editorMinimapEnabled: boolean
-  /** Defaults on for profiles saved before file-editor wrapping became configurable. */
-  editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
