@@ -79,4 +79,19 @@ describe('buildAgentResumeStartupPlan launch recipe', () => {
       agentArgs: '--dangerously-skip-permissions'
     })
   })
+
+  it('preserves complete option-value pairs when restoring recorded arguments', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      agentCommand: 'claude --add-dir /a',
+      agentArgs: '--add-dir /a --add-dir /b'
+    })
+
+    expect(plan?.launchCommand).toContain('--add-dir /a')
+    expect(plan?.launchCommand).toContain("'--add-dir' '/b'")
+    expect(plan?.launchCommand).toContain('--resume')
+  })
 })

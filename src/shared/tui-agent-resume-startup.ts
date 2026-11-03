@@ -21,6 +21,42 @@ import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import { parseWslUncPath } from './wsl-paths'
 import { dropRecordedAgentPermissionArgs } from './tui-agent-permission-lift'
 
+function groupArgTokens(tokens: readonly string[]): string[][] {
+  const groups: string[][] = []
+  let current: string[] = []
+  for (const token of tokens) {
+    if (token.startsWith('-') && current.length > 0) {
+      groups.push(current)
+      current = [token]
+    } else {
+      current.push(token)
+    }
+  }
+  if (current.length > 0) {
+    groups.push(current)
+  }
+  return groups
+}
+
+function containsTokenSequence(haystack: readonly string[], needle: readonly string[]): boolean {
+  if (needle.length === 0) {
+    return true
+  }
+  for (let i = 0; i <= haystack.length - needle.length; i += 1) {
+    let match = true
+    for (let j = 0; j < needle.length; j += 1) {
+      if (haystack[i + j] !== needle[j]) {
+        match = false
+        break
+      }
+    }
+    if (match) {
+      return true
+    }
+  }
+  return false
+}
+
 function withMissingRecordedArgs(
   command: string,
   agentArgs: string | null | undefined,
@@ -34,7 +70,13 @@ function withMissingRecordedArgs(
   if (!commandTokens.ok || !argTokens.ok || argTokens.tokens.length === 0) {
     return command
   }
-  const missingTokens = argTokens.tokens.filter((token) => !commandTokens.tokens.includes(token))
+  const argGroups = groupArgTokens(argTokens.tokens)
+  const missingTokens: string[] = []
+  for (const group of argGroups) {
+    if (!containsTokenSequence(commandTokens.tokens, group)) {
+      missingTokens.push(...group)
+    }
+  }
   if (missingTokens.length === 0) {
     return command
   }
