@@ -2,9 +2,7 @@ import {
   recordStartedHandle,
   type OpenedProvider
 } from './structured-agent-session-provider-handle-publication'
-import { continueNativeRecovery } from './structured-agent-session-recovery-lifetime'
 import type { StructuredAgentSessionOptionsReportedEvent } from './structured-agent-session-adapter'
-
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
@@ -48,10 +46,6 @@ export type StructuredAgentSessionProviderStartedContext = {
   flushLifecycle?: (sessionId: string) => Promise<unknown>
   /** Release startup’s delivery barrier and drain all currently handable sends. */
   wakeDelivery: (sessionId: string) => Promise<void>
-  continueStartingChild?: (
-    sessionId: string,
-    child: StructuredAgentSessionProviderChildIdentity
-  ) => Promise<void>
   stopStartingChild: (sessionId: string, child: StructuredAgentSessionProviderChildIdentity) => void
 }
 
@@ -84,26 +78,6 @@ export async function settleStructuredAgentSessionProviderStarted(
     }
     if (!(await applyRewindAtStart(context, event.sessionId, session, rewind))) {
       context.stopStartingChild(event.sessionId, child)
-      return null
-    }
-    if (
-      await continueNativeRecovery({
-        store: context.deps.store,
-        journal: session.journal,
-        record: context.deps.store.requireWritableRecord(event.sessionId),
-        child: session.child,
-        busy:
-          !!context.deps.adapter.holdsDispatch?.(event.sessionId) ||
-          !!context.deps.adapter.liveTurnId?.(event.sessionId),
-        now: context.now(),
-        stop: async () => {
-          if (!context.continueStartingChild) {
-            throw new Error('Recovery construction has no lifetime owner')
-          }
-          await context.continueStartingChild(event.sessionId, child)
-        }
-      })
-    ) {
       return null
     }
     if (

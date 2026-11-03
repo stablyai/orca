@@ -1,4 +1,3 @@
-import { rebaseCompletedContextRewind } from '../../native-chat/agent-session-journal/context-transfer-rebase'
 import type { AgentSessionStoreTransactions } from './records/agent-session-store-transactions'
 import {
   commitConversationClearRecord,
@@ -31,17 +30,6 @@ export function createAgentSessionConversationReceipts(
       ...args: Parameters<typeof commitAgentSessionRewindCompletion> extends [unknown, ...infer A]
         ? A
         : never
-    ) => {
-      const receipt = transactions.receipt((draft) =>
-        commitAgentSessionRewindCompletion(draft, ...args)
-      )
-      return {
-        ...receipt,
-        write: (db, row) => {
-          receipt.write(db, row)
-          rebaseCompletedContextRewind(db, args[0])
-        }
-      }
-    }
+    ) => transactions.receipt((draft) => commitAgentSessionRewindCompletion(draft, ...args))
   }
 }

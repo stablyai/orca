@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 // Durable exit proof distinguishes safe new-operation retry from a possibly existing session.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -44,29 +43,26 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-failed-create-verdict-'))
   resetHostTestOperationIds()
-  acquire = vi.fn(async ({ fence, spawnToken }) =>
-    readyConstruction({
-      acquisitionGeneration: globalThis.crypto.randomUUID(),
-      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-      link: {
-        linkId: `link-${fence}`,
-        handle: codexProviderHandle(THREAD),
-        origin: 'created',
-        mintedAtFence: fence,
-        observedAt: NOW
-      }
-    })
-  )
+  acquire = vi.fn(async ({ fence, spawnToken }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
+    process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+    link: {
+      linkId: `link-${fence}`,
+      handle: codexProviderHandle(THREAD),
+      origin: 'created',
+      mintedAtFence: fence,
+      observedAt: NOW
+    }
+  }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
-      open: async () =>
-        readyConstruction({
-          reportedOptions: { model: '' }
-        }),
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire,
       releaseAcquisition: vi.fn(async () => true),
       dispatch: vi.fn(async () => ({ state: 'admitted' as const })),

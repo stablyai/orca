@@ -1,4 +1,3 @@
-import { prepareRecoveryCarrier } from './structured-agent-session-recovery-carrier'
 // Commit pending/settlement around an external provider call so concurrent sends remain acceptable.
 
 import type { UnsentSendHold } from '../agent-session-journal/journal-unsent-send-hold'
@@ -14,7 +13,6 @@ import {
 import { dispatchStructuredInputSafely } from './structured-agent-session-input-dispatch'
 import type { AgentSessionHandoverContext } from './structured-agent-session-host-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { resolveHandover } from './structured-agent-session-operation-settlement'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -65,7 +63,6 @@ export async function beginSubmissionHandover(
     )
     return null
   }
-  let carrier = prepareRecoveryCarrier(ctx, submission, body)
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   let carried = carriedStoppedHistory(ctx, turnScope, submission, body)
@@ -86,8 +83,7 @@ export async function beginSubmissionHandover(
   )
   const attempt = ctx.acquireAborts?.begin(ctx.sessionId, true, false, isBound)
   const queued = submission.queuedMessageId !== undefined
-  let dispatchBody = carried ? withStoppedHistory(body, carried.messages) : body
-  const pending = async () => {
+  try {
     await ctx.journal.resolveDispatch({
       clientMessageId,
       state: 'pending',
@@ -95,11 +91,6 @@ export async function beginSubmissionHandover(
       turnScope,
       ...(carried ? { carries: carried.covers } : {})
     })
-  }
-  try {
-    if (!carrier.required) {
-      await pending()
-    }
   } catch (error) {
     attempt?.end()
     release?.()
@@ -109,10 +100,6 @@ export async function beginSubmissionHandover(
   const prepareFresh = async (fence: number): Promise<AgentJournalMessageItem> => {
     ctx.fence = fence
     carried = carriedStoppedHistory(ctx, AGENT_JOURNAL_THREAD_SCOPE, submission, body)
-    carrier = prepareRecoveryCarrier(ctx, submission, body)
-    if (carrier.required) {
-      return dispatchBody
-    }
     await ctx.journal.resolveDispatch({
       clientMessageId,
       state: 'pending',
@@ -131,13 +118,6 @@ export async function beginSubmissionHandover(
         try {
           for (;;) {
             try {
-              dispatchBody = await carrier.run(
-                carried ? withStoppedHistory(body, carried.messages) : body,
-                commit,
-                ownsChild,
-                pending,
-                attempt?.signal
-              )
               markStructuredAgentSessionInputUnadmitted(
                 ctx.journal,
                 clientMessageId,
@@ -151,7 +131,7 @@ export async function beginSubmissionHandover(
                   ? await dispatchStructuredInputSafely(
                       ctx,
                       clientMessageId,
-                      dispatchBody,
+                      carried ? withStoppedHistory(body, carried.messages) : body,
                       requestedAt,
                       submission.options,
                       queued,
@@ -193,14 +173,9 @@ export async function beginSubmissionHandover(
             }
           }
         } catch (error) {
-          if (error instanceof StructuredAgentSessionInputNotAdmitted && error.outcome) {
-            unwritten = true
-            outcome = error.outcome
-          } else {
-            outcome = {
-              state: 'unknown',
-              reason: error instanceof Error ? error.message : String(error)
-            }
+          outcome = {
+            state: 'unknown',
+            reason: error instanceof Error ? error.message : String(error)
           }
         } finally {
           markStructuredAgentSessionInputUnadmitted(ctx.journal, clientMessageId, released, false)

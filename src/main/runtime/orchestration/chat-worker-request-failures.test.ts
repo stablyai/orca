@@ -439,9 +439,6 @@ it('normalizes linked refused starts, reads explicitly scoped late words past a 
     { kind: 'turn', turnId: 'start-turn', state: 'running' },
     { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
-  if (started === null) {
-    throw new Error('Expected the ordinary journal item to be retained')
-  }
   await r.journal.appendLifecycleBatch({
     settlementId: 'failed-start',
     fence: 0,

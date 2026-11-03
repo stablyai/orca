@@ -115,7 +115,6 @@ export class StructuredAgentSessionHost {
       runtimeState: this.runtimeState,
       wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
       stopStartingChild: (...args) => this.lifetime.stopStartingChild(...args),
-      continueStartingChild: (...args) => this.lifetime.continueStartingChild(...args),
       failStartingChild: (...args) => this.lifetime.failStartingChild(...args),
       trackOpen: (open) => this.tasks.trackAttach(open)
     })

@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -150,25 +149,22 @@ export async function createRestTestRig(
   }
   let store = await openTestAgentSessionRecordStore(root)
   const adapter: RestTestAdapter = {
-    open: async () =>
-      readyConstruction({
-        reportedOptions: { model: '' }
-      }),
-    acquire: vi.fn(async ({ fence, spawnToken }) =>
-      readyConstruction({
-        acquisitionGeneration: `generation-${++generations}`,
-        process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-        link: {
-          linkId: `link-${fence}`,
-          handle: codexProviderHandle(THREAD),
-          origin: store.getRecord(SESSION)?.providerHandleChain.length
-            ? ('resumed' as const)
-            : ('created' as const),
-          mintedAtFence: fence,
-          observedAt: clock.now
-        }
-      })
-    ),
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
+    acquire: vi.fn(async ({ fence, spawnToken }) => ({
+      acquisitionGeneration: `generation-${++generations}`,
+      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+      link: {
+        linkId: `link-${fence}`,
+        handle: codexProviderHandle(THREAD),
+        origin: store.getRecord(SESSION)?.providerHandleChain.length
+          ? ('resumed' as const)
+          : ('created' as const),
+        mintedAtFence: fence,
+        observedAt: clock.now
+      }
+    })),
     closeSession: vi.fn(async () => true),
     dispatch: vi.fn(async () => acceptedDispatch()),
     acknowledgeSessionRelease: vi.fn(),

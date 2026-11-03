@@ -72,7 +72,9 @@ export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStr
             transport: ACP_HANDLE_TRANSPORT,
             agent: spec.agent,
             nativeId: PROVIDER_SESSION
-          })
+          }),
+          mayBeUnsaved: () => false,
+          unannouncedLosses: () => []
         }
       : null
   })

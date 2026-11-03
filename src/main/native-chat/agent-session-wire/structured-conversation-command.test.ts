@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { listStructuredProviderSessionOwnership } from './structured-provider-session-ownership'
 import { findConflictingStructuredAdoption } from '../structured-agent-session-history-adoption'
@@ -116,14 +115,13 @@ beforeEach(async () => {
   adapter = {
     supportsLocation: (location) =>
       location.executionHostId === 'local' && location.wslDistro === null,
-    open: async () =>
-      readyConstruction({
-        reportedOptions: { model: '' }
-      }),
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: vi.fn(async (input) => {
       acquisitions++
       const acquisitionGeneration = `acquisition-${acquisitions}`
-      return readyConstruction({
+      return {
         acquisitionGeneration,
         process: {
           hostId: 'local',
@@ -145,7 +143,7 @@ beforeEach(async () => {
               `00000000-0000-4000-8000-${String(acquisitions).padStart(12, '0')}`
           )
         }
-      })
+      }
     }),
     dispatch: vi.fn(async () => ({ state: 'unknown' as const, reason: 'test' })),
     cancelTurn: vi.fn(async () => ({ cancelled: true })),

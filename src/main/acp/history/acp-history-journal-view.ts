@@ -117,15 +117,6 @@ export function acpHistoryJournalView(
   )
   // Aliases are rejected; their target bodies cannot establish exact provider coverage.
   const requests = new Set(eligible.map((send) => `prompt:${send.clientMessageId}`))
-  const recoveryItems = new Set(
-    candidates.flatMap(({ items }) =>
-      items.flatMap((item) =>
-        history.recoveryEcho?.(item.identity, item.body)?.kind === 'carrier'
-          ? [agentJournalItemKey(item.identity)]
-          : []
-      )
-    )
-  )
   const origin = usableJournalHistoryOrigin(history.historyOrigin())
   const handle = origin?.providerHandle
   const importedAt =
@@ -140,9 +131,8 @@ export function acpHistoryJournalView(
     [...items.values()].map((item) => [item.itemId, item.revision]),
     [...canonical],
     [...requests],
-    [...recoveryItems],
     importedAt,
     retained
   ])
-  return { items, canonical, requests, recoveryItems, importedAt, retained, token }
+  return { items, canonical, requests, importedAt, retained, token }
 }

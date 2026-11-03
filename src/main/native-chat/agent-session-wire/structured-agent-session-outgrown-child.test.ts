@@ -1,5 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
-import { readyConstructionValue } from './structured-agent-session-instant-start.test-support'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -51,12 +49,10 @@ describe('a send after the account was switched', () => {
     if (!acquire) {
       throw new Error('the rig acquires through a mock implementation')
     }
-    rig.adapter.acquire.mockImplementation(async (request) =>
-      readyConstruction({
-        ...readyConstructionValue(await acquire(request)),
-        accountHome: selected
-      })
-    )
+    rig.adapter.acquire.mockImplementation(async (request) => ({
+      ...(await acquire(request)),
+      accountHome: selected
+    }))
   })
 
   afterEach(async () => {
@@ -151,16 +147,16 @@ describe('a send while the selected account folder is not set up yet', () => {
     rig.adapter.acquire.mockImplementation(async (input) => {
       // The real router prepares the selected account, joining or failing its setup, as a launch does.
       const recipe = await prepareClaudeLaunchAccount(router, {}, home('a'))
-      const acquired = readyConstructionValue(await base(input))
+      const acquired = await base(input)
       if (!acquired.link) {
         throw new Error('the rig acquisition always links a provider handle')
       }
-      return readyConstruction({
+      return {
         ...acquired,
         accountHome: agentSessionAccountHome(CLAUDE_STRUCTURED_AGENT, recipe.home),
         accountRecipe: recipe,
         link: { ...acquired.link, handle: claudeProviderHandle(PROVIDER, null) }
-      })
+      }
     })
     const attached = await rig.host.attach(
       CALLER,
@@ -243,9 +239,6 @@ describe('a send while the selected account folder is not set up yet', () => {
   })
 
   it('starts a resting chat through account preparation instead of refusing the read', async () => {
-    await vi.waitFor(() =>
-      expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
-    )
     // Attach started the child on a; idle release puts the chat at rest before the switch.
     rig.clock.now += IDLE_MS + 1
     await sweepOnce(rig.host)

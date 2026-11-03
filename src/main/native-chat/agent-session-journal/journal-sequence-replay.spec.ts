@@ -31,12 +31,7 @@ export function registerJournalSequenceReplayTests(
           })
         )
       )
-      const sequences = results.map((result) => {
-        if (!result) {
-          throw new Error('Expected every ordinary item to be retained')
-        }
-        return result.cursor.sequence
-      })
+      const sequences = results.map((result) => result.cursor.sequence)
       expect(new Set(sequences).size).toBe(25)
       expect(sequences.slice().sort((a, b) => a - b)).toEqual(
         Array.from({ length: 25 }, (_unused, index) => index + 2)
@@ -59,14 +54,7 @@ export function registerJournalSequenceReplayTests(
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
         })
       ])
-      expect(
-        results.map((result) => {
-          if (!result) {
-            throw new Error('Expected every ordinary item to be retained')
-          }
-          return result.revision
-        })
-      ).toEqual([1, 2, 3])
+      expect(results.map((result) => result.revision)).toEqual([1, 2, 3])
       expect(journal.snapshot().items).toHaveLength(1)
       expect(journal.snapshot().items[0]?.revision).toBe(3)
     })
@@ -81,9 +69,6 @@ export function registerJournalSequenceReplayTests(
         fence: 1,
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
-      if (latest === null) {
-        throw new Error('Expected the ordinary journal item to be retained')
-      }
       await journal.appendItem(fixture.item(0), fixture.body('first revised'), {
         fence: 1,
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
@@ -161,9 +146,6 @@ export function registerJournalSequenceReplayTests(
         fence: 1,
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
-      if (!oversized || !mimic) {
-        throw new Error('Expected both ordinary identities to be retained')
-      }
       expect(oversized.itemId).not.toBe(mimic.itemId)
       expect([oversized.revision, mimic.revision]).toEqual([1, 1])
 

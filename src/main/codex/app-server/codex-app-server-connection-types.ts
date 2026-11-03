@@ -21,11 +21,7 @@ export type CodexAppServerConnection = {
     method: string,
     params?: Record<string, unknown>,
     /** `timeoutMs` null: no deadline; the caller bounds the wait. */
-    options?: {
-      timeoutMs?: number | null
-      onReply?: (result?: unknown) => void
-      onRequestId?: (id: number) => void
-    }
+    options?: { timeoutMs?: number | null; onReply?: (result?: unknown) => void }
   ) => Promise<unknown>
   notify: (method: string, params?: Record<string, unknown>) => void
   respond: (id: number | string, result: unknown) => void

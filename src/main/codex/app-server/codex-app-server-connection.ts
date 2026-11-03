@@ -128,11 +128,7 @@ async function connectCodexAppServer(
   function request(
     method: string,
     params?: Record<string, unknown>,
-    options: {
-      timeoutMs?: number | null
-      onReply?: (result?: unknown) => void
-      onRequestId?: (id: number) => void
-    } = {}
+    options: { timeoutMs?: number | null; onReply?: (result?: unknown) => void } = {}
   ): Promise<unknown> {
     if (closing) {
       return Promise.reject(new Error(`codex app-server connection is closed (${method})`))
@@ -144,11 +140,6 @@ async function connectCodexAppServer(
       return Promise.reject(buildExitError())
     }
     const id = nextRequestId++
-    try {
-      options.onRequestId?.(id)
-    } catch {
-      /* Observation cannot authorize or prevent the write. */
-    }
     const timeoutMs =
       options.timeoutMs === undefined ? DEFAULT_CODEX_REQUEST_TIMEOUT_MS : options.timeoutMs
     return new Promise<unknown>((resolve, reject) => {

@@ -13,13 +13,13 @@ import { rejectedAcpDispatch, type AcpStructuredSession } from './acp-structured
 import { applyAcpMessageOptions } from './acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { awaitAcpTurnEnd, interruptAcpTurn } from './acp-structured-stop'
-import { acpSessionAcceptsImages, readAcpLiveOptions } from './acp-structured-options'
-import { acpDispatchPrompt, acpPromptBlocks, ACP_PROMPT_LINE_BUDGET } from './acp-prompt-content'
+import { acpDispatchPrompt } from './acp-prompt-content'
 import {
   ACP_OPTION_WRITE_TIMEOUT_MS,
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
+import { readAcpLiveOptions } from './acp-structured-options'
 import { writeAcpSessionOption } from './acp-session-option-write'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 import * as childState from './acp-structured-child'
@@ -65,7 +65,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       throw new Error('ACP child changed before it opened')
     }
     try {
-      return await child.open(input.signal, input.constructionIntent)
+      return await child.open(input.signal)
     } catch (error) {
       const failure = childState.acpStartupFailure(child, error)
       if (failure) {
@@ -119,15 +119,6 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     // Admission precedes provider confirmation of the send.
     return { state: 'admitted' }
   }
-
-  historicalInputBytes: NonNullable<SessionAdapter['historicalInputBytes']> = async (input) => ({
-    bytes: Buffer.byteLength(
-      JSON.stringify(
-        await acpPromptBlocks(input.body, await acpSessionAcceptsImages(this.live(input.sessionId)))
-      )
-    ),
-    limit: ACP_PROMPT_LINE_BUDGET
-  })
 
   compact: NonNullable<SessionAdapter['compact']> = async (input) =>
     this.live(input.sessionId).turns.compact(input.command)

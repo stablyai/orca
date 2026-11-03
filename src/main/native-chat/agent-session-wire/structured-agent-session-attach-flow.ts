@@ -1,4 +1,3 @@
-import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
@@ -90,8 +89,7 @@ export type AttachFlowInput = {
     acquisitionGeneration: string | null,
     owner: AttachedOwner,
     /** The account home the spawned child launched under, when its adapter reports one. */
-    accountHome?: AgentSessionAccountHome,
-    recoveryPermit?: RecoveryConstructionPermit
+    accountHome?: AgentSessionAccountHome
   ) => Promise<void> | void
   /** Wait outside commits for sink drains/provider reads. */
   beforePublish?: (owner: AttachedOwner) => Promise<void>
@@ -142,7 +140,6 @@ export async function performAttach(
 
   let record: AgentSessionRecord
   let acquisitionGeneration: string | null = null
-  let recoveryPermit: RecoveryConstructionPermit | undefined
   let accountHome: AgentSessionAccountHome | undefined
   let owner: AttachedOwner = 'kept'
   let reservedRecord: AgentSessionRecord | null = null
@@ -212,7 +209,6 @@ export async function performAttach(
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
       accountHome = acquired.accountHome
-      recoveryPermit = acquired.recoveryPermit
       owner = 'acquired'
     }
   } catch (error) {
@@ -271,7 +267,7 @@ export async function performAttach(
         openConversation: input.openConversation
       })
       await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items)
-      await input.onAttached(journal, acquisitionGeneration, owner, accountHome, recoveryPermit)
+      await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
       return journal
     })
     await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())

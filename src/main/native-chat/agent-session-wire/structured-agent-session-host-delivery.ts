@@ -1,7 +1,4 @@
-import { retireDeliveryChild } from './structured-agent-session-recovery-lifetime'
-
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
-
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -31,8 +28,15 @@ import type {
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { settleInterruptedStructuredAgentSessionCommands } from './structured-rewind-recovery'
-import { structuredAgentSessionChildOwesWork } from './structured-agent-session-outgrown-child'
-import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
+import {
+  retireOutgrownStructuredAgentSessionChild,
+  structuredAgentSessionChildOwesWork
+} from './structured-agent-session-outgrown-child'
+import {
+  structuredAgentSessionLaunchPermission,
+  structuredAgentSessionInputCompilerPermission,
+  structuredAgentSessionImmediatePermission
+} from './structured-agent-session-launch-permission'
 import { acceptedNoLaterThan } from './structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { settleStructuredAgentSessionLeftovers } from './structured-agent-session-leftover-settlement'
@@ -102,19 +106,44 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
-    retireOutgrownChild: (sessionId, continuingId, next) =>
-      retireDeliveryChild(
-        {
-          deps,
-          sessions,
-          clientDelivery: input.clientDelivery,
-          stopOutgrownAgent: input.stopOutgrownAgent,
-          retainedWork
+    retireOutgrownChild: async (sessionId, continuingId, next) => {
+      // Defer retirement while personal Stop holds handover; its next step decides.
+      const session = input.clientDelivery.readStopping(sessionId)
+        ? undefined
+        : sessions.get(sessionId)
+      await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
+        next,
+        requiresModelTransitionRestart: (submission) =>
+          session?.child?.phase === 'ready' &&
+          deps.adapter.requiresModelTransitionRestart?.({
+            sessionId,
+            fence: session.child.fence,
+            executionOptions: submission.options
+          }) === true,
+        work: retainedWork(sessionId, continuingId),
+        launchPermission: async () => {
+          const record = deps.store.getRecord(sessionId)
+          return (
+            structuredAgentSessionInputCompilerPermission(session?.journal, continuingId) ??
+            (record ? structuredAgentSessionLaunchPermission(deps, record) : null)
+          )
         },
-        sessionId,
-        continuingId,
-        next
-      ),
+        permissionRequiresAcquisition: (mode) =>
+          continuingId
+            ? true
+            : (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, mode) ??
+              mode !== session?.child?.permissionMode),
+        stopAgent: (sessionId) => {
+          deps.store.requireWritableRecord(sessionId)
+          return input.stopOutgrownAgent(sessionId)
+        },
+        launchAccountHome: async () => {
+          const record = deps.store.getRecord(sessionId)
+          return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
+        },
+        logger: deps.logger
+      })
+    },
     immediatePermission: (sessionId) => {
       const record = deps.store.getRecord(sessionId)
       return record ? structuredAgentSessionImmediatePermission(deps, record) : null

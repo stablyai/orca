@@ -105,11 +105,6 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
       for (const { source, items } of candidates) {
         check()
         const coverage = kind.get(source.turn)
-        for (const item of items) {
-          if (baseline.recoveryItems.has(agentJournalItemKey(item.identity))) {
-            compose(item)
-          }
-        }
         const dividerIdentity = {
           provider: 'legacy',
           agent: input.agent,

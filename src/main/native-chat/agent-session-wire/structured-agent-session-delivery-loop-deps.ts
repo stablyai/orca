@@ -34,7 +34,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
     sessionId: string,
     continuingId?: string,
     next?: AgentJournalSubmission
-  ) => Promise<void | 'waiting'>
+  ) => Promise<void>
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   retainedWork?: (sessionId: string, continuingId: string) => boolean
   readiness: (

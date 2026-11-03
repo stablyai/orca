@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 // Quiet tools may emit only start/end rows; pre-crash lease renewal supplies the latest observed work time.
 
@@ -161,10 +160,9 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): void {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
-      open: async () =>
-        readyConstruction({
-          reportedOptions: { model: '' }
-        }),
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire: vi.fn(),
       dispatch: vi.fn(),
       cancelTurn: vi.fn(),
@@ -418,10 +416,9 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
     openHost({
       adapter: {
-        open: async () =>
-          readyConstruction({
-            reportedOptions: { model: '' }
-          }),
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
         acquire,
         dispatch: vi.fn(),
         cancelTurn: vi.fn(),
@@ -463,7 +460,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
           { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: RELAUNCHED_AT },
           { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )
-        return readyConstruction({
+        return {
           acquisitionGeneration: globalThis.crypto.randomUUID(),
           process,
           link: {
@@ -473,15 +470,14 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
             mintedAtFence: fence,
             observedAt: RELAUNCHED_AT
           }
-        })
+        }
       }
     )
     openHost({
       adapter: {
-        open: async () =>
-          readyConstruction({
-            reportedOptions: { model: '' }
-          }),
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
         acquire,
         dispatch: vi.fn(),
         cancelTurn: vi.fn(),
@@ -544,7 +540,7 @@ async function hostWithFailingFirstStart(failure: Error) {
       if (fence === 15) {
         throw failure
       }
-      return readyConstruction({
+      return {
         acquisitionGeneration: globalThis.crypto.randomUUID(),
         process,
         link: {
@@ -554,15 +550,14 @@ async function hostWithFailingFirstStart(failure: Error) {
           mintedAtFence: fence,
           observedAt: now
         }
-      })
+      }
     }
   )
   openHost({
     adapter: {
-      open: async () =>
-        readyConstruction({
-          reportedOptions: { model: '' }
-        }),
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire,
       releaseAcquisition: async () => true,
       dispatch: vi.fn(),

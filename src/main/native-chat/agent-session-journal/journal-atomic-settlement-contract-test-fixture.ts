@@ -71,9 +71,6 @@ export function createFixture() {
       { kind: 'turn', turnId: 'turn', state: 'running', startedAt: 900 },
       { fence: 7, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    if (turn === null) {
-      throw new Error('Expected the ordinary journal item to be retained')
-    }
     for (let index = 0; index < count; index++) {
       await journal.appendItem(
         { provider: 'orca', clientMessageId: `call-${index}` },

@@ -1,4 +1,3 @@
-import { createStartingRecoveryLifetime } from './structured-agent-session-recovery-lifetime'
 import {
   createStructuredAgentSessionStopStartingChild,
   cutClosingStructuredAgentSession,
@@ -37,7 +36,7 @@ import {
   workspaceSleepStartAborts,
   type WorkspaceSleepCloseResult
 } from './structured-agent-session-workspace-sleep-stop'
-
+import type { StructuredAgentSessionExpiredStartup } from './structured-agent-session-startup-attempt'
 import {
   providerStartupFailureFact,
   structuredAgentSessionStartFailure
@@ -209,8 +208,10 @@ export function createStructuredAgentSessionConversationLifetime(
     closeForWorkspaceSleep,
     idleSweep,
     stopAgent,
+    /** Expire only the matching still-starting child; its end fails queued work. */
+    expireStartup: ({ sessionId, child }: StructuredAgentSessionExpiredStartup): void =>
+      stopStartingChild(sessionId, child),
     stopStartingChild,
-    ...createStartingRecoveryLifetime(host, stopAgent, stopStartingChild),
     failStartingChild: (
       sessionId: string,
       failed: StructuredAgentSessionProviderChildIdentity,

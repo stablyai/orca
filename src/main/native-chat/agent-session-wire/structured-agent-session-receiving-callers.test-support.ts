@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { Store } from '../../persistence/loading-store/store'
@@ -81,7 +80,7 @@ export async function createReceivingCallerFixture() {
     if (input.events) {
       sinks.set(input.identity.sessionId, input.events)
     }
-    return readyConstruction({
+    return {
       acquisitionGeneration: `caller-generation-${++generation}`,
       ...launched,
       process: {
@@ -100,7 +99,7 @@ export async function createReceivingCallerFixture() {
         mintedAtFence: input.fence,
         observedAt: rig.clock.now
       }
-    })
+    }
   })
   rig.adapter.dispatch.mockImplementation(async (input) => ({
     state: 'accepted',

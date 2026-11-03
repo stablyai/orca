@@ -1,5 +1,3 @@
-import { preparePiRpcPrompt } from './rpc-prompt'
-import { readyConstruction } from '../native-chat/agent-session-wire/structured-agent-session-construction'
 import { acquirePiRpcSession } from './rpc-session-acquisition'
 import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
 import {
@@ -16,12 +14,9 @@ import { applyPiRpcSessionOption } from './rpc-options'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 
 export type PiRpcSessionAdapterDeps = PiRpcSessionDeps & {
-  resolveLaunch: (
-    input: Pick<
-      StructuredAgentSessionAcquireInput,
-      'identity' | 'spawnToken' | 'constructionIntent'
-    >
-  ) => Promise<PiRpcResolvedLaunch>
+  resolveLaunch: (input: {
+    [K in 'identity' | 'spawnToken']: StructuredAgentSessionAcquireInput[K]
+  }) => Promise<PiRpcResolvedLaunch>
   readProcessStartTime?: (pid: number) => Promise<number | null>
 }
 
@@ -47,7 +42,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       acknowledgeSessionRelease: (id) => this.acknowledgeSessionRelease(id)
     })
 
-  open = async (input: Parameters<StructuredAgentSessionAdapter['open']>[0]) => {
+  open: NonNullable<StructuredAgentSessionAdapter['open']> = async (input) => {
     const session = this.sessions.get(input.sessionId)
     if (
       !session ||
@@ -57,15 +52,8 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     ) {
       throw new Error('Pi child changed before it opened')
     }
-    return readyConstruction(await session.open(input.signal))
+    return session.open(input.signal)
   }
-
-  historicalInputBytes: NonNullable<StructuredAgentSessionAdapter['historicalInputBytes']> = async (
-    input
-  ) => ({
-    bytes: Buffer.byteLength(JSON.stringify(await preparePiRpcPrompt(input.body))),
-    limit: 8 * 1024 * 1024
-  })
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
     const session = this.session(input.sessionId, input.fence)

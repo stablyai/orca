@@ -1,5 +1,3 @@
-import { readyConstruction } from '../../../native-chat/agent-session-wire/structured-agent-session-construction'
-import { readyConstructionValue } from '../../../native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
@@ -76,11 +74,11 @@ beforeEach(() => {
     throw new Error('Fixture acquisition is missing')
   }
   acquire.mockImplementation(async (input) => {
-    const acquired = readyConstructionValue(await acquireImpl(input))
+    const acquired = await acquireImpl(input)
     if (!acquired.link) {
       throw new Error('Fixture acquisition has no provider link')
     }
-    return readyConstruction({
+    return {
       ...acquired,
       link: {
         ...acquired.link,
@@ -88,7 +86,7 @@ beforeEach(() => {
           ? 'resumed'
           : 'created'
       }
-    })
+    }
   })
   setStructuredAgentSessionHost(host)
   workerSessionIds = []

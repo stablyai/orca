@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -125,19 +124,17 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-send-after-failed-start-'))
   resetHostTestOperationIds()
   generation = 0
-  acquire = vi.fn(async ({ fence, spawnToken }) =>
-    readyConstruction({
-      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-      link: {
-        linkId: `link-${fence}`,
-        handle: codexProviderHandle(THREAD),
-        origin: generation === 0 ? ('created' as const) : ('resumed' as const),
-        mintedAtFence: fence,
-        observedAt: NOW
-      },
-      acquisitionGeneration: `generation-${++generation}`
-    })
-  )
+  acquire = vi.fn(async ({ fence, spawnToken }) => ({
+    process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+    link: {
+      linkId: `link-${fence}`,
+      handle: codexProviderHandle(THREAD),
+      origin: generation === 0 ? ('created' as const) : ('resumed' as const),
+      mintedAtFence: fence,
+      observedAt: NOW
+    },
+    acquisitionGeneration: `generation-${++generation}`
+  }))
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
@@ -152,10 +149,9 @@ beforeEach(async () => {
       cancelTurn: vi.fn(async () => ({ cancelled: true })),
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined),
-      open: async () =>
-        readyConstruction({
-          reportedOptions: { model: '' }
-        })
+      open: async () => ({
+        reportedOptions: { model: '' }
+      })
     }),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',

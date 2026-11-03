@@ -219,7 +219,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       input,
       this.deps.requestTimeoutMs
     )
-  open = async (request: Parameters<StructuredAgentSessionAdapter['open']>[0]) => {
+  open: NonNullable<StructuredAgentSessionAdapter['open']> = async (request) => {
     try {
       return await openClaudeStructuredSession({
         request,

@@ -1,4 +1,3 @@
-import { readyConstructionValue } from '../native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
@@ -13,14 +12,12 @@ import {
 } from './rpc-session-adapter.test-fixture'
 
 function openAt8(h: Awaited<ReturnType<typeof setup>>, acquisitionGeneration: string) {
-  return h.adapter
-    .open({
-      sessionId,
-      fence: 8,
-      acquisitionGeneration,
-      signal: new AbortController().signal
-    })
-    .then(readyConstructionValue)
+  return h.adapter.open({
+    sessionId,
+    fence: 8,
+    acquisitionGeneration,
+    signal: new AbortController().signal
+  })
 }
 
 afterEach(closePiRpcAdapterFixtures)

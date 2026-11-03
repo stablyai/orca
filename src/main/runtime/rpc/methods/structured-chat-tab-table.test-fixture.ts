@@ -1,4 +1,3 @@
-import { readyConstruction } from '../../../native-chat/agent-session-wire/structured-agent-session-construction'
 import { availableRevealWorkspace } from '../../session-tabs/structured-workspace-authority.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 /** Drive chat tab pointers through real disk records, structured host, runtime and RPC; fake only the provider. */
@@ -57,10 +56,9 @@ function providerAdapter(): StructuredAgentSessionAdapter {
   return {
     supportsLocation: (location) =>
       location.executionHostId === 'local' && location.wslDistro === null,
-    open: async () =>
-      readyConstruction({
-        reportedOptions: { model: '' }
-      }),
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: vi.fn(async (input) => {
       if (acquireFails) {
         throw new Error('provider failed to start')

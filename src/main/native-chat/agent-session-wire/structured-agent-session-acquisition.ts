@@ -1,11 +1,3 @@
-import {
-  normalizeConstruction,
-  type RecoveryConstructionPermit
-} from './structured-agent-session-construction'
-import {
-  prepareNativeRecovery,
-  recoveryConstructionIntent
-} from './structured-agent-session-recovery'
 import { isDeepStrictEqual } from 'node:util'
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
@@ -39,7 +31,6 @@ export async function acquireOwner(
 ): Promise<{
   record: AgentSessionRecord
   acquisitionGeneration: string
-  recoveryPermit?: RecoveryConstructionPermit
   accountHome?: AgentSessionAccountHome
 }> {
   const fence = record.lease.runtimeFence
@@ -79,41 +70,19 @@ export async function acquireOwner(
       ...(input.startupAttemptId ? { attemptId: input.startupAttemptId } : {})
     })
     const progress = input.onStartupAttempt?.(attempt)
-    const journal = await input.openConversation(record)
-    const intent = () =>
-      recoveryConstructionIntent({ store: input.store, journal, record, now: input.now() })
-    const constructionIntent = input.lock ? await input.lock.commit(async () => intent()) : intent()
-    const construction = normalizeConstruction(
-      await input.adapter.acquire({
-        ...(constructionIntent ? { constructionIntent } : {}),
-        ...attempt,
-        ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
-        onSpawned: async (process) => {
-          progress?.spawned()
-          record = await input.store.commitProcessIdentity({
-            sessionId: record.sessionId,
-            fence,
-            process,
-            now: input.now()
-          })
-        }
-      })
-    )
-    let recoveryPermit = constructionIntent?.permit
-    const acquired =
-      construction.kind === 'ready'
-        ? construction.value
-        : await construction.createFresh(
-            (recoveryPermit = prepareNativeRecovery({
-              store: input.store,
-              journal,
-              record,
-              source: construction.sourceLink,
-              trigger: construction.trigger,
-              now: input.now()
-            })),
-            input.acquireSignal ?? new AbortController().signal
-          )
+    const acquired = await input.adapter.acquire({
+      ...attempt,
+      ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
+      onSpawned: async (process) => {
+        progress?.spawned()
+        record = await input.store.commitProcessIdentity({
+          sessionId: record.sessionId,
+          fence,
+          process,
+          now: input.now()
+        })
+      }
+    })
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({
         sessionId: record.sessionId,
@@ -141,7 +110,6 @@ export async function acquireOwner(
     return {
       record: proved,
       acquisitionGeneration: acquired.acquisitionGeneration,
-      ...(recoveryPermit ? { recoveryPermit } : {}),
       ...(acquired.accountHome ? { accountHome: acquired.accountHome } : {})
     }
   } catch (error) {

@@ -27,11 +27,6 @@ import {
 import { readPiRpcModelOptions } from '../../pi/rpc-options'
 import type { AgentModelCatalogLiveListing } from '../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
-import {
-  normalizeConstruction,
-  readyConstruction
-} from '../../native-chat/agent-session-wire/structured-agent-session-construction'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { peekOpenedAgentSessionRecordStore } from './records/agent-session-record-store-slot'
 import {
   ensureStructuredAgentSessionHost,
@@ -88,12 +83,10 @@ async function setup(
     : null
   if (options.initialCatalogListing) {
     const open = host.deps.adapter.open
-    vi.spyOn(host.deps.adapter, 'open').mockImplementation(async (input) => {
-      const opened = normalizeConstruction(await open(input))
-      return opened.kind === 'ready'
-        ? readyConstruction({ ...opened.value, catalogListing: options.initialCatalogListing })
-        : opened
-    })
+    vi.spyOn(host.deps.adapter, 'open').mockImplementation(async (input) => ({
+      ...(await open(input)),
+      catalogListing: options.initialCatalogListing
+    }))
   }
   if (options.catalog) {
     vi.spyOn(host.deps.modelCatalog!, 'read').mockResolvedValue({
@@ -603,7 +596,6 @@ it.each([false, true])(
     await vi.waitFor(() =>
       expect(h.publication!.mock.calls.length).toBeGreaterThanOrEqual(initial ? 2 : 1)
     )
-    expect(h.script.wire()).toContain('get_entries')
     expect(h.host.deps.modelCatalog!.peek(HOST_TEST_SESSION)).toBeNull()
     const answer = await h.host.readOptions(HOST_TEST_SESSION)
     expect(answer.models).toEqual(models)
@@ -634,34 +626,3 @@ it.each([false, true])(
     })
   }
 )
-
-it('sends a typed Pi skill command as typed after recovery and carries saved context on the next message', async () => {
-  const { script, host, caller } = await setup()
-  script.completeTurns = false
-  script.releaseHandshake()
-  expect((await sendText(host, caller, 'remember the number 42')).ok).toBe(true)
-  await vi.waitFor(() => expect(script.prompts()).toEqual(['remember the number 42']))
-  expect((await host.cancel(caller, { envelope: envelope('agentSession.cancel', {}) })).ok).toBe(
-    true
-  )
-  await vi.waitFor(() => expect(script.closes()).toBe(1))
-  script.completeTurns = true
-  script.missingHistory = () =>
-    agentSessionProviderHandleChainHead(
-      peekOpenedAgentSessionRecordStore()?.getRecord(HOST_TEST_SESSION)?.providerHandleChain ?? []
-    ) ?? undefined
-  expect((await sendText(host, caller, '/skill:review src/main')).ok).toBe(true)
-  await vi.waitFor(() => expect(script.spawns()).toBe(2))
-  script.missingHistory = undefined
-  script.releaseHandshake()
-  await vi.waitFor(() => expect(script.prompts()).toHaveLength(2))
-  expect(script.prompts()[1]).toBe('/skill:review src/main')
-
-  expect((await sendText(host, caller, 'continue')).ok).toBe(true)
-  await vi.waitFor(() => expect(script.prompts()).toHaveLength(3))
-  expect(script.prompts()[2]).toContain('remember the number 42')
-  expect(script.prompts()[2]).toMatch(/\ncontinue$/)
-  expect((await sendText(host, caller, 'and again')).ok).toBe(true)
-  await vi.waitFor(() => expect(script.prompts()).toHaveLength(4))
-  expect(script.prompts()[3]).toBe('and again')
-})

@@ -1,4 +1,3 @@
-import { readyConstructionValue } from './structured-agent-session-instant-start.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -64,13 +63,11 @@ describe('Claude root-exit stop', () => {
       now: NOW
     })
     const fence = reservation.record.lease.runtimeFence
-    const acquisition = readyConstructionValue(
-      await adapter.acquire({
-        identity: { ...identityFor(), hostId: 'local', workspaceId: 'folder-1' },
-        fence,
-        spawnToken: 'spawn-1'
-      })
-    )
+    const acquisition = await adapter.acquire({
+      identity: { ...identityFor(), hostId: 'local', workspaceId: 'folder-1' },
+      fence,
+      spawnToken: 'spawn-1'
+    })
     await store.commitProcessIdentity({
       sessionId: 'session-1',
       fence,

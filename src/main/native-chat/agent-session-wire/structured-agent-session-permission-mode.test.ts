@@ -1,5 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
-import { readyConstructionValue } from './structured-agent-session-instant-start.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
@@ -117,13 +115,13 @@ describe('a chat permission mode', () => {
       const defaults = vi.spyOn(store, 'recordConfiguredDefault')
       const acquire = rig.adapter.acquire.getMockImplementation()!
       rig.adapter.acquire.mockImplementation(async (input) => {
-        const acquired = readyConstructionValue(await acquire(input))
-        return readyConstruction({
+        const acquired = await acquire(input)
+        return {
           ...acquired,
           ...(acquired.link
             ? { link: { ...acquired.link, handle: claudeProviderHandle(HOST_TEST_THREAD, null) } }
             : {})
-        })
+        }
       })
       rig.adapter.dispatch.mockResolvedValue({
         state: 'accepted',
@@ -237,13 +235,13 @@ describe('a chat permission mode', () => {
     })
     const acquire = rig.adapter.acquire.getMockImplementation()!
     rig.adapter.acquire.mockImplementation(async (input) => {
-      const acquired = readyConstructionValue(await acquire(input))
-      return readyConstruction({
+      const acquired = await acquire(input)
+      return {
         ...acquired,
         ...(acquired.link
           ? { link: { ...acquired.link, handle: claudeProviderHandle(HOST_TEST_THREAD, null) } }
           : {})
-      })
+      }
     })
     rig.adapter.dispatch.mockResolvedValue({
       state: 'accepted',

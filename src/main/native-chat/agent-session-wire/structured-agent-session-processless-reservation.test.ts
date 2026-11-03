@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -77,10 +76,9 @@ function adapterForAcquire(
   acquire: StructuredAgentSessionAdapter['acquire']
 ): StructuredAgentSessionAdapter {
   return {
-    open: async () =>
-      readyConstruction({
-        reportedOptions: { model: '' }
-      }),
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire,
     dispatch: vi.fn(),
     cancelTurn: vi.fn(),
@@ -137,19 +135,17 @@ describe('processless structured session reservation', () => {
     const adapter = {
       ...adapterForAcquire(vi.fn()),
       supportsCreate,
-      acquire: vi.fn(async ({ fence, spawnToken }) =>
-        readyConstruction({
-          acquisitionGeneration: globalThis.crypto.randomUUID(),
-          process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
-          link: {
-            linkId: 'link-1',
-            handle: codexProviderHandle('thread-1'),
-            origin: 'created' as const,
-            mintedAtFence: fence,
-            observedAt: NOW
-          }
-        })
-      )
+      acquire: vi.fn(async ({ fence, spawnToken }) => ({
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
+        process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
+        link: {
+          linkId: 'link-1',
+          handle: codexProviderHandle('thread-1'),
+          origin: 'created' as const,
+          mintedAtFence: fence,
+          observedAt: NOW
+        }
+      }))
     }
     const input = {
       agents: NO_STRUCTURED_AGENTS,
@@ -295,24 +291,22 @@ describe('processless structured session reservation', () => {
       acquire: vi
         .fn<StructuredAgentSessionAdapter['acquire']>()
         .mockRejectedValueOnce(new AgentSessionPreSpawnError(new Error('launch not ready')))
-        .mockImplementationOnce(async ({ fence, spawnToken }) =>
-          readyConstruction({
-            acquisitionGeneration: globalThis.crypto.randomUUID(),
-            process: {
-              hostId: 'local',
-              pid: 4242,
-              processStartTimeMs: NOW,
-              spawnToken
-            },
-            link: {
-              linkId: 'link-1',
-              handle: codexProviderHandle('thread-1'),
-              origin: 'created',
-              mintedAtFence: fence,
-              observedAt: NOW
-            }
-          })
-        ),
+        .mockImplementationOnce(async ({ fence, spawnToken }) => ({
+          acquisitionGeneration: globalThis.crypto.randomUUID(),
+          process: {
+            hostId: 'local',
+            pid: 4242,
+            processStartTimeMs: NOW,
+            spawnToken
+          },
+          link: {
+            linkId: 'link-1',
+            handle: codexProviderHandle('thread-1'),
+            origin: 'created',
+            mintedAtFence: fence,
+            observedAt: NOW
+          }
+        })),
       releaseAcquisition: vi.fn(async () => true)
     }
     const input = {

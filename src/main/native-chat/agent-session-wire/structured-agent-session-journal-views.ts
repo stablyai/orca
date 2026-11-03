@@ -27,8 +27,7 @@ export type StructuredAgentSessionHistoryJournal = Pick<
   | 'receiptFor'
   | 'submissions'
   | 'historyOrigin'
-> &
-  Partial<Pick<AgentSessionJournal, 'recoveryEcho'>>
+>
 
 export type StructuredAgentSessionLinkageJournal = Pick<
   AgentSessionJournal,

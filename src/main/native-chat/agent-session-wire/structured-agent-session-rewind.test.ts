@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import {
   expectLargeRetainedPrefixRewind,
   expectSupersededRewindReplay,
@@ -35,7 +34,6 @@ import type {
 } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import {
-  awaitHostTestStartup,
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
@@ -76,11 +74,13 @@ beforeEach(async () => {
     {
       supportsCreate: (_location, agent) => agent === 'codex',
       supportsLocation: () => true,
-      open: async () => readyConstruction({ reportedOptions: { model: '' } }),
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire: async (input) => {
         acquires.push(input)
         sink = input.events!
-        return readyConstruction({
+        return {
           process: {
             hostId: 'local',
             pid: 4000 + acquires.length,
@@ -95,7 +95,7 @@ beforeEach(async () => {
             origin: acquires.length === 1 ? 'created' : 'resumed',
             handle: codexProviderHandle(HOST_TEST_THREAD)
           }
-        })
+        }
       },
       dispatch: vi.fn(async (): Promise<AgentSessionDispatchOutcome> => ({
         state: 'unknown',
@@ -134,7 +134,6 @@ async function attachAndStart(fence: number | null) {
   const attached = await host.attach(caller, hostTestAttachParams(fence))
   const { serialize } = host.collaboratorsForTests()
   await serialize(HOST_TEST_SESSION, async () => {})
-  await awaitHostTestStartup(host)
   await serialize(HOST_TEST_SESSION, async () => {})
   return attached
 }

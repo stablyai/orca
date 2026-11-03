@@ -130,7 +130,6 @@ export async function retireOutgrownStructuredAgentSessionChild(
     }
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
     launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
-    recoveryRequired?: boolean
     /** The send about to be handed over; a new model pick may need the requested approval mode. */
     next?: AgentJournalSubmission
     requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
@@ -142,7 +141,6 @@ export async function retireOutgrownStructuredAgentSessionChild(
   if (
     !session ||
     !(
-      deps.recoveryRequired ||
       structuredAgentSessionChildReportedSignedOut(session) ||
       picksNewLaunchModel(session, deps.next, deps.requiresModelTransitionRestart) ||
       (await launchedWithOtherPermissionMode(

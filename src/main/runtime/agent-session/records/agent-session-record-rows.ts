@@ -1,4 +1,3 @@
-import { invalidateContextTransferOwner } from '../../../native-chat/agent-session-journal/journal-context-transfer'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Load session/ledger rows once and persist only changed rows inside the journal transaction.
 // Unreadable records remain present and immutable; every mutation of their ids is refused.
@@ -213,11 +212,9 @@ export function writeAgentSessionStoreRows(
     'INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET record_json = excluded.record_json'
   )
   for (const [sessionId, json] of writes.records.upsert) {
-    invalidateContextTransferOwner(db, sessionId)
     upsertRecord.run(sessionId, json)
   }
   for (const sessionId of writes.records.remove) {
-    invalidateContextTransferOwner(db, sessionId)
     db.prepare('DELETE FROM agent_session_records WHERE session_id = ?').run(sessionId)
   }
   const upsertOperation = db.prepare(

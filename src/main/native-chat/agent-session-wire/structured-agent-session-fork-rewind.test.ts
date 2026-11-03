@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -96,7 +95,7 @@ beforeEach(async () => {
           throw new Error('Claude cannot start')
         }
         sink = input.events!
-        return readyConstruction({
+        return {
           providerChildPhase: 'starting' as const,
           process: {
             hostId: 'local',
@@ -114,17 +113,16 @@ beforeEach(async () => {
               : 'created',
             handle: input.identity.providerHandle ?? claudeProviderHandle(SOURCE, 'answer-2')
           }
-        })
+        }
       },
-      open: async ({ fence }) =>
-        readyConstruction({
-          reportedOptions: { model: '' },
-          link: {
-            ...store.getRecord(HOST_TEST_SESSION)!.providerHandleChain.at(-1)!,
-            origin: 'resumed',
-            mintedAtFence: fence
-          }
-        }),
+      open: async ({ fence }) => ({
+        reportedOptions: { model: '' },
+        link: {
+          ...store.getRecord(HOST_TEST_SESSION)!.providerHandleChain.at(-1)!,
+          origin: 'resumed',
+          mintedAtFence: fence
+        }
+      }),
       dispatch: async () => ({ state: 'unknown', reason: 'test' }),
       cancelTurn: async () => ({ cancelled: false }),
       answerPrompt: async () => {},
@@ -296,8 +294,8 @@ describe('rewinding a chat whose agent forks', () => {
         const receipt = makeReceipt(...args)
         return {
           ...receipt,
-          write: (db, row) => {
-            receipt.write(db, row)
+          write: (db) => {
+            receipt.write(db)
             throw new Error('commit failed')
           }
         }

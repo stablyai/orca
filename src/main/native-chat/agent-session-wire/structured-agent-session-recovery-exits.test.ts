@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -75,10 +74,9 @@ async function startAgent(): Promise<void> {
 
 function adapter(): StructuredAgentSessionAdapter {
   return {
-    open: async () =>
-      readyConstruction({
-        reportedOptions: { model: '' }
-      }),
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire,
     releaseAcquisition: vi.fn(async () => false),
     dispatch: vi.fn(),
@@ -110,24 +108,22 @@ async function reopenStore(): Promise<void> {
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-recovery-exits-'))
   resetHostTestOperationIds()
-  acquire = vi.fn(async ({ fence }) =>
-    readyConstruction({
-      acquisitionGeneration: globalThis.crypto.randomUUID(),
-      process: {
-        hostId: 'local',
-        pid: 4242,
-        processStartTimeMs: 1_700_000_000_000,
-        spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
-      },
-      link: {
-        linkId: `link-${fence}`,
-        handle: codexProviderHandle(THREAD),
-        origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
-        mintedAtFence: fence,
-        observedAt: NOW
-      }
-    })
-  )
+  acquire = vi.fn(async ({ fence }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
+    process: {
+      hostId: 'local',
+      pid: 4242,
+      processStartTimeMs: 1_700_000_000_000,
+      spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+    },
+    link: {
+      linkId: `link-${fence}`,
+      handle: codexProviderHandle(THREAD),
+      origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
+      mintedAtFence: fence,
+      observedAt: NOW
+    }
+  }))
   store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
   openHost()
 })
@@ -288,19 +284,17 @@ describe('recovery exits', () => {
 
   it('recovers when the outgoing runtime writes after the replacement probes its dying owner', async () => {
     const outgoing = await acquireOwner('spawn-a')
-    acquire.mockResolvedValueOnce(
-      readyConstruction({
-        acquisitionGeneration: globalThis.crypto.randomUUID(),
-        process: outgoing.process,
-        link: {
-          linkId: 'link-outgoing',
-          handle: codexProviderHandle(THREAD),
-          origin: 'created',
-          mintedAtFence: 1,
-          observedAt: NOW
-        }
-      })
-    )
+    acquire.mockResolvedValueOnce({
+      acquisitionGeneration: globalThis.crypto.randomUUID(),
+      process: outgoing.process,
+      link: {
+        linkId: 'link-outgoing',
+        handle: codexProviderHandle(THREAD),
+        origin: 'created',
+        mintedAtFence: 1,
+        observedAt: NOW
+      }
+    })
     expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
 
     const outgoingHost = host
@@ -336,19 +330,17 @@ describe('recovery exits', () => {
     expect(acquire).toHaveBeenCalledOnce()
 
     const replacement = await acquireOwner('spawn-b')
-    acquire.mockResolvedValueOnce(
-      readyConstruction({
-        acquisitionGeneration: globalThis.crypto.randomUUID(),
-        process: replacement.process,
-        link: {
-          linkId: 'link-replacement',
-          handle: codexProviderHandle(THREAD),
-          origin: 'resumed',
-          mintedAtFence: 3,
-          observedAt: NOW + 2
-        }
-      })
-    )
+    acquire.mockResolvedValueOnce({
+      acquisitionGeneration: globalThis.crypto.randomUUID(),
+      process: replacement.process,
+      link: {
+        linkId: 'link-replacement',
+        handle: codexProviderHandle(THREAD),
+        origin: 'resumed',
+        mintedAtFence: 3,
+        observedAt: NOW + 2
+      }
+    })
 
     await startAgent()
 

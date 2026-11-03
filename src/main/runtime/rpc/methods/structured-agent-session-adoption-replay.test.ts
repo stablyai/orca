@@ -1,4 +1,3 @@
-import { readyConstruction } from '../../../native-chat/agent-session-wire/structured-agent-session-construction'
 import type { AgentProcessVerdict } from '../../../../shared/agent-process-presence'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
@@ -54,30 +53,27 @@ vi.mock('../../../../shared/process-table-snapshot-reader', async (importOrigina
 function adapter(): StructuredAgentSessionAdapter {
   return {
     supportsCreate: () => true,
-    open: async () =>
-      readyConstruction({
-        reportedOptions: { model: '' }
-      }),
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: vi
       .fn<StructuredAgentSessionAdapter['acquire']>()
-      .mockImplementation(async ({ fence, spawnToken }) =>
-        readyConstruction({
-          acquisitionGeneration: globalThis.crypto.randomUUID(),
-          process: {
-            hostId: 'local',
-            pid: 4242,
-            processStartTimeMs: 1_800_000_000_000,
-            spawnToken
-          },
-          link: {
-            linkId: `codex-${fence}-${THREAD}`,
-            handle: codexProviderHandle(THREAD),
-            origin: 'resumed',
-            mintedAtFence: fence,
-            observedAt: 1_800_000_000_000
-          }
-        })
-      ),
+      .mockImplementation(async ({ fence, spawnToken }) => ({
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
+        process: {
+          hostId: 'local',
+          pid: 4242,
+          processStartTimeMs: 1_800_000_000_000,
+          spawnToken
+        },
+        link: {
+          linkId: `codex-${fence}-${THREAD}`,
+          handle: codexProviderHandle(THREAD),
+          origin: 'resumed',
+          mintedAtFence: fence,
+          observedAt: 1_800_000_000_000
+        }
+      })),
     releaseAcquisition: vi.fn(async () => true),
     dispatch: vi.fn(),
     cancelTurn: vi.fn(),

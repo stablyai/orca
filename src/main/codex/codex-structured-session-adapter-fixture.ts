@@ -47,21 +47,13 @@ export async function acquireReadyCodexForTest(
   adapter: CodexStructuredSessionAdapter,
   input: StructuredAgentSessionAcquireInput
 ) {
-  const acquisition = await adapter.acquire(input)
-  if (acquisition.kind !== 'ready') {
-    throw new Error('Fixture requires a ready acquisition')
-  }
-  const acquired = acquisition.value
-  const opening = await adapter.open({
+  const acquired = await adapter.acquire(input)
+  const result = await adapter.open({
     sessionId: input.identity.sessionId,
     fence: input.fence,
     acquisitionGeneration: acquired.acquisitionGeneration,
     signal: new AbortController().signal
   })
-  if (opening.kind !== 'ready') {
-    throw new Error('Fixture requires a ready open')
-  }
-  const result = opening.value
   startReports.get(adapter)?.set(input.identity.sessionId, result)
   if (result.link) {
     startLinks.get(adapter)?.set(input.identity.sessionId, result.link)

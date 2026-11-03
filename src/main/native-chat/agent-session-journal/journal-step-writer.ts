@@ -27,10 +27,6 @@ export class JournalStepWriter {
       serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
       state: () => JournalReducerState
       writeRows: JournalRowWriter['writeRows']
-      recoveryItem?: (
-        resolved: JournalResolvedItem,
-        options: JournalItemAppendOptions
-      ) => ((seq: number, ts: number) => JournalRow)[] | null
       planSettlement: JournalLifecycleBatchAppender['planResolved']
     }
   ) {}
@@ -52,8 +48,6 @@ export class JournalStepWriter {
     const resolved = step.resolve()
     return resolved === null
       ? []
-      : (this.deps.recoveryItem?.(resolved, step.options) ?? [
-          journalItemRowBuilder(this.deps.state, resolved.identity, resolved.body, step.options)
-        ])
+      : [journalItemRowBuilder(this.deps.state, resolved.identity, resolved.body, step.options)]
   }
 }

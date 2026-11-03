@@ -259,9 +259,8 @@ export async function constructAcpStructuredChild(input: {
     journalClosed: null,
     ended: false,
     exitObservedAt: null,
-    open: (signal, constructionIntent) =>
+    open: (signal) =>
       initializeAcpStructuredSession({
-        constructionIntent,
         acquire,
         deps,
         generation,

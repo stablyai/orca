@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -36,19 +35,17 @@ let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let terminalWriting: boolean
 const CALLER = { callerKey: 'client-1' }
-const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>(async ({ fence, spawnToken }) =>
-  readyConstruction({
-    process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-    acquisitionGeneration: `generation-${fence}`,
-    link: {
-      linkId: `link-${fence}`,
-      handle: codexProviderHandle(THREAD),
-      origin: fence === 1 ? ('created' as const) : ('resumed' as const),
-      mintedAtFence: fence,
-      observedAt: NOW
-    }
-  })
-)
+const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>(async ({ fence, spawnToken }) => ({
+  process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+  acquisitionGeneration: `generation-${fence}`,
+  link: {
+    linkId: `link-${fence}`,
+    handle: codexProviderHandle(THREAD),
+    origin: fence === 1 ? ('created' as const) : ('resumed' as const),
+    mintedAtFence: fence,
+    observedAt: NOW
+  }
+}))
 const assertNoTerminalWriter = vi.fn(async (_record: AgentSessionRecord) => {
   if (terminalWriting) {
     throw agentSessionRefusalError('agent_session_conflict', {
@@ -92,7 +89,7 @@ beforeEach(async () => {
       cancelTurn: vi.fn(async () => ({ cancelled: false })),
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined),
-      open: async () => readyConstruction({ reportedOptions: { model: '' } })
+      open: async () => ({ reportedOptions: { model: '' } })
     },
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',

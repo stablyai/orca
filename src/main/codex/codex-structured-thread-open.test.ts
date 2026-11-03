@@ -5,15 +5,7 @@ import { CodexAppServerRequestError } from './app-server/codex-app-server-reques
 import { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
-import { openCodexThread as openNativeCodexThread } from './codex-structured-thread-open'
-
-async function openCodexThread(...args: Parameters<typeof openNativeCodexThread>) {
-  const opened = await openNativeCodexThread(...args)
-  if ('kind' in opened) {
-    throw new Error('This test requires available native history')
-  }
-  return opened
-}
+import { openCodexThread } from './codex-structured-thread-open'
 
 function connectionFor(
   request: CodexAppServerConnection['request']
@@ -368,27 +360,6 @@ describe('openCodexThread', () => {
   })
 
   describe('a thread Codex never saved', () => {
-    const source = {
-      linkId: 'original',
-      handle: {
-        transport: 'codex-app-server' as const,
-        agent: 'codex' as const,
-        nativeId: 'thread-unsaved'
-      },
-      origin: 'created' as const,
-      mintedAtFence: 1,
-      observedAt: 1
-    }
-    async function recover(...args: Parameters<typeof openCodexThread>) {
-      const step = await openNativeCodexThread(...args)
-      if (!('kind' in step)) {
-        throw new Error('Expected authoritative history unavailability')
-      }
-      return step.createFresh(
-        { handoffId: 'h', targetAttemptId: 't', sourceLinkId: source.linkId, fence: 1 },
-        new AbortController().signal
-      )
-    }
     const noRollout = (threadId: string, code = -32600) =>
       new CodexAppServerRequestError(
         'thread/resume',
@@ -408,13 +379,14 @@ describe('openCodexThread', () => {
       const request = codexWithoutRollout()
 
       await expect(
-        recover(
+        openCodexThread(
           connectionFor(request),
-          { cwd: '/workspace', resumeThreadId: 'thread-unsaved', sourceLink: source, fence: 1 },
+          { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
           2_000
         )
       ).resolves.toMatchObject({
         threadId: 'thread-new',
+        supersededThreadId: 'thread-unsaved',
         model: 'gpt-live'
       })
       expect(request.mock.calls.map(([method]) => method)).toEqual([
@@ -433,13 +405,12 @@ describe('openCodexThread', () => {
     it('opens the replacement thread on the chosen model', async () => {
       const request = codexWithoutRollout()
 
-      await recover(
+      await openCodexThread(
         connectionFor(request),
         {
           cwd: '/workspace',
           resumeThreadId: 'thread-unsaved',
-          sourceLink: source,
-          fence: 1,
+          supersedeIfUnsaved: true,
           model: 'gpt-chosen'
         },
         2_000
@@ -487,7 +458,7 @@ describe('openCodexThread', () => {
         await expect(
           openCodexThread(
             connectionFor(request),
-            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', sourceLink: source, fence: 1 },
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
             2_000
           )
         ).rejects.toBe(failure)
@@ -520,12 +491,12 @@ describe('openCodexThread', () => {
       })
       try {
         await expect(
-          recover(
+          openCodexThread(
             connection,
-            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', sourceLink: source, fence: 1 },
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
             5_000
           )
-        ).resolves.toMatchObject({ threadId: 'thread-new' })
+        ).resolves.toMatchObject({ threadId: 'thread-new', supersededThreadId: 'thread-unsaved' })
       } finally {
         await connection.close()
       }

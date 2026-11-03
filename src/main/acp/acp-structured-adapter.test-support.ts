@@ -1,5 +1,3 @@
-import { normalizeConstruction } from '../native-chat/agent-session-wire/structured-agent-session-construction'
-import type { ConstructionStep } from '../native-chat/agent-session-wire/structured-agent-session-construction'
 import { FakeAcpChild } from './acp-scripted-connection.test-fixture'
 export { FakeAcpChild, PID } from './acp-scripted-connection.test-fixture'
 
@@ -9,10 +7,7 @@ import { vi } from 'vitest'
 import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
-import type {
-  AgentSessionAcquisition,
-  StructuredAgentSessionLifecycleEvent
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import {
   openProviderTimelineRig,
@@ -62,7 +57,6 @@ export type AcpAdapterRig = {
   lifecycle: StructuredAgentSessionLifecycleEvent[]
   readonly ended: Extract<StructuredAgentSessionLifecycleEvent, { type: 'ended' }>[]
   started(): StructuredAgentSessionProviderOpenResult
-  opening(): ConstructionStep<StructuredAgentSessionProviderOpenResult> | null
   openFailure(): unknown
   settled: Parameters<NonNullable<AcpStructuredSessionAdapterDeps['onDispatchSettledLate']>>[0][]
   acquire(options?: {
@@ -72,7 +66,7 @@ export type AcpAdapterRig = {
     waitForStart?: boolean
     options?: Readonly<Record<string, string>>
     permissionMode?: AgentChatPermissionChoice
-  }): Promise<AgentSessionAcquisition>
+  }): ReturnType<AcpStructuredSessionAdapter['acquire']>
   sent(method: string): FakeFrame[]
   frame(method: string, index?: number): Promise<FakeFrame>
   settle(): Promise<void>
@@ -92,7 +86,6 @@ export async function openAcpAdapterRig(
   const spawned: string[] = []
   const lifecycle: StructuredAgentSessionLifecycleEvent[] = []
   const settled: AcpAdapterRig['settled'] = []
-  let opening: ConstructionStep<StructuredAgentSessionProviderOpenResult> | null = null
   let openFailure: unknown
   let opened: StructuredAgentSessionProviderOpenResult | null = null
   const startListeners = new Set<() => void>()
@@ -192,59 +185,44 @@ export async function openAcpAdapterRig(
       }
       return opened
     },
-    opening: () => opening,
     openFailure: () => openFailure,
     settled,
     acquire: async (acquireOptions = {}) => {
-      opening = null
       openFailure = undefined
       opened = null
-      const acquisition = await adapter
-        .acquire({
-          identity: {
-            sessionId: SESSION,
-            workspaceId: 'workspace-1',
-            hostId: 'local',
-            agent: spec.agent,
-            providerHandle: null
-          },
-          fence: acquireOptions.fence ?? 1,
-          spawnToken: 'spawn-1',
-          events: rig.eventSink,
-          ...(acquireOptions.options ? { options: acquireOptions.options } : {}),
-          ...(acquireOptions.signal ? { signal: acquireOptions.signal } : {}),
-          ...(acquireOptions.permissionMode
-            ? { permissionMode: acquireOptions.permissionMode }
-            : {}),
-          onSpawned: async () => {
-            spawned.push('onSpawned')
-            await acquireOptions.onSpawned?.()
-          }
-        })
-        .then(normalizeConstruction)
-      if (acquisition.kind !== 'ready') {
-        throw new Error('Fixture requires a ready acquisition')
-      }
+      const acquisition = await adapter.acquire({
+        identity: {
+          sessionId: SESSION,
+          workspaceId: 'workspace-1',
+          hostId: 'local',
+          agent: spec.agent,
+          providerHandle: null
+        },
+        fence: acquireOptions.fence ?? 1,
+        spawnToken: 'spawn-1',
+        events: rig.eventSink,
+        ...(acquireOptions.options ? { options: acquireOptions.options } : {}),
+        ...(acquireOptions.signal ? { signal: acquireOptions.signal } : {}),
+        ...(acquireOptions.permissionMode ? { permissionMode: acquireOptions.permissionMode } : {}),
+        onSpawned: async () => {
+          spawned.push('onSpawned')
+          await acquireOptions.onSpawned?.()
+        }
+      })
       if (acquireOptions.waitForStart !== false) {
         try {
-          const result = await adapter
-            .open({
-              sessionId: SESSION,
-              fence: acquireOptions.fence ?? 1,
-              acquisitionGeneration: acquisition.value.acquisitionGeneration,
-              signal: acquireOptions.signal ?? new AbortController().signal
-            })
-            .then(normalizeConstruction)
-          opening = result
-          if (result.kind === 'ready') {
-            opened = result.value
-          }
+          opened = await adapter.open({
+            sessionId: SESSION,
+            fence: acquireOptions.fence ?? 1,
+            acquisitionGeneration: acquisition.acquisitionGeneration,
+            signal: acquireOptions.signal ?? new AbortController().signal
+          })
         } catch (error) {
           openFailure = error
           await adapter.closeSession(SESSION)
         }
       }
-      return acquisition.value
+      return acquisition
     },
     sent: (method) => frames().filter((frame) => frame.method === method),
     frame: (method, index = 0) =>

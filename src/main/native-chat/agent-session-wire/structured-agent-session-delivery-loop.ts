@@ -198,9 +198,7 @@ export class StructuredAgentSessionDeliveryLoop {
     if (failedStart) {
       return this.fail(sessionId, failedStart, oldest.clientMessageId)
     }
-    if ((await this.deps.retireOutgrownChild(sessionId, undefined, oldest)) === 'waiting') {
-      return this.stop(sessionId)
-    }
+    await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
     const child = this.deps.sessions.get(sessionId)?.child
     if (!child || child.close) {
       return { start: progress.claim(sessionId, this.deps, oldest.clientMessageId) }
@@ -257,9 +255,7 @@ export class StructuredAgentSessionDeliveryLoop {
     }
     if (waited) {
       // Verify awaited-child identity before rechecking launch permissions.
-      if ((await this.deps.retireOutgrownChild(sessionId, undefined, next)) === 'waiting') {
-        return this.stop(sessionId)
-      }
+      await this.deps.retireOutgrownChild(sessionId, undefined, next)
       if (session.child !== awaitedChild) {
         return 'continue'
       }

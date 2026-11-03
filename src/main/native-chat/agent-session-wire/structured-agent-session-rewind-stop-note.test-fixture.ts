@@ -11,7 +11,6 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session/record
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
-  awaitHostTestStartup,
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
   hostTestAttachParams,
@@ -95,7 +94,8 @@ export async function expectRawStopNoteRewindRecovery({
       hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
     )
   ).toMatchObject({ ok: true })
-  await awaitHostTestStartup(host)
+  // Rewind settlement runs in startup after attach; drain serialization before asserting.
+  await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   expect(journal.itemBody(noteId)).toEqual(unconfirmed)
   expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({

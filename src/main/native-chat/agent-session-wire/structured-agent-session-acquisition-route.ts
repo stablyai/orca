@@ -1,14 +1,11 @@
-import { normalizeConstruction } from './structured-agent-session-construction'
-import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
-import {
-  AgentSessionAcquisitionRootExitObservedError,
-  type AgentSessionAcquisition,
-  type StructuredAgentSessionAcquireInput,
-  type StructuredAgentSessionAdapter
-} from './structured-agent-session-adapter'
+import { AgentSessionAcquisitionRootExitObservedError } from './structured-agent-session-adapter'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import type { StructuredAgentRegistration } from './structured-agent-registry'
+import type {
+  StructuredAgentSessionAcquireInput,
+  StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
 
 export type SessionRoute = {
   registration: StructuredAgentRegistration
@@ -39,35 +36,23 @@ export async function acquireSessionRoute(
   }
   routes.set(input.identity.sessionId, route)
   try {
-    const acquired = normalizeConstruction(
-      await registration.adapter.acquire({
-        ...input,
-        onSpawned: async (process) => {
-          if (route.acquisition) {
-            route.acquisition.process = process
-          }
-          await input.onSpawned?.(process)
+    const acquired = await registration.adapter.acquire({
+      ...input,
+      onSpawned: async (process) => {
+        if (route.acquisition) {
+          route.acquisition.process = process
         }
-      })
-    )
-    const publish = (value: AgentSessionAcquisition) => {
-      if (route.acquisition) {
-        route.acquisition.process = value.process
+        await input.onSpawned?.(process)
       }
-      if (isClosed()) {
-        throw new Error('structured session adapter router is closed')
-      }
-      route.state = 'live'
-      return value
+    })
+    if (route.acquisition) {
+      route.acquisition.process = acquired.process
     }
-    if (acquired.kind === 'ready') {
-      return { ...acquired, value: publish(acquired.value) }
+    if (isClosed()) {
+      throw new Error('structured session adapter router is closed')
     }
-    return {
-      ...acquired,
-      createFresh: async (permit: RecoveryConstructionPermit, signal: AbortSignal) =>
-        publish(await acquired.createFresh(permit, signal))
-    }
+    route.state = 'live'
+    return acquired
   } catch (error) {
     if (
       routes.get(input.identity.sessionId) === route &&

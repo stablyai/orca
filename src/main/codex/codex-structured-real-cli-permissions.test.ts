@@ -55,9 +55,6 @@ describe.skipIf(!enabled)('Codex real app-server permissions', () => {
             },
             20_000
           )
-          if ('kind' in opened) {
-            throw new Error('Expected the real native thread to reopen')
-          }
           if (threadId !== null) {
             expect(opened.threadId).toBe(threadId)
           }

@@ -327,20 +327,3 @@ describe("a chat assignee's liveness, stop and close", () => {
     }
   })
 })
-
-describe('a chat opened by attach', () => {
-  it('has its native thread as attach returns, takes an immediate message, and stops cleanly', async () => {
-    // openChat reads the native thread right after attach, before any other wait.
-    const chat = await openChat(PEER_CHAT)
-    expect(chat.methods).toContain('thread/start')
-    expect((await sendUserMessage(PEER_CHAT, 'right away')).ok).toBe(true)
-    await vi.waitFor(
-      () => expect(chat.turns.some((turn) => turn.text.includes('right away'))).toBe(true),
-      WAIT
-    )
-    await settleTurn(PEER_CHAT, 0)
-    await host.close(PEER_CHAT, 'user-close')
-    expect(chat.closed).toBe(true)
-    expect(host.hasSession(PEER_CHAT)).toBe(false)
-  })
-})

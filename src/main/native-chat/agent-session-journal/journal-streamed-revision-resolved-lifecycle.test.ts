@@ -64,9 +64,6 @@ it('resolves/builds once after preceding writes and preserves actual output and 
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE },
     { write, committed }
   )
-  if (result === null) {
-    throw new Error('Expected the ordinary journal item to be retained')
-  }
   expect(levels).toEqual([2])
   expect(db.prepare('SELECT sequence FROM receipt_fact').get()?.sequence).toBe(
     result.cursor.sequence

@@ -1,5 +1,3 @@
-import { createJournalContextTransfer } from './journal-context-transfer'
-import { ContextTransferRepository } from './context-transfer-repository'
 import { journalInputOrder } from './journal-input-order'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
@@ -55,11 +53,6 @@ type JournalCollaborators = ReturnType<typeof createJournalStoreCollaborators>
 
 export class AgentSessionJournal {
   private readonly goalAttachments: JournalCollaborators['goalAttachments']
-  readonly contextTransfers: ContextTransferRepository
-  readonly recoveryEcho: ReturnType<typeof createJournalContextTransfer>['recoveryEcho']
-  readonly exportRecoveryContext: ReturnType<
-    typeof createJournalContextTransfer
-  >['exportRecoveryContext']
   private readonly identity: AgentSessionJournalIdentity
   private readonly database: JournalHostDatabase
 
@@ -87,20 +80,6 @@ export class AgentSessionJournal {
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
     this.database = options.database
-    this.contextTransfers = new ContextTransferRepository(
-      options.database,
-      options.identity.sessionId
-    )
-    const transfer = createJournalContextTransfer({
-      database: this.database,
-      sessionId: this.identity.sessionId,
-      snapshot: () => this.snapshot(),
-      canonicalItemId: (id) => this.canonicalItemId(id),
-      itemBody: (id) => this.itemBody(id),
-      carries: (id) => this.stoppedHistoryCarried().get(id) ?? []
-    })
-    this.recoveryEcho = transfer.recoveryEcho
-    this.exportRecoveryContext = transfer.exportRecoveryContext
     this.state = createJournalReducerState(options.identity.sessionId, '')
     this.queue = new JournalWriteQueue(options.identity.sessionId)
     this.projection = new JournalWriteProjection({
@@ -175,7 +154,6 @@ export class AgentSessionJournal {
 
   async open(): Promise<void> {
     await this.restore()
-    this.contextTransfers.reopen()
     this.openedThrough = this.cursor()
     journalInputOrder(this.state).markOpeningRecovery()
   }

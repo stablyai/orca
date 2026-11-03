@@ -39,10 +39,6 @@ export class StructuredAgentSessionEventRecovery {
         sessionId: string,
         child: StructuredAgentSessionProviderChildIdentity
       ) => void
-      continueStartingChild: (
-        sessionId: string,
-        child: StructuredAgentSessionProviderChildIdentity
-      ) => Promise<void>
       failStartingChild: (
         sessionId: string,
         child: StructuredAgentSessionProviderChildIdentity,

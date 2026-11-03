@@ -1,8 +1,3 @@
-import { finishContextTransferTransaction } from './journal-context-transfer'
-import {
-  CONTEXT_TRANSFER_TABLE_SQL,
-  ensureContextTransferIndexes
-} from './context-transfer-repository'
 // Read user_version before persistent pragmas/DDL: even enabling WAL mutates newer databases.
 
 import { ensureJournalOutcomeTables } from './journal-outcome-format'
@@ -82,7 +77,6 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     // An earlier build indexed clear successors for a query that no longer exists; writes stop paying for it.
     probe.exec('DROP INDEX IF EXISTS idx_agent_session_clear_successor')
     ensureAgentSessionAttachmentClaimTables(probe)
-    ensureContextTransferIndexes(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }
@@ -117,7 +111,6 @@ function migrateJournalSchema(db: Database.Database, stored: number): void {
       db.exec(createJournalTablesSql())
     }
     db.exec(createAgentSessionRecordTablesSql())
-    db.exec(CONTEXT_TRANSFER_TABLE_SQL)
     db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION}`)
   })
 }
@@ -150,7 +143,5 @@ export function runJournalTransaction<T>(
       }
     }
     throw error
-  } finally {
-    finishContextTransferTransaction(db)
   }
 }

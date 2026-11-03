@@ -1,8 +1,3 @@
-import type { ContextTransferMessage } from '../agent-session-journal/context-transfer-record'
-import type {
-  ConstructionStep,
-  RecoveryConstructionIntent
-} from './structured-agent-session-construction'
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
@@ -164,7 +159,6 @@ export type StructuredAgentSessionAcquireInput = Pick<
   'identity' | 'fence' | 'spawnToken'
 > &
   Partial<Omit<StructuredAgentSessionStartupAttempt, 'identity' | 'fence' | 'spawnToken'>> & {
-    constructionIntent?: RecoveryConstructionIntent
     recordPhase?: AgentSessionCreatePhaseRecorder
     /** Persist process identity before handshake so mid-start crashes leave a recoverable owner; returned process must match. */
     onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
@@ -185,9 +179,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Keep runtime/location support in adapter data for remote enablement. */
   supportsLocation?(location: AgentSessionExecutionLocation): boolean
   /** Spawn once per reservation; use its token/fence because the store rejects mismatched handles. */
-  acquire(
-    input: StructuredAgentSessionAcquireInput
-  ): Promise<AgentSessionAcquisition | ConstructionStep<AgentSessionAcquisition>>
+  acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition>
   /** Reap failed acquisitions; true proves child exit, root-only proof throws AgentSessionAcquisitionRootExitObservedError. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   hasOwnedAcquisition?(sessionId: string): boolean
@@ -196,20 +188,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string,
     mode: AgentChatPermissionChoice
   ): boolean | undefined
-  injectHistoricalContext?(input: {
-    sessionId: string
-    fence: number
-    deliveryId: string
-    targetId: string
-    context: string
-    coverageText: string
-    messages: readonly ContextTransferMessage[]
-    signal?: AbortSignal
-  }): Promise<{ kind: 'injected'; requestId: string } | { kind: 'unsupported' }>
-  historicalInputBytes?(input: {
-    sessionId: string
-    body: AgentJournalMessageItem
-  }): Promise<{ bytes: number; limit: number }>
   dispatch(input: {
     sessionId: string
     clientMessageId: string

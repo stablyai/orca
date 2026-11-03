@@ -1,4 +1,3 @@
-import { normalizeConstruction } from './structured-agent-session-construction'
 import { structuredAgentSessionAdapterCapabilities } from './structured-agent-session-adapter-capabilities'
 
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -48,22 +47,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return releaseSessionRoute(input, this.routes, () => this.adapters())
   }
 
-  open: StructuredAgentSessionAdapter['open'] = (input) =>
-    this.owner(input.sessionId).open(input).then(normalizeConstruction)
-
-  injectHistoricalContext: NonNullable<StructuredAgentSessionAdapter['injectHistoricalContext']> = (
-    input
-  ) =>
-    this.owner(input.sessionId).injectHistoricalContext?.(input) ??
-    Promise.resolve({ kind: 'unsupported' })
-  historicalInputBytes: NonNullable<StructuredAgentSessionAdapter['historicalInputBytes']> = (
-    input
-  ) =>
-    this.owner(input.sessionId).historicalInputBytes?.(input) ??
-    Promise.resolve({
-      bytes: Buffer.byteLength(JSON.stringify(input.body)),
-      limit: 8 * 1024 * 1024
-    })
+  open: StructuredAgentSessionAdapter['open'] = (input) => this.owner(input.sessionId).open(input)
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)

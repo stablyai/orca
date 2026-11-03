@@ -1,7 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   codexItemIdentity,
-  codexJournalItem,
   CodexTurnOrdinals,
   readCodexThreadItem
 } from './codex-structured-item-translation'
@@ -43,9 +42,6 @@ export function createCodexHistoryImportPlan(input: {
     options: StructuredAgentSessionItemAppendOptions
   ) => {
     input.check()
-    if (input.journal.recoveryEcho?.(identity, body)?.kind === 'history') {
-      return { accepted: true } as const
-    }
     const key = agentJournalItemKey(identity)
     if (omitted.has(key)) {
       return { accepted: true } as const
@@ -115,12 +111,6 @@ export function createCodexHistoryImportPlan(input: {
           ordinals,
           historyImport: true
         })
-        const recoveredBody = codexJournalItem(item).body
-        const recovered = recoveredBody && input.journal.recoveryEcho?.(identity, recoveredBody)
-        if (recovered) {
-          native = true
-          continue
-        }
         if (item.type === 'userMessage') {
           if (
             typeof item.clientId === 'string' &&

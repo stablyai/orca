@@ -1,4 +1,3 @@
-import { readyConstructionValue } from './structured-agent-session-instant-start.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import * as journalFactory from '../agent-session-journal/journal-store-factory'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -220,8 +219,7 @@ it.each(['quit', 'stop', 'failure', 'provider-death'] as const)(
       })
     }
     if (ending === 'provider-death') {
-      const acquired = await acquire.mock.results.at(-1)?.value
-      const generation = acquired && readyConstructionValue(acquired).acquisitionGeneration
+      const generation = (await acquire.mock.results.at(-1)?.value)?.acquisitionGeneration
       const fence = store.getRecord(SESSION)?.lease.runtimeFence
       if (!generation || fence === undefined) {
         throw new Error('provider identity missing')

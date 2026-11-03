@@ -1,4 +1,3 @@
-import { readyConstruction } from './structured-agent-session-construction'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
@@ -121,19 +120,17 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-append-delivery-'))
   resetHostTestOperationIds()
   generation = 0
-  acquire = vi.fn(async ({ fence, spawnToken }) =>
-    readyConstruction({
-      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-      link: {
-        linkId: `link-${fence}`,
-        handle: codexProviderHandle(THREAD),
-        origin: generation === 0 ? ('created' as const) : ('resumed' as const),
-        mintedAtFence: fence,
-        observedAt: NOW
-      },
-      acquisitionGeneration: `generation-${++generation}`
-    })
-  )
+  acquire = vi.fn(async ({ fence, spawnToken }) => ({
+    process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+    link: {
+      linkId: `link-${fence}`,
+      handle: codexProviderHandle(THREAD),
+      origin: generation === 0 ? ('created' as const) : ('resumed' as const),
+      mintedAtFence: fence,
+      observedAt: NOW
+    },
+    acquisitionGeneration: `generation-${++generation}`
+  }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
