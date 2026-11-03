@@ -66,7 +66,7 @@ export function MobileNativeChatAsk({
   const [sending, setSubmitting] = useState(false)
   const submitting = sending || answerPending
   const submittingRef = useRef(false)
-  const autoAdvance = useMobileNativeChatAskAutoAdvance()
+  const autoAdvance = useMobileNativeChatAskAutoAdvance(submitting)
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
   const showStep = (next: (current: number) => number): void => {
     inputRef.current?.blur()

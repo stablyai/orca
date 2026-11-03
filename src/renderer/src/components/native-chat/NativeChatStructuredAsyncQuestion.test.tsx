@@ -170,6 +170,78 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     expect(container.querySelector('input[data-native-chat-answer-field]')).toBeNull()
   })
 
+  it.each([false, true])(
+    'cancels a scheduled step when another send becomes pending (multiple: %s)',
+    (multiple) => {
+      const send = vi.fn(() => true)
+      const question = multiple
+        ? {
+            ...askedItem,
+            body: {
+              kind: 'message' as const,
+              role: 'assistant' as const,
+              blocks: [
+                {
+                  type: 'tool-call' as const,
+                  name: 'request_user_input_async',
+                  input: {
+                    questions: [
+                      { title: 'Which color?', options: ['Red', 'Blue'] },
+                      { title: 'Another question?', options: ['Yes', 'No'] }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        : askedItem
+      const render = (pending: boolean) =>
+        act(() =>
+          root.render(
+            <NativeChatStructuredAsyncQuestion
+              paneKey="timer-card"
+              sourceKey="host/session/epoch"
+              sourceScope="journal/session/epoch"
+              session={{
+                readPhase: 'ready',
+                messages: projectStructuredAgentSessionMessages(
+                  pending ? [question, answerItem] : [question],
+                  [],
+                  pending ? [pendingAnswer] : []
+                )
+              }}
+              send={send}
+            />
+          )
+        )
+      render(false)
+      act(() =>
+        [...container.querySelectorAll('button[aria-pressed]')]
+          .find((button) => button.textContent?.includes('Blue'))!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+      render(true)
+      expect(
+        container.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.disabled
+      ).toBe(true)
+      act(() => vi.runAllTimers())
+      expect(send).not.toHaveBeenCalled()
+      expect(container.textContent).toContain('Which color?')
+      expect(container.textContent).not.toContain('Another question?')
+      render(false)
+      act(() =>
+        [...container.querySelectorAll('button')]
+          .find((button) => button.textContent === (multiple ? 'Next' : 'Submit'))!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      )
+      if (multiple) {
+        expect(container.textContent).toContain('Another question?')
+      } else {
+        expect(send).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+
   it('keeps a queued answer hidden through handoff, releasing only uncertainty or delivery', () => {
     const render = (submissions: AgentJournalSubmission[], queuedCards: { text: string }[] = []) =>
       act(() =>

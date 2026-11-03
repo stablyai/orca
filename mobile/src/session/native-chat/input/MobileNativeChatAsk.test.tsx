@@ -102,6 +102,32 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     expect(onAnswer).toHaveBeenLastCalledWith([{ indices: [1] }])
   })
 
+  it.each([false, true])(
+    'cancels a scheduled step when delivery becomes pending (multiple: %s)',
+    async (multiple) => {
+      const prompt = { questions: multiple ? [indent, fruit] : [indent], replyAsMessage: true }
+      const onAnswer = render(prompt)
+      press('Spaces')
+      act(() =>
+        tree.update(createElement(MobileNativeChatAsk, { prompt, onAnswer, answerPending: true }))
+      )
+      await passAutoAdvanceBeat()
+      expect(onAnswer).not.toHaveBeenCalled()
+      expect(shows('Tabs or spaces?')).toBe(true)
+      expect(shows('Which fruit?')).toBe(false)
+      expect(tree.root.find((node) => node.props.label === 'Spaces').props.selected).toBe(true)
+      act(() =>
+        tree.update(createElement(MobileNativeChatAsk, { prompt, onAnswer, answerPending: false }))
+      )
+      await submit(multiple ? 'Next' : 'Submit')
+      if (multiple) {
+        expect(shows('Which fruit?')).toBe(true)
+      } else {
+        expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1] }])
+      }
+    }
+  )
+
   it('moves to the next question after a pick and sends after the last one', async () => {
     const onAnswer = render({ questions: [indent, fruit] })
 
