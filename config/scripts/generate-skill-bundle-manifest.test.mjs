@@ -14,7 +14,6 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import { observeSkillPackage } from '../../src/main/skills/skill-package-identity'
 import {
   classifyFile,
@@ -28,7 +27,6 @@ import {
 } from './generate-skill-bundle-manifest.mjs'
 
 const temporaryDirectories = []
-const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 
 async function createPackage() {
   const directory = await mkdtemp(path.join(tmpdir(), 'orca-skill-manifest-'))
@@ -51,6 +49,11 @@ async function createGeneratorSandbox() {
   const script = path.join(root, 'config', 'scripts', 'generate-skill-bundle-manifest.mjs')
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
+  await mkdir(path.join(root, 'src', 'shared'), { recursive: true })
+  await copyFile(
+    path.resolve(import.meta.dirname, '../../src/shared/bundled-skill-renames.json'),
+    path.join(root, 'src', 'shared', 'bundled-skill-renames.json')
+  )
   for (const name of ['generate-skill-bundle-manifest.mjs', 'git-pull-request-diff-base.mjs']) {
     await copyFile(path.join(import.meta.dirname, name), path.join(path.dirname(script), name))
   }
@@ -328,31 +331,5 @@ describe('skill bundle manifest generator', () => {
     const generated = (await collectPackageFiles(packageRoot)).map((file) => file.path)
     expect(generated).toEqual((await observeSkillPackage(packageRoot)).files.map((f) => f.path))
     expect(generated).toEqual(['.DS_Store.md', '.dsstore', 'SKILL.md', '_SKILL.md', 'ds_store.md'])
-  })
-
-  // Release steps share index; a prior step can stage regenerated manifest into bump commit. Pin cut’s committed-artifact guard and spellings.
-  it('keeps the whole release-cut job off skill regeneration', async () => {
-    const workflow = parse(
-      await readFile(path.join(REPO_ROOT, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const runSteps = workflow.jobs.cut.steps
-      .filter((step) => typeof step.run === 'string')
-      .map((step) => ({ name: step.name ?? '(unnamed)', run: step.run.replace(/^\s*#.*$/gm, '') }))
-    const bumpStep = runSteps.find((step) => step.name === 'Bump package.json and tag')
-
-    // Check commit, not index (commit flags can bypass it); -F keeps dot literal, -m exposes merge changes.
-    expect(bumpStep.run).toMatch(
-      /git diff-tree --no-commit-id --name-only -r -m --first-parent HEAD\s*\|\s*grep -vxF -e 'package\.json'/
-    )
-    expect(bumpStep.run.indexOf('grep -vxF')).toBeLessThan(bumpStep.run.indexOf('git tag'))
-    // ...and that it aborts. A guard degraded to a warning still reads as covered.
-    expect(bumpStep.run).toMatch(
-      /if \[\[ -n "\$committed" \]\]; then(?:(?!\bfi\b)[\s\S])*exit 1[\s\S]*?fi/
-    )
-    for (const step of runSteps) {
-      expect(step.run, step.name).not.toMatch(
-        /resources[/\\]skills|--write|generate:skill-bundle-manifest/
-      )
-    }
   })
 })

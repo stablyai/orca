@@ -7665,7 +7665,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Computer Use'u Aç",
-          "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
+          "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Orca Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
           "333984cf90": "Mevcut bir tarayıcı oturumunu kullan"
         },
         "BrowserUseEnableSwitch": {
@@ -7785,7 +7785,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Ajanların yerel masaüstü uygulamalarını incelemesini ve çalıştırmasını sağlar.",
-          "93255aaf18": "Computer Use becerisi",
+          "93255aaf18": "Orca Computer Use becerisi",
           "45f8e22c2e": "Aç",
           "d95d1cfab8": "Yenile",
           "0c29da5805": "Hazır",
@@ -19998,7 +19998,8 @@
         "effortPickerFailed": "Çaba seçici açılamadı.",
         "modelApplyFailed": "{{value}} modeli uygulanamadı.",
         "effortApplyFailed": "Çaba düzeyi {{value}} olarak ayarlanamadı."
-      }
+      },
+      "settings": "Sohbet ayarları"
     },
     "tab": {
       "bar": {

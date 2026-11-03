@@ -7550,7 +7550,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Ouvrir Computer Use",
-          "79209b37b9": "Si l'import de cookies ne convient pas, Computer Use peut contrôler des apps locales et, le cas échéant, réutiliser des sessions de navigateur déjà connectées. Installez la skill Computer Use ; macOS exige aussi des autorisations de confidentialité.",
+          "79209b37b9": "Si l'import de cookies ne convient pas, Computer Use peut contrôler des apps locales et, le cas échéant, réutiliser des sessions de navigateur déjà connectées. Installez la skill Orca Computer Use ; macOS exige aussi des autorisations de confidentialité.",
           "333984cf90": "Utiliser une session de navigateur existante"
         },
         "BrowserUseEnableSwitch": {
@@ -7670,7 +7670,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Permet aux agents d'inspecter et de piloter des applications de bureau locales.",
-          "93255aaf18": "Compétence Computer Use",
+          "93255aaf18": "Compétence Orca Computer Use",
           "45f8e22c2e": "Ouvert",
           "d95d1cfab8": "Actualiser",
           "0c29da5805": "Prêt",
@@ -20065,7 +20065,8 @@
         "cancelled": "Orca ne reprendra pas ce chat automatiquement.",
         "scheduled": "Orca reprendra ce chat à {{time}}.",
         "cancel": "Ne pas reprendre"
-      }
+      },
+      "settings": "Paramètres du chat"
     },
     "tab": {
       "bar": {

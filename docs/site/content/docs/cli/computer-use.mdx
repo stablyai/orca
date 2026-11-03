@@ -103,10 +103,10 @@ On Linux and Windows, action payloads also pass briefly through a local operatio
 
 ## Use it from an agent
 
-The shipped `computer-use` skill packages the same command surface with safety guidance. Install it into the agent's skill directory:
+The shipped `orca-computer-use` skill packages the same command surface with safety guidance. Install it into the agent's skill directory:
 
 ```
-npx skills add https://github.com/stablyai/orca --skill computer-use
+npx skills add https://github.com/stablyai/orca --skill orca-computer-use
 ```
 
 See [Skills registry & MCP](/docs/cli/skills) for how skills are picked up.
@@ -115,3 +115,5 @@ See [Skills registry & MCP](/docs/cli/skills) for how skills are picked up.
 
 - [Orca CLI overview](/docs/cli/overview) — the rest of the CLI surface (worktrees, terminal, browser).
 - [Skills registry & MCP](/docs/cli/skills) — distributing this CLI to agents.
+
+The skill was previously named `computer-use`. Existing Orca CLI requests using that name remain supported. Use `$orca-computer-use` for agent invocations. Orca migrates verified, unedited installations through its skill updater and preserves edited copies. The old shared folder may remain as a forwarding link for existing agent profiles.

@@ -1,7 +1,7 @@
 import {
   pairedRuntimeBrowserClientHostId,
   pairedRuntimeBrowserClientHostsPage
-} from '../../browser/paired-runtime-browser-client-host-runtime'
+} from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 import {

@@ -1,10 +1,10 @@
-import { BrowserNetworkTunnelSession } from '../../../browser/browser-network-tunnel-session'
-import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/browser-network-tunnel-outbound-memory-budget'
+import { BrowserNetworkTunnelSession } from '../../../browser/network/tunnels/browser-network-tunnel-session'
+import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
 import {
   browserNetworkExecutionHostKey,
   type BrowserNetworkExecutionRouteResolver
-} from '../../../browser/browser-network-execution-route'
-import { resolveBrowserNetworkExecutionRoute } from '../../../browser/browser-network-execution-route-dispatch'
+} from '../../../browser/network/execution-routes/browser-network-execution-route'
+import { resolveBrowserNetworkExecutionRoute } from '../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
 import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,

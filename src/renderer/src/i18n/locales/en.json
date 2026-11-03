@@ -1099,6 +1099,12 @@
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
       "keywords": "formatter format on save prettier biome gofmt"
     },
+    "editorInsertFinalNewline": {
+      "title": "Insert Final Newline",
+      "description": "Add a line break when saving a non-empty code file that does not end with one. Off by default.",
+      "keywordNewline": "newline",
+      "keywordEndOfFile": "end of file"
+    },
     "repositoryFormatter": {
       "title": "Formatter Command",
       "description": "Use this project’s formatter for Format on Save.",
@@ -7863,7 +7869,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
-          "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Computer Use skill; macOS also requires privacy permissions.",
+          "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
           "333984cf90": "Use an existing browser session"
         },
         "BrowserUseEnableSwitch": {
@@ -7983,7 +7989,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Enables agents to inspect and operate local desktop apps.",
-          "93255aaf18": "Computer Use skill",
+          "93255aaf18": "Orca Computer Use skill",
           "45f8e22c2e": "Open",
           "d95d1cfab8": "Refresh",
           "0c29da5805": "Ready",
@@ -20419,7 +20425,8 @@
         "cancelled": "Orca won't continue this chat automatically.",
         "scheduled": "Orca will continue this chat at {{time}}.",
         "cancel": "Don't continue"
-      }
+      },
+      "settings": "Chat settings"
     },
     "tab": {
       "bar": {

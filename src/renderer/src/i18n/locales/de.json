@@ -7679,7 +7679,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Computer Use öffnen",
-          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
+          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
           "333984cf90": "Bestehende Browser-Sitzung verwenden"
         },
         "BrowserUseEnableSwitch": {
@@ -7799,7 +7799,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Ermöglicht Agenten, lokale Desktop-Apps zu untersuchen und zu bedienen.",
-          "93255aaf18": "Computer Use-Skill",
+          "93255aaf18": "Orca Computer Use-Skill",
           "45f8e22c2e": "Öffnen",
           "d95d1cfab8": "Aktualisieren",
           "0c29da5805": "Bereit",
@@ -20014,7 +20014,8 @@
         "effortPickerFailed": "Die Auswahl des Denkaufwands konnte nicht geöffnet werden.",
         "modelApplyFailed": "Modell {{value}} konnte nicht angewendet werden.",
         "effortApplyFailed": "Denkaufwand {{value}} konnte nicht angewendet werden."
-      }
+      },
+      "settings": "Chat-Einstellungen"
     },
     "tab": {
       "bar": {

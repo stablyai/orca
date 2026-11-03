@@ -1,4 +1,5 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
+import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-attribution-diagnostics'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence, restateHookRoot } from '../../../shared/agent-hook-owner-presence'
 import type { HookRootEvidenceReader } from '../../../shared/hook-process-root-evidence'
@@ -13,6 +14,7 @@ import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
   /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
   protected readHookRootEvidence: HookRootEvidenceReader | undefined
 

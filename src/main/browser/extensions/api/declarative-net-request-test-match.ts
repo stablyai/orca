@@ -1,11 +1,12 @@
 import { z } from 'zod'
-import { createDnrRequestState, DnrEngine } from '../declarative-net-request/engine'
+import { createDnrRequestState } from '../declarative-net-request/request-state'
+import { DnrEngine } from '../declarative-net-request/engine'
 import type { DnrHostAccess } from '../declarative-net-request/extension-matcher'
 import { compareActions, type DnrRequestAction } from '../declarative-net-request/ruleset-matcher'
 import { DNR_REQUEST_METHODS, DNR_RESOURCE_TYPES } from '../declarative-net-request/rule-types'
-import { BrowserExtensionApiError } from '../browser-extension-namespace-registry'
-import type { DnrExtensionRules } from '../browser-extension-dnr-extension-rules'
-import { DNR_ERRORS } from '../browser-extension-dnr-limits'
+import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
+import type { DnrExtensionRules } from '../declarative-net-request/session/browser-extension-dnr-extension-rules'
+import { DNR_ERRORS } from '../declarative-net-request/session/browser-extension-dnr-limits'
 
 export const testMatchRequestSchema = z
   .object({

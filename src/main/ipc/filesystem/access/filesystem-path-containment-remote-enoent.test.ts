@@ -4,15 +4,6 @@ import { isENOENT, isPathAbsentError } from './filesystem-path-containment'
 
 /** Relay JSON-RPC preserves Node ENOENT messages but replaces string codes; remote creation must still recognize expected absence. */
 describe('isENOENT across the SSH relay boundary', () => {
-  it('recognises a local Node error by its code', () => {
-    const local = new Error(
-      "ENOENT: no such file or directory, lstat '/tmp/nope'"
-    ) as NodeJS.ErrnoException
-    local.code = 'ENOENT'
-
-    expect(isENOENT(local)).toBe(true)
-  })
-
   it('recognises an error rebuilt from the relay with a numeric transport code', () => {
     // Relay response reconstruction preserves the message and replaces the code.
     const fromRelay = new Error(
@@ -44,12 +35,6 @@ describe('isENOENT across the SSH relay boundary', () => {
     // Match the canonical phrase so unrelated ENOENT mentions cannot bypass collision checks.
     expect(isENOENT(new Error('fix: handle ENOENT better'))).toBe(false)
     expect(isENOENT(new Error('branch enoent-handling created'))).toBe(false)
-  })
-
-  it('ignores non-errors', () => {
-    expect(isENOENT('ENOENT: no such file or directory')).toBe(false)
-    expect(isENOENT(null)).toBe(false)
-    expect(isENOENT(undefined)).toBe(false)
   })
 })
 

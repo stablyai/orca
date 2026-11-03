@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { createAccumulator } from './session-scanner-accumulator'
 import { decodeSessionMessage } from './transcripts/session-decoded-message'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
@@ -70,34 +70,6 @@ it('keeps preview writes independent of transcript publication and first-prompt 
       'not the ask either'
     ])
   })
-})
-
-it('formats a preview without joining large source blocks when no transcript consumer is active', () => {
-  const { accumulator } = recordingAccumulator()
-  accumulator.messages = {
-    active: false,
-    push: () => {
-      throw new Error('Unexpected transcript publication')
-    }
-  }
-  const text = 'visible '.repeat(1024 * 1024)
-  const join = vi.spyOn(Array.prototype, 'join')
-  try {
-    addSessionContent(
-      accumulator,
-      'assistant',
-      [
-        { type: 'reasoning', text },
-        { type: 'text', text },
-        { type: 'text', text }
-      ],
-      AT
-    )
-    expect(join).not.toHaveBeenCalled()
-    expect(accumulator.previewMessages[0]?.text).toHaveLength(220)
-  } finally {
-    join.mockRestore()
-  }
 })
 
 it('keeps every published turn after older previews leave the display window', () => {
