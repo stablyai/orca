@@ -1030,8 +1030,8 @@
 2 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatStructuredSessionStatus.test.tsx
 8 test-no-wall-clock:src/renderer/src/components/native-chat/structured-child-records-switch.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/settings/GrokAccountsSection.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/settings/ZcodePlanAccountsSection.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.test.tsx
+3 test-no-wall-clock:src/renderer/src/components/settings/accounts/usage/ZcodePlanAccountsSection.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/SidebarToolbar.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.compact-hover.test.tsx
 13 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.pr-display.test.tsx

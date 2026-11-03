@@ -6,7 +6,7 @@ import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-se
 import { getEphemeralVmsSearchEntry } from '../virtual-machines/recipes/ephemeral-vms-search'
 import { getBrowserExtensionsExperimentalSearchEntry } from '../browser/extensions/browser-extensions-experimental-search'
 import { getWslHostsExperimentalSearchEntry } from '../wsl/hosts/wsl-hosts-experimental-search'
-import { getOrchestrationPanelExperimentalSearchEntry } from '../orchestration-panel-experimental-search'
+import { getOrchestrationPanelExperimentalSearchEntry } from '../orchestration/orchestration-panel-experimental-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [

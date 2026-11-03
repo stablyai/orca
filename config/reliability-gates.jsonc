@@ -1607,17 +1607,19 @@
       "coveredProviders": [],
       "coverageNotes": "Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/AccountsPane.tsx"
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/accounts/AccountsPane.tsx"
       ],
       "invariant": "Matching sections retain their owners as earlier search results disappear; genuine removal releases the Codex subscription and reopens fresh status reads.",
       "oracle": "Across nine matching Grok, ten matching Cursor and eleven matching Codex queries each matched section keeps the same DOM node and its status-read, watcher and subscription counts do not grow, against four to six reads each before. Explicit refresh, store-published usage updates, pushed login URLs and genuine removal all still reach the retained section.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx"
       ],
-      "testFiles": ["src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"],
+      "testFiles": [
+        "src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx"
+      ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx",
+          "file": "src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx",
           "assertions": [
             "preserves explicit Grok refresh and real hide/reopen status reads",
             "keeps the login subscription until Codex genuinely hides",
@@ -1631,6 +1633,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/accounts/AccountsPane.section-lifetime.test.tsx",
           "result": "passed",
           "durationSeconds": 1.84,
           "summary": "10 tests/1 suite pass after the shared SettingsSectionStack adoption. Read-count oracles restated as node identity plus non-growing counts; original main fails the three retained-section cases and the retained Codex subscription, and passes the explicit-refresh, usage-driven and genuine-removal controls."

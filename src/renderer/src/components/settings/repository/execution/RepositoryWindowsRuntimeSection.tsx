@@ -2,9 +2,9 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import type { Project, ProjectUpdateArgs } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import type { SettingsSearchEntry } from '../../search/settings-search'
-import { matchesSettingsSearch } from '../../search/settings-search'
-import { ProjectWindowsRuntimeSetting } from '../../ProjectWindowsRuntimeSetting'
+
+import { type SettingsSearchEntry, matchesSettingsSearch } from '../../search/settings-search'
+import { ProjectWindowsRuntimeSetting } from './ProjectWindowsRuntimeSetting'
 import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
 import { useWslMoveTargetForRepo } from '../../../wsl-move/wsl-move-entry'

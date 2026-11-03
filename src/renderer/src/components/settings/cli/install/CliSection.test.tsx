@@ -63,7 +63,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-vi.mock('../../AgentSkillSetupPanel', () => ({
+vi.mock('../../../skills/setup/AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: function AgentSkillSetupPanel(props: CapturedPanelProps) {
     capturedPanel.props = props
     return <div data-testid="agent-skill-setup-panel" />

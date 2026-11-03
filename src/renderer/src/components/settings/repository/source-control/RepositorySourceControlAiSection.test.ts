@@ -11,7 +11,7 @@ import { act, render, cleanup, fireEvent, screen, within, waitFor } from '@testi
 import { pickerLocaleFixture } from '../../__fixtures__/settings-persistence-test-fixture'
 import React from 'react'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { createRepoActionTextDraftEditors } from '../../repository-source-control-ai-text-draft'
+import { createRepoActionTextDraftEditors } from './repository-source-control-ai-text-draft'
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
 import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control-ai-actions'
 import {
@@ -19,14 +19,14 @@ import {
   withRepoAiActionMode,
   withRepoAiActionRecipeText
 } from './repository-source-control-ai-draft'
-import { withRepoAiActionAgent } from '../../repository-source-control-ai-action-agent-draft'
+import { withRepoAiActionAgent } from './repository-source-control-ai-action-agent-draft'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
 
 import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
-import { SourceControlActionAgentPicker } from '../../SourceControlActionAgentPicker'
+import { SourceControlActionAgentPicker } from '../../source-control/SourceControlActionAgentPicker'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
-import { SourceControlAiActionRecipeDefaults } from '../../SourceControlAiActionRecipeDefaults'
+import { SourceControlAiActionRecipeDefaults } from '../../source-control/SourceControlAiActionRecipeDefaults'
 import { useAppStore } from '../../../../store/index'
 import { TooltipProvider } from '../../../ui/tooltip'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'

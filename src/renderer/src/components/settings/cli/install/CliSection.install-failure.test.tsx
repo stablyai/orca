@@ -28,7 +28,7 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({ canUseSkillFreshness: true })
 }))
 
-vi.mock('../../AgentSkillSetupPanel', () => ({
+vi.mock('../../../skills/setup/AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: () => <div data-testid="agent-skill-setup-panel" />
 }))
 

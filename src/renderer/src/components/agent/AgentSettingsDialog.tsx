@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { AgentsPane } from '@/components/settings/AgentsPane'
+import { AgentsPane } from '@/components/settings/agents/AgentsPane'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import {
