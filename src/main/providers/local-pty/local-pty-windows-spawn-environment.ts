@@ -9,7 +9,7 @@ import {
   isWslCodexHomeForHost
 } from '../../pty/shell-startup/codex-home-wsl-env'
 import { addWslEnvKeys } from '../../../shared/wsl-env'
-import { parseWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { isWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import {

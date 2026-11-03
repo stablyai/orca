@@ -19,10 +19,10 @@ vi.mock('../native-chat/wsl-transcript-running-admission', () => ({
 vi.mock('./session-scanner-opencode-sqlite-process-client', () => ({
   createOpenCodeSqliteProcessClient: mocks.create
 }))
-vi.mock('../wsl/wsl-executable-path', () => ({
+vi.mock('../wsl/execution/wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
-vi.mock('../wsl-interop-spawn-directory', () => ({
+vi.mock('../wsl/execution/wsl-interop-spawn-directory', () => ({
   resolveWslInteropSpawnCwd: () => 'C:\\Windows'
 }))
 import {

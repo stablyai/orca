@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGateModule from '../../../wsl-background-distro-gate'
+import type * as BackgroundDistroGateModule from '../../../wsl/discovery/wsl-background-distro-gate'
 import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
 import { prepareRuntimePtySpawn } from './spawn-preflight'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 import { makeRuntimePtySpawnTestDeps } from './spawn-preflight-test-deps-fixture'
-import { isWslUserActFor } from '../../../wsl/wsl-user-act-scope'
+import { isWslUserActFor } from '../../../wsl/discovery/wsl-user-act-scope'
 
 const mocks = vi.hoisted(() => ({
   readWslDistroRunningState: vi.fn<() => Promise<'running' | 'stopped' | 'unverifiable'>>()
 }))
-vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGateModule>()),
   readWslDistroRunningState: mocks.readWslDistroRunningState
 }))

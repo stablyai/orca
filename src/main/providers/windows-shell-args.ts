@@ -1,6 +1,7 @@
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
-import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand

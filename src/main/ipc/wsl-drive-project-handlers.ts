@@ -15,7 +15,7 @@ import {
   convertWslDriveProjectToWindowsGit,
   previewWslDriveProjectWindowsGit,
   type WslDriveProjectDeps
-} from '../wsl/wsl-drive-project-windows-git'
+} from '../wsl/filesystem/wsl-drive-project-windows-git'
 
 export const WSL_DRIVE_PROJECT_HANDLER_CHANNELS = [
   'wslDriveProject:preview',

@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { WslDistroGateNote } from '../wsl-background-distro-gate'
-import { noteWslDistroMayHaveStopped, noteWslDistroWoken } from '../wsl-background-distro-gate'
+import type { WslDistroGateNote } from './discovery/wsl-background-distro-gate'
+import {
+  noteWslDistroMayHaveStopped,
+  noteWslDistroWoken
+} from './discovery/wsl-background-distro-gate'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import type { WslDistroHolder } from './wsl-distro-holder-types'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import {
   ADOPTED_HOLDER_POLL_MS,
   fenceHolderOnStop,

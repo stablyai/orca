@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { WslDistroVersion1Error } from './wsl-distro-unsupported'
+import { WslDistroVersion1Error } from './discovery/wsl-distro-unsupported'
 import { connectForWslHostAdd } from './wsl-host-first-connect'
 
 describe('connectForWslHostAdd', () => {

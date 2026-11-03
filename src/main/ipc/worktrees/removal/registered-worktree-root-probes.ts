@@ -7,7 +7,10 @@ import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/executi
 import type { RegisteredWorktreeRootStore as RootStore } from './registered-worktree-root-store'
 import { getWorktreeMirrorDistroForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listRepoWorktreeGraph } from '../../../workspaces/catalog/repo-worktrees'
-import { blockedWslDistroForPath, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
+import {
+  blockedWslDistroForPath,
+  wslDistroForPath
+} from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 const CREATED_WORKTREE_ROOT_PROBE_TIMEOUT_MS = 1_000
 const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8

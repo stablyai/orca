@@ -1,4 +1,4 @@
-import { killWslChannelsInCloseGrace } from '../wsl/wsl-command-channel'
+import { killWslChannelsInCloseGrace } from '../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './quit/host-shutdown-state'
 import { app, type Event } from 'electron'
 import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'

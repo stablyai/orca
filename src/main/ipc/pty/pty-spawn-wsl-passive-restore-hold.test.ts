@@ -25,7 +25,7 @@ vi.mock('../../pi/titlebar-extension-service', () =>
 vi.mock('../../pty/shell-startup/pwsh', () =>
   import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('node:fs/promises', async (importOriginal) =>
@@ -55,7 +55,7 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
 const runningStateMock = vi.hoisted(() =>
   vi.fn(async (_distro: string, _options?: { startedAfter?: number }) => 'stopped')
 )
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readWslDistroRunningState: runningStateMock
 }))

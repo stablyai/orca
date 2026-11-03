@@ -34,7 +34,7 @@ import {
 } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import type { WslDistroHolder } from './wsl-distro-holder'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
 vi.mock('electron', () => ({

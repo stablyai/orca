@@ -2,7 +2,7 @@ import { join, resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { lstat, readdir } from '../filesystem/asar-transparent-fs'
 import { removeHostCheckout } from '../filesystem/host-tree-removal'
-import { parseWslPath } from '../wsl'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
 import { CLIENT_REMOVAL_HOME } from '../workspaces/removal/worktree-removal-home-guard'
 import {
   assertWorktreeUnlockedForRemoval,

@@ -1,11 +1,14 @@
 /** List user distros from Lxss (including WSL version), then probe running state without booting any. Exclude Docker internals. */
 import type { WslHostDistro } from '../../shared/wsl-host-types'
-import { filterUserWslDistros } from '../wsl-distro-list-output'
+import { filterUserWslDistros } from './discovery/wsl-distro-list-output'
 import {
   readConfirmedRunningWslDistros,
   type WslRunningDistrosRead
-} from '../wsl-background-distro-gate'
-import { readWslDistroRegistrations, type WslDistroRegistration } from './wsl-distro-registry-id'
+} from './discovery/wsl-background-distro-gate'
+import {
+  readWslDistroRegistrations,
+  type WslDistroRegistration
+} from './discovery/wsl-distro-registry-id'
 
 export type WslHostDistroListDependencies = {
   readRegistrations?: () => Promise<WslDistroRegistration[] | null>

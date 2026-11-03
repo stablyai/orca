@@ -15,7 +15,7 @@ vi.mock('../../filesystem/host-tree-removal', () => ({
   removeHostTree: removeHostTreeMock
 }))
 
-vi.mock('../../wsl-fish-history-cleanup', () => ({
+vi.mock('../../wsl/history/wsl-fish-history-cleanup', () => ({
   deleteWslFishHistoryFile: deleteWslFishHistoryFileMock
 }))
 
@@ -32,7 +32,7 @@ import {
 import {
   _resetWslBackgroundDistroGateForTests,
   noteWslDistrosRunning
-} from '../../wsl-background-distro-gate'
+} from '../../wsl/discovery/wsl-background-distro-gate'
 
 // Real filesystem reads need the actual event loop, even while timers are faked.
 const realSetImmediate = setImmediate

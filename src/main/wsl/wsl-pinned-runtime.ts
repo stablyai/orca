@@ -15,7 +15,7 @@ import {
 } from '../ssh/orcad-remote-node-runtime-report'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { isGlibcBelow, PINNED_NODE_GLIBC_FLOOR } from '../ssh/pinned-runtime-host-target'
-import type { WslSpec } from './wsl-runner'
+import type { WslSpec } from './execution/wsl-runner'
 
 const downloads = new Map<string, Promise<string>>()
 const DOWNLOAD_TIMEOUT_MS = 180_000

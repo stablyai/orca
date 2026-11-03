@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildLocalPtySpawnEnvironment } from './local-pty-spawn-environment'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { PtySpawnOptions } from '../pty-provider-contract'
-import { runAsWslLaunchUserAct } from '../../wsl/wsl-background-exec-gate'
-import { isWslUserActFor } from '../../wsl/wsl-user-act-scope'
+import { runAsWslLaunchUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
+import { isWslUserActFor } from '../../wsl/discovery/wsl-user-act-scope'
 
 const plan: LocalPtyLaunchPlan = {
   startupAgentRecognition: null,

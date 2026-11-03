@@ -52,11 +52,13 @@ vi.mock('../../shared/wsl-host-deployment-store', () => ({
     return { deployments: [], unreadableEnvironmentIds: new Set() }
   }
 }))
-vi.mock('../wsl/wsl-distro-registry-id', () => ({ readWslDistroRegistrations: async () => null }))
+vi.mock('../wsl/discovery/wsl-distro-registry-id', () => ({
+  readWslDistroRegistrations: async () => null
+}))
 vi.mock('../wsl/wsl-orcad-deploy', () => ({
   defaultWslOrcadEnvironmentId: (distro: string) => `wsl:${distro}`
 }))
-vi.mock('../wsl-background-distro-gate', () => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', () => ({
   readConfirmedRunningWslDistros: async () => {
     runningRead.hook?.()
     return host.running
@@ -515,7 +517,7 @@ describe('WSL move orchestrator wiring', () => {
   // so its reads of a just-connected distro pass; a wake's reads stay background work.
   it('runs the driver for Check again as the user act, and for a wake as background work', async () => {
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
-    const { isWslUserActFor } = await import('../wsl/wsl-user-act-scope')
+    const { isWslUserActFor } = await import('../wsl/discovery/wsl-user-act-scope')
     const seen: boolean[] = []
     const original = driver.previewWslMove.getMockImplementation()
     driver.previewWslMove.mockImplementation(

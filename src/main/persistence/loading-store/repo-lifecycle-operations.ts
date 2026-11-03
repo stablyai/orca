@@ -17,7 +17,7 @@ import { RepoOrderPersistenceOperations } from '../tracking-repos/repo-order-ope
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../tracking-repos/repo-worktree-pruning'
 import { collectDeregisteredRepoIds } from '../tracking-repos/deregistered-repo-residue'
 import { retireLocalWorktreeMetadataPruneStateForRepo } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
-import { releaseWslStoppedWorktreeRescan } from '../../wsl-stopped-worktree-rescan-registry'
+import { releaseWslStoppedWorktreeRescan } from '../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
 import { hydrateRepo as hydrateRepoOperation } from '../tracking-repos/repo-hydration'
 import { RepoUpdatePersistenceOperations } from '../tracking-repos/repo-update-operations'
 import { ProjectHostSetupPersistenceOperations } from '../tracking-repos/project-host-setup-update'
@@ -33,7 +33,7 @@ import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
 import { isWslMoveProjectSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { applyNewWindowsDriveProjectDefault } from '../../wsl/wsl-drive-project-new-default'
+import { applyNewWindowsDriveProjectDefault } from '../../wsl/filesystem/wsl-drive-project-new-default'
 
 // A paused WSL move keeps its local rows for a downgrade.
 function removeLocalRepoSession(

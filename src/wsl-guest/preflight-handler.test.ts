@@ -1,3 +1,4 @@
+import type * as WslAvailability from '../main/wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
@@ -28,8 +29,13 @@ vi.mock('child_process', () => {
 vi.mock('../main/pty/shell-startup/pwsh', () => ({
   isPwshAvailableAsync: isPwshAvailableAsyncMock
 }))
-vi.mock('../main/wsl', () => ({
-  isWslAvailableAsync: isWslAvailableAsyncMock,
+vi.mock('../main/wsl/discovery/wsl-availability', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslAvailability>()),
+  ...(await (() => ({
+    isWslAvailableAsync: isWslAvailableAsyncMock
+  }))())
+}))
+vi.mock('../main/wsl/discovery/distro-catalog', () => ({
   listWslDistrosAsync: listWslDistrosAsyncMock
 }))
 vi.mock('../main/pty/shell-startup/git-bash', () => ({

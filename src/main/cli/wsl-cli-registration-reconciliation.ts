@@ -1,10 +1,10 @@
 import type { CliInstallState, CliInstallStatus } from '../../shared/cli-install-types'
-import { listWslDistrosAsync } from '../wsl'
+import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
 import {
   deferUntilWslDistroRunning,
   isWslDistroRunning,
   listConfirmedRunningWslDistros
-} from '../wsl-background-distro-gate'
+} from '../wsl/discovery/wsl-background-distro-gate'
 import { CliInstaller } from './cli-installer'
 import {
   getWslCliRegistrationCandidates,

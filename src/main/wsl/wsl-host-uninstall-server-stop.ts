@@ -5,7 +5,7 @@ import { errorMessage } from '../../shared/error-message'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import type { WslHostServerStop } from '../../shared/wsl-host-types'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
-import { listRunningWslDistrosAsync } from '../wsl'
+import { listRunningWslDistrosAsync } from './discovery/distro-catalog'
 import { readWslHostRecordsQuietly } from './wsl-host-connection-record'
 import {
   decommissionWslHostOrcad,

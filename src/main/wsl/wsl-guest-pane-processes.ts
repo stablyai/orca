@@ -3,8 +3,8 @@ import { isShellProcess } from '../../shared/shell-process-detection'
 import {
   isWslDistroRunning,
   wasWslDistroLastSeenRunningSettled
-} from '../wsl-background-distro-gate'
-import { runWslProcess } from './wsl-runner'
+} from './discovery/wsl-background-distro-gate'
+import { runWslProcess } from './execution/wsl-runner'
 
 export type WslGuestProcessRow = {
   pid: number

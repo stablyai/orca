@@ -2,7 +2,7 @@ import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/managed-data-account-shell'
 /** Restore ZDOTDIR before user startup; define functions first so .zshenv emulation cannot change their parsing. */
 import { getPosixOmpShellWrapper } from './omp-shell-wrapper'
-import { WSL_MANAGED_CLI_PATH_RESTORE } from '../../wsl-managed-cli-path-restore'
+import { WSL_MANAGED_CLI_PATH_RESTORE } from '../../wsl/execution/wsl-managed-cli-path-restore'
 import { getPosixCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../../shared/claude-shell-function'
 import {
@@ -17,7 +17,7 @@ import {
   ZSH_USER_ZSHENV_SOURCE_BLOCK,
   ZSH_ZDOTDIR_HANDBACK_BLOCK
 } from './shell-templates'
-import { ZSH_WSL_CWD_REPORT_BLOCK } from '../../wsl-shell-cwd-report'
+import { ZSH_WSL_CWD_REPORT_BLOCK } from '../../wsl/filesystem/wsl-shell-cwd-report'
 
 export type ZshWrapperRestoreSpec = {
   /** Local-only PATH restore; inert outside WSL. */

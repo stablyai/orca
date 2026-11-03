@@ -10,7 +10,7 @@ import type { AgentWorkspaceTrustSpawnRequest } from '../../../shared/agent-work
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-host-workspace-trust'
 import { getLocalCodexTrustConfigFiles } from '../../codex/codex-home-paths'
-import { getCachedWslHome } from '../../wsl-home-cache'
+import { getCachedWslHome } from '../../wsl/discovery/wsl-home-cache'
 
 export type AgentTrustLaunchContext = {
   /** The final spawn env, before the host's own process env. */

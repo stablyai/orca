@@ -6,7 +6,7 @@
  */
 import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 import type { WslOrcadWatch } from './wsl-orcad-watch'
-import { noteWslDistroMayHaveStopped } from '../wsl-background-distro-gate'
+import { noteWslDistroMayHaveStopped } from './discovery/wsl-background-distro-gate'
 
 export type WslOrcadBridgeChannelEvents = {
   opened(): void

@@ -104,7 +104,7 @@ vi.mock('../../../../main/pi/titlebar-extension-service', () =>
 vi.mock('../../../../main/pty/shell-startup/pwsh', () =>
   import('../../../../main/ipc/pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
-vi.mock('../../../../main/wsl', async (importOriginal) =>
+vi.mock('../../../../main/wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('../../../../main/ipc/pty/pty-ipc-mock-registry')).wslModuleMock(
     await importOriginal()
   )

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WslModule from '../../../wsl'
+import type * as WslModule from '../../../wsl/discovery/distro-catalog'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 
@@ -37,7 +37,7 @@ vi.mock('../../execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
   getWorktreeMirrorDistro: mocks.getMirrorDistro
 }))
-vi.mock('../../../wsl', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getWslHome: mocks.getWslHome,
   getWslHomeAsync: mocks.getWslHomeAsync

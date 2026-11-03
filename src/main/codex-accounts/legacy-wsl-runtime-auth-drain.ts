@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { posix as pathPosix } from 'node:path'
 import { wslCodexRuntimeHomeForGuestHome } from '../pty/shell-startup/codex-home-wsl-env'
 import { WSL_SESSION_BRIDGE_TIMEOUT_MS } from '../codex/wsl-codex-session-bridge-script'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { compareCodexAuthFreshness, codexAuthIsFresher } from './codex-auth-identity'
 import {
   APPLY_LEGACY_AUTH_SCRIPT,

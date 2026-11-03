@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { createWslHostConnector } from './wsl-host-connector'
-import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
+import type { WslRunningDistrosRead } from './discovery/wsl-background-distro-gate'
 import type * as TunnelIdentity from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 const mocks = vi.hoisted(() => ({
@@ -22,7 +22,7 @@ vi.mock('./wsl-orcad-connection', async (importOriginal) => ({
     isConnecting = mocks.managerIsConnecting
   }
 }))
-vi.mock('../wsl-background-distro-gate', () => ({
+vi.mock('./discovery/wsl-background-distro-gate', () => ({
   // Settled per distro: a list taken while it stops still names it (E9).
   readSettledConfirmedRunningWslDistros: mocks.readRunning,
   wasWslDistroLastSeenRunningSettled: mocks.lastSeenRunning,

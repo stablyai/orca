@@ -1,4 +1,4 @@
-import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
+import type { WslRunningDistrosRead } from './discovery/wsl-background-distro-gate'
 import { confirmsRunning, EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import type { Supervised, WslOrcadLivenessDependencies } from './wsl-orcad-liveness-state'
 

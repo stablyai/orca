@@ -17,11 +17,15 @@ vi.mock('./session-scanner-opencode-sqlite-open', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readOpenCodeDatabase: mocks.readDb
 }))
-vi.mock('../wsl/wsl-executable-path', () => ({ resolveWslExecutablePath: () => 'wsl.exe' }))
-vi.mock('../wsl-interop-spawn-directory', () => ({ resolveWslInteropSpawnCwd: () => 'C:\\' }))
+vi.mock('../wsl/execution/wsl-executable-path', () => ({
+  resolveWslExecutablePath: () => 'wsl.exe'
+}))
+vi.mock('../wsl/execution/wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\'
+}))
 
-import { _resetWslCachesForTests } from '../wsl'
-import { _resetWslBackgroundDistroGateForTests } from '../wsl-background-distro-gate'
+import { _resetWslCachesForTests } from '../wsl/discovery/distro-catalog'
+import { _resetWslBackgroundDistroGateForTests } from '../wsl/discovery/wsl-background-distro-gate'
 import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from '../native-chat/wsl-transcript-running-admission'
 import {
   configureOpenCodeWslReaders,
@@ -31,9 +35,9 @@ import {
   devinSessionsIndexForSidecar,
   resetDevinSessionsIndexCacheForTests
 } from './session-scanner-devin-db'
-import { listRunningWslHomeDirsUnlessStopped } from '../wsl/wsl-home-unless-stopped'
-import { clearWslHomeCache, rememberWslHome } from '../wsl-home-cache'
-import { _resetRunningWslDistroCacheForTests } from '../wsl-running-distro-cache'
+import { listRunningWslHomeDirsUnlessStopped } from '../wsl/discovery/wsl-home-unless-stopped'
+import { clearWslHomeCache, rememberWslHome } from '../wsl/discovery/wsl-home-cache'
+import { _resetRunningWslDistroCacheForTests } from '../wsl/discovery/wsl-running-distro-cache'
 import { localAiVaultScanRoots } from './cached-session-list'
 
 const DB = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.opencode\\opencode.db'

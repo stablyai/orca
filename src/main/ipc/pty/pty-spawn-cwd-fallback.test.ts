@@ -7,7 +7,7 @@ import {
   existsSyncMock
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { _setWslCachesForTests } from '../../wsl'
+import { _setWslCachesForTests } from '../../wsl/discovery/distro-catalog'
 import { acquireWatcherRemovalGate } from '../watcher-removal-gate'
 import { registerPtyHandlers } from './register-handlers'
 import { join } from 'node:path'
@@ -34,7 +34,7 @@ vi.mock('../../pi/titlebar-extension-service', () =>
 vi.mock('../../pty/shell-startup/pwsh', () =>
   import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('node:fs/promises', async (importOriginal) =>

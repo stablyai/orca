@@ -3,7 +3,7 @@ import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
 import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
-import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
@@ -310,7 +310,7 @@ vi.mock('../repo-worktree-resolution-scan', () => ({
 }))
 
 // Fake-win32 runtime tests have no wsl.exe: treat every distro as running unless a test says otherwise.
-vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => {
   const actual = await importOriginal<typeof WslUncAccessGateModule>()
   const blockedWslDistroForPath = vi.fn<typeof actual.blockedWslDistroForPath>(async () => null)
   return {

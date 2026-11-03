@@ -1,5 +1,5 @@
-import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
+import type { WslRunningDistrosRead } from './discovery/wsl-background-distro-gate'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
 import type { WslGuestIdentity } from './wsl-guest-process-identity'
 import type { Trigger } from './wsl-orcad-liveness-state'
 import { nextWslLivenessProbe, type WslLivenessEvidence } from './wsl-orcad-liveness-verdict'

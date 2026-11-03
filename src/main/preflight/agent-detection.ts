@@ -29,8 +29,8 @@ import {
   type RemoteWindowsTerminalCapabilities
 } from '../ipc/preflight-remote-windows-terminal-capabilities'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
-import { prunePreflightWslCache } from '../preflight-wsl-cache'
-import { assertWslDistroRunningForExec } from '../wsl/wsl-background-exec-gate'
+import { prunePreflightWslCache } from '../wsl/discovery/preflight-wsl-cache'
+import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import {
   detectInstalledAgents,
   type InstalledAgentDetectionOptions
