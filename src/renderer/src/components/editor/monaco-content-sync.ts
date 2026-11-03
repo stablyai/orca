@@ -2,7 +2,7 @@ import type { editor } from 'monaco-editor'
 
 export type MonacoContentSyncMode = 'undoable' | 'read-only-live-tail'
 
-function normalizeToModelEol(
+export function normalizeToModelEol(
   content: string,
   model: editor.ITextModel,
   currentContent: string
