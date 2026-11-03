@@ -33,6 +33,7 @@ import {
 import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
@@ -89,7 +90,12 @@ export function createAllHostRepoCatalogActions(
           return {
             repos: finalizedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
+            ...reconcileFetchedCatalogWorktreeState(
+              s,
+              catalog,
+              finalizedRepos,
+              reconciliation.pendingReadoptions
+            ),
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(finalizedRepos, s.repos)
               ? {}
@@ -99,6 +105,7 @@ export function createAllHostRepoCatalogActions(
             setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
           }
         })
+        noteLiveRepoCatalogApplied(get, catalog.hostId)
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
         scheduleSafeAutoForkSync(hostRepos)
         if (options?.onHostLoaded) {

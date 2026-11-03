@@ -1,11 +1,16 @@
+import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
 // @vitest-environment happy-dom
 import React, { createRef, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
 import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { LinearConnectionStatus } from '../../../../shared/linear/workspace-types'
+import type {
+  LinearCollectionResult,
+  LinearConnectionStatus
+} from '../../../../shared/linear/workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { JiraUrlSourceState } from '../new-workspace/use-jira-url-source'
@@ -120,7 +125,7 @@ const connectedLinear: LinearConnectionStatus = {
   ]
 }
 const onAdd = vi.fn<(item: WorkspaceAttachment) => boolean>(() => true)
-const fetchLinearIssue = vi.fn<() => Promise<LinearIssue | null>>()
+const fetchLinearIssue = vi.fn<(...args: unknown[]) => Promise<LinearIssue | null>>()
 
 function composer(value: string): React.JSX.Element {
   return (
@@ -159,9 +164,12 @@ describe('workspace reference URL resolution and recovery', () => {
       refreshPreflightStatus: vi.fn(async () => {}),
       checkLinearConnection: vi.fn(async () => {}),
       linearStatusChecked: true,
-      fetchLinearIssue,
-      searchLinearIssues: vi.fn(async () => []),
-      listLinearIssues: vi.fn(async () => ({ items: [] }))
+      fetchLinearIssue: (...args: unknown[]) =>
+        linearIssueReadFixture(() => fetchLinearIssue(...args)),
+      searchLinearIssues: vi.fn(() => linearIssueReadFixture<LinearIssue[]>(async () => [])),
+      listLinearIssues: vi.fn(() =>
+        linearIssueReadFixture<LinearCollectionResult<LinearIssue>>(async () => ({ items: [] }))
+      )
     })
     Object.assign(sourceMock.jiraState, {
       intent: false,
@@ -178,6 +186,14 @@ describe('workspace reference URL resolution and recovery', () => {
     Element.prototype.scrollIntoView = vi.fn()
   })
   afterEach(cleanup)
+
+  it('keeps inline attachment results from claiming composer focus', () => {
+    render(composer(jiraUrl))
+
+    const results = screen.getByRole('listbox')
+    expect(results.getClientRects().length).toBeGreaterThan(0)
+    expect(getOverlayFocusOwners()).not.toContain(results)
+  })
 
   it('blocks pasted Jira URLs while loading, including plain Enter', () => {
     Object.assign(sourceMock.jiraState, { intent: true, loading: true })

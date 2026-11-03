@@ -38,7 +38,6 @@ const cases = {
   windows: {
     excluded: [
       'src/main/daemon/daemon-server.test.ts',
-      'src/main/orcad/orcad-native-preflight.test.ts',
       'src/main/orcad/nested/orcad-launch.test.ts',
       'src/cli/runtime/serve.test.ts',
       'src/cli/runtime/nested/serve.test.ts'
@@ -73,7 +72,7 @@ const cases = {
       'src/main/wsl/wsl-orcad-deploy.ts',
       'src/main/runtime/runtime-rpc.ts',
       'src/main/claude/claude-structured-session-state.ts',
-      'src/shared/agent-session-wire-refusals.ts',
+      'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
       'package.json',
       'pnpm-lock.yaml',
       'src/main/wsl/wsl-orcad-bridge-test-child.ts',
@@ -233,7 +232,7 @@ describe('WSL host coverage without UI-only admissions', () => {
     'src/main/wsl/wsl-orcad-deploy.ts',
     'src/main/runtime/runtime-rpc.ts',
     'src/main/claude/claude-structured-session-state.ts',
-    'src/shared/agent-session-wire-refusals.ts'
+    'src/shared/agent-session/failures/agent-session-wire-refusals.ts'
   ])('retains mixed UI and host changes, including renames: %s', (hostFile) => {
     expect(workflowIncludes(paths, uiFiles)).toBe(false)
     expect(workflowIncludes(paths, [...uiFiles, hostFile])).toBe(true)

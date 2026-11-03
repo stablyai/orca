@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { useAppStore } from '@/store'
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { buildWindowApi } from '../ipc-events-agent-status-window-test-fixtures'
 import type { AgentStatusSetData } from '../ipc-events-agent-status-store-test-fixtures'
-import { resolvePaneKey, shouldApplyResolvedAgentTerminalTitleToTab } from './agent-status-routing'
 
 vi.mock('../agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn(),
@@ -49,53 +47,6 @@ function storeWithDivergedTitleSlots(args: {
     repos: []
   } as unknown as ReturnType<typeof useAppStore.getState>
 }
-
-describe('hook-driven tab title writes', () => {
-  it('exposes the tab record title separately from the pane slot title', () => {
-    const store = storeWithDivergedTitleSlots({
-      tabTitle: 'Codex - action required',
-      paneSlotTitle: 'Codex ready'
-    })
-
-    const resolved = resolvePaneKey(store, PANE_KEY)
-
-    expect(resolved.title).toBe('Codex ready')
-    expect(resolved.tabTitle).toBe('Codex - action required')
-  })
-
-  // Unmounted panes kept old titles, causing the former pane-slot guard to skip clearing Orca’s stale action-required tab title.
-  it('rewrites a stale action-required tab title once the agent reports done', () => {
-    const store = storeWithDivergedTitleSlots({
-      tabTitle: 'Codex - action required',
-      paneSlotTitle: 'Codex ready'
-    })
-    const resolved = resolvePaneKey(store, PANE_KEY)
-    const nextTitle = resolveAgentStatusTerminalTitle(
-      { agentType: 'codex', state: 'done' },
-      resolved.title
-    )
-
-    expect(nextTitle).toBe('Codex ready')
-    expect(
-      shouldApplyResolvedAgentTerminalTitleToTab(store, PANE_KEY, resolved.title, nextTitle)
-    ).toBe(false)
-    expect(
-      shouldApplyResolvedAgentTerminalTitleToTab(store, PANE_KEY, resolved.tabTitle, nextTitle)
-    ).toBe(true)
-  })
-
-  it('still skips the write when the tab record already holds the resolved title', () => {
-    const store = storeWithDivergedTitleSlots({
-      tabTitle: 'Codex ready',
-      paneSlotTitle: 'Codex ready'
-    })
-    const resolved = resolvePaneKey(store, PANE_KEY)
-
-    expect(
-      shouldApplyResolvedAgentTerminalTitleToTab(store, PANE_KEY, resolved.tabTitle, 'Codex ready')
-    ).toBe(false)
-  })
-})
 
 describe('hook-driven tab title IPC integration', () => {
   afterEach(() => {

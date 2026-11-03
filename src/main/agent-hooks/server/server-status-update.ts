@@ -1,5 +1,11 @@
+import { RelaySessionGenerations } from './server-relay-sessions'
+import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
-import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
+import { previewHookPresence } from '../../../shared/agent-hook-presence-transition'
+import {
+  needsHookRootEvidence,
+  readHookProcessVerdict
+} from '../../../shared/agent-hook-owner-presence'
 import {
   reconcileCodexStatusEvent,
   markCodexLeadTurnInterrupted
@@ -27,6 +33,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
     this.state
   )
+  protected readonly relaySessions = new RelaySessionGenerations()
 
   // Every row mutation passes here, including cancellation and pane moves.
   protected override commitStatusRowMutation(
@@ -37,7 +44,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (after) {
       this.claudeOwedNotificationExpiry.arm(after.paneKey, (row) => {
         if (this.server) {
-          this.applyNormalizedStatus(row)
+          this.applyRestatedStatus(row)
         }
       })
     }
@@ -50,23 +57,40 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload,
-    newRun = false
+    newRun = false,
+    retireBinding = false
   ): EnrichedAgentHookEventPayload | undefined {
-    const transitioned = transitionHookPresence(
+    const restated = this.restatingStatus
+    this.restatingStatus = false
+    const recordedRow = this.state.lastStatusByPaneKey.get(incoming.paneKey)
+    const sender = incoming.agentPresence?.process
+    const rootContext = previewHookPresence(
       incoming,
-      this.state.lastStatusByPaneKey.get(incoming.paneKey)
+      recordedRow,
+      (origin === 'hook' || origin === 'launch') && !restated,
+      retireBinding,
+      // A relay's owner is root proof only with the binding this link issued for the pane; its
+      // PID is never probed here. Without it the baseline never displaces a record.
+      incoming.connectionId
+        ? incoming.rooted && needsHookRootEvidence(recordedRow, sender)
+          ? 'root'
+          : undefined
+        : readHookProcessVerdict(this.state, recordedRow, {
+            paneKey: incoming.paneKey,
+            process: sender
+          })
     )
+    const { event: rootIdentityIncoming, statusAdmissionSession } = rootContext
+    const transitioned = rootContext.transitioned
     if (!transitioned) {
       return undefined
     }
-    const { authorityRestartId, codexRosterAuthority, ...payload } = {
-      ...incoming,
-      ...transitioned
-    }
+    const enrichedTransition = { ...rootIdentityIncoming, ...transitioned }
+    const { authorityRestartId, codexRosterAuthority, rooted: _, ...payload } = enrichedTransition
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
     }
-    if (payload.agentPresence?.ended) {
+    if (rootContext.exited) {
       this.reconcileEndedProcessForPaneKeys([payload.paneKey], {
         preserveResumeIdentity: true,
         endedPresence: payload.agentPresence
@@ -112,19 +136,19 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     )
     const identity = resolveAgentStatusIdentity({
       existing:
-        previous && this.sameTerminalOwner(previous, terminalOwnedPayload)
+        previous && !rootContext.acquired && this.sameTerminalOwner(previous, terminalOwnedPayload)
           ? {
               agentType: previous.payload.agentType,
               state: previous.payload.state,
               updatedAt: previous.receivedAt,
               restoredUnconfirmed: previous.restoredUnconfirmed,
-              agentPresence: previous.providerSessionOnly ? undefined : previous.agentPresence
+              agentPresence: previous.providerSessionOnly ? undefined : rootContext.owner
             }
           : undefined,
       incoming: terminalOwnedPayload.payload.agentType,
-      // Relay presence is the execution host's owner verdict, not the sender's identity.
+      // Relay process presence is the host's owner verdict; scoped session bytes only compare this hook.
       incomingProcess: payload.connectionId ? undefined : incoming.agentPresence?.process,
-      incomingSession: terminalOwnedPayload.providerSession?.id,
+      incomingSession: statusAdmissionSession,
       now
     })
     if (
@@ -173,29 +197,14 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       previous?.payload,
       codexRosterAuthority
     )
-    const previousCodexRoot =
-      stateReconciledPayload.payload.agentType === 'codex' &&
-      stateReconciledPayload.toolAgentId &&
-      previous?.payload.agentType === 'codex'
-        ? previous
-        : undefined
-    const preservedProviderSession = !stateReconciledPayload.providerSession
-      ? previousCodexRoot?.providerSession
-      : undefined
-    const preservedRootModel = !stateReconciledPayload.payload.model
-      ? previousCodexRoot?.payload.model
-      : undefined
     // Relay restart loses root context; child hooks must not erase persisted resume/model identity.
-    const rootContextPreservingPayload =
-      preservedProviderSession || preservedRootModel
-        ? {
-            ...stateReconciledPayload,
-            ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
-            payload: preservedRootModel
-              ? { ...stateReconciledPayload.payload, model: preservedRootModel }
-              : stateReconciledPayload.payload
-          }
-        : stateReconciledPayload
+    const rootContextPreservingPayload = retainHookRootContext(
+      stateReconciledPayload,
+      previous,
+      origin === 'hook',
+      !!previous && this.sameTerminalOwner(previous, stateReconciledPayload),
+      rootContext.returningProviderSession
+    )
     const identityResolvedPayload =
       identity.agentType === rootContextPreservingPayload.payload.agentType
         ? rootContextPreservingPayload

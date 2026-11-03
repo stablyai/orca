@@ -1,7 +1,8 @@
-import { AgentSessionSelectionSchema } from '../agent-session-execution-options'
+import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import {
   SendBody,
   MAX_OPTION_LABEL,
+  CompactInstructions,
   AgentSessionOptions
 } from './structured-agent-session-message-params'
 import { TerminalClose } from './terminal-unary-params'
@@ -13,15 +14,16 @@ import {
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
-import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
-import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH } from '../agent-session-question-answer'
+import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH } from '../agent-session/agent-session-question-answer'
 import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
-} from '../agent-session-wire'
-import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session-thread-goal-wire'
+} from '../agent-session/agent-session-wire'
+import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
+import { ResumeSource, ResumeWriterAdmission } from './structured-agent-session-resume-params'
 
 export {
   SendBlock,
@@ -37,6 +39,8 @@ export {
   MAX_ID_LENGTH,
   SessionId
 } from './structured-agent-session-identifiers'
+
+export { ResumeSource } from './structured-agent-session-resume-params'
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -97,24 +101,11 @@ export const AttachParams = z
   })
   .strict()
 
-/** Identity only: derive transcript/account paths host-side so clients cannot choose imported files or credential directories. */
-export const ResumeSource = z
-  .object({
-    providerSessionId: Identifier('Invalid provider session id'),
-    cliSource: z
-      .object({
-        workspaceId: Identifier('Invalid workspace id'),
-        paneKey: Identifier('Invalid pane key')
-      })
-      .strict()
-      .optional()
-  })
-  .strict()
-
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: StructuredAgent
+    agent: StructuredAgent,
+    resumeFrom: ResumeWriterAdmission.optional()
   })
   .strict()
 
@@ -122,7 +113,7 @@ export const SendParams = z
   .object({
     envelope: MutationEnvelope,
     retryUnknown: z.literal(true).optional(),
-    /** Host-held draft while active; gate strict payloads on agent-session.queued-messages.v1.
+    /** Host-held draft while active; gate strict payloads on agent-session.queued-messages.v2.
      * Operation fingerprint only, never body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
     /** Preserve composer options until dispatch; requires agent-session.send-options.v1. Operation fingerprint only. */
@@ -189,7 +180,7 @@ export const CancelParams = z
     }
   })
 
-/** Queued draft actions require agent-session.queued-messages.v1; older hosts lack these methods. */
+/** Queued draft actions require agent-session.queued-messages.v2; older hosts lack these methods. */
 export const QueuedMessageActionParams = z
   .object({
     envelope: MutationEnvelope,
@@ -217,6 +208,9 @@ export const SetOptionParams = z.strictObject({
 })
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const RevealParams = OptionsParams.extend({
+  navigation: z.literal('caller').optional()
+}).strict()
 export const SwitchToChatParams = OptionsParams.extend({
   execution: z
     .object({
@@ -284,11 +278,16 @@ export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
     command: z.enum(['clear', 'compact']),
+    /** Only where the session's options report compactInstructions: older strict hosts refuse it. */
+    instructions: CompactInstructions.optional(),
     /** Queue active /compact only with agent-session.queued-commands.v1; older strict hosts refuse it.
      * /clear never queues: delivery is outside its fingerprint, so including it conflicts. */
     delivery: z.literal('queue-if-active').optional()
   })
   .strict()
+  .refine((params) => params.instructions === undefined || params.command === 'compact', {
+    message: 'Only /compact takes instructions'
+  })
 
 export const ThreadGoalParams = z
   .object({

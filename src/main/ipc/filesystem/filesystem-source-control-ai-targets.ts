@@ -1,5 +1,5 @@
 import type { Repo } from '../../../shared/repo-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import {
   getLocalProjectWorktreeGitOptions,
   type LocalProjectWorktreeGitOptions
@@ -9,7 +9,7 @@ import type { CommitMessageGenerationTarget } from '../../text-generation/commit
 import { resolve } from 'node:path'
 import { listRepoWorktreeGraph } from '../../repo-worktrees'
 import { resolveAuthorizedPath } from './filesystem-auth'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 
 function comparableLocalPath(value: string): string {

@@ -2,7 +2,7 @@ import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { resolveGitMetadataPath, type GitMetadataPathOptions } from '../../shared/git-metadata-path'
-import { toHostFilesystemPath } from '../host-tree-removal'
+import { toHostFilesystemPath } from '../filesystem/host-tree-removal'
 import { gitExecFileAsync } from './runner'
 import {
   getErrorCode,

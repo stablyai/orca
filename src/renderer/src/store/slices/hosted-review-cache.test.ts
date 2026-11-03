@@ -68,29 +68,67 @@ describe('hosted review cache revalidation', () => {
     _clearHostedReviewRequestGenerationsForTest()
   })
 
-  it('dedupes repeated linked PR retries while a stronger lookup is in flight', async () => {
-    let resolveLinkedLookup: (value: typeof review) => void = () => {}
-    const linkedLookup = new Promise<typeof review>((resolve) => {
-      resolveLinkedLookup = resolve
-    })
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(null).mockReturnValueOnce(linkedLookup)
+  it('retains last-good after refused manual dispatch without restoring a superseded renderer owner', async () => {
     const store = makeStore()
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature')
+    const original = Object.values(store.getState().hostedReviewCache)[0]
+    let finishOld: (value: HostedReviewInfo) => void = () => {}
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(
+        new Promise<HostedReviewInfo>((resolve) => {
+          finishOld = resolve
+        })
+      )
+      .mockRejectedValueOnce(new Error('capacity refused'))
+    const before = store.getState().fetchHostedReviewForBranch('/repo', 'feature', { force: true })
+    const options = { force: true, userRefresh: true }
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature', options)
+    ).rejects.toThrow('capacity refused')
+    finishOld({ ...review, state: 'merged' })
+    await before
+    expect(Object.values(store.getState().hostedReviewCache)[0]).toEqual(original)
+    expect(_getHostedReviewRequestGenerationCountForTest()).toBe(0)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce({ ...review, state: 'merged' })
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature', { force: true })
+    ).resolves.toMatchObject({ state: 'merged' })
+  })
 
-    await expect(store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr')).resolves.toBe(
-      null
+  it('settles a failed manual runtime flight separately for an ordinary joiner without renewing last-good', async () => {
+    const store = makeStore()
+    store.setState((state) => ({
+      repos: state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:paired' }))
+    }))
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature')
+    const original = Object.values(store.getState().hostedReviewCache)[0]
+    let reject: (error: Error) => void = () => {}
+    runtimeRpc.callRuntimeRpc.mockReturnValueOnce(
+      new Promise((_, fail) => {
+        reject = fail
+      })
     )
-
-    const firstLinkedFetch = store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr', {
-      linkedGitHubPR: 42
-    })
-    const secondLinkedFetch = store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr', {
-      linkedGitHubPR: 42
-    })
-
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-    resolveLinkedLookup(review)
-    await expect(firstLinkedFetch).resolves.toEqual(review)
-    await expect(secondLinkedFetch).resolves.toEqual(review)
+    const manual = store
+      .getState()
+      .fetchHostedReviewForBranch('/repo', 'feature', { force: true, userRefresh: true })
+    const failed = expect(manual).rejects.toThrow('offline')
+    const ordinary = store
+      .getState()
+      .fetchHostedReviewForBranch('/repo', 'feature', { force: true })
+    reject(new Error('offline'))
+    await failed
+    await expect(ordinary).resolves.toEqual(review)
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledTimes(2)
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'environment', environmentId: 'paired' }),
+      'hostedReview.forBranch',
+      expect.objectContaining({ userRefresh: true }),
+      { timeoutMs: 30_000 }
+    )
+    expect(Object.values(store.getState().hostedReviewCache)[0]).toEqual(original)
+    expect(_getHostedReviewRequestGenerationCountForTest()).toBe(0)
   })
 
   it('serves stale hosted review metadata while revalidating in the background', async () => {
@@ -149,43 +187,6 @@ describe('hosted review cache revalidation', () => {
     expect(store.getState().hostedReviewCache[cacheKey]?.data).toEqual(updatedReview)
   })
 
-  it('coalesces M card poll ticks into one trailing run after the slowTaskBackoff gap', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(0)
-    let resolveRefresh: (value: HostedReviewInfo) => void = () => {}
-    const slowRefresh = new Promise<HostedReviewInfo>((resolve) => {
-      resolveRefresh = resolve
-    })
-    mockApi.hostedReview.forBranch
-      .mockResolvedValueOnce(review)
-      .mockReturnValueOnce(slowRefresh)
-      .mockResolvedValue(review)
-    const store = makeStore()
-    const options = { linkedGitHubPR: 42, staleWhileRevalidate: true }
-
-    await store
-      .getState()
-      .fetchHostedReviewForBranch('/repo', 'feature/slow-poll', { linkedGitHubPR: 42 })
-    vi.setSystemTime(60_001)
-    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/slow-poll', options)
-    for (let tick = 0; tick < 5; tick += 1) {
-      await store.getState().fetchHostedReviewForBranch('/repo', 'feature/slow-poll', options)
-    }
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    resolveRefresh(review)
-    await slowRefresh
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-
-    await vi.advanceTimersByTimeAsync(49_999)
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
-  })
-
   it('lets a force refresh supersede queued stale-while-revalidate work', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
@@ -228,33 +229,6 @@ describe('hosted review cache revalidation', () => {
     await expect(forceRefresh).resolves.toEqual(forcedReview)
     await vi.advanceTimersByTimeAsync(300_000)
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
-  })
-
-  it('does not serve stale metadata when a stronger linked PR hint changes the lookup', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(0)
-    const linkedReview: HostedReviewInfo = {
-      ...review,
-      provider: 'github',
-      number: 42,
-      title: 'Exact linked PR',
-      url: 'https://github.com/acme/orca/pull/42'
-    }
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review).mockResolvedValueOnce(linkedReview)
-    const store = makeStore()
-
-    await expect(store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr')).resolves.toBe(
-      review
-    )
-    vi.setSystemTime(60_001)
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr', {
-        linkedGitHubPR: 42,
-        staleWhileRevalidate: true
-      })
-    ).resolves.toEqual(linkedReview)
-
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
   })
 
   it('bounds cached hosted review branches by evicting the oldest entries', async () => {

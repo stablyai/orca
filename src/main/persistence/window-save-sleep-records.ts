@@ -1,6 +1,6 @@
 // Legacy renderer saves may author other resume state; workspace-sleep records remain main-owned.
 
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { isWorkspaceSleepRecord } from '../../shared/workspace-sleep'
 import type {
   WorkspaceSessionPatch,

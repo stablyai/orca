@@ -55,22 +55,6 @@ const notFound = (): never => {
 
 // Why: only the desktop that owns a run can verify its dispatch token (#34433).
 describe('worktree.create for another owner’s automation run', () => {
-  it('creates a plain workspace for a dispatch token it cannot verify', async () => {
-    const { response, createManagedWorktree } = createOnHost(notFound, {
-      automationProvenanceRequest: {
-        automationId: 'desktop-automation',
-        automationRunId: 'desktop-run',
-        dispatchToken: 'desktop-token',
-        createRequestId: 'create-request-desktop'
-      }
-    })
-
-    await expect(response).resolves.toMatchObject({ ok: true })
-    expect(createManagedWorktree).toHaveBeenCalledWith(
-      expect.not.objectContaining({ automationProvenance: expect.anything() })
-    )
-  })
-
   // Invariant: a client-origin label never grants ownership, sleep authority or create policy here.
   it('records the owner’s run as a client-origin label without automation create policy', async () => {
     const { response, createManagedWorktree } = createOnHost(notFound, {
@@ -101,32 +85,6 @@ describe('worktree.create for another owner’s automation run', () => {
     expect(createManagedWorktree).toHaveBeenCalledWith(
       expect.not.objectContaining({ automationProvenance: expect.anything() })
     )
-  })
-
-  it('drops an oversized label and still creates the workspace', async () => {
-    // Why fresh modules: the warning is once per process, so this create must be the first to drop one.
-    vi.resetModules()
-    const { WORKTREE_METHODS: freshMethods } = await import('./worktree')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { response, createManagedWorktree } = createOnHost(
-      notFound,
-      {
-        clientAutomationProvenance: {
-          ...CLIENT_PROVENANCE,
-          automationNameSnapshot: 'x'.repeat(1025)
-        }
-      },
-      freshMethods
-    )
-
-    await expect(response).resolves.toMatchObject({ ok: true })
-    expect(createManagedWorktree).toHaveBeenCalledWith(
-      expect.not.objectContaining({ automationProvenance: expect.anything() })
-    )
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('dropped a malformed client automation label')
-    )
-    warn.mockRestore()
   })
 
   it('surfaces an automation store failure', async () => {

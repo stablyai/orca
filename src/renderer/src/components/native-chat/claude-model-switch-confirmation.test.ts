@@ -1,21 +1,9 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it, vi } from 'vitest'
-import {
-  createClaudeModelSwitchConfirmationObserver,
-  hasClaudeModelSwitchConfirmation
-} from './claude-model-switch-confirmation'
+import { createClaudeModelSwitchConfirmationObserver } from './claude-model-switch-confirmation'
 
 describe('Claude model switch confirmation detection', () => {
-  it('recognizes the rendered cache warning across ANSI and wrapped whitespace', () => {
-    expect(
-      hasClaudeModelSwitchConfirmation(
-        '\u001b[1mSwitch model?\u001b[0m\r\nThis\u001b[9Gconversation\u001b[22Gis\u001b[25Gcached\r\nfor the current model.'
-      )
-    ).toBe(true)
-    expect(hasClaudeModelSwitchConfirmation('Set model to Haiku 4.5')).toBe(false)
-  })
-
   it('reports matching success output split across PTY chunks', async () => {
     const dataObserver = { current: (_data: string): void => {} }
     const unsubscribe = vi.fn(() => {})

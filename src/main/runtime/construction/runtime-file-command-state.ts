@@ -34,6 +34,8 @@ import type { RuntimeRepoSelector } from '../runtime-repo-selector'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
 import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
+import { resolveNativeChatMediaPath } from '../../native-chat/native-chat-media-path'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -105,6 +107,14 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>
       this.resolveTerminalFileUriHostname(terminalHandle),
+    resolveNativeChatMediaPath: (request) => {
+      const host = getStructuredAgentSessionHost()
+      return resolveNativeChatMediaPath(request, {
+        getConversation: (id) => host?.deps.store.getConversation(id),
+        getSessionTabId: (id) => host?.getSessionTabId(id),
+        providerRows: (tabId) => this.getAgentProviderSessionRows(tabId)
+      })
+    },
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     openFile: createRuntimeEditorFileOpener({
       getNotifier: () => this.notifier,
@@ -115,7 +125,15 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         this.notifyMobileSessionTabsChanged(id)
       }
     }),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
+    openDiff: (
+      worktreeId,
+      filePath,
+      relativePath,
+      staged,
+      runtimeEnvironmentId,
+      navigation,
+      oldPath
+    ) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
       }
@@ -128,7 +146,8 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         relativePath,
         staged,
         runtimeEnvironmentId,
-        navigation
+        navigation,
+        ...(oldPath ? ([oldPath] as const) : [])
       )
     }
   })

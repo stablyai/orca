@@ -36,8 +36,8 @@ import {
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
-import { withUnregisteredRemovalCheckouts } from '../../worktree-removal-listing'
-import { withoutInFlightWorktreeCreates } from '../../worktree-create-in-flight'
+import { withUnregisteredRemovalCheckouts } from '../../workspaces/removal/worktree-removal-listing'
+import { withoutInFlightWorktreeCreates } from '../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'

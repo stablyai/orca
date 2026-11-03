@@ -1,10 +1,9 @@
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import {
-  buildAgentSessionForkPrompt,
-  buildBoundedSessionTranscript
-} from '@/lib/agent-session-fork-context'
+import { settleAgentTabLaunch } from '@/lib/launch-agent-in-new-tab-host-agents'
+import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
+import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveOwner } from '@/lib/resolve-owner'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -16,6 +15,7 @@ import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { copyAgentSessionContext } from '@/lib/copy-agent-session-context'
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -31,7 +31,7 @@ export type PreparedAgentSessionFork = {
   prompt: string
   agent: TuiAgent | null
   worktreeId: string
-  pane: ManagedPane
+  focusSource: () => void
 }
 
 function buildForkWorkspaceName(sourceName: string): string {
@@ -64,7 +64,7 @@ function getUsableForkBase(
   return branch
 }
 
-async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boolean> {
+async function copyForkContext(prompt: string, focusSource: () => void): Promise<boolean> {
   try {
     await window.api.ui.writeTerminalClipboardText(prompt)
     toast.message(
@@ -73,7 +73,7 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
         'Fork context copied. Launch an agent and paste it to start the fork.'
       )
     )
-    pane.terminal.focus()
+    focusSource()
     return true
   } catch (error) {
     toast.error(
@@ -84,7 +84,7 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
             'Failed to copy fork context.'
           )
     )
-    pane.terminal.focus()
+    focusSource()
     return false
   }
 }
@@ -123,53 +123,26 @@ export function prepareAgentSessionForkFromPane({
     prompt,
     agent,
     worktreeId,
-    pane
+    focusSource: () => pane.terminal.focus()
   }
 }
 
 export async function copyAgentSessionForkContext(
   fork: PreparedAgentSessionFork
 ): Promise<boolean> {
-  return copyForkContext(fork.prompt, fork.pane)
+  return copyForkContext(fork.prompt, fork.focusSource)
 }
 
 // Standalone Copy Context omits the dialog’s fork instructions so it can be pasted into another tool.
 export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promise<boolean> {
-  const transcript = buildBoundedSessionTranscript(
-    pane.serializeAddon.serialize({ scrollback: 800 })
+  return copyAgentSessionContext(
+    pane.serializeAddon.serialize({ scrollback: 800 }),
+    () => pane.terminal.focus(),
+    translate(
+      'auto.components.terminal.pane.terminal.agent.session.fork.f62b40e2c7',
+      'No terminal context to copy'
+    )
   )
-  if (!transcript) {
-    toast.error(
-      translate(
-        'auto.components.terminal.pane.terminal.agent.session.fork.f62b40e2c7',
-        'No terminal context to copy'
-      )
-    )
-    pane.terminal.focus()
-    return false
-  }
-  try {
-    await window.api.ui.writeTerminalClipboardText(transcript)
-    toast.message(
-      translate(
-        'auto.components.terminal.pane.terminal.agent.session.fork.373a3103e7',
-        'Context copied'
-      )
-    )
-    pane.terminal.focus()
-    return true
-  } catch (error) {
-    toast.error(
-      error instanceof Error
-        ? error.message
-        : translate(
-            'auto.components.terminal.pane.terminal.agent.session.fork.3fc568a49d',
-            'Failed to copy context.'
-          )
-    )
-    pane.terminal.focus()
-    return false
-  }
 }
 
 /** The transport that owns the source: its server, else where this app reaches it (local or SSH). */
@@ -285,7 +258,14 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
       }) !== false,
     ...(launchPlatform ? { launchPlatform } : {})
   })
-  if (!result) {
+  const settled = await settleAgentTabLaunch(result)
+  const delivery =
+    result?.promptDeliveryResult ??
+    (settled.kind === 'structured' ? settled.promptDeliveryResult : undefined)
+  if (
+    (settled.kind !== 'terminal' && settled.kind !== 'structured') ||
+    (delivery && !(await newAgentPromptOutcome({ delivery })).delivered)
+  ) {
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }

@@ -2,12 +2,17 @@
  * Where each WSL project's distro mounts Windows drives (`[automount] root`, `/mnt/` by default),
  * so a worktree link WSL Git wrote as `<root>c/src/app/.git/worktrees/x` maps back to `C:\…`.
  * Read only from a distro confirmed running after any stop settled, never waking a stopped one,
- * and read again after it stops, since `wsl.conf` changes take effect on the next start.
+ * and read again after it stops, since `wsl.conf` changes take effect on the next start. A stop and
+ * restart between two probes goes unseen, so Orca's own wake also allows one re-read; a restart
+ * outside Orca with no wake after it keeps the old root until the next noticed stop or wake.
  */
 import { runProcess } from '@orca/process-host'
 import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
-import { wasWslDistroLastSeenRunningSettled } from '../wsl-background-distro-gate'
+import {
+  onWslDistroGateNote,
+  wasWslDistroLastSeenRunningSettled
+} from '../wsl-background-distro-gate'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import {
   onConfirmedRunningWslDistros,
@@ -18,12 +23,15 @@ import { resolveWslExecutablePath } from './wsl-executable-path'
 export const DEFAULT_WSL_AUTOMOUNT_ROOT = '/mnt/'
 
 const READ_TIMEOUT_MS = 5_000
+// A wake re-reads at most this often per distro, so terminals opened on a running distro stay free.
+export const WSL_AUTOMOUNT_WAKE_REREAD_INTERVAL_MS = 5 * 60_000
 
 export type WslAutomountRootReader = (distro: string) => Promise<string | null>
 
 const roots = new Map<string, string>()
 // Read since its last start, the default `/mnt/` too: one guest launch per start, not per probe.
 const readSinceStart = new Set<string>()
+const readAt = new Map<string, number>()
 const pending = new Set<string>()
 // Bumped on a stop, so a read still in flight then neither marks the restarted distro read.
 const stopCounts = new Map<string, number>()
@@ -78,10 +86,17 @@ export function followWslAutomountRoots(
             return
           }
           readSinceStart.add(key)
-          if (root !== DEFAULT_WSL_AUTOMOUNT_ROOT) {
-            roots.set(key, root)
-            changed()
+          readAt.set(key, performance.now())
+          const previous = roots.get(key) ?? DEFAULT_WSL_AUTOMOUNT_ROOT
+          if (root === previous) {
+            return
           }
+          if (root === DEFAULT_WSL_AUTOMOUNT_ROOT) {
+            roots.delete(key)
+          } else {
+            roots.set(key, root)
+          }
+          changed()
         })
         // Unreadable: links under it fall back to `/mnt/`.
         .catch(() => {})
@@ -94,15 +109,30 @@ export function followWslAutomountRoots(
       const key = distroKey(distro)
       stopCounts.set(key, (stopCounts.get(key) ?? 0) + 1)
       readSinceStart.delete(key)
+      readAt.delete(key)
       removed = roots.delete(key) || removed
     }
     if (removed) {
       changed()
     }
   })
+  // A wake may have restarted it unseen: the next settled probe reads again, its old root kept until then.
+  const stopWoken = onWslDistroGateNote((note) => {
+    const key = distroKey(note.distro)
+    const lastRead = readAt.get(key)
+    if (
+      note.kind === 'woken' &&
+      readSinceStart.has(key) &&
+      lastRead !== undefined &&
+      performance.now() - lastRead >= WSL_AUTOMOUNT_WAKE_REREAD_INTERVAL_MS
+    ) {
+      readSinceStart.delete(key)
+    }
+  })
   return () => {
     stopRunning()
     stopStopped()
+    stopWoken()
   }
 }
 
@@ -146,6 +176,7 @@ export function parseWslAutomountRoot(drivePath: string | null): string | null {
 export function resetWslAutomountRootsForTests(): void {
   roots.clear()
   readSinceStart.clear()
+  readAt.clear()
   pending.clear()
   stopCounts.clear()
   changeListeners.clear()

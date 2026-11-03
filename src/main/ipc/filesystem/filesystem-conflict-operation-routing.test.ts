@@ -42,7 +42,7 @@ import { registerFilesystemHandlers } from './filesystem'
 import {
   registerWorktreeRootsForRepo,
   invalidateAuthorizedRootsCache
-} from '../registered-worktree-roots-cache'
+} from '../worktrees/removal/registered-worktree-roots-cache'
 
 // Read .git in the worktree's own host namespace, including WSL.
 describe('git:conflictOperation local routing', () => {

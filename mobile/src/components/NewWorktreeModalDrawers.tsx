@@ -18,7 +18,7 @@ import type {
 } from './new-workspace-project-targets'
 import { getMobileWorkspaceRepoBadgeColor } from './new-worktree-modal-types'
 import { PickerListDrawer } from './PickerListDrawer'
-import { SetupHookTrustDrawer, type SetupTrustPrompt } from './SetupHookTrustDrawer'
+import { OrcaHookTrustDrawer, type OrcaHookTrustPrompt } from './OrcaHookTrustDrawer'
 import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
@@ -43,7 +43,7 @@ export function NewWorktreeModalDrawers(props: {
   runTargetPickerItems: NewWorkspaceRunTargetOption<MobileWorkspaceRepo>[]
   pickerAgentOptions: NewWorktreeAgentOption[]
   selectedAgent: NewWorktreeAgentOption
-  setupTrustPrompt: SetupTrustPrompt | null
+  setupTrustPrompt: OrcaHookTrustPrompt | null
   creating: boolean
   onSourceRepoChange: (repo: MobileWorkspaceRepo) => void
   onRepoChange: (repo: MobileWorkspaceRepo) => void
@@ -120,7 +120,7 @@ export function NewWorktreeModalDrawers(props: {
         selectedId={props.selectedRepo ? getRepoExecutionHostId(props.selectedRepo) : ''}
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
-        renderIcon={(item) => <HostKindIcon hostId={item.hostId} size={16} />}
+        renderIcon={(item) => <HostKindIcon hostId={item.hostId} size={18} />}
       />
 
       <PickerListDrawer
@@ -130,10 +130,10 @@ export function NewWorktreeModalDrawers(props: {
         selectedId={props.selectedAgent.id}
         onSelect={props.onAgentChange}
         onClose={props.onTransitionToForm}
-        renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={18} />}
+        renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={20} />}
       />
 
-      <SetupHookTrustDrawer
+      <OrcaHookTrustDrawer
         visible={props.visible && props.drawerView === 'trust' && props.setupTrustPrompt != null}
         prompt={props.setupTrustPrompt}
         busy={props.creating}

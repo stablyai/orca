@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { isPersistedAgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import { replaceAgentSessionRecordOptions } from '../runtime/agent-session-record-options'
-import { agentSessionStoreDraftRowWrites } from '../runtime/agent-session-store-draft'
-import type { AgentSessionStoreState } from '../runtime/agent-session-store-state'
+import { isPersistedAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { replaceAgentSessionRecordOptions } from '../runtime/agent-session/records/agent-session-record-options'
+import { agentSessionStoreDraftRowWrites } from '../runtime/agent-session/records/agent-session-store-draft'
+import type { AgentSessionStoreState } from '../runtime/agent-session/records/agent-session-store-state'
 import { AcpStructuredOptions } from './acp-structured-options'
 import {
   NewSessionResponseSchema,

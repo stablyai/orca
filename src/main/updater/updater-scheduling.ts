@@ -7,6 +7,7 @@ import {
   MAX_AUTO_UPDATE_RETRY_INTERVAL_MS
 } from './updater-state'
 import { UpdaterCheckFailure } from './updater-check-failure'
+import { getDelayedUpdateWakeDelayMs } from '../updater-release-delay'
 
 export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected getAutomaticRetryInterval(): number {
@@ -88,7 +89,9 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
       this.markUpdateCheckLaunched(attemptId)
       return autoUpdater.checkForUpdates()
     }
-    const run = this.pinDefaultReleaseFeed().then(launch)
+    const run = this.pinDefaultReleaseFeed().then((preflightResult) =>
+      preflightResult === 'not-available' ? this.settleHeldUpdateCheck(attemptId) : launch()
+    )
     void Promise.resolve(run)
       .then(() => this.handleSettledUpdateCheckPromise(attemptId))
       .catch((err) => {
@@ -109,6 +112,39 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
         )
       })
     return true
+  }
+
+  /** Settles a check the release feed resolved without launching electron-updater (update delay). */
+  protected settleHeldUpdateCheck(attemptId: number): void {
+    if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+      return
+    }
+    const userInitiated = this.getSettledCheckUserInitiated()
+    this.finishActiveUpdateCheckAttempt()
+    this.clearBackgroundCheckLaunchPending()
+    this.backgroundCheckPromotedToUserInitiated = false
+    this.userInitiatedCheck = false
+    const preserveAvailableUpdate =
+      this.currentStatus.state === 'available' ||
+      this.currentStatus.state === 'downloading' ||
+      this.currentStatus.state === 'downloaded'
+    this.completeSilentUpdateCheck(userInitiated, { preserveAvailableUpdate })
+    this.scheduleCheckWhenDelayedUpdateClears()
+    if (preserveAvailableUpdate) {
+      return
+    }
+    this.sendSettledCheckStatus({ state: 'not-available', userInitiated })
+  }
+
+  /** Offer a held release when it clears instead of up to a day later. */
+  private scheduleCheckWhenDelayedUpdateClears(): void {
+    if (!this.delayedUpdate) {
+      return
+    }
+    const wakeMs = getDelayedUpdateWakeDelayMs(this.delayedUpdate, Date.now())
+    if (wakeMs !== null) {
+      this.scheduleAutomaticUpdateCheck(wakeMs)
+    }
   }
 
   protected checkForUpdatesInBackground(): void {

@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 
 export const EMPTY_NATIVE_CHAT_TRANSCRIPT: NativeChatMessage[] = []
 

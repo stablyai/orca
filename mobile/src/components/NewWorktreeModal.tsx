@@ -17,7 +17,7 @@ import {
   useRetiredWorktreeNames
 } from '../worktree/use-retired-worktree-names'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
-import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
+import { BottomDrawerModalHost } from './bottom-drawer/bottom-drawer-modal-host'
 import {
   getMobileWorkspaceRepoBadgeColor,
   type MobileWorkspaceRepo,
@@ -73,15 +73,22 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onOpenWorktree,
     onClose
   } = props
-  const { repos, allRepos, selectedRepo, setSelectedRepo, upsertRepo, loading } =
-    useNewWorkspaceRepositories({
-      client: desktopClient,
-      serverClients,
-      hostId,
-      visible
-    })
-  // Why: everything about the picked repo runs where it does; the routing table keeps the
-  // desktop's own concerns (settings, accounts) on the desktop.
+  const {
+    repos,
+    allRepos,
+    selectedRepo,
+    setSelectedRepo,
+    upsertRepo,
+    loading,
+    loadError,
+    retryLoad
+  } = useNewWorkspaceRepositories({
+    client: desktopClient,
+    serverClients,
+    hostId,
+    visible
+  })
+  // Picked-repo work runs on that host; desktop settings and accounts stay on the desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
   const navigation = useNewWorktreeDrawerNavigation(visible)
@@ -243,6 +250,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         interactive={navigation.formSheetInteractive}
         loading={loading}
         hasRepos={repos.length > 0}
+        loadError={loadError}
+        onRetryLoad={retryLoad}
         project={selectedProject}
         runTarget={selectedRunTarget}
         projectBadgeColor={selectedRepo ? getMobileWorkspaceRepoBadgeColor(selectedRepo) : null}

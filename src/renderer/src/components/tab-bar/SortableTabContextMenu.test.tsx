@@ -21,10 +21,10 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useOptionalShortcutLabel: () => '⌘D'
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children?: ReactNode }) => children,
-  DropdownMenuContent: ({ children }: { children?: ReactNode }) => children,
-  DropdownMenuItem: ({
+vi.mock('@/components/ui/context-menu', () => ({
+  ContextMenu: ({ children }: { children?: ReactNode }) => children,
+  ContextMenuContent: ({ children }: { children?: ReactNode }) => children,
+  ContextMenuItem: ({
     children,
     disabled,
     onSelect
@@ -37,15 +37,15 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
       {children}
     </button>
   ),
-  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSeparator: () => null,
-  DropdownMenuSub: ({ children }: { children?: ReactNode }) => children,
-  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => children,
-  DropdownMenuSubTrigger: ({ children }: { children?: ReactNode }) => (
+  ContextMenuLabel: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  ContextMenuSeparator: () => null,
+  ContextMenuSub: ({ children }: { children?: ReactNode }) => children,
+  ContextMenuSubContent: ({ children }: { children?: ReactNode }) => children,
+  ContextMenuSubTrigger: ({ children }: { children?: ReactNode }) => (
     <button type="button">{children}</button>
   ),
-  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => children,
-  DropdownMenuTrigger: ({ children }: { children?: ReactNode }) => children
+  ContextMenuShortcut: ({ children }: { children?: ReactNode }) => children,
+  ContextMenuTrigger: ({ children }: { children?: ReactNode }) => children
 }))
 
 vi.mock('lucide-react', () => ({
@@ -72,6 +72,8 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+vi.mock('./use-allow-auto-close', () => ({ useAllowAutoClose: () => undefined }))
 
 vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   TabSessionSurfaceSwitchMenuItems: ({
@@ -123,17 +125,15 @@ function renderMenu(overrides: Partial<ComponentProps<typeof SortableTabContextM
   act(() => {
     root.render(
       <SortableTabContextMenu
+        open
         tab={{ id: 'term-1', worktreeId: 'wt-1', color: null }}
         unifiedTabId="tab-1"
         groupId="group-1"
         isActive
-        open
-        point={{ x: 0, y: 0 }}
         tabCount={2}
         hasTabsToRight
         hasTabsToLeft
         isPinned={false}
-        onOpenChange={vi.fn()}
         onActivate={onActivate}
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}

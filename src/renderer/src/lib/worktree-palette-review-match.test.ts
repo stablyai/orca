@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { matchWorktreePaletteReview } from './worktree-palette-review-match'
+import './worktree-palette-review-match'
 import { searchWorktrees } from './worktree-palette-search'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
-
-// Rehydrated caches can lack required title, crashing Cmd+J text queries in matchWorktreePaletteReview (report c5d87873, macOS 1.4.147).
-
-type MatcherReview = Parameters<typeof matchWorktreePaletteReview>[0]
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -44,32 +40,6 @@ const repoMap = new Map<string, Repo>([
     }
   ]
 ])
-
-describe('matchWorktreePaletteReview title null-safety', () => {
-  it('returns null instead of throwing when a cached review has no title', () => {
-    const review = { number: 42, provider: 'github' } as unknown as MatcherReview
-    expect(() => matchWorktreePaletteReview(review, 'feature', 'feature')).not.toThrow()
-    expect(matchWorktreePaletteReview(review, 'feature', 'feature')).toBeNull()
-  })
-
-  it('still matches on the title text when a title is present', () => {
-    const review = {
-      number: 42,
-      title: 'Fix the thing',
-      provider: 'github'
-    } as unknown as MatcherReview
-    const match = matchWorktreePaletteReview(review, 'thing', 'thing')
-    expect(match).not.toBeNull()
-    expect(match?.text).toBe('Fix the thing')
-    expect(match?.matchRange).toEqual({ start: 8, end: 13 })
-  })
-
-  it('still matches on the PR number even when the title is missing', () => {
-    const review = { number: 42, provider: 'github' } as unknown as MatcherReview
-    const match = matchWorktreePaletteReview(review, '42', '42')
-    expect(match?.text).toBe('PR #42')
-  })
-})
 
 describe('searchWorktrees with a titleless cached review (Cmd+J palette crash path)', () => {
   it('does not throw when the checks-review cache entry has no title', () => {

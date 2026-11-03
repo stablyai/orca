@@ -2,6 +2,7 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 import { agentVerdictDisplayMark } from '../../../src/shared/agent-main-agent-verdict'
 import { resolveDecayedAgentRowState } from '../../../src/shared/agent-row-decay-state'
+import { getAgentRowPrimaryText } from '../../../src/shared/agent-row-primary-text'
 import { translate } from '../i18n/mobile-i18n'
 
 // Mirror desktop AgentStateDot vocabulary.
@@ -71,16 +72,21 @@ export function agentStateLabel(state: AgentDotState): string {
   }
 }
 
-// Match DashboardAgentRow fallback order; a user-requested Stop takes precedence while ending the turn.
+// Match desktop's compact row: name then message, else message → prompt → state; Stop leads while ending the turn.
 export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
-  if (row.state === 'working' && row.mainAgent?.stopping === true) {
-    return translate('worktree.agentRowDisplay.stopping', 'Stopping…')
-  }
+  const name = row.conversationName?.trim()
   const message = row.lastAssistantMessage?.trim()
+  if (row.state === 'working' && row.mainAgent?.stopping === true) {
+    const stopping = translate('worktree.agentRowDisplay.stopping', 'Stopping…')
+    return name ? `${stopping} · ${name}` : stopping
+  }
+  if (name) {
+    return message ? `${name} · ${message}` : name
+  }
   if (message) {
     return message
   }
-  const prompt = row.prompt.trim()
+  const prompt = getAgentRowPrimaryText({ prompt: row.prompt })
   if (prompt) {
     return prompt
   }

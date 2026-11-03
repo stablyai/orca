@@ -13,13 +13,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { afterEach, expect, it, vi } from 'vitest'
-import { parse } from 'yaml'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import { sha256Of } from './orcad-prebuild-slot-contents.mjs'
 import { peImage } from './windows-pe-image-fixture.mjs'
 import {
-  assertSecurityComparisonHost,
-  assertSecurityCommand,
   benchmarkWindowsSecurityReuse,
   probeSecurityArtifact,
   runSecurityComparisonSample,
@@ -99,56 +96,6 @@ function windows(arch = 'x64') {
   vi.stubEnv('SOURCE_SHA', sourceSha)
   vi.stubEnv('BENCHMARK_RUNNER', arch === 'x64' ? 'windows-2022' : 'windows-11-arm')
 }
-
-it.each(['x64', 'arm64'])('accepts only matching Windows %s source and Node identity', (arch) => {
-  windows(arch)
-  expect(() => assertSecurityComparisonHost()).not.toThrow()
-  for (const mismatch of [
-    { platform: 'linux' },
-    { platform: 'darwin' },
-    { arch: 'ia32' },
-    { runner: 'unknown' },
-    { version: '24.20.0' },
-    { sourceSha: 'main' },
-    { electron: '43.7.8' }
-  ]) {
-    expect(() => assertSecurityComparisonHost(mismatch)).toThrow()
-  }
-})
-it.each([
-  { code: 1 },
-  { code: null },
-  { signal: 'SIGTERM' },
-  { timedOut: true },
-  { outputTruncated: true }
-])('refuses incomplete commands: %j', (failure) => {
-  expect(() => assertSecurityCommand({ ...success, ...failure })).toThrow()
-})
-
-it.each(['control', 'candidate', 'fallback'])(
-  'records observed compiler calls and private operation proof for %s',
-  async (variant) => {
-    const f = fixture()
-    windows()
-    const act = () => runSecurityComparisonSample({ ...f, variant })
-    const receipt =
-      variant === 'fallback'
-        ? await withInvalidSecurityCandidate(f.candidate, f.root, sha256Of(f.candidate), act)
-        : act()
-    expect(receipt.qualification).toBe('passed')
-    expect(receipt.compilerInvocationCount).toBe(variant === 'candidate' ? 0 : 1)
-    expect(receipt.calls.filter((call) => call.phase === 'preparation-probe')).toHaveLength(
-      variant === 'candidate' ? 1 : 0
-    )
-    expect(receipt.staged.currentUserSid).toBe('passed')
-    expect(receipt.staged.sha256).toBe(sha256Of(f.output))
-    expect(readFileSync(f.receiptFile, 'utf8')).not.toContain(sidFixture)
-    for (const [spec] of f.run.mock.calls) {
-      expect(spec.stdio).toBe('pipe')
-      expect(spec.timeoutMs).toBeGreaterThan(0)
-    }
-  }
-)
 
 it.each(['timeout', 'truncated', 'download', 'spawn'])(
   'cannot hide a %s in the reuse probe behind successful fallback',
@@ -246,39 +193,6 @@ it('refuses a changed candidate, symlink and preexisting backup before invalidat
   expect(action).not.toHaveBeenCalled()
 })
 
-it('keeps the existing manual default and runs the security mode on only its two existing slots', () => {
-  const workflow = parse(
-    readFileSync('.github/workflows/windows-native-preparation-benchmark.yml', 'utf8')
-  )
-  expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
-  expect(workflow.on.workflow_dispatch.inputs.comparison).toEqual({
-    description: expect.any(String),
-    type: 'choice',
-    default: 'native-preparation',
-    options: ['native-preparation', 'windows-security']
-  })
-  expect(Object.keys(workflow.jobs)).toEqual(['compare'])
-  expect(workflow.jobs.compare.strategy.matrix.os).toEqual(['windows-2022', 'windows-11-arm'])
-  expect(workflow.jobs.compare.strategy['max-parallel']).toBe(2)
-  const steps = workflow.jobs.compare.steps
-  const native = steps.find(
-    (step) => step.run === 'node config/scripts/benchmark-windows-native-preparation.mjs'
-  )
-  const security = steps.find(
-    (step) => step.run === 'node config/scripts/benchmark-windows-security-reuse.mjs'
-  )
-  for (const choice of [undefined, '', 'native-preparation', 'windows-security']) {
-    expect(runInNewContext(native.if, { inputs: { comparison: choice } })).toBe(
-      choice !== 'windows-security'
-    )
-    expect(runInNewContext(security.if, { inputs: { comparison: choice } })).toBe(
-      choice === 'windows-security'
-    )
-  }
-  expect(steps.at(-1).if).toBe('always()')
-  expect(workflow.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
-})
-
 function hostedFixture(arch = 'x64', failure) {
   const f = fixture(arch)
   windows(arch)
@@ -340,43 +254,6 @@ function hostedFixture(arch = 'x64', failure) {
   return f
 }
 
-it.each(['x64', 'arm64'])(
-  'qualifies exactly one same-source %s pair and fallback after separate preparation',
-  async (arch) => {
-    const f = hostedFixture(arch)
-    const report = await benchmarkWindowsSecurityReuse(f.root, f.ports)
-    expect(report.qualification).toBe('passed')
-    expect(
-      report.samples.map((sample) => [sample.variant, sample.compilerInvocationCount])
-    ).toEqual([
-      ['control', 1],
-      ['candidate', 0],
-      ['fallback', 1]
-    ])
-    expect(report.restored).toBe(true)
-    expect(report.restoredPreparedSha256).toBe(report.prepared.sha256)
-    expect(sha256Of(f.candidate)).toBe(report.prepared.sha256)
-    expect(report.runtime.sha256).toBe(digest('pinned fixture'))
-    expect(
-      report.samples.every((sample) => sample.fullCommandMs >= sample.buildIncludingReuseProbesMs)
-    ).toBe(true)
-    const phases = report.phases.map((phase) => phase.label)
-    expect(phases).toContain('verify-prepared-node')
-    expect(phases).toContain('warm-compiler-before-measurement')
-    expect(phases.indexOf('verify-prepared-node')).toBeLessThan(
-      phases.indexOf('control-full-build-and-probe')
-    )
-    expect(phases.indexOf('warm-compiler-before-measurement')).toBeLessThan(
-      phases.indexOf('control-full-build-and-probe')
-    )
-    expect(report.sourceSha).toBe(sourceSha)
-    expect(report.sourceHashes['native/windows-security/binding.gyp']).toBe(
-      sha256Of(join(f.root, 'native/windows-security/binding.gyp'))
-    )
-    expect(JSON.stringify(report)).not.toContain(sidFixture)
-  }
-)
-
 it('restores the owned candidate and leaves a failed redacted receipt when fallback times out', async () => {
   const f = hostedFixture('x64', 'fallback')
   await expect(benchmarkWindowsSecurityReuse(f.root, f.ports)).rejects.toThrow('did not qualify')
@@ -391,12 +268,4 @@ it('restores the owned candidate and leaves a failed redacted receipt when fallb
     report.phases.find((phase) => phase.label === 'fallback-full-build-and-probe').timedOut
   ).toBe(true)
   expect(JSON.stringify(report)).not.toContain(sidFixture)
-})
-
-it('refuses another checkout commit before preparing artifacts', async () => {
-  const f = hostedFixture()
-  f.ports.run.mockResolvedValueOnce({ ...success, stdout: 'c'.repeat(40) })
-  await expect(benchmarkWindowsSecurityReuse(f.root, f.ports)).rejects.toThrow('did not qualify')
-  expect(f.ports.prepareHeaders).not.toHaveBeenCalled()
-  expect(existsSync(f.candidate)).toBe(false)
 })

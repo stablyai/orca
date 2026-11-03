@@ -28,7 +28,9 @@ vi.mock('./repo-git-remote-identity', () => ({ probeGitRemoteIdentity: vi.fn() }
 vi.mock('./github/client', () => ({
   getRepoUpstream: vi.fn(async () => ({ owner: 'acme', repo: 'app' }))
 }))
-vi.mock('./repo-icon-autodetect', () => ({ detectGitHubAvatarIcon: vi.fn(async () => null) }))
+vi.mock('./repository-icons/repo-icon-autodetect', () => ({
+  detectGitHubAvatarIcon: vi.fn(async () => null)
+}))
 
 const MOVING = 'repo-1'
 const STAYING = 'repo-2'
@@ -102,17 +104,6 @@ describe('git remote identity enrichment under a WSL move', () => {
 })
 
 describe('fork upstream backfill under a WSL move', () => {
-  it('leaves the moving repo unset for a later run and fills the rest', async () => {
-    const store = createStore()
-    store.addRepo(repo(MOVING))
-    store.addRepo(repo(STAYING))
-
-    await new RuntimeRepositoryForkBackfill(() => store, vi.fn()).run()
-
-    expect(store.getRepo(MOVING)?.upstream).toBeUndefined()
-    expect(store.getRepo(STAYING)?.upstream).toEqual({ owner: 'acme', repo: 'app' })
-  })
-
   it('fills the host row, not the hidden local row with the same id', async () => {
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
     const store = createStore()

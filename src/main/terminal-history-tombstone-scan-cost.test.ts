@@ -30,7 +30,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-vi.mock('./host-tree-removal', () => ({ removeHostTree: removeHostTreeMock }))
+vi.mock('./filesystem/host-tree-removal', () => ({ removeHostTree: removeHostTreeMock }))
 
 import {
   cancelPendingHistoryTreeRemovalRetries,

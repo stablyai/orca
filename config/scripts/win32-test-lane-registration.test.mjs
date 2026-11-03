@@ -41,7 +41,7 @@ const MANUAL_OPT_IN = [
   // `runIf(platform === 'win32' && Boolean(distro))`, distro from ORCA_TEST_WSL_DISTRO.
   'src/main/git/runner-wsl-linked-gitdir-windows.test.ts',
   // `runRealWsl = … && ORCA_REAL_WSL_BANNER_TEST === '1'`; needs a real distro.
-  'src/main/local-worktree-filesystem-wsl-banner.wsl.test.ts',
+  'src/main/workspaces/removal/local-worktree-filesystem-wsl-banner.wsl.test.ts',
   // `ORCA_REAL_WINDOWS_SKILL_TEST === '1'`; installs into a real Windows workspace.
   'src/main/skills/skill-windows-workspace.integration.test.ts',
   // `RUN_REAL_WSL = … && ORCA_REAL_WSL_SKILL_TEST === '1'`; real distro filesystem.

@@ -85,15 +85,22 @@ export function createMarkdownPreviewActions(
           ['edit']
         )
       const id = `markdown-preview::${sourceFileId}`
-      // Why: with the source tab closed, a retarget keeps the authority the preview already reads with.
-      const { externalSshTargetId, terminalArtifactGrantId, readOnly } = inheritFileReadAuthority(
-        file,
-        initialState.openFiles.find((openFile) => openFile.id === sourceFileId) ??
-          initialState.openFiles.find((openFile) => openFile.id === id)
-      )
       const anchor = options?.anchor || undefined
       set((s) => {
         const existing = s.openFiles.find((openFile) => openFile.id === id)
+        // Why: with the source tab closed, a retarget keeps the authority the preview already reads with.
+        const { externalSshTargetId, terminalArtifactGrantId, readOnly } = inheritFileReadAuthority(
+          file,
+          s.openFiles.find((openFile) => openFile.id === sourceFileId) ??
+            s.openFiles.find((openFile) => openFile.id === id)
+        )
+        const source = s.openFiles.find((openFile) => openFile.id === sourceFileId)
+        const operationProvenance =
+          file.externalSshTargetId !== undefined
+            ? (file.operationProvenance ?? source?.operationProvenance)
+            : (existing?.operationProvenance ??
+              file.operationProvenance ??
+              source?.operationProvenance)
         const worktreeId = file.worktreeId
         const runtimeEnvironmentId = resolvedRuntimeEnvironmentId
         const activeResult = buildEditorActiveResult(s, worktreeId, id)
@@ -104,6 +111,7 @@ export function createMarkdownPreviewActions(
             terminalArtifactGrantId !== undefined &&
             existing.terminalArtifactGrantId !== terminalArtifactGrantId
           const needsUpdate =
+            existing.operationProvenance !== operationProvenance ||
             existing.relativePath !== file.relativePath ||
             existing.filePath !== file.filePath ||
             existing.language !== file.language ||
@@ -124,6 +132,7 @@ export function createMarkdownPreviewActions(
                         worktreeId: file.worktreeId,
                         language: file.language,
                         runtimeEnvironmentId,
+                        operationProvenance,
                         externalSshTargetId,
                         terminalArtifactGrantId,
                         readOnly,
@@ -149,6 +158,7 @@ export function createMarkdownPreviewActions(
           language: file.language,
           isDirty: false,
           runtimeEnvironmentId,
+          operationProvenance,
           externalSshTargetId,
           terminalArtifactGrantId,
           readOnly,

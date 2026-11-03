@@ -6,11 +6,11 @@ import { runProcess } from '@orca/process-host'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { withCliRuntimeOnPath } from '../codex-cli/command'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
-import { collectListedHooks, type CodexListedHook } from './codex-app-server-client'
+import { collectListedHooks, type CodexListedHook } from './app-server/codex-app-server-client'
 import {
   isCodexAppServerUnsupportedError,
   runCodexAppServerSession
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 import { buildCodexManagedHook, CODEX_EVENTS, CODEX_EVENT_LABEL } from './codex-hook-definition'
 import {
   normalizeHookTrustKeyForLookup,

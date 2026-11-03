@@ -9,11 +9,11 @@ import { resolveRuntimeWorktreeRemovalTarget } from '../runtime-worktree-removal
 import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
-import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
 import {
   dropRemovedWorktreeProcessState,
   pruneRemovedWorktreeSnapshots
-} from '../../worktree-removal-process-cleanup'
+} from '../../workspaces/removal/worktree-removal-process-cleanup'
 import { forgetFailedAgentLaunches } from '../../agent-launch/agent-launch-pane-attachment'
 import { closeClientHostedBrowserPagesForWorktree } from '../worktree-browser-client-page-close'
 import { teardownStops } from '../owned-session-teardown-policy'
@@ -33,15 +33,15 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/registered-worktree-roots-scoped-invalidation'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../../worktree-background-removal'
+} from '../../workspaces/removal/worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from '../runtime-interrupted-local-worktree-removal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { retryFailedRemovalUnlessRegistered } from '../../worktree-removal-leftover'
+import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import {
   resolveAgentTerminalCreateOptions,
@@ -83,9 +83,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
 
   protected joinPendingWorktreeRemoval(
     worktreeId: string,
-    options: RemoveManagedWorktreeOptions
+    { hostId, deleteBranch }: RemoveManagedWorktreeOptions
   ): Promise<RemoveWorktreeResult> | undefined {
-    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(options.hostId)?.id)
+    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(hostId)?.id, deleteBranch)
   }
 
   /** Failed intent schedules a retry; current Git/filesystem proof still controls every deletion. */
@@ -119,7 +119,8 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
                   allowUnverifiedStop: allowUnverifiedPtyStop
                 })
             }),
-          options.force === true
+          options.force === true,
+          options.deleteBranch
         )
     )
   }

@@ -9,6 +9,7 @@ const HTTP_SCHEME_PATTERN = /https?:\/\//i
 const HTTP_SCHEME_START_PATTERN = /^https?:\/\//i
 const HTTP_FRAGMENT_PATTERN = /^[^\s"'!*(){}|\\^<>`│┃║╎╏┆┇┊┋]*/
 const VERTICAL_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]/
+const CLOSING_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]\s*$/
 const NON_LAYOUT_SUFFIX_PATTERN = /[^\s│┃║╎╏┆┇┊┋|]/
 const HARD_WRAP_CONTINUATION_SUFFIX_PATTERN = /[/?&=#%+:-]$/
 const LAYOUT_SUFFIX_CHAR_PATTERN = /[\s│┃║╎╏┆┇┊┋|]/
@@ -54,12 +55,16 @@ function findOverlayFragmentStart(
   outerFrameColumn: number | null,
   framedPrefix: string
 ): number {
-  // A second stable left frame under a changed prefix denotes adjacent table cells.
-  if (outerFrameColumn !== null && hasFrameAtColumn(translated, outerFrameColumn)) {
-    return -1
-  }
   const frameIndex = translated.columns.indexOf(frameColumn)
   if (frameIndex === -1) {
+    return -1
+  }
+  // Table cells left of the URL: blank ones continue its wrapped cell, filled ones start a new row.
+  if (
+    outerFrameColumn !== null &&
+    hasFrameAtColumn(translated, outerFrameColumn) &&
+    NON_LAYOUT_SUFFIX_PATTERN.test(translated.text.slice(0, frameIndex))
+  ) {
     return -1
   }
   const prefixEnd = frameIndex + framedPrefix.length
@@ -101,6 +106,8 @@ function buildCandidateFromStart(
   let rightFrameColumn: number | null = null
   let previousRowCanContinue = true
   let startRowFilled = false
+  let isWrappedTableCell = false
+  let continuationLeftCells: string | null = null
   const rows: WrappedLogicalLine['rows'] = []
 
   for (let rowY = startY; rowY < startY + TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS; rowY++) {
@@ -127,6 +134,12 @@ function buildCandidateFromStart(
     if (fragmentStartColumn === undefined) {
       break
     }
+    const leftCells = translated.text.slice(0, fragmentStart - framedPrefix.length)
+    const isTableRow = outerFrameColumn !== null && hasFrameAtColumn(translated, outerFrameColumn)
+    // A wrapped table cell shows the same cells to its left on every continuation row; a change starts a new row.
+    if (rowY > startY + 1 && isTableRow && leftCells !== continuationLeftCells) {
+      break
+    }
 
     const fragment = translated.text.slice(fragmentStart).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
     if (!fragment || (rowY > startY && HTTP_SCHEME_START_PATTERN.test(fragment))) {
@@ -137,11 +150,13 @@ function buildCandidateFromStart(
     const rightFrameOffset = layoutSuffix.search(VERTICAL_LAYOUT_FRAME_PATTERN)
     const currentRightFrameIndex = rightFrameOffset === -1 ? -1 : fragmentEnd + rightFrameOffset
     const currentRightFrameColumn = translated.columns[currentRightFrameIndex]
+    // Cells right of the URL may be filled on its first row only; below it they start a new table row.
+    const rowSuffix = rowY === startY ? layoutSuffix.slice(0, rightFrameOffset) : layoutSuffix
     if (
       currentRightFrameIndex === -1 ||
       currentRightFrameColumn === undefined ||
       (rightFrameColumn !== null && currentRightFrameColumn !== rightFrameColumn) ||
-      NON_LAYOUT_SUFFIX_PATTERN.test(layoutSuffix)
+      NON_LAYOUT_SUFFIX_PATTERN.test(rowSuffix)
     ) {
       break
     }
@@ -166,12 +181,26 @@ function buildCandidateFromStart(
     const fragmentWidth = translated.columns[fragmentEnd]! - fragmentStartColumn
     const fillsRow = contentWidth > 0 && fragmentWidth / contentWidth >= MIN_HARD_WRAP_FILL_RATIO
     if (rowY === startY) {
+      const rightCells = translated.text.slice(currentRightFrameIndex + 1)
       startRowFilled = fillsRow
+      // Only framed cells count; screen text around an overlay is not a table row.
+      isWrappedTableCell =
+        (isTableRow && NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)) ||
+        (CLOSING_LAYOUT_FRAME_PATTERN.test(rightCells) &&
+          NON_LAYOUT_SUFFIX_PATTERN.test(rightCells))
+    } else {
+      continuationLeftCells = leftCells
+      isWrappedTableCell &&=
+        (outerFrameColumn === null || isTableRow) && !NON_LAYOUT_SUFFIX_PATTERN.test(leftCells)
     }
     previousRowCanContinue = HARD_WRAP_CONTINUATION_SUFFIX_PATTERN.test(fragment) || fillsRow
   }
 
-  if (rows.length > 1 && (rows.length < MIN_HARD_WRAPPED_HTTP_ROWS || !startRowFilled)) {
+  // A wrapped table cell blanks its row's other cells, which proves continuation without a third row.
+  if (
+    rows.length > 1 &&
+    (!startRowFilled || (rows.length < MIN_HARD_WRAPPED_HTTP_ROWS && !isWrappedTableCell))
+  ) {
     // A complete URL may end in /; one adjacent framed token alone cannot prove continuation.
     rows.splice(1)
     text = rows[0]?.text ?? ''

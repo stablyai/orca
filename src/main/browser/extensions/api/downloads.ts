@@ -178,6 +178,7 @@ function startDownload(
       }
       clearTimeout(timer)
       caller.session.off('will-download', onWillDownload)
+      browserManager.markExtensionDownload(item)
       if (place.savePath !== undefined) {
         browserManager.requestDownloadSavePath(item, place.savePath)
       } else if (place.filename !== undefined) {

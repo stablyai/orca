@@ -2,7 +2,9 @@ import { useCallback, useRef, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
 import { getCachedWorktrees } from '../cache/worktree-cache'
+import { storedHostDescriptor, type HostStoredDescriptor } from './host-stored-identity'
 import type { RpcClient } from '../transport/rpc-client'
+import type { HostProfile } from '../transport/types'
 import { WorktreeCatalogSnapshotClient } from '../worktree/worktree-catalog-snapshot-client'
 import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
 import type { Worktree } from '../worktree/workspace-list-sections'
@@ -11,7 +13,10 @@ import type { SectionRepo } from '../worktree/workspace-list-types'
 import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
 
-export function useHostScreenState(hostId: string | undefined) {
+export function useHostScreenState(
+  hostId: string | undefined,
+  storedHost: HostProfile | null = null
+) {
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
@@ -31,19 +36,17 @@ export function useHostScreenState(hostId: string | undefined) {
   const [optimisticActiveWorktreeIdentity, setOptimisticActiveWorktreeIdentity] = useState<
     string | null
   >(null)
-  const [hostName, setHostName] = useState('')
+  const [seedHost] = useState(storedHost)
+  const [hostName, setHostName] = useState(seedHost?.name ?? '')
   // The stored name identity, loaded with the name so the header can label an offline host.
-  const [hostStoredDescriptor, setHostStoredDescriptor] = useState<{
-    personalName?: string
-    lastKnownMachineName?: string
-    lastKnownHostPlatform?: NodeJS.Platform
-  } | null>(null)
+  const [hostStoredDescriptor, setHostStoredDescriptor] = useState<HostStoredDescriptor | null>(
+    seedHost ? storedHostDescriptor(seedHost) : null
+  )
   const [error, setError] = useState('')
   // Keep action errors separate from identity errors so a failed action cannot replace the list and its recovery controls.
   const [actionError, setActionError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
-  const [showSearch, setShowSearch] = useState(false)
   const [view, setView] = useState<MobileViewState>(INITIAL_MOBILE_VIEW)
   const viewRef = useRef(view)
   const [servedProjectSections, setServedProjectSections] = useState<ServedProjectSections | null>(
@@ -127,14 +130,12 @@ export function useHostScreenState(hostId: string | undefined) {
     setServerWorkspaces,
     setShowWorkspaceOptions,
     setShowPinnedInGroups,
-    setShowSearch,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
     showNewWorktree,
     showWorkspaceOptions,
     showPinnedInGroups,
-    showSearch,
     setView,
     view,
     viewRef,

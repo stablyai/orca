@@ -2,6 +2,13 @@
 import type { AgentType } from './agent-status-types'
 import type { AutomationRun } from './automations-types'
 import type { TuiAgent } from './tui-agent'
+import type { WorkspaceRunContext } from './task-source-context'
+import { parseExecutionHostId } from './execution-host'
+import { normalizeRuntimePathForComparison } from './cross-platform-path'
+
+export type AutomationSessionTarget = Pick<WorkspaceRunContext, 'hostId' | 'repoId' | 'path'> & {
+  runtimeEnvironmentId?: string | null
+}
 
 export type ReusableAutomationRun = AutomationRun & {
   terminalPaneKey: string
@@ -17,6 +24,7 @@ export function findReusableAutomationRun<Session>(args: {
   automationId: string
   agentId: TuiAgent
   worktreeId: string
+  target: AutomationSessionTarget
   currentRunId: string
   runs: readonly AutomationRun[]
   agentStatusForPane: (paneKey: string) => { state: string; agentType?: AgentType } | undefined
@@ -33,7 +41,14 @@ export function findReusableAutomationRun<Session>(args: {
       continue
     }
     seenPaneKeys.add(run.terminalPaneKey)
-    if (!isReusableRun(run, args.worktreeId)) {
+    if (
+      !isReusableRun(run, args.worktreeId) ||
+      (run.runContext &&
+        (parseExecutionHostId(run.runContext.hostId)?.id !== args.target.hostId ||
+          run.runContext.repoId !== args.target.repoId ||
+          normalizeRuntimePathForComparison(run.runContext.path) !==
+            normalizeRuntimePathForComparison(args.target.path)))
+    ) {
       continue
     }
     const status = args.agentStatusForPane(run.terminalPaneKey)

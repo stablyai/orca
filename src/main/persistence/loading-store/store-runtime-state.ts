@@ -1,4 +1,4 @@
-import { removeStaleDurableWriteTempFiles } from '../../durable-file-write'
+import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -8,12 +8,12 @@ import type {
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StateWriteListener } from './write-scheduling'
 import type { PartitionEditorViews } from './layout-editor-views'
-import type { ActiveViewPreference } from '../../active-view-preference'
+import type { ActiveViewPreference } from '../preferences/active-view-preference'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
 } from '../../terminal-scrollback-snapshots'
-import { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { getDataFile, getGithubCacheFile } from './user-data-path'
 import { dirname, join } from 'node:path'
 import { STALE_DURABLE_WRITE_TEMP_AGE_MS } from '../tracking-repos/worktree-metadata-normalization'
@@ -91,6 +91,7 @@ export class StoreRuntimeState {
   readonly gitUsernameCache = new Map<string, string>()
   readonly protectedSecrets = new ProtectedSecretPersistence()
   loadNeedsSave = false
+  originalExperimentalNativeChat?: { readonly experimentalNativeChat: unknown }
   flushOrThrow!: () => void
   runDurableMutation!: <T>(mutate: () => DurableProfileStateMutation<T>) => Promise<T>
   settingsChangeListeners = new Set<

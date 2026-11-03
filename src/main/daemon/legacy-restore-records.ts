@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../filesystem/durable-file-write'
 import type { LegacyRestoreRecord } from '../../shared/host-spawn-admission'
 import { DEFAULT_MAX_HOST_TERMINALS } from './host-terminal-ledger'
 

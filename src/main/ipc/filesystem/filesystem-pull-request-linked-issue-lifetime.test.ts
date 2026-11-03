@@ -60,7 +60,7 @@ vi.mock('../../source-control/pull-request-linked-issue', async () => {
 })
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 
 describe('PR linked-issue lifetime on a local worktree', () => {
   const draftContext = {

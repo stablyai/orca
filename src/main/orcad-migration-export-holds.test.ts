@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
-import { writeFileDurableSync } from './durable-file-write'
+import { writeFileDurableSync } from './filesystem/durable-file-write'
 import {
   getTerminalScrollbackSnapshotPath,
   readTerminalScrollbackStoredBytesSync,
@@ -13,7 +13,7 @@ import {
 import { deleteRemovedTerminalScrollbackSnapshots } from './persistence/loading-store/terminal-session-cleanup'
 import { deleteRemovedTerminalScrollbackSnapshotsAsync } from './terminal-scrollback-snapshot-async-migration'
 import { extractSessionOwnersForTransfer } from './orca-profiles/profile-session-owner-transfer'
-import type { SleepingAgentSessionRecord } from '../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../shared/agent-session/lifecycle/agent-session-resume'
 
 const roots: string[] = []
 afterEach(() => {
