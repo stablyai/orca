@@ -99,7 +99,7 @@ function SettingControl(props: SettingControlProps): React.JSX.Element {
   return <TextSetting {...props} />
 }
 
-function SettingRow({
+export function PluginSettingRow({
   setting,
   value,
   error,
@@ -157,7 +157,7 @@ export function PluginSettingsSection({
       title={translate('auto.components.settings.PluginSettingsSection.title', 'Settings')}
     >
       {snapshot.settings.map((setting) => (
-        <SettingRow
+        <PluginSettingRow
           key={setting.key}
           setting={setting}
           value={snapshot.values[setting.key]}

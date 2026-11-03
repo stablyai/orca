@@ -1518,6 +1518,15 @@
           "examples": [
             "cards/review-first.json"
           ]
+        },
+        "options": {
+          "description": "Options people set for this card in the Card Studio, in the settings format; the template reads them as `cardOptions.<key>`. At most 24.",
+          "x-orca-since": "1.4.248",
+          "maxItems": 24,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SettingContribution"
+          }
         }
       },
       "required": [

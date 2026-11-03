@@ -5,6 +5,7 @@ import {
   type CardTemplate
 } from '../../workspace-cards/card-template-schema'
 import { cardTemplateIssues } from '../../workspace-cards/card-template-validation'
+import { pluginSettingContributionSchema } from '../contributions/plugin-settings-contribution'
 import { pluginContentIdSchema } from './plugin-theme-artifact'
 
 export const PLUGIN_SIDEBAR_CARD_MAX_BYTES = CARD_TEMPLATE_LIMITS.maxBytes
@@ -16,6 +17,7 @@ const pluginSidebarCardRegistrationSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
   revision: z.string(),
+  options: z.array(pluginSettingContributionSchema).optional(),
   template: cardTemplateSchema
 })
 

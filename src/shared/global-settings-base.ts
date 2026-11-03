@@ -13,6 +13,7 @@ import type { WorktreeDeletionPreferences } from './worktree-deletion-preference
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
 import type { WindowMaterialSettings } from './window-material'
+import type { WorkspaceCardSettings } from './workspace-cards/workspace-card-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
@@ -28,5 +29,6 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
+  WorkspaceCardSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings

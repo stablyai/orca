@@ -98,4 +98,6 @@ export type WorkspaceCardFacts = {
     agentRows: 'full' | 'compact'
   }
   env: { projectGroups: boolean }
+  /** The person's values for the card's own declared options, defaults filled in. */
+  cardOptions: Readonly<Record<string, string | number | boolean>>
 }

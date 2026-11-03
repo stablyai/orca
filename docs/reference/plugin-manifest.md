@@ -221,6 +221,7 @@ A workspace card for the left sidebar, drawn by Orca from a template; it runs no
 | `title` | string | yes | 1.4.248 | Name shown where people pick a card. Example: `"Review first"` |
 | `description` | string | no | 1.4.248 | One line on what the card emphasizes. |
 | `template` | string | yes | 1.4.248 | JSON card template, at most 64 KiB. See the workspace card reference. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"cards/review-first.json"` |
+| `options` | [SettingContribution](#settingcontribution)[] | no | 1.4.248 | Options people set for this card in the Card Studio, in the settings format; the template reads them as `cardOptions.<key>`. At most 24. |
 
 ## Capability
 

@@ -3248,6 +3248,7 @@ const ORCA_PLUGIN_AUTHORING_MANIFEST_REFERENCE_MARKDOWN = [
   "- `title` (string, required, since 1.4.248): Name shown where people pick a card.",
   "- `description` (string, since 1.4.248): One line on what the card emphasizes.",
   "- `template` (string, required, since 1.4.248): JSON card template, at most 64 KiB. See the workspace card reference.",
+  "- `options` (SettingContribution[], since 1.4.248): Options people set for this card in the Card Studio, in the settings format; the template reads them as `cardOptions.<key>`. At most 24.",
   "",
   "## Capability",
   "",
