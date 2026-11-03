@@ -194,6 +194,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
   }
 
   protected notifyMobileSessionTabsRemoved(worktreeId: string): void {
+    this.agentProjections.senders.retireScope(worktreeId)
     const removed: RuntimeMobileSessionTabsRemovedResult = {
       worktree: worktreeId,
       publicationEpoch: `removed:${Date.now().toString(36)}`,

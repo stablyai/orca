@@ -78,6 +78,8 @@ describe('BrowserAnnotationSendMenuContent', () => {
         worktreeId="wt-1"
         groupId="group-1"
         prompt="browser annotation prompt"
+        includePageDetails={false}
+        onIncludePageDetailsChange={vi.fn()}
         onPromptDelivered={onPromptDelivered}
         onPromptHandedOff={onPromptHandedOff}
       />

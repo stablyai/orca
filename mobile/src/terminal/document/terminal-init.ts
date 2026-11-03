@@ -197,11 +197,10 @@ export function init(
         scope.surface!.style.visibility = ''
       }
       // Replay lands at bottom; restore only readers who had scrolled upward before reflow.
-      if (scrollAnchorRows > 0 && scope.term && scope.term.buffer && scope.term.buffer.active) {
+      const anchorRows = scope.pendingReplayScrollAnchorRows ?? 0
+      if (anchorRows > 0 && scope.term && scope.term.buffer && scope.term.buffer.active) {
         try {
-          scope.term.scrollToLine(
-            Math.max(0, (scope.term.buffer.active.baseY || 0) - scrollAnchorRows)
-          )
+          scope.term.scrollToLine(Math.max(0, (scope.term.buffer.active.baseY || 0) - anchorRows))
         } catch {}
       }
       captureInitialOscLinkTexts(scope)

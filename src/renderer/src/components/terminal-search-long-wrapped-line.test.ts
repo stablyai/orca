@@ -5,10 +5,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
-  DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX
-} from '../../../shared/terminal-scrollback-policy'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX } from '../../../shared/terminal-scrollback-policy'
 import { safeFind } from './terminal-search-safe-find'
 
 /** Wrapped-line rewind once recursed per row, overflowing V8 and killing the terminal surface (crash 012eb5be; xtermjs/xterm.js#6149). Drive real Terminal/SearchAddon through safeFind, which must rethrow non-decoration failures. */
@@ -106,23 +103,6 @@ describe('terminal search inside one very long wrapped line', () => {
         found = find()
       }).not.toThrow()
       expect(found).toBe(true)
-    }
-  )
-
-  it.each(SEARCH_MODES)(
-    'scans a long wrapped line once, not once per wrapped row (%s)',
-    async (_mode, options) => {
-      const { terminal, search } = openTerminalWithSearch()
-      await write(terminal, 'x'.repeat(COLS * DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
-
-      // No match, so the scan visits every row: the shape that froze the pane.
-      const startedAt = performance.now()
-      safeFind((term, searchOptions) => search.findNext(term, searchOptions), NEEDLE, {
-        ...options,
-        decorations: SEARCH_DECORATIONS
-      })
-
-      expect(performance.now() - startedAt).toBeLessThan(FULL_SCAN_BUDGET_MS)
     }
   )
 

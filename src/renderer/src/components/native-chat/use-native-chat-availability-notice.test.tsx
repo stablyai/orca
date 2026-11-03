@@ -2,13 +2,11 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import {
-  structuredAgentSessionDeliveryNotices,
-  structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 
 afterEach(cleanup)
 describe('each agent names its own sign-in method before a send', () => {
@@ -63,7 +61,7 @@ it('keeps one auth explanation while an unechoed message still reads as unsent',
   const notices = structuredAgentSessionDeliveryNotices({
     pending: [],
     agentName: 'Codex',
-    startFailures: structuredAgentSessionStartFailureFacts([authRow]),
+    startFailures: agentSessionVisibleFailureFacts([authRow]),
     submissions: [
       {
         clientMessageId: 'send',

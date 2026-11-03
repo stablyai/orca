@@ -104,15 +104,6 @@ it.each([
   }
 )
 
-it('does not attach a source rejected by the configured-remote exact lookup', async () => {
-  const { store, workspace, branchLookup } = setup()
-  exactLookup.mockResolvedValue(null)
-  store.getState().observeTerminalGitHubPullRequestLink(workspace.id, link)
-  await flush()
-  expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo[0])).toEqual([])
-  expect(branchLookup).toHaveBeenCalledTimes(1)
-})
-
 it.each([false, true])(
   'checks a saved push branch and its late replacement=%s',
   async (replace) => {

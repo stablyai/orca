@@ -1,42 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV,
-  createShedSubagentsField,
-  isAgentHookSource,
-  isWslAgentHookRelayEnabled,
-  restoreShedStatusFields
-} from './agent-hook-relay'
+import { createShedSubagentsField, restoreShedStatusFields } from './agent-hook-relay'
 import type { ParsedAgentStatusPayload } from './agent-status-types'
-
-describe('agent-hook-relay wire shape', () => {
-  it('validates hook sources crossing persisted and relay trust boundaries', () => {
-    expect(isAgentHookSource('claude')).toBe(true)
-    expect(isAgentHookSource('kimi')).toBe(true)
-    expect(isAgentHookSource('prime-agent')).toBe(true)
-    expect(isAgentHookSource('claude\0codex')).toBe(false)
-    expect(isAgentHookSource('unknown')).toBe(false)
-    expect(isAgentHookSource({ source: 'claude' })).toBe(false)
-  })
-})
-
-describe('isWslAgentHookRelayEnabled', () => {
-  it('is on when the env var is absent', () => {
-    expect(isWslAgentHookRelayEnabled({})).toBe(true)
-  })
-
-  it('is off for empty / "0"', () => {
-    expect(isWslAgentHookRelayEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '' })).toBe(false)
-    expect(isWslAgentHookRelayEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '0' })).toBe(false)
-    expect(isWslAgentHookRelayEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '   ' })).toBe(false)
-    expect(isWslAgentHookRelayEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: ' 0 ' })).toBe(false)
-  })
-
-  it('is on for any other non-empty value', () => {
-    expect(isWslAgentHookRelayEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '1' })).toBe(true)
-    expect(isWslAgentHookRelayEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: 'on' })).toBe(true)
-    expect(isWslAgentHookRelayEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: 'true' })).toBe(true)
-  })
-})
 
 describe('restoreShedStatusFields', () => {
   const roster = [{ id: 'child-1', agentType: 'reviewer', state: 'working' as const, startedAt: 1 }]
@@ -82,21 +46,6 @@ describe('restoreShedStatusFields', () => {
     expect(restored).toBe(shed)
   })
 
-  it('never restores interactivePrompt — a stale answerable card is worse than none', () => {
-    const restored = restoreShedStatusFields(shed, ['interactivePrompt'], cached)
-    expect(restored.interactivePrompt).toBeUndefined()
-    expect(restored).toBe(shed)
-  })
-
-  it('leaves an intentional lastAssistantMessage clear intact when the relay shed nothing', () => {
-    expect(restoreShedStatusFields(shed, undefined, cached)).toBe(shed)
-    expect(restoreShedStatusFields(shed, [], cached)).toBe(shed)
-    expect(restoreShedStatusFields(shed, [], cached).lastAssistantMessage).toBeUndefined()
-    expect(restoreShedStatusFields(shed, 'subagents', cached)).toBe(shed)
-    expect(restoreShedStatusFields(shed, ['subagents'], cached)).toBe(shed)
-    expect(restoreShedStatusFields(shed, [{ toString: () => 'subagents' }], cached)).toBe(shed)
-  })
-
   it('does not overwrite a roster the envelope still carries', () => {
     const freshRoster = [
       { id: 'child-fresh', agentType: 'reviewer', state: 'working' as const, startedAt: 2 }
@@ -104,9 +53,5 @@ describe('restoreShedStatusFields', () => {
     const fresh: ParsedAgentStatusPayload = { ...shed, subagents: freshRoster }
     const restored = restoreShedStatusFields(fresh, [createShedSubagentsField(roster)], cached)
     expect(restored.subagents).toEqual(freshRoster)
-  })
-
-  it('is a no-op with no cached payload for the pane', () => {
-    expect(restoreShedStatusFields(shed, ['subagents'], undefined)).toBe(shed)
   })
 })

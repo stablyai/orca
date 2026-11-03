@@ -1,7 +1,10 @@
 import { resolve, dirname, basename } from 'node:path'
 import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import { lstat } from 'node:fs/promises'
-import { realpathAcrossWslDriveMount, windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
+import {
+  realpathAcrossWslDriveMount,
+  windowsFsPath
+} from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../../shared/local-file-access'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import { isDescendantOrEqual, isENOENT, normalizeExistingPath } from './filesystem-path-containment'
@@ -9,7 +12,7 @@ import {
   ensureAuthorizedRootsCache,
   isPathAllowedByCanonicalRegisteredRoot,
   isRegisteredWorktreePath
-} from '../registered-worktree-roots-cache'
+} from '../worktrees/removal/registered-worktree-roots-cache'
 
 export const PATH_ACCESS_DENIED_MESSAGE = `${PATH_OUTSIDE_ALLOWED_DIRECTORIES}. If this blocks a legitimate workflow, please file a GitHub issue.`
 /** Lazily share allowed roots across every check in one authorization. */

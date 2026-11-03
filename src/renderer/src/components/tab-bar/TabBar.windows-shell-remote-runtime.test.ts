@@ -58,6 +58,9 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -126,6 +129,9 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -195,6 +201,9 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(false),

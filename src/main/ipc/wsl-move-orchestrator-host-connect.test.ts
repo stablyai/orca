@@ -10,8 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WslMoveResult } from '../../shared/wsl-move/wsl-move-driver-types'
 import { prepareWslMoveHost } from '../persistence/moving-wsl-projects/wsl-move-host-readiness'
 import { WslMoveOrchestrator } from '../persistence/moving-wsl-projects/wsl-move-orchestrator'
-import { WslHostService } from '../wsl/wsl-host-service'
-import { UBUNTU, makeConnector } from '../wsl/wsl-host-service-test-connector'
+import { WslHostService } from '../wsl/host-lifecycle/wsl-host-service'
+import {
+  UBUNTU,
+  makeConnector
+} from '../wsl/host-lifecycle/__tests__/wsl-host-service-test-connector'
 import { connectWslMoveHostService, wslHostRemovalPending } from './wsl-move-host-connect'
 
 const moved: WslMoveResult = {
@@ -59,6 +62,7 @@ function orchestratorOverHost(connector: ReturnType<typeof makeConnector>) {
     now: () => 1_000,
     appVersion: '1.0.0',
     autoMoveEnabled: () => true,
+    autoMovesBridgeProjects: () => true,
     prepareHost: (distro, stillWanted) =>
       prepareWslMoveHost(
         {

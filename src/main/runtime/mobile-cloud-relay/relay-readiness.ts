@@ -1,4 +1,5 @@
 import { RelayHttpError } from './relay-http-client'
+import { RelayHostProofClockSkewError } from './relay-host-proof'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 
 // Lowercase reason tokens must form valid relay_<reason> mint-failure codes.
@@ -10,11 +11,16 @@ export type RelayUnavailableReason =
   | 'tls_untrusted'
   | 'connect_timeout'
   | 'network'
+  | 'clock_skew'
   | 'control_not_active'
   | `director_${'token_exchange' | 'assignment'}_${number}`
   | `control_${string}`
 
-export type RelayUnavailable = { reason: RelayUnavailableReason; retryAt: number | null }
+export type RelayUnavailable = {
+  reason: RelayUnavailableReason
+  retryAt: number | null
+  clockOffsetMs?: number
+}
 
 const TLS_TRUST_ERROR_CODES = new Set([
   'UNABLE_TO_GET_ISSUER_CERT',
@@ -49,6 +55,9 @@ function errorChain(error: unknown): unknown[] {
 }
 
 export function relayUnavailableReasonFor(error: unknown): RelayUnavailableReason {
+  if (error instanceof RelayHostProofClockSkewError) {
+    return 'clock_skew'
+  }
   if (error instanceof RelayHttpError) {
     return error.statusCode === 429
       ? 'rate_limited'
@@ -68,6 +77,13 @@ export function relayUnavailableReasonFor(error: unknown): RelayUnavailableReaso
     return 'rate_limited'
   }
   return message ? `control_${message[1].slice('control_'.length)}` : 'network'
+}
+
+export function relayUnavailableFor(error: unknown): Omit<RelayUnavailable, 'retryAt'> {
+  return {
+    reason: relayUnavailableReasonFor(error),
+    ...(error instanceof RelayHostProofClockSkewError ? { clockOffsetMs: error.clockOffsetMs } : {})
+  }
 }
 
 const RATE_LIMIT_FLOOR_BASE_MS = 5_000
@@ -121,9 +137,11 @@ export class RelayReadinessWaiters {
 
 export class RelayUnavailableError extends Error {
   readonly code: string
+  readonly clockOffsetMs?: number
 
   constructor(readonly unavailable: RelayUnavailable) {
     super(`relay_${unavailable.reason}`)
     this.code = this.message
+    this.clockOffsetMs = unavailable.clockOffsetMs
   }
 }

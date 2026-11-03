@@ -1,4 +1,4 @@
-import { ChevronLeft, Loader2, SearchX } from 'lucide-react'
+import { Blocks, ChevronLeft, Loader2, PackageCheck, SearchX } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../ui/button'
 import { PluginCatalogEmptyState } from './PluginCatalogEmptyState'
@@ -72,5 +72,48 @@ export function PluginPageMissing({
         </p>
       )}
     </div>
+  )
+}
+
+/** The Installed or Updates filter with nothing installed. */
+export function PluginNoneInstalled({ onBrowse }: { onBrowse: () => void }): React.JSX.Element {
+  return (
+    <PluginCatalogEmptyState
+      icon={Blocks}
+      title={translate(
+        'auto.components.settings.PluginManager.noneInstalledTitle',
+        'No plugins installed'
+      )}
+      action={
+        <Button variant="outline" size="sm" onClick={onBrowse}>
+          {translate('auto.components.settings.PluginManager.browseAll', 'Browse all plugins')}
+        </Button>
+      }
+    />
+  )
+}
+
+/** The Not installed filter once every catalog plugin is installed. */
+export function PluginAllInstalled({
+  onShowInstalled
+}: {
+  onShowInstalled: () => void
+}): React.JSX.Element {
+  return (
+    <PluginCatalogEmptyState
+      icon={PackageCheck}
+      title={translate(
+        'auto.components.settings.PluginManager.allInstalledTitle',
+        'Every catalog plugin is installed'
+      )}
+      action={
+        <Button variant="outline" size="sm" onClick={onShowInstalled}>
+          {translate(
+            'auto.components.settings.PluginManager.showInstalled',
+            'Show installed plugins'
+          )}
+        </Button>
+      }
+    />
   )
 }

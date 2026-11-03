@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -37,6 +37,10 @@ vi.mock('../browser/browser-screencast-stream', () => ({
 vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn(),
   waitForWorktreeTabRegistration: vi.fn()
+}))
+
+vi.mock('../browser/browser-main-window-readiness', () => ({
+  whenBrowserMainWindowReady: async () => null
 }))
 
 vi.mock('../browser/browser-session-registry', () => ({

@@ -13,7 +13,7 @@ export const ActiveSettingsSectionProvider = ActiveSettingsSectionContext.Provid
 type SettingsSectionProps = {
   id: string
   title: string
-  description: string
+  description: React.ReactNode
   searchEntries?: SettingsSearchEntry[]
   children?: React.ReactNode
   className?: string

@@ -8,7 +8,7 @@ import { resolveNotificationTabOwner } from '@/attention/notification-subject-ow
 import type {
   AgentSessionPromptAttention,
   AgentSessionTurnCompletion
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import {
   agentSessionAttentionKey,
   agentSessionAttentionNews,
@@ -16,14 +16,16 @@ import {
   structuredAttentionOrigin,
   type AgentSessionAttentionEdge,
   type StructuredAttentionRead
-} from '../../../../shared/agent-session-attention'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/agent-session-attention'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import {
   deliverAgentAttentionNotification,
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { isCoordinatorOnlyChatNews } from '../../../../shared/dispatched-worker-attention'
 import { getNotificationWorkspaceLabels } from '../terminal-pane/terminal-notification-state'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from './structured-agent-session-tabs'
@@ -80,7 +82,10 @@ function dispatchStructuredAttention(
       // A prompt earns unread like a settled turn, as the hook lane's blocked row does.
       settlesTurn: true,
       // Host journal edges prove fresh activity even without a rendered transcript; still require current tab ownership.
-      hasFreshActivityEvidence: true
+      hasFreshActivityEvidence: true,
+      coordinatorOnlyNews: isCoordinatorOnlyChatNews(edge, news.agentState, () =>
+        canonicalOrchestrationForRow(state, paneKey)
+      )
     },
     createStructuredAttentionSurface(state)
   )

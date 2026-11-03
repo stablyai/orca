@@ -45,7 +45,7 @@ export function wslOrcadQualification(changed, modified, event = {}) {
     ) {
       return full('Unknown path')
     }
-    if (file === 'src/main/wsl/wsl-orcad-real-distro-lane.test.ts') {
+    if (file === 'src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts') {
       return full(`Distro contract changed: ${file}`)
     }
     if (

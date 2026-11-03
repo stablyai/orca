@@ -80,6 +80,40 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 }
 
 describe('resolveAiVaultSessionWorktreeInfo', () => {
+  it('ranks each same-host candidate by its closest cwd spelling, independent of link length or alias order', () => {
+    const parent = makeWorktree({ id: 'parent', path: '/a-very-long-parent-link' })
+    const child = makeWorktree({ id: 'child', path: '/short', priorWorktreeIds: ['repo-1::/old'] })
+    const foreign = makeWorktree({ id: 'foreign', path: '/other-host', hostId: 'runtime:other' })
+    for (const cwdAliases of [
+      ['/a-very-long-parent-link/child', '/short/nested', '/short', '/other-host'],
+      ['/other-host', '/short', '/short/nested', '/a-very-long-parent-link/child']
+    ]) {
+      expect(
+        resolveAiVaultSessionWorktreeInfo({
+          session: { ...baseSession, cwd: '/physical/child', cwdAliases },
+          worktrees: [parent, foreign, child],
+          activeWorktreeId: 'parent'
+        })
+      ).toMatchObject({ worktreeId: 'child', path: '/short', status: 'active' })
+    }
+  })
+
+  it('keeps current-path ownership ahead of a prior-path alias tie', () => {
+    const prior = makeWorktree({
+      id: 'renamed',
+      path: '/renamed',
+      priorWorktreeIds: ['repo-1::/link']
+    })
+    const current = makeWorktree({ id: 'current', path: '/link' })
+    expect(
+      resolveAiVaultSessionWorktreeInfo({
+        session: { ...baseSession, cwd: '/physical', cwdAliases: ['/link'] },
+        worktrees: [prior, current],
+        activeWorktreeId: null
+      })?.worktreeId
+    ).toBe('current')
+  })
+
   it('marks the selected owning worktree as current', () => {
     const worktree = makeWorktree()
 

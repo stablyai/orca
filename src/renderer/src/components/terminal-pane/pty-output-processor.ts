@@ -43,6 +43,7 @@ export type ProcessPtyOutputOptions = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   snapshotCols?: number
   snapshotRows?: number
   carriesNormalBuffer?: boolean
@@ -202,6 +203,7 @@ export function createPtyOutputProcessor({
           ? { alternateScreen: options.alternateScreen }
           : {}),
         ...(options.terminalOwner ? { terminalOwner: options.terminalOwner } : {}),
+        ...(options.lastTitle !== undefined ? { lastTitle: options.lastTitle } : {}),
         ...(options.snapshotCols !== undefined && options.snapshotRows !== undefined
           ? { snapshotCols: options.snapshotCols, snapshotRows: options.snapshotRows }
           : {}),

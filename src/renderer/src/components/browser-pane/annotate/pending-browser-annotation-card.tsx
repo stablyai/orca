@@ -16,19 +16,23 @@ import {
   BROWSER_ANNOTATION_INTENT_OPTIONS,
   type BrowserOverlayAnchor
 } from '../describe-page/browser-annotation-geometry'
+import { useBrowserAnnotationImages } from './use-browser-annotation-images'
+import { BrowserAnnotationImageStrip } from './browser-annotation-image-strip'
 
 export function PendingBrowserAnnotationCard({
   payload,
+  worktreeId,
   resolveAnchor,
   portalContainer,
   onAdd,
   onCancel
 }: {
   payload: BrowserGrabPayload
+  worktreeId: string
   /** Anchor for a card of the given measured height; null until the card has rendered once. */
   resolveAnchor: (cardHeight: number | null) => BrowserOverlayAnchor
   portalContainer: HTMLElement | null
-  onAdd: (comment: string, intent: BrowserAnnotationIntent) => void
+  onAdd: (comment: string, intent: BrowserAnnotationIntent, imagePaths: string[]) => void
   onCancel: () => void
 }): React.JSX.Element {
   const [card, setCard] = useState<HTMLDivElement | null>(null)
@@ -45,7 +49,10 @@ export function PendingBrowserAnnotationCard({
   const anchor = resolveAnchor(cardHeight)
   const [comment, setComment] = useState('')
   const [intent, setIntent] = useState<BrowserAnnotationIntent>('change')
+  const { images, imagePaths, saving, handlePaste, removeImage } =
+    useBrowserAnnotationImages(worktreeId)
   const trimmed = comment.trim()
+  const canAdd = Boolean(trimmed) && !saving
   const submitModifierLabel = getScreenSubmitModifierLabel()
 
   return (
@@ -99,6 +106,7 @@ export function PendingBrowserAnnotationCard({
           id="browser-annotation-comment"
           value={comment}
           onChange={(event) => setComment(event.target.value)}
+          onPaste={handlePaste}
           placeholder={translate(
             'auto.components.browser.pane.BrowserPane.532bac48c5',
             'Describe what the agent should change here...'
@@ -116,12 +124,13 @@ export function PendingBrowserAnnotationCard({
             if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               event.stopPropagation()
-              if (trimmed) {
-                onAdd(trimmed, intent)
+              if (canAdd) {
+                onAdd(trimmed, intent, imagePaths)
               }
             }
           }}
         />
+        <BrowserAnnotationImageStrip images={images} onRemove={removeImage} />
         <ToggleGroup
           type="single"
           size="sm"
@@ -160,8 +169,8 @@ export function PendingBrowserAnnotationCard({
           <Button
             size="sm"
             className="h-8 gap-1.5"
-            disabled={!trimmed}
-            onClick={() => onAdd(trimmed, intent)}
+            disabled={!canAdd}
+            onClick={() => onAdd(trimmed, intent, imagePaths)}
           >
             <MessageSquarePlus className="size-3.5" />
             {translate('auto.components.browser.pane.BrowserPane.90d021f2ad', 'Add')}

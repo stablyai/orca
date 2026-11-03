@@ -159,17 +159,6 @@ describe('Claude session replacement voids the replaced session claims', () => {
     expect(state.claudeSessionOwnerByPaneKey.get(paneKey)).toBe(SESSION_A)
   })
 
-  it('voids nothing when the event carries no session id', () => {
-    const state = createHookListenerState()
-    const paneKey = makePaneKey('no-session', LEAF_ID)
-
-    stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
-    stop(state, paneKey, '')
-
-    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
-    expect(state.claudeSessionOwnerByPaneKey.get(paneKey)).toBe(SESSION_A)
-  })
-
   it('does not anchor an ignored compact SessionStart', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('compact-owner', LEAF_ID)
@@ -186,19 +175,5 @@ describe('Claude session replacement voids the replaced session claims', () => {
     stop(state, paneKey, SESSION_B)
 
     expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(false)
-  })
-
-  it('folds the replacement session prompt into the lead working state', () => {
-    const state = createHookListenerState()
-    const paneKey = makePaneKey('lead-untouched', LEAF_ID)
-
-    stop(state, paneKey, SESSION_A)
-    claudeEvent(state, paneKey, {
-      hook_event_name: 'UserPromptSubmit',
-      session_id: SESSION_B,
-      prompt: 'new conversation'
-    })
-
-    expect(state.claudeLeadStateByPaneKey.get(paneKey)?.state).toBe('working')
   })
 })

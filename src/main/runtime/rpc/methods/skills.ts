@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
 import {
+  BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
   BundledSkillPlanRequestSchema
 } from '../../../../shared/bundled-skill-plan'
@@ -44,7 +45,7 @@ import {
   SkillsGetInstallProgressParams
 } from '../../../../shared/rpc-contract/skills-params'
 import { unavailableWhileWslDistroStopped } from '../../../skills/skill-discovery-stopped-wsl-roots'
-import { runAsWslUserAct, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct, wslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 // Use the same target resolution for discovery and delete-plan roots, including WSL.
 export function resolveDiscoveryTarget(
@@ -139,6 +140,12 @@ export const SKILL_METHODS = [
     permission: 'skills-admin',
     params: BundledSkillExecuteRequestSchema,
     handler: (params, { runtime }) => runtime.executeLocalBundledSkills(params)
+  }),
+  defineMethod({
+    name: 'skills.autoUpdateBundledOrca',
+    permission: 'skills-admin',
+    params: BundledSkillAutoUpdateRequestSchema,
+    handler: (params, { runtime }) => runtime.autoUpdateLocalBundledSkills(params)
   }),
   defineMethod({
     name: 'skills.share',

@@ -42,29 +42,45 @@ afterEach(async () => {
 })
 
 it('observes pre-initialize reports, validates session identity and keeps the latest explicit empty', async () => {
-  const { catalog, children, workspacePath } = await rig((child) => {
-    child.agent.on('initialize', (frame) => {
-      child.agent.notify('session/update', { sessionId: 'wrong', update: capture.enabled })
-      child.agent.notify('session/update', {
-        sessionId: DISCOVERY_SESSION,
-        update: capture.enabled
+  const { catalog, children, workspacePath } = await rig(
+    (child) => {
+      child.agent.on('initialize', (frame) => {
+        child.agent.notify('session/update', { sessionId: 'wrong', update: capture.enabled })
+        child.agent.notify('session/update', {
+          sessionId: DISCOVERY_SESSION,
+          update: capture.enabled
+        })
+        child.agent.notify('session/update', {
+          sessionId: DISCOVERY_SESSION,
+          update: { sessionUpdate: 'available_commands_update', availableCommands: [] }
+        })
+        child.agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
       })
-      child.agent.notify('session/update', {
-        sessionId: DISCOVERY_SESSION,
-        update: { sessionUpdate: 'available_commands_update', availableCommands: [] }
+      child.agent.on('session/new', (frame) =>
+        child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
+      )
+    },
+    {
+      resolveCommandSettings: () => ({
+        agentCmdOverrides: { omp: `"${process.execPath}" run -- omp` }
       })
-      child.agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
-    })
-    child.agent.on('session/new', (frame) =>
-      child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
-    )
-  })
+    }
+  )
   expect(await catalog.settled(ompRecord(), 1_000)).toEqual([])
   await catalog.closeAll()
   expect(children[0]!.launch).toMatchObject({
-    command: '/configured/omp',
+    command: process.execPath,
     cwd: workspacePath('workspace-1'),
-    args: ['acp', '--plugin-dir', '/installed/plugin', '--session-dir', expect.any(String)],
+    args: [
+      'run',
+      '--',
+      'omp',
+      'acp',
+      '--plugin-dir',
+      '/installed/plugin',
+      '--session-dir',
+      expect.any(String)
+    ],
     env: { PI_CODING_AGENT_DIR: '/accounts/omp', OMP_PROFILE: 'configured' },
     envToDelete: expect.arrayContaining([
       'ORCA_CHAT_SCRATCH_DIR',
@@ -646,3 +662,33 @@ it.each([10, 100])(
     }
   }
 )
+
+it('takes an OMP context out of the legacy queue for a capable menu while joining admitted work', async () => {
+  const gate = deferred<void>()
+  const { catalog, children } = await rig((child) => {
+    const initialize = child.initialize.bind(child)
+    vi.spyOn(child, 'initialize').mockImplementation(async () => {
+      await gate.promise
+      return initialize()
+    })
+  })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  try {
+    catalog.read(ompRecord('legacy-one'))
+    catalog.read(ompRecord('legacy-two'))
+    await waitFor(() => expect(children).toHaveLength(2))
+    catalog.read(ompRecord('queued'))
+    const explicit = catalog.settled(ompRecord('queued'), 1_000, true)
+    const joined = catalog.settled(ompRecord('legacy-one'), 1_000, true)
+    await waitFor(() => expect(children).toHaveLength(3))
+    expect(children.filter((child) => !child.exited)).toHaveLength(3)
+    gate.resolve()
+    expect(await explicit).toBeDefined()
+    expect(await joined).toBeDefined()
+    await waitFor(() => expect(children.every((child) => child.exited)).toBe(true))
+    expect(children).toHaveLength(3)
+  } finally {
+    gate.resolve()
+    catalog.dispose()
+  }
+})

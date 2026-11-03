@@ -7,6 +7,7 @@ import { Button } from './ui/button'
 import { acknowledgeBanner, PRIVACY_URL, setOptIn as telemetrySetOptIn } from '../lib/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type FirstLaunchBannerProps = {
   onResolve: () => void
@@ -84,7 +85,7 @@ export function FirstLaunchBanner({
           <button
             type="button"
             className="underline underline-offset-2 hover:text-foreground"
-            onClick={() => void window.api.shell.openUrl(PRIVACY_URL)}
+            onClick={(event) => openAppHttpLink(PRIVACY_URL, { event })}
           >
             {translate('auto.components.FirstLaunchBanner.d1deebb050', 'Privacy policy')}
           </button>

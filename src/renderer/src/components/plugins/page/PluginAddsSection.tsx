@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
 import {
   Blocks,
@@ -7,6 +8,7 @@ import {
   Highlighter,
   Languages,
   Palette,
+  PanelBottom,
   PanelRight,
   PenTool,
   Server,
@@ -23,10 +25,14 @@ import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
+import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 import { usePluginSyntaxes } from '@/store/plugin-syntax-packs'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import { Button } from '../../ui/button'
+import { revealPluginIconTheme } from '../state/plugin-try-action'
 import { DetailRow, DetailSection } from './PluginDetailSections'
 import { PluginContributionActionCommand } from './PluginContributionActionCommand'
+import { PluginCommandReplacementRow } from './PluginCommandReplacementRow'
 import { PluginContributionEventRow, usePluginWorkerEvents } from './PluginContributionActionEvents'
 import { PluginContributionActionLanguage } from './PluginContributionActionLanguage'
 import { PluginContributionActionPanel } from './PluginContributionActionPanel'
@@ -100,13 +106,16 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   panels: <PanelRight />,
   customEditors: <PenTool />,
   vmRecipes: <Server />,
-  newFiles: <FilePlus />
+  newFiles: <FilePlus />,
+  statusBarItems: <PanelBottom />
 }
 
 type AddsCommand = {
   id: string
   title: string
   keybindings: readonly { key: string; when: string }[]
+  replaces?: string
+  replacedBy?: string
   /** Set once the plugin is on, so the row can run it exactly as the palette would. */
   live?: ActivePluginCommand
 }
@@ -192,6 +201,7 @@ function useContributionRowActions(
 ): (row: PluginContribution) => React.ReactNode {
   const syntaxes = usePluginSyntaxes()
   const languagePacks = usePluginLanguagePackStore((state) => state.entries)
+  const iconThemes = usePluginIconThemes()
   if (!isPluginContributionLive(plugin)) {
     return () => null
   }
@@ -223,11 +233,29 @@ function useContributionRowActions(
         const newFile = collectActivePluginNewFiles([plugin])[Number(id)]
         return newFile ? <PluginContributionActionNewFile newFile={newFile} /> : null
       }
+      case 'iconThemes': {
+        const theme = iconThemes.find(
+          (entry) => entry.id === id && entry.pluginKey === plugin.pluginKey
+        )
+        return theme ? (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() =>
+              revealPluginIconTheme(() =>
+                useAppStore.getState().updateSettings({ pluginIconTheme: theme.id })
+              )
+            }
+          >
+            {translate('auto.components.settings.pluginInstallAction.tryIt', 'Try it')}
+          </Button>
+        ) : null
+      }
       case 'themes':
       case 'terminalThemes':
-      case 'iconThemes':
       case 'customEditors':
       case 'vmRecipes':
+      case 'statusBarItems':
         // Themes have "Use now" above the list; editors open from their new files; recipes have nothing to try here.
         return null
     }
@@ -267,6 +295,7 @@ export function PluginAddsSection({
   const previewCommands = preview?.manifest.contributes.commands.map((command) => ({
     id: command.id,
     title: command.title,
+    replaces: command.replaces,
     keybindings: preview.manifest.contributes.keybindings
       .filter((binding) => binding.command === command.id)
       .map((binding) => ({ key: binding.key, when: binding.when ?? 'global' }))
@@ -317,7 +346,12 @@ export function PluginAddsSection({
         />
       ))}
       {commands.map((command) => (
-        <CommandRow key={command.id} command={command} onOpenShortcuts={onOpenShortcuts} />
+        <Fragment key={command.id}>
+          <CommandRow command={command} onOpenShortcuts={onOpenShortcuts} />
+          {command.replaces ? (
+            <PluginCommandReplacementRow command={{ ...command, replaces: command.replaces }} />
+          ) : null}
+        </Fragment>
       ))}
       {events.map((event) => (
         <PluginContributionEventRow key={`event:${event}`} event={event} />

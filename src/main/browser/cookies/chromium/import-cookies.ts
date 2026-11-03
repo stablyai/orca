@@ -1,9 +1,10 @@
 import { session } from 'electron'
+import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
 import { existsSync } from 'node:fs'
 import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
 import {
   diag,
-  reasonWithDiagLog,
+  getDiagLogPath,
   summarizeCookieImportError
 } from '../browser-cookie-import-diagnostics'
 import type { DetectedBrowser } from '../sources/browser-cookie-detection-types'
@@ -22,7 +23,7 @@ export async function importChromiumCookies(
   diag(`importCookiesFromBrowser: browser=${browser.family} partition="${targetPartition}"`)
   if (!existsSync(browser.cookiesPath)) {
     diag(`  cookies DB not found: ${browser.cookiesPath}`)
-    return { ok: false, reason: `${browser.label} cookies database not found.` }
+    return browserCookieImportFailure('databaseNotFound', { browser: browser.label })
   }
 
   const targetSession = session.fromPartition(targetPartition)
@@ -44,12 +45,11 @@ export async function importChromiumCookies(
         return await finalizeChromiumCookieImport(context, targetPartition)
       } catch (err) {
         diag(`  SQLite import failed: ${String(err)}`)
-        return {
-          ok: false,
-          reason: reasonWithDiagLog(
-            `Could not import cookies from ${browser.label}: ${summarizeCookieImportError(err)}.`
-          )
-        }
+        return browserCookieImportFailure(
+          'importFailedWithLog',
+          { browser: browser.label, logPath: getDiagLogPath() },
+          summarizeCookieImportError(err)
+        )
       } finally {
         if (context) {
           try {

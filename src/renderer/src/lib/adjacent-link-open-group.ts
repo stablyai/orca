@@ -1,4 +1,5 @@
 import type { TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 
 type LayoutRect = { left: number; top: number; right: number; bottom: number }
 type LayoutLeaf = { groupId: string; rect: LayoutRect; layoutOrder: number }
@@ -76,7 +77,7 @@ export function findNeighbor(source: LayoutRect, target: LayoutRect): Neighbor |
 function rankCandidate(candidate: Candidate, sourceGroupId: string): Rank | null {
   const { neighbor, hasMatchingDestination, showsDestinationSurface, layoutOrder } = candidate
   if (candidate.id === sourceGroupId) {
-    return [4, 0, 0, layoutOrder]
+    return [hasMatchingDestination ? 1 : 4, 0, 0, layoutOrder]
   }
   if (!neighbor) {
     return hasMatchingDestination ? [1, 0, 0, layoutOrder] : null
@@ -91,9 +92,9 @@ function compareRanks(a: Rank, b: Rank): number {
 
 export function pickAdjacentLinkOpenGroupId(input: {
   layout: TabGroupLayoutNode
-  groups: readonly TabGroup[]
+  groups: readonly Pick<TabGroup, 'id'>[]
   sourceGroupId: string
-  facts: ReadonlyMap<string, { hasMatchingDestination: boolean; showsDestinationSurface: boolean }>
+  facts?: ReadonlyMap<string, { hasMatchingDestination: boolean; showsDestinationSurface: boolean }>
 }): string | null {
   const leaves = projectLayoutLeaves(input.layout)
   const liveGroups = new Set(input.groups.map((group) => group.id))
@@ -107,7 +108,7 @@ export function pickAdjacentLinkOpenGroupId(input: {
     if (!liveGroups.has(leaf.groupId)) {
       continue
     }
-    const facts = input.facts.get(leaf.groupId)
+    const facts = input.facts?.get(leaf.groupId)
     const rank = rankCandidate(
       {
         id: leaf.groupId,
@@ -124,4 +125,34 @@ export function pickAdjacentLinkOpenGroupId(input: {
     }
   }
   return bestId
+}
+
+/** Keep the source visible without adding splits to an existing multi-group layout. */
+export function resolveLinkOpenSidePlacement(input: {
+  layout?: TabGroupLayoutNode
+  groups: readonly Pick<TabGroup, 'id' | 'activeTabId'>[]
+  sourceGroupId: string | undefined
+}): { groupId: string } | { split: TabSplitTarget } | null {
+  const { layout, groups, sourceGroupId } = input
+  const groupIds = new Set(groups.map((group) => group.id))
+  const liveGroups = layout
+    ? new Set(
+        projectLayoutLeaves(layout)
+          .map((leaf) => leaf.groupId)
+          .filter((id) => groupIds.has(id))
+      )
+    : groupIds
+  if (!sourceGroupId || !liveGroups.has(sourceGroupId)) {
+    return null
+  }
+  if (!groups.find((group) => group.id === sourceGroupId)?.activeTabId) {
+    return { groupId: sourceGroupId }
+  }
+  if (liveGroups.size > 1) {
+    const neighbor = layout ? pickAdjacentLinkOpenGroupId({ layout, groups, sourceGroupId }) : null
+    return {
+      groupId: neighbor ?? [...liveGroups].find((id) => id !== sourceGroupId) ?? sourceGroupId
+    }
+  }
+  return { split: { sourceGroupId, splitDirection: 'right', activate: false } }
 }

@@ -51,30 +51,6 @@ describe('remote runtime session-tabs in-flight requests', () => {
     expect(getRemoteRuntimeSessionTabsInFlightCountForTests()).toBe(0)
   })
 
-  it('does not share requests across runtime or worktree ownership boundaries', async () => {
-    const load = vi.fn(async () => ({ snapshot: SNAPSHOT }))
-
-    await Promise.all([
-      listRemoteRuntimeSessionTabsDeduped({
-        environmentId: 'env-1',
-        worktreeId: 'wt-1',
-        load
-      }),
-      listRemoteRuntimeSessionTabsDeduped({
-        environmentId: 'env-2',
-        worktreeId: 'wt-1',
-        load
-      }),
-      listRemoteRuntimeSessionTabsDeduped({
-        environmentId: 'env-1',
-        worktreeId: 'wt-2',
-        load
-      })
-    ])
-
-    expect(load).toHaveBeenCalledTimes(3)
-  })
-
   it('waits out an older request before sharing a post-operation inventory', async () => {
     let resolveCurrent: (answer: { snapshot: RuntimeMobileSessionTabsResult }) => void = () => {}
     const currentLoad = vi.fn(

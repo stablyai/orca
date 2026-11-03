@@ -1,8 +1,9 @@
-import { delimiter, isAbsolute, resolve } from 'node:path'
+import { pathEnvRelativeTo } from '../../shared/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentCommand,
   type StructuredAgentResolutionOperation
 } from '../native-chat/structured-agent-command-resolution'
 // How a durable session record becomes a Codex process launch.
@@ -13,11 +14,11 @@ import {
 // must name the thread this session actually proved — never one a caller asks
 // for, which is how a resume becomes a fork wearing a resume's name.
 
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
-import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
+import type { CodexStructuredLaunch } from './codex-structured-session-state'
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
@@ -28,7 +29,10 @@ import {
 
 export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
-  resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
+  resolveCommand?: (options?: {
+    pathEnv?: string | null
+    homePath?: string
+  }) => StructuredAgentCommand
 }
 
 export type CodexStructuredInvocationDeps = Pick<
@@ -47,6 +51,7 @@ export type CodexStructuredInvocationDeps = Pick<
 
 export type CodexStructuredInvocation = {
   command: string
+  prefixArgs: string[]
   environment: NodeJS.ProcessEnv | undefined
 }
 
@@ -81,17 +86,16 @@ async function readCodexStructuredInvocation(
   )
   assertStructuredAgentResolutionCurrent(deps.operation)
   deps.signal?.throwIfAborted()
-  const pathEnv =
-    (environment?.PATH ?? environment?.Path)
-      ?.split(delimiter)
-      .map((entry) => (entry && !isAbsolute(entry) ? resolve(cwd ?? process.cwd(), entry) : entry))
-      .join(delimiter) ?? null
+  const pathEnv = pathEnvRelativeTo(environment?.PATH ?? environment?.Path, cwd ?? process.cwd())
   const homePath = environment?.HOME ?? environment?.USERPROFILE
-  const command = (deps.resolveCommand ?? resolveCodexCommand)({
+  const options = {
     pathEnv,
     ...(homePath ? { homePath } : {})
-  })
-  return { command, environment }
+  }
+  const invocation = deps.resolveCommand
+    ? deps.resolveCommand(options)
+    : { command: resolveCodexCommand(options), prefixArgs: [] }
+  return { ...invocation, environment }
 }
 
 /** Derive resume identity and account home from the durable record. */
@@ -101,7 +105,7 @@ export function codexStructuredLaunchPart(
   return async (basis) => {
     const { record } = basis
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
-    const { command } = await resolveCodexStructuredInvocation({
+    const { command, prefixArgs } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
       resolveWorkingDirectory: basis.launchDirectory,
@@ -118,7 +122,8 @@ export function codexStructuredLaunchPart(
     return {
       launch: {
         command,
-        args: [...args, 'app-server'],
+        prefixArgs,
+        args: [...prefixArgs, ...args, 'app-server'],
         codexHome: accountHome.path,
         resumeThreadId,
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.

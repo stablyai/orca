@@ -33,7 +33,7 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
       ...spec.env
     }
     try {
-      const command = resolveAcpLaunchCommand(spec, env, {
+      const { command } = resolveAcpLaunchCommand(spec, env, {
         commandSettings: settings,
         dataDirectory
       })

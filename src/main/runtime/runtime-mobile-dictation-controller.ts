@@ -6,6 +6,10 @@ import {
   hasLocalSpeechRecognizer,
   LOCAL_SPEECH_UNAVAILABLE_ERROR
 } from '../speech/stt-worker-paths'
+import {
+  MobileDictationChunkOrder,
+  type MobileDictationChunk
+} from './mobile-dictation-chunk-order'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type MobileDictationSession = {
@@ -20,6 +24,7 @@ type MobileDictationSession = {
   textVersion: number
   reportedVersion: number
   reportedAt: number
+  chunkOrder: MobileDictationChunkOrder
   abandonTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -32,7 +37,7 @@ export class RuntimeMobileDictationController {
     dictationId: string
     modelId?: string
     clientId?: string
-  }): Promise<{ dictationId: string; modelId: string }> {
+  }): Promise<{ dictationId: string; modelId: string; dedupesResentChunks: true }> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     if (!voice.enabled) {
@@ -72,7 +77,8 @@ export class RuntimeMobileDictationController {
       errors: [],
       textVersion: 0,
       reportedVersion: 0,
-      reportedAt: 0
+      reportedAt: 0,
+      chunkOrder: new MobileDictationChunkOrder()
     }
     try {
       await getSpeechSttService(store).startDictation(
@@ -97,13 +103,15 @@ export class RuntimeMobileDictationController {
       }
       throw error
     }
-    return { dictationId: params.dictationId, modelId }
+    // Tells the phone it may resend chunks a drop left unanswered.
+    return { dictationId: params.dictationId, modelId, dedupesResentChunks: true }
   }
 
   feed(params: {
     dictationId: string
     audioBase64: string
     sampleRate: number
+    seq?: number
     clientId?: string
   }): { dictationId: string; text?: string } {
     const session = this.requireOwnedSession(params)
@@ -113,12 +121,12 @@ export class RuntimeMobileDictationController {
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
-    const pcm = Buffer.from(params.audioBase64, 'base64')
-    const samples = new Float32Array(Math.floor(pcm.length / 2))
-    for (let i = 0; i < samples.length; i += 1) {
-      samples[i] = pcm.readInt16LE(i * 2) / 32768
+    // Phones that send no seq never resend.
+    const ready =
+      params.seq === undefined ? [params] : session.chunkOrder.accept(params.seq, params)
+    for (const chunk of ready) {
+      this.feedChunk(session, chunk)
     }
-    getSpeechSttService(this.requireStore()).feedAudio(samples, params.sampleRate, session.owner)
     // The text so far lets the phone keep it if the connection never comes back; resent each second in case a reply was lost.
     const now = Date.now()
     if (session.reportedVersion === session.textVersion && now - session.reportedAt < 1000) {
@@ -134,6 +142,9 @@ export class RuntimeMobileDictationController {
     clientId?: string
   }): Promise<{ dictationId: string; text: string }> {
     const session = this.requireOwnedSession(params)
+    for (const chunk of session.chunkOrder.drain()) {
+      this.feedChunk(session, chunk)
+    }
     await this.stopSession(session, { discard: false })
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
@@ -150,6 +161,15 @@ export class RuntimeMobileDictationController {
       await this.stopSession(session, { discard: true })
     }
     return { dictationId: params.dictationId }
+  }
+
+  private feedChunk(session: MobileDictationSession, chunk: MobileDictationChunk): void {
+    const pcm = Buffer.from(chunk.audioBase64, 'base64')
+    const samples = new Float32Array(Math.floor(pcm.length / 2))
+    for (let i = 0; i < samples.length; i += 1) {
+      samples[i] = pcm.readInt16LE(i * 2) / 32768
+    }
+    getSpeechSttService(this.requireStore()).feedAudio(samples, chunk.sampleRate, session.owner)
   }
 
   private acceptEvent(

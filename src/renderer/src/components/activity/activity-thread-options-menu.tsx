@@ -18,7 +18,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { OptionsFilterCountBadge } from '@/components/sidebar/options-filter-count-badge'
-import { activeFilterCountLabel } from '../sidebar/active-filter-count-label'
 import {
   ActivityScopeFilterMenuItems,
   useActivityScopeFilterCount
@@ -82,13 +81,15 @@ export function ActivityThreadOptionsMenu({
   const skipCloseAutoFocusRef = React.useRef(false)
   const activeFilterCount =
     useActivityScopeFilterCount() + (onUnreadOnlyChange && unreadOnly ? 1 : 0)
-  const activeFilterLabel = activeFilterCountLabel(activeFilterCount)
   const optionsLabel =
     activeFilterCount > 0
       ? translate(
-          'auto.components.activity.ActivityPrototypePage.threadListOptionsActive',
-          'Thread list options ({{value0}} active)',
-          { value0: activeFilterLabel }
+          'auto.components.activity.ActivityPrototypePage.threadListOptionsActiveFilters',
+          'Thread list options ({{count}} filters active)',
+          {
+            count: activeFilterCount,
+            defaultValue_one: 'Thread list options ({{count}} filter active)'
+          }
         )
       : translate(
           'auto.components.activity.ActivityPrototypePage.db8a1878b5',
@@ -115,9 +116,12 @@ export function ActivityThreadOptionsMenu({
         <TooltipContent side="bottom" sideOffset={6}>
           {activeFilterCount > 0
             ? translate(
-                'auto.components.activity.ActivityPrototypePage.activityOptionsActive',
-                'Activity options ({{value0}})',
-                { value0: activeFilterLabel }
+                'auto.components.activity.ActivityPrototypePage.activityOptionsFilterCount',
+                'Activity options ({{count}} filters)',
+                {
+                  count: activeFilterCount,
+                  defaultValue_one: 'Activity options ({{count}} filter)'
+                }
               )
             : translate(
                 'auto.components.activity.ActivityPrototypePage.activityOptions',

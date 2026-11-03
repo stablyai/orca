@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { normalizeAgentSessionConversationName } from './agent-session-conversation-name'
 import { isOrcaSessionId, type OrcaSessionId } from '../orca-session-address'
 import type { OrchestrationPartyIdentity } from '../orchestration-party-identity'
+import type { AgentType } from '../agent-status-types'
+import { AGENT_TYPE_MAX_LENGTH } from '../agent-status-field-normalization'
 import { openEnum, salvagedField, salvagedOptional, salvagingArray } from '../zod-salvage'
 
 /** Resolve senders through the storing host's orchestration mailbox address (dispatch:<id> for federation), never a pane key. */
@@ -11,6 +13,9 @@ export type AgentMessageSender = Readonly<{
   party: Omit<OrchestrationPartyIdentity, 'paneKey'>
   /** What Orca called the sender when it wrote, kept for when it is gone; null when it had none. */
   name: string | null
+  /** Its agent when Orca wrote, so the card keeps its icon once the agent is gone; absent when unknown. */
+  agent?: AgentType
+  relation?: 'worker' | 'coordinator' | 'none'
 }>
 
 /** One orchestration message a notice points at: its record, and its sender's `senders` address. */
@@ -43,6 +48,16 @@ export type AgentMessageSource = Readonly<{
   /** Null when this build cannot read the kind a newer one wrote; the senders still stand. */
   orchestration: OrchestrationAgentMessage | null
 }>
+
+/** The mail a message notices, if it is orchestration mail; a person's message, a Task, or a kind this
+ *  build cannot read is not. */
+export function orchestrationMailNotice(
+  from: AgentMessageSource | undefined
+): OrchestrationMailNotice | null {
+  return from?.kind === 'agent' && from.orchestration?.message === 'mail-notice'
+    ? from.orchestration
+    : null
+}
 
 /** Persist only the source kind so restart/close retains human unsent cards; sender identities stay on the message body. */
 export type AgentSessionMessageSource = Readonly<{ kind: 'user' | 'agent' }>
@@ -80,6 +95,9 @@ const senderSchema = z.object({
     terminalHandle: z.string().nullable(),
     orcaSessionId: orcaSessionIdSchema.nullable()
   }),
+  // Any bounded string: a kind a newer build knows still draws as its first letter.
+  agent: salvagedOptional('agent', z.string().min(1).max(AGENT_TYPE_MAX_LENGTH)),
+  relation: salvagedOptional('relation', z.enum(['worker', 'coordinator', 'none'])),
   name: z.unknown().transform(agentMessageSenderName)
 })
 

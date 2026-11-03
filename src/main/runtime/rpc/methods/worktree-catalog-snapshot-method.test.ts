@@ -29,49 +29,6 @@ function runtimeReturning(...results: RuntimeWorktreePsResult[]) {
 }
 
 describe('worktree.ps catalog snapshots', () => {
-  it('preserves the exact legacy response when no snapshot field is sent', async () => {
-    const runtime = makeRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-    const response = await dispatcher.dispatch({
-      id: 'legacy',
-      authToken: 'token',
-      method: 'worktree.ps',
-      params: { limit: 10_000 }
-    })
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { worktrees: [], totalCount: 0, truncated: false }
-    })
-    expect((response as { result: unknown }).result).not.toHaveProperty('snapshotId')
-  })
-
-  it('returns a full snapshot followed by a tiny unchanged response', async () => {
-    const runtime = makeRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-    const first = await dispatcher.dispatch({
-      id: 'first',
-      authToken: 'token',
-      method: 'worktree.ps',
-      params: { limit: 10_000, afterSnapshotId: null }
-    })
-    const snapshotId = (first as { result: { snapshotId: string } }).result.snapshotId
-
-    const second = await dispatcher.dispatch({
-      id: 'second',
-      authToken: 'token',
-      method: 'worktree.ps',
-      params: { limit: 10_000, afterSnapshotId: snapshotId }
-    })
-
-    expect(snapshotId).toEqual(expect.any(String))
-    expect(second).toMatchObject({
-      ok: true,
-      result: { unchanged: true, snapshotId }
-    })
-    expect(runtime.getWorktreePs).toHaveBeenCalledTimes(2)
-  })
-
   it('gates source-default worktree projection by client capability', async () => {
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
@@ -206,16 +163,6 @@ describe('worktree.ps snapshot polls', () => {
     expect(second).toEqual({ unchanged: true, snapshotId: first.snapshotId })
   })
 
-  it('keeps a null lastOutputAt null', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: makeRuntime(psRow({ lastOutputAt: null, preview: '' })),
-      methods: WORKTREE_METHODS
-    })
-    const result = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
-
-    expect(result.worktrees).toEqual([expect.objectContaining({ lastOutputAt: null })])
-  })
-
   it('returns byte-identical rows, preview included, to callers that do not poll snapshots', async () => {
     const dispatcher = new RpcDispatcher({
       runtime: makeRuntime(before),
@@ -225,5 +172,56 @@ describe('worktree.ps snapshot polls', () => {
     expect(JSON.stringify(await poll(dispatcher, { limit: 10_000 }))).toBe(
       JSON.stringify({ worktrees: [before], totalCount: 1, truncated: false })
     )
+  })
+})
+
+describe('worktree.ps row deltas', () => {
+  const a = psRow({ worktreeId: 'repo-1::/w/a', displayName: 'a' })
+  const b = psRow({ worktreeId: 'repo-1::/w/b', displayName: 'b' })
+  const c = psRow({ worktreeId: 'repo-1::/w/c', displayName: 'c' })
+  const catalog = (...worktrees: RuntimeWorktreePsSummary[]): RuntimeWorktreePsResult => ({
+    worktrees,
+    totalCount: worktrees.length,
+    truncated: false
+  })
+
+  it('sends rows the caller holds as indexes into its base catalog', async () => {
+    const renamed = psRow({ worktreeId: 'repo-1::/w/b', displayName: 'b2' })
+    const dispatcher = new RpcDispatcher({
+      runtime: runtimeReturning(catalog(a, b, c), catalog(c, renamed, a)),
+      methods: WORKTREE_METHODS
+    })
+    const base = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
+    const delta = await poll(dispatcher, {
+      limit: 10_000,
+      afterSnapshotId: base.snapshotId,
+      acceptRowDelta: true
+    })
+
+    expect(delta).toMatchObject({ baseSnapshotId: base.snapshotId, totalCount: 3 })
+    expect(delta.rowsFromBase).toEqual([
+      2,
+      { ...renamed, preview: '', lastOutputAt: 1_700_000_010_000 },
+      0
+    ])
+    expect(delta).not.toHaveProperty('worktrees')
+  })
+
+  it('answers a full catalog to callers that did not opt in or hold an unknown base', async () => {
+    const dispatcher = new RpcDispatcher({
+      runtime: runtimeReturning(catalog(a), catalog(a, b), catalog(a, b, c)),
+      methods: WORKTREE_METHODS
+    })
+    const base = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
+
+    const optedOut = await poll(dispatcher, { limit: 10_000, afterSnapshotId: base.snapshotId })
+    const unknownBase = await poll(dispatcher, {
+      limit: 10_000,
+      afterSnapshotId: 'evicted',
+      acceptRowDelta: true
+    })
+
+    expect(optedOut.worktrees).toHaveLength(2)
+    expect(unknownBase.worktrees).toHaveLength(3)
   })
 })

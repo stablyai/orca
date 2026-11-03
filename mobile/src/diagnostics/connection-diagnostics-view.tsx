@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, Copy, Check, Send } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { ConnectionLog } from '../components/ConnectionLog'
 import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
@@ -55,7 +55,7 @@ export function ConnectionDiagnosticsView({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('common.back', 'Back')}
-          style={styles.backButton}
+          style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
           onPress={onBack}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
@@ -66,19 +66,24 @@ export function ConnectionDiagnosticsView({
       </View>
 
       {hostPicker}
-      {hasHost ? (
+      {hasHost || entries.length > 0 ? (
         <>
           <View style={styles.statusRow}>
             <Text style={styles.statusText}>
-              {reconnectAttempts > 0
-                ? t(
-                    'diagnostics.connectionDiagnosticsView.stateWithAttempt',
-                    '{{state}} · attempt {{attempts}}',
-                    { state: stateLabels[state], attempts: reconnectAttempts }
-                  )
-                : stateLabels[state]}
+              {!hasHost
+                ? t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')
+                : reconnectAttempts > 0
+                  ? t(
+                      'diagnostics.connectionDiagnosticsView.stateWithAttempt',
+                      '{{state}} · attempt {{attempts}}',
+                      { state: stateLabels[state], attempts: reconnectAttempts }
+                    )
+                  : stateLabels[state]}
             </Text>
-            <Pressable style={styles.copyButton} onPress={() => void copyDiagnostics()}>
+            <Pressable
+              style={({ pressed }) => [styles.copyButton, pressed && pressedStyle]}
+              onPress={() => void copyDiagnostics()}
+            >
               {copied ? (
                 <Check size={14} color={colors.statusGreen} />
               ) : (
@@ -107,7 +112,7 @@ export function ConnectionDiagnosticsView({
                     )}
                   </Text>
                   <Pressable
-                    style={styles.sendButton}
+                    style={({ pressed }) => [styles.sendButton, pressed && pressedStyle]}
                     onPress={() => void sendDiagnostics()}
                     disabled={submissionState === 'sending'}
                   >

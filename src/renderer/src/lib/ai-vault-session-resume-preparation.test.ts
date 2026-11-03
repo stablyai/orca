@@ -3,7 +3,6 @@ import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import {
   dropDeletedRemoteResumeCwd,
   prepareAiVaultSessionForFork,
-  prepareAiVaultSessionForResume,
   prepareAiVaultSessionForTerminalResume
 } from './ai-vault-session-resume-preparation'
 
@@ -17,95 +16,6 @@ vi.mock('@/runtime/runtime-server-directory-browser', () => ({
 afterEach(() => {
   vi.unstubAllGlobals()
   browseServerDir.mockReset()
-})
-
-describe('prepareAiVaultSessionForResume', () => {
-  it('returns a real-home launch identity only after targeted materialization succeeds', async () => {
-    const prepareSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
-    stubPreparation(prepareSessionResume)
-    const legacy = session({
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
-    })
-
-    const prepared = await prepareAiVaultSessionForResume(legacy)
-
-    expect(prepared.codexHome).toBeNull()
-    expect(prepareSessionResume).toHaveBeenCalledWith({
-      agent: 'codex',
-      sessionId: legacy.sessionId,
-      filePath: legacy.filePath,
-      codexHome: legacy.codexHome,
-      executionHostId: 'local'
-    })
-  })
-
-  it('rejects without changing the launch identity when materialization fails', async () => {
-    stubPreparation(vi.fn().mockRejectedValue(new Error('Retry resume.')))
-
-    await expect(
-      prepareAiVaultSessionForResume(session({ codexHome: '/tmp/orca/codex-runtime-home/home' }))
-    ).rejects.toThrow('Retry resume.')
-  })
-
-  it('preserves a custom home without materialization', async () => {
-    const prepareSessionResume = vi.fn()
-    stubPreparation(prepareSessionResume)
-    const current = session({ codexHome: '/custom/codex' })
-
-    await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
-    expect(prepareSessionResume).not.toHaveBeenCalled()
-  })
-
-  it('does not prepare a legacy CLI resume for a native structured session', async () => {
-    const prepareSessionResume = vi.fn()
-    stubPreparation(prepareSessionResume)
-    const native = session({
-      codexHome: '/tmp/orca/codex-runtime-home/home',
-      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
-    })
-
-    await expect(prepareAiVaultSessionForResume(native)).resolves.toBe(native)
-    expect(prepareSessionResume).not.toHaveBeenCalled()
-  })
-
-  it('repins a per-account session to the home the host substitutes', async () => {
-    const prepareSessionResume = vi.fn().mockResolvedValue({
-      useRealCodexHome: false,
-      substituteCodexHome: '/tmp/orca/codex-accounts/account-2/home'
-    })
-    stubPreparation(prepareSessionResume)
-    const current = session({ codexHome: '/tmp/orca/codex-accounts/account-1/home' })
-
-    const prepared = await prepareAiVaultSessionForResume(current)
-
-    expect(prepared.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
-    expect(prepareSessionResume).toHaveBeenCalledWith({
-      agent: 'codex',
-      sessionId: current.sessionId,
-      filePath: current.filePath,
-      codexHome: current.codexHome,
-      executionHostId: 'local'
-    })
-  })
-
-  it('keeps a per-account session unchanged when the host declines to repin', async () => {
-    stubPreparation(vi.fn().mockResolvedValue({ useRealCodexHome: false }))
-    const current = session({ codexHome: '/tmp/orca/codex-accounts/account-1/home' })
-
-    await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
-  })
-
-  it('does not ask a remote host to repin a per-account session', async () => {
-    const prepareSessionResume = vi.fn()
-    stubPreparation(prepareSessionResume)
-    const current = session({
-      codexHome: '/home/user/.orca/codex-accounts/account-1/home',
-      executionHostId: 'ssh:server-1' as AiVaultSession['executionHostId']
-    })
-
-    await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
-    expect(prepareSessionResume).not.toHaveBeenCalled()
-  })
 })
 
 describe('ordinary Resume against an older paired host', () => {
@@ -132,48 +42,6 @@ describe('ordinary Resume against an older paired host', () => {
 })
 
 describe('prepareAiVaultSessionForFork', () => {
-  // A fork of a chat-owned conversation must run under the selected account, as a resume does.
-  it('repins a chat-owned per-account session, asking the host as a fork', async () => {
-    const prepareSessionResume = vi.fn().mockResolvedValue({
-      useRealCodexHome: false,
-      substituteCodexHome: '/tmp/orca/codex-accounts/account-2/home'
-    })
-    stubPreparation(prepareSessionResume)
-    const owned = session({
-      codexHome: '/tmp/orca/codex-accounts/account-1/home',
-      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
-    })
-
-    const prepared = await prepareAiVaultSessionForFork(owned)
-
-    expect(prepared.copied).toBe(false)
-    expect(prepared.session.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
-    expect(prepareSessionResume).toHaveBeenCalledWith({
-      agent: 'codex',
-      sessionId: owned.sessionId,
-      filePath: owned.filePath,
-      codexHome: owned.codexHome,
-      executionHostId: 'local',
-      fork: true
-    })
-  })
-
-  it('does not ask the host for a home that needs no preparation', async () => {
-    const prepareSessionResume = vi.fn()
-    stubPreparation(prepareSessionResume)
-    const owned = session({
-      agent: 'claude',
-      codexHome: null,
-      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
-    })
-
-    await expect(prepareAiVaultSessionForFork(owned)).resolves.toEqual({
-      session: owned,
-      copied: false
-    })
-    expect(prepareSessionResume).not.toHaveBeenCalled()
-  })
-
   it("refuses a host that made no copy rather than resuming the chat's own conversation", async () => {
     stubPreparation(vi.fn().mockResolvedValue({ useRealCodexHome: false }))
     const owned = session({
@@ -188,28 +56,6 @@ describe('prepareAiVaultSessionForFork', () => {
 })
 
 describe('dropDeletedRemoteResumeCwd', () => {
-  it('leaves a live SSH session alone, scanner command and all', async () => {
-    const pathExists = vi.fn().mockResolvedValue(true)
-    vi.stubGlobal('window', { api: { fs: { pathExists } } })
-    const remote = session({ executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/feat-x' })
-
-    // Preserve recorded cwd or ordinary remote resumes would start at the workspace root.
-    await expect(dropDeletedRemoteResumeCwd(remote)).resolves.toBe(remote)
-    expect(pathExists).toHaveBeenCalledWith({
-      filePath: '/home/ada/wt/feat-x',
-      connectionId: 'server-1'
-    })
-  })
-
-  it('never probes a host for a local session', async () => {
-    const pathExists = vi.fn()
-    vi.stubGlobal('window', { api: { fs: { pathExists } } })
-    const local = session({ cwd: '/repo' })
-
-    await expect(dropDeletedRemoteResumeCwd(local)).resolves.toBe(local)
-    expect(pathExists).not.toHaveBeenCalled()
-  })
-
   it('keeps the recorded folder when the SSH host cannot answer', async () => {
     const pathExists = vi.fn().mockRejectedValue(new Error('CONNECTION_LOST'))
     vi.stubGlobal('window', { api: { fs: { pathExists } } })

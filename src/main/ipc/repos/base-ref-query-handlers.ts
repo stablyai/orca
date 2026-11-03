@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../../shared/repo-types'
 import {
   clampRepoSearchRefsLimit,
@@ -13,8 +13,8 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../../git/repo'
-import { getProjectRuntimeReadGitOptions } from '../../project-runtime-git-options'
-import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
+import { getProjectRuntimeReadGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
 
 export function registerBaseRefQueryHandlers(store: Store): void {

@@ -18,6 +18,8 @@ import {
 
 export type ChecksListProps = {
   checks: PRCheckDetail[]
+  /** A GitLab parent pipeline: shown as its provider link above the job rows, never as a job. */
+  pipelineCheck?: PRCheckDetail | null
   /** Set when the last read failed; replaces the empty-list copy. */
   checksError?: string | null
   checksLoading: boolean

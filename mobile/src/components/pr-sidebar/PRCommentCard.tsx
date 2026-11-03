@@ -7,7 +7,7 @@ import type {
   GitHubReactionContent,
   PRComment
 } from '../../../../src/shared/github/comment-types'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -186,7 +186,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         ) : null}
         {comment.url ? (
           <Pressable
-            style={styles.openButton}
+            style={({ pressed }) => [styles.openButton, pressed && pressedStyle]}
             onPress={() => openExternalLink(comment.url)}
             hitSlop={8}
             accessibilityRole="button"

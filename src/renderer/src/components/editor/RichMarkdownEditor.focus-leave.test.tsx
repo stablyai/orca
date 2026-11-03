@@ -61,7 +61,8 @@ it.each(['outside', 'null', 'inside'] as const)(
         headerSlot={<input aria-label="inside" />}
       />
     )
-    await act(async () => {})
+    // Why: Tiptap emits create on a zero-delay timer, and typing before it lands is dropped as initialization.
+    await act(() => vi.waitFor(() => expect(live.editor?.isInitialized).toBe(true)))
     const editor = live.editor
     const root = view.container.querySelector('.rich-markdown-editor-shell')
     if (!editor || !root) {

@@ -26,7 +26,9 @@ const window = vi.hoisted(() => ({ reloads: 0 }))
 vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: () => [{ id: 'wsl:Ubuntu' }]
 }))
-vi.mock('../wsl/wsl-host-kept-for-peers', () => ({ wasWslHostKeptForPeers: () => false }))
+vi.mock('../wsl/host-lifecycle/wsl-host-kept-for-peers', () => ({
+  wasWslHostKeptForPeers: () => false
+}))
 vi.mock('../persistence/moving-wsl-projects/wsl-move-cutover-journal', () => ({
   listWslMoveCutoverChain: () => [...journal.chain]
 }))

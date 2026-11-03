@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MarkdownDocumentsModule from '../markdown-documents'
@@ -16,6 +18,23 @@ const { listMarkdownDocumentsMock, localOptionsMock } = vi.hoisted(() => ({
   localOptionsMock: vi.fn()
 }))
 
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktreeGraph: facade.listWorktreeGraph,
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
 vi.mock('../markdown-documents', async (importOriginal) => ({
   ...(await importOriginal<typeof MarkdownDocumentsModule>()),
   listMarkdownDocuments: listMarkdownDocumentsMock
@@ -27,7 +46,7 @@ vi.mock('../local-worktree-runtime-options', () => ({
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock(
-  '../../wsl-unc-delete',
+  '../../wsl/filesystem/wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
@@ -64,7 +83,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {

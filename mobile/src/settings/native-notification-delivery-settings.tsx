@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, Text } from 'react-native'
+import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { NotificationDeliverySection } from '../notifications/NotificationDeliverySection'
 import {
@@ -9,9 +9,9 @@ import {
 } from '../notifications/notification-delivery-preferences'
 import { setNotificationDeliveryPreferences } from '../notifications/push-registration'
 import { useRemotePushCapableHosts } from '../notifications/use-remote-push-capable-hosts'
-import { colors, spacing, typography } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SettingsNote } from './settings-screen-frame'
 
 export function NativeNotificationDeliverySettings({ enabled }: { enabled: boolean }) {
   useMobileColorScheme()
@@ -84,11 +84,6 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       setSaving(false)
     }
   }
-  const hintStyle = {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: spacing.md
-  }
   return (
     <>
       <NotificationDeliverySection
@@ -96,19 +91,15 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
         disabled={!enabled || !loaded || saving}
         onChange={(value) => void change(value)}
       />
-      {error && (
-        <Text accessibilityRole="alert" style={hintStyle}>
-          {error}
-        </Text>
-      )}
-      {support.resolved && !support.supported && (
-        <Text style={hintStyle}>
+      {error ? <SettingsNote error>{error}</SettingsNote> : null}
+      {support.resolved && !support.supported ? (
+        <SettingsNote>
           {t(
             'settings.nativeNotificationDeliverySettings.updateDesktopHint',
             'Pair an updated desktop to receive notifications on this phone.'
           )}
-        </Text>
-      )}
+        </SettingsNote>
+      ) : null}
     </>
   )
 }

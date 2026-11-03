@@ -11,6 +11,7 @@ import {
 } from '@/components/native-chat/native-chat-layout-actions'
 import type { NativeChatSplitDirection } from '@/components/native-chat/native-chat-split-shortcut'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 
 export type CmdJUnavailableReason =
   | 'loading'
@@ -38,7 +39,7 @@ export type CmdJQuickActionContext = {
   runtimeMode: 'local-desktop' | 'paired-web'
   managedBrowserCreationEnabled?: boolean
   activeGroupId: string | null
-  openNewBrowserTab: (groupId: string) => Promise<void>
+  openNewBrowserTab: (groupId: string, splitDirection?: TabSplitDirection) => Promise<void>
   openBrowserUrl: (groupId: string, url: string) => Promise<void>
   openNewMarkdownFile: (groupId: string) => Promise<void>
   openNewTerminalTab: (groupId: string) => Promise<void>
@@ -152,7 +153,7 @@ export function getCurrentWorkspaceActionAvailability(
 export function buildCmdJQuickActionContext(args: {
   state: AppState
   activeGroupSnapshot: CmdJActiveGroupSnapshot | null
-  openNewBrowserTab: (groupId: string) => Promise<void>
+  openNewBrowserTab: (groupId: string, splitDirection?: TabSplitDirection) => Promise<void>
   openBrowserUrl: (groupId: string, url: string) => Promise<void>
   openNewMarkdownFile: (groupId: string) => Promise<void>
   openNewTerminalTab: (groupId: string) => Promise<void>

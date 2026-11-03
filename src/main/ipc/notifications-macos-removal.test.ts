@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAttentionOrigin } from '../../shared/agent-session-attention'
+import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
 
 import {
   getDismissHandler,
@@ -55,6 +55,7 @@ function register(): void {
         notifications: {
           enabled: true,
           agentTaskComplete: true,
+          agentNeedsInput: true,
           terminalBell: true,
           suppressWhenFocused: false
         }

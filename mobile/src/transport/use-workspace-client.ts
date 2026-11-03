@@ -6,7 +6,12 @@ import type { ConnectionState } from './types'
 
 // WorkspaceRoute supplies server context; null means unreachable, absent means desktop routing.
 export const WorkspaceServerContext = createContext<
-  | { client: RpcClient | null; state: ConnectionState; desktopCapabilities: readonly string[] }
+  | {
+      client: RpcClient | null
+      state: ConnectionState
+      desktopCapabilities: readonly string[]
+      name?: string | null
+    }
   | undefined
 >(undefined)
 
@@ -20,8 +25,14 @@ export function useRouteCapability(capability: string): boolean {
   )
 }
 
-export function useWorkspaceClient(hostId: string | undefined): ReturnType<typeof useHostClient> {
+export function useWorkspaceClient(hostId: string | undefined): ReturnType<typeof useHostClient> & {
+  /** The route's own paired host, which stays the phone's peer when a server executes the workspace. */
+  pairedHostClient: RpcClient | null
+} {
   const host = useHostClient(hostId)
   const server = useContext(WorkspaceServerContext)
-  return server === undefined ? host : { ...host, client: server.client, state: server.state }
+  const pairedHostClient = host.client
+  return server === undefined
+    ? { ...host, pairedHostClient }
+    : { ...host, client: server.client, state: server.state, pairedHostClient }
 }

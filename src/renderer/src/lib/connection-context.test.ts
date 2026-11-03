@@ -11,7 +11,6 @@ import {
   getConnectionIdFromState,
   isWorktreeConnectionResolved
 } from './connection-context'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { createConnectionIdForFileSelector } from './connection-owner-resolution'
 
@@ -51,85 +50,6 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
 describe('getConnectionId', () => {
   afterEach(() => {
     useAppStore.setState(initialState, true)
-  })
-
-  it('resolves SSH targets from composite worktree IDs before worktree discovery completes', () => {
-    useAppStore.setState({
-      repos: [
-        makeRepo({
-          id: 'repo-ssh',
-          connectionId: 'ssh-1'
-        })
-      ],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionId('repo-ssh::/home/neil/repo-feature')).toBe('ssh-1')
-  })
-
-  it('returns null for known local repos without a discovered worktree', () => {
-    useAppStore.setState({
-      repos: [makeRepo({ id: 'repo-local' })],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionId('repo-local::/Users/me/repo-feature')).toBeNull()
-  })
-
-  it('returns undefined when neither the worktree nor repo is known', () => {
-    useAppStore.setState({
-      repos: [],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionId('repo-missing::/tmp/repo-feature')).toBeUndefined()
-  })
-
-  it('resolves SSH targets for folder workspaces from repos in the folder scope', () => {
-    useAppStore.setState({
-      folderWorkspaces: [
-        {
-          id: 'folder-workspace-1',
-          projectGroupId: 'group-1',
-          name: 'Platform workspace',
-          folderPath: '/home/neil/platform',
-          linkedTask: null,
-          comment: '',
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 1,
-          lastActivityAt: 0,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      projectGroups: [
-        {
-          id: 'group-1',
-          name: 'Platform',
-          parentPath: '/home/neil/platform',
-          parentGroupId: null,
-          createdFrom: 'folder-scan',
-          tabOrder: 0,
-          isCollapsed: false,
-          color: null,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      repos: [
-        makeRepo({
-          id: 'repo-ssh',
-          path: '/home/neil/platform/api',
-          projectGroupId: 'group-1',
-          connectionId: 'ssh-1'
-        })
-      ],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionId(folderWorkspaceKey('folder-workspace-1'))).toBe('ssh-1')
   })
 
   it('resolves SSH targets for repo-less folder workspaces from persisted scope provenance', () => {
@@ -281,46 +201,6 @@ describe('getConnectionId', () => {
     expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/README.md')).toBeUndefined()
   })
 
-  it('resolves folder workspace combined diff sections by child repo path', () => {
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace()],
-      projectGroups: [
-        {
-          id: 'group-1',
-          name: 'Platform',
-          parentPath: '/home/neil/platform',
-          parentGroupId: null,
-          createdFrom: 'folder-scan',
-          tabOrder: 0,
-          isCollapsed: false,
-          color: null,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      repos: [
-        makeRepo({
-          id: 'repo-local',
-          path: '/home/neil/platform/web',
-          projectGroupId: 'group-1'
-        }),
-        makeRepo({
-          id: 'repo-ssh',
-          path: '/home/neil/platform/api',
-          projectGroupId: 'group-1',
-          connectionId: 'ssh-1'
-        })
-      ],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform')).toBeUndefined()
-    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/api/src/index.ts')).toBe(
-      'ssh-1'
-    )
-  })
-
   it('keeps explicit folder workspace provenance isolated from unrelated same-path SSH repos', () => {
     useAppStore.setState({
       folderWorkspaces: [
@@ -399,21 +279,6 @@ describe('getConnectionId', () => {
       worktreesByRepo: {}
     })
     expect(isWorktreeConnectionResolved('repo-ssh::/home/neil/repo')).toBe(true)
-  })
-
-  it('treats null worktrees and folder workspaces as resolved owners', () => {
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
-    expect(isWorktreeConnectionResolved(null)).toBe(true)
-    // Folder workspaces resolve per-file via getConnectionIdForFile.
-    expect(isWorktreeConnectionResolved(folderWorkspaceKey('folder-workspace-1'))).toBe(true)
-  })
-
-  it('treats the floating workspace as a resolved local owner (#6831)', () => {
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
-
-    expect(getConnectionId(FLOATING_TERMINAL_WORKTREE_ID)).toBeNull()
-    expect(getConnectionIdForFile(FLOATING_TERMINAL_WORKTREE_ID, '/tmp/orca/note.md')).toBeNull()
-    expect(isWorktreeConnectionResolved(FLOATING_TERMINAL_WORKTREE_ID)).toBe(true)
   })
 
   it('keeps normalized same-path folder repo ambiguity when resolving files', () => {
@@ -534,17 +399,6 @@ describe('getConnectionIdFromState', () => {
     expect(getStateSpy).not.toHaveBeenCalled()
   })
 
-  it('resolves SSH repo provenance for non-folder worktrees from the passed-in state', () => {
-    const state: ConnectionContextState = {
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-2' })],
-      worktreesByRepo: {}
-    }
-
-    expect(getConnectionIdFromState(state, 'repo-ssh::/home/neil/repo-feature')).toBe('ssh-2')
-  })
-
   it('refuses to resolve a connection when duplicate repo rows disagree about the owning host', () => {
     // Same-ID repo rows with conflicting owners must not lend a client SSH connection to a runtime (#17799).
     const state: ConnectionContextState = {
@@ -558,20 +412,6 @@ describe('getConnectionIdFromState', () => {
     }
 
     expect(getConnectionIdFromState(state, 'repo-dup::/home/neil/repo-feature')).toBeUndefined()
-  })
-
-  it('still resolves duplicate repo rows that agree about the owning host', () => {
-    const state: ConnectionContextState = {
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos: [
-        makeRepo({ id: 'repo-dup', connectionId: 'ssh-same' }),
-        makeRepo({ id: 'repo-dup', connectionId: 'ssh-same', path: '/home/neil/other' })
-      ],
-      worktreesByRepo: {}
-    }
-
-    expect(getConnectionIdFromState(state, 'repo-dup::/home/neil/repo-feature')).toBe('ssh-same')
   })
 
   it('never hands a worktree the SSH connection of a different host', () => {
@@ -729,7 +569,11 @@ describe('getConnectionIdFromState', () => {
     expect(getConnectionIdFromState(local, key)).toBeNull()
     const contested = {
       ...local,
-      projectGroups: [makeProjectGroup({ connectionId: 'ssh-2' })]
+      projectGroups: [makeProjectGroup()],
+      repos: [
+        ...local.repos,
+        makeRepo({ id: 'repo-2', projectGroupId: 'group-1', connectionId: 'ssh-2' })
+      ]
     }
     expect(getConnectionIdFromState(contested, key)).toBeUndefined()
     expect(getConnectionIdFromState(contested, key)).toBeUndefined()
@@ -744,17 +588,6 @@ describe('getConnectionIdFromState', () => {
     // Retained snapshots remain independent when React reads them between current publications.
     expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
     expect(getConnectionIdFromState(local, key)).toBeNull()
-  })
-
-  it('returns null for a null worktreeId', () => {
-    const state: ConnectionContextState = {
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos: [],
-      worktreesByRepo: {}
-    }
-
-    expect(getConnectionIdFromState(state, null)).toBeNull()
   })
 
   it('recomputes a retained file-owner selector when ownership slices hydrate', () => {

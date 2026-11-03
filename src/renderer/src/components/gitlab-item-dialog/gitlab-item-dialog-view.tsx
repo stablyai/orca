@@ -24,6 +24,7 @@ import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabPipelineActions } from './use-gitlab-pipeline-actions'
 import type { GitLabPrimaryActions } from './use-gitlab-primary-actions'
 import type { GitLabReviewActions } from './use-gitlab-review-actions'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type Props = {
   item: GitLabWorkItem | null
@@ -54,9 +55,11 @@ export function GitLabItemDialogView({
   const Icon = item?.type === 'mr' ? GitMerge : CircleDot
   const prefix = item?.type === 'mr' ? '!' : '#'
   const isMR = item?.type === 'mr'
-  const canClose = isMR && item?.state === 'opened'
-  const canReopen = isMR && item?.state === 'closed'
-  const canMerge = isMR && item?.state === 'opened'
+  // Why: details belong to this item (reset on switch) and a reread after a write is newer than the list row.
+  const visibleState = details?.item.state ?? item?.state
+  const canClose = isMR && visibleState === 'opened'
+  const canReopen = isMR && visibleState === 'closed'
+  const canMerge = isMR && visibleState === 'opened'
   const visibleTitle = details?.item.title || item?.title || ''
   const visibleLabels = normalizeGitLabLabels(details?.item.labels ?? item?.labels ?? [])
   const canSubmitComment = hasBoundedCommentBodyText(commentDraft)
@@ -91,7 +94,7 @@ export function GitLabItemDialogView({
                       {prefix}
                       {item.number}
                     </span>
-                    <StateBadge state={item.state} />
+                    <StateBadge state={visibleState ?? item.state} />
                     {item.author ? (
                       <span>
                         {translate('auto.components.GitLabItemDialog.9bfb4a24d7', 'by')}{' '}
@@ -180,7 +183,8 @@ export function GitLabItemDialogView({
               </TabsList>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 scrollbar-sleek">
-                {error ? (
+                {/* Why: a failed reread keeps the loaded content; the error replaces nothing and the write owns its feedback. */}
+                {error && !details ? (
                   <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {error}
                   </div>
@@ -237,7 +241,7 @@ export function GitLabItemDialogView({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void window.api.shell.openUrl(item.url)}
+                  onClick={(event) => openAppHttpLink(item.url, { event })}
                   className="gap-1.5"
                 >
                   <ExternalLink className="size-3.5" />

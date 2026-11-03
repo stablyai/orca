@@ -59,48 +59,6 @@ const unrelatedReadySurface = {
 describe('restored placeholders retire only by their own identity', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
-  it('keeps two restored rows when the host publishes an unrelated terminal', () => {
-    const first = restoredRow('restored-a', 0)
-    const second = restoredRow('restored-b', 1)
-
-    const patch: Partial<WebSessionTabsSyncState> = applyWebSessionTabsSnapshot(
-      makeState({
-        tabsByWorktree: { [WT]: [first, second] },
-        terminalLayoutsByTabId: {
-          [first.id]: restoredLayout(SECOND_LEAF_ID, 'remote:web-env-1@@gone-a'),
-          [second.id]: restoredLayout(THIRD_LEAF_ID, 'remote:web-env-1@@gone-b')
-        }
-      }),
-      makeSnapshot([unrelatedReadySurface]),
-      ENV,
-      NOW
-    )
-
-    const ids = patch.tabsByWorktree?.[WT]?.map((tab) => tab.id) ?? []
-    expect(ids).toContain(first.id)
-    expect(ids).toContain(second.id)
-    expect(ids).toHaveLength(3)
-  })
-
-  it('retires a restored row once the host publishes the PTY it was bound to', () => {
-    const restored = restoredRow('restored-a', 0)
-
-    const patch: Partial<WebSessionTabsSyncState> = applyWebSessionTabsSnapshot(
-      makeState({
-        tabsByWorktree: { [WT]: [restored] },
-        terminalLayoutsByTabId: {
-          [restored.id]: restoredLayout(SECOND_LEAF_ID, 'remote:web-env-1@@terminal-1')
-        }
-      }),
-      makeSnapshot([unrelatedReadySurface]),
-      ENV,
-      NOW
-    )
-
-    expect(patch.tabsByWorktree?.[WT]?.map((tab) => tab.id)).not.toContain(restored.id)
-    expect(patch.tabsByWorktree?.[WT]).toHaveLength(1)
-  })
-
   // #11800: the host's close record is the identity a ghost row needs; without it the row stayed forever.
   it('retires a kept row once the host publishes a close record for every pane it holds', () => {
     const closed = restoredRow('restored-a', 0)

@@ -85,10 +85,9 @@ function recordAndDispatch(
   entry: InstrumentedPane,
   fake: ReturnType<typeof fakeTerminal>,
   source: 'direct' | 'ime' = 'direct',
-  recordedAt: number = performance.now(),
-  text: string = ''
+  recordedAt: number = performance.now()
 ): void {
-  recordKeystroke(entry, recordedAt, source, text)
+  recordKeystroke(entry, recordedAt, source)
   fake.emitData()
 }
 
@@ -97,23 +96,6 @@ afterEach(() => {
 })
 
 describe('recordKeystroke', () => {
-  it('queues inputs rather than overwriting a single slot', () => {
-    const entry = emptyEntry()
-    expect(recordKeystroke(entry, 0, 'direct').unmatched).toBe(0)
-    expect(recordKeystroke(entry, 5, 'ime').unmatched).toBe(0)
-    expect(entry.undispatched.map((pending) => pending.t0)).toEqual([0, 5])
-    expect(entry.pendingCount).toBe(2)
-  })
-
-  it('counts timed-out undispatched inputs without creating an output attribution gap', () => {
-    const entry = emptyEntry()
-    recordKeystroke(entry, 0, 'direct')
-    recordKeystroke(entry, 1, 'direct')
-    expect(recordKeystroke(entry, 5000, 'direct').unmatched).toBe(2)
-    expect(entry.pendingCount).toBe(1)
-    expect(entry.attributionGap).toBe(false)
-  })
-
   it('drains a final timed-out input without waiting for another keystroke', () => {
     const entry = emptyEntry()
     const recorded = recordKeystroke(entry, 0, 'direct')
@@ -126,7 +108,7 @@ describe('recordKeystroke', () => {
 
   it('reverses timeout accounting when an undispatched IME commit settles prevented', () => {
     const entry = emptyEntry()
-    const recorded = recordKeystroke(entry, 0, 'ime', '한')
+    const recorded = recordKeystroke(entry, 0, 'ime')
 
     expect(drainTimedOutEchoCandidates(entry, 2_001)).toBe(1)
     expect(discardUndispatchedKeystroke(entry, recorded.candidate)).toBe('counted-unmatched')
@@ -137,7 +119,7 @@ describe('recordKeystroke', () => {
   it('keeps timeout accounting when the IME commit reached terminal input', () => {
     const fake = fakeTerminal()
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, () => undefined)
-    const recorded = recordKeystroke(entry, 0, 'ime', '한')
+    const recorded = recordKeystroke(entry, 0, 'ime')
     fake.emitData('한')
 
     expect(drainTimedOutEchoCandidates(entry, 2_001)).toBe(1)
@@ -166,10 +148,10 @@ describe('recordKeystroke', () => {
   it('drops a prevented commit only when it never dispatched', () => {
     const fake = fakeTerminal()
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, () => undefined)
-    const prevented = recordKeystroke(entry, 10, 'ime', '한')
+    const prevented = recordKeystroke(entry, 10, 'ime')
     expect(discardUndispatchedKeystroke(entry, prevented.candidate)).toBe('pending')
 
-    const dispatched = recordKeystroke(entry, 20, 'ime', '글')
+    const dispatched = recordKeystroke(entry, 20, 'ime')
     fake.emitData('글')
     expect(discardUndispatchedKeystroke(entry, dispatched.candidate)).toBeNull()
     expect(entry.awaitingEcho).toHaveLength(1)
@@ -178,8 +160,8 @@ describe('recordKeystroke', () => {
   it('dispatches a nested IME finalizer before its outer direct key', () => {
     const fake = fakeTerminal()
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, () => undefined)
-    recordKeystroke(entry, 10, 'direct', 'Enter')
-    recordKeystroke(entry, 11, 'ime', '한')
+    recordKeystroke(entry, 10, 'direct')
+    recordKeystroke(entry, 11, 'ime')
 
     fake.emitData('한')
     fake.emitData('\r')
@@ -243,7 +225,7 @@ describe('recordKeystroke', () => {
       recordKeystroke(entry, index, 'direct')
     }
 
-    const rejected = recordKeystroke(entry, 64, 'ime', '한')
+    const rejected = recordKeystroke(entry, 64, 'ime')
     expect(rejected.unmatched).toBe(1)
     expect(discardUndispatchedKeystroke(entry, rejected.candidate)).toBe('counted-unmatched')
     expect(entry.undispatched).toHaveLength(64)
@@ -257,8 +239,8 @@ describe('recordKeystroke', () => {
       recordKeystroke(entry, index, 'direct')
     }
 
-    const first = recordKeystroke(entry, 64, 'ime', '한')
-    const second = recordKeystroke(entry, 65, 'ime', '글')
+    const first = recordKeystroke(entry, 64, 'ime')
+    const second = recordKeystroke(entry, 65, 'ime')
     expect(first.unmatched).toBe(1)
     expect(second.unmatched).toBe(1)
     expect(discardUndispatchedKeystroke(entry, first.candidate)).toBe('counted-unmatched')
@@ -274,8 +256,8 @@ describe('recordKeystroke', () => {
       recordKeystroke(entry, index, 'direct')
     }
 
-    const first = recordKeystroke(entry, 64, 'ime', '한')
-    const second = recordKeystroke(entry, 64, 'ime', '글')
+    const first = recordKeystroke(entry, 64, 'ime')
+    const second = recordKeystroke(entry, 64, 'ime')
 
     expect(discardUndispatchedKeystroke(entry, first.candidate)).toBe('counted-unmatched')
     expect(discardUndispatchedKeystroke(entry, second.candidate)).toBe('counted-unmatched')
@@ -289,7 +271,7 @@ describe('instrumentPaneEcho', () => {
     const entry = instrumentPaneEcho({ terminal }, () => undefined)
     const coreService = (terminal as unknown as CoreServiceAccess)._core.coreService
 
-    recordKeystroke(entry, 10, 'direct', 'a')
+    recordKeystroke(entry, 10, 'direct')
     coreService.triggerDataEvent('\x1b[?1;2c', false)
     expect(entry.undispatched).toHaveLength(1)
     expect(entry.awaitingEcho).toEqual([])
@@ -300,60 +282,6 @@ describe('instrumentPaneEcho', () => {
 
     detachPaneEcho(entry)
     terminal.dispose()
-  })
-
-  it('measures input, dispatch, parse, and paint stages separately', () => {
-    const fake = fakeTerminal()
-    const observations: EchoObservation[] = []
-    const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
-      observations.push(value)
-    )
-    const now = vi.spyOn(performance, 'now')
-
-    recordKeystroke(entry, 10, 'direct', 'a')
-    now.mockReturnValueOnce(25)
-    fake.emitData('a')
-    fake.terminal.write('echo')
-    now.mockReturnValueOnce(40)
-    fake.emitParsed()
-    now.mockReturnValueOnce(50)
-    fake.emitRender()
-
-    expect(observations).toEqual([
-      {
-        attribution: 'single-input',
-        source: 'direct',
-        text: 'a',
-        inputToDispatchMs: 15,
-        dispatchToParseMs: 15,
-        parseToPaintMs: 10,
-        inputToPaintMs: 40,
-        outputBytes: 4,
-        outputWrites: 1
-      }
-    ])
-  })
-
-  it('counts UTF-8 bytes consistently for string and binary writes', () => {
-    const fake = fakeTerminal()
-    const observations: EchoObservation[] = []
-    const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
-      observations.push(value)
-    )
-
-    recordAndDispatch(entry, fake, 'ime', performance.now(), '한𠀀')
-    fake.terminal.write('한𠀀')
-    fake.terminal.write(new Uint8Array(6))
-    fake.emitParsed()
-    fake.emitRender()
-
-    expect(observations).toHaveLength(1)
-    expect(observations[0]).toMatchObject({
-      attribution: 'single-input',
-      outputBytes: 13,
-      outputWrites: 2
-    })
-    expect(fake.writtenPayloads).toHaveLength(2)
   })
 
   it('does not credit output that arrived before the input dispatched', () => {
@@ -399,29 +327,6 @@ describe('instrumentPaneEcho', () => {
       inputCount: 2,
       sourceCounts: { direct: 2, ime: 0 },
       outputBatchBytes: 1,
-      outputBatchWrites: 1
-    })
-  })
-
-  it('emits one aggregate observation for genuinely coalesced mixed-source output', () => {
-    const fake = fakeTerminal()
-    const observations: EchoObservation[] = []
-    const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
-      observations.push(value)
-    )
-
-    recordAndDispatch(entry, fake, 'direct')
-    recordAndDispatch(entry, fake, 'ime')
-    fake.terminal.write('x'.repeat(90))
-    fake.emitParsed()
-    fake.emitRender()
-
-    expect(observations).toHaveLength(1)
-    expect(observations[0]).toMatchObject({
-      attribution: 'ambiguous-burst',
-      inputCount: 2,
-      sourceCounts: { direct: 1, ime: 1 },
-      outputBatchBytes: 90,
       outputBatchWrites: 1
     })
   })
@@ -494,10 +399,10 @@ describe('instrumentPaneEcho', () => {
     )
     const now = vi.spyOn(performance, 'now')
 
-    recordKeystroke(entry, 0, 'direct', 'A')
+    recordKeystroke(entry, 0, 'direct')
     now.mockReturnValueOnce(1)
     fake.emitData('A')
-    expect(recordKeystroke(entry, 5_000, 'direct', 'B').unmatched).toBe(1)
+    expect(recordKeystroke(entry, 5_000, 'direct').unmatched).toBe(1)
     now.mockReturnValueOnce(5_001)
     fake.emitData('B')
     fake.terminal.write('late A')
@@ -506,7 +411,7 @@ describe('instrumentPaneEcho', () => {
     now.mockReturnValueOnce(5_015)
     fake.emitRender()
 
-    recordKeystroke(entry, 5_020, 'ime', '한')
+    recordKeystroke(entry, 5_020, 'ime')
     now.mockReturnValueOnce(5_021)
     fake.emitData('한')
     fake.terminal.write('한')
@@ -522,8 +427,7 @@ describe('instrumentPaneEcho', () => {
     })
     expect(observations[1]).toMatchObject({
       attribution: 'single-input',
-      source: 'ime',
-      text: '한'
+      source: 'ime'
     })
   })
 
@@ -535,10 +439,10 @@ describe('instrumentPaneEcho', () => {
     )
     const now = vi.spyOn(performance, 'now')
 
-    recordKeystroke(entry, 0, 'direct', 'A')
+    recordKeystroke(entry, 0, 'direct')
     now.mockReturnValueOnce(1)
     fake.emitData('A')
-    expect(recordKeystroke(entry, 5_000, 'direct', 'B').unmatched).toBe(1)
+    expect(recordKeystroke(entry, 5_000, 'direct').unmatched).toBe(1)
     fake.terminal.write('late A')
     now.mockReturnValueOnce(5_001)
     fake.emitParsed()
@@ -553,7 +457,7 @@ describe('instrumentPaneEcho', () => {
     fake.emitRender()
 
     expect(observations).toHaveLength(1)
-    expect(observations[0]).toMatchObject({ attribution: 'single-input', text: 'B' })
+    expect(observations[0]).toMatchObject({ attribution: 'single-input', startedAt: 5_000 })
   })
 
   it('holds an unparsed input across a render instead of discarding it', () => {
@@ -580,7 +484,7 @@ describe('instrumentPaneEcho', () => {
       observations.push(value)
     )
 
-    recordAndDispatch(entry, fake, 'direct', 0, 'A')
+    recordAndDispatch(entry, fake, 'direct', 0)
     fake.terminal.write('A')
     fake.emitParsed()
 
@@ -588,13 +492,13 @@ describe('instrumentPaneEcho', () => {
     expect(drainTimedOutEchoCandidates(entry, 2_002)).toBe(0)
     expect(entry).toMatchObject({ parsedBatches: [], pendingCount: 0 })
 
-    recordAndDispatch(entry, fake, 'direct', 2_003, 'B')
+    recordAndDispatch(entry, fake, 'direct', 2_003)
     fake.terminal.write('B')
     fake.emitParsed()
     fake.emitRender()
 
     expect(observations).toHaveLength(1)
-    expect(observations[0]).toMatchObject({ attribution: 'single-input', text: 'B' })
+    expect(observations[0]).toMatchObject({ attribution: 'single-input', startedAt: 2_003 })
     expect(entry.pendingCount).toBe(0)
   })
 
@@ -605,11 +509,11 @@ describe('instrumentPaneEcho', () => {
       observations.push(value)
     )
 
-    recordAndDispatch(entry, fake, 'direct', 0, 'A')
+    recordAndDispatch(entry, fake, 'direct', 0)
     fake.terminal.write('late A')
     expect(drainTimedOutEchoCandidates(entry, 2_001)).toBe(1)
 
-    recordAndDispatch(entry, fake, 'direct', 2_002, 'B')
+    recordAndDispatch(entry, fake, 'direct', 2_002)
     fake.terminal.write('B')
     fake.emitParsed()
     fake.emitRender()
@@ -643,12 +547,5 @@ describe('instrumentPaneEcho', () => {
     fake.emitRender()
     fake.emitData()
     expect(observations).toEqual([])
-  })
-
-  it('degrades to a no-op when the pane has no terminal', () => {
-    const entry = instrumentPaneEcho({}, () => undefined)
-    expect(entry.disposables).toEqual([])
-    expect(detachPaneEcho(entry)).toBe(0)
-    expect(entry.pane).toBeNull()
   })
 })

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
 import { queuedMessageUpdateDecision } from '../../../src/main/native-chat/agent-session-journal/queued-message-update'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'

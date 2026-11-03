@@ -46,7 +46,7 @@ export function AntigravityProviderSignInArea(props: {
   // A settled failure says only why; a running sign-in keeps its step beside a copy failure.
   const line = alert && !ownFlow ? null : signIn.line
   return (
-    <div className="ml-10 space-y-2">
+    <div className="space-y-2">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium leading-none">

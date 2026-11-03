@@ -27,8 +27,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -108,7 +110,7 @@ describe('PTY registration without renderer delivery', () => {
     const local = installObservableDaemonTestProvider()
     const localProvider = getLocalPtyProvider()
     const localClear = vi.spyOn(localProvider, 'clearBuffer')
-    const attach = vi.spyOn(localProvider, 'attach').mockResolvedValue({})
+    const attach = vi.spyOn(localProvider, 'attach').mockResolvedValue()
     const runtime = new OrcaRuntimeService()
     const setController = vi.spyOn(runtime, 'setPtyController')
     const remoteId = 'ssh:ssh-a@@remote-pty'

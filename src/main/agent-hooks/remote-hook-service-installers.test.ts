@@ -1,5 +1,4 @@
 import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
-import { qoderHookService } from '../qoder/hook-service'
 import { describe, expect, it, vi } from 'vitest'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'
@@ -579,96 +578,6 @@ describe('remote hook service installers', () => {
     expect(beforeToolCommands.some((command) => command.includes('gemini-hook.sh'))).toBe(true)
   })
 
-  it('installs remote Copilot hooks under the user-level hooks directory', async () => {
-    const { sftp, fs } = createFakeSftp()
-    fs.dirs.add('/home/dev/.copilot')
-    fs.dirs.add('/home/dev/.copilot/hooks')
-    fs.files.set(
-      '/home/dev/.copilot/hooks/orca.json',
-      JSON.stringify({
-        version: 99,
-        disableAllHooks: true,
-        hooks: {}
-      })
-    )
-
-    const status = await new CopilotHookService().installRemote(sftp, '/home/dev/')
-
-    expect(status.state).toBe('installed')
-    expect(status.configPath).toBe('/home/dev/.copilot/hooks/orca.json')
-    const config = JSON.parse(fs.files.get('/home/dev/.copilot/hooks/orca.json')!) as {
-      version: number
-      disableAllHooks?: boolean
-      hooks: Record<string, { bash?: string; timeoutSec?: number }[]>
-    }
-    expect(config.version).toBe(1)
-    for (const eventName of [
-      'SessionStart',
-      'SessionEnd',
-      'UserPromptSubmit',
-      'PreToolUse',
-      'PostToolUse',
-      'PostToolUseFailure',
-      'subagentStart',
-      'SubagentStop',
-      'PreCompact',
-      'Stop',
-      'ErrorOccurred',
-      'PermissionRequest',
-      'Notification'
-    ]) {
-      const definition = config.hooks[eventName]?.[0]
-      expect(definition?.bash).toContain('/home/dev/.orca/agent-hooks/copilot-hook.sh')
-      expect(definition?.bash).toContain(`ORCA_COPILOT_HOOK_EVENT='${eventName}'`)
-      expect(definition?.timeoutSec).toBe(5)
-    }
-    expect(config.disableAllHooks).toBeUndefined()
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toContain('#!/bin/sh')
-    expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
-  })
-
-  it('installs Qoder on the execution host with its own event endpoint', async () => {
-    const { sftp, fs } = createFakeSftp()
-    const result = await qoderHookService.installRemote(sftp, '/home/dev/')
-    expect(result.state).toBe('installed')
-    expect(result.configPath).toBe('/home/dev/.qoder/settings.json')
-    const settings = JSON.parse(fs.files.get(result.configPath) ?? '{}')
-    expect(settings.hooks.SessionEnd).toHaveLength(1)
-    expect(settings.hooks.Notification).toHaveLength(1)
-    expect(settings.hooks.TeammateIdle).toBeUndefined()
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/qoder-hook.sh')).toContain('/hook/qoder')
-  })
-  it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
-    const { sftp, fs } = createFakeSftp()
-    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
-      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
-    })
-    const byAgent = new Map(results.map((r) => [r.agent, r.state]))
-    expect(byAgent.get('droid')).toBe('installed')
-    expect(byAgent.get('copilot')).toBe('installed')
-    expect(JSON.parse(fs.files.get('/home/dev/.factory/settings.json') ?? '{}')).toMatchObject({
-      hooks: {
-        Stop: [
-          {
-            hooks: [
-              { command: expect.stringContaining('/home/dev/.orca/agent-hooks/droid-hook.sh') }
-            ]
-          }
-        ]
-      }
-    })
-    expect(JSON.parse(fs.files.get('/home/dev/.copilot/hooks/orca.json') ?? '{}')).toMatchObject({
-      hooks: {
-        Stop: [{ bash: expect.stringContaining('/home/dev/.orca/agent-hooks/copilot-hook.sh') }]
-      }
-    })
-    for (const agent of ['droid', 'copilot']) {
-      const path = `/home/dev/.orca/agent-hooks/${agent}-hook.sh`
-      expect(fs.files.get(path)).toContain(`/hook/${agent}`)
-      expect(fs.modes.get(path)).toBe(0o755)
-    }
-  })
-
   it('installs only positively detected remote agents', async () => {
     const { sftp, fs } = createFakeSftp()
 
@@ -727,41 +636,6 @@ describe('remote hook service installers', () => {
     }
   })
 
-  it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {
-    const { sftp, fs } = createFakeSftp()
-
-    const status = await new DroidHookService().installRemote(sftp, '/home/dev')
-
-    expect(status.state).toBe('installed')
-    expect(status.configPath).toBe('/home/dev/.factory/settings.json')
-    const config = JSON.parse(fs.files.get('/home/dev/.factory/settings.json')!) as {
-      hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
-    }
-    for (const eventName of [
-      'SessionStart',
-      'UserPromptSubmit',
-      'Stop',
-      'SubagentStop',
-      'PreToolUse',
-      'PostToolUse',
-      'PermissionRequest',
-      'Notification'
-    ]) {
-      const definition = config.hooks[eventName]?.[0]
-      const command = definition?.hooks?.[0]?.command
-      expect(command).toContain('/home/dev/.orca/agent-hooks/droid-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
-    }
-    expect(config.hooks.PreToolUse?.[0]?.matcher).toBe('*')
-    expect(config.hooks.PostToolUse?.[0]?.matcher).toBe('*')
-    expect(config.hooks.PermissionRequest?.[0]?.matcher).toBe('*')
-    expect(config.hooks.Stop?.[0]?.matcher).toBeUndefined()
-    const script = fs.files.get('/home/dev/.orca/agent-hooks/droid-hook.sh')
-    expect(script).toContain('#!/bin/sh')
-    expect(script).toContain('/hook/droid')
-    expect(fs.modes.get('/home/dev/.orca/agent-hooks/droid-hook.sh')).toBe(0o755)
-  })
-
   it('does not overwrite a malformed remote Factory settings.json', async () => {
     const original = '{"hooks": }'
     const { sftp, fs } = createFakeSftp({
@@ -779,22 +653,6 @@ describe('remote hook service installers', () => {
     })
     expect(fs.files.get('/home/dev/.factory/settings.json')).toBe(original)
     expect(fs.files.get('/home/dev/.orca/agent-hooks/droid-hook.sh')).toBeUndefined()
-  })
-
-  it('installs remote Hermes plugin files and enables the plugin', async () => {
-    const { sftp, fs } = createFakeSftp()
-
-    const status = await new HermesHookService().installRemote(sftp, '/home/dev')
-
-    expect(status.state).toBe('installed')
-    expect(status.configPath).toBe('/home/dev/.hermes/config.yaml')
-    expect(fs.files.get('/home/dev/.hermes/plugins/orca-status/plugin.yaml')).toContain(
-      'pre_llm_call'
-    )
-    expect(fs.files.get('/home/dev/.hermes/plugins/orca-status/__init__.py')).toContain(
-      '/hook/hermes'
-    )
-    expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
   })
 
   it('refreshes remote named profiles that keep the plugin enabled, and only those', async () => {

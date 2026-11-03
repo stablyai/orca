@@ -1,4 +1,4 @@
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { retryTransientDatabaseStartup } from './database-startup-retry.js'
 
