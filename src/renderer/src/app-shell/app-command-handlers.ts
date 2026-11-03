@@ -16,6 +16,7 @@ import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
+import { createWorkspacePinCommandHandlers } from './workspace-pin-command-handlers'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -239,6 +240,7 @@ export function createAppCommandHandlers(
         })
       }
     ],
+    ...createWorkspacePinCommandHandlers({ floatingWorkspaceFocused, claim }),
     [
       'workspace.openBoard',
       () => {

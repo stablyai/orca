@@ -27,6 +27,10 @@ const STATIC_TITLE_COPY = {
   'workspace.create': () => translate('keybindings.title.workspaceCreate', 'Create worktree'),
   'workspace.rename': () => translate('keybindings.title.workspaceRename', 'Rename worktree'),
   'workspace.delete': () => translate('keybindings.title.workspaceDelete', 'Delete Workspace'),
+  'workspace.togglePin': () =>
+    translate('keybindings.title.workspaceTogglePin', 'Toggle Workspace Pin'),
+  'workspace.pin': () => translate('keybindings.title.workspacePin', 'Pin Workspace'),
+  'workspace.unpin': () => translate('keybindings.title.workspaceUnpin', 'Unpin Workspace'),
   'workspace.openBoard': () =>
     translate('keybindings.title.workspaceOpenBoard', 'Toggle Workspace Board'),
   'dashboard.toggle': () =>
