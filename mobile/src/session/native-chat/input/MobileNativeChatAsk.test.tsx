@@ -2,7 +2,10 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import type { NativeChatAnswerSource } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
+import type {
+  NativeChatAnswerSource,
+  AskAnswerSelection
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat/input/native-chat-question-auto-advance'
 import { encodeAgentSessionQuestionAnswers } from '../../../../../src/shared/agent-session/agent-session-question-answer'
@@ -81,10 +84,12 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     const prompt = { questions: [indent], replyAsMessage: true }
     let source: NativeChatAnswerSource = { messages: [], submissions: [] }
     const replies: (() => void)[] = []
-    const onAnswer = vi.fn((_selections, onCreated?: (id: string) => void) => {
-      onCreated?.(['answer', 'retry', 'newer'][replies.length]!)
-      return new Promise<boolean>((resolve) => replies.push(() => resolve(true)))
-    })
+    const onAnswer = vi.fn(
+      (_selections: AskAnswerSelection[], onCreated?: (id: string) => void) => {
+        onCreated?.(['answer', 'retry', 'newer'][replies.length]!)
+        return new Promise<boolean>((resolve) => replies.push(() => resolve(true)))
+      }
+    )
     vi.useFakeTimers()
     const update = () =>
       act(() =>
@@ -110,6 +115,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
         {
           id: agentJournalSubmissionKey('answer'),
           role: 'user',
+          source: 'transcript',
           blocks: [],
           timestamp: 2,
           deliveryState: 'pending'
