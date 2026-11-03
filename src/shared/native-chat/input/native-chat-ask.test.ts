@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import recordedQuestion from './fixtures/codex-weekend-question.json'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
@@ -478,13 +479,19 @@ describe('async questions', () => {
   })
 
   it('does not make an earlier pending answer disable or hide a later question', () => {
-    const asked = message('first', [asyncCall('first-call', 'A?')])
+    const recordedCall = {
+      type: 'tool-call',
+      name: 'request_user_input_async',
+      callId: 'first-call',
+      input: recordedQuestion
+    } satisfies NativeChatBlock
+    const asked = message('first', [recordedCall])
     const waiting = userRow('pending-answer', {
       deliveryState: 'pending',
       queuedMessageId: 'queue-answer',
-      blocks: [{ type: 'text', text: '> A?\n\nBlue' }]
+      blocks: [{ type: 'text', text: `> ${recordedQuestion.questions[0].title}\n\nGet outside` }]
     })
-    const later = message('later', [asyncCall('later-call', 'A?')])
+    const later = message('later', [{ ...recordedCall, callId: 'later-call' }])
     const scan = scanPendingAsks([asked, waiting, later])
     expect(scan.contributors.map((contributor) => contributor.sourceRowId)).toEqual(['later'])
     expect(scan.answerPending).toBeUndefined()
