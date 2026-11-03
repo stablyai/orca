@@ -10,6 +10,13 @@ import type {
   AgentSessionMutationResult,
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session/agent-session-wire'
+import {
+  BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
+  HISTORY_PAGE_CONTENT_BUDGET_BYTES,
+  historyContentBytes,
+  measureHistoryItem,
+  submissionBytesByItemId
+} from '../../../native-chat/agent-session-wire/agent-session-history-page-bounds'
 import type { RpcContext } from '../core'
 import { structuredCallerFor } from './structured-agent-session-gate'
 
@@ -41,8 +48,30 @@ export function projectReceiptDeviceItem(
   return { ...item, body: { ...body, resolution: { ...body.resolution, resolvedByDevice } } }
 }
 
-function projectPage(page: AgentSessionHistoryPage, ctx: ReceiptReader): AgentSessionHistoryPage {
-  return { ...page, items: page.items.map((item) => projectReceiptDeviceItem(item, ctx)) }
+function projectItems(
+  content: Pick<AgentSessionHistoryPage, 'items' | 'submissions' | 'removedItemIds'>,
+  ctx: ReceiptReader,
+  budgetBytes: number
+): AgentJournalRenderItem[] {
+  const items = content.items.map((item) => projectReceiptDeviceItem(item, ctx))
+  if (items.every((item, index) => item === content.items[index])) {
+    return content.items
+  }
+  const bytes = historyContentBytes(
+    items.map(measureHistoryItem),
+    content.removedItemIds,
+    submissionBytesByItemId(content.submissions)
+  )
+  // Display metadata must not consume the envelope reserve or displace existing history.
+  return bytes <= budgetBytes ? items : content.items
+}
+
+function projectPage(
+  page: AgentSessionHistoryPage,
+  ctx: ReceiptReader,
+  budgetBytes = HISTORY_PAGE_CONTENT_BUDGET_BYTES
+): AgentSessionHistoryPage {
+  return { ...page, items: projectItems(page, ctx, budgetBytes) }
 }
 
 export function projectReceiptDeviceHistory(
@@ -65,17 +94,21 @@ export function projectReceiptDeviceEvent(
   event: AgentSessionSubscribeEvent,
   ctx: ReceiptReader
 ): AgentSessionSubscribeEvent {
+  const budgetBytes =
+    ctx.clientKind === 'mobile'
+      ? BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+      : HISTORY_PAGE_CONTENT_BUDGET_BYTES
   if (event.type === 'batch') {
     return {
       ...event,
       batch: {
         ...event.batch,
-        items: event.batch.items.map((item) => projectReceiptDeviceItem(item, ctx))
+        items: projectItems(event.batch, ctx, budgetBytes)
       }
     }
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
-    return { ...event, page: projectPage(event.page, ctx) }
+    return { ...event, page: projectPage(event.page, ctx, budgetBytes) }
   }
   return event
 }

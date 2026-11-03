@@ -63,6 +63,8 @@ describe('registerRuntimeHandlers', () => {
         hostCalls.history.mockReturnValue({
           ok: true,
           page: {
+            submissions: [],
+            removedItemIds: [],
             items: [
               {
                 itemId: 'question-1',

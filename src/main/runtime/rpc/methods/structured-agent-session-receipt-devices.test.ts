@@ -34,7 +34,10 @@ beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)
 
 it('projects paired names onto historical receipts without changing the stored row', async () => {
-  hostCalls.history.mockReturnValue({ ok: true, page: { items: [receipt] } })
+  hostCalls.history.mockReturnValue({
+    ok: true,
+    page: { items: [receipt], submissions: [], removedItemIds: [] }
+  })
   const response = await call(
     'agentSession.history',
     { sessionId: SESSION, direction: 'tail' },
@@ -128,7 +131,10 @@ it.each(['desktop-renderer', 'trusted-local:runtime'])(
       ...receipt,
       body: { ...receipt.body, resolution: { ...receipt.body.resolution, resolvedBy } }
     }
-    hostCalls.history.mockReturnValue({ ok: true, page: { items: [item] } })
+    hostCalls.history.mockReturnValue({
+      ok: true,
+      page: { items: [item], submissions: [], removedItemIds: [] }
+    })
     const response = await call(
       'agentSession.history',
       { sessionId: SESSION, direction: 'tail' },
