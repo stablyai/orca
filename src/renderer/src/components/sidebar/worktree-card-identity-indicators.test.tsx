@@ -3,9 +3,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
-import { WorktreeCardIdentityBadges } from './worktree-card-header'
+import { WorktreeCardPrimaryBadge, WorktreeCardSparseBadge } from './worktree-card-header-items'
 
 function IdentityIndicatorsFixture({
   hasHoverDetails = true
@@ -24,21 +23,14 @@ function IdentityIndicatorsFixture({
           Close review menu
         </button>
         <div data-testid="details-state">{detailsHoverControl.hoverOpen ? 'open' : 'closed'}</div>
-        <WorktreeCardIdentityBadges
-          card={{
-            worktree: makeWorktree({
-              id: 'repo::/repo/primary',
-              repoId: 'repo',
-              isMainWorktree: true,
-              isSparse: true,
-              sparseDirectories: ['src/renderer']
-            }),
-            compactCards: false,
-            newCardStyle: true,
-            isFolder: false,
-            detailsHoverControl
-          }}
+        <WorktreeCardPrimaryBadge
+          card={{ newCardStyle: true, detailsHoverControl }}
           hasHoverDetails={hasHoverDetails}
+        />
+        <WorktreeCardSparseBadge
+          card={{ newCardStyle: true, detailsHoverControl }}
+          hasHoverDetails={hasHoverDetails}
+          directories={['src/renderer']}
         />
       </div>
     </TooltipProvider>

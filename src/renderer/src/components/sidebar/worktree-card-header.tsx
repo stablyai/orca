@@ -1,179 +1,19 @@
 import React from 'react'
-import { AlertCircle, FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import type { Repo } from '../../../../shared/repo-types'
-import { resolveRepoHeaderColor } from './project-header-color'
-import { formatSparseDirectoryPreview, shouldBeginWorktreeRename } from './worktree-card-model'
+import { shouldBeginWorktreeRename } from './worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
+import {
+  WorktreeCardDeleteQuickAction,
+  WorktreeCardPrimaryBadge,
+  WorktreeCardPrimaryStar,
+  WorktreeCardRenameErrorButton,
+  WorktreeCardRepoChip,
+  WorktreeCardRuntimeHostMark,
+  WorktreeCardSparseBadge
+} from './worktree-card-header-items'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 import type { WorktreeCardController } from './use-worktree-card-controller'
-
-function RepoIdentityChip({
-  repo,
-  children
-}: {
-  repo: Repo
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5"
-          aria-label={translate(
-            'auto.components.sidebar.WorktreeCard.35ccfe2475',
-            'Project {{value0}}',
-            { value0: repo.displayName }
-          )}
-        >
-          {/* Why: emoji glyphs scale with font size (0.9em), so pin it to fit the 12px icon box. */}
-          <span className="inline-flex size-3 shrink-0 items-center justify-center text-2xs">
-            {children}
-          </span>
-          {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
-          <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
-            {repo.displayName}
-          </span>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>
-        {repo.displayName}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-export function WorktreeCardIdentityBadges({
-  card,
-  hasHoverDetails
-}: {
-  card: Pick<
-    WorktreeCardController,
-    'worktree' | 'compactCards' | 'newCardStyle' | 'isFolder' | 'detailsHoverControl'
-  >
-  hasHoverDetails: boolean
-}): React.JSX.Element {
-  const { worktree, compactCards, newCardStyle, isFolder, detailsHoverControl } = card
-  const hideIndicatorTooltip = newCardStyle && hasHoverDetails && detailsHoverControl.hoverOpen
-  const closeDetailsForIndicator = (): void => detailsHoverControl.handleHoverOpenChange(false)
-  const resumeDetailsAfterIndicator = (event: React.PointerEvent<HTMLSpanElement>): void => {
-    const root = event.currentTarget.closest('[data-worktree-card-hover-trigger]')
-    const next = event.relatedTarget
-    if (
-      hasHoverDetails &&
-      root &&
-      next instanceof Element &&
-      root.contains(next) &&
-      !next.closest('[data-worktree-card-identity-indicator]') &&
-      !root.querySelector('[data-worktree-card-identity-indicator]:focus')
-    ) {
-      detailsHoverControl.handleHoverOpenChange(true)
-    }
-  }
-
-  return (
-    <>
-      {!compactCards && worktree.isMainWorktree && !isFolder && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {newCardStyle ? (
-              <span
-                role="img"
-                aria-label={translate(
-                  'auto.components.sidebar.WorktreeCard.0d224eff10',
-                  'Primary worktree'
-                )}
-                tabIndex={0}
-                data-worktree-card-identity-indicator=""
-                onPointerEnter={closeDetailsForIndicator}
-                onPointerLeave={resumeDetailsAfterIndicator}
-                onFocus={closeDetailsForIndicator}
-                className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <House className="size-3" aria-hidden="true" />
-              </span>
-            ) : (
-              <Badge
-                variant="outline"
-                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
-              >
-                {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
-              </Badge>
-            )}
-          </TooltipTrigger>
-          <TooltipContent
-            side="right"
-            sideOffset={8}
-            className={cn(hideIndicatorTooltip && 'hidden')}
-          >
-            {translate(
-              'auto.components.sidebar.WorktreeCard.0777de5970',
-              'Primary worktree (original clone directory)'
-            )}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {worktree.isSparse && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {newCardStyle ? (
-              <span
-                role="img"
-                aria-label={translate('fileExplorer.root.sparseStatus', 'Sparse checkout')}
-                tabIndex={0}
-                data-worktree-card-identity-indicator=""
-                onPointerEnter={closeDetailsForIndicator}
-                onPointerLeave={resumeDetailsAfterIndicator}
-                onFocus={closeDetailsForIndicator}
-                className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <FolderMinus className="size-3.5" aria-hidden="true" />
-              </span>
-            ) : (
-              <Badge
-                variant="outline"
-                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
-              >
-                {translate('auto.components.sidebar.WorktreeCard.4f964d5e8c', 'sparse')}
-              </Badge>
-            )}
-          </TooltipTrigger>
-          <TooltipContent
-            side="right"
-            sideOffset={8}
-            className={cn('max-w-72', hideIndicatorTooltip && 'hidden')}
-          >
-            <div className="space-y-1">
-              {newCardStyle && (
-                <div>{translate('fileExplorer.root.sparseStatus', 'Sparse checkout')}</div>
-              )}
-              <div>
-                {translate(
-                  'auto.components.sidebar.WorktreeCard.0f33af979b',
-                  'Partial checkout. Files outside these paths are not on disk.'
-                )}
-              </div>
-              {worktree.sparseDirectories && worktree.sparseDirectories.length > 0 ? (
-                <div
-                  className={cn('font-mono opacity-80', newCardStyle ? 'text-2xs' : 'text-[11px]')}
-                >
-                  {formatSparseDirectoryPreview(worktree.sparseDirectories)}
-                </div>
-              ) : null}
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </>
-  )
-}
 
 export function WorktreeCardHeader({
   card,
@@ -206,6 +46,7 @@ export function WorktreeCardHeader({
     setRenamingWorktreeId,
     titleRenaming,
     handleOpenRenameErrorDialog,
+    isFolder,
     handleWorkspaceQuickAction
   } = card
   const {
@@ -218,20 +59,12 @@ export function WorktreeCardHeader({
     titleRowIndicators,
     titleWrapper
   } = presentation
+  const hasHoverDetails = presentation.hasHoverDetails && !titleRenaming
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        {showPinnedRepoIcon && (
-          <RepoIdentityChip repo={repo!}>
-            <RepoIconGlyph
-              repoIcon={repo!.repoIcon}
-              color={resolveRepoHeaderColor(repo!.badgeColor)}
-              className="size-full"
-              iconClassName="size-3"
-            />
-          </RepoIdentityChip>
-        )}
+        {showPinnedRepoIcon && <WorktreeCardRepoChip repo={repo!} />}
 
         {repo?.connectionId && (
           <WorktreeCardSshHostControl
@@ -246,53 +79,13 @@ export function WorktreeCardHeader({
         )}
 
         {!repo?.connectionId && parsedRepoHost?.kind === 'runtime' && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="shrink-0 inline-flex items-center">
-                {isRuntimeDisconnected ? (
-                  // This surface shows runtime disconnection passively; reconnect controls belong to host management.
-                  <ServerOff className="size-3 text-destructive" />
-                ) : (
-                  <Server className="size-3 text-muted-foreground" />
-                )}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              {isRuntimeDisconnected
-                ? runtimeHostLabel
-                  ? translate(
-                      'auto.components.sidebar.WorktreeCard.runtimeHostDisconnectedNamed',
-                      '{{hostName}} disconnected',
-                      { hostName: runtimeHostLabel }
-                    )
-                  : translate(
-                      'auto.components.sidebar.WorktreeCard.runtimeHostDisconnected',
-                      'Server disconnected'
-                    )
-                : runtimeHostLabel
-                  ? translate(
-                      'auto.components.sidebar.WorktreeCard.runtimeHostProjectNamed',
-                      'Project on {{hostName}}',
-                      { hostName: runtimeHostLabel }
-                    )
-                  : translate(
-                      'auto.components.sidebar.WorktreeCard.runtimeHostProject',
-                      'Project on Orca server'
-                    )}
-            </TooltipContent>
-          </Tooltip>
+          <WorktreeCardRuntimeHostMark
+            disconnected={isRuntimeDisconnected}
+            hostLabel={runtimeHostLabel}
+          />
         )}
 
-        {showInlineRepoBadge && (
-          <RepoIdentityChip repo={repo!}>
-            <RepoIconGlyph
-              repoIcon={repo!.repoIcon}
-              color={resolveRepoHeaderColor(repo!.badgeColor)}
-              className="size-full"
-              iconClassName="size-3"
-            />
-          </RepoIdentityChip>
-        )}
+        {showInlineRepoBadge && <WorktreeCardRepoChip repo={repo!} />}
 
         <WorktreeTitleInlineRename
           displayName={visibleCardTitle}
@@ -314,90 +107,35 @@ export function WorktreeCardHeader({
         {typeof worktree.firstAgentMessageRenameError === 'string' &&
         worktree.firstAgentMessageRenameError.length > 0 &&
         !titleRenaming ? (
-          // Errors can contain raw agent output; open a dialog rather than a tooltip.
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                onPointerDown={stopQuickActionPointerPropagation}
-                onClick={handleOpenRenameErrorDialog}
-                onDoubleClick={handleOpenRenameErrorDialog}
-                className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-destructive border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:text-destructive has-[>svg]:!px-0.5"
-                aria-label={translate(
-                  'auto.components.sidebar.WorktreeCard.02e19349f4',
-                  'Auto-rename failed: view error'
-                )}
-              >
-                <AlertCircle className="size-2.5" />
-                {translate('auto.components.sidebar.WorktreeCard.74522ee457', 'rename failed')}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              {translate(
-                'auto.components.sidebar.WorktreeCard.4eba2ea99e',
-                'Auto-name failed. Click to see details.'
-              )}
-            </TooltipContent>
-          </Tooltip>
+          <WorktreeCardRenameErrorButton
+            onPointerDown={stopQuickActionPointerPropagation}
+            onOpen={handleOpenRenameErrorDialog}
+          />
         ) : null}
-        <WorktreeCardIdentityBadges
-          card={card}
-          hasHoverDetails={presentation.hasHoverDetails && !titleRenaming}
-        />
+        {!compactCards && worktree.isMainWorktree && !isFolder && (
+          <WorktreeCardPrimaryBadge card={card} hasHoverDetails={hasHoverDetails} />
+        )}
+
+        {worktree.isSparse && (
+          <WorktreeCardSparseBadge
+            card={card}
+            hasHoverDetails={hasHoverDetails}
+            directories={worktree.sparseDirectories}
+          />
+        )}
 
         {showTitleRowIndicators && titleRowIndicators}
       </div>
 
       {showHeaderActions && (
         <div className="ml-auto flex shrink-0 items-center justify-center gap-1 pr-1.5">
-          {showTitleRowPrimary && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className="shrink-0 inline-flex items-center"
-                  aria-label={translate(
-                    'auto.components.sidebar.WorktreeCard.0d224eff10',
-                    'Primary worktree'
-                  )}
-                >
-                  <Star className="size-3 fill-amber-400 text-amber-400" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {translate(
-                  'auto.components.sidebar.WorktreeCard.0777de5970',
-                  'Primary worktree (original clone directory)'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          )}
+          {showTitleRowPrimary && <WorktreeCardPrimaryStar />}
 
           {showDeleteQuickAction && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  data-workspace-board-preserve-open=""
-                  onPointerDown={stopQuickActionPointerPropagation}
-                  onClick={handleWorkspaceQuickAction}
-                  className={cn(
-                    'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
-                    'group-hover/worktree-card:opacity-100 group-focus-within/worktree-card:opacity-100 focus-visible:opacity-100',
-                    'text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
-                  )}
-                  aria-label={translate(
-                    'auto.components.sidebar.WorktreeCard.6f09f58541',
-                    'Delete workspace'
-                  )}
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {translate('auto.components.sidebar.WorktreeCard.6f09f58541', 'Delete workspace')}
-              </TooltipContent>
-            </Tooltip>
+            <WorktreeCardDeleteQuickAction
+              onPointerDown={stopQuickActionPointerPropagation}
+              onClick={handleWorkspaceQuickAction}
+            />
           )}
         </div>
       )}
