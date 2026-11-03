@@ -34,7 +34,7 @@ vi.mock('../browser/browser-screencast-stream', () => ({
   startBrowserScreencast: startBrowserScreencastMock
 }))
 
-vi.mock('../ipc/browser-tab-registration-wait', () => ({
+vi.mock('../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn(),
   waitForWorktreeTabRegistration: vi.fn()
 }))

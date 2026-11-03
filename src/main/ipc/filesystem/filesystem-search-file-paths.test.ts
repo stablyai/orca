@@ -24,7 +24,7 @@ vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
   wslAwareSpawn: wslAwareSpawnMock
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./access/filesystem-auth', () => ({
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 

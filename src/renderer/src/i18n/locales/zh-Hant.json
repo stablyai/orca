@@ -8507,8 +8507,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "命令範本",
-          "2b2f38652b": "自訂命令",
-          "0ffb081b3a": "使用預設代理程式",
           "f4310cf63f": "代理程式",
           "1cd88d470a": "自訂",
           "403876bb48": "使用全域",
@@ -22783,6 +22781,7 @@
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
     "launchTerminal": "啟動終端機",
+    "use": "使用",
     "select": "選擇代理程式",
     "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案"

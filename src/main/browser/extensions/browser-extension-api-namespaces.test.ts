@@ -45,7 +45,9 @@ vi.mock('../browser-manager', () => ({
     getGuestWebContentsId: (id: string) => (id === 'gesture-page' ? 700 : null)
   }
 }))
-vi.mock('../../ipc/browser-tab-registration-wait', () => ({ waitForTabRegistration: vi.fn() }))
+vi.mock('../../ipc/browser/browser-tab-registration-wait', () => ({
+  waitForTabRegistration: vi.fn()
+}))
 vi.mock('../../runtime/browser/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: vi.fn()
 }))

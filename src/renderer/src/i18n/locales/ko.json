@@ -7995,8 +7995,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "명령 템플릿",
-          "2b2f38652b": "사용자 지정 명령",
-          "0ffb081b3a": "기본 에이전트 사용",
           "f4310cf63f": "에이전트",
           "1cd88d470a": "사용자 정의",
           "403876bb48": "글로벌 사용",
@@ -22326,6 +22324,7 @@
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
     "legacyModelCount": "모델 {{total}}개",
+    "use": "사용",
     "select": "에이전트 선택",
     "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",
     "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @"

@@ -7,7 +7,7 @@ import {
   waitForTabFirstLoad,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
-} from '../../ipc/browser-tab-registration-wait'
+} from '../../ipc/browser/browser-tab-registration-wait'
 import { whenBrowserMainWindowReady } from '../../browser/browser-main-window-readiness'
 import type { BrowserSnapshotResult } from '../../../shared/runtime-types'
 import type {

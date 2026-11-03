@@ -321,7 +321,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         if (next || openSetup === setupId) {
           onSetupOpenChange(next ? { id: setupId, agent: entry.agent, preset, label } : null)
         }
-        if (next) {
+        if (next && openSetup !== setupId) {
           onSelectAgent?.(entry.agent)
         }
       }}

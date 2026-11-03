@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
@@ -62,6 +63,11 @@ vi.mock('../text-generation/pull-request-context', async () => ({
   )),
   getPullRequestDraftContext: mocks.getPullRequestDraftContext
 }))
+
+// Loaded at collection so a test that runs the real resolver does not pay for it in its timeout.
+const actualTextGeneration = await vi.importActual<typeof CommitMessageTextGenerationModule>(
+  '../text-generation/commit-message-text-generation'
+)
 
 vi.mock('../source-control/pull-request-template', () => ({
   resolveHostedReviewBodyForGeneration: mocks.resolveHostedReviewBodyForGeneration
@@ -276,6 +282,44 @@ describe('RuntimeGitCommands', () => {
         cwd: worktreePath,
         env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
       })
+    )
+  })
+
+  it('runs a phone-initiated commit message with the saved Commit message model and effort', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    mocks.resolveCommitMessageSettings.mockImplementation(
+      actualTextGeneration.resolveCommitMessageSettings
+    )
+    mocks.getStagedCommitContext.mockResolvedValue({
+      branch: 'main',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    })
+    mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
+    const settings = getDefaultSettings('/home')
+    settings.sourceControlAi = {
+      ...settings.sourceControlAi!,
+      enabled: true,
+      agentId: 'codex',
+      modelOverridesByOperation: {
+        commitMessage: {
+          selectedModelByAgent: { codex: 'gpt-5.4' },
+          selectedThinkingByModel: { 'gpt-5.4': 'high' }
+        }
+      }
+    }
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath),
+      getRuntimeSettings: () => settings
+    })
+
+    await commands.generateRuntimeCommitMessage('id:wt-1')
+
+    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ agentId: 'codex', model: 'gpt-5.4', thinkingLevel: 'high' }),
+      expect.anything()
     )
   })
 
