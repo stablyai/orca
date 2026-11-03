@@ -13,6 +13,7 @@ import type {
   AutomationDispatchResult
 } from '../../../shared/automations-types'
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
+import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import {
   connectAutomationDispatchWorkspace,
   prepareAutomationDispatchWorkspace,
@@ -91,7 +92,8 @@ export async function handleAutomationDispatchRequest({
       precheckResult: resolved.context.precheckResult,
       markDispatchResult,
       releaseTerminalOwnership,
-      finalizeTerminalOwnership
+      finalizeTerminalOwnership,
+      agentLabel: tuiAgentDisplayName(automation.agentId) ?? 'Agent'
     })
     const dispatchStartedAt = Date.now()
     if (automation.reuseSession) {
@@ -128,13 +130,16 @@ export async function handleAutomationDispatchRequest({
               completion.cleanupRunObservers()
             } else {
               let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: { state: string }): void => {
+              const handleReusableAgentStatus = (payload: {
+                state: string
+                interrupted?: boolean
+              }): void => {
                 if (payload.state === 'working') {
                   reuseSawWorking = true
                   return
                 }
                 if (payload.state === 'done' && reuseSawWorking) {
-                  completion.handleAgentDone()
+                  completion.handleAgentDone(payload)
                 }
               }
               const reuseCompletionStartedAt = Date.now()
@@ -200,7 +205,7 @@ export async function handleAutomationDispatchRequest({
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return
         }
-        completion.handleAgentDone()
+        completion.handleAgentDone(payload)
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)

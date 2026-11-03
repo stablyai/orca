@@ -26,6 +26,7 @@ export function createAutomationDispatchCompletion(args: {
   markDispatchResult: MarkDispatchResult
   releaseTerminalOwnership: () => void
   finalizeTerminalOwnership: AutomationTerminalOwnership['finalize']
+  agentLabel: string
 }) {
   const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
   let latestAssistantMessage: string | null = null
@@ -33,7 +34,7 @@ export function createAutomationDispatchCompletion(args: {
     selectAutomationRunOutputSnapshot(latestAssistantMessage, outputSnapshotBuffer.snapshot())
   let dispatchMarked = false
   let pendingExitCode: number | null = null
-  let pendingDone = false
+  let pendingDone: { interrupted: boolean } | null = null
   let completionMarked = false
   let contactLost = false
   let unsubscribeAgentStatus = (): void => {}
@@ -47,7 +48,7 @@ export function createAutomationDispatchCompletion(args: {
     unsubscribeSessionObserver = (): void => {}
     releaseReuseDispatchTab = (): void => {}
   }
-  const markCompletionResult = async (): Promise<void> => {
+  const markCompletionResult = async (interrupted: boolean): Promise<void> => {
     if (completionMarked) {
       return
     }
@@ -56,18 +57,25 @@ export function createAutomationDispatchCompletion(args: {
     try {
       await args.markDispatchResult({
         runId: args.run.id,
-        status: 'completed',
+        status: interrupted ? 'dispatch_failed' : 'completed',
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
         precheckResult: args.precheckResult,
-        error: null
+        error: interrupted
+          ? `${args.agentLabel} was Interrupted. Open the terminal or run the automation again.`
+          : null
       })
     } catch (error) {
       args.releaseTerminalOwnership()
       throw error
     }
-    await retireRunTerminal()
+    if (interrupted) {
+      // Keep the cut-off terminal visible, as a failed exit does.
+      args.releaseTerminalOwnership()
+    } else {
+      await retireRunTerminal()
+    }
   }
   const retireRunTerminal = async (): Promise<void> => {
     const retirement = await args.finalizeTerminalOwnership({
@@ -137,15 +145,16 @@ export function createAutomationDispatchCompletion(args: {
       console.error('[automations] Failed to persist late automation result:', error)
     })
   }
-  const handleAgentDone = (): void => {
+  const handleAgentDone = (turn: { interrupted?: boolean } = {}): void => {
     if (completionMarked) {
       return
     }
+    const interrupted = turn.interrupted === true
     if (!dispatchMarked) {
-      pendingDone = true
+      pendingDone = { interrupted }
       return
     }
-    settleLateResult(markCompletionResult())
+    settleLateResult(markCompletionResult(interrupted))
   }
   const handleExit = (code: number): void => {
     if (completionMarked) {
@@ -195,7 +204,7 @@ export function createAutomationDispatchCompletion(args: {
           // The done edge left live history; only the entry’s completed slot retains its output.
           latestAssistantMessage =
             entry.lastCompletedAssistantMessage?.trim() || latestAssistantMessage
-          handleAgentDone()
+          handleAgentDone(historicalState)
           return
         }
       }
@@ -210,7 +219,7 @@ export function createAutomationDispatchCompletion(args: {
         (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
       ) {
         latestAssistantMessage = entry.lastAssistantMessage?.trim() || latestAssistantMessage
-        handleAgentDone()
+        handleAgentDone(entry)
       }
     }
     // Codex/Claude completion normally comes from global hook IPC rather than hidden PTY OSC.
@@ -236,7 +245,7 @@ export function createAutomationDispatchCompletion(args: {
     settlePendingAfterDispatch: async () => {
       dispatchMarked = true
       if (pendingDone) {
-        await markCompletionResult()
+        await markCompletionResult(pendingDone.interrupted)
       } else if (pendingExitCode !== null) {
         await markExitResult(pendingExitCode)
       }

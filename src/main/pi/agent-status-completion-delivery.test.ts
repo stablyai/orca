@@ -201,3 +201,23 @@ describe('OMP completion delivery', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 })
+
+describe('Pi cancelled-turn completion', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  // Why: without the verdict the host records a cancelled automation run as completed (STA-12638).
+  it.each([
+    { stopReason: 'aborted', fields: { interrupted: true } },
+    { stopReason: 'stop', fields: { turn_completed_at: expect.any(Number) } }
+  ])('ends a $stopReason reply with $fields', async ({ stopReason, fields }) => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end', {
+      messages: [{ role: 'user' }, { role: 'assistant', stopReason }]
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(events(harness.fetchMock).at(-1)).toEqual({ hook_event_name: 'agent_end', ...fields })
+  })
+})
