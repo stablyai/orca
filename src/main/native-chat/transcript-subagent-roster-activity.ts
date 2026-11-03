@@ -5,7 +5,7 @@ import type { NativeChatSubagentActivity } from '../../shared/native-chat/input/
 import {
   SUBAGENT_TRANSCRIPT_PREFIX,
   subagentTranscriptsDirFor
-} from '../ai-vault/session-scanner-subagent-transcripts'
+} from '../ai-vault/scanners/claude/session-scanner-subagent-transcripts'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import { splitTranscriptStreamLines } from './transcript-stream-lines'
 import {

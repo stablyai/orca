@@ -9,7 +9,7 @@ import type { NativeChatMessage } from '../../shared/native-chat/native-chat-typ
 import {
   SUBAGENT_TRANSCRIPT_PREFIX,
   subagentTranscriptsDirFor
-} from '../ai-vault/session-scanner-subagent-transcripts'
+} from '../ai-vault/scanners/claude/session-scanner-subagent-transcripts'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import { BOUNDED_FRAME_CONTENT_BUDGET_BYTES } from './agent-session-wire/agent-session-history-page-bounds'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
