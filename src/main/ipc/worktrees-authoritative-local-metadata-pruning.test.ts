@@ -18,7 +18,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   isRegisteredWorktreePath,
   registerWorktreeRootsForRepo
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 
 const localWorktreePathPresenceMock = vi.hoisted(() => vi.fn())
 
@@ -33,6 +33,10 @@ vi.mock('electron', async () =>
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+}))
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )

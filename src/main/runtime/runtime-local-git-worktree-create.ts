@@ -23,7 +23,7 @@ import {
 import {
   failedWorktreeCreationNeedsRetirement,
   retireGeneratedWorktreeName
-} from '../worktree-name-retirement'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
 import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
 
 export type RuntimeLocalBaseRefRefresh = {

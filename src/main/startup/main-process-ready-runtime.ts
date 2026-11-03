@@ -28,7 +28,10 @@ import {
 } from './main-process-runtime-service'
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
-import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
+import {
+  collectWorktreeTrashSweepRoots,
+  sweepStaleWorktreeTrash
+} from '../workspaces/removal/worktree-trash'
 import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'

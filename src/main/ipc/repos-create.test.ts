@@ -67,7 +67,7 @@ vi.mock('../git/repo', () => ({
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 

@@ -112,7 +112,7 @@ import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migrat
 import {
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
@@ -149,9 +149,9 @@ import {
   failedWorktreeCreationNeedsRetirement,
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
-} from '../worktree-name-retirement'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
 import {
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim

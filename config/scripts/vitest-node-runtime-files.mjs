@@ -137,7 +137,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/git/worktree-removal-large-tree.bench.test.ts',
   'src/main/runtime/runtime-failed-local-worktree-removal.test.ts',
   'src/main/runtime/runtime-interrupted-local-worktree-removal.test.ts',
-  'src/main/local-worktree-removal-recovery-live.test.ts',
+  'src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts',
   'src/main/rate-limits/codex-rpc-worker-backpressure.test.ts',
   'src/main/computer/macos-native-provider-client.test.ts',
   'src/main/ai-vault-search/session-search-schema.test.ts',

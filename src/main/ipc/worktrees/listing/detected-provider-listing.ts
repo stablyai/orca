@@ -2,7 +2,7 @@ import {
   projectPendingWorktreeRemovals,
   snapshotPendingWorktreeRemovals,
   withUnregisteredRemovalCheckouts
-} from '../../../worktree-removal-listing'
+} from '../../../workspaces/removal/worktree-removal-listing'
 import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'

@@ -8,9 +8,9 @@ import { removeWorktree as removeNativeWorktree } from '../git/worktree-removal'
 import { readTranslatedWorktreeGraph } from '../git/worktree-list-reader'
 import { toHostFilesystemPath } from '../filesystem/host-tree-removal'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import * as scopedRootsInvalidation from './registered-worktree-roots-scoped-invalidation'
-import * as authorizedRootsCache from './registered-worktree-roots-cache'
-import * as localWorktreeFilesystem from '../local-worktree-filesystem'
+import * as scopedRootsInvalidation from './worktrees/removal/registered-worktree-roots-scoped-invalidation'
+import * as authorizedRootsCache from './worktrees/removal/registered-worktree-roots-cache'
+import * as localWorktreeFilesystem from '../workspaces/removal/local-worktree-filesystem'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -49,6 +49,10 @@ vi.mock('electron', async () =>
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+}))
 vi.mock('../git/runner', async (importOriginal) => ({
   ...(await importOriginal<typeof gitRunner>()),
   ...(await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()

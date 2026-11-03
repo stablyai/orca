@@ -7,12 +7,12 @@ import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-opti
 import {
   resolveWorktreeRemovalHome,
   type WorktreeRemovalRoute
-} from '../worktree-removal-execution-host-route'
+} from '../workspaces/removal/worktree-removal-execution-host-route'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePath
-} from '../local-worktree-filesystem'
+} from '../workspaces/removal/local-worktree-filesystem'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
@@ -21,7 +21,7 @@ import {
   isDangerousWorktreeRemovalPath,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
-} from '../worktree-removal-safety'
+} from '../workspaces/removal/worktree-removal-safety'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 import { isLocalRuntimeWorktreePathMissing } from './runtime-worktree-filesystem'

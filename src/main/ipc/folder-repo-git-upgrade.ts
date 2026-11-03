@@ -10,7 +10,7 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { resolveFolderToGitConversion } from '../folder-repo-git-conversion'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from './worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos/repos-changed-notification'
 import { notifyWorktreesChanged } from './worktree-remote'
 import { setFolderRepoGitUpgradeWakeListener } from './folder-repo-git-upgrade-wake'

@@ -10,7 +10,7 @@ import {
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
-import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'

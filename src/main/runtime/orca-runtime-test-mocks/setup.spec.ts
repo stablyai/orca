@@ -277,10 +277,17 @@ const {
   }
 })
 
+const listWorktreesStrictMock = vi.hoisted(() => vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES))
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesStrictMock
+}))
+
 vi.mock('../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
   listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+  listWorktreesStrict: listWorktreesStrictMock,
   describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
   assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addSparseWorktree: addSparseWorktreeMock,
@@ -396,11 +403,11 @@ vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
-vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 

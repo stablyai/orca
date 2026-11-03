@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { notifyWorktreesChanged } from './worktree-remote'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 import { __getDetectedWorktreeScanCacheStatsForTests } from './worktrees/listing/detected-worktree-scan-cache'
 import { setPlatform, listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
@@ -19,6 +19,10 @@ vi.mock('electron', async () =>
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+}))
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )

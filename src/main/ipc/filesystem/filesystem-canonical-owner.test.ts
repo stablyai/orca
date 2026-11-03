@@ -18,7 +18,7 @@ import {
   rebuildAuthorizedRootsCache,
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo
-} from '../registered-worktree-roots-cache'
+} from '../worktrees/removal/registered-worktree-roots-cache'
 
 const mocks = vi.hoisted(() => ({
   graph: vi.fn(),

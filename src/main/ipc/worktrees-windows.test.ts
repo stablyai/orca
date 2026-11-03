@@ -79,6 +79,11 @@ vi.mock('../git/worktree', () => ({
   removeWorktree: removeWorktreeMock
 }))
 
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesMock
+}))
+
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
   gitExecFileSync: vi.fn()
@@ -142,7 +147,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
 })
 
 import { registerWorktreeHandlers } from './worktrees'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>

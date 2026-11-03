@@ -10,7 +10,7 @@ import {
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { enrichRepoGitUsernames } from '../../repo-git-username-enrichment'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktrees/creation/worktree-base-directory-watcher'
 import { ProjectUpdateIpcArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'

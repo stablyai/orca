@@ -19,7 +19,7 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
-vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))

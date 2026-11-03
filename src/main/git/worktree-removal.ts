@@ -19,7 +19,7 @@ import { invalidateSparseCheckoutState } from './worktree-sparse-checkout-cache'
 import { runUnderWorktreeDeleteLimit } from './worktree-delete-limit'
 import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-worktree-removal'
 import { listWorktreesStrict } from './worktree-listing'
-import { isWorktreePathMissing } from '../worktree-removal-safety'
+import { isWorktreePathMissing } from '../workspaces/removal/worktree-removal-safety'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()

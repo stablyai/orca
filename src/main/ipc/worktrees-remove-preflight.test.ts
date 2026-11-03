@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as scopedRootsInvalidation from './registered-worktree-roots-scoped-invalidation'
-import * as authorizedRootsCache from './registered-worktree-roots-cache'
+import * as scopedRootsInvalidation from './worktrees/removal/registered-worktree-roots-scoped-invalidation'
+import * as authorizedRootsCache from './worktrees/removal/registered-worktree-roots-cache'
 import {
   removeWorktreeLinkedPathsMock,
   findExistingWorktreeSymlinkPathsMock,
@@ -21,6 +21,10 @@ vi.mock('electron', async () =>
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+}))
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )

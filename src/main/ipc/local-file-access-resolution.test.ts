@@ -20,7 +20,7 @@ import {
   assertLocalWriteTargetIsRegularFile,
   NOT_A_REGULAR_FILE_MESSAGE
 } from './filesystem/local-regular-file-read'
-import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from './worktrees/removal/registered-worktree-roots-cache'
 
 const { userData } = vi.hoisted(() => ({ userData: { path: '' } }))
 

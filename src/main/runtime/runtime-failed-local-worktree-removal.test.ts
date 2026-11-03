@@ -25,14 +25,14 @@ import {
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../worktree-background-removal'
-import { withUnregisteredRemovalCheckouts } from '../worktree-removal-listing'
-import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-leftover'
+} from '../workspaces/removal/worktree-background-removal'
+import { withUnregisteredRemovalCheckouts } from '../workspaces/removal/worktree-removal-listing'
+import { retryFailedRemovalUnlessRegistered } from '../workspaces/removal/worktree-removal-leftover'
 import {
   readWorktreeRemovalRecords,
   writeWorktreeRemovalRecords,
   type WorktreeRemovalRecord
-} from '../worktree-removal-records'
+} from '../workspaces/removal/worktree-removal-records'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import type { RuntimeStore } from './runtime-store-contract'

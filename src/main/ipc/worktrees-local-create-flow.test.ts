@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../shared/setup-agent-sequencing'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 import { computeWorkspaceRootAsync } from './worktree-logic'
 import type * as WorktreeLogic from './worktree-logic'
 import {
@@ -33,6 +33,10 @@ vi.mock('electron', async () =>
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+}))
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
