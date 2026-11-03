@@ -235,6 +235,28 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).toHaveBeenCalled()
   })
 
+  it('prefetches the recorded canonical remote when identity is not origin', async () => {
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      kind: 'git',
+      gitRemoteIdentity: {
+        remoteName: 'upstream',
+        remoteUrl: 'https://github.com/stablyai/orca.git',
+        canonicalKey: 'github.com/stablyai/orca'
+      }
+    })
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-1',
+      baseBranch: 'main'
+    })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'upstream')
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalledWith('/workspace/repo', 'origin')
+  })
+
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'improve-dashboard' ? 'remote' : null

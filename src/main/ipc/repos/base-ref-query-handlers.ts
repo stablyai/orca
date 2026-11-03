@@ -13,11 +13,17 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../../git/repo'
+import { resolveWorktreeBroadFetchRemoteName } from '../../../shared/worktree-broad-fetch-remote'
 import { getProjectRuntimeReadGitOptions } from '../../project-runtime-git-options'
 import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
 import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
 
-export function registerBaseRefQueryHandlers(store: Store): void {
+export type BaseRefQueryRuntime = {
+  /** Best-effort `git fetch <remote>` with the runtime remote-fetch cache (local native only). */
+  fetchRemoteWithCache: (repoPath: string, remote: string) => Promise<void>
+}
+
+export function registerBaseRefQueryHandlers(store: Store, runtime?: BaseRefQueryRuntime): void {
   ipcMain.handle(
     'repos:getBaseRefDefault',
     async (
@@ -55,7 +61,7 @@ export function registerBaseRefQueryHandlers(store: Store): void {
       _event,
       args: { repoId: string; query: string; limit?: number; hostId?: ExecutionHostId }
     ) => {
-      return (await searchBaseRefDetailsForRepo(store, args)).map((entry) => entry.refName)
+      return (await searchBaseRefDetailsForRepo(store, args, runtime)).map((entry) => entry.refName)
     }
   )
 
@@ -65,14 +71,15 @@ export function registerBaseRefQueryHandlers(store: Store): void {
       _event,
       args: { repoId: string; query: string; limit?: number; hostId?: ExecutionHostId }
     ) => {
-      return searchBaseRefDetailsForRepo(store, args)
+      return searchBaseRefDetailsForRepo(store, args, runtime)
     }
   )
 }
 
 async function searchBaseRefDetailsForRepo(
   store: Store,
-  args: { repoId: string; query: string; limit?: number; hostId?: ExecutionHostId }
+  args: { repoId: string; query: string; limit?: number; hostId?: ExecutionHostId },
+  runtime?: BaseRefQueryRuntime
 ): Promise<BaseRefSearchResult[]> {
   const repo = getRepoForExecutionHost(store, args.repoId, args.hostId)
   if (!repo || isFolderRepo(repo)) {
@@ -86,6 +93,14 @@ async function searchBaseRefDetailsForRepo(
   const limit = clampRepoSearchRefsLimit(requestedLimit)
   if (getRepoRoutingConnectionId(repo)) {
     return []
+  }
+  // The picker only sees local remote-tracking refs. Fetch the canonical remote first.
+  if (runtime) {
+    try {
+      await runtime.fetchRemoteWithCache(repo.path, resolveWorktreeBroadFetchRemoteName(repo))
+    } catch {
+      // Offline or auth failures must not block listing the local refs we already have.
+    }
   }
   return searchBaseRefDetails(
     repo.path,
