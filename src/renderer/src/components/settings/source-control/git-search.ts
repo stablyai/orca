@@ -89,6 +89,27 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.git.search.linkedRepositoriesTitle',
+      'Linked Repositories'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.linkedRepositoriesDescription',
+      "When an agent changes files in another project you've added to Orca, show that project in this workspace's Source Control so you can review and commit it there."
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.linkedRepos',
+        'linked repositories'
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.multiRepo', 'multi repo'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.otherProjects',
+        'other projects'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.git.search.compareAgainstUpstreamTitle',
       'Default Compare Base'
     ),

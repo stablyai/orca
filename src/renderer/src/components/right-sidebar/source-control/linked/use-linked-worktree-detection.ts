@@ -112,6 +112,9 @@ export function useLinkedWorktreeDetection(): void {
     const verifier = createShellVerifier()
     const seenToolByPaneKey = new Map<string, string>()
     const scan = (state: AppState): void => {
+      if (state.settings?.linkedRepositoriesEnabled === false) {
+        return
+      }
       for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
         const uses = extractToolPathUses(entry.toolName, entry.toolInput)
         if (uses.length === 0) {
