@@ -151,8 +151,7 @@ export class StructuredAgentSessionHost {
     deps: this.deps,
     sessions: this.sessions,
     serialize: this.serialize,
-    readCommands: (id, commandsOnRequest) =>
-      this.clientDelivery.readCommandsSettled(id, commandsOnRequest),
+    readCommands: (id, onRequest) => this.clientDelivery.readCommandsSettled(id, onRequest),
     conversation: (id) => this.lifetime.conversation(id)
   }))
   sessionAgent = this.reads.sessionAgent

@@ -142,49 +142,46 @@ it.each([
   'dispatch-owned',
   'option',
   'goal'
-])(
-  'does not auto-send after %s',
-  async (action) => {
-    await attach()
-    const { host, dispatch } = hostTestState()
-    host.deps.transientRecovery = { enabled: () => action !== 'disabled' }
-    if (action === 'dispatch-owned') {
-      host.deps.hasOpenDispatch = () => true
-    }
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    await failTurn(action === 'quota' ? 'usageLimitExceeded' : 'serverOverloaded')
-    if (action === 'manual-send') {
-      const body = hostTestMessage('My next request')
-      await host.send(CALLER, { body, envelope: envelope('agentSession.send', { body }) })
-    }
-    if (action === 'stop') {
-      await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
-    }
-    if (action === 'close') {
-      await host.close(SESSION, 'user-close')
-    }
-    if (action === 'shutdown') {
-      host.stopDelivery()
-    }
-    if (action === 'option') {
-      const fields = { key: 'model', value: 'another-model' }
-      await host.setOption(CALLER, {
-        envelope: envelope('agentSession.setOption', fields),
-        ...fields
-      })
-    }
-    if (action === 'goal') {
-      const change = { kind: 'clear' as const }
-      await host.changeThreadGoal(CALLER, {
-        envelope: envelope('agentSession.threadGoal', { change }),
-        change
-      })
-    }
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(dispatch).toHaveBeenCalledTimes(action === 'manual-send' ? 1 : 0)
-    expect(dispatch.mock.calls.flatMap(([input]) => input.body.blocks)).not.toContainEqual({
-      type: 'text',
-      text: TRANSIENT_RECOVERY_MESSAGE
+])('does not auto-send after %s', async (action) => {
+  await attach()
+  const { host, dispatch } = hostTestState()
+  host.deps.transientRecovery = { enabled: () => action !== 'disabled' }
+  if (action === 'dispatch-owned') {
+    host.deps.hasOpenDispatch = () => true
+  }
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  await failTurn(action === 'quota' ? 'usageLimitExceeded' : 'serverOverloaded')
+  if (action === 'manual-send') {
+    const body = hostTestMessage('My next request')
+    await host.send(CALLER, { body, envelope: envelope('agentSession.send', { body }) })
+  }
+  if (action === 'stop') {
+    await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+  }
+  if (action === 'close') {
+    await host.close(SESSION, 'user-close')
+  }
+  if (action === 'shutdown') {
+    host.stopDelivery()
+  }
+  if (action === 'option') {
+    const fields = { key: 'model', value: 'another-model' }
+    await host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', fields),
+      ...fields
     })
   }
-)
+  if (action === 'goal') {
+    const change = { kind: 'clear' as const }
+    await host.changeThreadGoal(CALLER, {
+      envelope: envelope('agentSession.threadGoal', { change }),
+      change
+    })
+  }
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(dispatch).toHaveBeenCalledTimes(action === 'manual-send' ? 1 : 0)
+  expect(dispatch.mock.calls.flatMap(([input]) => input.body.blocks)).not.toContainEqual({
+    type: 'text',
+    text: TRANSIENT_RECOVERY_MESSAGE
+  })
+})
