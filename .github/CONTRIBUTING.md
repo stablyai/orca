@@ -21,6 +21,10 @@ Install Node 24, pnpm, and the Bun version in [`config/.bun-version`](../config/
 native PTYs, socket liveness, and V8 memory behavior. `pnpm test:node` runs the same suites
 entirely on Node. Builds and dependency installation still use Node and pnpm.
 
+For persistence regressions, record `process.execPath` and the Node patch version: shells
+can select different installations. Operation-ledger keys remain NUL-separated on disk;
+the read boundary JSON-quotes them to preserve the complete key on Node 24.15.
+
 The server, its workers and its packaged dependencies target Node 24. The compatibility
 launcher and CLI still target Node 18; the launcher hands off to bundled Node 24 before
 loading server code. WSL guest programs and host discovery retain their Node 18 minimum.

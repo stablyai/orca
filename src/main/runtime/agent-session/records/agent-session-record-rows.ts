@@ -124,10 +124,14 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
       })
     }
   }
+  // Node 24.15 truncates SQLite TEXT at NUL; JSON quoting preserves the complete ledger key.
   for (const row of db
-    .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
+    .prepare(
+      "SELECT CASE WHEN typeof(operation_key) = 'text' THEN json_quote(operation_key) END AS operation_key_json, row_json FROM agent_session_operations ORDER BY rowid"
+    )
     .all()) {
-    const key = text(row, 'operation_key')
+    const parsedKey = parseJson(text(row, 'operation_key_json'))
+    const key = parsedKey.ok && typeof parsedKey.value === 'string' ? parsedKey.value : null
     const parsed = parseJson(text(row, 'row_json'))
     if (key !== null && parsed.ok && isReadableAgentSessionStoreOperation(key, parsed.value)) {
       state.operations.set(key, parsed.value)
