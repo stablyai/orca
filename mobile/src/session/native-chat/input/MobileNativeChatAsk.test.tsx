@@ -200,7 +200,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
       if (multiple) {
         expect(shows('Which fruit?')).toBe(true)
       } else {
-        expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1] }])
+        expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1] }], expect.any(Function))
       }
     }
   )
@@ -216,7 +216,10 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     press('Apple')
     await passAutoAdvanceBeat()
 
-    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1] }, { indices: [0] }])
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith(
+      [{ indices: [1] }, { indices: [0] }],
+      expect.any(Function)
+    )
   })
 
   it('waits for the typed text when "Other…" is picked', async () => {
@@ -231,7 +234,10 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     await passAutoAdvanceBeat()
     expect(onAnswer).not.toHaveBeenCalled()
     await submit()
-    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [], other: 'custom answer' }])
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith(
+      [{ indices: [], other: 'custom answer' }],
+      expect.any(Function)
+    )
   })
 
   it('waits for Submit on a multi-select question', async () => {
@@ -242,7 +248,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
 
     expect(onAnswer).not.toHaveBeenCalled()
     await submit()
-    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }])
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }], expect.any(Function))
   })
 
   it('holds its choices while an answer is being delivered', async () => {
@@ -259,7 +265,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
 
     expect(row('Spaces').props).toMatchObject({ selected: false, disabled: true })
     expect(row('Tabs').props.selected).toBe(true)
-    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }])
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }], expect.any(Function))
   })
 
   it('sends the answered questions when the last one is skipped', async () => {
@@ -269,7 +275,10 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     await passAutoAdvanceBeat()
     await submit('Skip')
 
-    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }, { indices: [] }])
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith(
+      [{ indices: [0] }, { indices: [] }],
+      expect.any(Function)
+    )
   })
 
   it('cancels the prompt when every question is skipped', async () => {

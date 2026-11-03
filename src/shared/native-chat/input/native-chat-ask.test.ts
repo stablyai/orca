@@ -558,6 +558,26 @@ describe('async questions', () => {
     }
   )
 
+  it('uses write index when a held answer and a newer question share a journal sequence', () => {
+    const first = {
+      ...message('first', [asyncCall('first', 'A?')]),
+      journalPosition: { sequence: 1, index: 0 }
+    }
+    const later = {
+      ...message('later', [asyncCall('later', 'A?')]),
+      journalPosition: { sequence: 2, index: 1 }
+    }
+    const held = userRow('answer', {
+      deliveryState: 'pending',
+      queuedMessageId: 'queue',
+      journalPosition: { sequence: 2, index: 0 },
+      blocks: [{ type: 'text', text: '> A?\n\nYes' }]
+    })
+    const result = scanPendingAsks([first, later, held])
+    expect(result.contributors.map((row) => row.sourceRowId)).toEqual(['later'])
+    expect(result.answerPending).toBeUndefined()
+  })
+
   it('leaves questions available for positionless composer previews, including revised existing rows', () => {
     const first = {
       ...message('first', [asyncCall('first', 'A?')]),
