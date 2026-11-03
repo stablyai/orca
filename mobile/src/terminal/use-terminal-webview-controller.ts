@@ -145,8 +145,8 @@ export function useTerminalWebViewController(
         writeCoalescer.markInteractive()
       }
 
-      if (writeCoalescer.receive(msg)) {
-        return
+      if (msg.type === 'applied') {
+        writeCoalescer.receive(msg)
       } else if (msg.type === 'web-ready') {
         cellBoxRef.current = readTerminalCellBox(msg)
         confirmWebReady(true)

@@ -26,6 +26,33 @@ function enqueuePayload(queue: WsInboundMessageQueue, value: number) {
 }
 
 describe('WebSocket inbound message lifetime', () => {
+  it('keeps reentrant frames behind the active conversion', async () => {
+    const wait = gate()
+    const received: unknown[] = []
+    const errors: unknown[] = []
+    let reentrant: Promise<void> | undefined
+    const queue = new WsInboundMessageQueue(
+      (raw) => {
+        received.push(raw)
+        if (raw === 'active') {
+          reentrant = queue.enqueue('reentrant')
+          return wait.promise
+        }
+        return undefined
+      },
+      (error) => errors.push(error)
+    )
+    const active = queue.enqueue('active')
+    const later = queue.enqueue('later')
+    await Promise.resolve()
+    expect(received).toEqual(['active'])
+    wait.release()
+    await Promise.all([active, reentrant, later])
+    expect(received).toEqual(['active', 'reentrant', 'later'])
+    expect(errors).toEqual([])
+    queue.dispose()
+  })
+
   it('admits a replacement after disposing pending frames behind a blocked conversion', async () => {
     const budget = new WsInboundMessageBudget()
     const wait = gate()

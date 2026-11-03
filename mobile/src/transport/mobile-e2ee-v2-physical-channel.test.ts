@@ -196,7 +196,7 @@ describe('mobile E2EE v2 physical channel', () => {
 
     const binary = serverFrame(new Uint8Array([7]), 'binary', 1n, ctx.schedule)
     const text = serverFrame(new TextEncoder().encode('later'), 'text', 2n, ctx.schedule)
-    const first = ctx.channel.handleMessage(new Blob([binary]))
+    const first = ctx.channel.handleMessage(new Blob([new Uint8Array(binary).buffer]))
     const second = ctx.channel.handleMessage(Buffer.from(text).toString('base64'))
     await Promise.resolve()
     expect(ctx.events).toEqual([])
@@ -276,7 +276,7 @@ describe('mobile E2EE v2 physical channel', () => {
 
     const binary = serverFrame(new Uint8Array([7]), 'binary', 1n, ctx.schedule)
     const text = serverFrame(new TextEncoder().encode('retired'), 'text', 2n, ctx.schedule)
-    const first = ctx.channel.handleMessage(new Blob([binary]))
+    const first = ctx.channel.handleMessage(new Blob([new Uint8Array(binary).buffer]))
     const second = ctx.channel.handleMessage(Buffer.from(text).toString('base64'))
     await Promise.resolve()
     ctx.channel.dispose()
@@ -330,7 +330,7 @@ describe('mobile E2EE v2 physical channel', () => {
       await authenticate(ctx)
       ctx.events.length = 0
       const encrypted = serverFrame(new Uint8Array([7]), 'binary', 1n, ctx.schedule)
-      const active = ctx.channel.handleMessage(new Blob([encrypted]))
+      const active = ctx.channel.handleMessage(new Blob([new Uint8Array(encrypted).buffer]))
       await Promise.resolve()
       const pending = Array.from({ length: load * 8 }, () =>
         ctx.channel.handleMessage(new Uint8Array(8 * 1024 * 1024))

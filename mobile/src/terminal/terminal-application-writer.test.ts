@@ -49,11 +49,14 @@ describe('terminal document application admission', () => {
     const commands: TerminalWebViewCommand[] = []
     const writer = createTerminalApplicationWriter((command) => commands.push(command))
     const initial = vi.fn()
-    writer.snapshot({ type: 'init', cols: 40, rows: 20, initialData: 'old' }, initial)
+    writer.snapshot({ type: 'init', frame: null, cols: 40, rows: 20, initialData: 'old' }, initial)
     writer.clear()
     expect(initial).toHaveBeenCalledWith(expect.any(Error))
     const replacement = vi.fn()
-    writer.snapshot({ type: 'init', cols: 40, rows: 20, initialData: 'new' }, replacement)
+    writer.snapshot(
+      { type: 'init', frame: null, cols: 40, rows: 20, initialData: 'new' },
+      replacement
+    )
     writer.receive({ type: 'applied', receipt: commands[0]!.receipt })
     expect(replacement).not.toHaveBeenCalled()
     writer.receive({ type: 'applied', receipt: commands[1]!.receipt })

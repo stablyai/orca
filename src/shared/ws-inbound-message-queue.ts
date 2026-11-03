@@ -5,7 +5,7 @@ import {
 } from './remote-runtime/remote-runtime-memory-limits'
 import { getUtf8ByteLength } from './utf8-byte-limits'
 
-type InboundMessage = { raw: unknown; release: () => void }
+type InboundMessage = { raw: unknown; release: () => void; settle: () => void }
 
 export class WsInboundMessageBudget {
   private bytes = 0
@@ -34,7 +34,7 @@ export class WsInboundMessageBudget {
 
 export class WsInboundMessageQueue {
   private readonly pending = new Set<InboundMessage>()
-  private tail: Promise<void> = Promise.resolve()
+  private active = false
   private disposed = false
 
   constructor(
@@ -55,25 +55,58 @@ export class WsInboundMessageQueue {
       this.onError(new Error('WebSocket inbound buffer overflow'))
       return Promise.resolve()
     }
-    const message = { raw, release }
-    this.pending.add(message)
-    this.tail = this.tail
-      .then(() => {
-        this.pending.delete(message)
-        if (this.disposed) {
-          return
-        }
+    let settle = (): void => {}
+    const completed = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    this.pending.add({ raw, release, settle })
+    this.drain()
+    return completed
+  }
+
+  private drain(): void {
+    while (!this.active && !this.disposed) {
+      const message = this.pending.values().next().value
+      if (!message) {
+        return
+      }
+      this.pending.delete(message)
+      this.active = true
+      let asynchronous = false
+      try {
         const raw = message.raw
         message.raw = undefined
-        return this.processMessage(raw)
-      })
-      .catch((error: unknown) => {
+        const result = this.processMessage(raw)
+        if (result) {
+          asynchronous = true
+          void Promise.resolve(result)
+            .catch((error: unknown) => {
+              if (!this.disposed) {
+                this.onError(error)
+              }
+            })
+            .finally(() => {
+              this.complete(message)
+              this.drain()
+            })
+          return
+        }
+      } catch (error) {
         if (!this.disposed) {
           this.onError(error)
         }
-      })
-      .finally(release)
-    return this.tail
+      } finally {
+        if (!asynchronous) {
+          this.complete(message)
+        }
+      }
+    }
+  }
+
+  private complete(message: InboundMessage): void {
+    message.release()
+    message.settle()
+    this.active = false
   }
 
   dispose(): void {
@@ -82,6 +115,7 @@ export class WsInboundMessageQueue {
     for (const message of this.pending) {
       message.raw = undefined
       message.release()
+      message.settle()
     }
     this.pending.clear()
   }

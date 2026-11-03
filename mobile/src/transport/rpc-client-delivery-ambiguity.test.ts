@@ -95,7 +95,7 @@ async function connectAuthenticated(): Promise<{
   socket.open()
   socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
   socket.receive('encrypted:{"type":"e2ee_authenticated"}')
-  await client.waitForConnected()
+  await vi.waitFor(() => expect(client.getState()).toBe('connected'))
   return { client, socket }
 }
 

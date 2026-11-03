@@ -150,7 +150,7 @@ function createLegacyFraming(args: Parameters<typeof createDirectSocketFraming>[
     }
   }
 
-  const handleInbound = async (raw: unknown): Promise<void> => {
+  const handleInbound = (raw: unknown): void | Promise<void> => {
     if (typeof raw === 'string') {
       if (!authenticated) {
         handleHandshake(raw)
@@ -165,14 +165,15 @@ function createLegacyFraming(args: Parameters<typeof createDirectSocketFraming>[
     if (!authenticated) {
       return
     }
-    const bytes = await websocketPayloadToUint8(raw)
-    if (disposed || !bytes || !keyed) {
-      return
-    }
-    const plaintext = handshake.channel.openBinary(bytes)
-    if (plaintext) {
-      events.onBinary(plaintext)
-    }
+    return websocketPayloadToUint8(raw).then((bytes) => {
+      if (disposed || !bytes || !keyed) {
+        return
+      }
+      const plaintext = handshake.channel.openBinary(bytes)
+      if (plaintext) {
+        events.onBinary(plaintext)
+      }
+    })
   }
 
   const inbound = new MobileWsInboundMessageQueue(handleInbound, (error) => {
