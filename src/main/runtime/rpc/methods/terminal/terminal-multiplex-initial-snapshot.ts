@@ -164,8 +164,10 @@ export async function publishMultiplexInitialSnapshot(
   stream.buffering = false
   const pendingOutput = stream.pendingOutput.splice(0)
   const initialQueries =
-    stream.initialQueryReplay?.covered(snapshotOutputSeq, initialOutputOverflowed) ?? []
-  stream.initialQueryReplay = undefined
+    stream.initialQueryReplay?.finish(snapshotOutputSeq, initialOutputOverflowed) ?? []
+  if (initialQueries.length === 0) {
+    stream.initialQueryReplay = undefined
+  }
   replaySnapshotCoveredQueries(
     state,
     stream,

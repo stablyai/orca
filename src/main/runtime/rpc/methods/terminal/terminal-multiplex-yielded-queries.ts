@@ -64,6 +64,9 @@ export function settleReplayedYieldedQuery(
   stream: TerminalMultiplexStream,
   replayedQuery: ReplayedTerminalQuery
 ): void {
+  if (stream.initialQueryReplay?.settle(replayedQuery.seq, replayedQuery.data)) {
+    stream.initialQueryReplay = undefined
+  }
   const index = findYieldedQuery(stream, replayedQuery)
   if (index !== -1) {
     stream.yieldedQueries.splice(index, 1)
@@ -141,7 +144,10 @@ export function replaySnapshotCoveredQueries(
   chunks: readonly TerminalOutputChunk[],
   snapshotSeq: number | undefined,
   pendingEscapeTailAnsi?: string,
-  initialQueries: readonly TerminalReplyQuerySequence[] = []
+  initialQueries: readonly TerminalReplyQuerySequence[] = stream.initialQueryReplay?.covered(
+    snapshotSeq,
+    false
+  ) ?? []
 ): void {
   if (typeof snapshotSeq !== 'number') {
     return

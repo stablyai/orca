@@ -15,6 +15,7 @@ import {
 } from './terminal-multiplex-test-harness'
 import {
   TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
+  TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
   TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
 } from '../../../shared/terminal-multiplex-flow-control'
 
@@ -502,3 +503,123 @@ it('drops a superseded snapshot replay and its escape tail queued behind the ACK
     await stream.cleanup()
   }
 })
+
+it.each(['', '\x1b[6'])(
+  'retains unsent initial mobile queries across replacement snapshots with escape tail %j',
+  async (pendingEscapeTailAnsi) => {
+    vi.useFakeTimers()
+    const listeners = new Map<string, (data: string, meta?: RuntimeTerminalDataMeta) => void>()
+    let releaseInitial: (() => void) | undefined
+    const prefix = 'covered\x1b[6n\x1b[c'
+    const suffix = pendingEscapeTailAnsi ? 'nAFTER' : 'AFTER'
+    const snapshotSeq = prefix.length + pendingEscapeTailAnsi.length
+    const answerYieldedTerminalQueries = vi.fn()
+    let holdInitial = true
+    const harness = startDesktopMultiplexSubscribe({
+      resolveLiveLeafForHandle: vi.fn((terminal) => ({ ptyId: terminal })),
+      isSoleRemoteTerminalQueryOwner: () => true,
+      handleMobileSubscribe: vi.fn().mockResolvedValue(true),
+      handleMobileUnsubscribe: vi.fn(),
+      answerYieldedTerminalQueries,
+      subscribeToTerminalData: vi.fn((ptyId, listener) => {
+        listeners.set(ptyId, listener)
+        return vi.fn()
+      }),
+      serializeTerminalBuffer: vi.fn(async (ptyId) => {
+        const snapshot = {
+          data: '',
+          cols: 80,
+          rows: 24,
+          seq: ptyId === 'mobile' ? snapshotSeq : 0,
+          pendingEscapeTailAnsi: ptyId === 'mobile' ? pendingEscapeTailAnsi : undefined
+        }
+        if (ptyId === 'mobile' && holdInitial) {
+          holdInitial = false
+          await new Promise<void>((resolve) => {
+            releaseInitial = resolve
+          })
+        }
+        return snapshot
+      })
+    })
+    const send = (streamId: number, opcode: TerminalStreamOpcode, payload: unknown): void => {
+      harness.handlers.get(opcode === TerminalStreamOpcode.Subscribe ? 0 : streamId)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode,
+            streamId: opcode === TerminalStreamOpcode.Subscribe ? 0 : streamId,
+            seq: 1,
+            payload: encodeTerminalStreamJson(payload)
+          })
+        )!
+      )
+    }
+    const subscribe = (streamId: number, terminal: string): void =>
+      send(streamId, TerminalStreamOpcode.Subscribe, {
+        streamId,
+        terminal,
+        capabilities: { ackOutput: 1 },
+        client: { id: terminal, type: terminal === 'mobile' ? 'mobile' : 'desktop' },
+        viewport: { cols: 80, rows: 24 }
+      })
+    const outputs = () =>
+      harness.binaryFrames
+        .map(decodeTerminalStreamFrame)
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+    try {
+      await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
+      for (let index = 0; index < 4; index += 1) {
+        const terminal = `blocker-${index}`
+        subscribe(8 + index, terminal)
+        await vi.waitFor(() => expect(harness.handlers.has(8 + index)).toBe(true))
+        await vi.runOnlyPendingTimersAsync()
+        listeners.get(terminal)?.('x'.repeat(TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES), {
+          seq: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
+          rawLength: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES
+        })
+        await vi.runOnlyPendingTimersAsync()
+      }
+      expect(outputs().reduce((total, frame) => total + frame!.payload.byteLength, 0)).toBe(
+        TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES
+      )
+      subscribe(7, 'mobile')
+      await vi.waitFor(() => expect(releaseInitial).toBeDefined())
+      const data = `${prefix}${pendingEscapeTailAnsi}${suffix}`
+      listeners.get('mobile')?.(data, { seq: data.length, rawLength: data.length })
+      releaseInitial?.()
+      await vi.runOnlyPendingTimersAsync()
+      expect(outputs().filter((frame) => frame?.streamId === 7)).toHaveLength(0)
+      for (let replacement = 0; replacement < 2; replacement += 1) {
+        send(7, TerminalStreamOpcode.SnapshotRequest, {})
+        await vi.runOnlyPendingTimersAsync()
+      }
+      expect(
+        harness.binaryFrames
+          .map(decodeTerminalStreamFrame)
+          .filter(
+            (frame) => frame?.streamId === 7 && frame.opcode === TerminalStreamOpcode.SnapshotEnd
+          )
+      ).toHaveLength(3)
+      send(8, TerminalStreamOpcode.Ack, {
+        bytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES
+      })
+      await vi.runOnlyPendingTimersAsync()
+      expect(
+        outputs()
+          .filter((frame) => frame?.streamId === 7)
+          .map((frame) => decodeTerminalStreamText(frame!.payload))
+          .join('')
+      ).toBe(
+        `${pendingEscapeTailAnsi ? '\x18' : ''}\x1b[6n\x1b[c${pendingEscapeTailAnsi ? '\x1b[6n' : ''}AFTER`
+      )
+      const deliveredFrames = outputs().length
+      send(7, TerminalStreamOpcode.SnapshotRequest, {})
+      await vi.runOnlyPendingTimersAsync()
+      expect(outputs()).toHaveLength(deliveredFrames)
+      expect(answerYieldedTerminalQueries).not.toHaveBeenCalled()
+    } finally {
+      harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
+      await harness.dispatchPromise
+    }
+  }
+)
