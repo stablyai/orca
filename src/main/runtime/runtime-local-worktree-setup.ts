@@ -11,6 +11,7 @@ import {
 } from '../workspace-hooks/effective-hook-config'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeLocalWorktreeTerminalStartupResult } from './runtime-local-worktree-terminal-startup'
 
 /** Share setup decision between pre-add admission and post-add execution so allowed creates cannot fail after making the worktree. */
 export function resolveRuntimeSetupDecision(
@@ -95,5 +96,26 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,
     didStartInProcessSetupHook
+  }
+}
+
+export function buildRuntimeLocalWorktreeSetupReceipt(args: {
+  prepared: Awaited<ReturnType<typeof prepareRuntimeLocalWorktreeSetup>>
+  terminal: Pick<RuntimeLocalWorktreeTerminalStartupResult, 'didSpawnSetup' | 'setupTerminalHandle'>
+}): NonNullable<CreateWorktreeResult['setupReceipt']> {
+  const { prepared, terminal } = args
+  return {
+    requested: prepared.effectiveDecision,
+    hookFound: prepared.hookFound,
+    startupPolicy: prepared.setup?.waitForAgentStartup ? 'wait-for-setup' : 'start-immediately',
+    state: !prepared.hookFound
+      ? 'not_configured'
+      : prepared.effectiveDecision === 'skip' || !prepared.shouldRunSetup
+        ? 'skipped'
+        : // The in-process setup hook already started; spawn_failed would strand retrying callers.
+          terminal.didSpawnSetup || prepared.didStartInProcessSetupHook
+          ? 'running'
+          : 'spawn_failed',
+    ...(terminal.setupTerminalHandle ? { terminalHandle: terminal.setupTerminalHandle } : {})
   }
 }

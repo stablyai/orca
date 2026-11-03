@@ -1,10 +1,10 @@
 import type { Repo } from '../../shared/repo-types'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
-import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+import type { ProjectRuntimeResolutionStore } from '../workspaces/execution-host/local-project-runtime-resolution'
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import type { HostedReviewLocalGitOptions } from '../source-control/hosted-review-git-options'
 import type { GitHubParticipantRegistry } from './github-participant-registry'
 import { createGitHubExecutionAccountResolver } from './github-participant-execution'
