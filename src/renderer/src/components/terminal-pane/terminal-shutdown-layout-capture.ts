@@ -8,6 +8,7 @@ import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { getUtf8ByteLength, isUtf8ByteLengthWithinLimit } from '../../../../shared/utf8-byte-limits'
+import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
 
 const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
@@ -24,6 +25,8 @@ type CaptureTerminalShutdownLayoutArgs = {
   existingLayout: TerminalLayoutSnapshot
   /** Merge prior for buffers, resolved across both scrollback homes; defaults to the shared layout's. */
   priorBuffersByLeafId?: Record<string, string>
+  /** Re-read after a yielding serialize so a concurrent layout write is the merge prior. */
+  readExistingLayout?: () => TerminalLayoutSnapshot | undefined
   captureBuffers?: boolean
   clearedScrollbackLeafIds?: ReadonlySet<string>
 }
@@ -85,43 +88,89 @@ function serializeWithinSessionScrollbackByteLimit(
   return best ?? ''
 }
 
-export function captureTerminalShutdownLayout({
-  manager,
-  paneTransports,
-  existingLayout,
-  priorBuffersByLeafId = existingLayout.buffersByLeafId,
-  captureBuffers = true,
-  clearedScrollbackLeafIds
-}: CaptureTerminalShutdownLayoutArgs): TerminalLayoutSnapshot {
-  const panes = manager.getPanes()
-  const buffers: Record<string, string> = {}
+function serializeShutdownPaneScrollback(pane: ShutdownPane): string | undefined {
+  try {
+    // Drain throttled output before capture so hidden/nonfocused panes retain queued bytes.
+    flushTerminalOutput(pane.terminal)
+    const scrollback = pane.terminal.options?.scrollback ?? 10_000
+    // Absolute cursor restore avoids SerializeAddon’s one-column-short relative restore after wrap-pending rows.
+    let serialized = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
+      scrollback
+    })
+    // Cap persisted SSH sleep history by UTF-8 bytes so non-ASCII cannot bypass the limit.
+    if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
+      serialized = serializeWithinSessionScrollbackByteLimit(pane, serialized, scrollback)
+    }
+    return serialized.length > 0 ? serialized : undefined
+  } catch {
+    // Serialization failure for one pane should not block others.
+    return undefined
+  }
+}
 
-  if (captureBuffers) {
-    for (const pane of panes) {
-      try {
-        // Drain throttled output before capture so hidden/nonfocused panes retain queued bytes.
-        flushTerminalOutput(pane.terminal)
-        const leafId = pane.leafId
-        let scrollback = pane.terminal.options.scrollback ?? 10_000
-        // Absolute cursor restore avoids SerializeAddon’s one-column-short relative restore after wrap-pending rows.
-        let serialized = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
-          scrollback
-        })
-        // Cap persisted SSH sleep history by UTF-8 bytes so non-ASCII cannot bypass the limit.
-        if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
-          serialized = serializeWithinSessionScrollbackByteLimit(pane, serialized, scrollback)
-        }
-        if (serialized.length > 0) {
-          buffers[leafId] = serialized
-        }
-      } catch {
-        // Serialization failure for one pane should not block others.
-      }
+function isShutdownPaneMounted(manager: ShutdownPaneManager, pane: ShutdownPane): boolean {
+  try {
+    return manager
+      .getPanes()
+      .some((candidate) => candidate.id === pane.id && candidate.terminal === pane.terminal)
+  } catch {
+    return false
+  }
+}
+
+function captureMountedPaneBuffers(panes: readonly ShutdownPane[]): Record<string, string> {
+  const buffers: Record<string, string> = {}
+  for (const pane of panes) {
+    const serialized = serializeShutdownPaneScrollback(pane)
+    if (serialized !== undefined) {
+      buffers[pane.leafId] = serialized
     }
   }
+  return buffers
+}
 
+async function captureMountedPaneBuffersYielding(
+  manager: ShutdownPaneManager,
+  panes: readonly ShutdownPane[]
+): Promise<Record<string, string>> {
+  const buffers: Record<string, string> = {}
+  for (let index = 0; index < panes.length; index += 1) {
+    if (index > 0) {
+      // One remote pane's serialize can take a frame; yield so a multi-pane park cannot freeze the UI.
+      await yieldToEventLoop()
+    }
+    const pane = panes[index]
+    if (!isShutdownPaneMounted(manager, pane)) {
+      continue
+    }
+    const serialized = serializeShutdownPaneScrollback(pane)
+    if (serialized !== undefined) {
+      buffers[pane.leafId] = serialized
+    }
+  }
+  return buffers
+}
+
+function assembleStoredShutdownLayout(
+  {
+    paneTransports,
+    existingLayout,
+    priorBuffersByLeafId = existingLayout.buffersByLeafId,
+    captureBuffers = true,
+    clearedScrollbackLeafIds
+  }: CaptureTerminalShutdownLayoutArgs,
+  panes: readonly ShutdownPane[],
+  buffers: Record<string, string>,
+  unionCapturedLeaves: boolean
+): TerminalLayoutSnapshot {
   // Why the stored tree, not the mounted panes: reconciliation can leave a stored leaf unmounted.
   const currentLeafIds = new Set(collectLeafIds(existingLayout.root))
+  if (unionCapturedLeaves) {
+    // A pane may unmount after its serialize; dropping that leaf would throw away the only copy the yield just wrote.
+    for (const leafId of Object.keys(buffers)) {
+      currentLeafIds.add(leafId)
+    }
+  }
   const livePtyIdsByLeafId: Record<string, string> = {}
   const preservedPtyIdsByLeafId: Record<string, string> = {}
   const mountedLeafIds = new Set<string>(panes.map((p) => p.leafId))
@@ -149,7 +198,7 @@ export function captureTerminalShutdownLayout({
   const mergedBuffers = captureBuffers
     ? mergeCapturedLeafState({
         prior: omitClearedLeafState(priorBuffersByLeafId, clearedScrollbackLeafIds),
-        fresh: buffers,
+        fresh: omitClearedLeafState(buffers, clearedScrollbackLeafIds) ?? {},
         currentLeafIds
       })
     : {}
@@ -179,4 +228,38 @@ export function captureTerminalShutdownLayout({
       : {}),
     ...(Object.keys(ptyIdsByLeafId).length > 0 ? { ptyIdsByLeafId } : {})
   }
+}
+
+export function captureTerminalShutdownLayout(
+  args: CaptureTerminalShutdownLayoutArgs
+): TerminalLayoutSnapshot {
+  const panes = args.manager.getPanes()
+  const buffers = args.captureBuffers === false ? {} : captureMountedPaneBuffers(panes)
+  return assembleStoredShutdownLayout(args, panes, buffers, false)
+}
+
+/** Same stored-tree snapshot as `captureTerminalShutdownLayout`, yielding between panes so a park cannot monopolize a frame. */
+export async function captureTerminalShutdownLayoutYielding(
+  args: CaptureTerminalShutdownLayoutArgs
+): Promise<TerminalLayoutSnapshot> {
+  const panesAtStart = args.manager.getPanes()
+  const buffers =
+    args.captureBuffers === false
+      ? {}
+      : await captureMountedPaneBuffersYielding(args.manager, panesAtStart)
+  let panesNow: ShutdownPane[]
+  try {
+    panesNow = args.manager.getPanes()
+  } catch {
+    panesNow = []
+  }
+  const reread = args.readExistingLayout?.()
+  const nextArgs = reread
+    ? {
+        ...args,
+        existingLayout: reread,
+        priorBuffersByLeafId: reread.buffersByLeafId ?? args.priorBuffersByLeafId
+      }
+    : args
+  return assembleStoredShutdownLayout(nextArgs, panesNow, buffers, true)
 }
