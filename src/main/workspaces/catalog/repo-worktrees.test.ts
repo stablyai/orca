@@ -1,5 +1,5 @@
-import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../../git/worktree-listing'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { listWorktreeGraphMock, listWorktreesMock, listWorktreesStrictMock } = vi.hoisted(() => ({
@@ -8,8 +8,8 @@ const { listWorktreeGraphMock, listWorktreesMock, listWorktreesStrictMock } = vi
   listWorktreesStrictMock: vi.fn()
 }))
 
-vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
     listWorktrees: facade.listWorktrees,
@@ -18,20 +18,26 @@ vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
   }
 })
 
-vi.mock('../../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
     listWorktreesStrict: facade.listWorktreesStrict
   }
 })
 
-vi.mock('../../git/worktree', () => ({
-  listWorktreeGraph: listWorktreeGraphMock,
-  listWorktrees: listWorktreesMock,
-  listWorktreesStrict: listWorktreesStrictMock,
-  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesStrictMock
-}))
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (() => ({
+      listWorktreeGraph: listWorktreeGraphMock,
+      listWorktrees: listWorktreesMock,
+      listWorktreesStrict: listWorktreesStrictMock,
+      listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesStrictMock
+    }))()
+  }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
+})
 
 import {
   createFolderWorktree,

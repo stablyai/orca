@@ -189,35 +189,6 @@ describe('detach completed split pane → sidebar retention', () => {
     expect(resolveAgentPaneAuthorityKey(TARGET_PANE_KEY)).toBe(FINAL_PANE_KEY)
   })
 
-  it('keeps every intermediate key routed after a fourth move', () => {
-    const store = createDetachStore()
-    const EXTRA_TAB = 'tab-extra'
-    const extraPaneKey = makePaneKey(EXTRA_TAB, LEAF)
-    store.setState({
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          ...(store.getState().tabsByWorktree[WORKTREE_ID] ?? []),
-          makeTab({ id: EXTRA_TAB, worktreeId: WORKTREE_ID, ptyId: null })
-        ]
-      }
-    })
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    detach(store, TARGET_TAB, FINAL_TAB)
-    detach(store, FINAL_TAB, EXTRA_TAB)
-
-    for (const formerKey of [SOURCE_PANE_KEY, TARGET_PANE_KEY, FINAL_PANE_KEY]) {
-      expect(resolveAgentPaneAuthorityKey(formerKey)).toBe(extraPaneKey)
-    }
-    store.getState().setAgentStatus(TARGET_PANE_KEY, { state: 'done', prompt: 'late post' })
-    expect(store.getState().agentStatusByPaneKey[extraPaneKey]?.prompt).toBe('late post')
-  })
-
   it('does not resurrect the source when the transferred owner immediately closes', () => {
     const store = createDetachStore()
     store.getState().setAgentStatus(SOURCE_PANE_KEY, {

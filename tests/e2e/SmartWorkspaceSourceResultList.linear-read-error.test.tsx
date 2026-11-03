@@ -15,7 +15,7 @@ import {
   aliasStatus,
   aliasRow
 } from './smart-workspace-linear-read-test-fixtures'
-import { LinearIntegrationCard } from '../../src/renderer/src/components/settings/task-tracker-integration-cards'
+import { LinearIntegrationCard } from '../../src/renderer/src/components/integrations/task-trackers/linear-integration-card'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
 import { getIssue } from '../../src/main/linear/linear-issue-lookups'
 import React from 'react'
@@ -34,7 +34,7 @@ import type { LinearIssue } from '../../src/shared/linear/issue-types'
 import type { LinearConnectionStatus } from '../../src/shared/linear/workspace-types'
 import { referenceLinearIssue } from '../../src/renderer/src/components/sidebar/workspace-reference-fixtures.test-support'
 
-vi.mock('../../src/renderer/src/components/settings/linear-agent-skill-install-cta', () => ({
+vi.mock('../../src/renderer/src/components/skills/setup/linear-agent-skill-install-cta', () => ({
   LinearAgentSkillInstallCta: () => null
 }))
 vi.mock('../../src/renderer/src/components/linear-api-key-dialog', () => ({

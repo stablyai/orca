@@ -34,8 +34,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../git/runner', () => ({
-  gitExecFileAsync: vi.fn(),
+vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn()
+}))
+
+vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   wslAwareSpawn: wslAwareSpawnMock
 }))
 

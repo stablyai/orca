@@ -1,5 +1,6 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, gitRunner, setPlatform } from '../orca-runtime-test-mocks.spec'
+import { OrcaRuntimeService, setPlatform } from '../orca-runtime-test-mocks.spec'
 import { readHostedReviewForBranch } from '../../source-control/hosted-review'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import {
@@ -35,30 +36,32 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const wslGitOptions = { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
     let driftCounts = '1\t2\n'
-    const asyncGitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
-        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
-      }
-      if (isOriginMainBaseRefProbe(args)) {
-        return { stdout: 'main-sha\n', stderr: '' }
-      }
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
-        return { stdout: `${TEST_REPO_PATH}/.git\n`, stderr: '' }
-      }
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'rev-list') {
-        return { stdout: driftCounts, stderr: '' }
-      }
-      if (args[0] === 'log') {
-        return { stdout: 'base commit 2\nbase commit 1\n', stderr: '' }
-      }
-      throw new Error(`unexpected git call: ${args.join(' ')}`)
-    })
+    const asyncGitSpy = vi
+      .spyOn(gitExecFile, 'gitExecFileAsync')
+      .mockImplementation(async (args) => {
+        if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (isOriginMainBaseRefProbe(args)) {
+          return { stdout: 'main-sha\n', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
+          return { stdout: `${TEST_REPO_PATH}/.git\n`, stderr: '' }
+        }
+        if (args[0] === 'fetch') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-list') {
+          return { stdout: driftCounts, stderr: '' }
+        }
+        if (args[0] === 'log') {
+          return { stdout: 'base commit 2\nbase commit 1\n', stderr: '' }
+        }
+        throw new Error(`unexpected git call: ${args.join(' ')}`)
+      })
 
     try {
       const result = await runtime.probeWorktreeDrift(`id:${TEST_WORKTREE_ID}`)
