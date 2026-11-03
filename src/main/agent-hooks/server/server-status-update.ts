@@ -19,13 +19,10 @@ import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-
 import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/claude-owed-notification-expiry-timers'
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
-  attachClaudePermissionToolUseId,
-  claudeBatchSettlesRequest,
-  pairedClaudeNonAgentWork,
-  resumeClaudeRequestLead,
-  shouldKeepClaudePermissionVisible,
-  holdClaudeRequest
-} from '../../../shared/agent-hook-listener/claude-permission-transition'
+  attachLocalClaudeToolUseId,
+  decideLocalClaudePermission,
+  storedClaudeTransitionRow
+} from './server-claude-permission-hold'
 import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
@@ -214,12 +211,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    // A projected row was already decided by its execution host; this server decides only its own hooks.
-    const projection = identityResolvedPayload.claudePermission
-    const host = identityResolvedPayload.connectionId === null ? this.state : undefined
-    const attachedPayload = projection
-      ? identityResolvedPayload
-      : attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    const attachedPayload = attachLocalClaudeToolUseId(previous, identityResolvedPayload)
     // Resolve cancellation before permission holds adopt a replayed main-agent observation.
     const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
     if (latch.hold) {
@@ -242,17 +234,13 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const effectivePayload =
-      host && claudeBatchSettlesRequest(previous, latch.event) && previous
-        ? resumeClaudeRequestLead(this.state, previous, latch.event)
-        : latch.event
-    if (
-      previous &&
-      (projection
-        ? projection.held === true && !projection.row
-        : shouldKeepClaudePermissionVisible(previous, effectivePayload, host))
-    ) {
-      const held = holdClaudeRequest(previous, effectivePayload, !!host || !!projection)
+    const { held, next: effectivePayload } = decideLocalClaudePermission(
+      this.state,
+      previous,
+      latch.event,
+      identityResolvedPayload
+    )
+    if (previous && held) {
       // Child prompts preserve main-agent progress and its paired shell evidence; the main agent's own waits do not.
       if (previous.toolAgentId) {
         onAccepted?.()
@@ -280,19 +268,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    // Preserve terminal joins only within one host; settlement lists vouch only for this transition.
-    const {
-      claudeRunningNonAgentTask: _unpaired,
-      claudeSettledRequests: _settled,
-      claudeBatch: _batch,
-      claudePermission: _projection,
-      ...unpairedPayload
-    } = effectivePayload
-    const runningNonAgentTask = pairedClaudeNonAgentWork(previous, effectivePayload)
-    const pairedPayload =
-      runningNonAgentTask === undefined
-        ? unpairedPayload
-        : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
+    const pairedPayload = storedClaudeTransitionRow(previous, effectivePayload)
     const enriched = deriveCliWriterTopology(
       {
         ...this.attachStatusTiming(pairedPayload, now, observedAt),
