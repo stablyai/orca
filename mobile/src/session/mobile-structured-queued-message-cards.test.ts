@@ -51,12 +51,19 @@ describe('mobileQueuedMessageCards', () => {
         from: source
       }
     })
-    expect(mobileQueuedMessageCards([queued], [])[0]?.attribution).toBe('From ci-notifier, Coder')
+    const sourceOnly = {
+      ...queued,
+      messageId: 'command-only-mail',
+      body: { ...queued.body, from: { ...source, senders: source.senders.slice(0, 1) } }
+    }
+    expect(
+      mobileQueuedMessageCards([sourceOnly, queued], []).map((card) => card.attribution)
+    ).toEqual(['From ci-notifier', 'From ci-notifier, Coder'])
     try {
       await activateMobileUiLocale('fr')
-      expect(mobileQueuedMessageCards([queued], [])[0]?.attribution).toBe(
-        'De la part de ci-notifier, Coder'
-      )
+      expect(
+        mobileQueuedMessageCards([sourceOnly, queued], []).map((card) => card.attribution)
+      ).toEqual(['De la part de ci-notifier', 'De la part de ci-notifier, Coder'])
     } finally {
       await activateMobileUiLocale('en')
     }
