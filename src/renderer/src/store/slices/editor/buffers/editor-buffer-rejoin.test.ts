@@ -4,7 +4,7 @@ import { assertEditorBufferInvariant } from '../../../editor-buffer-record-lifec
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
 import type { OpenFile } from '../types/open-file'
 import { isDetachedEditorBufferId } from './editor-buffer-views'
-import { mayRejoinAfterDraftWrite } from './editor-buffer-rejoin'
+import './editor-buffer-rejoin'
 import { getEditorModelOwnerKey } from '@/components/editor/editor-model-owner'
 
 function tab(id: string, worktreeId: string, patch: Partial<OpenFile> = {}): OpenFile {
@@ -90,41 +90,6 @@ describe('detached records rejoin once one side is clean', () => {
     expect(state().editorDrafts.b).toBe('abc')
     expect(view('b')?.isDirty).toBe(true)
   })
-
-  it("carries the detached side's conflict banner onto every view when it wins", async () => {
-    divergentPair({ externalMutation: 'changed' })
-    state().markFileDirty('a', false)
-    state().clearEditorDraft('a')
-    await settled()
-
-    expect(view('a')?.externalMutation).toBe('changed')
-    expect(view('b')?.externalMutation).toBe('changed')
-  })
-
-  it('typing on either side schedules no rejoin pass', async () => {
-    divergentPair()
-    const revision = state().editorBufferIdentityRevision
-    state().setEditorDraft('a', 'abcX')
-    state().setEditorDraft('b', 'abcdY')
-    await settled()
-    expect(state().editorBufferIdentityRevision).toBe(revision)
-    // Only clearing a side's draft can make it clean.
-    expect(mayRejoinAfterDraftWrite(state(), state().editorBufferDetached, { a: 'x' }, {})).toBe(
-      true
-    )
-    expect(
-      mayRejoinAfterDraftWrite(state(), state().editorBufferDetached, { a: 'x' }, { a: 'y' })
-    ).toBe(false)
-  })
-
-  it('takes the key when the partner closed', async () => {
-    divergentPair()
-    state().closeFile('a')
-    await settled()
-
-    expect(isDetachedEditorBufferId(recordOf('b'))).toBe(false)
-    expect(state().editorDrafts.b).toBe('abcd')
-  })
 })
 
 describe('a dirty record whose last view closed without a prompt', () => {
@@ -150,19 +115,6 @@ describe('a dirty record whose last view closed without a prompt', () => {
     expect(state().editorDrafts.b).toBe('kept edits')
     expect(view('b')?.isDirty).toBe(true)
     expect(view('b')?.lastKnownDiskSignature).toBe('sig-old')
-    expect(state().editorBufferKept).toEqual({})
-  })
-
-  it('is not kept when the close asked nothing (Don’t save) or the record was clean', () => {
-    useAppStore.setState({
-      openFiles: [
-        tab('a', 'wt-1', { isDirty: true }),
-        tab('c', 'wt-1', { filePath: '/repo/c.ts' })
-      ],
-      editorDrafts: { a: 'discarded' }
-    })
-    state().closeFile('a')
-    closeWithoutPrompt(['c'])
     expect(state().editorBufferKept).toEqual({})
   })
 

@@ -20,7 +20,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['automation-prompt-disclosure', 'automation-runs-dashboard'],
     [`${COMPONENTS}automations/`]
   ),
-  featureRoute('feature.feature-wall', ['feature-wall'], [`${COMPONENTS}feature-wall/`]),
   featureRoute(
     'feature.sparse-checkout',
     ['sparse-explorer-proof', 'sparse-preset-proof'],
@@ -53,7 +52,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   ),
   featureRoute(
     'feature.dictation',
-    ['dictation-indicator', 'voice-microphone-selection'],
+    ['voice-microphone-selection'],
     [`${COMPONENTS}dictation/`, 'src/main/speech/']
   ),
   featureRoute(
@@ -68,12 +67,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   ),
   featureRoute(
     'feature.linear',
-    [
-      'linear-filter-chip-labels',
-      'linear-issue-view-persistence',
-      'linear-private-images',
-      'linear-url-workspace-entry'
-    ],
+    ['linear-issue-view-persistence', 'linear-private-images', 'linear-url-workspace-entry'],
     [
       `${COMPONENTS}task-page/linear/`,
       'src/renderer/src/store/slices/linear/',
@@ -94,7 +88,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
   ),
   featureRoute('feature.usage-overview', ['usage-overview'], [`${COMPONENTS}stats/`]),
-  featureRoute('feature.pet', ['pet-status-segment-layout'], [`${COMPONENTS}pet/`]),
   featureRoute(
     'feature.new-workspace',
     [

@@ -12,7 +12,7 @@ import { assertLegacyAiVaultResumeAllowed } from '../ai-vault/structured-session
 import { tryEnsureStructuredAgentSessionHostForResume } from '../runtime/agent-session/structured-agent-session-host-refusal'
 import { copyStructuredChatConversation } from '../ai-vault/structured-chat-conversation-copy'
 import { wakeNativeChatTranscriptDistro } from '../native-chat/native-chat-open-wake'
-import { wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export type AiVaultResumeHandlerOptions = {
   ensureStructuredSessionOwnership?: () => Promise<void>

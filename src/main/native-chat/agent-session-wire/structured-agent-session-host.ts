@@ -101,6 +101,7 @@ export class StructuredAgentSessionHost {
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),
       // Retire at rest; the next start refreshes login and permission mode.
       stopOutgrownAgent: (id) => this.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
+      stopPermissionTransitionChild: (id) => this.lifetime.stopAgent(id, { cause: 'evict' }),
       clientDelivery: this.clientDelivery
     })
     this.startup = createStartupRecovery(deps, this.runtimeState.reconcileLeases, this.runtimeState)
@@ -306,8 +307,10 @@ export class StructuredAgentSessionHost {
     ...args
   ) => this.sessions.observeConversationPublications(...args)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
-  queuedSendAnswer = (sessionId: string, messageId: string) =>
-    this.backgroundTasks.queuedSendAnswer(sessionId, messageId)
+  queuedSendAnswer = this.reads.queuedSendAnswer
+  /** What became of one send, answered by key, for callers that follow many sends. */
+  sendAnswer = this.reads.sendAnswer
+  wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
 
   private readonly startJournal = structuredAgentStartJournal(
     () => this.deps,

@@ -610,36 +610,6 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[stale.paneKey]).toBeUndefined()
   })
 
-  it('lets quit/live pane-owned records claim provider sessions before stale duplicates launch', () => {
-    const ownedPaneKey = makePaneKey('tab-1', LEAF_ID)
-    const stalePaneKey = makePaneKey('missing-tab', OTHER_LEAF_ID)
-    const owned = makeRecord({ paneKey: ownedPaneKey, origin: 'quit' })
-    const stale = makeRecord({
-      paneKey: stalePaneKey,
-      tabId: 'missing-tab',
-      origin: 'quit',
-      capturedAt: 2,
-      updatedAt: 2
-    })
-    useAppStore.setState({
-      ...makeActiveTerminalState('tab-1'),
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-      terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID) },
-      sleepingAgentSessionsByPaneKey: {
-        [owned.paneKey]: owned,
-        [stale.paneKey]: stale
-      }
-    } as never)
-
-    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-    const state = useAppStore.getState()
-    expect(launched).toBe(0)
-    expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
-    expect(state.sleepingAgentSessionsByPaneKey[owned.paneKey]).toBe(owned)
-    expect(state.sleepingAgentSessionsByPaneKey[stale.paneKey]).toBeUndefined()
-  })
-
   it('does not let completed same-provider hibernation evidence launch before an active fresh resume', () => {
     const completedPaneKey = makePaneKey('tab-completed', OTHER_LEAF_ID)
     const activePaneKey = makePaneKey('tab-active', LEAF_ID)

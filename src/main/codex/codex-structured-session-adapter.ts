@@ -1,3 +1,4 @@
+import * as permission from './codex-structured-turn-permission'
 import { projectCodexSessionOptions } from './codex-structured-service-tier'
 import * as codexRewind from './codex-structured-rewind'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
@@ -97,7 +98,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       invocation: this.deps.renameInvocation
     })
 
-  permissionModeRequiresAcquisition = (): boolean => false
+  permissionModeRequiresAcquisition = permission.codexNativeResumeRequirement(this.sessions)
+
+  settlePermissionTransition = permission.createCodexPermissionTransition(this.sessions, this)
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireCodexStructuredSession({
@@ -285,8 +288,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     recoverCodexRewindAtStart(this.sessions, input, this.deps.requestTimeoutMs)
 
-  startupEnding = (sessionId: string, generation: string) =>
-    this.acquisitions.endings.get(sessionId, generation)
+  startupEnding = (id: string, generation: string) => this.acquisitions.endings.get(id, generation)
   retireStartup = (sessionId: string, generation: string) =>
     this.acquisitions.endings.retire(sessionId, generation)
 

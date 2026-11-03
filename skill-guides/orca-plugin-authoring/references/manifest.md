@@ -47,7 +47,7 @@
 - `customEditors` (CustomEditorContribution[], since 1.4.245): Editors that open files of given types in the editor tab. At most 16.
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
-- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.
+- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
 
 Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`, `sidebarCards`.
 

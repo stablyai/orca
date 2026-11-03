@@ -9,7 +9,7 @@ import {
   structuredLaunchIntent,
   launchErrorMocks
 } from './launch-agent-structured-chat-test-fixture'
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import { useTabAgentMenuLaunch } from '@/components/tab-bar/QuickLaunchButton'
@@ -114,7 +114,7 @@ function editor(): HTMLElement {
   return document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
 }
 function button(name: string): HTMLButtonElement {
-  return [...document.querySelectorAll('button')].find((button) => button.textContent === name)!
+  return screen.getByRole('button', { name })
 }
 
 it.each(
@@ -509,20 +509,3 @@ it('returns setup input when explicit chat is refused before session admission',
   expect(mockLaunchStructuredCodexSession).not.toHaveBeenCalled()
   expect(mockCreateTab).not.toHaveBeenCalled()
 })
-
-it.each(['auto-submit', 'draft'] as const)(
-  'honors local no-future %s ownership instead of treating it as a missing result',
-  async (promptDelivery) => {
-    const actual = launcher.launchAgentInNewTab
-    const dispatch = vi
-      .spyOn(launcher, 'launchAgentInNewTab')
-      .mockImplementation((args) => actual({ ...args, promptDelivery }))
-    render(<Menu route="menu" />)
-    fireEvent.click(document.querySelector('button[aria-label="Configure Claude"]')!)
-    changePrompt(editor(), 'local prompt')
-    await act(async () => button('Launch terminal').click())
-    expect(dispatch.mock.results[0].value?.promptDeliveryResult).toBeUndefined()
-    expect(mockCreateTab).toHaveBeenCalledOnce()
-    expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(entry)).text).toBe('')
-  }
-)

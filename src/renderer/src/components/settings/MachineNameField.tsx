@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { cn } from '@/lib/utils'
 import { MACHINE_NAME_MAX_LENGTH } from '../../../../shared/machine-name'
-import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
+import { DebouncedSettingsTextInput } from './form-controls/DebouncedSettingsTextInput'
 import { usePublishedMachineName } from './use-published-machine-name'
 
 type MachineNameFieldProps = {

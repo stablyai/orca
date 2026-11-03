@@ -16,16 +16,16 @@ import {
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { hostedReviewForBranchReply } from '../../shared/hosted-review'
 import { readHostedReviewForBranch } from '../source-control/hosted-review'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
-import { listRepoWorktreeGraph } from '../repo-worktrees'
+import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
+import { listRepoWorktreeGraph } from '../workspaces/catalog/repo-worktrees'
 import {
   getLocalProjectGhExecOptions,
   getLocalProjectWorktreeGitOptions
-} from '../project-runtime-git-options'
-import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+} from '../workspaces/execution-host/project-runtime-git-options'
+import { getWorktreeSharedLinkPaths } from '../git/worktrees/content-paths/worktree-shared-directories'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
-import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
+import { guardWslUncPathAccess } from '../wsl/filesystem/wsl-unc-access-gate'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {

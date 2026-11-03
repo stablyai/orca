@@ -6,7 +6,8 @@ describe('offline recovery source selection', () => {
     { kind: 'current-json' },
     { kind: 'latest-json' },
     { kind: 'json', revision: 1 },
-    { kind: 'sqlite', backupId: 'selected-backup' }
+    { kind: 'sqlite', backupId: 'selected-backup' },
+    { kind: 'repair', sections: [{ domain: 'automationRuns', source: 'current' }] }
   ])('accepts an explicit source: %j', (selector) => {
     expect(
       profileStateRecoveryRequestSchema.parse({ userDataPath: '/profile', selector }).selector
@@ -22,7 +23,9 @@ describe('offline recovery source selection', () => {
     { kind: 'json', revision: null },
     { kind: 'json', revision: 0 },
     { kind: 'sqlite' },
-    { kind: 'json' }
+    { kind: 'json' },
+    { kind: 'repair', sections: [{ domain: 'automationRuns', source: 'current', backupId: null }] },
+    { kind: 'repair', sections: [{ domain: 'repos', source: 'current' }] }
   ])('rejects ambiguous or incomplete sources: %j', (selector) => {
     expect(
       profileStateRecoveryRequestSchema.safeParse({ userDataPath: '/profile', selector }).success

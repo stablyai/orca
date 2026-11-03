@@ -125,10 +125,11 @@ export function readAgentLaunchChoice(
   store: AgentLaunchRouteStore,
   agent: TuiAgent,
   workspace: ProspectiveWorkspace,
-  detected: readonly TuiAgent[] | null
+  detected: readonly TuiAgent[] | null,
+  preferredSurface?: 'chat'
 ) {
   const context = resolveChatProgramContext(store, workspace)
-  const input = buildAgentLaunchRouteInput(store, { agent, workspace })
+  const input = buildAgentLaunchRouteInput(store, { agent, workspace, preferredSurface })
   const program = readChatProgram(store, agent, context, detected)
   const support = structuredAgentLaunchSupport(input)
   const catalogReady =
@@ -142,7 +143,7 @@ export function readAgentLaunchChoice(
     (support.blocker === 'runtime-capability-unknown' ||
       (support.blocker === 'agent-without-structured-session' && !catalogReady))
   const chatEligibility =
-    !nativeChatPreferenceFor(store.settings, agent) ||
+    (preferredSurface !== 'chat' && !nativeChatPreferenceFor(store.settings, agent)) ||
     (!support.supported && !routePending) ||
     program === 'missing'
       ? 'no'
@@ -175,11 +176,20 @@ export function chosenAgentChatUnlearned(
 export function agentsOfferedForLaunch(
   store: AgentLaunchRouteStore,
   workspace: ProspectiveWorkspace,
-  detected: readonly TuiAgent[] | null
+  detected: readonly TuiAgent[] | null,
+  preferredChatAgent?: TuiAgent
 ): TuiAgent[] {
   const { executionHostId } = resolveChatProgramContext(store, workspace)
   const chats = chatProviderAgents(executionHostId, store.runtimeStatusByEnvironmentId)
-  const opens = chats.filter((agent) => agentChoiceOpensAsChat(store, agent, workspace, detected))
+  const opens = chats.filter((agent) =>
+    agentChoiceOpensAsChat(
+      store,
+      agent,
+      workspace,
+      detected,
+      agent === preferredChatAgent ? 'chat' : undefined
+    )
+  )
   return [...new Set([...(detected ?? []), ...opens])]
 }
 

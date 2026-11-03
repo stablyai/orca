@@ -12,12 +12,13 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
-import { agentChoiceConfigValue } from './agent-choice-cli-apply'
+import { agentChoiceConfigString, agentChoiceConfigValue } from './agent-choice-cli-apply'
 
 export type ChoiceOccurrence = {
   key: string
   value: string
-  valueType: 'string' | 'boolean'
+  valueType?: 'string' | 'boolean'
+  source?: boolean
   words: string[]
   start: number
   end: number
@@ -156,9 +157,10 @@ export function analyzeChoiceArgs(
             if (configValue === undefined) {
               continue
             }
-            value = configValue
-            lift &&=
-              /^[A-Za-z_][A-Za-z0-9_./:-]*$/.test(value) && !/^(true|false|inf|nan)$/i.test(value)
+            const decoded = agentChoiceConfigString(configValue)
+            valueType = decoded === undefined ? undefined : 'string'
+            value = decoded ?? configValue
+            lift &&= decoded !== undefined
           }
         }
         const spans = first.parsed.spans.slice(index, index + count)
@@ -179,7 +181,7 @@ export function analyzeChoiceArgs(
                   text.slice(span.start, span.end) === quoteStartupArg(words[offset], grammars[0])
               )
           ) ?? false
-        const agreed = originals.every((original) => {
+        const sourceAgreed = originals.every((original, grammarIndex) => {
           if (!original) {
             return false
           }
@@ -189,7 +191,8 @@ export function analyzeChoiceArgs(
             original.parsed.spans[at + count - 1]?.end === end &&
             spans.every(
               (_, offset) =>
-                (!original.parsed.spans[at + offset]?.divergesFromShell ||
+                (grammars[grammarIndex] === 'cmd' ||
+                  !original.parsed.spans[at + offset]?.divergesFromShell ||
                   currentGeneratedCarrier) &&
                 original.parsed.tokens[at + offset] === first.parsed.tokens[index + offset]
             ) &&
@@ -200,6 +203,19 @@ export function analyzeChoiceArgs(
               ))
           )
         })
+        const agreed =
+          sourceAgreed &&
+          originals.every(
+            (original) =>
+              original &&
+              spans.every((span) => {
+                const at = original.offsets.get(span.start)
+                return (
+                  at !== undefined &&
+                  (!original.parsed.spans[at].divergesFromShell || currentGeneratedCarrier)
+                )
+              })
+          )
         if (!seen.has(`${key}:${start}`)) {
           seen.add(`${key}:${start}`)
           occurrences.push({
@@ -211,6 +227,7 @@ export function analyzeChoiceArgs(
             end,
             lift: lift && agreed,
             owned: agreed,
+            source: sourceAgreed && valueType !== undefined,
             ...(replacement !== undefined ? { replacement } : {})
           })
         }

@@ -7,7 +7,7 @@ import {
   loadWindowsNativeRegistry,
   WINDOWS_REG_EXPAND_SZ,
   WINDOWS_REG_SZ
-} from '../../windows-native-registry'
+} from '../../windows/windows-native-registry'
 import { NATIVE_HOST_ERRORS } from './browser-extension-native-host-errors'
 import {
   nativeHostManifestSources,

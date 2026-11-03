@@ -90,6 +90,26 @@ describe('lightweight Run CLI handlers', () => {
     })
   })
 
+  it('prints the next step run-current returns for a caller that also works a Dispatch', async () => {
+    callMock.mockResolvedValue({
+      result: { run: { id: 'run_1', objective: 'Work' }, next: 'You work Dispatch ctx_1.' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await ORCHESTRATION_HANDLERS['orchestration run-current']({
+      flags: new Map([['from', 'term_coord']]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(JSON.parse(String(log.mock.calls[0][0])).result).toMatchObject({
+      runId: 'run_1',
+      next: 'You work Dispatch ctx_1.'
+    })
+    log.mockRestore()
+  })
+
   it('passes Run pagination flags to the runtime', async () => {
     callMock.mockResolvedValue({
       result: { runs: [], nextCursor: null }

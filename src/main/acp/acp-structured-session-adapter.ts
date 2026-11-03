@@ -22,7 +22,7 @@ import { AcpConnectionClosedError } from './acp-errors'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
-import { awaitAcpTurnEnd, interruptAcpTurn } from './acp-structured-stop'
+import * as stop from './acp-structured-stop'
 import { acpDispatchPrompt } from './acp-prompt-content'
 import {
   ACP_OPTION_WRITE_TIMEOUT_MS,
@@ -39,6 +39,7 @@ import { AcpTextTasks } from './acp-text-task'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
 import { acpAcquireFailure, acpRefusedStart } from './acp-startup-outcome'
 import { openAcpStart } from './acp-structured-start-open'
+import { admitStructuredAgentSessionInput } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
@@ -127,7 +128,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       const { connection } = attempt
       if (connection && error instanceof AcpConnectionClosedError) {
         // Wait briefly for process exit so startup failures include final diagnostics.
-        await waitForAcpExit(connection, this.stopGraceMs(), attempt.signal)
+        await waitForAcpExit(connection, this.graceMs(), attempt.signal)
       }
       // Orca closing the connection first, such as on a sign-in line it cannot read, is the start's
       // cause; the exit its cleanup then causes is not the agent ending unanswered. Capture
@@ -208,11 +209,13 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     input.signal?.throwIfAborted()
     await input.beforeDispatch?.()
     input.signal?.throwIfAborted()
-    session.turns.dispatch({
-      clientMessageId: input.clientMessageId,
-      prompt,
-      requestedAt: input.requestedAt ?? this.now()
-    })
+    await admitStructuredAgentSessionInput(input.admitFreshInput, () =>
+      session.turns.dispatch({
+        clientMessageId: input.clientMessageId,
+        prompt,
+        requestedAt: input.requestedAt ?? this.now()
+      })
+    )
     // Admission precedes provider confirmation of the send.
     return { state: 'admitted' }
   }
@@ -231,16 +234,15 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
     // The host waits for turn completion or grace expiry, never for the cancel write.
-    interruptAcpTurn(session)
+    stop.interruptAcpTurn(session)
     return { cancelled: true }
   }
 
-  awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number): Promise<void> => {
-    const session = this.children.sessions.get(sessionId)
-    if (session && childState.isAcpReadySession(session)) {
-      await awaitAcpTurnEnd(session, stoppedAt, this.stopGraceMs())
-    }
-  }
+  private readonly graceMs = (): number => this.deps.stopGraceMs ?? ACP_STOP_GRACE_MS
+
+  awaitStoppedRequestEnd = stop.requestEndWait((id) => this.children.sessions.get(id), this.graceMs)
+
+  settlePermissionTransition = stop.acpPermissionTransition((id) => this.live(id), this.graceMs)
 
   answerPrompt: SessionAdapter['answerPrompt'] = (input) =>
     this.live(input.sessionId).prompts.answer(input)
@@ -338,6 +340,5 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return session
   }
 
-  private readonly stopGraceMs = (): number => this.deps.stopGraceMs ?? ACP_STOP_GRACE_MS
   private readonly now = (): number => (this.deps.now ?? Date.now)()
 }

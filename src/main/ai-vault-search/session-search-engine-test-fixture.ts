@@ -1,4 +1,4 @@
-import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptMessageRole } from '../ai-vault/transcripts/session-transcript-consumers'
 import type SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchEngine, type SessionSearchEngineOptions } from './session-search-engine'
 import { cwdKey } from './session-search-file-records'

@@ -11,7 +11,7 @@ import {
 } from './AntigravityProviderSignInArea'
 import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
 import type { AgentOpensAs } from './native-chat-provider-choice'
-import { SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsSegmentedControl } from './form-controls/SettingsFormControls'
 
 // The chat choice is this computer's, so the downloaded chat programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }

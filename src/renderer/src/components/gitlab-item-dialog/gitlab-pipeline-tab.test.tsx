@@ -38,7 +38,7 @@ const failedDetails = {
 }
 
 function PipelineTab({ data = failedDetails }: { data?: GitLabWorkItemDetails }) {
-  const state = useGitLabItemDialogState(item.id)
+  const state = useGitLabItemDialogState(item.id, item.id)
   return (
     <Tabs value="pipeline">
       <GitLabPipelineTab

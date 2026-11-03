@@ -15,7 +15,9 @@ vi.mock('electron', () => ({
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
-vi.mock('../codex-cli/command', () => ({ resolveCliCommand: resolveCliCommandMock }))
+vi.mock('../../shared/node-cli-command-resolution', () => ({
+  resolveCliCommand: resolveCliCommandMock
+}))
 
 import { registerShellHandlers } from './shell'
 import { fingerprintRuntimeSshTarget } from '../ssh/runtime-ssh-target-fingerprint'

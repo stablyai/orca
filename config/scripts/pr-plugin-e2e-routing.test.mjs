@@ -62,7 +62,7 @@ describe('plugin PR E2E routing', () => {
     ['src/main/plugins/panels/plugin-panel-controller.ts', 'plugin-panel-containment'],
     ['src/main/plugins/catalog/plugin-file-type-suggestion.ts', 'plugin-file-type-suggestion'],
     ['src/main/plugins/catalog/plugin-auto-updater.ts', 'plugin-update-review-toast'],
-    ['src/shared/plugins/manifest/plugin-manifest.ts', 'plugin-startup-budget'],
+    ['src/shared/plugins/manifest/plugin-manifest.ts', 'plugin-demo'],
     ['src/main/plugins/panels/plugin-frame-module-transform.ts', 'plugin-buildless-tsx'],
     ['src/cli/plugin-authoring/plugin-type-files.ts', 'plugin-buildless-tsx'],
     ['examples/plugins/hello-tsx/src/panel.tsx', 'plugin-buildless-tsx'],
@@ -157,7 +157,7 @@ describe('plugin PR E2E routing', () => {
       'src/renderer/src/components/plugins/review/PluginUpdateReview.test.tsx',
       'src/main/plugins/plugin-service.test.ts',
       'src/main/plugins/__mocks__/plugin-git-ssh-remote-fixture.ts',
-      'src/renderer/src/components/settings/GeneralPane.tsx',
+      'src/renderer/src/components/settings/general/GeneralPane.tsx',
       'src/main/ipc/filesystem.ts'
     ]) {
       expect(routedPluginSpecs(file), file).toEqual([])

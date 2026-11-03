@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
-import { writeRollingFileBackup } from '../rolling-file-backup'
+import { writeRollingFileBackup } from '../filesystem/rolling-file-backup'
 
 export function writeTomlConfigAtomically(configPath: string, contents: string): void {
   const writePath = resolveTomlWritePath(configPath)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
-import { useProjectHostSetupProjection, useRepoById } from '@/store/selectors'
+import { useRepoById } from '@/store/selectors'
 import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
 import {
   addSessionRestoredBannerPaneId,
@@ -127,7 +127,6 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
   const quickCommandRepoId =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
   const quickCommandRepo = useRepoById(quickCommandRepoId)
-  const projectHostSetupProjection = useProjectHostSetupProjection()
   const quickCommandRepoLabel = quickCommandRepo
     ? quickCommandRepo.displayName || quickCommandRepo.path
     : quickCommandRepoId
@@ -214,7 +213,6 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     dismissSessionRestoredBanner,
     openDiskSpaceAnalyzer,
     quickCommandRepoId,
-    projectHostSetupProjection,
     quickCommandRepoLabel,
     quickCommandGroupId,
     openQuickCommandEditor,

@@ -10,11 +10,11 @@ import { gitOptionsForWorktree } from './git-runtime-options'
 import {
   postponeRepoRefMaintenance,
   withRepoRefMaintenancePaused
-} from './local-repo-ref-maintenance'
+} from './refs/maintenance/local-repo-ref-maintenance'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
-import { fetchForkRemoteWithStaleRefspecRepair } from './fork-remote-stale-branch-refspec'
-import { runWithGitReadCacheInvalidation } from './status'
+import { fetchForkRemoteWithStaleRefspecRepair } from './refs/fork-remotes/fork-remote-stale-branch-refspec'
+import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 import { runWithGitWorktreeOperationLock } from '../../shared/git-worktree-operation-lock'
 
 export { gitPullRebaseFromBase } from './remote-rebase'

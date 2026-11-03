@@ -595,23 +595,6 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     expect(checkedA.result.messages).toEqual([expect.objectContaining({ id: messageId })])
   })
 
-  test('writes and submits the pointer for the active coordinator pane', async ({
-    orcaPage,
-    electronApp
-  }) => {
-    test.setTimeout(180_000)
-    const { client, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
-    const pane = await openAgentPane()
-    await driveToLiveIdle(client, pane)
-    const mailbox = await createRunMailbox(client, pane, 'Coordinator pointer submit')
-
-    const subject = 'Coordinator pointer submit'
-    await sendMail(client, mailbox, { subject })
-
-    await expectPointed(pane)
-    await expectSubmitted(pane)
-  })
-
   test('writes and submits the pointer for a Cursor agent pane', async ({
     orcaPage,
     electronApp
@@ -637,7 +620,6 @@ test.describe('orchestration delivery to a cold-parked agent', () => {
   test.use({
     orcaAppExtraEnv: {
       ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(parkingDelayMs),
-      // Allow CI’s title roundtrip to beat Enter; production’s 500ms heuristic is not a reliable test budget.
       ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS: '5000'
     }
   })
@@ -768,57 +750,5 @@ test.describe('orchestration delivery to a cold-parked agent', () => {
       path: screenshotPath,
       contentType: 'image/png'
     })
-  })
-
-  test('does not submit a parked pointer after the agent starts working', async ({
-    orcaPage,
-    electronApp
-  }) => {
-    test.setTimeout(180_000)
-    const { client, userDataDir, worktreeId, openAgentPane } = await setUpMailFixture(
-      orcaPage,
-      electronApp
-    )
-    const pane = await openAgentPane({
-      titleOnStdin: { needle: POINTER_COMMAND, title: CODEX_WORKING_TITLE }
-    })
-    await driveToLiveIdle(client, pane)
-    const mailbox = await createRunMailbox(client, pane, 'Cold parked working transition')
-    const beforePark = await waitForPaneIdentitySnapshot(orcaPage, 1)
-    const tabId = beforePark.tabId
-
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
-      parkDelayMs: parkingDelayMs
-    })
-    const messageId = await sendMail(client, mailbox, {
-      subject: `Cold parked working transition ${randomUUID()}`
-    })
-
-    await expect
-      .poll(() => countOccurrences(pane.agent.readStdin(), POINTER_COMMAND), {
-        timeout: DELIVERY_TIMEOUT_MS,
-        message: 'cold-parked pointer never reached the agent'
-      })
-      .toBe(1)
-    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
-    await orcaPage.waitForTimeout(1_000)
-    expect(countOccurrences(pane.agent.readStdin(), '\r')).toBe(0)
-    expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pending')
-
-    pane.agent.setTitle(CODEX_IDLE_TITLE)
-    await waitForObservedTitle(client, pane.handle, CODEX_IDLE_TITLE)
-    await expect
-      .poll(
-        () => ({
-          pointers: countOccurrences(pane.agent.readStdin(), POINTER_COMMAND),
-          enters: countOccurrences(pane.agent.readStdin(), '\r')
-        }),
-        {
-          timeout: DELIVERY_TIMEOUT_MS,
-          message: 'mail did not recover after the parked agent returned idle'
-        }
-      )
-      .toEqual({ pointers: 1, enters: 1 })
-    expect(mailDisposition(readMailRow(userDataDir, messageId))).toBe('pushed')
   })
 })

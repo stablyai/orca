@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WslRunningPathFilterModule from '../wsl-running-path-filter'
+import type * as WslRunningPathFilterModule from '../wsl/filesystem/wsl-running-path-filter'
 import type * as WslTranscriptFsGateModule from './wsl-transcript-fs-gate'
 
 const WSL_SESSIONS_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions'
@@ -31,19 +31,19 @@ vi.mock('../ai-vault/session-scanner-discovery', () => ({
 }))
 // These cases cover root and path policy; the E9 gate has its own suite.
 vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
-vi.mock('../wsl/wsl-home-unless-stopped', async () => {
-  const wsl = await import('../wsl')
+vi.mock('../wsl/discovery/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl/discovery/distro-catalog')
   return {
     wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
     listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
   }
 })
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: vi.fn(async () => '\\\\wsl.localhost\\Ubuntu\\home\\ada'),
   listRunningWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
   listRunningWslHomeDirsAsync: vi.fn(async () => ['\\\\wsl.localhost\\Ubuntu\\home\\ada'])
 }))
-vi.mock('../wsl-running-path-filter', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', async (importOriginal) => ({
   ...(await importOriginal<typeof WslRunningPathFilterModule>()),
   filterPathsToRunningWslDistrosAsync: mocks.filterPathsToRunningWslDistrosAsync
 }))

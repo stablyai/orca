@@ -1,13 +1,16 @@
+import type { RpcResponse } from '../../transport/types'
+import type { BridgePortPair } from './bridge-port-pair-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isRpcDeliveryUnknown,
   markRpcDeliveryUnknown
 } from '../../transport/rpc-delivery-ambiguity'
-import type { RpcResponse } from '../../transport/types'
+
 import { createFakeRpcClient } from '../bridge-host-test-fakes'
 import { BRIDGE_MAX_MESSAGE_BYTES, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
-import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
+
+import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 
 // Test RpcClient behavior across real FIFO bridge lanes; type conformance alone cannot prove screens observe the same round-trip semantics.
 
@@ -317,4 +320,40 @@ describe('bridge round trip: close', () => {
     expect(closeShellClient).not.toHaveBeenCalled()
     expect(pair.readToShell().at(-1)).toEqual({ v: 1, type: 'close' })
   })
+})
+
+it('keeps source signals local, cancels only the abandoned waiter and preserves an old-shell request frame', async () => {
+  const pair = await ready(createFakeBridgePortPair())
+  const controller = new AbortController()
+  const beforeSend = vi.fn()
+  const pending = pair.client
+    .sendRequest('status.get', undefined, { signal: controller.signal, beforeSend, timeoutMs: 50 })
+    .catch((error) => error)
+  await pair.flush()
+  expect(beforeSend).toHaveBeenCalledOnce()
+  expect(pair.rpc.requests[0]!.args).toEqual(['status.get', undefined, { timeoutMs: 50 }])
+  expect(
+    pair.toShell.some((frame) => frame.includes('signal') || frame.includes('beforeSend'))
+  ).toBe(false)
+  controller.abort()
+  expect((await pending).name).toBe('AbortError')
+  await pair.flush()
+  expect(pair.readToShell().some((frame) => frame.type === 'cancel')).toBe(true)
+  pair.rpc.requests[0]!.resolve(success('late35636', { old: true }))
+  const successor = pair.client.sendRequest('status.get', undefined, {
+    signal: new AbortController().signal,
+    timeoutMs: 50
+  })
+  await pair.flush()
+  pair.rpc.requests[1]!.resolve(success('retry35636', { next: true }))
+  await pair.flush()
+  expect(await successor).toEqual(success('retry35636', { next: true }))
+  const dropped = pair.client
+    .sendRequest('status.get', undefined, { signal: new AbortController().signal, timeoutMs: 50 })
+    .catch((error) => error)
+  await pair.flush()
+  await vi.advanceTimersByTimeAsync(51)
+  expect((await dropped).message).toContain('timed out')
+  pair.client.close()
+  pair.host.dispose()
 })

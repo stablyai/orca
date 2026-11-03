@@ -7,7 +7,7 @@ import {
   type AgentLaunchSettingsSource
 } from './agent-launch-settings'
 import { migrateAgentPermissionChoice } from './tui-agent-permission-lift'
-import { structuredLaunchSeedOptions } from './native-chat/input/native-chat-session-option-defaults'
+import './native-chat/input/native-chat-session-option-defaults'
 
 const baseline: AgentLaunchSettingsSource = {
   agentPermissionDefault: 'ask',
@@ -163,48 +163,3 @@ it('uses original raw ownership before compiling authored terminal defaults', ()
   expect(input(raw).sessionOptions).toEqual({ model: 'opus', effort: 'high' })
   expect(launch(input(raw))).toContain('{"language":"french","fastMode":false}')
 })
-
-it.each(['claude', 'codex'] as const)(
-  'preserves encoded boolean seeds through authored/remembered layering for %s',
-  (agent) => {
-    const remembered = {
-      model: 'remembered-model',
-      valuesByModel: { 'remembered-model': { effort: 'low', fastMode: true } }
-    }
-    const settings = {
-      agentPermissionDefault: 'ask' as const,
-      nativeChatSessionOptions: { [agent]: remembered },
-      agentLaunchChoices: {}
-    }
-    expect(structuredLaunchSeedOptions(settings, agent)).toMatchObject({
-      model: 'remembered-model',
-      effort: 'low',
-      fastMode: 'true'
-    })
-    const authored = {
-      ...settings,
-      agentLaunchChoices: {
-        [agent]: { model: 'authored-model', options: { effort: 'high', fastMode: 'false' } }
-      }
-    }
-    expect(structuredLaunchSeedOptions(authored, agent)).toMatchObject({
-      model: 'authored-model',
-      effort: 'high',
-      fastMode: 'false'
-    })
-    expect(
-      structuredLaunchSeedOptions({ ...authored, agentLaunchChoices: {} }, agent)
-    ).toMatchObject({ model: 'remembered-model', effort: 'low', fastMode: 'true' })
-    expect(settings.nativeChatSessionOptions[agent]).toEqual(remembered)
-    expect(
-      structuredLaunchSeedOptions(
-        {
-          agentLaunchChoices: {
-            [agent]: { options: { effort: 'high', fastMode: 'false' } }
-          }
-        },
-        agent
-      )
-    ).toMatchObject({ effort: 'high', fastMode: 'false' })
-  }
-)

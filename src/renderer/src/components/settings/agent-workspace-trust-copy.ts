@@ -1,6 +1,6 @@
 // @protected-copy: folder trust setting copy.
 import { translate } from '@/i18n/i18n'
-import { searchKeywords } from './settings-search-keywords'
+import { searchKeywords } from './search/settings-search-keywords'
 
 export function getAgentWorkspaceTrustTitle(): string {
   return translate(
