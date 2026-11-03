@@ -1,3 +1,4 @@
+import { resolveUnknownSessionLinkDelivery } from './session-link-resolution'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -251,5 +252,87 @@ describe('session link delivery through the real structured host', () => {
     await host.send({ callerKey: 'human' }, hostTestSendParams('Work on the owner task'))
     await stopSessionLinkTurns(store, 'link-test', 'stop-other')
     expect(cancelTurn).not.toHaveBeenCalled()
+  })
+
+  it('reconciles a queued card and its converted submission by the original operation without another send', async () => {
+    const { host, dispatch } = hostTestState()
+    const event = message()
+    store.reserve('link-test', event.id)
+    const answer = vi.spyOn(host, 'queuedSendAnswer').mockResolvedValue({
+      clientMessageId: event.operationId,
+      queued: { messageId: event.operationId, position: 1, state: 'waiting' }
+    })
+    await redriveSessionLinks(db, SESSION)
+    expect(store.event(event.id)?.state).toBe('dispatching')
+    expect(store.get('link-test').state).toBe('active')
+    expect(dispatch).not.toHaveBeenCalled()
+    const converted = hostTestSendParams('Review complete')
+    await host.send({ callerKey: 'converted-card' }, converted)
+    await host.waitForSendSettlement(SESSION, converted.envelope.clientOperationId, {
+      budgetMs: 1000
+    })
+    const submission = (await host.journalSnapshot(SESSION)).submissions.find(
+      (s) => s.clientMessageId === converted.envelope.clientOperationId
+    )
+    if (!submission) {
+      throw new Error('Missing converted submission')
+    }
+    answer.mockResolvedValue({ clientMessageId: event.operationId, submission })
+    await redriveSessionLinks(db, SESSION)
+    await redriveSessionLinks(db, SESSION)
+    expect(store.event(event.id)).toMatchObject({
+      state: 'accepted',
+      operationId: event.operationId
+    })
+    expect(dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('lets the owner review an unknown send without resending it, even after a late accepted receipt', async () => {
+    const { host, dispatch } = hostTestState()
+    const event = message()
+    store.reserve('link-test', event.id)
+    await redriveSessionLinks(db, SESSION)
+    const input = {
+      id: 'link-test',
+      eventId: event.id,
+      operationId: 'review-unknown',
+      version: store.get('link-test').version
+    }
+    resolveUnknownSessionLinkDelivery(store, input)
+    resolveUnknownSessionLinkDelivery(store, input)
+    expect(store.get('link-test').state).toBe('paused')
+    expect(store.event(event.id)).toMatchObject({
+      state: 'cancelled',
+      operationId: event.operationId
+    })
+    expect(store.events('link-test').filter((e) => e.requestId === input.operationId)).toHaveLength(
+      1
+    )
+    await host.send(
+      { callerKey: 'late-receipt' },
+      hostTestSendParams('Original delivery', event.operationId)
+    )
+    await host.waitForSendSettlement(SESSION, event.operationId, { budgetMs: 1000 })
+    await providerTurn('completed', event.operationId)
+    store.append({
+      id: 'later-report',
+      linkId: 'link-test',
+      actor: 'reviewer',
+      recipient: SESSION,
+      kind: 'message',
+      body: 'Later report'
+    })
+    store.control(
+      'link-test',
+      'owner',
+      'resume-after-review',
+      store.get('link-test').version,
+      'resume'
+    )
+    await redriveSessionLinks(db, SESSION)
+    await redriveSessionLinks(db, SESSION)
+    expect(dispatch).toHaveBeenCalledTimes(2)
+    expect(store.event(event.id)?.state).toBe('cancelled')
+    expect(store.event('later-report')?.state).toBe('accepted')
   })
 })

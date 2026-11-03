@@ -134,4 +134,28 @@ describe('session link mutation recovery', () => {
     expect(result.current.snapshot).toBeNull()
     expect(result.current.busy).toBe(false)
   })
+
+  it('reports a failed history read and stops polling the unavailable selected link', async () => {
+    rpc.call.mockImplementation(async (_target, method) => {
+      if (method === 'orchestration.linkCandidates') {
+        return { source: participant('codex-work'), candidates: [], history: [] }
+      }
+      if (method === 'orchestration.linkShow') {
+        throw new Error('History unavailable')
+      }
+      return null
+    })
+    const { result } = renderHook(() => useSessionLink('codex-work', { kind: 'local' }, true))
+    await waitFor(() => expect(result.current.supported).toBe(true))
+    await act(async () => {
+      await expect(result.current.show('old-link')).resolves.toBeUndefined()
+    })
+    expect(result.current.error).toBe('History unavailable')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1600))
+    })
+    expect(
+      rpc.call.mock.calls.filter(([, method]) => method === 'orchestration.linkShow')
+    ).toHaveLength(1)
+  })
 })

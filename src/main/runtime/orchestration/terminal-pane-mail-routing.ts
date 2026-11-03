@@ -170,10 +170,19 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
   }
 
+  private sessionLinkDb(): OrchestrationDb | null {
+    try {
+      return this.getExistingOrchestrationDb()
+    } catch (error) {
+      console.warn('[session-link] orchestration database unavailable', error)
+      return null
+    }
+  }
+
   /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
   notifyStructuredSessionJournalActivity(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
-    scheduleSessionLinkDelivery(this.getExistingOrchestrationDb(), sessionId)
+    scheduleSessionLinkDelivery(this.sessionLinkDb(), sessionId)
   }
 
   /** Retry parked mail on working/idle edges; at idle re-derive owned mailboxes for workers and chats. */
@@ -226,7 +235,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
   forgetStructuredSessionMail(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
-    pauseSessionLinkForSession(this.getExistingOrchestrationDb(), sessionId)
+    pauseSessionLinkForSession(this.sessionLinkDb(), sessionId)
   }
 
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no
@@ -270,7 +279,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   protected scheduleRestoredMessageRepoints(): void {
-    scheduleSessionLinkDelivery(this.getExistingOrchestrationDb())
+    scheduleSessionLinkDelivery(this.sessionLinkDb())
     let handles: Set<string>
     try {
       const db = this._orchestrationDb

@@ -90,6 +90,16 @@ export const LinkControlParams = z
     version: z.number().int().positive()
   })
   .strict()
+export const LinkResolveParams = z
+  .object({
+    id: identifier,
+    eventId: identifier,
+    operationId: identifier,
+    version: z.number().int().positive()
+  })
+  .strict()
+export type SessionLinkDeliveryResolution = z.infer<typeof LinkResolveParams>
+
 export const LinkSendParams = z
   .object({
     id: identifier,

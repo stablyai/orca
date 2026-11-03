@@ -126,7 +126,17 @@ export function SessionLinkControl({
                   {t('components.sessionLink.end', 'End link')}
                 </Button>
               </div>
-              <SessionLinkJournal snapshot={snapshot} />
+              <SessionLinkJournal
+                snapshot={snapshot}
+                disabled={state.busy || state.uncertain}
+                onResolve={(eventId) => {
+                  void state.mutate('orchestration.linkResolve', {
+                    id: snapshot.link.id,
+                    version: snapshot.link.version,
+                    eventId
+                  })
+                }}
+              />
               <p className="text-xs text-muted-foreground">
                 {snapshot.link.turns} / 6 {t('components.sessionLink.turns', 'automatic turns')} ·{' '}
                 {snapshot.link.messages} / 12{' '}

@@ -721,6 +721,7 @@
     "components.sessionLink.control",
     "components.sessionLink.create",
     "components.sessionLink.creating",
+    "components.sessionLink.deliveryReviewed",
     "components.sessionLink.description",
     "components.sessionLink.details",
     "components.sessionLink.dispatching",

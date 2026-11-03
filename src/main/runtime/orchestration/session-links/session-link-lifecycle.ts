@@ -10,9 +10,13 @@ export function pauseSessionLinkForSession(
   if (!db || !isOrcaSessionId(sessionId)) {
     return
   }
-  const store = new SessionLinkStore(db)
-  const link = store.forSession(canonicalOrcaSessionId(sessionId))
-  if (link) {
-    store.pause(link.id, 'participant-changed')
+  try {
+    const store = new SessionLinkStore(db)
+    const link = store.forSession(canonicalOrcaSessionId(sessionId))
+    if (link) {
+      store.pause(link.id, 'participant-changed')
+    }
+  } catch (error) {
+    console.warn('[session-link] pause unavailable', error)
   }
 }

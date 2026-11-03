@@ -1,3 +1,4 @@
+import { SessionLinkDeliveryReview } from './SessionLinkDeliveryReview'
 import { useEffect, useRef } from 'react'
 import type { SessionLinkSnapshot } from '../../../../shared/session-link'
 import { translate as t, getIntlLocale } from '@/i18n/i18n'
@@ -8,8 +9,12 @@ import {
 } from './session-link-presentation'
 
 export function SessionLinkJournal({
-  snapshot
+  snapshot,
+  disabled = false,
+  onResolve
 }: {
+  disabled?: boolean
+  onResolve?: (eventId: string) => void
   snapshot: SessionLinkSnapshot
 }): React.JSX.Element {
   const element = useRef<HTMLDivElement>(null)
@@ -47,6 +52,12 @@ export function SessionLinkJournal({
           </p>
           {event.recipient && event.kind !== 'control' ? (
             <p className="text-xs text-muted-foreground">{sessionLinkDeliveryState(event.state)}</p>
+          ) : null}
+          {onResolve &&
+          snapshot.link.state === 'paused' &&
+          event.state === 'blocked' &&
+          event.retryable === false ? (
+            <SessionLinkDeliveryReview disabled={disabled} onResolve={() => onResolve(event.id)} />
           ) : null}
           {event.body && event.detail ? (
             <details className="text-xs text-muted-foreground">

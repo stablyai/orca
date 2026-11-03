@@ -723,6 +723,7 @@ import {
   LinkControlParams,
   LinkCreateParams,
   LinkListParams,
+  LinkResolveParams,
   LinkSendParams,
   LinkShowParams
 } from '../session-link'
@@ -1314,6 +1315,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.linkControl': LinkControlParams,
   'orchestration.linkCreate': LinkCreateParams,
   'orchestration.linkCurrent': LinkListParams,
+  'orchestration.linkResolve': LinkResolveParams,
   'orchestration.linkSend': LinkSendParams,
   'orchestration.linkShow': LinkShowParams,
   'orchestration.partyLocation': PartyLocationParams,

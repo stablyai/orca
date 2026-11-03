@@ -97,8 +97,23 @@ async function deliverNext(
   const snapshot = await host.journalSnapshot(sessionId)
   const work = host.currentWork(sessionId)
   const gates = structuredSessionGateFacts(snapshot.items, work?.scope)
-  const previous = snapshot.submissions.find((s) => s.clientMessageId === event.operationId)
   if (event.state === 'dispatching' || (event.state === 'blocked' && event.retryable === false)) {
+    const direct = snapshot.submissions.find((s) => s.clientMessageId === event.operationId)
+    const answer = direct ? null : await host.queuedSendAnswer(sessionId, event.operationId)
+    if (store.event(event.id)?.state === 'cancelled') {
+      return
+    }
+    if (answer && 'queued' in answer) {
+      if (answer.queued.state === 'withdrawn') {
+        store.write({
+          ...event,
+          state: 'cancelled',
+          detail: 'The queued message was removed in the recipient chat.'
+        })
+      }
+      return
+    }
+    const previous = direct ?? (answer && 'submission' in answer ? answer.submission : undefined)
     if (previous?.dispatchState === 'accepted') {
       store.write({ ...event, state: 'accepted', detail: '' })
     } else if (previous?.dispatchState === 'rejected' || previous?.dispatchState === 'unknown') {

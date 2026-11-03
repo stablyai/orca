@@ -217,7 +217,16 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
   const retry = () => (request.current ? execute(request.current) : Promise.resolve(false))
   const show = async (id: string) => {
     selected.current = id
-    await refresh()
+    const issuedAt = generation.current
+    try {
+      await refresh()
+    } catch (e) {
+      if (issuedAt === generation.current && selected.current === id) {
+        selected.current = null
+        invalidateReads()
+        setError(e instanceof Error ? e.message : String(e))
+      }
+    }
   }
   return { supported, snapshot, candidates, error, busy, uncertain, mutate, retry, show }
 }

@@ -1,3 +1,4 @@
+import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import {
   planSemanticWorkerFollowUp,
   workerFollowUpArguments
@@ -66,6 +67,7 @@ export async function startWorkerFollowUp(args: {
 }): Promise<WorkerFollowUpOutcome> {
   const { ctx, db } = args
   const { latest, resource } = args.plan
+  assertSessionLinkMailBoundary(db, ctx.orchestrationCaller?.orcaSessionId, `dispatch:${latest.id}`)
   const { subject, body } = args.message
   let delivery: WorkerFollowUpDelivery = 'follow_up'
   let reopening = false

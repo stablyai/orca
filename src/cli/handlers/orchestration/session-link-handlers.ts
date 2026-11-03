@@ -1,8 +1,22 @@
 import { randomUUID } from 'node:crypto'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime-client'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { SessionLinkSnapshot } from '../../../shared/session-link'
+
+function linkOperationError(error: unknown, guidance: string): Error {
+  const message = `${error instanceof Error ? error.message : String(error)}\n${guidance}`
+  if (error instanceof RuntimeRpcFailureError) {
+    return new RuntimeRpcFailureError({
+      ...error.response,
+      error: { ...error.response.error, message }
+    })
+  }
+  return error instanceof RuntimeClientError
+    ? new RuntimeClientError(error.code, message, error.data)
+    : new Error(message)
+}
 
 export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
   'orchestration link-show': async ({ flags, client, json }) => {
@@ -29,8 +43,9 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
         (value) => JSON.stringify(value, null, 2)
       )
     } catch (error) {
-      throw new Error(
-        `${error instanceof Error ? error.message : String(error)}\nIf delivery is uncertain, retry unchanged with --operation ${operationId}.`
+      throw linkOperationError(
+        error,
+        `If delivery is uncertain, retry unchanged with --operation ${operationId}.`
       )
     }
   },
@@ -56,9 +71,7 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
         (value) => JSON.stringify(value, null, 2)
       )
     } catch (error) {
-      throw new Error(
-        `${error instanceof Error ? error.message : String(error)}\nRetry unchanged with --operation ${operationId}.`
-      )
+      throw linkOperationError(error, `Retry unchanged with --operation ${operationId}.`)
     }
   }
 }

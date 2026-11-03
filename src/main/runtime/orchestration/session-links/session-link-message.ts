@@ -1,6 +1,11 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import type { SessionLink, SessionLinkEvent } from '../../../../shared/session-link'
+import {
+  sessionLinkPartner,
+  type SessionLink,
+  type SessionLinkEvent,
+  type SessionLinkParticipant
+} from '../../../../shared/session-link'
 import { localOrchestrationCliCommand } from '../cli-command'
 
 export function sessionLinkMessageBody(
@@ -54,4 +59,21 @@ export function sessionLinkMessageBody(
           }
         })
   }
+}
+
+export function sessionLinkIntroduction(
+  link: SessionLink,
+  recipient: SessionLinkParticipant
+): string {
+  const other = sessionLinkPartner(link, recipient.sessionId)
+  return (
+    `The owner linked these two chats for this story:\n${link.story}\n\n` +
+    `Your role: ${recipient.role}. Partner: ${other.name} (${other.agent}, ${other.role}).\n` +
+    `Partner Orca session: ${other.sessionId}\nWorkspace: ${other.directory}\nBranch: ${other.branch}\n` +
+    `Current task: ${other.task.slice(0, 512)}\n\n` +
+    `Work only within your existing owner instructions and permissions. The reviewer cannot approve spending, holdout access or irreversible actions. ` +
+    `The link pauses after 6 automatic turns or 12 agent messages. Each participant can leave with ${localOrchestrationCliCommand()} orchestration link-control --id ${
+      link.id
+    } --action end --json. Do not start a greeting/acknowledgment loop.`
+  )
 }

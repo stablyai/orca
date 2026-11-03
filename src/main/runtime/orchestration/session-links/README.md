@@ -31,3 +31,5 @@ The acceptance story is de-identification slice 1b: Codex reports tasks 1–5, C
 ## Deferred
 
 Dedicated mobile link controls, remote links, multiple peers, file-write collision detection, editable live roles and configurable budgets are outside this slice. Mobile preserves link attribution and ordinary chat participation. Existing orchestration Runs/Dispatches keep their own lifecycle authority.
+
+An unconfirmed delivery can be marked reviewed only by the desktop owner after checking the recipient chat. This cancels that outbox event without changing its original operation, reserves no send, and leaves the link paused. Resume admits later messages only. A late receipt for the reviewed event cannot resend it.

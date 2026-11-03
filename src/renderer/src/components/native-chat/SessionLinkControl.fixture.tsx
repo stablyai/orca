@@ -59,7 +59,7 @@ const report = SessionLinkEvent.parse({
   body: 'Tasks 1–5 are ready. Local checks pass. Please review before corpus measurements; no spending or holdout access has been authorized.'
 })
 
-function setup(state: 'create' | 'waiting' | 'paused' | 'ended') {
+function setup(state: 'create' | 'waiting' | 'paused' | 'ended' | 'unknown') {
   setLocalRuntimeCapabilitiesForTests([SESSION_LINK_CAPABILITY])
   const snapshot =
     state === 'create'
@@ -67,10 +67,21 @@ function setup(state: 'create' | 'waiting' | 'paused' | 'ended') {
       : {
           link: {
             ...link,
-            state: state === 'waiting' ? 'active' : state,
-            reason: state === 'paused' ? 'owner-decision' : state === 'ended' ? 'end' : ''
+            state: state === 'waiting' ? 'active' : state === 'unknown' ? 'paused' : state,
+            reason:
+              state === 'unknown'
+                ? 'delivery-unknown'
+                : state === 'paused'
+                  ? 'owner-decision'
+                  : state === 'ended'
+                    ? 'end'
+                    : ''
           },
-          events: [report]
+          events: [
+            state === 'unknown'
+              ? { ...report, state: 'blocked', retryable: false, detail: 'delivery-unknown' }
+              : report
+          ]
         }
   window.api.runtime.call = async (request) => ({
     id: 'fixture',
@@ -129,4 +140,18 @@ export const narrow = defineFixture({
   setup: () => setup('waiting'),
   render,
   interact: openDialog
+})
+
+export const unknown = defineFixture({
+  width: 720,
+  setup: () => setup('unknown'),
+  render,
+  interact: async (frame) => {
+    await openDialog(frame)
+    document.querySelectorAll('summary').forEach((s) => {
+      if (s.textContent === 'Review unconfirmed delivery') {
+        s.click()
+      }
+    })
+  }
 })

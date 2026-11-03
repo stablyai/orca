@@ -22,6 +22,10 @@ export function sessionLinkReason(reason: string): string {
       'components.sessionLink.reasonParticipant',
       'A chat closed or changed context. Verify both chats before continuing.'
     ),
+    'delivery-reviewed': t(
+      'components.sessionLink.deliveryReviewed',
+      'Delivery reviewed by the owner; automatic resend is disabled.'
+    ),
     'delivery-held': t(
       'components.sessionLink.reasonHeld',
       'Delivery held before dispatch. Review and continue to retry.'

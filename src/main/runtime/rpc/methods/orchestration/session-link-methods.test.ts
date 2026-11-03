@@ -4,6 +4,7 @@ import { OrchestrationDb } from '../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
 import { SESSION_LINK_METHODS } from './session-link-methods'
+import { stopSessionLinkTurns } from '../../../orchestration/session-links/session-link-stop'
 import { sessionLinkCandidates } from '../../../orchestration/session-links/session-link-participants'
 import { SessionLinkParticipant } from '../../../../../shared/session-link'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
@@ -266,5 +267,64 @@ describe('session link caller authority', () => {
     expect(
       store.events('link-1').filter((e) => e.actor === 'owner' && e.kind === 'owner-note')
     ).toHaveLength(2)
+  })
+
+  it('lets a participant leave without cancelling its own closing turn', async () => {
+    await call(
+      'orchestration.linkControl',
+      { id: 'link-1', operationId: 'leave-safely', version: 1, action: 'end' },
+      agent()
+    )
+    expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(
+      store,
+      'link-1',
+      'leave-safely',
+      'codex_implement'
+    )
+  })
+
+  it('requires the desktop owner to resolve an unknown delivery and refuses stale or already settled reviews', async () => {
+    store.append({
+      id: 'unknown-event',
+      linkId: 'link-1',
+      actor: 'codex_implement',
+      recipient: 'claude_review',
+      kind: 'message',
+      body: 'Report'
+    })
+    const event = store.reserve('link-1', 'unknown-event')
+    if (!event) {
+      throw new Error('Missing reserved event')
+    }
+    store.write({ ...event, state: 'blocked', retryable: false })
+    store.pause('link-1', 'delivery-unknown')
+    const input = {
+      id: 'link-1',
+      eventId: event.id,
+      operationId: 'owner-review',
+      version: store.get('link-1').version
+    }
+    expect(() => call('orchestration.linkResolve', input, agent())).toThrow('Only the owner')
+    expect(() =>
+      call(
+        'orchestration.linkResolve',
+        { ...input, version: 1 },
+        { runtime, caller: { kind: 'desktop' } }
+      )
+    ).toThrow('changed')
+    call('orchestration.linkResolve', input, { runtime, caller: { kind: 'desktop' } })
+    call('orchestration.linkResolve', input, { runtime, caller: { kind: 'desktop' } })
+    expect(store.get('link-1').state).toBe('paused')
+    expect(store.event(event.id)).toMatchObject({
+      state: 'cancelled',
+      operationId: event.operationId
+    })
+    expect(() =>
+      call(
+        'orchestration.linkResolve',
+        { ...input, operationId: 'another-review', version: store.get('link-1').version },
+        { runtime, caller: { kind: 'desktop' } }
+      )
+    ).toThrow('unconfirmed')
   })
 })
