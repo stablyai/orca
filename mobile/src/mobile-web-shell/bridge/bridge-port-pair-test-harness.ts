@@ -1,6 +1,7 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
+import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge-caps'
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import type { BridgeNativeVerb } from './bridge-native-verbs'
 import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
@@ -50,6 +51,7 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   flush: () => Promise<void>
   // Flush init synchronously only for first-render recording; every other exchange must retain asynchronous lane delivery.
   drainNow: () => number
+  deliverToPage: (json: string) => void
   readToShell: () => BridgeClientMessage[]
   readToPage: () => BridgeHostMessage[]
 }
@@ -63,6 +65,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   storage?: Readonly<Record<string, string>>
   storageOversize?: readonly string[]
   // Test-only frame rewrite lets golden replay isolate narrower-reader behavior from payload changes; product transport never rewrites in-flight frames.
+  holdToPage?: (json: string) => boolean
   rewriteToPage?: (json: string) => string
   routeGrants?: readonly string[]
   sessionEstablished?: boolean
@@ -186,7 +189,9 @@ export function createBridgePortPair<TRpc extends RpcClient>(
 
   const rewrite = options.rewriteToPage ?? ((json: string) => json)
   const toPage = createLane((json) => {
-    receiveOnPage?.(rewrite(json))
+    if (!options.holdToPage?.(json)) {
+      receiveOnPage?.(rewrite(json))
+    }
   })
   const host = createBridgeHost({
     client: rpc,
@@ -240,13 +245,9 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onDiagnostic: (diagnostic) => hostDiagnostics.push(diagnostic)
   })
-  const toShell = createLane((json) => {
-    host.receive(json)
-  })
+  const toShell = createLane((json) => host.receive(json))
   const client = createBridgeRpcClient({
-    send: (json) => {
-      toShell.push(json)
-    },
+    send: (json) => toShell.push(json),
     onMessage: (handler) => {
       receiveOnPage = handler
       return () => {
@@ -293,6 +294,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       throw new Error('the port pair never went quiet')
     },
     drainNow: () => toShell.drainNow() + toPage.drainNow(),
+    deliverToPage: (json) => receiveOnPage?.(rewrite(json)),
     readToShell: () => readAll(toShell.sent, readBridgeClientMessage),
     readToPage: () => readAll(toPage.sent, readBridgeHostMessage)
   }
@@ -302,4 +304,20 @@ export function createFakeBridgePortPair(
   options: Omit<BridgePortPairOptions<FakeRpcClient>, 'rpc'> & { rpc?: FakeRpcClient } = {}
 ): BridgePortPair<FakeRpcClient> {
   return createBridgePortPair({ ...options, rpc: options.rpc ?? createFakeRpcClient() })
+}
+
+// Send desktop calls until one is refused, by whichever side refuses first; resolves to how many were admitted.
+export async function fillFreeDesktopSlots(pair: BridgePortPair): Promise<number> {
+  for (let admitted = 0; admitted <= BRIDGE_MAX_PENDING_REQUESTS; admitted += 1) {
+    let refused = false
+    const pending = pair.client.sendRequest('worktree.list').catch(() => {
+      refused = true
+    })
+    await pair.flush()
+    if (refused) {
+      await pending
+      return admitted
+    }
+  }
+  return BRIDGE_MAX_PENDING_REQUESTS + 1
 }

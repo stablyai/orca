@@ -102,7 +102,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
         if (!orchestrationMutation) {
           throw new OrchestrationError(
             'invalid_argument',
-            'Remote worker-retain requires a durable retry request.'
+            'Remote worker-keep-open requires a durable retry request.'
           )
         }
         db.endFederatedHomeAutoRelease(params.dispatch)

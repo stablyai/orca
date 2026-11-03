@@ -1,4 +1,3 @@
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AppState } from '../types'
@@ -7,13 +6,16 @@ import type { GitHubSlice } from './slice-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from './cache-model'
-import type { PRRefreshStateClearToken } from './pr-refresh-state'
+import { withDirectPRRefreshSettlement, type PRRefreshStateClearToken } from './pr-refresh-state'
 
 import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
 } from '../../../../shared/github/pull-request-refresh-types'
-import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github/pull-request-for-branch-outcome'
+import {
+  normalizeGitHubPRForBranchOutcome,
+  githubPRTransportFailureOutcome
+} from '../../../../shared/github/pull-request-for-branch-outcome'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
@@ -23,17 +25,12 @@ import { isWslHostOffForForge, withForgeHostOffSkip } from './wsl-host-off-forge
 import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
 import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
+import { findWorktreeById, isStaleExactLinkedPRLookup } from './worktree-refresh'
 import {
-  findUniqueWorktreeById,
-  findWorktreeById,
-  isStaleExactLinkedPRLookup
-} from './worktree-refresh'
-import {
-  shouldApplyBranchMismatchedLinkedPRClear,
-  shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
 } from '../../../../shared/github/linked-pr-staleness'
+import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
@@ -74,6 +71,8 @@ export function startPullRequestLookup(args: {
     requestStartedHostedReviewEntry,
     requestStartedPRRefreshToken
   } = args
+  const executionHostId = repo ? getRepoExecutionHostId(repo) : undefined
+  const ownerHostId = executionHostId ?? LOCAL_EXECUTION_HOST_ID
   const request = (async () => {
     try {
       const runtimeRepo = getRuntimeRepoTarget(get(), { repoId, repoPath }, requestTarget)
@@ -84,11 +83,16 @@ export function startPullRequestLookup(args: {
         return cached?.data ?? null
       }
       const candidateWorktree = options?.worktreeId
-        ? findWorktreeById(get(), options.worktreeId)
+        ? findWorktreeById(get(), options.worktreeId, executionHostId)
         : null
+      const clearScope =
+        linkedPRNumber != null
+          ? captureLinkedReviewClearScope(get(), options?.worktreeId, repo)
+          : undefined
       const requestHeadOid = candidateWorktree?.head ?? null
-      const outcome = runtimeRepo
-        ? await callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
+      let transportFailed = false
+      const response = runtimeRepo
+        ? callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
             runtimeRepo.target,
             'github.prForBranch',
             {
@@ -97,13 +101,14 @@ export function startPullRequestLookup(args: {
               linkedPRNumber,
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
+              ...(options?.userRefresh === true ? { userRefresh: true } : {}),
               ...(fallbackPRNumber !== null
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
             },
             { timeoutMs: 30_000 }
           ).then((result) => normalizeGitHubPRForBranchOutcome(result))
-        : await (async () => {
+        : (async () => {
             const candidate: GitHubPRRefreshCandidate = {
               repoId: repoId ?? '',
               repoPath,
@@ -121,37 +126,36 @@ export function startPullRequestLookup(args: {
               ...cachedPRCandidateFields(cached)
             }
             const reason = options?.reason ?? 'manual'
+            const requestOptions = options?.userRefresh === true ? { userRefresh: true } : {}
             const response = window.api.gh.refreshPRNow
-              ? await window.api.gh.refreshPRNow({ candidate, reason })
-              : await lookupPRForBranchOverIpc(candidate, reason)
+              ? await window.api.gh.refreshPRNow({ candidate, reason, ...requestOptions })
+              : await lookupPRForBranchOverIpc(candidate, reason, {
+                  ...requestOptions,
+                  repoOwnerExecutionHostId: options?.repoOwnerExecutionHostId
+                })
             return normalizeGitHubPRForBranchOutcome(response)
           })()
+      const outcome = await response.catch(() => {
+        transportFailed = true
+        return githubPRTransportFailureOutcome()
+      })
       const pr = outcome.kind === 'found' ? outcome.pr : null
+      // RPC and lost IPC replies get no coordinator settlement; a lost reply is reported only to the click that asked, so polls stay silent.
+      if (
+        prRequestGenerations.get(cacheKey) === generation &&
+        (outcome.kind !== 'upstream-error' ||
+          (transportFailed ? options?.userRefresh === true : runtimeRepo))
+      ) {
+        set((s) => withDirectPRRefreshSettlement(s, cacheKey, outcome, requestStartedAt))
+      }
       if (outcome.kind === 'upstream-error') {
-        // Runtime RPC bypasses native coordinator broadcasts; record classified errors here for Checks parity (criterion 2).
-        if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
-          set((s) => {
-            const nextStates = { ...s.prRefreshStates }
-            delete nextStates[cacheKey]
-            nextStates[cacheKey] = {
-              status: 'error',
-              reason: 'swr',
-              updatedAt: Date.now(),
-              message: outcome.message,
-              errorType: outcome.errorType,
-              nextAutoRetryAt: outcome.nextAutoRetryAt,
-              retryDisabledUntil: outcome.retryDisabledUntil
-            }
-            return { prRefreshStates: nextStates }
-          })
-        }
         return cached?.data ?? null
       }
       if (prRequestGenerations.get(cacheKey) === generation) {
         let skippedStaleLinkedPRLookup = false
         set((s) => {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
-          if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
+          if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber, executionHostId)) {
             skippedStaleLinkedPRLookup = true
             return s
           }
@@ -171,7 +175,7 @@ export function startPullRequestLookup(args: {
                     { cacheKey, repoPath, branch, repoId, connectionId: repo?.connectionId },
                     pr,
                     outcome.fetchedAt,
-                    repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+                    ownerHostId
                   )
                 : pr,
             fetchedAt: outcome.fetchedAt,
@@ -189,39 +193,16 @@ export function startPullRequestLookup(args: {
         if (skippedStaleLinkedPRLookup) {
           return null
         }
-        const linkedPRWorktree =
-          options?.worktreeId && linkedPRNumber != null
-            ? findUniqueWorktreeById(
-                get(),
-                options.worktreeId,
-                repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
-              )
-            : null
+        const linkedPRWorktree = clearScope
+          ? findWorktreeById(get(), clearScope.workspace.id, executionHostId)
+          : null
         if (
           options?.worktreeId &&
           linkedPRWorktree &&
           linkedPRNumber != null &&
           shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })
         ) {
-          // Why: only clear the durable link that produced this exact probe; drift means the stale result no longer owns the worktree.
-          void get().updateWorktreeMeta(
-            options.worktreeId,
-            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-            {
-              shouldApply: () =>
-                shouldApplyDivergedLinkedPRClear({
-                  worktree:
-                    findUniqueWorktreeById(
-                      get(),
-                      options.worktreeId!,
-                      repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
-                    ) ?? undefined,
-                  linkedPRNumber,
-                  branch,
-                  requestHeadOid
-                })
-            }
-          )
+          clearLinkedReview(get, clearScope, { linkedPRNumber, branch, requestHeadOid }, 'diverged')
         }
         if (
           options?.worktreeId &&
@@ -235,33 +216,24 @@ export function startPullRequestLookup(args: {
             pushTargetBranch: linkedPRWorktree.pushTarget?.branchName ?? null
           })
         ) {
-          void get().updateWorktreeMeta(
-            options.worktreeId,
-            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-            {
-              // Why: the branch-scoped PR refetch below updates both caches; the generic metadata refresh would duplicate provider work.
-              suppressHostedReviewRefresh: true,
-              shouldApply: () =>
-                shouldApplyBranchMismatchedLinkedPRClear({
-                  worktree:
-                    findUniqueWorktreeById(
-                      get(),
-                      options.worktreeId!,
-                      repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
-                    ) ?? undefined,
-                  linkedPRNumber,
-                  branch,
-                  requestHeadOid
-                })
-            }
+          clearLinkedReview(
+            get,
+            clearScope,
+            { linkedPRNumber, branch, requestHeadOid },
+            'branch-mismatch',
+            true
           )
           // Re-resolve by branch now so Checks recover this refresh instead of serving the stale linked PR.
-          void get().fetchPRForBranch(repoPath, branch, {
-            force: true,
-            repoId,
-            worktreeId: options.worktreeId,
-            reason: options.reason
-          })
+          void get()
+            .fetchPRForBranch(repoPath, branch, {
+              force: true,
+              repoId,
+              repoOwnerExecutionHostId: executionHostId,
+              worktreeId: options.worktreeId,
+              reason: options.reason,
+              ...(options.userRefresh === true ? { userRefresh: true } : {})
+            })
+            .catch((err) => console.warn('Branch-scoped PR refetch skipped:', err))
         }
       }
       if (
@@ -270,6 +242,7 @@ export function startPullRequestLookup(args: {
           nextPR: pr,
           state: get(),
           worktreeId: options?.worktreeId,
+          executionHostId,
           linkedPRNumber,
           rejectedPRUrls: outcome.kind === 'no-pr' ? outcome.rejectedPRUrls : undefined
         })

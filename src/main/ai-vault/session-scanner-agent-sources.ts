@@ -6,21 +6,20 @@ import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { resolveKiroHomeDir } from '../../shared/kiro-home'
-import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import { uniqueCodexSessionsDirs } from './scanners/codex/session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
-  isClineSessionMetadataPath
-} from './session-scanner-cline-parser'
-import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
-import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
-import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
-import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
-import {
-  isKiroSessionMetadataPath,
   kiroTranscriptPathForMetadata
-} from './session-scanner-kiro-parser'
-import { OPENCLAW_AGENT_SOURCE } from './openclaw-session-layout'
-import { isOmpConversationDirectory } from './session-scanner-omp-subagent-transcripts'
+} from '../../shared/ai-vault-session-log-resource'
+import { isClineSessionMetadataPath } from './scanners/cline/session-scanner-cline-parser'
+import { cursorChatMetaPath } from './scanners/cursor/session-scanner-cursor-chat-meta'
+import { devinSessionsDbDependencyPath } from './scanners/devin/session-scanner-devin-db'
+import { resolveKimiSessionsDir } from './scanners/kimi/session-scanner-kimi-paths'
+import { resolveMuseSessionsDir } from '../../shared/muse-session-log'
+import { isKiroSessionMetadataPath } from './scanners/kiro/session-scanner-kiro-parser'
+
+import { OPENCLAW_AGENT_SOURCE } from './scanners/openclaw/openclaw-session-layout'
+import { isOmpConversationDirectory } from './scanners/omp/session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
   codexHomeSessionsDir,
@@ -29,7 +28,7 @@ import {
   wslHomeSessionDirs
 } from './session-scanner-roots'
 import { getHermesHome } from '../hermes/hermes-default-home'
-import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
+import { SUBAGENT_DIR_NAME } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
 

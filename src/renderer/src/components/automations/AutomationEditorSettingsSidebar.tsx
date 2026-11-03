@@ -115,6 +115,7 @@ export function AutomationEditorSettingsSidebar({
         >
           <AutomationProjectCombobox
             repos={repos}
+            recordedProject={destination?.recordedProject}
             value={draft.projectId}
             onValueChange={onProjectChange}
             placeholder={translate(

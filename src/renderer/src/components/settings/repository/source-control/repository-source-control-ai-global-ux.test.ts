@@ -4,14 +4,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
 import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control-ai-settings'
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
-import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
+
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
-import { withRepoAiActionLaunchPreferences } from '../../repository-source-control-ai-action-agent-draft'
+import { withRepoAiActionLaunchPreferences } from './repository-source-control-ai-action-agent-draft'
 import {
+  dropRepoLegacyInstructionForAction,
   readActionRecipeTextDraft,
   withRepoAiActionRecipeText
 } from './repository-source-control-ai-draft'
-import { toSourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
+import {
+  type SourceControlAiRepoUpdate,
+  toSourceControlAiRepoUpdate
+} from '../../../../../../shared/source-control-ai-recipe-save'
 import type { SourceControlActionId } from '../../../../../../shared/source-control-ai-actions'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { sourceControlActionSelectedPreferences } from '../../../../../../shared/source-control-action-launch-preferences'
@@ -519,7 +523,7 @@ describe('editing one repository action', () => {
     expect(set().launchPreferences).toBeUndefined()
   })
 
-  it('keeps a prompt-only edit in the repository Args group without copying a global model', () => {
+  it('keeps own raw model semantics without authoring preferences during a prompt-only edit', () => {
     const legacy = { actionOverrides: { fixCommitFailure: { agentArgs: '--model gpt-5.6-sol' } } }
     const stored = {
       settings,
@@ -559,7 +563,7 @@ describe('editing one repository action', () => {
         }),
         'codex'
       )
-    ).toEqual({ agentId: 'codex', permissionMode: 'ask' })
+    ).toEqual({ agentId: 'codex', model: 'gpt-5.6-sol', permissionMode: 'ask' })
   })
 
   it('saves a prompt edit without authoring args the user never typed or touching a sibling', async () => {
@@ -604,5 +608,27 @@ describe('editing one repository action', () => {
     expect(reload(editPrompt(absent, 'fixCommitFailure'), 'fixCommitFailure').agentArgs).toBe(
       '--global'
     )
+  })
+})
+
+describe('dropRepoLegacyInstructionForAction', () => {
+  it('prevents legacy text instructions from remigrating after an action override is cleared', () => {
+    const next = dropRepoLegacyInstructionForAction(
+      {
+        instructionsByOperation: {
+          commitMessage: 'Use repo style.',
+          pullRequest: 'Use PR style.'
+        },
+        actionOverrides: {}
+      },
+      'commitMessage'
+    )
+
+    expect(next.instructionsByOperation).toEqual({ pullRequest: 'Use PR style.' })
+    const normalized = normalizeRepoSourceControlAiOverrides(next)
+    expect(normalized?.actionOverrides?.commitMessage).toBeUndefined()
+    expect(normalized?.actionOverrides?.pullRequest).toEqual({
+      commandInputTemplate: '{basePrompt}\n\nUse PR style.'
+    })
   })
 })

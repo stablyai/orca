@@ -9,6 +9,7 @@ import {
   type NativeChatComposerInput
 } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
 
 afterEach(cleanup)
 
@@ -34,6 +35,35 @@ function setup(value = '') {
 }
 
 describe('native chat skill editor', () => {
+  it('continues replacing the selected text after a composer handoff', () => {
+    const inputRef = createRef<NativeChatComposerInput>()
+    const text = 'Hello\nworld'
+    updateNativeChatComposerDraft('handoff-selection', { text }, 'immediate', undefined, {
+      at: 'selection',
+      from: 6,
+      to: 11,
+      target: 'chat-tab',
+      pending: true
+    })
+    render(
+      <NativeChatPromptEditor
+        scopeKey="handoff-selection"
+        positionTarget="chat-tab"
+        inputRef={inputRef}
+        initialValue={text}
+        disabled={false}
+        placeholder="Message"
+        onChange={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    )
+
+    expect(inputRef.current?.selectionStart).toBe(6)
+    expect(inputRef.current?.selectionEnd).toBe(11)
+    act(() => inputRef.current?.insertText?.('there'))
+    expect(inputRef.current?.value).toBe('Hello\nthere')
+  })
+
   it('renders only picker insertions as pills and serializes the exact invocation', async () => {
     const { input, container } = setup('Please $rev')
     await act(async () => input.insertSkill!(7, 11, '$review'))

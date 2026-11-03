@@ -1,5 +1,5 @@
-import { getClaudeAgentViewService } from '../../claude/agent-view-service'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
@@ -14,12 +14,12 @@ import type { CodexSessionResumePreparation } from '../../codex/codex-session-re
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 import { isSafePtySessionId } from '../../daemon/pty-session-id'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
-import { stampWslOrchestrationCompatibilityHost } from '../../pty/wsl-orca-env'
+import { stampWslOrchestrationCompatibilityHost } from '../../pty/shell-startup/wsl-orca-env'
 import { getRuntimeSourceStamp } from '../../runtime/host-descriptor'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { buildPtyHostEnv } from './host-env/assembly'
-import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
-import { runAsWslLaunchUserAct } from '../../wsl/wsl-background-exec-gate'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { runAsWslLaunchUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
 import {
   codexHomePathsEqual,
   getCompatibleSelectedCodexHomePath,

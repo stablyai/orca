@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 
 import {
   gitlabMergeRequestHeadLocalRef,

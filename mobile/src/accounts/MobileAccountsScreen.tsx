@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
-import { loadHosts } from '../transport/host-store'
-import { useHostClient } from '../transport/host-client-hooks'
+import { ChevronLeft, RefreshCw, User } from 'lucide-react-native'
+import { loadHosts, peekHosts } from '../transport/host-store'
+import { useForceReconnect, useHostClient } from '../transport/host-client-hooks'
+import { MobileAccountsLoadState } from './MobileAccountsLoadState'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -29,6 +30,9 @@ import {
 import { CodexResetCreditAction } from '../components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../components/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
 
 type AccountsNotice = { title: string; message: string }
@@ -43,7 +47,11 @@ export function MobileAccountsScreen() {
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
-  const [hostName, setHostName] = useState<string>('')
+  const forceReconnect = useForceReconnect()
+  // Seed from the last host read so the subtitle is there on the first frame.
+  const [hostName, setHostName] = useState(
+    () => peekHosts()?.find((host) => host.id === hostId)?.name ?? ''
+  )
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -108,27 +116,6 @@ export function MobileAccountsScreen() {
     }
   }, [hostId, t])
 
-  // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
-  useEffect(() => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
-      if (!payload || typeof payload !== 'object') {
-        return
-      }
-      const evt = payload as { type?: string; snapshot?: unknown }
-      if (evt.type === 'ready' || evt.type === 'snapshot') {
-        try {
-          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
-        } catch {
-          rejectInvalidSnapshot()
-        }
-      }
-    })
-    return unsubscribe
-  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
-
   const refresh = useCallback(async () => {
     if (!client) {
       return
@@ -151,6 +138,31 @@ export function MobileAccountsScreen() {
       setRefreshing(false)
     }
   }, [acceptSnapshot, client, rejectInvalidSnapshot])
+
+  // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
+  useEffect(() => {
+    if (!client || connState !== 'connected') {
+      return
+    }
+    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
+      if (!payload || typeof payload !== 'object') {
+        return
+      }
+      const evt = payload as { type?: string; snapshot?: unknown }
+      if (evt.type === 'error') {
+        void refresh()
+        return
+      }
+      if (evt.type === 'ready' || evt.type === 'snapshot') {
+        try {
+          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
+        } catch {
+          rejectInvalidSnapshot()
+        }
+      }
+    })
+    return unsubscribe
+  }, [acceptSnapshot, client, connState, refresh, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
@@ -203,26 +215,20 @@ export function MobileAccountsScreen() {
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
+    const switchBlocked = busyAccountId !== null || resettingCodex || connState !== 'connected'
+    const spinner = <ActivityIndicator size="small" color={colors.textSecondary} />
     return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Icon size={14} />
-          <Text style={styles.sectionHeading}>{title}</Text>
-        </View>
-        <View style={styles.card}>
-          {/* System default row */}
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => selectAccount(provider, null)}
-            disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
-          >
-            <View style={styles.rowMain}>
-              <Text style={styles.rowTitle}>{t('accounts.screen.default', 'System default')}</Text>
-              <Text style={styles.rowSubtitle}>
-                {t('accounts.screen.agentLogin', "Use the agent's own login")}
-              </Text>
-              {/* Show system-default login usage for users without managed accounts. */}
-              {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
+      <View>
+        <SectionHeader title={title} icon={<Icon size={14} />} first={provider === 'claude'} />
+        <ListGroup style={styles.group}>
+          {/* A blocked row drops its press instead of dimming, so the picked one keeps full contrast. */}
+          <ListRow
+            key="default"
+            title={t('accounts.screen.default', 'System default')}
+            subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
+            detail={
+              // Show system-default login usage for users without managed accounts.
+              activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
                 <View style={styles.usageRow}>
                   <UsageBar
                     label={t('accounts.screen.sessionWindow', '5h')}
@@ -239,17 +245,12 @@ export function MobileAccountsScreen() {
                     resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
                   />
                 </View>
-              ) : null}
-            </View>
-            <View style={styles.rowTrailing}>
-              {activeAccountId === null ? (
-                <Check size={16} color={colors.accentBlue} />
-              ) : busyAccountId === `${provider}:default` ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-              ) : null}
-            </View>
-          </Pressable>
-
+              ) : undefined
+            }
+            accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
+            selected={activeAccountId === null}
+            onPress={switchBlocked ? undefined : () => void selectAccount(provider, null)}
+          />
           {state.accounts.map((account) => {
             const isActive = activeAccountId === account.id
             const inactiveEntry = !isActive
@@ -262,22 +263,11 @@ export function MobileAccountsScreen() {
             const sessionBar = getUsageBarState(usage, 'session', isFetching)
             const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
             return (
-              <View key={account.id}>
-                <View style={styles.separator} />
-                <Pressable
-                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                  onPress={() => selectAccount(provider, account.id)}
-                  disabled={
-                    busyAccountId !== null ||
-                    resettingCodex ||
-                    connState !== 'connected' ||
-                    isActive
-                  }
-                >
-                  <View style={styles.rowMain}>
-                    <Text style={styles.rowTitle} numberOfLines={1}>
-                      {account.email}
-                    </Text>
+              <ListRow
+                key={account.id}
+                title={account.email}
+                detail={
+                  <>
                     <View style={styles.usageRow}>
                       <UsageBar
                         label={t('accounts.screen.sessionWindow', '5h')}
@@ -299,20 +289,21 @@ export function MobileAccountsScreen() {
                         {usage.error}
                       </Text>
                     ) : null}
-                  </View>
-                  <View style={styles.rowTrailing}>
-                    {isActive ? (
-                      <Check size={16} color={colors.accentBlue} />
-                    ) : busyAccountId === account.id ? (
-                      <ActivityIndicator size="small" color={colors.textSecondary} />
-                    ) : null}
-                  </View>
-                </Pressable>
-              </View>
+                  </>
+                }
+                accessory={busyAccountId === account.id ? spinner : undefined}
+                selected={isActive}
+                onPress={
+                  switchBlocked || isActive
+                    ? undefined
+                    : () => void selectAccount(provider, account.id)
+                }
+              />
             )
           })}
           {resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
             <CodexResetCreditAction
+              key="codex-reset"
               summary={resetCredit}
               scopeLabel={resetScopeLabel}
               busy={resettingCodex}
@@ -320,69 +311,49 @@ export function MobileAccountsScreen() {
               onPress={confirmCodexReset}
             />
           ) : null}
-        </View>
+        </ListGroup>
       </View>
     )
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.topRow}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-        >
-          <ChevronLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <View style={styles.titleWrap}>
-          <Text style={styles.heading}>{t('accounts.screen.title', 'Accounts')}</Text>
-          {hostName ? (
-            <Text style={styles.subheading} numberOfLines={1}>
-              {hostName}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable
-          style={styles.iconButton}
-          onPress={refresh}
-          disabled={!client || refreshing || connState !== 'connected'}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
-        >
-          {refreshing ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          ) : (
-            <RefreshCw size={18} color={colors.textSecondary} />
-          )}
-        </Pressable>
-      </View>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={() => router.back()}
+            accessibilityLabel={t('common.back', 'Back')}
+          />
+        }
+        title={t('accounts.screen.title', 'Accounts')}
+        subtitle={hostName || undefined}
+        trailing={
+          <NavBarButton
+            icon={refreshing ? RefreshingIcon : RefreshCw}
+            onPress={() => void refresh()}
+            disabled={!client || refreshing || connState !== 'connected'}
+            accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
+          />
+        }
+      />
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
+        contentContainerStyle={[
+          styles.scroll,
+          !snapshot && { flexGrow: 1 },
+          { paddingBottom: insets.bottom + spacing.xl }
+        ]}
       >
-        {connState !== 'connected' && !snapshot ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>
-              {hostName
-                ? t('accounts.screen.connectingTo', 'Connecting to {{name}}…', { name: hostName })
-                : t('accounts.screen.connecting', 'Connecting to host…')}
-            </Text>
-          </View>
-        ) : error && !snapshot ? (
-          <View style={styles.placeholder}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : !snapshot ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>
-              {t('accounts.screen.loadingAccounts', 'Loading accounts…')}
-            </Text>
-          </View>
+        {!snapshot ? (
+          <MobileAccountsLoadState
+            connState={connState}
+            hostName={hostName}
+            error={error}
+            onRetry={() => void refresh()}
+            onReconnect={hostId && forceReconnect ? () => void forceReconnect(hostId) : null}
+            onRepair={() => router.push('/pair-scan')}
+          />
         ) : (
           <>
             {renderProviderSection('claude', 'Claude')}
@@ -417,4 +388,8 @@ export function MobileAccountsScreen() {
       />
     </SafeAreaView>
   )
+}
+
+function RefreshingIcon({ color }: { color?: string }) {
+  return <ActivityIndicator size="small" color={color} />
 }

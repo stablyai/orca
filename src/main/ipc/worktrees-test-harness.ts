@@ -1,11 +1,11 @@
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import { registerWorktreeHandlers } from './worktrees'
 import { __resetDetectedWorktreeScanCacheForTests } from './worktrees/listing/detected-worktree-scan-cache'
-import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
+import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktrees/content-paths/worktree-shared-directories'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
@@ -253,7 +253,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
       GHOSTX_ROOT_PATH: repoArg.path
     })
   )
-  createSetupRunnerScriptMock.mockReturnValue({
+  createSetupRunnerScriptMock.mockResolvedValue({
     runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
     envVars: {
       ORCA_ROOT_PATH: '/workspace/repo',

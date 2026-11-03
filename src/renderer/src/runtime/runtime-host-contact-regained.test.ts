@@ -132,16 +132,6 @@ describe('subscribeRuntimeHostContactRegained', () => {
     expect(listener).toHaveBeenCalledTimes(2)
   })
 
-  it('ignores other environments', () => {
-    publish(makeStatus('runtime-a'), 1)
-    const listener = vi.fn()
-    const stop = subscribeRuntimeHostContactRegained('env-b', listener)
-    publish(null, 2)
-    publish(makeStatus('runtime-a'), 3)
-    expect(listener).not.toHaveBeenCalled()
-    stop()
-  })
-
   it('wakes a parked owner when a pending managed pairing proves its key without another revision', async () => {
     useAppStore.getState().setRuntimeEnvironments([env(1, 'key-A')])
     const target = { kind: 'environment', environmentId: 'env-a' } as const

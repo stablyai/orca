@@ -1,8 +1,8 @@
 import { vi } from 'vitest'
-import * as drafts from './agent-session-store-draft'
-import * as attribution from './agent-session-runtime-attribution'
+import * as drafts from './agent-session/records/agent-session-store-draft'
+import * as attribution from './agent-session/agent-session-runtime-attribution'
 import { AgentSessionTabTable } from './agent-session/agent-session-tab-table'
-import type { AgentSessionStoreState } from './agent-session-store-state'
+import type { AgentSessionStoreState } from './agent-session/records/agent-session-store-state'
 
 /** Transparent counters on actual iterator yields, including the two death-listener passes. */
 export function countStatusWriteWork() {

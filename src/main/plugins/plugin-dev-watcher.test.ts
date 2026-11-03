@@ -612,7 +612,7 @@ describe('PluginDevWatcher', () => {
     }
 
     expect(refresh).toHaveBeenCalledTimes(2)
-    expect(root.options).toEqual({ backend: 'windows' })
+    expect(root.options).toEqual({ backend: 'windows', ignoreGlobs: [expect.any(String)] })
     expect(root.unsubscribe).not.toHaveBeenCalled()
     expect(subscribeMock).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(60_000)
@@ -645,8 +645,8 @@ describe('PluginDevWatcher', () => {
     expect(refresh).toHaveBeenCalledTimes(2)
     expect(root.unsubscribe).toHaveBeenCalledOnce()
     expect(subscriptions.map((item) => ({ path: item.path, options: item.options }))).toEqual([
-      { path, options: { backend: 'windows' } },
-      { path, options: { backend: 'windows' } }
+      { path, options: { backend: 'windows', ignoreGlobs: [expect.any(String)] } },
+      { path, options: { backend: 'windows', ignoreGlobs: [expect.any(String)] } }
     ])
     subscriptions.at(-1)?.callback(null, [{ type: 'create', path: join(path, 'manifest.json') }])
     await vi.advanceTimersByTimeAsync(300)

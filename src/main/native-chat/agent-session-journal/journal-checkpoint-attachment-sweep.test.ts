@@ -10,7 +10,7 @@ import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/ag
 import {
   installAgentSessionAttachments,
   stopAgentSessionAttachments
-} from '../../runtime/structured-agent-session-attachment-wiring'
+} from '../../runtime/agent-session/structured-agent-session-attachment-wiring'
 import { createStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger'
 
 let root: string

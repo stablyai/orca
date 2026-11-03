@@ -5,7 +5,7 @@ import { sameGitHubRemoteUrl, type GitRemoteExec } from './worktree-push-target-
 import {
   buildNarrowForkFetchRefspec,
   ensureRemoteTracksBranchNarrowly
-} from '../git/fork-remote-refspec'
+} from '../git/refs/fork-remotes/fork-remote-refspec'
 
 // One remote -v avoids a subprocess per configured remote (#17914).
 export async function findRemoteForUrl(

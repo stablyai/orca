@@ -129,20 +129,6 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       }
       return
     }
-    if (
-      !db ||
-      shouldReleaseOrchestrationPointer(
-        db,
-        args.mailboxHandle,
-        args.messages,
-        args.deps.getMessageWaiters(args.mailboxHandle)
-      )
-    ) {
-      if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
-        args.redrive(args.mailboxHandle)
-      }
-      return
-    }
     const submitEnter = (): void =>
       submitOrchestrationMailboxPointer(
         {
@@ -150,7 +136,6 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           state: args.state,
           getDb: args.deps.getDb,
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
-          getMessageWaiters: args.deps.getMessageWaiters,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,

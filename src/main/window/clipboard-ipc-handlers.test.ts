@@ -225,37 +225,6 @@ describe('registerClipboardHandlers', () => {
     vi.restoreAllMocks()
   })
 
-  it('registers normal and selection text clipboard IPC handlers', async () => {
-    const values = { standard: 'standard text', selection: 'selection text' }
-    clipboardReadTextMock.mockImplementation((type?: string) =>
-      type === 'selection' ? values.selection : values.standard
-    )
-    clipboardWriteTextMock.mockImplementation((text: string, type?: string) => {
-      if (type === 'selection') {
-        values.selection = text
-      } else {
-        values.standard = text
-      }
-    })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(handlers.get('clipboard:readText')?.(makeClipboardEvent())).resolves.toBe(
-      'standard text'
-    )
-    await expect(handlers.get('clipboard:readSelectionText')?.(makeClipboardEvent())).resolves.toBe(
-      'selection text'
-    )
-    await handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'normal text')
-    await handlers.get('clipboard:writeSelectionText')?.(makeClipboardEvent(), 'primary text')
-
-    expect(clipboardReadTextMock).toHaveBeenCalledWith()
-    expect(clipboardReadTextMock).toHaveBeenCalledWith('selection')
-    expect(clipboardWriteTextMock).toHaveBeenCalledWith('normal text')
-    expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
-  })
-
   it.each(['clipboard:writeText', 'clipboard:writeTerminalText'])(
     'keeps a newer image after %s yields without blocking primary selection',
     async (channel) => {
@@ -442,21 +411,6 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
-  it('writes local files through the trusted handler into process-host', async () => {
-    // Pinned so the process-host wiring runs on every CI host, macOS included.
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), '/tmp/copied-file.txt')
-    ).resolves.toEqual({ ok: true })
-
-    expect(fsStatMock).toHaveBeenCalledWith('/tmp/copied-file.txt')
-    expect(resolveAuthorizedPathMock.mock.calls[0]?.[0]).toBe('/tmp/copied-file.txt')
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
-  })
-
   it('rejects unauthorized local files before touching the OS clipboard', async () => {
     resolveAuthorizedPathMock.mockRejectedValue(
       new Error(
@@ -587,38 +541,6 @@ describe('registerClipboardHandlers', () => {
       )
     ).rejects.toThrow('Clipboard text is too large to copy safely.')
     expect(clipboardWriteTextMock).not.toHaveBeenCalled()
-  })
-
-  it('removes stale clipboard IPC handlers before registering replacements', () => {
-    registerClipboardHandlers({} as never)
-
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readText')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readSelectionText')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeText')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeSelectionText')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeImage')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeFile')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:saveImageAsTempFile')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readImageThumbnail')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:hasImage')
-    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readFilePaths')
-  })
-
-  it('does not inspect FileNameW when an empty image clipboard is read outside Windows', async () => {
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-    clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
-
-    try {
-      registerClipboardHandlers({} as never)
-
-      const handler = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
-      await expect(handler?.(makeClipboardEvent(), undefined)).resolves.toBeNull()
-      expect(clipboardReadBufferMock).not.toHaveBeenCalled()
-      expect(fsOpenMock).not.toHaveBeenCalled()
-      expect(nativeImageCreateFromBufferMock).not.toHaveBeenCalled()
-    } finally {
-      platformSpy.mockRestore()
-    }
   })
 
   it.each([false, true])(

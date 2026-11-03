@@ -2,8 +2,8 @@
 // Earlier children's rows are swept before attach; this covers rows that reach the live fence
 // without the child's own lifecycle, such as restored history.
 
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { runningTurnLifecycleRevisions } from './structured-agent-session-stale-turn-verdict'
 

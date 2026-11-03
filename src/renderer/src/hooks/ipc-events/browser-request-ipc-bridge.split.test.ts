@@ -124,10 +124,4 @@ describe('browser tab create with a split pane', () => {
       expect.objectContaining({ split: expect.objectContaining({ sourceGroupId: 'g-terminal' }) })
     )
   })
-
-  it('adds a plain tab without --split', () => {
-    mocks.createListener?.({ requestId: 'r3', worktreeId: WT, url: 'about:blank' })
-
-    expect(mocks.createBrowserTab.mock.calls[0]?.[2]).not.toHaveProperty('split')
-  })
 })

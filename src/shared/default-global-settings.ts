@@ -44,6 +44,8 @@ export function buildDefaultSettings(args: {
     pluginAppTheme: null,
     pluginAppThemeLight: null,
     pluginAppThemeDark: null,
+    editorThemeLight: null,
+    editorThemeDark: null,
     pluginIconTheme: null,
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -53,6 +55,7 @@ export function buildDefaultSettings(args: {
     appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: args.appFontFamily,
     editorAutoSave: false,
+    editorFormatOnSave: false,
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
@@ -86,6 +89,7 @@ export function buildDefaultSettings(args: {
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
     terminalUseSeparateLightTheme: true,
+    terminalColorOverridesSplit: true,
     terminalThemeLight: 'Builtin Tango Light',
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
@@ -110,6 +114,7 @@ export function buildDefaultSettings(args: {
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
+    reduceVisualEffects: false,
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
@@ -133,10 +138,11 @@ export function buildDefaultSettings(args: {
     terminalLinkActionPopoverEnabled: true,
     terminalLinkClickBehavior: 'actions',
     terminalUrlMiddleClickBehavior: 'open',
-    experimentalNativeChat: false,
     experimentalBrowserExtensions: false,
+    agentDefaultSurface: 'terminal',
     nativeChatResumeWorkOnRestart: false,
     nativeChatQueueFollowUps: true,
+    nativeChatAutoContinueAfterUsageLimit: false,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
     nativeChatInheritShellEnvironment: true,
@@ -228,6 +234,7 @@ export function buildDefaultSettings(args: {
     agentCmdOverrides: {},
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},
+    agentLaunchChoices: {},
     agentDefaultEnv: {},
     agentYoloDefaultsMigrated: true,
     agentPermissionDefault: 'full-access',
@@ -267,6 +274,7 @@ export function buildDefaultSettings(args: {
     experimentalEphemeralVms: false,
     experimentalConnectors: false,
     experimentalWslHosts: false,
+    experimentalOrchestrationPanel: false,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,

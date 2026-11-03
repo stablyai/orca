@@ -1,3 +1,4 @@
+import type { AgentLaunchChoices } from './agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
@@ -28,7 +29,6 @@ import type {
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
-import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
 import type { ZcodePlanSite } from './zcode-plan-sites'
@@ -80,6 +80,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   uiLanguagePortugueseMigrationApplied?: boolean
   appIcon: AppIconId
   appFontFamily: string
+  editorFormatOnSave?: boolean
+  /** Days a release must be public before Orca offers it; absent/0 offers releases immediately. */
+  updateDelayDays?: number
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
@@ -128,14 +131,12 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  background-luminance-gated floor (3 dark / 4.5 light); 1 disables contrast correction so TUIs
    *  that rely on deliberately low contrast (Powerline seams, dimmed secondary text) render as sent. */
   terminalMinimumContrastRatio?: number
-  terminalColorOverrides?: TerminalColorOverrides
   terminalPaddingX?: number
   terminalPaddingY?: number
   terminalMouseHideWhileTyping?: boolean
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
-  windowBackgroundBlur?: boolean
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean
   /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */
@@ -198,12 +199,13 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
-  /** New supported agent launches use structured Chat UI; off defaults to terminal UI. */
-  experimentalNativeChat?: boolean
   /** Opt-in resume of working structured chats after restart; off still lists them for review before token spending. */
   nativeChatResumeWorkOnRestart?: boolean
-  /** Queue editable mid-turn follow-ups until turn end on capable hosts. Absent means on; off sends immediately. */
+  /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
+  /** Opt-in: when a chat stops on a usage limit with a known reset time, send it "Continue where
+   *  you left off." once the limit resets, unless that chat was told not to. */
+  nativeChatAutoContinueAfterUsageLimit?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
@@ -381,6 +383,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+  agentLaunchChoices?: AgentLaunchChoices
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
@@ -441,6 +444,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
+  /** Experimental: panel beside chats and terminals listing the agents each agent works with; off mounts nothing. */
+  experimentalOrchestrationPanel?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */
@@ -459,10 +464,14 @@ export type GlobalSettings = GlobalSettingsBase & {
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
   experimentalNewWorktreeCardStyle?: boolean
+  /** Plugin frames as isolated guests (default on); main-only kill switch, see plugin-frame-isolation.ts. */
+  experimentalPluginIsolatedFrames?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
   experimentalWslHosts?: boolean
+  /** Declined the add-project offer to run a `\\wsl.localhost` project's distro as a host. */
+  wslHostOfferDismissed?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */
@@ -488,6 +497,4 @@ export type GlobalSettings = GlobalSettingsBase & {
   aiVaultSearch?: AiVaultSearchSettings
 }
 
-// Retain one import entry point while keeping feature shapes separate from the max-lines-limited settings module.
-export type { GhosttyImportPreview } from './ghostty-import-preview'
 export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

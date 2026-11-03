@@ -1,3 +1,4 @@
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import type React from 'react'
 import { EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
@@ -43,6 +44,7 @@ type RichMarkdownEditorSurfaceProps = {
   rootRef: (node: HTMLDivElement | null) => void
   onFocusLeave: (event: React.FocusEvent<HTMLDivElement>) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  scrollContainerCallbackRef: (node: HTMLDivElement | null) => void
   headerSlot?: React.ReactNode
   reviewRailExpanded: boolean
   reviewRailVisible: boolean
@@ -51,6 +53,7 @@ type RichMarkdownEditorSurfaceProps = {
   attentionReviewCommentId: string | null
   copiedReviewNoteId: string | null
   markdownReviewContent: string
+  commentOwner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
   markdownCommentsCount: number
@@ -134,6 +137,7 @@ export function RichMarkdownEditorSurface({
   rootRef,
   onFocusLeave,
   scrollContainerRef,
+  scrollContainerCallbackRef,
   headerSlot,
   reviewRailExpanded,
   reviewRailVisible,
@@ -142,6 +146,7 @@ export function RichMarkdownEditorSurface({
   attentionReviewCommentId,
   copiedReviewNoteId,
   markdownReviewContent,
+  commentOwner,
   worktreeId,
   filePath,
   markdownCommentsCount,
@@ -213,7 +218,7 @@ export function RichMarkdownEditorSurface({
         {headerSlot}
         <div className="relative min-h-0 flex-1">
           <div
-            ref={scrollContainerRef}
+            ref={scrollContainerCallbackRef}
             // Image layout must not anchor-scroll over the restored tab position.
             className="relative h-full overflow-auto scrollbar-editor [overflow-anchor:none]"
             onMouseDown={(event) => {
@@ -230,6 +235,7 @@ export function RichMarkdownEditorSurface({
             <RichMarkdownTableControls editor={editor} scrollContainerRef={scrollContainerRef} />
             {reviewRailVisible && notePositions.length > 0 ? (
               <RichMarkdownReviewNoteLayer
+                owner={commentOwner}
                 positions={notePositions}
                 activeCommentId={activeReviewCommentId}
                 attentionCommentId={attentionReviewCommentId}
@@ -327,6 +333,7 @@ export function RichMarkdownEditorSurface({
         />
         {markdownCommentsCount > 0 ? (
           <RichMarkdownReviewRailActions
+            owner={commentOwner}
             worktreeId={worktreeId}
             filePath={filePath}
             noteCount={markdownCommentsCount}

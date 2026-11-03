@@ -86,3 +86,25 @@ When an agent ships OSC 7501 support, or changes what it reports:
    `src/shared/program-status/agent-status-projector.ts` (examples: `claude-code` → `claude`,
    `grok-build` → `grok`). Otherwise hook precedence can't match its rows.
 3. Update the row and the date above.
+
+## Plugin tool hooks (`agent.tool.before` / `.after`)
+
+The hook server runs plugins' `agent.tool.before` and `.after` on each tool event it receives, after
+it records status (`agent-tool-plugin-hooks.ts`). Only Claude Code's POSIX script waits for the
+answer: it sends `X-Orca-Hook-Decision: claude-pre-tool-use-v1` on PreToolUse, waits at most 8 s
+(Orca answers within 6 s), and prints Orca's `hookSpecificOutput` (a `deny`, or `updatedInput`
+without an approval) or `{}`. A timeout, an error or Orca being down prints `{}`, so the call
+proceeds as if Orca were not there. Every other script discards the reply, so for those agents
+`agent.tool.before` only observes.
+
+| Agent                                                                                                                         | Tool events Orca receives        | Blocks?                                             |
+| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------- |
+| Claude Code (POSIX)                                                                                                           | PreToolUse, PostToolUse(Failure) | yes                                                 |
+| Claude Code (Windows `.cmd`)                                                                                                  | same                             | no: prints `{}` first; follow-up                    |
+| OpenClaude, Qoder, Qwen Code, CodeBuddy                                                                                       | same, via Claude's script        | no: their honoring of Claude's output is unverified |
+| Codex, Droid, Devin, Kimi, Muse, ZCode, DSH, Command Code, Copilot, Grok, Antigravity                                         | PreToolUse/PostToolUse           | no: reply discarded                                 |
+| Gemini (BeforeTool/AfterTool), Cursor (preToolUse, beforeShellExecution, …), Kiro, Jcode (pre_tool, posted in the background) | their own names                  | no                                                  |
+| Amp, Hermes (plugins)                                                                                                         | tool.call / pre_tool_call        | no: posts are not awaited for a decision            |
+
+SSH and WSL agents post to a relay on their host, which answers locally and forwards status
+only, so their tool calls are not hooked yet.

@@ -3,6 +3,7 @@ import {
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerSetupIdentity } from '../agent/agent-launch-picker-drafts'
 import { rowLabel, rowId, chatUnavailableLabel } from './tab-agent-row-presentation'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { orderAgentLaunchPickerAgents } from '../../../../shared/agent-launch-picker-rows'
@@ -18,6 +19,7 @@ export type TabAgentLaunchOption = {
   id?: string
   row?: NewTabAgentMenuRow
   setup?: AgentPickerDraft
+  preset?: AgentPickerSetupIdentity
   pickerEntry?: AgentPickerEntry
   reason?: string
 }
@@ -188,6 +190,7 @@ export function matchingAgentPickerLaunchOptions(
         kind: surface === 'chat' ? 'chat' : 'cli',
         executionHostId: setup.entry.rows[0]?.executionHostId
       },
+      preset: { model: setup.model.id, effort: setup.choices.options?.effort },
       setup: { agent: setup.entry.agent, surface, choices: setup.choices },
       pickerEntry: setup.entry
     }

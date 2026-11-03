@@ -86,7 +86,8 @@ vi.mock('./gh-utils', () => ({
   _resetOwnerRepoCache: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -215,7 +216,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     const pr = await getPRForBranch('/repo-root', 'master')
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1', '--include'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=10', '--include'],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(pr).toBeNull()

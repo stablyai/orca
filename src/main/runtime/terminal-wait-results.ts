@@ -12,6 +12,10 @@ type ReadonlyTerminalStateRecord = {
   lastExitCause?: TerminalExitCause | null
 }
 
+export function buildPtyTerminalWaitExitError(pty: ReadonlyTerminalStateRecord): Error {
+  return Object.assign(new Error('terminal_exited'), { terminalExitCause: pty.lastExitCause })
+}
+
 export function getTerminalState(leaf: ReadonlyTerminalStateRecord): RuntimeTerminalState {
   if (leaf.connected) {
     return 'running'

@@ -6,7 +6,7 @@ import {
   type AgentTokenUsage
 } from '../../shared/telemetry-agent-token-usage-schema'
 import { isTelemetryEnabled, track } from '../telemetry/client'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
+import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 import type { AgentTokenSession } from './agent-token-usage'
 
 const stateSchema = z

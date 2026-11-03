@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
-import { createSessionParseStats } from './session-scanner-parse-cache'
+import { createSessionParseStats } from './parse-cache/session-scanner-parse-cache'
 import {
   resetSessionParseCacheForTests,
   storeSessionParseCacheEntry
-} from './session-parse-cache-store'
+} from './parse-cache/session-parse-cache-store'
 import { createAccumulator, finalizeSession, sessionSortTime } from './session-scanner-accumulator'
 import * as cutoff from './session-scan-cutoff'
 

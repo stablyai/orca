@@ -1,3 +1,4 @@
+import type { WorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
 import type { DispatchPreambleSendOptions } from './preamble'
 
 export type WorktreeDrift = {
@@ -38,6 +39,7 @@ export type CoordinatorRuntime = {
     paneKey: string | null
     processIncarnation: string | null
     launchTokenHash: string | null
+    hostScope?: WorkerTerminalHostScope
   } | null
   // The worker's native/WSL pane determines its packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-dev' | 'orca-ide'

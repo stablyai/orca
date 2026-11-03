@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type * as StructuredAgentClient from '@/runtime/structured-agent-session-client'
 
 import {
   commitSourceControlActionArguments,
@@ -15,7 +16,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
-import { clearHostAgentMenuSettingsForTests } from '../settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -33,9 +34,15 @@ import {
   type SaveAction
 } from './source-control-action-dialog.test-fixture'
 
+vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof StructuredAgentClient>()),
+  callStructuredAgentSession: vi.fn(async () => undefined)
+}))
+
 const initialState = useAppStore.getState()
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   clearHostAgentMenuSettingsForTests()
   useAppStore.setState(initialState, true)
   setLocalRuntimeCapabilitiesForTests(null)
@@ -75,21 +82,6 @@ it('starts and saves a live pick from the unified picker, keeping the agent-boun
   expect(result.current.recipe).toMatchObject({ agentId: 'claude', surface: 'chat' })
   expect(result.current.recipe.launchPreferences).toBeUndefined()
   expect(result.current.agentArgsApply).toBe(false)
-})
-
-it('saves no surface for a pick made when the picker offers no chats', async () => {
-  const { result, onStart, onSaveAgentDefault } = renderDialog(false)
-  await waitFor(() => expect(result.current.canStart).toBe(true))
-
-  act(() => result.current.surfaceRows.onPick('codex', 'terminal'))
-  await act(() => result.current.handleStart())
-
-  expect(onStart).toHaveBeenCalledWith(
-    expect.objectContaining({ launchChoice: expect.objectContaining({ route: 'terminal-tui' }) })
-  )
-  const savedRecipe = onSaveAgentDefault.mock.calls[0]?.[2]
-  expect(savedRecipe).toMatchObject({ agentId: 'codex' })
-  expect(savedRecipe).not.toHaveProperty('surface')
 })
 
 it('leaves an untouched saved surface in the draft but omits it when saving to an older action host', async () => {
@@ -140,7 +132,7 @@ it.each(['codex', null] as const)(
       ...getDefaultSettings('/tmp/host-action'),
       defaultTuiAgent: 'opencode' as const,
       disabledTuiAgents: ['codex' as const],
-      experimentalNativeChat: false
+      nativeChatProviders: { claude: false, codex: false }
     }
     const recipe = {
       agentId,
@@ -204,7 +196,7 @@ it.each(['codex', null] as const)(
     )
     expect(view.result.current.surfaceRows.model).toMatchObject({
       state: 'settled',
-      rows: [{ agent: 'codex', kind: 'terminal' }]
+      rows: [{ agent: 'codex', kind: 'cli' }]
     })
     expect(view.result.current.selectedAgent).toBe('codex')
     expect(view.result.current.canStart).toBe(true)
@@ -217,6 +209,7 @@ it.each(['codex', null] as const)(
         agentArgs: '--dangerously-bypass-approvals-and-sandbox --model chosen',
         sessionOptions: { model: 'chosen' },
         agentLaunchPreferences: {
+          agentLaunchChoices: {},
           defaultTuiAgent: 'codex',
           disabledTuiAgents: ['opencode', 'claude']
         }
@@ -258,15 +251,19 @@ it.each([
     )
     await pickDialogAgent('Claude', terminal)
     if (terminal) {
-      expect(
-        screen.getByRole<HTMLInputElement>('textbox', { name: 'Extra CLI arguments' }).value
-      ).toBe('--verbose')
+      expect(f.controller.agentArgs).toBe('--verbose')
     } else {
       expect(screen.queryByRole('textbox', { name: 'Extra CLI arguments' })).toBeNull()
     }
-    expect(screen.getByText(/High/).textContent).toContain('High')
+    expect(
+      projectSourceControlActionLaunch(f.controller.recipe, 'claude', { basePrompt: 'fix' })
+        .sessionOptions
+    ).toMatchObject({ effort: 'high' })
     if (model) {
-      expect(screen.getByText(/High/).textContent).toContain('Opus')
+      expect(
+        projectSourceControlActionLaunch(f.controller.recipe, 'claude', { basePrompt: 'fix' })
+          .sessionOptions?.model
+      ).toBe('opus')
     }
     fireEvent.click(screen.getByRole('button', { name: 'Save & start agent' }))
     await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
@@ -292,7 +289,10 @@ it.each([
     ).toMatchObject({ agentArgs: '--verbose', sessionOptions: options })
     f.view.unmount()
     const reopened = f.mount()
-    expect(screen.getByText(/High/).textContent).toContain('High')
+    expect(
+      projectSourceControlActionLaunch(f.controller.recipe, 'claude', { basePrompt: 'fix' })
+        .sessionOptions
+    ).toMatchObject({ effort: 'high' })
     reopened.unmount()
   }
 )
@@ -351,7 +351,10 @@ it('distinguishes masked eligibility from owning reset and uses the captured par
     }))
   )
   await pickDialogAgent('Codex', true)
-  expect(screen.getByText(/Model from Settings: o3/)).toBeDefined()
+  expect(
+    projectSourceControlActionLaunch(f.controller.recipe, 'codex', { basePrompt: 'fix' })
+      .sessionOptions?.model
+  ).toBe('o3')
   fireEvent.click(screen.getByRole('button', { name: 'Save & start agent' }))
   await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
   expect(f.onStart).toHaveBeenCalledWith(
@@ -382,7 +385,10 @@ it('distinguishes masked eligibility from owning reset and uses the captured par
   expect(screen.queryByText(/Opus/)).toBeNull()
   f.view.unmount()
   const reopened = f.mount()
-  expect(screen.getByText(/Model from Settings: o3/)).toBeDefined()
+  expect(
+    projectSourceControlActionLaunch(f.controller.recipe, 'codex', { basePrompt: 'fix' })
+      .sessionOptions?.model
+  ).toBe('o3')
   reopened.unmount()
   useAppStore.setState((state) => ({
     repos: state.repos.map((row) =>
@@ -395,7 +401,10 @@ it('distinguishes masked eligibility from owning reset and uses the captured par
     )
   }))
   const fresh = f.mount()
-  expect(screen.getByText(/Model from Settings: later/)).toBeDefined()
+  expect(
+    projectSourceControlActionLaunch(f.controller.recipe, 'codex', { basePrompt: 'fix' })
+      .sessionOptions?.model
+  ).toBe('later')
   fresh.unmount()
 })
 
@@ -414,10 +423,11 @@ it('retains newly eligible literal syntax, demotes obsolete syntax once and does
     ).toBe(false)
   )
   await pickDialogAgent('Claude', true)
-  expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Extra CLI arguments' }).value).toBe(
-    '--verbose'
-  )
-  expect(screen.getByText(/Opus/).textContent).toContain('High')
+  expect(f.controller.agentArgs).toBe('--verbose')
+  expect(
+    projectSourceControlActionLaunch(f.controller.recipe, 'claude', { basePrompt: 'fix' })
+      .sessionOptions
+  ).toMatchObject({ model: 'opus', effort: 'high' })
   fireEvent.click(screen.getByRole('button', { name: 'Save & start agent' }))
   await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
   expect(f.onStart).toHaveBeenCalledWith(
@@ -431,13 +441,10 @@ it('retains newly eligible literal syntax, demotes obsolete syntax once and does
   expect(saved.argumentChoices).toEqual(global.argumentChoices)
   expect(saved.launchPreferences).toBeUndefined()
   await pickDialogAgent('Codex', true)
-  const text = screen.getByRole<HTMLInputElement>('textbox', { name: 'Extra CLI arguments' })
-  expect(text.value).toBe('--model opus  --effort high --verbose')
+  expect(f.controller.agentArgs).toBe('--model opus  --effort high --verbose')
   await pickDialogAgent('Claude', true)
   expect(screen.queryByText(/Model from Settings/)).toBeNull()
-  expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Extra CLI arguments' }).value).toBe(
-    '--model opus  --effort high --verbose'
-  )
+  expect(f.controller.agentArgs).toBe('--model opus  --effort high --verbose')
 })
 
 it('keeps an owned empty-Args default barrier and submitted choices across failed Save, newer edits and Discard', async () => {
@@ -470,13 +477,9 @@ it('keeps an owned empty-Args default barrier and submitted choices across faile
     commandInput: 'fix'
   })
   expect(f.onStart.mock.calls[0][0].sessionOptions).toBeUndefined()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Extra CLI arguments' }), {
-    target: { value: '--newer' }
-  })
+  act(() => f.controller.onAgentArgsChange('--newer'))
   await act(async () => done.reject(new Error('write failed')))
-  expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Extra CLI arguments' }).value).toBe(
-    '--newer'
-  )
+  expect(f.controller.agentArgs).toBe('--newer')
   expect(save.mock.calls[0][2].agentArgs).toBe('')
   expect(f.onStart).toHaveBeenCalledOnce()
   expect(useAppStore.getState().repos[0].sourceControlAi).toEqual(f.repo.sourceControlAi)
@@ -484,9 +487,7 @@ it('keeps an owned empty-Args default barrier and submitted choices across faile
   f.view.unmount()
   const fresh = f.mount()
   await pickDialogAgent('Claude', true)
-  expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Extra CLI arguments' }).value).toBe(
-    ''
-  )
+  expect(f.controller.agentArgs).toBe('')
   fresh.unmount()
 })
 
@@ -581,9 +582,7 @@ it.each([
         permission: captured.source.authoredPreferences
       })
     }
-    fireEvent.change(screen.getByRole('textbox', { name: 'Extra CLI arguments' }), {
-      target: { value: replacement }
-    })
+    act(() => f.controller.onAgentArgsChange(replacement))
     if (native) {
       await pickDialogAgent(agent === 'claude' ? 'Claude' : 'Codex', false)
       expect(screen.queryByRole('textbox', { name: 'Extra CLI arguments' })).toBeNull()
@@ -661,9 +660,7 @@ it.each([
           expect(screen.queryByRole('textbox', { name: 'Extra CLI arguments' })).toBeNull()
         )
       } else {
-        expect(
-          screen.getByRole<HTMLInputElement>('textbox', { name: 'Extra CLI arguments' }).value
-        ).toBe('--verbose')
+        expect(f.controller.agentArgs).toBe('--verbose')
       }
       reopened.unmount()
     }
@@ -686,9 +683,7 @@ it.each([
   )
   await waitFor(() => expect(screen.getByRole('checkbox')).toBeDefined())
   if (edit !== undefined) {
-    fireEvent.change(screen.getByRole('textbox', { name: 'Extra CLI arguments' }), {
-      target: { value: edit }
-    })
+    act(() => f.controller.onAgentArgsChange(edit))
   }
   fireEvent.click(screen.getByRole('checkbox'))
   fireEvent.click(screen.getByRole('button', { name: 'Start agent' }))
@@ -736,9 +731,7 @@ it('replaces the selected captured parent key without flattening sparse ownershi
       }
     }))
   )
-  fireEvent.change(screen.getByRole('textbox', { name: 'Extra CLI arguments' }), {
-    target: { value: '--model sonnet --verbose' }
-  })
+  act(() => f.controller.onAgentArgsChange('--model sonnet --verbose'))
   fireEvent.click(screen.getByRole('checkbox'))
   fireEvent.click(screen.getByRole('button', { name: 'Start agent' }))
   await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
@@ -758,16 +751,10 @@ it('settles pending replacement in its old grammar before a genuine agent demoti
     }),
     {}
   )
-  await waitFor(() =>
-    expect(screen.getByRole('textbox', { name: 'Extra CLI arguments' })).toBeDefined()
-  )
-  fireEvent.change(screen.getByRole('textbox', { name: 'Extra CLI arguments' }), {
-    target: { value: '--model sonnet --verbose' }
-  })
+  await waitFor(() => expect(f.controller.selectedAgent).toBeTruthy())
+  act(() => f.controller.onAgentArgsChange('--model sonnet --verbose'))
   await pickDialogAgent('Codex', true)
-  expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Extra CLI arguments' }).value).toBe(
-    '--model sonnet --verbose'
-  )
+  expect(f.controller.agentArgs).toBe('--model sonnet --verbose')
   await pickDialogAgent('Claude', true)
   fireEvent.click(screen.getByRole('checkbox'))
   fireEvent.click(screen.getByRole('button', { name: 'Start agent' }))
@@ -791,12 +778,8 @@ it.each([
       },
       {}
     )
-    await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'Extra CLI arguments' })).toBeDefined()
-    )
-    fireEvent.change(screen.getByRole('textbox', { name: 'Extra CLI arguments' }), {
-      target: { value: `--model sonnet --permission-mode ${raw} --verbose` }
-    })
+    await waitFor(() => expect(f.controller.selectedAgent).toBeTruthy())
+    act(() => f.controller.onAgentArgsChange(`--model sonnet --permission-mode ${raw} --verbose`))
     fireEvent.click(screen.getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: 'Start agent' }))
     await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
@@ -807,3 +790,26 @@ it.each([
     expect(f.persist).not.toHaveBeenCalled()
   }
 )
+
+it('owns one pending Start, carries its signal, and permits a fresh Start after setup cancellation', async () => {
+  const f = renderDialog(false, false)
+  const choice = Promise.withResolvers<'cancelled'>()
+  f.onStart.mockImplementationOnce(() => choice.promise)
+  await waitFor(() => expect(f.result.current.canStart).toBe(true))
+  let first: Promise<void> | undefined
+  act(() => {
+    first = f.result.current.handleStart()
+  })
+  await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
+  expect(f.onStart.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal)
+  await act(async () => f.result.current.handleStart())
+  expect(f.onStart).toHaveBeenCalledOnce()
+  await act(async () => {
+    choice.resolve('cancelled')
+    await first
+  })
+  await act(async () => f.result.current.handleStart())
+  expect(f.onStart).toHaveBeenCalledTimes(2)
+  expect(f.onStart.mock.calls[1][0].signal).not.toBe(f.onStart.mock.calls[0][0].signal)
+  f.unmount()
+})

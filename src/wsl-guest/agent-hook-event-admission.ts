@@ -1,5 +1,11 @@
 import { previewHookPresence } from '../shared/agent-hook-presence-transition'
 import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
+import {
+  readHookProcessEvidence,
+  restateHookRoot,
+  type HookRootAcquisition
+} from '../shared/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../shared/hook-process-root-evidence'
 import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
@@ -26,22 +32,56 @@ type RelayHookAdmissionHost = {
   checkAgentPresence: (paneKey: string) => Promise<void>
 }
 
+export type RelayHookAdmissionOptions = {
+  isReplay?: boolean
+  checkPresence?: boolean
+  onAccepted?: (event: AgentHookEventPayload) => void
+}
+
+/** The relay's acquisition: a late answer restates the pane's cached row, which forwards like any
+ *  change, so the desktop heals too. */
+export function relayHookRootAcquisition(
+  read: HookRootEvidenceReader | undefined,
+  state: HookListenerState,
+  apply: (event: AgentHookEventPayload) => unknown,
+  answerBy?: number
+): HookRootAcquisition | undefined {
+  return (
+    read && {
+      read,
+      answerBy,
+      reconcile: (completion) => {
+        const event = restateHookRoot(state, completion, 'AgentProcessExit')
+        if (event) {
+          apply(event)
+        }
+      }
+    }
+  )
+}
+
 export function applyRelayHookEvent(
   host: RelayHookAdmissionHost,
   incoming: AgentHookEventPayload,
   source: AgentHookSource,
   env?: string,
   version?: string,
-  options: { isReplay?: boolean; checkPresence?: boolean } = {}
+  options: RelayHookAdmissionOptions = {}
 ): AgentHookEventPayload | undefined {
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
   }
   const previous = host.state.lastStatusByPaneKey.get(incoming.paneKey)
+  const evidence = readHookProcessEvidence(host.state, previous, {
+    paneKey: incoming.paneKey,
+    process: incoming.agentPresence?.process
+  })
   if (
     previous &&
     !previous.providerSessionOnly &&
     sameAgentStatusTerminalOwner(previous, incoming) &&
+    // A proved root replaces a fallback owner instead of yielding to it.
+    evidence?.verdict !== 'root' &&
     hasOtherAgentProcessOwner(previous.agentPresence, {
       agent: incoming.payload.agentType ?? 'unknown',
       process: incoming.agentPresence?.process
@@ -53,7 +93,14 @@ export function applyRelayHookEvent(
   if (cancellation.hold) {
     return previous
   }
-  const preview = previewHookPresence(cancellation.event, previous)
+  const preview = previewHookPresence(
+    cancellation.event,
+    previous,
+    true,
+    false,
+    evidence?.verdict,
+    evidence?.binding
+  )
   const transitioned = preview.transitioned && {
     ...preview.transitioned,
     statusAdmissionSession: incoming.statusAdmissionSession
@@ -63,9 +110,7 @@ export function applyRelayHookEvent(
   }
   const revised = withRelayClaudeTurnRevision(
     previous,
-    transitioned.agentPresence?.ended
-      ? { ...transitioned, providerSessionOnly: true }
-      : transitioned,
+    preview.exited ? { ...transitioned, providerSessionOnly: true } : transitioned,
     source
   )
   // Why: the relay is this pane's execution host, the only side that sees the event name.
@@ -109,6 +154,7 @@ export function applyRelayHookEvent(
     version,
     ...(claudeSettledRequests ? { claudeSettledRequests } : {})
   })
+  options.onAccepted?.(event)
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
   const sender = incoming.agentPresence?.process
   const owner = event.agentPresence

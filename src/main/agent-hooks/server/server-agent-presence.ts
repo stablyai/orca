@@ -26,6 +26,16 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
   >()
   private readonly claudeContinuations = new ClaudeSessionContinuationTracker()
 
+  /** Issue pane-root bindings for a relay's request on the link generation current when it
+   *  asked; a link restart during the read issues nothing. */
+  relayPaneRootIssuer(
+    connectionId: string
+  ): (paneKey: string, incarnation: string, isCurrent: () => boolean) => string | undefined {
+    const generation = this.relaySessions.generation(connectionId)
+    return (paneKey, incarnation, isCurrent) =>
+      this.relaySessions.issuePaneRoot(connectionId, generation, paneKey, incarnation, isCurrent)
+  }
+
   /** A hook proves its sender alive; only another process can challenge the owner. */
   checkAgentPresenceAfterHook(event: AgentHookEventPayload, row: AgentHookEventPayload): void {
     const sender = event.agentPresence?.process
@@ -80,8 +90,13 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
         this.statusHookGeneration === generation &&
         this.state.lastStatusByPaneKey.get(resolved) === row &&
         row.agentPresence === presence,
+      // An agent that reported its own end holds nothing, even while its process winds down.
       presence: () =>
-        presence?.process ? probeAgentProcessPresence(presence.process) : Promise.resolve(null),
+        presence?.ended
+          ? Promise.resolve('exited')
+          : presence?.process
+            ? probeAgentProcessPresence(presence.process)
+            : Promise.resolve(null),
       topology: cliWriterTopology(row)
     }
   }
@@ -95,6 +110,11 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     // A replaced owner's probe result counts only if its exit was retained.
     if (verdict !== null && verdict !== 'exited') {
       return verdict
+    }
+    // Why: a hook still deciding whether it succeeds the owner may yet occupy the pane; its
+    // admission forgets the exit, its refusal leaves the exit to answer.
+    if (this.undecidedOwnerChallenges.has(this.resolvePaneKeyAlias(paneKey))) {
+      return 'unverifiable'
     }
     const exit =
       this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(paneKey)) ??
@@ -202,10 +222,16 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     await this.initializeStatusHookOwner()
     const resolved = this.resolvePaneKeyAlias(paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)
-    if (!row || row.connectionId !== null || row.agentPresence?.ended) {
+    // A terminal report after an exit keeps the retired record only as metadata, not as its author.
+    const retired = row?.agentPresence?.ended === true
+    if (!row || row.connectionId !== null || (retired && row.providerSessionOnly)) {
       return null
     }
-    if (row.agentPresence?.process && (await this.checkAgentPresence(resolved)) !== 'live') {
+    if (
+      !retired &&
+      row.agentPresence?.process &&
+      (await this.checkAgentPresence(resolved)) !== 'live'
+    ) {
       return null
     }
     // Each await may have seen hooks turned off or a newer report replace this one.

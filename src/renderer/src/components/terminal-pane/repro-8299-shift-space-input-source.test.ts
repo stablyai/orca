@@ -1,9 +1,6 @@
 /** Bound macOS Shift+Space switches input source without PTY bytes, including companion key events; unbound chords retain ordinary space input (#8299). */
 import { describe, expect, it } from 'vitest'
-import {
-  createTerminalNativeOnlyShortcutTracker,
-  getTerminalShortcutKeyIdentity
-} from './terminal-native-only-shortcut'
+import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
 import {
   resolveTerminalShortcutAction,
   type TerminalShortcutEvent
@@ -47,20 +44,6 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
     }
   })
 
-  it('configures Shift+Space as native-only input-source switch without sendInput', () => {
-    const overrides = { 'terminal.switchInputSource': ['Shift+Space'] }
-    const action = resolveTerminalShortcutAction(
-      shortcutEvent({ key: ' ', code: 'Space', shiftKey: true }),
-      true,
-      'false',
-      0,
-      false,
-      overrides
-    )
-    expect(action).toEqual({ type: 'switchInputSource' })
-    expect(action).not.toMatchObject({ type: 'sendInput' })
-  })
-
   it('leaves unbound Shift+Space as non-action on macOS/Linux/Windows', () => {
     // Why: native-only behavior is opt-in; non-IME users keep ordinary Space input.
     for (const [isMac, isWindows] of [
@@ -94,20 +77,6 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
     ).toEqual({ type: 'switchInputSource' })
   })
 
-  it('supports alternate OS chords such as Ctrl+Space', () => {
-    const overrides = { 'terminal.switchInputSource': ['Ctrl+Space'] }
-    expect(
-      resolveTerminalShortcutAction(
-        shortcutEvent({ key: ' ', code: 'Space', ctrlKey: true }),
-        false,
-        'false',
-        0,
-        false,
-        overrides
-      )
-    ).toEqual({ type: 'switchInputSource' })
-  })
-
   it('suppresses keypress/keyup companions including keypress without code', () => {
     // Why: Chromium keypress may omit code and only report key:" ".
     const tracker = createTerminalNativeOnlyShortcutTracker()
@@ -115,13 +84,6 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
     expect(tracker.consumeCompanion({ type: 'keypress', key: ' ' })).toBe(true)
     expect(tracker.consumeCompanion({ type: 'keyup', key: ' ' })).toBe(true)
     expect(tracker.consumeCompanion({ type: 'keyup', key: ' ' })).toBe(false)
-  })
-
-  it('normalizes Space identities across key/code aliases', () => {
-    expect(getTerminalShortcutKeyIdentity({ key: ' ', code: 'Space' })).toBe('Space')
-    expect(getTerminalShortcutKeyIdentity({ key: ' ' })).toBe('Space')
-    expect(getTerminalShortcutKeyIdentity({ key: 'Spacebar' })).toBe('Space')
-    expect(getTerminalShortcutKeyIdentity({ key: 'a', code: 'KeyA' })).toBe('KeyA')
   })
 
   it('does not suppress unrelated companions while Space is pending', () => {

@@ -1,5 +1,5 @@
 import type { CommandHandler } from './dispatch'
-import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
+import { BROWSER_HANDLER_GROUPS } from './browser/browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
@@ -144,6 +144,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration worker-stop',
       'orchestration worker-abandon',
       'orchestration worker-release',
+      'orchestration worker-keep-open',
       'orchestration worker-retain',
       'orchestration worker-list',
       'orchestration dispatch',

@@ -7,7 +7,7 @@
  *   flag rows whose identity it changed (a later move offers them; none runs on its own), and drop
  *   marks no committed move explains, such as after "Use on this computer again".
  */
-import { wslHostsServing } from '../../wsl/wsl-host-gate'
+import { wslHostsServing } from '../../wsl/host-lifecycle/wsl-host-gate'
 import type { Store } from '../loading-store/store'
 import {
   listWslMoveCutoverChain,

@@ -33,7 +33,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 import { registerNotebookHandlers } from './notebook'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as FileAccessResolution from './local-file-access-resolution'
 
 function fakeKernel() {

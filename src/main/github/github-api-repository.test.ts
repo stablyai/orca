@@ -28,7 +28,7 @@ vi.mock('./github-enterprise-repository', async (importOriginal) => ({
   isGitHubHostAuthenticated: isGitHubHostAuthenticatedMock
 }))
 
-vi.mock('../git/remote-name-listing', () => ({
+vi.mock('../git/remotes/remote-name-listing', () => ({
   shouldProbeGitRemote: shouldProbeGitRemoteMock
 }))
 
