@@ -80,7 +80,7 @@ function readTerminalViewModeFlags(
     }
     return viewMode === 'terminal' ? { viewMode } : undefined
   }
-  if (command === undefined) {
+  if (!command?.trim()) {
     throw new RuntimeClientError(
       'invalid_argument',
       '--view-mode chat shows the agent that --command starts; pass --command.'

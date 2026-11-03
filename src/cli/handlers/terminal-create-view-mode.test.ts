@@ -65,6 +65,14 @@ const REFUSALS: [[string, string][], RegExp][] = [
   ],
   [
     [
+      ['command', '  '],
+      ['view-mode', 'chat'],
+      ['command-agent', 'claude']
+    ],
+    /pass --command/
+  ],
+  [
+    [
       ['command', 'claude'],
       ['view-mode', 'chat']
     ],

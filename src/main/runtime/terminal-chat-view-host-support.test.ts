@@ -31,7 +31,21 @@ describe('terminalCreateChatViewParamsRefusal', () => {
     [{ viewMode: 'chat', worktree: 'id:w' }, /given together/],
     [{ commandAgent: 'claude', worktree: 'id:w' }, /given together/],
     [{ viewMode: 'terminal', commandAgent: 'claude', worktree: 'id:w' }, /given together/],
-    [{ viewMode: 'chat', commandAgent: 'claude' }, /needs a worktree/]
+    [{ viewMode: 'chat', commandAgent: 'claude' }, /needs a worktree/],
+    [{ viewMode: 'chat', commandAgent: 'claude', worktree: 'id:w' }, /pass --command/],
+    [
+      { viewMode: 'chat', commandAgent: 'claude', worktree: 'id:w', command: '  ' },
+      /pass --command/
+    ],
+    [
+      {
+        viewMode: 'chat',
+        commandAgent: 'claude',
+        worktree: 'id:w',
+        command: 'codex --full-auto'
+      },
+      /contradicts codex/
+    ]
   ] as const)('refuses %o', (params, message) => {
     expect(terminalCreateChatViewParamsRefusal(params)?.message).toMatch(message)
   })
@@ -41,7 +55,8 @@ describe('terminalCreateChatViewParamsRefusal', () => {
       terminalCreateChatViewParamsRefusal({
         viewMode: 'chat',
         commandAgent: 'claude',
-        worktree: 'id:w'
+        worktree: 'id:w',
+        command: './start-agent.sh'
       })
     ).toBeNull()
     expect(terminalCreateChatViewParamsRefusal({})).toBeNull()
