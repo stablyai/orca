@@ -29,19 +29,22 @@ function logPlanExitFailure(error: unknown): void {
 }
 
 /** Claude stays in plan after an approved ExitPlanMode until told. The request is written
- *  before the allow and never awaited, so its failure cannot hold or reject the approval. */
+ *  before the allow and never awaited, so its failure cannot hold or reject the approval.
+ *  Full access reads the mode in wire order: its presentation report can lag behind the plan. */
 export function leaveClaudePlanModeOnApproval(
-  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'reportedOptions'> & {
+  session: Pick<
+    ClaudeSession,
+    'launchIntent' | 'firstRootInit' | 'reportedOptions' | 'orderedPermissionMode'
+  > & {
     connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
   },
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
   reply: PermissionResult
 ): void {
-  if (
-    prompt.toolName !== 'ExitPlanMode' ||
-    reply.behavior !== 'allow' ||
-    session.reportedOptions.reportedPermissionMode !== 'plan'
-  ) {
+  const mode = session.orderedPermissionMode
+    ? session.orderedPermissionMode()
+    : session.reportedOptions.reportedPermissionMode
+  if (prompt.toolName !== 'ExitPlanMode' || reply.behavior !== 'allow' || mode !== 'plan') {
     return
   }
   try {

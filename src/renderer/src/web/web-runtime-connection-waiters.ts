@@ -6,16 +6,21 @@ type WebRuntimeConnectionWaiterOptions = {
   getState: () => WebRuntimeConnectionState
   getAuthError: () => Error
   isIntentionallyClosed: () => boolean
+  getSetupFailure?: () => { error: unknown } | undefined
 }
 
 export class WebRuntimeConnectionWaiters {
-  private readonly waiters: { resolve: () => void; reject: (error: Error) => void }[] = []
+  private readonly waiters: { resolve: () => void; reject: (error: unknown) => void }[] = []
 
   constructor(private readonly options: WebRuntimeConnectionWaiterOptions) {}
 
   wait(timeoutMs = 30_000, signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) {
       return Promise.reject(signal.reason)
+    }
+    const failure = this.options.getSetupFailure?.()
+    if (failure) {
+      return Promise.reject(failure.error)
     }
     if (this.options.getState() === 'connected') {
       return Promise.resolve()
@@ -55,7 +60,7 @@ export class WebRuntimeConnectionWaiters {
           cleanup()
           resolve()
         },
-        reject: (error: Error) => {
+        reject: (error: unknown) => {
           cleanup()
           reject(error)
         }
@@ -82,7 +87,7 @@ export class WebRuntimeConnectionWaiters {
     )
   }
 
-  rejectAll(error: Error): void {
+  rejectAll(error: unknown): void {
     for (const waiter of this.waiters.splice(0)) {
       waiter.reject(error)
     }

@@ -164,6 +164,11 @@ function cantMoveReasonLabel(reason: ClaudeSessionCantMoveReason): string {
       return translate('accounts.claude.switchSessions.reasonUnknownAccount', 'Account unknown')
     case 'no-session':
       return translate('accounts.claude.switchSessions.reasonNoSession', "Can't resume")
+    case 'shared-session':
+      return translate(
+        'accounts.claude.switchSessions.reasonSharedSession',
+        'Also open in another pane'
+      )
   }
 }
 

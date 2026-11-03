@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
-import { writeRollingFileBackup } from '../rolling-file-backup'
+import { writeRollingFileBackup } from '../filesystem/rolling-file-backup'
 import { renameOverLockedTarget } from './locked-executable-rename'
 import {
   getWindowsNativeHookAgent,

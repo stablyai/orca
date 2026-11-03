@@ -22,6 +22,7 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   providerStartFailed: '{{agent}} stopped before it finished starting.',
+  savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
@@ -119,6 +120,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   attachmentNotAFile: "An image on this message isn't a file, so the message was not sent.",
   attachmentNoSource: 'An image on this message has no file to send, so the message was not sent.',
   attachmentInvalid: "An attachment on this message can't be sent to the agent.",
+  attachmentsExpired: '{{names}} expired.',
   attachmentUnreadable:
     "An attachment on this message couldn't be read, so the message was not sent.",
   emptyMessage: 'This message is empty, so it was not sent.',
@@ -198,6 +200,8 @@ export type AgentSessionFailureCopyValues = {
   /** A provider protocol method that got no answer, e.g. `thread/start`. */
   method?: string
   seconds?: string
+  /** Attachment file names, already listed for the sentence. */
+  names?: string
 }
 
 export type AgentSessionFailureSay = (

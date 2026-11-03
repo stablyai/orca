@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { Automation } from '../../shared/automations-types'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import type * as UncGate from '../wsl/wsl-unc-access-gate'
 import { AutomationService } from './service'
@@ -22,7 +22,7 @@ const projectGit = vi.hoisted(() => {
   const value: { wslDistro?: string } = {}
   return value
 })
-vi.mock('../project-runtime-git-options', async (importOriginal) => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getLocalProjectWorktreeGitOptions: () =>
     projectGit.wslDistro ? { wslDistro: projectGit.wslDistro } : {}

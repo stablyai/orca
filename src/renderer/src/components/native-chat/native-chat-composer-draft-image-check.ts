@@ -1,3 +1,4 @@
+import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-launch-draft-source'
 // Restored store images are checked only with affirmative execution-host ownership.
 
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
@@ -95,16 +96,16 @@ function checkAuthority(image: NativeChatComposerDraftImage, local: string | nul
 }
 
 function replaceCheck(scopeKey: string, entry: DraftImageCheck, next?: DraftImageCheck): void {
-  const checks = restoredImageChecks.get(scopeKey)
+  const checks = restoredImageChecks.get(currentDraftScope(scopeKey))
   if (!checks?.includes(entry)) {
     return
   }
   restoredImageChecks.set(
-    scopeKey,
+    currentDraftScope(scopeKey),
     checks.flatMap((held) => (held === entry ? (next ? [next] : []) : [held]))
   )
-  if (restoredImageChecks.get(scopeKey)?.length === 0) {
-    restoredImageChecks.delete(scopeKey)
+  if (restoredImageChecks.get(currentDraftScope(scopeKey))?.length === 0) {
+    restoredImageChecks.delete(currentDraftScope(scopeKey))
   }
   notifyScope(scopeKey)
 }
@@ -112,7 +113,7 @@ function replaceCheck(scopeKey: string, entry: DraftImageCheck, next?: DraftImag
 function attemptIsCurrent(scopeKey: string, entry: DraftImageCheck): boolean {
   return (
     !!entry.attempt &&
-    restoredImageChecks.get(scopeKey)?.includes(entry) === true &&
+    restoredImageChecks.get(currentDraftScope(scopeKey))?.includes(entry) === true &&
     readNativeChatComposerDraft(scopeKey).images.some(
       (image) => restoredImageKey(image) === restoredImageKey(entry.image)
     ) &&
@@ -122,8 +123,10 @@ function attemptIsCurrent(scopeKey: string, entry: DraftImageCheck): boolean {
 }
 
 async function runCheck(scopeKey: string, entry: DraftImageCheck): Promise<void> {
+  const destination = captureLaunchDraftDestination(scopeKey)
   try {
     const missing = await findMissingNativeChatComposerDraftImages([entry.image])
+    scopeKey = destination?.scopeKey ?? scopeKey
     if (attemptIsCurrent(scopeKey, entry) && missing.has(entry.image.id)) {
       updateNativeChatComposerDraft(
         scopeKey,
@@ -138,6 +141,7 @@ async function runCheck(scopeKey: string, entry: DraftImageCheck): Promise<void>
       )
     }
   } finally {
+    scopeKey = destination?.scopeKey ?? scopeKey
     if (attemptIsCurrent(scopeKey, entry)) {
       replaceCheck(scopeKey, entry)
     }
@@ -146,7 +150,7 @@ async function runCheck(scopeKey: string, entry: DraftImageCheck): Promise<void>
 
 export async function verifyRestoredNativeChatComposerDraftImages(scopeKey: string): Promise<void> {
   await Promise.all(
-    (restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS).map(async (entry) => {
+    (restoredImageChecks.get(currentDraftScope(scopeKey)) ?? NO_IMAGE_CHECKS).map(async (entry) => {
       const authority = checkAuthority(
         entry.image,
         localStoreAuthority(useAppStore.getState(), scopeKey, [entry])
@@ -156,7 +160,7 @@ export async function verifyRestoredNativeChatComposerDraftImages(scopeKey: stri
       } else if (!entry.attempt && authority !== null) {
         const claimed = { image: entry.image, attempt: { authority } }
         replaceCheck(scopeKey, entry, claimed)
-        if (restoredImageChecks.get(scopeKey)?.includes(claimed)) {
+        if (restoredImageChecks.get(currentDraftScope(scopeKey))?.includes(claimed)) {
           await runCheck(scopeKey, claimed)
         }
       }
@@ -187,7 +191,7 @@ export function recheckNativeChatComposerDraftImagesIn(uploadDir: string): void 
     // A fresh entry replaces any attempt in flight, whose answer predates the removal.
     const keys = new Set(named.map(restoredImageKey))
     restoredImageChecks.set(scopeKey, [
-      ...(restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS).filter(
+      ...(restoredImageChecks.get(currentDraftScope(scopeKey)) ?? NO_IMAGE_CHECKS).filter(
         (entry) => !keys.has(restoredImageKey(entry.image))
       ),
       ...named.map((image) => ({ image }))
@@ -204,7 +208,7 @@ export function useRestoredNativeChatComposerDraftImageCheck(
 ): ReadonlySet<string> {
   const checks = useSyncExternalStore(
     subscribe,
-    () => restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS
+    () => restoredImageChecks.get(currentDraftScope(scopeKey)) ?? NO_IMAGE_CHECKS
   )
   const local = useAppStore((state) => localStoreAuthority(state, scopeKey, checks))
   const pending = useMemo(

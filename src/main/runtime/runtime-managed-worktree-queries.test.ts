@@ -11,7 +11,7 @@ const { pruneLineageMock, pruneMetadataMock } = vi.hoisted(() => ({
     .fn()
     .mockResolvedValue({ scanGenerationCurrent: true, preservedMetadataCandidateIds: new Set() })
 }))
-vi.mock('../worktree-lineage-pruning', () => ({
+vi.mock('../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: pruneLineageMock
 }))
 vi.mock(
@@ -26,7 +26,7 @@ vi.mock('./runtime-visible-catalog', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   runtimeHiddenHostIds: () => hiddenHostIds
 }))
-vi.mock('../project-runtime-git-options', async (importOriginal) => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
@@ -39,7 +39,7 @@ import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeScanGeneration,
   resetLocalWorktreeScanGenerationsForTests
-} from '../local-worktree-scan-generation'
+} from '../workspaces/catalog/local-worktree-scan-generation'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const settings: ReturnType<RuntimeStore['getSettings']> = {

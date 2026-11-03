@@ -18,7 +18,7 @@ import {
   patchPackagedProcessPath,
   optOutOfHiddenPageWakeUpThrottling
 } from './configure-process'
-import { installServeSupervisorDisconnectQuit } from '../serve-update-handoff'
+import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
   installUncaughtPipeErrorGuard,
   installUnhandledRejectionLogging
@@ -31,7 +31,7 @@ import {
   downloadRemoteServerUpdate,
   installRemoteServerUpdate,
   isQuittingForUpdate
-} from '../updater'
+} from '../updater/updater-service'
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'
@@ -72,8 +72,8 @@ import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/proxy-settings'
-import { initDataPath, getCanonicalUserDataPath } from '../persistence'
-import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
+import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
 import { configureSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'

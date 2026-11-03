@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { reportedChildWork } from './structured-agent-session-reported-child-work.test-support'
@@ -536,6 +537,71 @@ describe('a /compact that waits in line', () => {
     expect(await rig.queuePause()).toBeNull()
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     expect(rig.store.listRecords()).toHaveLength(1)
+  })
+})
+
+describe('/compact instructions', () => {
+  const INSTRUCTIONS = 'keep the open decisions\nand the plan'
+  function instructedCompact(delivery?: 'queue-if-active') {
+    const id = hostTestOperationId()
+    const fields = {
+      command: 'compact' as const,
+      instructions: INSTRUCTIONS,
+      ...(delivery ? { delivery } : {})
+    }
+    return {
+      id,
+      result: rig.host.conversationCommand(CALLER, {
+        envelope: rig.envelope(fields, 'agentSession.conversationCommand', id),
+        ...fields,
+        userSend: true
+      })
+    }
+  }
+  async function useClaude() {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({ restartable: true, agent: 'claude' })
+  }
+  const handedOver = () => rig.compact.mock.calls[0]?.[0].command.instructions
+
+  it('reach an agent that takes them, and the row shows what was typed', async () => {
+    await useClaude()
+    const { id, result } = instructedCompact()
+    expect(await result).toMatchObject({ ok: true, value: { state: 'completed' } })
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    expect(handedOver()).toBe(INSTRUCTIONS)
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.itemBody(agentJournalSubmissionKey(id))).toMatchObject({
+      blocks: [{ type: 'text', text: `/compact ${INSTRUCTIONS}` }],
+      command: { name: 'compact', instructions: INSTRUCTIONS }
+    })
+  })
+
+  it('survive waiting in line behind a running turn', async () => {
+    await useClaude()
+    const working = await rig.workingSend()
+    const { result } = instructedCompact('queue-if-active')
+    expect(await result).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
+    await rig.settleAccepted(working, 'a')
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    expect(handedOver()).toBe(INSTRUCTIONS)
+  })
+
+  it('are refused, never dropped, for an agent that would ignore them', async () => {
+    const { result } = instructedCompact()
+    expect(await result).toMatchObject({
+      ok: true,
+      value: { command: 'compact', state: 'completed', error: expect.any(String) }
+    })
+    expect(rig.compact).not.toHaveBeenCalled()
+  })
+
+  it('are refused on a /clear at the wire', () => {
+    const base = { envelope: rig.envelope({}, 'agentSession.conversationCommand', 'op-schema') }
+    const parse = (fields: Record<string, unknown>) =>
+      ConversationCommandParams.safeParse({ ...base, ...fields }).success
+    expect(parse({ command: 'compact', instructions: 'keep' })).toBe(true)
+    expect(parse({ command: 'clear', instructions: 'keep' })).toBe(false)
   })
 })
 

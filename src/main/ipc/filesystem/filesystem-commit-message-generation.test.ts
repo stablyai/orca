@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -13,6 +15,23 @@ import {
   cancelGeneratePullRequestFieldsLocalMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
+
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktreeGraph: facade.listWorktreeGraph,
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
@@ -54,7 +73,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 
 describe('registerFilesystemHandlers', () => {

@@ -11,7 +11,7 @@ import {
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,

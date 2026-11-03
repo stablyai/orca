@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { mcpToolIdentity } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
@@ -17,14 +18,15 @@ export function NativeChatToolInvocation({
   const input = useMemo(() => formatToolInput(call.input), [call.input])
   const [expanded, setExpanded] = useState(false)
   const available = call.input !== null && call.input !== undefined
+  const identity = call.mcpIdentity ?? mcpToolIdentity(call.name)
   return (
     <div data-native-chat-tool-invocation className="space-y-1">
       <p className="whitespace-pre-wrap break-all font-mono text-xs text-chat-foreground">
         {call.name}
       </p>
-      {call.mcpIdentity ? (
+      {identity ? (
         <p className="whitespace-pre-wrap break-all font-mono text-xs text-chat-foreground-faint">
-          {call.mcpIdentity.server} / {call.mcpIdentity.tool}
+          {identity.server} / {identity.tool}
         </p>
       ) : null}
       {available ? (

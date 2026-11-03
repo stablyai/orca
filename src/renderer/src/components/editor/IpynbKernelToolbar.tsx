@@ -187,7 +187,9 @@ export function IpynbKernelToolbar({
               <span
                 className={cn(
                   'size-2 rounded-full',
-                  kernel.busy ? 'animate-pulse bg-muted-foreground' : 'bg-status-success'
+                  kernel.busy
+                    ? 'animate-pulse bg-muted-foreground motion-reduce:animate-none'
+                    : 'bg-status-success'
                 )}
               />
             ) : null}

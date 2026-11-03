@@ -7,6 +7,7 @@ import {
   createPluginFrameConsoleLimiter,
   formatPluginFrameConsoleLine,
   installPluginFrameGuestDiagnostics,
+  notePluginFrameBlockedRequest,
   openPluginFrameGuestDevTools,
   pluginFrameSourceLocation,
   setPluginFrameGuestLogSink,
@@ -151,5 +152,29 @@ describe('installPluginFrameGuestDiagnostics', () => {
     expect(other.openDevTools).not.toHaveBeenCalled()
     first.destroy()
     expect(openPluginFrameGuestDevTools('acme.notes2')).toBe(0)
+  })
+
+  it('counts blocked requests per origin outside the line budget, and logs them on teardown', () => {
+    const lines: string[] = []
+    setPluginFrameGuestLogSink(() => (_level, line) => lines.push(line))
+    const guest = new FakeGuest()
+    const key = pluginFrameKey('acme.blocked')
+    installPluginFrameGuestDiagnostics(fake(guest), key, 'acme.blocked')
+    const refused = `Refused to load the font 'https://unpkg.com/a.woff2' because it violates the following Content Security Policy directive: "font-src 'self' data:".`
+    for (let index = 0; index < PLUGIN_FRAME_CONSOLE_BURST_LIMIT * 2; index += 1) {
+      guest.emit('console-message', consoleEvent('error', refused))
+      guest.emit(
+        'console-message',
+        consoleEvent('error', 'Failed to load resource: net::ERR_BLOCKED_BY_CLIENT')
+      )
+      notePluginFrameBlockedRequest(key, 'https://api.example.com/v1', 'xhr')
+    }
+    guest.emit('console-message', consoleEvent('error', 'a real error'))
+    expect(lines).toEqual(['[frame] a real error'])
+    guest.destroy()
+    expect(lines.slice(1)).toEqual([
+      `[frame] blocked font-src https://unpkg.com (x${PLUGIN_FRAME_CONSOLE_BURST_LIMIT * 2}): plugin frames have no network`,
+      `[frame] blocked connect-src https://api.example.com (x${PLUGIN_FRAME_CONSOLE_BURST_LIMIT * 2}): plugin frames have no network`
+    ])
   })
 })

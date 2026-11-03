@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { structuredAgentSessionCanStop } from '../../../src/shared/structured-agent-session-stop-control'
+import { structuredAgentSessionCanStop } from '../../../src/shared/agent-session/view/structured-agent-session-stop-control'
 
 type Send<Args extends unknown[], Result> = (...args: Args) => Promise<Result>
 

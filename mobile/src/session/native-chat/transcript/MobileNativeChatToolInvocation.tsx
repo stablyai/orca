@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { mcpToolIdentity } from '../../../../../src/shared/native-chat/tools/native-chat-tool-identity'
 import { Pressable, Text, View } from 'react-native'
 import type { NativeChatToolCallBlock } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
@@ -30,14 +31,15 @@ export function MobileNativeChatToolInvocation({
   const input = useMemo(() => formatToolInput(call.input), [call.input])
   const [expanded, setExpanded] = useState(false)
   const available = call.input !== null && call.input !== undefined
+  const identity = call.mcpIdentity ?? mcpToolIdentity(call.name)
   return (
     <View style={styles.searchResults}>
       <Text selectable={INLINE_TEXT_SELECTION} style={[styles.codeText, type.meta]}>
         {call.name}
       </Text>
-      {call.mcpIdentity ? (
+      {identity ? (
         <Text selectable={INLINE_TEXT_SELECTION} style={[styles.codeText, type.meta]}>
-          {`${call.mcpIdentity.server} / ${call.mcpIdentity.tool}`}
+          {`${identity.server} / ${identity.tool}`}
         </Text>
       ) : null}
       {available ? (

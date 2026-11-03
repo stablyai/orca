@@ -44,6 +44,9 @@ describe('expanded tool invocation', () => {
     )
     fireEvent.click(screen.getByRole('button'))
     expect(container.querySelector('[data-native-chat-tool-invocation]')).toHaveTextContent(name)
+    expect(container.querySelector('[data-native-chat-tool-invocation]')).toHaveTextContent(
+      'Review tools / SubagentHandoffWithCompleteReport'
+    )
     expect(container.querySelector('pre')?.textContent).toBe(JSON.stringify(input, null, 2))
   })
 

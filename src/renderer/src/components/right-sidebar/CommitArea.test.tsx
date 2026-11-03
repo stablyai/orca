@@ -838,3 +838,22 @@ describe('OperationBanner', () => {
     }
   })
 })
+
+it('shows waiting feedback without a publish spinner when another workspace publishes', () => {
+  const props = baseProps({
+    stagedCount: 0,
+    hasMessage: false,
+    upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+    isRemoteOperationActive: true,
+    inFlightRemoteOpKind: null,
+    isRemoteOperationInAnotherWorktree: true
+  })
+  const { container, getByRole } = render(<CommitArea {...props} />)
+  expect(
+    getByRole('button', { name: 'Git operation running elsewhere' }).hasAttribute('disabled')
+  ).toBe(true)
+  expect(container.querySelector('.animate-spin')).toBeNull()
+  expect(container.textContent).toContain(
+    'Another workspace is running a Git operation, such as push, pull, or force push.'
+  )
+})

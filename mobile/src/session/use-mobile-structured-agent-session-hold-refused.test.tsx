@@ -82,6 +82,7 @@ it('subscribes when an older host refuses the hold, and shows the transcript (P2
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook's options, of which this test supplies the ones it reads.
     hook = useMobileStructuredAgentSession({
       client,
+      pairedHostClient: client,
       sessionId: 'session-1',
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,

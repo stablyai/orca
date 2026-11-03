@@ -75,6 +75,7 @@ vi.mock('../../../components/inline-text-selection', () => ({ INLINE_TEXT_SELECT
 
 import { openExternalLink } from '../../../platform/external-link'
 import { ToolRun } from './MobileNativeChatToolRun'
+import { MobileNativeChatToolInvocation } from './MobileNativeChatToolInvocation'
 import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
@@ -164,6 +165,9 @@ describe('ToolRun', () => {
       ])
       open(tree, 'Review tools')
       expect(textIn(tree.root)).toContain(name)
+      expect(textIn(tree.root.findByType(MobileNativeChatToolInvocation))).toContain(
+        'Review tools / SubagentHandoffWithCompleteReport'
+      )
       expect(textIn(tree.root)).toContain(JSON.stringify(input, null, 2))
     })
 
